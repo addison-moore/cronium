@@ -111,58 +111,10 @@ export default function WorkflowExecutionGraph({
     return () => window.removeEventListener("resize", checkScreenSize);
   }, []);
 
-  // tRPC query for execution details - only when executionId exists
-  const {
-    data: executionDetailsData,
-    isLoading: isLoadingExecution,
-    refetch: refetchExecutionDetails,
-  } = trpc.workflows.getExecutionDetails?.useQuery(
-    {
-      workflowId,
-      executionId: executionId!,
-    },
-    {
-      enabled: !!executionId,
-      refetchInterval: (data) => {
-        // Poll every 2 seconds if execution is running
-        if (isExecuting || actuallyExecuting) {
-          return 2000;
-        }
-        return false;
-      },
-      staleTime: 1000, // 1 second
-      onSuccess: (data) => {
-        const events = data?.events || [];
-        const execution = data?.execution;
+  // Use REST API for execution details since tRPC endpoint doesn't exist yet
+  const [isLoadingExecution, setIsLoadingExecution] = useState(false);
 
-        // Only update state if we're still working with the same execution ID
-        if (executionId === lastExecutionId) {
-          setExecutionEvents(events);
-          setCurrentExecution(execution);
-          setHasInitialData(true);
-          hasAnyDataRef.current = true;
-
-          // Update internal execution state based on actual status
-          if (execution) {
-            const isCompleted =
-              execution.status === "SUCCESS" ||
-              execution.status === "FAILURE" ||
-              execution.status === "completed" ||
-              execution.status === "failed";
-
-            setActuallyExecuting(!isCompleted);
-          }
-
-          // Notify parent of execution update
-          if (onExecutionUpdate && execution) {
-            onExecutionUpdate(execution);
-          }
-        }
-      },
-    },
-  );
-
-  // Fallback to REST API for execution details if tRPC endpoint doesn't exist
+  // Declare fetchExecutionEvents function for fetching execution details via REST API
   const fetchExecutionEvents = useCallback(
     async (isPolling = false) => {
       if (!executionId) {
@@ -170,6 +122,7 @@ export default function WorkflowExecutionGraph({
       }
 
       try {
+        setIsLoadingExecution(true);
         const response = await fetch(
           `/api/workflows/${workflowId}/executions/${executionId}`,
         );
@@ -205,19 +158,22 @@ export default function WorkflowExecutionGraph({
         }
       } catch (error) {
         // Silently handle fetch errors to prevent state corruption
+      } finally {
+        setIsLoadingExecution(false);
       }
     },
     [workflowId, executionId, lastExecutionId, onExecutionUpdate],
   );
 
-  // Use tRPC data if available, otherwise fallback to REST
-  useEffect(() => {
-    if (executionDetailsData) {
-      // tRPC data is handled in the query onSuccess callback
-      return;
-    }
+  // Function to manually refetch execution details
+  const refetchExecutionDetails = useCallback(() => {
+    if (!executionId) return;
+    fetchExecutionEvents(false);
+  }, [executionId, fetchExecutionEvents]);
 
-    // Fallback to REST API if tRPC endpoint doesn't exist
+  // Initial fetch of execution data when executionId changes
+  useEffect(() => {
+    // Fetch execution details via REST API
     if (
       executionId &&
       executionId === lastExecutionId &&
@@ -225,12 +181,7 @@ export default function WorkflowExecutionGraph({
     ) {
       fetchExecutionEvents(false);
     }
-  }, [
-    executionDetailsData,
-    executionId,
-    lastExecutionId,
-    fetchExecutionEvents,
-  ]);
+  }, [executionId, lastExecutionId, fetchExecutionEvents]);
 
   // Update nodes with execution status
   useEffect(() => {
@@ -243,13 +194,13 @@ export default function WorkflowExecutionGraph({
       let status = LogStatus.PENDING;
       let isCurrentlyExecuting = false;
       let hasError = false;
-      let duration = undefined;
+      let duration = null;
 
       if (executionEvent) {
         status = executionEvent.status;
         isCurrentlyExecuting = status === LogStatus.RUNNING;
         hasError = status === LogStatus.FAILURE;
-        duration = executionEvent.duration || undefined;
+        duration = executionEvent.duration || null;
       }
 
       return {
@@ -332,11 +283,11 @@ export default function WorkflowExecutionGraph({
 
   // Poll for updates when execution is active using REST API fallback
   useEffect(() => {
-    if (!isExecuting || !executionId || executionDetailsData) return;
+    if (!isExecuting || !executionId) return;
 
     const interval = setInterval(() => fetchExecutionEvents(true), 2000);
     return () => clearInterval(interval);
-  }, [isExecuting, executionId, fetchExecutionEvents, executionDetailsData]);
+  }, [isExecuting, executionId, fetchExecutionEvents]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -672,18 +623,27 @@ export default function WorkflowExecutionGraph({
                                 eventId={node.data.eventId}
                                 eventName={node.data.label || "Untitled"}
                                 eventType={node.data.type as EventType}
-                                eventDescription={node.data.description}
-                                eventTags={node.data.tags || []}
-                                eventServerId={node.data.serverId}
-                                eventServerName={node.data.serverName}
-                                createdAt={node.data.createdAt}
-                                updatedAt={node.data.updatedAt}
-                                onEventUpdated={() => {
-                                  // Use the same updateEvents function for consistent refresh
-                                  if (updateEvents) {
-                                    updateEvents();
-                                  }
-                                }}
+                                {...(node.data.description
+                                  ? { eventDescription: node.data.description }
+                                  : {})}
+                                {...(node.data.tags && node.data.tags.length > 0
+                                  ? { eventTags: node.data.tags }
+                                  : {})}
+                                {...(node.data.serverId !== undefined
+                                  ? { eventServerId: node.data.serverId }
+                                  : {})}
+                                {...(node.data.serverName
+                                  ? { eventServerName: node.data.serverName }
+                                  : {})}
+                                {...(node.data.createdAt
+                                  ? { createdAt: node.data.createdAt }
+                                  : {})}
+                                {...(node.data.updatedAt
+                                  ? { updatedAt: node.data.updatedAt }
+                                  : {})}
+                                {...(updateEvents
+                                  ? { onEventUpdated: () => updateEvents() }
+                                  : {})}
                               >
                                 <Button
                                   variant="ghost"

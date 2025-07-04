@@ -249,7 +249,6 @@ export default function EventForm({
         conditionalActions: conditionalActionsForSubmission,
       };
 
-      // Use tRPC mutations instead of fetch
       const result =
         isEditing && (eventData?.id || eventId)
           ? await updateEventMutation.mutateAsync({
