@@ -25,10 +25,8 @@ interface Script {
 interface ActivityWithFiltersProps {
   title: string;
   description?: string;
-  fetchLogs: (
-    params: URLSearchParams,
-  ) => Promise<{ logs: any[]; total: number }>;
-  fetchScripts: () => Promise<Script[]>;
+  getLogs: (params: URLSearchParams) => Promise<{ logs: any[]; total: number }>;
+  getEvents: () => Promise<Script[]>;
   fetchWorkflows?: () => Promise<any[]>;
   pageSize?: number;
   className?: string;
@@ -37,8 +35,8 @@ interface ActivityWithFiltersProps {
 export function ActivityTableWithFilters({
   title,
   description,
-  fetchLogs,
-  fetchScripts,
+  getLogs,
+  getEvents,
   fetchWorkflows,
   pageSize = 20,
   className = "",
@@ -81,7 +79,7 @@ export function ActivityTableWithFilters({
 
   const loadScripts = async () => {
     try {
-      const scriptData = await fetchScripts();
+      const scriptData = await getEvents();
       setScripts(scriptData);
     } catch (error) {
       console.error("Error loading scripts:", error);
@@ -123,7 +121,7 @@ export function ActivityTableWithFilters({
         queryParams.set("sharedOnly", "true");
       }
 
-      const { logs, total } = await fetchLogs(queryParams);
+      const { logs, total } = await getLogs(queryParams);
 
       setLogs(logs);
       setTotalItems(total);

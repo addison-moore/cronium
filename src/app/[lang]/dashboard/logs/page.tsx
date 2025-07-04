@@ -20,8 +20,7 @@ export default function LogsPage() {
     validTabs: ["events", "workflows"],
   });
 
-  // tRPC-based fetch functions
-  const fetchLogs = async (params: URLSearchParams) => {
+  const getLogs = async (params: URLSearchParams) => {
     try {
       // Extract search parameters
       const limit = parseInt(params.get("limit") || "20");
@@ -35,7 +34,6 @@ export default function LogsPage() {
         : undefined;
       const date = params.get("date") || undefined;
 
-      // Use tRPC to fetch logs
       const data = await trpcClient.logs.getAll.query({
         limit,
         offset,
@@ -60,7 +58,7 @@ export default function LogsPage() {
     }
   };
 
-  const fetchScripts = async () => {
+  const getEvents = async () => {
     try {
       const data = await trpcClient.events.getAll.query({
         limit: 1000,
@@ -127,8 +125,8 @@ export default function LogsPage() {
           <TabsContent value="events" className="space-y-4">
             <ActivityTableWithFilters
               title={t("RecentActivity")}
-              fetchLogs={fetchLogs}
-              fetchScripts={fetchScripts}
+              getLogs={getLogs}
+              getEvents={getEvents}
               fetchWorkflows={fetchWorkflows}
               pageSize={20}
             />
