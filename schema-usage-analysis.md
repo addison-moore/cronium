@@ -62,7 +62,7 @@ This document analyzes which exports from `src/shared/schema.ts` are actually be
    - `sessions` - Might be used by auth library internally
    - `userSettings` - Limited direct usage
    - `eventServers` - Used mainly in storage layer
-   - `conditionalEvents` - Used mainly in storage layer
+   - `conditionalActions` - Used mainly in storage layer
    - `workflowExecutionEvents` - Used mainly in storage layer
 
 ### Usage Patterns

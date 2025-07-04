@@ -62,7 +62,7 @@ const createEventSchema = z
         }),
       )
       .optional(),
-    onSuccessEvents: z
+    onSuccessActions: z
       .array(
         z.object({
           type: z.string(),
@@ -71,7 +71,7 @@ const createEventSchema = z
         }),
       )
       .optional(),
-    onFailEvents: z
+    onFailActions: z
       .array(
         z.object({
           type: z.string(),
@@ -328,55 +328,55 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Handle conditional events
-    if (body.conditionalEvents && body.conditionalEvents.length > 0) {
-      for (const condEvent of body.conditionalEvents) {
+    // Handle conditional actions
+    if (body.conditionalActions && body.conditionalActions.length > 0) {
+      for (const condAction of body.conditionalActions) {
         const eventData: any = {
-          type: condEvent.action,
-          value: condEvent.details.emailAddresses || "",
-          targetEventId: condEvent.details.targetEventId || null,
-          toolId: condEvent.details.toolId || null,
-          message: condEvent.details.message || null,
-          emailAddresses: condEvent.details.emailAddresses || null,
-          emailSubject: condEvent.details.emailSubject || null,
+          type: condAction.action,
+          value: condAction.details.emailAddresses || "",
+          targetEventId: condAction.details.targetEventId || null,
+          toolId: condAction.details.toolId || null,
+          message: condAction.details.message || null,
+          emailAddresses: condAction.details.emailAddresses || null,
+          emailSubject: condAction.details.emailSubject || null,
         };
 
-        if (condEvent.type === "ON_SUCCESS") {
+        if (condAction.type === "ON_SUCCESS") {
           eventData.successEventId = script.id;
-          await storage.createEvent(eventData);
-        } else if (condEvent.type === "ON_FAILURE") {
+          await storage.createAction(eventData);
+        } else if (condAction.type === "ON_FAILURE") {
           eventData.failEventId = script.id;
-          await storage.createEvent(eventData);
-        } else if (condEvent.type === "ALWAYS") {
+          await storage.createAction(eventData);
+        } else if (condAction.type === "ALWAYS") {
           eventData.alwaysEventId = script.id;
-          await storage.createEvent(eventData);
-        } else if (condEvent.type === "ON_CONDITION") {
+          await storage.createAction(eventData);
+        } else if (condAction.type === "ON_CONDITION") {
           eventData.conditionEventId = script.id;
-          await storage.createEvent(eventData);
+          await storage.createAction(eventData);
         }
       }
     }
 
     // Add success events if provided (legacy support)
-    if (data.onSuccessEvents && data.onSuccessEvents.length > 0) {
-      for (const event of data.onSuccessEvents) {
-        await storage.createEvent({
-          type: event.type as any,
-          value: event.value,
+    if (data.onSuccessActions && data.onSuccessActions.length > 0) {
+      for (const action of data.onSuccessActions) {
+        await storage.createAction({
+          type: action.type as any,
+          value: action.value,
           successEventId: script.id,
-          targetEventId: event.targetScriptId,
+          targetEventId: action.targetScriptId,
         });
       }
     }
 
     // Add failure events if provided (legacy support)
-    if (data.onFailEvents && data.onFailEvents.length > 0) {
-      for (const event of data.onFailEvents) {
-        await storage.createEvent({
-          type: event.type as any,
-          value: event.value,
+    if (data.onFailActions && data.onFailActions.length > 0) {
+      for (const action of data.onFailActions) {
+        await storage.createAction({
+          type: action.type as any,
+          value: action.value,
           failEventId: script.id,
-          targetEventId: event.targetScriptId,
+          targetEventId: action.targetScriptId,
         });
       }
     }

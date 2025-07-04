@@ -52,8 +52,8 @@ export interface CreateScriptInput {
   timeoutUnit: TimeUnit;
   retries: number;
   envVars: EnvVarInput[];
-  onSuccessEvents: EventInput[];
-  onFailEvents: EventInput[];
+  onSuccessActions: EventInput[];
+  onFailActions: EventInput[];
 }
 
 export interface UpdateScriptInput extends CreateScriptInput {
