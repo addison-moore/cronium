@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTranslations } from "next-intl";
@@ -82,10 +82,11 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
             <Input
               id="smtpHost"
               placeholder="smtp.gmail.com"
+              aria-describedby={form.formState.errors.smtpHost ? "smtpHost-error" : undefined}
               {...form.register("smtpHost")}
             />
             {form.formState.errors.smtpHost && (
-              <p className="text-sm text-red-600">
+              <p id="smtpHost-error" className="text-sm text-red-600">
                 {form.formState.errors.smtpHost.message}
               </p>
             )}
@@ -96,10 +97,11 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
             <Input
               id="smtpPort"
               placeholder="587"
+              aria-describedby={form.formState.errors.smtpPort ? "smtpPort-error" : undefined}
               {...form.register("smtpPort")}
             />
             {form.formState.errors.smtpPort && (
-              <p className="text-sm text-red-600">
+              <p id="smtpPort-error" className="text-sm text-red-600">
                 {form.formState.errors.smtpPort.message}
               </p>
             )}
@@ -110,10 +112,11 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
             <Input
               id="smtpUser"
               placeholder="your-email@gmail.com"
+              aria-describedby={form.formState.errors.smtpUser ? "smtpUser-error" : undefined}
               {...form.register("smtpUser")}
             />
             {form.formState.errors.smtpUser && (
-              <p className="text-sm text-red-600">
+              <p id="smtpUser-error" className="text-sm text-red-600">
                 {form.formState.errors.smtpUser.message}
               </p>
             )}
@@ -127,10 +130,11 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
               id="smtpPassword"
               type="password"
               placeholder="your-app-password"
+              aria-describedby={form.formState.errors.smtpPassword ? "smtpPassword-error" : undefined}
               {...form.register("smtpPassword")}
             />
             {form.formState.errors.smtpPassword && (
-              <p className="text-sm text-red-600">
+              <p id="smtpPassword-error" className="text-sm text-red-600">
                 {form.formState.errors.smtpPassword.message}
               </p>
             )}
@@ -144,10 +148,11 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
               id="smtpFromEmail"
               type="email"
               placeholder="noreply@yourcompany.com"
+              aria-describedby={form.formState.errors.smtpFromEmail ? "smtpFromEmail-error" : undefined}
               {...form.register("smtpFromEmail")}
             />
             {form.formState.errors.smtpFromEmail && (
-              <p className="text-sm text-red-600">
+              <p id="smtpFromEmail-error" className="text-sm text-red-600">
                 {form.formState.errors.smtpFromEmail.message}
               </p>
             )}
@@ -158,10 +163,11 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
             <Input
               id="smtpFromName"
               placeholder="Your Company"
+              aria-describedby={form.formState.errors.smtpFromName ? "smtpFromName-error" : undefined}
               {...form.register("smtpFromName")}
             />
             {form.formState.errors.smtpFromName && (
-              <p className="text-sm text-red-600">
+              <p id="smtpFromName-error" className="text-sm text-red-600">
                 {form.formState.errors.smtpFromName.message}
               </p>
             )}
@@ -169,10 +175,16 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
         </div>
 
         <div className="flex items-center space-x-2">
-          <Switch
-            id="smtpEnabled"
-            checked={form.watch("smtpEnabled") ?? false}
-            onCheckedChange={(checked) => form.setValue("smtpEnabled", checked)}
+          <Controller
+            name="smtpEnabled"
+            control={form.control}
+            render={({ field }) => (
+              <Switch
+                id="smtpEnabled"
+                checked={field.value ?? false}
+                onCheckedChange={field.onChange}
+              />
+            )}
           />
           <Label htmlFor="smtpEnabled">{t("EmailSettings.EnableEmail")}</Label>
         </div>
