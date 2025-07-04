@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTranslations } from "next-intl";
@@ -322,10 +322,11 @@ export function UsersManagement({
                         id="email"
                         type="email"
                         placeholder="user@example.com"
+                        aria-describedby={inviteForm.formState.errors.email ? "email-error" : undefined}
                         {...inviteForm.register("email")}
                       />
                       {inviteForm.formState.errors.email && (
-                        <p className="text-sm text-red-600">
+                        <p id="email-error" className="text-sm text-red-600">
                           {inviteForm.formState.errors.email.message}
                         </p>
                       )}
@@ -333,20 +334,24 @@ export function UsersManagement({
 
                     <div className="space-y-2">
                       <Label htmlFor="role">Role</Label>
-                      <Select
-                        value={inviteForm.watch("role")}
-                        onValueChange={(value) =>
-                          inviteForm.setValue("role", value as UserRole)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={UserRole.USER}>User</SelectItem>
-                          <SelectItem value={UserRole.ADMIN}>Admin</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Controller
+                        name="role"
+                        control={inviteForm.control}
+                        render={({ field }) => (
+                          <Select
+                            value={field.value}
+                            onValueChange={field.onChange}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={UserRole.USER}>User</SelectItem>
+                              <SelectItem value={UserRole.ADMIN}>Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
                     </div>
                   </div>
 

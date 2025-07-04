@@ -230,6 +230,50 @@ const onSubmit = async (data) => {
 };
 ```
 
+### Displaying Root Errors
+
+Display general form errors at the top of your form:
+
+```tsx
+function MyForm() {
+  const { 
+    handleSubmit, 
+    formState: { errors } 
+  } = useForm();
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      {errors.root?.serverError && (
+        <Alert variant="destructive">
+          <AlertDescription>{errors.root.serverError.message}</AlertDescription>
+        </Alert>
+      )}
+      {/* Form fields */}
+    </form>
+  );
+}
+```
+
+### Async Validation with Error Handling
+
+```tsx
+const schema = z.object({
+  username: z
+    .string()
+    .min(3)
+    .refine(async (username) => {
+      try {
+        const available = await checkUsernameAvailability(username);
+        return available;
+      } catch (error) {
+        // Network errors should not fail validation
+        console.error("Failed to check username:", error);
+        return true;
+      }
+    }, "Username is already taken"),
+});
+```
+
 ## Testing React Hook Form
 
 ### Basic Testing Example
@@ -271,6 +315,79 @@ describe("MyForm", () => {
 });
 ```
 
+### Testing Forms with Controller Components
+
+```tsx
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MyFormWithSelect } from "./MyFormWithSelect";
+
+describe("MyFormWithSelect", () => {
+  it("should handle select changes", async () => {
+    const user = userEvent.setup();
+    const mockSubmit = jest.fn();
+    render(<MyFormWithSelect onSubmit={mockSubmit} />);
+
+    // Open select dropdown
+    await user.click(screen.getByRole("combobox"));
+    
+    // Select an option
+    await user.click(screen.getByRole("option", { name: "Admin" }));
+    
+    // Submit form
+    await user.click(screen.getByRole("button", { name: /submit/i }));
+
+    await waitFor(() => {
+      expect(mockSubmit).toHaveBeenCalledWith({
+        role: "admin",
+      });
+    });
+  });
+});
+```
+
+### Testing Async Validation
+
+```tsx
+describe("Form with async validation", () => {
+  it("should show error for duplicate username", async () => {
+    const user = userEvent.setup();
+    
+    // Mock the API call
+    jest.mocked(checkUsernameAvailability).mockResolvedValue(false);
+    
+    render(<SignUpForm />);
+
+    await user.type(screen.getByLabelText(/username/i), "existinguser");
+    
+    // Trigger validation by moving to next field
+    await user.tab();
+
+    await waitFor(() => {
+      expect(screen.getByText("Username is already taken")).toBeInTheDocument();
+    });
+  });
+});
+```
+
+### Testing Form Reset
+
+```tsx
+it("should reset form after successful submission", async () => {
+  const user = userEvent.setup();
+  render(<MyForm />);
+
+  const input = screen.getByLabelText(/name/i);
+  await user.type(input, "John Doe");
+  
+  await user.click(screen.getByRole("button", { name: /submit/i }));
+
+  await waitFor(() => {
+    expect(input).toHaveValue("");
+  });
+});
+```
+
 ## TypeScript Patterns with Zod
 
 ### Advanced Type Inference
@@ -306,6 +423,96 @@ function UserForm() {
   // TypeScript knows all the field names and types
   const role = form.watch("role"); // type: 'admin' | 'user' | 'viewer'
 }
+```
+
+### Conditional Validation with Zod
+
+```tsx
+const formSchema = z
+  .object({
+    accountType: z.enum(["personal", "business"]),
+    firstName: z.string().min(1, "First name is required"),
+    lastName: z.string().min(1, "Last name is required"),
+    companyName: z.string().optional(),
+    taxId: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.accountType === "business") {
+        return !!data.companyName && data.companyName.length > 0;
+      }
+      return true;
+    },
+    {
+      message: "Company name is required for business accounts",
+      path: ["companyName"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.accountType === "business") {
+        return !!data.taxId && data.taxId.length > 0;
+      }
+      return true;
+    },
+    {
+      message: "Tax ID is required for business accounts",
+      path: ["taxId"],
+    }
+  );
+```
+
+### Dynamic Form Schemas
+
+```tsx
+// Create schema based on dynamic conditions
+function createFormSchema(includeAddress: boolean) {
+  const baseSchema = z.object({
+    name: z.string().min(1, "Name is required"),
+    email: z.string().email("Invalid email address"),
+  });
+
+  if (includeAddress) {
+    return baseSchema.extend({
+      address: z.object({
+        street: z.string().min(1, "Street is required"),
+        city: z.string().min(1, "City is required"),
+        zipCode: z.string().regex(/^\d{5}$/, "Invalid ZIP code"),
+      }),
+    });
+  }
+
+  return baseSchema;
+}
+
+// Use in component
+function DynamicForm({ includeAddress }: { includeAddress: boolean }) {
+  const schema = createFormSchema(includeAddress);
+  type FormData = z.infer<typeof schema>;
+
+  const form = useForm<FormData>({
+    resolver: zodResolver(schema),
+  });
+}
+```
+
+### Transform and Preprocess Data
+
+```tsx
+const schema = z.object({
+  price: z
+    .string()
+    .transform((val) => parseFloat(val))
+    .pipe(z.number().min(0, "Price must be positive")),
+  tags: z
+    .string()
+    .transform((val) => val.split(",").map((tag) => tag.trim()))
+    .pipe(z.array(z.string().min(1))),
+  publishDate: z
+    .string()
+    .transform((val) => new Date(val))
+    .pipe(z.date()),
+});
 ```
 
 ## Accessibility Guidelines
@@ -399,6 +606,225 @@ function EditUserForm({ userId }: { userId: string }) {
   const { register, onSubmit, formState } = useUserForm(user);
 
   return <form onSubmit={onSubmit}>{/* Form fields */}</form>;
+}
+```
+
+## Common Pitfalls and Solutions
+
+### 1. Forgetting to spread field props
+
+**❌ Wrong:**
+```tsx
+<Controller
+  name="email"
+  control={control}
+  render={({ field }) => (
+    <Input value={field.value} onChange={field.onChange} />
+  )}
+/>
+```
+
+**✅ Correct:**
+```tsx
+<Controller
+  name="email"
+  control={control}
+  render={({ field }) => <Input {...field} />}
+/>
+```
+
+### 2. Using useState for form values
+
+**❌ Wrong:**
+```tsx
+const [name, setName] = useState("");
+<input value={name} onChange={(e) => setName(e.target.value)} />
+```
+
+**✅ Correct:**
+```tsx
+const { register } = useForm();
+<input {...register("name")} />
+```
+
+### 3. Not handling loading states properly
+
+**❌ Wrong:**
+```tsx
+<button type="submit">Submit</button>
+```
+
+**✅ Correct:**
+```tsx
+const { formState: { isSubmitting } } = useForm();
+<button type="submit" disabled={isSubmitting}>
+  {isSubmitting ? "Submitting..." : "Submit"}
+</button>
+```
+
+### 4. Incorrect error display
+
+**❌ Wrong:**
+```tsx
+{errors.email && <span>{errors.email}</span>}
+```
+
+**✅ Correct:**
+```tsx
+{errors.email && <span>{errors.email.message}</span>}
+```
+
+## Complex Form Patterns
+
+### Dynamic Field Arrays
+
+```tsx
+import { useFieldArray } from "react-hook-form";
+
+const schema = z.object({
+  users: z.array(
+    z.object({
+      name: z.string().min(1, "Name is required"),
+      email: z.string().email("Invalid email"),
+    })
+  ).min(1, "At least one user is required"),
+});
+
+function UserListForm() {
+  const form = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      users: [{ name: "", email: "" }],
+    },
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "users",
+  });
+
+  return (
+    <form onSubmit={form.handleSubmit(onSubmit)}>
+      {fields.map((field, index) => (
+        <div key={field.id}>
+          <Controller
+            name={`users.${index}.name`}
+            control={form.control}
+            render={({ field }) => <Input {...field} placeholder="Name" />}
+          />
+          <Controller
+            name={`users.${index}.email`}
+            control={form.control}
+            render={({ field }) => <Input {...field} placeholder="Email" />}
+          />
+          <Button type="button" onClick={() => remove(index)}>
+            Remove
+          </Button>
+        </div>
+      ))}
+      <Button
+        type="button"
+        onClick={() => append({ name: "", email: "" })}
+      >
+        Add User
+      </Button>
+    </form>
+  );
+}
+```
+
+### Multi-Step Forms
+
+```tsx
+function MultiStepForm() {
+  const [step, setStep] = useState(1);
+  const form = useForm({
+    resolver: zodResolver(schema),
+    mode: "onChange", // Validate on change for better UX
+  });
+
+  const nextStep = async () => {
+    // Validate current step fields
+    const fields = step === 1 
+      ? ["firstName", "lastName"] 
+      : ["email", "phone"];
+    
+    const isValid = await form.trigger(fields);
+    if (isValid) setStep(step + 1);
+  };
+
+  return (
+    <form onSubmit={form.handleSubmit(onSubmit)}>
+      {step === 1 && (
+        <>
+          <Input {...form.register("firstName")} />
+          <Input {...form.register("lastName")} />
+        </>
+      )}
+      {step === 2 && (
+        <>
+          <Input {...form.register("email")} />
+          <Input {...form.register("phone")} />
+        </>
+      )}
+      
+      {step < 2 ? (
+        <Button type="button" onClick={nextStep}>Next</Button>
+      ) : (
+        <Button type="submit">Submit</Button>
+      )}
+    </form>
+  );
+}
+```
+
+### Dependent Fields
+
+```tsx
+function DependentFieldsForm() {
+  const form = useForm();
+  const country = form.watch("country");
+
+  return (
+    <form>
+      <Controller
+        name="country"
+        control={form.control}
+        render={({ field }) => (
+          <Select {...field}>
+            <option value="us">United States</option>
+            <option value="ca">Canada</option>
+          </Select>
+        )}
+      />
+      
+      {country === "us" && (
+        <Controller
+          name="state"
+          control={form.control}
+          render={({ field }) => (
+            <Select {...field}>
+              <option value="ny">New York</option>
+              <option value="ca">California</option>
+            </Select>
+          )}
+        />
+      )}
+      
+      {country === "ca" && (
+        <Controller
+          name="province"
+          control={form.control}
+          render={({ field }) => (
+            <Select {...field}>
+              <option value="on">Ontario</option>
+              <option value="bc">British Columbia</option>
+            </Select>
+          )}
+        />
+      )}
+    </form>
+  );
 }
 ```
 

@@ -1,6 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,28 +27,63 @@ import { Label } from "@/components/ui/label";
 import { MonacoEditor } from "@/components/ui/monaco-editor";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 
-// Generic template form component - unchanged UI, only API calls changed
+// Create dynamic schema based on tool type
+const createTemplateSchema = (toolType: string) => {
+  const baseSchema = {
+    name: z.string().min(1, "Template name is required").max(100, "Template name is too long"),
+    content: z.string().min(1, "Content is required"),
+  };
+
+  if (toolType === "email") {
+    return z.object({
+      ...baseSchema,
+      subject: z.string().min(1, "Subject is required").max(200, "Subject is too long"),
+    });
+  }
+
+  return z.object(baseSchema);
+};
+
+type TemplateFormData = {
+  name: string;
+  subject?: string;
+  content: string;
+};
+
+// Generic template form component - refactored to use React Hook Form
 function TemplateForm({
   toolType,
   onSubmit,
   onCancel,
 }: {
   toolType: string;
-  onSubmit: (data: any) => void;
+  onSubmit: (data: TemplateFormData) => void;
   onCancel: () => void;
 }) {
-  const [formData, setFormData] = useState({
-    name: "",
-    subject: "",
-    content: "",
-  });
   const [editorSettings, setEditorSettings] = useState({
     fontSize: 14,
     theme: "vs-dark",
     wordWrap: true,
     minimap: false,
     lineNumbers: true,
+  });
+
+  const form = useForm<TemplateFormData>({
+    resolver: zodResolver(createTemplateSchema(toolType)),
+    defaultValues: {
+      name: "",
+      subject: "",
+      content: "",
+    },
   });
 
   // Fetch user editor settings - keeping REST for now as this isn't part of Phase 3
@@ -65,62 +103,82 @@ function TemplateForm({
     fetchEditorSettings();
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit(formData);
+  const handleSubmit = (data: TemplateFormData) => {
+    onSubmit(data);
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="templateName">Template Name</Label>
-        <Input
-          id="templateName"
-          type="text"
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          placeholder="Enter template name"
-          required
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Template Name</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  placeholder="Enter template name"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
         />
-      </div>
 
-      {toolType === "email" && (
-        <div className="space-y-2">
-          <Label htmlFor="subject">Subject</Label>
-          <Input
-            id="subject"
-            type="text"
-            value={formData.subject}
-            onChange={(e) =>
-              setFormData({ ...formData, subject: e.target.value })
-            }
-            placeholder="Email subject"
-            required
+        {toolType === "email" && (
+          <FormField
+            control={form.control}
+            name="subject"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Subject</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    placeholder="Email subject"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </div>
-      )}
+        )}
 
-      <div className="space-y-2">
-        <Label htmlFor="content">
-          {toolType === "email" ? "Message Content" : "Message Template"}
-        </Label>
-        <MonacoEditor
-          value={formData.content}
-          onChange={(value) => setFormData({ ...formData, content: value })}
-          language="html"
-          height="200px"
-          editorSettings={editorSettings}
-          className="border-0"
+        <FormField
+          control={form.control}
+          name="content"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>
+                {toolType === "email" ? "Message Content" : "Message Template"}
+              </FormLabel>
+              <FormControl>
+                <MonacoEditor
+                  value={field.value}
+                  onChange={field.onChange}
+                  language="html"
+                  height="200px"
+                  editorSettings={editorSettings}
+                  className="border-0"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
         />
-      </div>
 
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="submit">Save Template</Button>
-      </div>
-    </form>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={form.formState.isSubmitting}>
+            Save Template
+          </Button>
+        </div>
+      </form>
+    </Form>
   );
 }
 
