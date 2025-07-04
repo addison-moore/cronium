@@ -1,0 +1,14 @@
+node_modules/
+_scratch/
+_packages/
+_duplicates/
+.next/
+.config/
+.cache/
+.env*
+.local/
+.pythonlibs/
+.upm/
+pyproject.toml
+uv.lock
+attached_assets/

@@ -1,0 +1,322 @@
+/**
+ * Component-specific styles using Tailwind 4 directives and utilities
+ * This file contains component styles that are used across the application
+ */
+
+/* Custom utility classes */
+@layer components {
+  /* === Layout Components === */
+  .main-layout {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  /* === Navigation Components === */
+  .navbar,
+  .dashboard-navbar,
+  nav,
+  header {
+    background-color: var(--secondary-bg-color);
+    border-color: var(--border-color);
+    border-bottom-width: 1px;
+    z-index: 50;
+  }
+
+  .fixed-navbar,
+  .sticky-navbar,
+  nav.fixed,
+  nav.sticky,
+  header.fixed,
+  header.sticky {
+    position: sticky;
+    top: 0;
+    background-color: var(--secondary-bg-color);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    z-index: 50;
+  }
+
+  /* Sidebar styling */
+  .dashboard-sidebar {
+    background-color: var(--secondary-bg-color);
+    border-right: 1px solid var(--border-color);
+  }
+
+  /* Navigation items with improved hover states */
+  .dashboard-nav-item {
+    color: var(--foreground-color);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: var(--radius);
+    transition: background-color 150ms;
+  }
+
+  .dashboard-nav-item.active {
+    background-color: var(--primary-color);
+    color: white;
+  }
+
+  .dashboard-nav-item:hover:not(.active) {
+    background-color: var(--muted-color);
+  }
+
+  /* === Card Components === */
+  .dashboard-card {
+    background-color: var(--card-color);
+    color: var(--card-foreground-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .stat-card {
+    background-color: var(--card-color);
+    color: var(--card-foreground-color);
+    padding: 1rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* === Alert Components === */
+  .alert {
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    padding: 0.75rem 1rem;
+  }
+
+  .alert-title {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+
+  .alert-description {
+    font-size: 0.875rem;
+  }
+
+  /* Alert variants using theme-based colors */
+  .alert-error,
+  .alert[data-variant="destructive"] {
+    background-color: rgb(239 68 68 / 0.15);
+    border-color: var(--destructive-color);
+    color: var(--destructive-color);
+  }
+
+  .alert-success,
+  .alert[data-variant="success"] {
+    background-color: rgb(16 185 129 / 0.15);
+    border-color: var(--success-color);
+    color: var(--success-color);
+  }
+
+  .alert-warning,
+  .alert[data-variant="warning"] {
+    background-color: rgb(245 158 11 / 0.15);
+    border-color: var(--warning-color);
+    color: var(--warning-color);
+  }
+
+  /* Dark mode alert variants */
+  .dark .alert-error,
+  .dark .alert[data-variant="destructive"] {
+    background-color: rgb(185 28 28 / 0.2);
+    border-color: var(--destructive-color);
+    color: rgb(254 242 242 / 0.8);
+  }
+
+  .dark .alert-success,
+  .dark .alert[data-variant="success"] {
+    background-color: rgb(16 185 129 / 0.2);
+    border-color: var(--success-color);
+    color: rgb(255 255 255 / 0.8);
+  }
+
+  .dark .alert-warning,
+  .dark .alert[data-variant="warning"] {
+    background-color: rgb(245 158 11 / 0.2);
+    border-color: var(--warning-color);
+    color: rgb(254 243 199 / 0.8);
+  }
+
+  /* === Dropdown and Dialog Components === */
+  .popover-content,
+  [data-radix-popper-content-wrapper] > div,
+  [role="menu"],
+  [role="listbox"],
+  .radix-dropdown-content,
+  div[data-radix-dropdown-menu-content],
+  div[data-radix-select-content],
+  [cmdk-root] div[cmdk-list],
+  div[class*="SelectContent"],
+  div[class*="DropdownMenuContent"],
+  [role="dialog"],
+  [role="alertdialog"] {
+    background-color: var(--popover-color);
+    color: var(--popover-foreground-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Dropdown menu items */
+  .dropdown-item,
+  [role="menuitem"],
+  [role="option"],
+  div[class*="DropdownMenuItem"],
+  div[class*="SelectItem"],
+  [cmdk-item] {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background-color 150ms;
+  }
+
+  /* Hover states for dropdown items */
+  .dropdown-item:hover,
+  [role="menuitem"]:hover,
+  [role="option"]:hover,
+  div[class*="DropdownMenuItem"]:hover,
+  div[class*="SelectItem"]:hover,
+  [cmdk-item]:hover {
+    background-color: var(--muted-color);
+    color: var(--foreground-color);
+  }
+
+  /* === Button Components === */
+  .btn,
+  button[class*="btn-"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius);
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+  }
+
+  .btn:disabled,
+  button[class*="btn-"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Button variants */
+  .btn-primary,
+  button[class*="btn-primary"] {
+    background-color: var(--primary-color);
+    color: white;
+  }
+  
+  .btn-primary:hover,
+  button[class*="btn-primary"]:hover {
+    filter: brightness(0.9);
+  }
+
+  .btn-secondary,
+  button[class*="btn-secondary"] {
+    background-color: var(--secondary-color);
+    color: white;
+  }
+  
+  .btn-secondary:hover,
+  button[class*="btn-secondary"]:hover {
+    filter: brightness(0.9);
+  }
+
+  .btn-destructive,
+  button[class*="btn-destructive"] {
+    background-color: var(--destructive-color);
+    color: white;
+  }
+  
+  .btn-destructive:hover,
+  button[class*="btn-destructive"]:hover {
+    filter: brightness(0.9);
+  }
+
+  .btn-outline,
+  button[class*="btn-outline"] {
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--foreground-color);
+  }
+  
+  .btn-outline:hover,
+  button[class*="btn-outline"]:hover {
+    background-color: var(--muted-color);
+  }
+
+  /* === Modal Components === */
+  .dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgb(0 0 0 / 0.5);
+    z-index: 40;
+  }
+
+  .dialog-content {
+    background-color: var(--background-color);
+    color: var(--foreground-color);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    box-shadow: var(--shadow-lg);
+    z-index: 50;
+  }
+
+  /* === Toast Components === */
+  .toast {
+    background-color: var(--background-color);
+    color: var(--foreground-color);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-md);
+  }
+
+  .toast[data-variant="default"] {
+    background-color: var(--background-color);
+    color: var(--foreground-color);
+  }
+
+  .toast[data-variant="destructive"] {
+    background-color: var(--destructive-color);
+    color: var(--destructive-foreground-color);
+    border-color: var(--destructive-color);
+  }
+
+  .toast[data-variant="success"] {
+    background-color: var(--success-color);
+    color: var(--success-foreground-color);
+    border-color: var(--success-color);
+  }
+
+  .toast[data-variant="warning"] {
+    background-color: var(--warning-color);
+    color: var(--warning-foreground-color);
+    border-color: var(--warning-color);
+  }
+
+  .toast[data-variant="info"] {
+    background-color: var(--info-color);
+    color: var(--info-foreground-color);
+    border-color: var(--info-color);
+  },
+  /* Solarized terminal specific utility classes */
+  .console-container {
+    background-color: var(--terminal-background);
+    color: var(--terminal-text);
+    font-family: var(--font-mono);
+    border-radius: var(--terminal-border-radius);
+    box-shadow: var(--terminal-shadow);
+  }
+
+  .console-header {
+    background-color: var(--color-solarized-base02);
+    color: var(--color-solarized-base1);
+    border-bottom: 1px solid var(--terminal-border);
+  }
+
+  .console-output {
+    background-color: var(--color-solarized-base03);
+    color: var(--color-solarized-base0);
+  }
+}

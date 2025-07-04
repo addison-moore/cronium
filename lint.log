@@ -1,0 +1,258 @@
+src/components/event-details/EventDetailsTab.tsx(178,51): error TS2532: Object is possibly 'undefined'.
+src/components/event-details/EventDetailsTab.tsx(276,20): error TS2339: Property 'description' does not exist on type 'Event'.
+src/components/event-details/EventDetailsTab.tsx(280,26): error TS2339: Property 'description' does not exist on type 'Event'.
+src/components/event-details/EventDetailsTab.tsx(296,34): error TS2339: Property 'active' does not exist on type 'Event'.
+src/components/event-details/EventDetailsTab.tsx(297,36): error TS2339: Property 'active' does not exist on type 'Event'.
+src/components/event-details/EventDetailsTab.tsx(299,26): error TS2339: Property 'active' does not exist on type 'Event'.
+src/components/event-details/EventDetailsTab.tsx(306,20): error TS2339: Property 'schedule' does not exist on type 'Event'.
+src/components/event-details/EventDetailsTab.tsx(309,62): error TS2339: Property 'schedule' does not exist on type 'Event'.
+src/components/event-details/EventDetailsTab.tsx(350,35): error TS2339: Property 'SCRIPT' does not exist on type 'typeof EventType'.
+src/components/event-details/EventDetailsTab.tsx(364,16): error TS2339: Property 'conditionalActions' does not exist on type 'Event'.
+src/components/event-details/EventDetailsTab.tsx(364,44): error TS2339: Property 'conditionalActions' does not exist on type 'Event'.
+src/components/event-details/EventDetailsTab.tsx(369,24): error TS2339: Property 'conditionalActions' does not exist on type 'Event'.
+src/components/event-details/EventDetailsTab.tsx(369,48): error TS7006: Parameter 'action' implicitly has an 'any' type.
+src/components/event-details/EventDetailsTab.tsx(369,56): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/components/event-details/EventLogsTab.tsx(158,44): error TS2345: Argument of type 'string | Date' is not assignable to parameter of type 'string | null'.
+  Type 'Date' is not assignable to type 'string'.
+src/components/event-details/EventLogsTab.tsx(179,61): error TS2345: Argument of type 'string | Date' is not assignable to parameter of type 'string | null'.
+  Type 'Date' is not assignable to type 'string'.
+src/components/event-details/EventLogsTab.tsx(193,49): error TS2345: Argument of type 'string | Date' is not assignable to parameter of type 'string | null'.
+  Type 'Date' is not assignable to type 'string'.
+src/components/event-details/EventLogsTab.tsx(199,49): error TS2345: Argument of type 'string | Date | null | undefined' is not assignable to parameter of type 'string | null'.
+  Type 'undefined' is not assignable to type 'string | null'.
+src/components/event-details/ResetCounterSwitch.tsx(65,9): error TS2353: Object literal may only specify known properties, and 'resetCounterOnActive' does not exist in type '{ id: number; }'.
+src/components/event-details/WorkflowsCard.tsx(58,7): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(input: { id: number; } | typeof skipToken, opts: DefinedUseTRPCQueryOptions<{ id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; ... 10 more ...; overrideServerIds: unknown; }[], { ...; }[], TRPCClientErrorLike<...>, { ...; }[]>): DefinedUseTRPCQueryResult<...>', gave the following error.
+    Object literal may only specify known properties, and 'eventId' does not exist in type '{ id: number; }'.
+  Overload 2 of 2, '(input: { id: number; } | typeof skipToken, opts?: UseTRPCQueryOptions<{ id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; ... 10 more ...; overrideServerIds: unknown; }[], { ...; }[], TRPCClientErrorLike<...>, { ...; }[]> | undefined): UseTRPCQueryResult<...>', gave the following error.
+    Object literal may only specify known properties, and 'eventId' does not exist in type '{ id: number; }'.
+src/components/event-details/WorkflowsCard.tsx(65,17): error TS7006: Parameter 'error' implicitly has an 'any' type.
+src/components/event-details/WorkflowsCard.tsx(76,52): error TS2339: Property 'workflows' does not exist on type '{ id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; shared: boolean; triggerType: WorkflowTriggerType; ... 7 more ...; overrideServerIds: unknown; }[]'.
+src/components/event-list/events-table.tsx(202,13): error TS2322: Type 'void' is not assignable to type 'Promise<void>'.
+src/components/terminal/Terminal.tsx(37,26): error TS7030: Not all code paths return a value.
+src/components/tools/IntegrationTestPanel.tsx(130,60): error TS2345: Argument of type '{ toolId: any; payload: { message: string; test: boolean; }; method: "POST"; }' is not assignable to parameter of type '{ toolId: number; message: string; method?: "POST" | "GET" | "PUT" | "PATCH" | undefined; payload?: Record<string, any> | undefined; timeout?: number | undefined; headers?: Record<...> | undefined; variables?: Record<...> | undefined; templateId?: number | undefined; contentType?: "application/json" | ... 2 more ......'.
+  Property 'message' is missing in type '{ toolId: any; payload: { message: string; test: boolean; }; method: "POST"; }' but required in type '{ toolId: number; message: string; method?: "POST" | "GET" | "PUT" | "PATCH" | undefined; payload?: Record<string, any> | undefined; timeout?: number | undefined; headers?: Record<...> | undefined; variables?: Record<...> | undefined; templateId?: number | undefined; contentType?: "application/json" | ... 2 more ......'.
+src/components/tools/plugins/discord/discord-plugin.tsx(352,9): error TS2322: Type '(credentials: any) => Promise<{ isValid: boolean; error: string | undefined; }>' is not assignable to type '(credentials: Record<string, any>) => Promise<{ isValid: boolean; error?: string; }>'.
+  Type 'Promise<{ isValid: boolean; error: string | undefined; }>' is not assignable to type 'Promise<{ isValid: boolean; error?: string; }>'.
+    Type '{ isValid: boolean; error: string | undefined; }' is not assignable to type '{ isValid: boolean; error?: string; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+      Types of property 'error' are incompatible.
+        Type 'string | undefined' is not assignable to type 'string'.
+          Type 'undefined' is not assignable to type 'string'.
+src/components/tools/plugins/email/email-plugin.tsx(475,9): error TS2322: Type '(credentials: any) => Promise<{ isValid: boolean; error: string | undefined; }>' is not assignable to type '(credentials: Record<string, any>) => Promise<{ isValid: boolean; error?: string; }>'.
+  Type 'Promise<{ isValid: boolean; error: string | undefined; }>' is not assignable to type 'Promise<{ isValid: boolean; error?: string; }>'.
+    Type '{ isValid: boolean; error: string | undefined; }' is not assignable to type '{ isValid: boolean; error?: string; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+      Types of property 'error' are incompatible.
+        Type 'string | undefined' is not assignable to type 'string'.
+          Type 'undefined' is not assignable to type 'string'.
+src/components/tools/plugins/slack/slack-plugin.tsx(421,31): error TS2339: Property 'variables' does not exist on type '{ id: number; userId: string | null; name: string; type: ToolType; content: string; subject: string | null; isSystemTemplate: boolean; createdAt: Date; updatedAt: Date; }'.
+src/components/tools/plugins/slack/slack-plugin.tsx(421,53): error TS2339: Property 'variables' does not exist on type '{ id: number; userId: string | null; name: string; type: ToolType; content: string; subject: string | null; isSystemTemplate: boolean; createdAt: Date; updatedAt: Date; }'.
+src/components/tools/plugins/slack/slack-plugin.tsx(425,37): error TS2339: Property 'variables' does not exist on type '{ id: number; userId: string | null; name: string; type: ToolType; content: string; subject: string | null; isSystemTemplate: boolean; createdAt: Date; updatedAt: Date; }'.
+src/components/tools/plugins/slack/slack-plugin.tsx(481,9): error TS2322: Type '(credentials: any) => Promise<{ isValid: boolean; error: string | undefined; }>' is not assignable to type '(credentials: Record<string, any>) => Promise<{ isValid: boolean; error?: string; }>'.
+  Type 'Promise<{ isValid: boolean; error: string | undefined; }>' is not assignable to type 'Promise<{ isValid: boolean; error?: string; }>'.
+    Type '{ isValid: boolean; error: string | undefined; }' is not assignable to type '{ isValid: boolean; error?: string; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+      Types of property 'error' are incompatible.
+        Type 'string | undefined' is not assignable to type 'string'.
+          Type 'undefined' is not assignable to type 'string'.
+src/components/tools/template-form.tsx(168,14): error TS2375: Type '{ id: string; checked: boolean | undefined; onCheckedChange: (checked: boolean) => void; }' is not assignable to type 'Omit<SwitchProps & RefAttributes<HTMLButtonElement>, "ref">' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'checked' are incompatible.
+    Type 'boolean | undefined' is not assignable to type 'boolean'.
+      Type 'undefined' is not assignable to type 'boolean'.
+src/components/ui/event-details-popover.tsx(198,8): error TS2375: Type '{ isOpen: boolean; onClose: () => void; eventId: number; onEventUpdated: (() => void) | undefined; }' is not assignable to type 'EventEditModalProps' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'onEventUpdated' are incompatible.
+    Type '(() => void) | undefined' is not assignable to type '() => void'.
+      Type 'undefined' is not assignable to type '() => void'.
+src/components/ui/use-toast.tsx(155,20): error TS7006: Parameter 'open' implicitly has an 'any' type.
+src/components/ui/use-toast.tsx(193,45): error TS2345: Argument of type '{ type: "DISMISS_TOAST"; toastId: string | undefined; }' is not assignable to parameter of type 'Action'.
+  Type '{ type: "DISMISS_TOAST"; toastId: string | undefined; }' is not assignable to type '{ type: "DISMISS_TOAST"; toastId?: string; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+    Types of property 'toastId' are incompatible.
+      Type 'string | undefined' is not assignable to type 'string'.
+        Type 'undefined' is not assignable to type 'string'.
+src/components/workflows/nodes/EventNode.tsx(103,14): error TS2375: Type '{ children: Element; eventId: number; eventName: string; eventType: EventType; eventDescription: string | undefined; eventTags: string[] | undefined; eventServerId: number | undefined; eventServerName: string | undefined; createdAt: string | ... 1 more ... | undefined; updatedAt: string | ... 1 more ... | undefined;...' is not assignable to type 'EventDetailsPopoverProps' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'eventDescription' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+src/components/workflows/WorkflowCanvas.tsx(426,23): error TS2345: Argument of type 'NodeBase | null | undefined' is not assignable to parameter of type 'SetStateAction<Node | null>'.
+  Type 'undefined' is not assignable to type 'SetStateAction<Node | null>'.
+src/components/workflows/WorkflowDetailsForm.tsx(118,48): error TS2345: Argument of type '{ nodes: any[]; edges: any[]; name: string; description: string; triggerType: WorkflowTriggerType; status: EventStatus; tags: string[]; customSchedule: string; scheduleNumber: number | null; ... 5 more ...; id: number; }' is not assignable to parameter of type '{ id: number; name?: string | null | undefined; description?: string | null | undefined; status?: EventStatus | null | undefined; shared?: boolean | null | undefined; triggerType?: WorkflowTriggerType | ... 1 more ... | undefined; ... 10 more ...; edges?: { ...; }[] | undefined; }'.
+  Types of property 'scheduleUnit' are incompatible.
+    Type 'string' is not assignable to type 'TimeUnit | null | undefined'.
+src/components/workflows/WorkflowDetailsForm.tsx(237,56): error TS2551: Property 'SCHEDULED' does not exist on type 'typeof WorkflowTriggerType'. Did you mean 'SCHEDULE'?
+src/components/workflows/WorkflowDetailsForm.tsx(254,57): error TS2551: Property 'SCHEDULED' does not exist on type 'typeof WorkflowTriggerType'. Did you mean 'SCHEDULE'?
+src/components/workflows/WorkflowExecutionGraph.tsx(119,22): error TS2551: Property 'getExecutionDetails' does not exist on type 'DecorateRouterRecord<{ ctx: { session: any; }; meta: object; errorShape: { data: { zodError: string | null; code: "TIMEOUT" | "PARSE_ERROR" | "BAD_REQUEST" | "INTERNAL_SERVER_ERROR" | "NOT_IMPLEMENTED" | "BAD_GATEWAY" | ... 13 more ... | "CLIENT_CLOSED_REQUEST"; httpStatus: number; path?: string; stack?: string; }; ...'. Did you mean 'getExecutions'?
+src/components/workflows/WorkflowExecutionGraph.tsx(126,25): error TS7006: Parameter 'data' implicitly has an 'any' type.
+src/components/workflows/WorkflowExecutionGraph.tsx(134,19): error TS7006: Parameter 'data' implicitly has an 'any' type.
+src/components/workflows/WorkflowExecutionGraph.tsx(237,11): error TS2322: Type '{ nodeId: number; status: LogStatus; isCurrentlyExecuting: boolean; hasError: boolean; duration: number | undefined; id: string; type: string; position: { x: number; y: number; }; data: { ...; }; }[]' is not assignable to type 'NodeWithStatus[]'.
+  Type '{ nodeId: number; status: LogStatus; isCurrentlyExecuting: boolean; hasError: boolean; duration: number | undefined; id: string; type: string; position: { x: number; y: number; }; data: { eventId: number; label: string; type: string; eventTypeIcon: string; description: string; tags?: string[]; serverId?: number; ser...' is not assignable to type 'NodeWithStatus' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+    Types of property 'duration' are incompatible.
+      Type 'number | undefined' is not assignable to type 'number | null'.
+        Type 'undefined' is not assignable to type 'number | null'.
+src/components/workflows/WorkflowExecutionGraph.tsx(671,32): error TS2375: Type '{ children: Element; eventId: number; eventName: string; eventType: EventType; eventDescription: string; eventTags: string[]; eventServerId: number | undefined; eventServerName: string | undefined; createdAt: string | ... 1 more ... | undefined; updatedAt: string | ... 1 more ... | undefined; onEventUpdated: () => v...' is not assignable to type 'EventDetailsPopoverProps' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'eventServerId' are incompatible.
+    Type 'number | undefined' is not assignable to type 'number'.
+      Type 'undefined' is not assignable to type 'number'.
+src/components/workflows/WorkflowExecutionHistory.tsx(102,34): error TS2339: Property 'executions' does not exist on type 'Query<{ executions: { executions: { id: number; createdAt: Date; updatedAt: Date; status: LogStatus; userId: string; triggerType: string; workflowId: number; startedAt: Date; ... 5 more ...; executionData: unknown; }[]; total: number; }; hasMore: boolean; }, TRPCClientErrorLike<...>, { ...; }, any>'.
+src/components/workflows/WorkflowExecutionHistory.tsx(112,43): error TS2339: Property 'total' does not exist on type '{ executions: { executions: { id: number; createdAt: Date; updatedAt: Date; status: LogStatus; userId: string; triggerType: string; workflowId: number; startedAt: Date; ... 5 more ...; executionData: unknown; }[]; total: number; }; hasMore: boolean; }'.
+src/components/workflows/WorkflowExecutionHistory.tsx(143,36): error TS2339: Property 'find' does not exist on type 'never[] | { executions: { id: number; createdAt: Date; updatedAt: Date; status: LogStatus; userId: string; triggerType: string; workflowId: number; startedAt: Date; ... 5 more ...; executionData: unknown; }[]; total: number; }'.
+  Property 'find' does not exist on type '{ executions: { id: number; createdAt: Date; updatedAt: Date; status: LogStatus; userId: string; triggerType: string; workflowId: number; startedAt: Date; completedAt: Date | null; ... 4 more ...; executionData: unknown; }[]; total: number; }'.
+src/components/workflows/WorkflowExecutionHistory.tsx(143,42): error TS7006: Parameter 'exec' implicitly has an 'any' type.
+src/components/workflows/WorkflowExecutionHistory.tsx(197,41): error TS2339: Property 'filter' does not exist on type 'never[] | { executions: { id: number; createdAt: Date; updatedAt: Date; status: LogStatus; userId: string; triggerType: string; workflowId: number; startedAt: Date; ... 5 more ...; executionData: unknown; }[]; total: number; }'.
+  Property 'filter' does not exist on type '{ executions: { id: number; createdAt: Date; updatedAt: Date; status: LogStatus; userId: string; triggerType: string; workflowId: number; startedAt: Date; completedAt: Date | null; ... 4 more ...; executionData: unknown; }[]; total: number; }'.
+src/components/workflows/WorkflowExecutionHistory.tsx(197,49): error TS7006: Parameter 'execution' implicitly has an 'any' type.
+src/components/workflows/WorkflowExecutionHistory.tsx(505,25): error TS2339: Property 'length' does not exist on type 'never[] | { executions: { id: number; createdAt: Date; updatedAt: Date; status: LogStatus; userId: string; triggerType: string; workflowId: number; startedAt: Date; ... 5 more ...; executionData: unknown; }[]; total: number; }'.
+  Property 'length' does not exist on type '{ executions: { id: number; createdAt: Date; updatedAt: Date; status: LogStatus; userId: string; triggerType: string; workflowId: number; startedAt: Date; completedAt: Date | null; ... 4 more ...; executionData: unknown; }[]; total: number; }'.
+src/components/workflows/WorkflowForm.tsx(116,5): error TS2353: Object literal may only specify known properties, and 'sortBy' does not exist in type '{ search?: string | undefined; status?: EventStatus | undefined; shared?: boolean | undefined; type?: EventType | undefined; limit?: number | undefined; offset?: number | undefined; }'.
+src/components/workflows/WorkflowForm.tsx(210,34): error TS2551: Property 'SCHEDULED' does not exist on type 'typeof WorkflowTriggerType'. Did you mean 'SCHEDULE'?
+src/components/workflows/WorkflowForm.tsx(247,14): error TS2322: Type '{ children: string; value: string; }' is not assignable to type 'IntrinsicAttributes & SettingsTabProps'.
+  Property 'children' does not exist on type 'IntrinsicAttributes & SettingsTabProps'.
+src/components/workflows/WorkflowForm.tsx(248,14): error TS2322: Type '{ children: string; value: string; }' is not assignable to type 'IntrinsicAttributes & SettingsTabProps'.
+  Property 'children' does not exist on type 'IntrinsicAttributes & SettingsTabProps'.
+src/components/workflows/WorkflowForm.tsx(335,27): error TS2322: Type '{ value: string[]; onValueChange: (...event: any[]) => void; placeholder: string; }' is not assignable to type 'IntrinsicAttributes & TagsInputProps'.
+  Property 'onValueChange' does not exist on type 'IntrinsicAttributes & TagsInputProps'.
+src/components/workflows/WorkflowForm.tsx(398,39): error TS2551: Property 'SCHEDULED' does not exist on type 'typeof WorkflowTriggerType'. Did you mean 'SCHEDULE'?
+src/components/workflows/WorkflowForm.tsx(637,21): error TS2322: Type '{ events: EventItem[]; initialNodes: Node[]; initialEdges: Edge[]; onNodesChange: (nodes: any, edges: any) => void; onRefreshEvents: () => Promise<void>; }' is not assignable to type 'IntrinsicAttributes & WorkflowCanvasProps'.
+  Property 'events' does not exist on type 'IntrinsicAttributes & WorkflowCanvasProps'.
+src/components/workflows/WorkflowForm.tsx(640,37): error TS7006: Parameter 'nodes' implicitly has an 'any' type.
+src/components/workflows/WorkflowForm.tsx(640,44): error TS7006: Parameter 'edges' implicitly has an 'any' type.
+src/components/workflows/WorkflowList.tsx(176,27): error TS2339: Property 'some' does not exist on type '{}'.
+src/components/workflows/WorkflowList.tsx(176,33): error TS7006: Parameter 'tag' implicitly has an 'any' type.
+src/components/workflows/WorkflowList.tsx(190,54): error TS2339: Property 'includes' does not exist on type '{}'.
+src/components/workflows/WorkflowList.tsx(194,26): error TS2345: Argument of type '{ id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; shared: boolean; triggerType: WorkflowTriggerType; ... 7 more ...; overrideServerIds: unknown; }[]' is not assignable to parameter of type 'SetStateAction<WorkflowItem[]>'.
+  Type '{ id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; shared: boolean; triggerType: WorkflowTriggerType; ... 7 more ...; overrideServerIds: unknown; }[]' is not assignable to type 'WorkflowItem[]'.
+    Property 'lastRunAt' is missing in type '{ id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; shared: boolean; triggerType: WorkflowTriggerType; ... 7 more ...; overrideServerIds: unknown; }' but required in type 'WorkflowItem'.
+src/components/workflows/WorkflowList.tsx(211,23): error TS2339: Property 'forEach' does not exist on type '{}'.
+src/components/workflows/WorkflowList.tsx(211,32): error TS7006: Parameter 'tag' implicitly has an 'any' type.
+src/hooks/useClientEncryption.ts(61,43): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/hooks/useClientEncryption.ts(94,30): error TS2532: Object is possibly 'undefined'.
+src/hooks/useOptimisticUpdate.ts(61,37): error TS2345: Argument of type 'T | undefined' is not assignable to parameter of type 'T'.
+  'T' could be instantiated with an arbitrary type which could be unrelated to 'T | undefined'.
+src/lib/advanced-types.ts(178,13): error TS2300: Duplicate identifier 'ApiResponse'.
+src/lib/advanced-types.ts(514,13): error TS2300: Duplicate identifier 'ApiResponse'.
+src/lib/advanced-types.ts(532,35): error TS2353: Object literal may only specify known properties, and 'code' does not exist in type '{ success: false; error: string; data?: never; }'.
+src/lib/ai.ts(72,21): error TS2532: Object is possibly 'undefined'.
+src/lib/auth.ts(13,18): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/lib/auth.ts(94,9): error TS2412: Type 'string | null | undefined' is not assignable to type 'string | null' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the type of the target.
+  Type 'undefined' is not assignable to type 'string | null'.
+src/lib/auth.ts(95,9): error TS2412: Type 'string | null | undefined' is not assignable to type 'string | null' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the type of the target.
+  Type 'undefined' is not assignable to type 'string | null'.
+src/lib/auth.ts(96,9): error TS2412: Type 'string | null | undefined' is not assignable to type 'string | null' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the type of the target.
+  Type 'undefined' is not assignable to type 'string | null'.
+src/lib/auth.ts(97,9): error TS2412: Type 'string | null | undefined' is not assignable to type 'string | null' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the type of the target.
+  Type 'undefined' is not assignable to type 'string | null'.
+src/lib/auth.ts(98,9): error TS2412: Type 'string | null | undefined' is not assignable to type 'string | null' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the type of the target.
+  Type 'undefined' is not assignable to type 'string | null'.
+src/lib/encryption-service.ts(324,30): error TS2532: Object is possibly 'undefined'.
+src/lib/scheduler/event-handlers.ts(48,58): error TS2345: Argument of type '{ executionTime: string; duration: number | undefined; output: string; error: string | undefined; } | undefined' is not assignable to parameter of type '{ executionTime?: string; duration?: number; output?: string; error?: string; } | undefined'.
+  Type '{ executionTime: string; duration: number | undefined; output: string; error: string | undefined; }' is not assignable to type '{ executionTime?: string; duration?: number; output?: string; error?: string; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+    Types of property 'duration' are incompatible.
+      Type 'number | undefined' is not assignable to type 'number'.
+        Type 'undefined' is not assignable to type 'number'.
+src/lib/scheduler/execute-script.ts(776,5): error TS2375: Type '{ success: boolean; output: string; scriptOutput: any; condition: boolean | undefined; }' is not assignable to type 'ScriptExecutionResult' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'condition' are incompatible.
+    Type 'boolean | undefined' is not assignable to type 'boolean'.
+      Type 'undefined' is not assignable to type 'boolean'.
+src/lib/scheduler/local-executor.ts(293,7): error TS2375: Type '{ stdout: string; stderr: string; output: any; condition: boolean | undefined; }' is not assignable to type '{ stdout: string; stderr: string; output?: any; condition?: boolean; isTimeout?: boolean; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'condition' are incompatible.
+    Type 'boolean | undefined' is not assignable to type 'boolean'.
+      Type 'undefined' is not assignable to type 'boolean'.
+src/lib/scheduler/local-executor.ts(320,5): error TS2375: Type '{ stdout: string; stderr: any; condition: undefined; isTimeout: boolean; }' is not assignable to type '{ stdout: string; stderr: string; output?: any; condition?: boolean; isTimeout?: boolean; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'condition' are incompatible.
+    Type 'undefined' is not assignable to type 'boolean'.
+src/lib/ssh.ts(287,7): error TS2412: Type 'undefined' is not assignable to type 'Client' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the type of the target.
+src/lib/ssh.ts(1194,11): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/lib/ssh.ts(1195,11): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/lib/ssh.ts(1207,46): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/lib/ssh.ts(1208,48): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/lib/ssh.ts(1209,52): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/lib/ssh.ts(1433,28): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type '(substring: string, ...args: any[]) => string'.
+      Type 'undefined' is not assignable to type '(substring: string, ...args: any[]) => string'.
+src/lib/ssh/script-executor.ts(514,7): error TS2375: Type '{ stdout: any; stderr: any; scriptOutput: any; condition: boolean | undefined; }' is not assignable to type '{ stdout: string; stderr: string; scriptOutput?: any; condition?: boolean; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'condition' are incompatible.
+    Type 'boolean | undefined' is not assignable to type 'boolean'.
+      Type 'undefined' is not assignable to type 'boolean'.
+src/lib/ssh/terminal.ts(176,28): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type '(substring: string, ...args: any[]) => string'.
+      Type 'undefined' is not assignable to type '(substring: string, ...args: any[]) => string'.
+src/lib/template-processor.ts(222,21): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/lib/trpc.ts(9,19): error TS2345: Argument of type '{ url: string; headers(): Promise<{}>; }' is not assignable to parameter of type 'HTTPBatchLinkOptions<{ ctx: { session: any; }; meta: object; errorShape: { data: { zodError: string | null; code: "TIMEOUT" | "PARSE_ERROR" | "BAD_REQUEST" | "INTERNAL_SERVER_ERROR" | "NOT_IMPLEMENTED" | "BAD_GATEWAY" | ... 13 more ... | "CLIENT_CLOSED_REQUEST"; httpStatus: number; path?: string; stack?: string; }; ...'.
+  Property 'transformer' is missing in type '{ url: string; headers(): Promise<{}>; }' but required in type 'TransformerOptionYes'.
+src/lib/workflow-executor.ts(565,32): error TS2379: Argument of type '{ success: boolean; output: string; scriptOutput: any; condition: boolean | undefined; }' is not assignable to parameter of type '{ success: boolean; output: string; scriptOutput?: any; condition?: boolean; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'condition' are incompatible.
+    Type 'boolean | undefined' is not assignable to type 'boolean'.
+      Type 'undefined' is not assignable to type 'boolean'.
+src/scripts/clear-all-logs.ts(25,31): error TS2345: Argument of type '{}' is not assignable to parameter of type 'string'.
+src/scripts/clear-all-logs.ts(49,33): error TS2345: Argument of type '{}' is not assignable to parameter of type 'string'.
+src/scripts/clear-all-logs.ts(60,31): error TS2345: Argument of type '{}' is not assignable to parameter of type 'string'.
+src/scripts/clear-all-logs.ts(90,31): error TS2345: Argument of type '{}' is not assignable to parameter of type 'string'.
+src/scripts/clear-all-logs.ts(130,32): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/scripts/clear-all-logs.ts(148,32): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/scripts/seed-events.ts(644,34): error TS18048: 'script' is possibly 'undefined'.
+src/scripts/seed-events.ts(644,50): error TS18048: 'script' is possibly 'undefined'.
+src/scripts/seed-roles.ts(35,60): error TS18048: 'defaultRole' is possibly 'undefined'.
+src/scripts/seed-roles.ts(41,14): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(left: PgColumn<{ name: "role_id"; tableName: "users"; dataType: "number"; columnType: "PgInteger"; data: number; driverParam: string | number; notNull: false; hasDefault: false; isPrimaryKey: false; ... 5 more ...; generated: undefined; }, {}, {}>, right: number | SQLWrapper): SQL<...>', gave the following error.
+    Argument of type 'null' is not assignable to parameter of type 'number | SQLWrapper'.
+  Overload 2 of 3, '(left: Aliased<null>, right: SQLWrapper | null): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "role_id"; tableName: "users"; dataType: "number"; columnType: "PgInteger"; data: number; driverParam: string | number; notNull: false; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is not assignable to parameter of type 'Aliased<null>'.
+      Type 'PgColumn<{ name: "role_id"; tableName: "users"; dataType: "number"; columnType: "PgInteger"; data: number; driverParam: string | number; notNull: false; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is missing the following properties from type 'Aliased<null>': sql, fieldAlias
+  Overload 3 of 3, '(left: never, right: unknown): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "role_id"; tableName: "users"; dataType: "number"; columnType: "PgInteger"; data: number; driverParam: string | number; notNull: false; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is not assignable to parameter of type 'never'.
+src/scripts/seed-roles.ts(46,24): error TS18048: 'defaultRole' is possibly 'undefined'.
+src/scripts/seed-roles.ts(47,16): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(left: PgColumn<{ name: "role_id"; tableName: "users"; dataType: "number"; columnType: "PgInteger"; data: number; driverParam: string | number; notNull: false; hasDefault: false; isPrimaryKey: false; ... 5 more ...; generated: undefined; }, {}, {}>, right: number | SQLWrapper): SQL<...>', gave the following error.
+    Argument of type 'null' is not assignable to parameter of type 'number | SQLWrapper'.
+  Overload 2 of 3, '(left: Aliased<null>, right: SQLWrapper | null): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "role_id"; tableName: "users"; dataType: "number"; columnType: "PgInteger"; data: number; driverParam: string | number; notNull: false; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is not assignable to parameter of type 'Aliased<null>'.
+      Type 'PgColumn<{ name: "role_id"; tableName: "users"; dataType: "number"; columnType: "PgInteger"; data: number; driverParam: string | number; notNull: false; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is missing the following properties from type 'Aliased<null>': sql, fieldAlias
+  Overload 3 of 3, '(left: never, right: unknown): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "role_id"; tableName: "users"; dataType: "number"; columnType: "PgInteger"; data: number; driverParam: string | number; notNull: false; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, {}>' is not assignable to parameter of type 'never'.
+src/scripts/seed-workflows.ts(77,47): error TS18048: 'dailyReportWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(101,19): error TS18048: 'dailyReportWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(108,19): error TS18048: 'dailyReportWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(115,19): error TS18048: 'dailyReportWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(123,19): error TS18048: 'dailyReportWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(124,21): error TS18048: 'backupNode' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(125,21): error TS18048: 'reportNode' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(130,19): error TS18048: 'dailyReportWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(131,21): error TS18048: 'reportNode' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(132,21): error TS18048: 'emailNode' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(156,47): error TS18048: 'healthCheckWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(181,19): error TS18048: 'healthCheckWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(188,19): error TS18048: 'healthCheckWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(195,19): error TS18048: 'healthCheckWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(203,19): error TS18048: 'healthCheckWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(204,21): error TS18048: 'apiNode' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(205,21): error TS18048: 'notifyNode' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(210,19): error TS18048: 'healthCheckWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(211,21): error TS18048: 'apiNode' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(212,21): error TS18048: 'logNode' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(233,55): error TS18048: 'onboardingWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(256,19): error TS18048: 'onboardingWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(263,19): error TS18048: 'onboardingWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(270,19): error TS18048: 'onboardingWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(278,19): error TS18048: 'onboardingWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(279,21): error TS18048: 'createUserNode' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(280,21): error TS18048: 'permissionsNode' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(285,19): error TS18048: 'onboardingWorkflow' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(286,21): error TS18048: 'permissionsNode' is possibly 'undefined'.
+src/scripts/seed-workflows.ts(287,21): error TS18048: 'welcomeNode' is possibly 'undefined'.
+src/server/api/routers/variables.ts(34,20): error TS2532: Object is possibly 'undefined'.
+src/server/api/routers/variables.ts(35,35): error TS2532: Object is possibly 'undefined'.
+src/server/api/routers/variables.ts(253,11): error TS2379: Argument of type '{ description?: string | undefined; key?: string | undefined; value?: string | undefined; }' is not assignable to parameter of type 'Partial<{ userId: string; key: string; value: string; id?: number | undefined; description?: string | null | undefined; createdAt?: Date | undefined; updatedAt?: Date | undefined; }>' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'key' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+src/tests/setup.ts(38,38): error TS18046: 'error' is of type 'unknown'.
+husky - pre-commit script failed (code 1)

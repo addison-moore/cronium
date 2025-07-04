@@ -1,0 +1,284 @@
+"use client";
+
+import React from "react";
+import { Server, CheckCircle2, RefreshCw, Info, Tag } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useTranslations } from "next-intl";
+import { Event } from "./types";
+import { EventTypeIcon } from "@/components/ui/event-type-icon";
+import WorkflowsCard from "./WorkflowsCard";
+
+interface EventOverviewTabProps {
+  event: Event;
+  onResetCounter: () => void;
+  isResettingCounter: boolean;
+  isEventLoaded?: boolean;
+  onRefresh?: () => Promise<any>;
+  langParam?: string;
+}
+
+export function EventOverviewTab({
+  event,
+  onResetCounter,
+  isResettingCounter,
+  isEventLoaded = true,
+  onRefresh,
+  langParam,
+}: EventOverviewTabProps) {
+  const t = useTranslations("Events");
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return t("never");
+    return new Date(dateString).toLocaleString();
+  };
+
+  const formatSchedule = () => {
+    if (event.customSchedule) {
+      return (
+        <span className="font-mono text-xs bg-muted p-1 rounded">
+          {event.customSchedule}
+        </span>
+      );
+    }
+
+    return `${t("every")} ${event.scheduleNumber} ${event.scheduleUnit.toLowerCase()}`;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Event Info - Combined Card */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">
+              <div className="flex items-center">
+                <Info className="h-5 w-5 mr-2 text-blue-500" />
+                {t("eventInfo")}
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Event Basic Info */}
+            <div className="space-y-3 pb-3 border-b border-border">
+              <div className="text-sm">
+                <span className="text-muted-foreground">
+                  {t("eventName")}:{" "}
+                </span>
+                <span className="font-medium">{event.name}</span>
+              </div>
+              <div className="text-sm">
+                <span className="text-muted-foreground">{t("eventId")}: </span>
+                <span className="font-mono text-xs bg-muted p-1 rounded">
+                  {event.id}
+                </span>
+              </div>
+              {event.tags &&
+                Array.isArray(event.tags) &&
+                event.tags.length > 0 && (
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">{t("tags")}: </span>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {event.tags.map((tag: string, index: number) => (
+                        <Badge
+                          key={index}
+                          variant="secondary"
+                          className="text-xs"
+                        >
+                          <Tag className="h-3 w-3 mr-1" />
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              <div className="text-sm">
+                <span className="text-muted-foreground">
+                  {t("scriptType")}:{" "}
+                </span>
+                <span className="font-medium flex items-center gap-1.5">
+                  <EventTypeIcon type={event.type} size={16} />
+                  {event.type}
+                </span>
+              </div>
+            </div>
+
+            {/* Schedule Information */}
+            <div className="space-y-3 pb-3">
+              <h4 className="text-sm font-medium text-muted-foreground flex items-center">
+                <RefreshCw className="h-4 w-4 mr-1.5" />
+                {t("scheduleInfo")}
+              </h4>
+              <div className="text-sm">
+                <span className="text-muted-foreground">{t("schedule")}: </span>
+                <span className="font-medium">{formatSchedule()}</span>
+              </div>
+              <div className="text-sm">
+                <span className="text-muted-foreground">{t("lastRun")}: </span>
+                <span className="font-medium">
+                  {formatDate(event.lastRunAt)}
+                </span>
+              </div>
+              <div className="text-sm">
+                <span className="text-muted-foreground">{t("nextRun")}: </span>
+                <span className="font-medium">
+                  {formatDate(event.nextRunAt)}
+                </span>
+              </div>
+              <div className="text-sm">
+                <span className="text-muted-foreground">{t("timeout")}: </span>
+                <span className="font-medium">
+                  {event.timeoutValue} {event.timeoutUnit.toLowerCase()}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Execution Information */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">
+              <div className="flex items-center">
+                <Server className="h-5 w-5 mr-2 text-purple-500" />
+                {t("executionInfo")}
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Execution Details */}
+            <div className="space-y-3 pb-3 border-b border-border">
+              <div className="text-sm">
+                <span className="text-muted-foreground">
+                  {t("executionLocation")}:{" "}
+                </span>
+                {event.runLocation === "REMOTE" &&
+                event.servers &&
+                event.servers.length > 0 ? (
+                  <div className="space-y-1 mt-1">
+                    {event.servers.map((server) => (
+                      <div
+                        key={server.id}
+                        className="font-medium flex items-center"
+                      >
+                        <Server className="h-4 w-4 mr-2 text-purple-500" />
+                        <span>{server.name}</span>
+                        <span className="text-muted-foreground ml-2">
+                          ({server.address})
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="font-medium flex items-center">
+                    <Server className="h-4 w-4 mr-1" />
+                    {event.runLocation}
+                  </span>
+                )}
+              </div>
+              <div className="text-sm">
+                <span className="text-muted-foreground">
+                  {t("retryAttempts")}:{" "}
+                </span>
+                <span className="font-medium">{event.retries}</span>
+              </div>
+            </div>
+
+            {/* Execution Stats */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-muted-foreground flex items-center">
+                <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                {t("executionStats")}
+              </h4>
+              <div className="flex items-center gap-4 mt-1">
+                <div className="flex items-center">
+                  <span className="text-green-500 mr-2 font-bold text-lg">
+                    {event.successCount || 0}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {t("successful")}
+                  </span>
+                </div>
+                <div className="flex items-center">
+                  <span className="text-red-500 mr-2 font-bold text-lg">
+                    {event.failureCount || 0}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {t("failed")}
+                  </span>
+                </div>
+                <div className="flex items-center">
+                  <span className="text-blue-500 mr-2 font-bold text-lg">
+                    {(event.successCount || 0) + (event.failureCount || 0)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {t("total")}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 mt-1">
+                <div className="flex items-center">
+                  <span className="text-purple-500 mr-2 font-bold text-lg">
+                    {event.executionCount || 0}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {t("executionCounter")}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onResetCounter}
+                  disabled={isResettingCounter}
+                  className="bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
+                >
+                  {isResettingCounter ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />
+                      <span className="sm:inline">{t("resetting")}</span>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-1.5" />
+                      <span className="sm:inline">{t("resetCounter")}</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+              <div className="text-sm">
+                <span className="text-muted-foreground">
+                  {t("maxExecutions")}:{" "}
+                </span>
+                <span className="font-medium">
+                  {event.maxExecutions === 0
+                    ? t("unlimited")
+                    : event.maxExecutions}
+                </span>
+              </div>
+              <div className="text-sm">
+                <span className="text-muted-foreground">
+                  {t("resetCounterOnActive")}:{" "}
+                </span>
+                <span className="font-medium">
+                  {event.resetCounterOnActive === true ||
+                  (typeof event.resetCounterOnActive === "string" &&
+                    event.resetCounterOnActive === "t") ? (
+                    <span className="text-green-500">{t("enabled")}</span>
+                  ) : (
+                    <span className="text-gray-500">{t("disabled")}</span>
+                  )}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Workflows Card */}
+        <WorkflowsCard eventId={event.id} eventLoaded={isEventLoaded} />
+      </div>
+    </div>
+  );
+}
