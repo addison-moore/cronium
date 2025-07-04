@@ -1,39 +1,45 @@
-# Conditional Events Documentation
+# Conditional Actions Documentation
 
-This document provides a comprehensive overview of how conditional events are implemented, stored, and executed in the Cronium system.
+This document provides a comprehensive overview of how conditional actions are implemented, stored, and executed in the Cronium system.
 
 ## Overview
 
-Conditional events are automated actions that are triggered based on the outcome of event execution. They allow users to create complex workflows where one event can automatically trigger other actions when it succeeds, fails, or under specific conditions.
+Conditional actions are automated actions that are triggered based on the outcome of event execution. They allow users to create complex workflows where one event can automatically trigger other actions when it succeeds, fails, or under specific conditions.
 
-## Types of Conditional Events
+## Types of Conditional Actions
 
-### 1. **ON_SUCCESS** - Success Events
+### 1. **ON_SUCCESS** - Success Actions
+
 - Triggered when the parent event completes successfully (exit code 0)
 - Common use cases: Send success notifications, trigger dependent scripts
 
-### 2. **ON_FAILURE** - Failure Events  
+### 2. **ON_FAILURE** - Failure Actions
+
 - Triggered when the parent event fails (non-zero exit code, timeout, or error)
 - Common use cases: Send error alerts, trigger recovery scripts
 
-### 3. **ALWAYS** - Always Events
+### 3. **ALWAYS** - Always Actions
+
 - Triggered regardless of parent event success or failure
 - Common use cases: Cleanup operations, logging, monitoring
 
-### 4. **ON_CONDITION** - Conditional Events
+### 4. **ON_CONDITION** - Conditional Actions
+
 - Triggered based on custom conditions evaluated from event output
 - Currently implemented but condition evaluation logic is minimal
 
 ## Action Types
 
-Each conditional event can perform one of two action types:
+Each conditional action can perform one of two action types:
 
 ### **SCRIPT** - Trigger Another Event
+
 - Executes another event in the system
 - Uses `targetEventId` to specify which event to trigger
 - Prevents infinite loops by tracking executing events
 
 ### **SEND_MESSAGE** - Send Messages
+
 - Sends messages via email, Slack, or Discord
 - Uses tool credentials or system SMTP for email
 - Supports template processing with Handlebars syntax
@@ -48,7 +54,7 @@ CREATE TABLE conditional_events (
   type VARCHAR(50) NOT NULL,                    -- ConditionalActionType enum
   value VARCHAR(255),                           -- Legacy field (unused)
   success_event_id INTEGER REFERENCES events(id),
-  fail_event_id INTEGER REFERENCES events(id), 
+  fail_event_id INTEGER REFERENCES events(id),
   always_event_id INTEGER REFERENCES events(id),
   condition_event_id INTEGER REFERENCES events(id),
   target_event_id INTEGER REFERENCES events(id), -- For SCRIPT actions
@@ -87,7 +93,7 @@ interface ConditionalAction {
   type: "ON_SUCCESS" | "ON_FAILURE" | "ALWAYS" | "ON_CONDITION";
   action: ConditionalActionType; // SCRIPT or SEND_MESSAGE
   emailAddresses?: string;
-  emailSubject?: string; 
+  emailSubject?: string;
   targetEventId?: number | null;
   toolId?: number;
   toolType?: string;
@@ -147,7 +153,7 @@ const result = await executeScript(
 );
 ```
 
-### 2. Conditional Event Handlers
+### 2. Conditional Action Handlers
 
 Located in `src/lib/scheduler/event-handlers.ts`:
 
@@ -155,7 +161,7 @@ Located in `src/lib/scheduler/event-handlers.ts`:
 // Success handler
 export async function handleSuccessEvents(
   eventId: number,
-  processEventCallback: Function
+  processEventCallback: Function,
 ) {
   const successEvents = await storage.getSuccessEvents(eventId);
   for (const condEvent of successEvents) {
@@ -171,9 +177,9 @@ export async function handleSuccessEvents(
 ```typescript
 export async function processEvent(
   conditional_event: any,
-  event: any, 
+  event: any,
   isSuccess: boolean,
-  executionData?: ExecutionData
+  executionData?: ExecutionData,
 ) {
   // Handle SEND_MESSAGE actions
   if (conditional_event.type === "SEND_MESSAGE" && conditional_event.message) {
@@ -181,8 +187,8 @@ export async function processEvent(
     // Process templates with Handlebars
     // Send via email/Slack/Discord
   }
-  
-  // Handle SCRIPT actions  
+
+  // Handle SCRIPT actions
   if (conditional_event.type === "SCRIPT" && conditional_event.targetEventId) {
     // Trigger target event execution
     // Prevent infinite loops
@@ -194,7 +200,7 @@ export async function processEvent(
 
 ### Available Variables
 
-Conditional event messages support Handlebars templating with these variables:
+Conditional action messages support Handlebars templating with these variables:
 
 ```javascript
 const templateContext = {
@@ -207,17 +213,23 @@ const templateContext = {
     executionTime: executionData?.executionTime,
     server: event.server || "Local",
     output: executionData?.output,
-    error: executionData?.error
+    error: executionData?.error,
   },
-  
+
   // User variables
-  variables: { /* user-defined variables */ },
-  
+  variables: {
+    /* user-defined variables */
+  },
+
   // Input data
-  input: { /* event input data */ },
-  
+  input: {
+    /* event input data */
+  },
+
   // Output data
-  output: { /* event output data */ }
+  output: {
+    /* event output data */
+  },
 };
 ```
 
@@ -225,14 +237,15 @@ const templateContext = {
 
 ```handlebars
 <!-- Success notification -->
-Event "{{event.name}}" completed successfully!
-Duration: {{event.duration}}ms
-Output: {{event.output}}
+Event "{{event.name}}" completed successfully! Duration:
+{{event.duration}}ms Output:
+{{event.output}}
 
 <!-- Failure notification -->
-❌ Event "{{event.name}}" failed
-Error: {{event.error}}
-Server: {{event.server}}
+❌ Event "{{event.name}}" failed Error:
+{{event.error}}
+Server:
+{{event.server}}
 ```
 
 ## Storage Layer
@@ -246,7 +259,7 @@ await storage.getFailEvents(eventId);
 await storage.getAlwaysEvents(eventId);
 await storage.getConditionEvents(eventId);
 
-// Mutation methods  
+// Mutation methods
 await storage.createEvent(insertConditionalAction);
 await storage.deleteEventsByEventId(eventId);
 ```
@@ -255,14 +268,14 @@ await storage.deleteEventsByEventId(eventId);
 
 ```sql
 -- Get success events for an event
-SELECT * FROM conditional_events 
+SELECT * FROM conditional_events
 WHERE success_event_id = $1;
 
 -- Get failure events for an event
 SELECT * FROM conditional_events
 WHERE fail_event_id = $1;
 
--- Get always events for an event  
+-- Get always events for an event
 SELECT * FROM conditional_events
 WHERE always_event_id = $1;
 
@@ -282,7 +295,7 @@ if (conditional_event.toolId === null) {
   credentials = {
     host: systemSmtp.host,
     port: systemSmtp.port,
-    user: systemSmtp.user, 
+    user: systemSmtp.user,
     password: systemSmtp.password,
     fromEmail: systemSmtp.fromEmail,
     fromName: systemSmtp.fromName,
@@ -299,7 +312,7 @@ else {
   const tool = await db.select()
     .from(toolCredentials)
     .where(eq(toolCredentials.id, conditional_event.toolId));
-    
+
   // Decrypt credentials
   credentials = JSON.parse(encryptionService.decrypt(tool.credentials));
   toolType = tool.type;
@@ -311,12 +324,12 @@ else {
 ```typescript
 // Process templates
 const processedSubject = templateProcessor.processTemplate(
-  subject, 
-  templateContext
+  subject,
+  templateContext,
 );
 const processedMessage = templateProcessor.processHtmlTemplate(
   message,
-  templateContext  
+  templateContext,
 );
 
 // Send email
@@ -339,7 +352,9 @@ const emailSent = await sendEmail(emailMessage, smtpCredentials);
 const executingEvents = new Set<number>();
 
 if (executingEvents.has(targetEventId)) {
-  console.log(`Skipping event ${targetEventId} - already executing (loop prevention)`);
+  console.log(
+    `Skipping event ${targetEventId} - already executing (loop prevention)`,
+  );
   return;
 }
 
@@ -357,28 +372,33 @@ executingEvents.delete(targetEventId);
 ## Current Issues & Limitations
 
 ### 1. **Frontend/Backend Mismatch**
+
 - Frontend sends rich `details` object with all conditional action data
 - Backend tRPC router ignores `details` and only uses basic schema fields
 - Results in lost data for `toolId`, `message`, `emailAddresses`, etc.
 
 ### 2. **Legacy Fields**
+
 - `sendEmail` field in frontend form submission is unused
 - `value` field in database schema appears to be legacy/unused
 - Some field mappings don't align between frontend and backend
 
-### 3. **Condition Evaluation** 
-- ON_CONDITION events are partially implemented
+### 3. **Condition Evaluation**
+
+- ON_CONDITION actions are partially implemented
 - No sophisticated condition evaluation logic
 - Limited to basic boolean conditions
 
 ### 4. **Tool Integration**
+
 - Only email, Slack, and Discord are supported
-- Plugin system exists but isn't fully utilized for conditional events
+- Plugin system exists but isn't fully utilized for conditional actions
 - Limited error handling for tool failures
 
 ## Recommendations
 
 ### 1. **Fix Frontend/Backend Mismatch**
+
 ```typescript
 // Backend should process the full details object
 const conditionalEventData = {
@@ -393,16 +413,18 @@ const conditionalEventData = {
 ```
 
 ### 2. **Remove Legacy Fields**
+
 - Remove unused `sendEmail` field from frontend
 - Clarify purpose of `value` field or remove it
 - Align field names between frontend and backend
 
 ### 3. **Enhance Condition Logic**
+
 ```typescript
 // Add sophisticated condition evaluation
 const conditionResult = evaluateCondition(
   conditional_event.condition,
-  executionData
+  executionData,
 );
 if (conditionResult) {
   await processEventCallback(condEvent, event, true);
@@ -410,6 +432,7 @@ if (conditionResult) {
 ```
 
 ### 4. **Improve Error Handling**
+
 - Add retry logic for failed message sending
 - Better error reporting in UI
 - Graceful degradation when tools are unavailable
@@ -432,15 +455,15 @@ const conditionalAction = {
     <p><strong>Duration:</strong> {{event.duration}}ms</p>
     <p><strong>Output:</strong></p>
     <pre>{{event.output}}</pre>
-  `
+  `,
 };
 ```
 
 ### Creating a Failure Recovery Script
 
-```typescript  
+```typescript
 const conditionalAction = {
-  type: "ON_FAILURE", 
+  type: "ON_FAILURE",
   action: ConditionalActionType.SCRIPT,
   targetEventId: 123, // ID of recovery script
 };
