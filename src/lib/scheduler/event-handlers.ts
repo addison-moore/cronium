@@ -37,10 +37,16 @@ export async function handleSuccessActions(
       executionDataFromLog = {
         executionTime:
           latestLog.startTime?.toISOString() || new Date().toISOString(),
-        duration: latestLog.duration || undefined,
         output: latestLog.output || "No output available",
-        error: latestLog.error || undefined,
       };
+      
+      if (latestLog.duration !== null && latestLog.duration !== undefined) {
+        (executionDataFromLog as any).duration = latestLog.duration;
+      }
+      
+      if (latestLog.error) {
+        (executionDataFromLog as any).error = latestLog.error;
+      }
     }
 
     // Process each success event with execution data from latest log

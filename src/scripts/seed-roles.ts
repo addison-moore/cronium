@@ -1,6 +1,6 @@
 import { db } from "../server/db";
 import { roles, users } from "../shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 
 async function seedRoles() {
   console.log("Starting to seed roles...");
@@ -32,19 +32,24 @@ async function seedRoles() {
       })
       .returning();
 
-    console.log("✓ Created default 'Users' role with ID:", defaultRole.id);
+    if (defaultRole) {
+      console.log("✓ Created default 'Users' role with ID:", defaultRole.id);
+    } else {
+      console.error("Failed to create default role");
+      return;
+    }
 
     // Update existing users without roles to use the default role
     const usersWithoutRoles = await db
       .select()
       .from(users)
-      .where(eq(users.roleId, null));
+      .where(isNull(users.roleId));
 
     if (usersWithoutRoles.length > 0) {
       await db
         .update(users)
-        .set({ roleId: defaultRole.id })
-        .where(eq(users.roleId, null));
+        .set({ roleId: defaultRole!.id })
+        .where(isNull(users.roleId));
 
       console.log(`✓ Updated ${usersWithoutRoles.length} users to use default role`);
     }

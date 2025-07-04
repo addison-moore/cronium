@@ -73,9 +73,14 @@ async function seedWorkflows() {
     status: EventStatus.ACTIVE,
   });
 
-  console.log(
-    `Created daily report workflow with ID: ${dailyReportWorkflow.id}`,
-  );
+  if (dailyReportWorkflow) {
+    console.log(
+      `Created daily report workflow with ID: ${dailyReportWorkflow.id}`,
+    );
+  } else {
+    console.error("Failed to create daily report workflow");
+    return;
+  }
 
   // Find scripts for the workflow
   const backupScript = findScriptByTypeAndName(
@@ -98,36 +103,41 @@ async function seedWorkflows() {
   if (backupScript && reportScript && emailScript) {
     // Create nodes
     const backupNode = await createWorkflowNode({
-      workflowId: dailyReportWorkflow.id,
+      workflowId: dailyReportWorkflow!.id,
       eventId: backupScript.id,
       position_x: 100,
       position_y: 100,
     });
 
     const reportNode = await createWorkflowNode({
-      workflowId: dailyReportWorkflow.id,
+      workflowId: dailyReportWorkflow!.id,
       eventId: reportScript.id,
       position_x: 400,
       position_y: 100,
     });
 
     const emailNode = await createWorkflowNode({
-      workflowId: dailyReportWorkflow.id,
+      workflowId: dailyReportWorkflow!.id,
       eventId: emailScript.id,
       position_x: 700,
       position_y: 100,
     });
 
+    if (!backupNode || !reportNode || !emailNode) {
+      console.error("Failed to create workflow nodes");
+      return;
+    }
+
     // Create connections
     await createWorkflowConnection({
-      workflowId: dailyReportWorkflow.id,
+      workflowId: dailyReportWorkflow!.id,
       sourceNodeId: backupNode.id,
       targetNodeId: reportNode.id,
       connectionType: ConnectionType.ON_SUCCESS,
     });
 
     await createWorkflowConnection({
-      workflowId: dailyReportWorkflow.id,
+      workflowId: dailyReportWorkflow!.id,
       sourceNodeId: reportNode.id,
       targetNodeId: emailNode.id,
       connectionType: ConnectionType.ALWAYS,
@@ -152,10 +162,15 @@ async function seedWorkflows() {
     status: EventStatus.ACTIVE,
   });
 
-  console.log(
-    `Created health check workflow with ID: ${healthCheckWorkflow.id}`,
-  );
-  console.log(`Webhook key: ${webhookKey}`);
+  if (healthCheckWorkflow) {
+    console.log(
+      `Created health check workflow with ID: ${healthCheckWorkflow.id}`,
+    );
+    console.log(`Webhook key: ${webhookKey}`);
+  } else {
+    console.error("Failed to create health check workflow");
+    return;
+  }
 
   // Find scripts for the workflow
   const apiCheckScript = findScriptByTypeAndName(
@@ -178,36 +193,41 @@ async function seedWorkflows() {
   if (apiCheckScript && notifyScript && logScript) {
     // Create nodes
     const apiNode = await createWorkflowNode({
-      workflowId: healthCheckWorkflow.id,
+      workflowId: healthCheckWorkflow!.id,
       eventId: apiCheckScript.id,
       position_x: 100,
       position_y: 100,
     });
 
     const notifyNode = await createWorkflowNode({
-      workflowId: healthCheckWorkflow.id,
+      workflowId: healthCheckWorkflow!.id,
       eventId: notifyScript.id,
       position_x: 400,
       position_y: 50,
     });
 
     const logNode = await createWorkflowNode({
-      workflowId: healthCheckWorkflow.id,
+      workflowId: healthCheckWorkflow!.id,
       eventId: logScript.id,
       position_x: 400,
       position_y: 200,
     });
 
+    if (!apiNode || !notifyNode || !logNode) {
+      console.error("Failed to create workflow nodes");
+      return;
+    }
+
     // Create connections
     await createWorkflowConnection({
-      workflowId: healthCheckWorkflow.id,
+      workflowId: healthCheckWorkflow!.id,
       sourceNodeId: apiNode.id,
       targetNodeId: notifyNode.id,
       connectionType: ConnectionType.ON_FAILURE,
     });
 
     await createWorkflowConnection({
-      workflowId: healthCheckWorkflow.id,
+      workflowId: healthCheckWorkflow!.id,
       sourceNodeId: apiNode.id,
       targetNodeId: logNode.id,
       connectionType: ConnectionType.ALWAYS,
@@ -229,6 +249,11 @@ async function seedWorkflows() {
     userId,
     status: EventStatus.DRAFT,
   });
+
+  if (!onboardingWorkflow) {
+    console.error("Failed to create onboarding workflow");
+    return;
+  }
 
   console.log(`Created onboarding workflow with ID: ${onboardingWorkflow.id}`);
 
@@ -274,19 +299,23 @@ async function seedWorkflows() {
     });
 
     // Create connections
-    await createWorkflowConnection({
-      workflowId: onboardingWorkflow.id,
-      sourceNodeId: createUserNode.id,
-      targetNodeId: permissionsNode.id,
-      connectionType: ConnectionType.ON_SUCCESS,
-    });
+    if (createUserNode && permissionsNode && welcomeNode) {
+      await createWorkflowConnection({
+        workflowId: onboardingWorkflow.id,
+        sourceNodeId: createUserNode.id,
+        targetNodeId: permissionsNode.id,
+        connectionType: ConnectionType.ON_SUCCESS,
+      });
 
-    await createWorkflowConnection({
-      workflowId: onboardingWorkflow.id,
-      sourceNodeId: permissionsNode.id,
-      targetNodeId: welcomeNode.id,
-      connectionType: ConnectionType.ON_SUCCESS,
-    });
+      await createWorkflowConnection({
+        workflowId: onboardingWorkflow.id,
+        sourceNodeId: permissionsNode.id,
+        targetNodeId: welcomeNode.id,
+        connectionType: ConnectionType.ON_SUCCESS,
+      });
+    } else {
+      console.error("Failed to create workflow nodes for onboarding workflow");
+    }
 
     console.log("Created nodes and connections for onboarding workflow");
   } else {

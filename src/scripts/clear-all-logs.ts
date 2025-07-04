@@ -22,7 +22,8 @@ async function clearAllLogs() {
     const countResult = await db.execute(
       sql`SELECT COUNT(*) FROM logs`
     );
-    const logCount = parseInt(countResult.rows?.[0]?.count || '0', 10);
+    const countValue = countResult.rows?.[0]?.count;
+    const logCount = typeof countValue === 'string' ? parseInt(countValue, 10) : 0;
     
     // Delete all logs using direct db deletion
     await db.delete(logs);
@@ -46,7 +47,8 @@ async function clearEventLogs(eventId: number) {
     const eventExists = await db.execute(
       sql`SELECT COUNT(*) FROM events WHERE id = ${eventId}`
     );
-    const eventCount = parseInt(eventExists.rows?.[0]?.count || '0', 10);
+    const countResult = eventExists.rows?.[0] as { count?: string } | undefined;
+    const eventCount = parseInt(countResult?.count || '0', 10);
     
     if (eventCount === 0) {
       console.warn(`Warning: Event ${eventId} does not exist in the database.`);
@@ -54,10 +56,11 @@ async function clearEventLogs(eventId: number) {
     }
     
     // Count logs for this event first
-    const countResult = await db.execute(
+    const logCountQuery = await db.execute(
       sql`SELECT COUNT(*) FROM logs WHERE event_id = ${eventId}`
     );
-    const logCount = parseInt(countResult.rows?.[0]?.count || '0', 10);
+    const logCountResult = logCountQuery.rows?.[0] as { count?: string } | undefined;
+    const logCount = parseInt(logCountResult?.count || '0', 10);
     
     if (logCount === 0) {
       console.log(`No logs found for event/script ID ${eventId}.`);
@@ -87,7 +90,8 @@ async function clearOldLogs(daysAgo: number) {
     const countResult = await db.execute(
       sql`SELECT COUNT(*) FROM logs WHERE start_time < ${cutoffDate.toISOString()}`
     );
-    const logCount = parseInt(countResult.rows?.[0]?.count || '0', 10);
+    const countValue = countResult.rows?.[0]?.count;
+    const logCount = typeof countValue === 'string' ? parseInt(countValue, 10) : 0;
     
     if (logCount === 0) {
       console.log(`No logs found older than ${daysAgo} days (${cutoffDate.toISOString()}).`);
@@ -127,7 +131,12 @@ async function main() {
         process.exit(1);
       }
       
-      const eventId = parseInt(args[1], 10);
+      const eventIdArg = args[1];
+      if (!eventIdArg) {
+        console.error('Missing event ID');
+        process.exit(1);
+      }
+      const eventId = parseInt(eventIdArg, 10);
       if (isNaN(eventId)) {
         console.error('Invalid event ID. Please provide a valid number.');
         process.exit(1);
@@ -145,7 +154,12 @@ async function main() {
         process.exit(1);
       }
       
-      const daysAgo = parseInt(args[1], 10);
+      const daysArg = args[1];
+      if (!daysArg) {
+        console.error('Missing days parameter');
+        process.exit(1);
+      }
+      const daysAgo = parseInt(daysArg, 10);
       if (isNaN(daysAgo) || daysAgo <= 0) {
         console.error('Invalid days parameter. Please provide a positive number.');
         process.exit(1);

@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/form";
 import { useToast } from "@/components/ui/use-toast";
 import { Clock, Globe, User, CheckCircle, ServerIcon } from "lucide-react";
-import { Workflow, WorkflowTriggerType, EventStatus } from "@/shared/schema";
+import { Workflow, WorkflowTriggerType, EventStatus, TimeUnit } from "@/shared/schema";
 import { trpc } from "@/lib/trpc";
 
 interface WorkflowDetailsFormProps {
@@ -48,7 +48,7 @@ const workflowDetailsSchema = z.object({
   tags: z.array(z.string()),
   customSchedule: z.string().optional(),
   scheduleNumber: z.number().min(1).nullable(),
-  scheduleUnit: z.string(),
+  scheduleUnit: z.nativeEnum(TimeUnit).nullable(),
   useCronScheduling: z.boolean(),
   overrideEventServers: z.boolean(),
   overrideServerIds: z.array(z.number()),
@@ -65,6 +65,20 @@ export default function WorkflowDetailsForm({
 }: WorkflowDetailsFormProps) {
   const { toast } = useToast();
   const [tagInput, setTagInput] = useState("");
+  const [formData, setFormData] = useState<WorkflowDetailsFormData>({
+    name: "",
+    description: "",
+    triggerType: WorkflowTriggerType.MANUAL,
+    status: EventStatus.DRAFT,
+    tags: [],
+    customSchedule: "",
+    scheduleNumber: null,
+    scheduleUnit: null,
+    useCronScheduling: false,
+    overrideEventServers: false,
+    overrideServerIds: [],
+    shared: false,
+  });
 
   const form = useForm<WorkflowDetailsFormData>({
     resolver: zodResolver(workflowDetailsSchema),
@@ -76,7 +90,7 @@ export default function WorkflowDetailsForm({
       tags: [],
       customSchedule: "",
       scheduleNumber: null,
-      scheduleUnit: "",
+      scheduleUnit: null,
       useCronScheduling: false,
       overrideEventServers: false,
       overrideServerIds: [],
@@ -113,7 +127,7 @@ export default function WorkflowDetailsForm({
       tags: Array.isArray(workflow.tags) ? workflow.tags : [],
       customSchedule: workflow.customSchedule || "",
       scheduleNumber: workflow.scheduleNumber || null,
-      scheduleUnit: workflow.scheduleUnit || "",
+      scheduleUnit: workflow.scheduleUnit || null,
       useCronScheduling: !!workflow.customSchedule,
       overrideEventServers: workflow.overrideEventServers || false,
       overrideServerIds: Array.isArray(workflow.overrideServerIds)
@@ -122,6 +136,14 @@ export default function WorkflowDetailsForm({
       shared: workflow.shared || false,
     });
   }, [workflow, form]);
+
+  // Keep formData in sync with form values
+  useEffect(() => {
+    const subscription = form.watch((value) => {
+      setFormData(value as WorkflowDetailsFormData);
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
 
   const onSubmit = async (data: WorkflowDetailsFormData) => {
     try {
@@ -148,7 +170,10 @@ export default function WorkflowDetailsForm({
 
   const removeTag = (tagToRemove: string) => {
     const currentTags = form.getValues("tags");
-    form.setValue("tags", currentTags.filter((tag) => tag !== tagToRemove));
+    form.setValue(
+      "tags",
+      currentTags.filter((tag) => tag !== tagToRemove),
+    );
   };
 
   const handleTagInputKeyPress = (e: React.KeyboardEvent) => {
@@ -174,10 +199,7 @@ export default function WorkflowDetailsForm({
                   <FormItem>
                     <FormLabel>Name</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="Enter workflow name"
-                        {...field}
-                      />
+                      <Input placeholder="Enter workflow name" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -244,196 +266,196 @@ export default function WorkflowDetailsForm({
               )}
             />
 
-          <div className="space-y-2">
-            <Label htmlFor="triggerType">Trigger Type</Label>
-            <Select
-              value={formData.triggerType}
-              onValueChange={(value: WorkflowTriggerType) =>
-                setFormData((prev) => ({ ...prev, triggerType: value }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select trigger type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={WorkflowTriggerType.MANUAL}>
-                  <div className="flex items-center">
-                    <User className="mr-2 h-4 w-4" />
-                    Manual
-                  </div>
-                </SelectItem>
-                <SelectItem value={WorkflowTriggerType.SCHEDULED}>
-                  <div className="flex items-center">
-                    <Clock className="mr-2 h-4 w-4" />
-                    Scheduled
-                  </div>
-                </SelectItem>
-                <SelectItem value={WorkflowTriggerType.WEBHOOK}>
-                  <div className="flex items-center">
-                    <Globe className="mr-2 h-4 w-4" />
-                    Webhook
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="triggerType">Trigger Type</Label>
+              <Select
+                value={formData.triggerType}
+                onValueChange={(value: WorkflowTriggerType) =>
+                  setFormData((prev) => ({ ...prev, triggerType: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select trigger type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={WorkflowTriggerType.MANUAL}>
+                    <div className="flex items-center">
+                      <User className="mr-2 h-4 w-4" />
+                      Manual
+                    </div>
+                  </SelectItem>
+                  <SelectItem value={WorkflowTriggerType.SCHEDULE}>
+                    <div className="flex items-center">
+                      <Clock className="mr-2 h-4 w-4" />
+                      Scheduled
+                    </div>
+                  </SelectItem>
+                  <SelectItem value={WorkflowTriggerType.WEBHOOK}>
+                    <div className="flex items-center">
+                      <Globe className="mr-2 h-4 w-4" />
+                      Webhook
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-          {/* Schedule Settings */}
-          {formData.triggerType === WorkflowTriggerType.SCHEDULED && (
-            <Card className="bg-muted p-4">
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="useCronScheduling"
-                    checked={formData.useCronScheduling}
-                    onCheckedChange={(checked) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        useCronScheduling: !!checked,
-                        customSchedule: checked ? prev.customSchedule : "",
-                        scheduleNumber: checked ? null : prev.scheduleNumber,
-                        scheduleUnit: checked ? "" : prev.scheduleUnit,
-                      }))
-                    }
-                  />
-                  <Label htmlFor="useCronScheduling">Use Cron Expression</Label>
-                </div>
-
-                {formData.useCronScheduling ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="customSchedule">Cron Expression</Label>
-                    <Input
-                      id="customSchedule"
-                      placeholder="0 0 * * *"
-                      value={formData.customSchedule}
-                      onChange={(e) =>
+            {/* Schedule Settings */}
+            {formData.triggerType === WorkflowTriggerType.SCHEDULE && (
+              <Card className="bg-muted p-4">
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="useCronScheduling"
+                      checked={formData.useCronScheduling}
+                      onCheckedChange={(checked) =>
                         setFormData((prev) => ({
                           ...prev,
-                          customSchedule: e.target.value,
+                          useCronScheduling: !!checked,
+                          customSchedule: checked ? prev.customSchedule : "",
+                          scheduleNumber: checked ? null : prev.scheduleNumber,
+                          scheduleUnit: checked ? null : prev.scheduleUnit,
                         }))
                       }
                     />
+                    <Label htmlFor="useCronScheduling">
+                      Use Cron Expression
+                    </Label>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-4">
+
+                  {formData.useCronScheduling ? (
                     <div className="space-y-2">
-                      <Label htmlFor="scheduleNumber">Every</Label>
+                      <Label htmlFor="customSchedule">Cron Expression</Label>
                       <Input
-                        id="scheduleNumber"
-                        type="number"
-                        min="1"
-                        placeholder="1"
-                        value={formData.scheduleNumber || ""}
+                        id="customSchedule"
+                        placeholder="0 0 * * *"
+                        value={formData.customSchedule}
                         onChange={(e) =>
                           setFormData((prev) => ({
                             ...prev,
-                            scheduleNumber: e.target.value
-                              ? parseInt(e.target.value)
-                              : null,
+                            customSchedule: e.target.value,
                           }))
                         }
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="scheduleUnit">Unit</Label>
-                      <Select
-                        value={formData.scheduleUnit}
-                        onValueChange={(value) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            scheduleUnit: value,
-                          }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select unit" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="minute">Minute(s)</SelectItem>
-                          <SelectItem value="hour">Hour(s)</SelectItem>
-                          <SelectItem value="day">Day(s)</SelectItem>
-                          <SelectItem value="week">Week(s)</SelectItem>
-                          <SelectItem value="month">Month(s)</SelectItem>
-                        </SelectContent>
-                      </Select>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="scheduleNumber">Every</Label>
+                        <Input
+                          id="scheduleNumber"
+                          type="number"
+                          min="1"
+                          placeholder="1"
+                          value={formData.scheduleNumber || ""}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              scheduleNumber: e.target.value
+                                ? parseInt(e.target.value)
+                                : null,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="scheduleUnit">Unit</Label>
+                        <Select
+                          value={formData.scheduleUnit || ""}
+                          onValueChange={(value) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              scheduleUnit: value as TimeUnit,
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select unit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={TimeUnit.MINUTES}>Minute(s)</SelectItem>
+                            <SelectItem value={TimeUnit.HOURS}>Hour(s)</SelectItem>
+                            <SelectItem value={TimeUnit.DAYS}>Day(s)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            </Card>
-          )}
+                  )}
+                </div>
+              </Card>
+            )}
 
-          {/* Tags */}
-          <div className="space-y-2">
-            <Label>Tags</Label>
-            <div className="flex space-x-2">
-              <Input
-                placeholder="Add tag"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyPress={handleTagInputKeyPress}
-              />
-              <Button type="button" onClick={addTag} variant="outline">
-                Add
-              </Button>
-            </div>
-            {formData.tags.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {formData.tags.map((tag, index) => (
-                  <span
-                    key={index}
-                    className="bg-secondary text-secondary-foreground inline-flex items-center rounded-full px-2 py-1 text-xs"
-                  >
-                    {tag}
-                    <button
-                      type="button"
-                      onClick={() => removeTag(tag)}
-                      className="text-secondary-foreground hover:text-foreground ml-1"
+            {/* Tags */}
+            <div className="space-y-2">
+              <Label>Tags</Label>
+              <div className="flex space-x-2">
+                <Input
+                  placeholder="Add tag"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyPress={handleTagInputKeyPress}
+                />
+                <Button type="button" onClick={addTag} variant="outline">
+                  Add
+                </Button>
+              </div>
+              {formData.tags.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {formData.tags.map((tag, index) => (
+                    <span
+                      key={index}
+                      className="bg-secondary text-secondary-foreground inline-flex items-center rounded-full px-2 py-1 text-xs"
                     >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Server Override */}
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="overrideEventServers"
-                checked={formData.overrideEventServers}
-                onCheckedChange={(checked) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    overrideEventServers: checked,
-                    overrideServerIds: checked ? prev.overrideServerIds : [],
-                  }))
-                }
-              />
-              <Label htmlFor="overrideEventServers">
-                Override Event Server Settings
-              </Label>
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => removeTag(tag)}
+                        className="text-secondary-foreground hover:text-foreground ml-1"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
-            {formData.overrideEventServers && (
-              <div className="space-y-2">
-                <Label>Server Override Settings</Label>
-                <p className="text-muted-foreground text-sm">
-                  Select specific servers to run workflow events on, overriding
-                  individual event server settings.
-                </p>
-                {/* Server selection would go here - would need servers query */}
+
+            {/* Server Override */}
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="overrideEventServers"
+                  checked={formData.overrideEventServers}
+                  onCheckedChange={(checked) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      overrideEventServers: checked,
+                      overrideServerIds: checked ? prev.overrideServerIds : [],
+                    }))
+                  }
+                />
+                <Label htmlFor="overrideEventServers">
+                  Override Event Server Settings
+                </Label>
               </div>
-            )}
-          </div>
+              {formData.overrideEventServers && (
+                <div className="space-y-2">
+                  <Label>Server Override Settings</Label>
+                  <p className="text-muted-foreground text-sm">
+                    Select specific servers to run workflow events on,
+                    overriding individual event server settings.
+                  </p>
+                  {/* Server selection would go here - would need servers query */}
+                </div>
+              )}
+            </div>
 
             {/* Sharing */}
             <FormField
               control={form.control}
               name="shared"
               render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                <FormItem className="flex flex-row items-start space-y-0 space-x-3">
                   <FormControl>
                     <Switch
                       checked={field.value}
@@ -446,13 +468,15 @@ export default function WorkflowDetailsForm({
                 </FormItem>
               )}
             />
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
         <div className="flex justify-end space-x-4">
           <Button
             type="submit"
-            disabled={updateWorkflowMutation.isPending || form.formState.isSubmitting}
+            disabled={
+              updateWorkflowMutation.isPending || form.formState.isSubmitting
+            }
             className="px-8"
           >
             {updateWorkflowMutation.isPending ? "Saving..." : "Save Changes"}

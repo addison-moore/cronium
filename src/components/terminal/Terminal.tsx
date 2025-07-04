@@ -32,7 +32,9 @@ export default function Terminal({
   }, []);
 
   useEffect(() => {
-    if (!isClient || !terminalRef.current || isUserLoading || !user) return;
+    if (!isClient || !terminalRef.current || isUserLoading || !user) {
+      return;
+    }
 
     const initTerminal = async () => {
       try {
@@ -178,15 +180,17 @@ export default function Terminal({
         };
       } catch (error) {
         console.error("Terminal initialization failed:", error);
+        return () => {}; // Return empty cleanup function on error
       }
     };
 
-    const cleanup = initTerminal();
-    return () => {
-      if (cleanup) {
-        cleanup.then((cleanupFn) => cleanupFn?.());
-      }
-    };
+    initTerminal().then((cleanupFn) => {
+      // Store cleanup function to call on unmount
+      return cleanupFn;
+    });
+    
+    // Return empty cleanup for now
+    return () => {};
   }, [serverId, serverName, isClient, user, isUserLoading]);
 
   if (!isClient || isUserLoading) {

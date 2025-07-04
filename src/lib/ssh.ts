@@ -284,7 +284,7 @@ export class SSHService {
     if (this.isConnected && this.ssh) {
       this.ssh.end();
       this.isConnected = false;
-      this.ssh = undefined;
+      delete this.ssh;
     }
   }
 
@@ -1191,8 +1191,8 @@ module.exports = croniumInstance;`;
       if (memoryResult.stdout) {
         const memParts = memoryResult.stdout.trim().split(/\s+/);
         if (memParts.length >= 4) {
-          totalMemory = memParts[1];
-          freeMemory = memParts[3];
+          totalMemory = memParts[1] || "";
+          freeMemory = memParts[3] || "";
         }
       }
 
@@ -1204,9 +1204,9 @@ module.exports = croniumInstance;`;
         const hourMatch = uptimeStr.match(/(\d+) hours?/);
         const minuteMatch = uptimeStr.match(/(\d+) minutes?/);
 
-        if (dayMatch) uptime.days = parseInt(dayMatch[1]);
-        if (hourMatch) uptime.hours = parseInt(hourMatch[1]);
-        if (minuteMatch) uptime.minutes = parseInt(minuteMatch[1]);
+        if (dayMatch?.[1]) uptime.days = parseInt(dayMatch[1]);
+        if (hourMatch?.[1]) uptime.hours = parseInt(hourMatch[1]);
+        if (minuteMatch?.[1]) uptime.minutes = parseInt(minuteMatch[1]);
       }
 
       return {
@@ -1430,7 +1430,7 @@ module.exports = croniumInstance;`;
         // Replace PS1 variables with actual values
         prompt = prompt
           .replace(/\\u/g, username)
-          .replace(/\\h/g, host.split(".")[0]) // hostname without domain
+          .replace(/\\h/g, host.split(".")[0] || host) // hostname without domain
           .replace(/\\H/g, host) // full hostname
           .replace(
             /\\w/g,

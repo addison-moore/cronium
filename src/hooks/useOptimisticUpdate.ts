@@ -58,7 +58,12 @@ export function useOptimisticUpdate<T>({
         const originalItems = [...optimisticItems];
         
         // Apply the optimistic update
-        const updatedItem = updater(originalItems[itemIndex]);
+        const currentItem = originalItems[itemIndex];
+        if (!currentItem) {
+          console.error(`Item not found at index ${itemIndex}`);
+          return;
+        }
+        const updatedItem = updater(currentItem);
         const updatedItems = [...originalItems];
         updatedItems[itemIndex] = updatedItem;
         

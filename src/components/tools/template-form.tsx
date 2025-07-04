@@ -167,7 +167,7 @@ export function TemplateForm({
             </div>
             <Switch
               id="isSystemTemplate"
-              checked={form.watch("isSystemTemplate")}
+              checked={form.watch("isSystemTemplate") ?? false}
               onCheckedChange={(checked) =>
                 form.setValue("isSystemTemplate", checked)
               }

@@ -198,7 +198,7 @@ export function EventsTable({
       cell: (event) => (
         <ClickableStatusBadge
           currentStatus={event.status}
-          onStatusChange={(newStatus) =>
+          onStatusChange={async (newStatus) =>
             onEventStatusChange(event.id, newStatus)
           }
         />

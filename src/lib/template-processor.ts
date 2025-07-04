@@ -219,7 +219,9 @@ export class TemplateProcessor {
     let match;
 
     while ((match = regex.exec(template)) !== null) {
-      variables.add(match[1]);
+      if (match[1]) {
+        variables.add(match[1]);
+      }
     }
 
     return Array.from(variables);

@@ -97,9 +97,9 @@ export default function WorkflowExecutionHistory({
     {
       enabled: true,
       staleTime: 30000, // 30 seconds
-      refetchInterval: (data) => {
+      refetchInterval: (query) => {
         // Poll every 8 seconds if there are running executions
-        const hasRunning = data?.executions?.some(
+        const hasRunning = query.state.data?.executions?.executions?.some(
           (exec: any) => exec.status === LogStatus.RUNNING,
         );
         return hasRunning ? 8000 : false;
@@ -108,8 +108,8 @@ export default function WorkflowExecutionHistory({
   );
 
   // Extract executions from tRPC response
-  const executions = executionsData?.executions || [];
-  const totalExecutions = executionsData?.total || 0;
+  const executions = executionsData?.executions?.executions || [];
+  const totalExecutions = executionsData?.executions?.total || 0;
 
   // Handle manual refresh
   const handleManualRefresh = async () => {
@@ -140,7 +140,7 @@ export default function WorkflowExecutionHistory({
       setIsLoadingDetails(true);
 
       // Find the execution to get workflow ID
-      const execution = executions.find((exec) => exec.id === executionId);
+      const execution = executions.find((exec: any) => exec.id === executionId);
       const targetWorkflowId = workflowId || execution?.workflowId;
 
       if (!targetWorkflowId) {
@@ -194,9 +194,9 @@ export default function WorkflowExecutionHistory({
   ];
 
   // Apply filters to executions
-  const filteredExecutions = executions.filter((execution) => {
+  const filteredExecutions = executions.filter((execution: any) => {
     const matchesSearch =
-      execution.workflow?.name
+      `Workflow ${execution.workflowId}`
         ?.toLowerCase()
         .includes(searchTerm.toLowerCase()) ?? true;
 
@@ -215,9 +215,7 @@ export default function WorkflowExecutionHistory({
 
     switch (sortBy) {
       case "name":
-        comparison = (a.workflow?.name || "").localeCompare(
-          b.workflow?.name || "",
-        );
+        comparison = a.workflowId - b.workflowId;
         break;
       case "startedAt":
         comparison =
@@ -532,7 +530,7 @@ export default function WorkflowExecutionHistory({
                           className="hover:underline"
                         >
                           <div className="font-medium">
-                            {execution.workflow?.name || "Unknown Workflow"}
+                            {`Workflow ${execution.workflowId}`}
                           </div>
                         </Link>
                       </TableCell>
@@ -575,9 +573,7 @@ export default function WorkflowExecutionHistory({
                           <DialogHeader>
                             <DialogTitle>
                               Execution Details -{" "}
-                              {execution.workflow?.name
-                                ? `${execution.workflow.name} - `
-                                : ""}
+                              {`Workflow ${execution.workflowId}`} -{" "}
                               {formatDate(execution.startedAt)}
                             </DialogTitle>
                           </DialogHeader>

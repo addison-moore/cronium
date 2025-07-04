@@ -25,7 +25,7 @@ export function ResetCounterSwitch({
   const t = useTranslations("Events");
 
   // tRPC mutation for saving reset counter setting
-  const resetCounterMutation = trpc.events.resetCounter.useMutation({
+  const updateEventMutation = trpc.events.update.useMutation({
     onSuccess: () => {
       toast({
         title: "Setting Saved",
@@ -60,7 +60,7 @@ export function ResetCounterSwitch({
         `Saving reset counter setting for event ${eventId}: ${isChecked}`,
       );
 
-      await resetCounterMutation.mutateAsync({
+      await updateEventMutation.mutateAsync({
         id: eventId,
         resetCounterOnActive: isChecked,
       });
@@ -91,9 +91,9 @@ export function ResetCounterSwitch({
       <Button
         onClick={saveResetCounterSetting}
         className="w-full"
-        disabled={resetCounterMutation.isPending}
+        disabled={updateEventMutation.isPending}
       >
-        {resetCounterMutation.isPending ? "Saving..." : "Save Setting"}
+        {updateEventMutation.isPending ? "Saving..." : "Save Setting"}
       </Button>
     </div>
   );

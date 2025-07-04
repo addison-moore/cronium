@@ -104,13 +104,13 @@ function EventNode({ data, selected }: NodeProps) {
               eventId={eventId || 0}
               eventName={label || "Untitled"}
               eventType={eventType}
-              eventDescription={description}
-              eventTags={tags}
-              eventServerId={serverId}
-              eventServerName={serverName}
-              createdAt={createdAt}
-              updatedAt={updatedAt}
-              onEventUpdated={handleEventUpdated}
+              {...(description !== undefined && { eventDescription: description })}
+              {...(tags !== undefined && { eventTags: tags })}
+              {...(serverId !== undefined && { eventServerId: serverId })}
+              {...(serverName !== undefined && { eventServerName: serverName })}
+              {...(createdAt !== undefined && { createdAt })}
+              {...(updatedAt !== undefined && { updatedAt })}
+              {...(handleEventUpdated !== undefined && { onEventUpdated: handleEventUpdated })}
             >
               <Button
                 variant="ghost"

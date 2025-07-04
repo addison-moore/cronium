@@ -129,6 +129,7 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
           case 'webhook':
             result = await webhookSendMutation.mutateAsync({
               toolId: tool.id,
+              message: testMessage,
               payload: { message: testMessage, test: true },
               method: 'POST',
             });

@@ -423,7 +423,7 @@ export default function WorkflowCanvas({
 
       // Keep track of selected node
       const selectedNodes = updatedNodes.filter((node) => node.selected);
-      setSelectedNode(selectedNodes.length > 0 ? selectedNodes[0] : null);
+      setSelectedNode(selectedNodes.length > 0 && selectedNodes[0] ? selectedNodes[0] : null);
     },
     [
       nodes,

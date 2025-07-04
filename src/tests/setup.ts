@@ -35,7 +35,7 @@ afterEach(() => {
       }
     }
   } catch (error) {
-    console.warn('Cleanup warning:', error.message);
+    console.warn('Cleanup warning:', error instanceof Error ? error.message : String(error));
   }
 });
 

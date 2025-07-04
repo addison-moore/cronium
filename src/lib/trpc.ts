@@ -1,6 +1,7 @@
 import { createTRPCReact } from "@trpc/react-query";
 import { httpBatchLink } from "@trpc/client";
 import { AppRouter } from "@/server/api/root";
+import superjson from "superjson";
 
 export const trpc = createTRPCReact<AppRouter>();
 
@@ -14,6 +15,7 @@ export const trpcClient = trpc.createClient({
           // authorization: getAuthCookie(),
         };
       },
+      transformer: superjson,
     }),
   ],
 });

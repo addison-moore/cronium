@@ -173,9 +173,9 @@ export type ConditionalAction<
 } & ConditionalActionConfig<T>;
 
 /**
- * API Response patterns
+ * Basic API Response patterns (deprecated - use ApiResponse below)
  */
-export type ApiResponse<T = unknown> =
+export type BasicApiResponse<T = unknown> =
   | { success: true; data: T; error?: never }
   | { success: false; error: string; data?: never };
 
@@ -529,7 +529,7 @@ export function createErrorResponse(
   error: string,
   code?: string,
 ): ApiResponse<never> {
-  return { success: false, error, code };
+  return code ? { success: false, error, code } : { success: false, error };
 }
 
 /**

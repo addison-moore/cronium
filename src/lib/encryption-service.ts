@@ -321,7 +321,10 @@ export class ClientEncryptionUtils {
     const randomArray = crypto.getRandomValues(new Uint8Array(length));
 
     for (let i = 0; i < length; i++) {
-      result += chars.charAt(randomArray[i] % chars.length);
+      const randomValue = randomArray[i];
+      if (randomValue !== undefined) {
+        result += chars.charAt(randomValue % chars.length);
+      }
     }
 
     return result;

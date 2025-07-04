@@ -773,12 +773,20 @@ async function executeSingleScript(
     // Update execution count after processing
     await handleExecutionCount(event.id);
 
-    return {
+    const returnValue: ScriptExecutionResult = {
       success,
       output: success ? output : result.stderr,
-      scriptOutput: (result as any).scriptOutput, // cronium.output() data
-      condition: conditionValue,
     };
+    
+    if ((result as any).scriptOutput !== undefined) {
+      returnValue.scriptOutput = (result as any).scriptOutput;
+    }
+    
+    if (conditionValue !== undefined) {
+      returnValue.condition = conditionValue;
+    }
+    
+    return returnValue;
   } catch (err) {
     const error = err as Error;
     console.error(`Unexpected error executing script ${event.id}:`, error);
