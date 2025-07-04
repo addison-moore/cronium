@@ -158,7 +158,12 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
   });
 
   // Extract workflows from tRPC response
-  const workflows = workflowsData?.workflows || [];
+  const workflows: WorkflowItem[] = (workflowsData?.workflows || []).map((w: any) => ({
+    ...w,
+    createdAt: w.createdAt instanceof Date ? w.createdAt.toISOString() : w.createdAt,
+    updatedAt: w.updatedAt instanceof Date ? w.updatedAt.toISOString() : w.updatedAt,
+    lastRunAt: null // TODO: Get lastRunAt from workflow execution data
+  }));
 
   useEffect(() => {
     // Filter workflows based on search term, status, and tags
@@ -173,7 +178,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
           (workflow.description &&
             workflow.description.toLowerCase().includes(term)) ||
           (workflow.tags &&
-            workflow.tags.some((tag) => tag.toLowerCase().includes(term))),
+            workflow.tags.some((tag: any) => tag.toLowerCase().includes(term))),
       );
     }
 
@@ -208,7 +213,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
     const allTags = new Set<string>();
     workflows.forEach((workflow) => {
       if (workflow.tags) {
-        workflow.tags.forEach((tag) => allTags.add(tag));
+        workflow.tags.forEach((tag: any) => allTags.add(tag));
       }
     });
     return Array.from(allTags).sort();

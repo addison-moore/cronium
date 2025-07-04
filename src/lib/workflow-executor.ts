@@ -565,8 +565,8 @@ export class WorkflowExecutor {
       nodeResults.set(node.id, {
         success: executionResult.success,
         output: executionResult.output || "",
-        scriptOutput: executionResult.scriptOutput,
-        condition: executionResult.condition,
+        ...(executionResult.scriptOutput !== undefined && { scriptOutput: executionResult.scriptOutput }),
+        ...(executionResult.condition !== undefined && { condition: executionResult.condition }),
       });
 
       // Create a workflow execution event record

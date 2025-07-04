@@ -224,7 +224,7 @@ export async function PATCH(
           continue;
         }
 
-        await storage.createEvent(sanitizedEvent);
+        await storage.createAction(sanitizedEvent);
       }
     }
 
@@ -250,7 +250,7 @@ export async function PATCH(
           continue;
         }
 
-        await storage.createEvent(sanitizedEvent);
+        await storage.createAction(sanitizedEvent);
       }
     }
 

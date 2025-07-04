@@ -160,7 +160,18 @@ export default function ServerForm({
           ...payload,
         });
       } else {
-        await createServerMutation.mutateAsync(payload);
+        if (!payload.sshKey) {
+          toast({
+            title: "Error",
+            description: "SSH key is required when creating a new server",
+            variant: "destructive",
+          });
+          return;
+        }
+        await createServerMutation.mutateAsync({
+          ...payload,
+          sshKey: payload.sshKey,
+        });
       }
     } catch (error) {
       console.error("Error saving server:", error);

@@ -30,9 +30,10 @@ const variableProcedure = publicProcedure.use(async ({ ctx, next }) => {
       if (process.env.NODE_ENV === "development") {
         const allUsers = await storage.getAllUsers();
         const adminUsers = allUsers.filter((user) => user.role === "ADMIN");
-        if (adminUsers.length > 0) {
-          userId = adminUsers[0].id;
-          session = { user: { id: adminUsers[0].id } };
+        const firstAdmin = adminUsers[0];
+        if (firstAdmin) {
+          userId = firstAdmin.id;
+          session = { user: { id: firstAdmin.id } };
         }
       }
     }
@@ -220,7 +221,11 @@ export const variablesRouter = createTRPCRouter({
     .input(updateUserVariableSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const { id, ...updateData } = input;
+        const { id, ...rawUpdateData } = input;
+        // Filter out undefined values for exactOptionalPropertyTypes
+        const updateData = Object.fromEntries(
+          Object.entries(rawUpdateData).filter(([_, v]) => v !== undefined)
+        );
 
         // Check if variable exists and belongs to user
         const variables = await storage.getUserVariables(ctx.userId);

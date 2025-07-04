@@ -511,12 +511,25 @@ cronium_setVariable() {
         }
       }
 
-      return {
+      const returnValue: {
+        stdout: string;
+        stderr: string;
+        scriptOutput?: any;
+        condition?: boolean;
+      } = {
         stdout: result.stdout || "",
         stderr: result.stderr || "",
-        scriptOutput,
-        condition,
       };
+      
+      if (scriptOutput !== undefined) {
+        returnValue.scriptOutput = scriptOutput;
+      }
+      
+      if (condition !== undefined) {
+        returnValue.condition = condition;
+      }
+      
+      return returnValue;
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Script execution failed";

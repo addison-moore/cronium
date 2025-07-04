@@ -69,7 +69,7 @@ Generate code based on the user's request.`;
       max_tokens: 2000,
     });
 
-    const content = response.choices[0].message.content || "";
+    const content = response.choices[0]?.message.content || "";
 
     // Extract code from response if it's wrapped in markdown code blocks
     const codeBlockRegex = /```(?:\w+)?\s*\n([\s\S]+?)\n```/;

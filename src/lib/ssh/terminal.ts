@@ -173,7 +173,7 @@ export class TerminalSSHService {
         // Replace PS1 variables with actual values
         prompt = prompt
           .replace(/\\u/g, username)
-          .replace(/\\h/g, host.split(".")[0]) // hostname without domain
+          .replace(/\\h/g, host.split(".")[0] || host) // hostname without domain
           .replace(/\\H/g, host) // full hostname
           .replace(
             /\\w/g,

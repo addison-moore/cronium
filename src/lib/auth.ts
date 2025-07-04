@@ -10,7 +10,7 @@ const getLocaleFromPath = (path: string | null): string => {
 
   // Extract locale from the path (e.g., "/es/dashboard" -> "es")
   const match = path.match(/^\/([a-z]{2})(?:\/|$)/);
-  return match ? match[1] : "en";
+  return match?.[1] ?? "en";
 };
 
 export const authOptions: NextAuthOptions = {
@@ -91,11 +91,11 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.email = user.email;
-        token.username = user.username;
-        token.firstName = user.firstName;
-        token.lastName = user.lastName;
-        token.profileImageUrl = user.profileImageUrl;
+        token.email = user.email ?? null;
+        token.username = user.username ?? null;
+        token.firstName = user.firstName ?? null;
+        token.lastName = user.lastName ?? null;
+        token.profileImageUrl = user.profileImageUrl ?? null;
         token.role = user.role;
         token.status = user.status;
       }

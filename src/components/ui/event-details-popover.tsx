@@ -199,7 +199,7 @@ export function EventDetailsPopover({
         isOpen={editModalOpen}
         onClose={() => setEditModalOpen(false)}
         eventId={eventId}
-        onEventUpdated={onEventUpdated}
+        {...(onEventUpdated && { onEventUpdated })}
       />
     </Popover>
   );

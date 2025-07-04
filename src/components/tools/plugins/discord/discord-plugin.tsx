@@ -351,9 +351,13 @@ export const DiscordPlugin: ToolPlugin = {
 
   async validate(credentials: any) {
     const result = discordSchema.safeParse(credentials);
-    return {
-      isValid: result.success,
-      error: result.success ? undefined : result.error.issues[0]?.message,
-    };
+    if (result.success) {
+      return { isValid: true };
+    } else {
+      return { 
+        isValid: false, 
+        error: result.error.issues[0]?.message || "Validation failed" 
+      };
+    }
   },
 };

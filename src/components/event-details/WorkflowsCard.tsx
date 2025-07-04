@@ -55,25 +55,22 @@ export default function WorkflowsCard({
     error,
     refetch,
   } = trpc.events.getWorkflows.useQuery(
-    { eventId },
+    { id: eventId },
     {
       enabled: eventLoaded,
       retry: (failureCount, error) => {
         // Retry up to 3 times on failure
         return failureCount < 3;
       },
-      onError: (error) => {
-        console.error("Error fetching workflows:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load workflows. Click retry to try again.",
-          variant: "destructive",
-        });
-      },
+      // Remove onError as it's not available in the new tRPC version
     },
   );
 
-  const workflows: WorkflowItem[] = workflowsData?.workflows || [];
+  const workflows: WorkflowItem[] = (workflowsData || []).map((w) => ({
+    ...w,
+    createdAt: w.createdAt instanceof Date ? w.createdAt.toISOString() : w.createdAt,
+    updatedAt: w.updatedAt instanceof Date ? w.updatedAt.toISOString() : w.updatedAt,
+  }));
 
   const handleViewWorkflow = (workflowId: number) => {
     router.push(`/dashboard/workflows/${workflowId}`);

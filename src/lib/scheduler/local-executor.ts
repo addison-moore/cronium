@@ -290,12 +290,26 @@ export async function executeLocalScript(
         }
       }
 
-      return {
+      const returnValue: {
+        stdout: string;
+        stderr: string;
+        output?: any;
+        condition?: boolean;
+        isTimeout?: boolean;
+      } = {
         stdout: result.stdout,
         stderr: result.stderr,
-        output,
-        condition,
       };
+      
+      if (output !== undefined) {
+        returnValue.output = output;
+      }
+      
+      if (condition !== undefined) {
+        returnValue.condition = condition;
+      }
+      
+      return returnValue;
     } finally {
       // Restore original working directory
       process.chdir(originalCwd);
@@ -317,11 +331,21 @@ export async function executeLocalScript(
     // Check if this is a timeout error
     const isTimeout = error.killed === true && error.signal === "SIGTERM";
 
-    return {
+    const errorReturn: {
+      stdout: string;
+      stderr: string;
+      output?: any;
+      condition?: boolean;
+      isTimeout?: boolean;
+    } = {
       stdout: "",
       stderr: error.message || "Unknown error executing local script",
-      condition: undefined,
-      isTimeout,
     };
+    
+    if (isTimeout) {
+      errorReturn.isTimeout = isTimeout;
+    }
+    
+    return errorReturn;
   }
 }

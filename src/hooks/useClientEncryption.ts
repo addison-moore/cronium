@@ -58,7 +58,10 @@ class ClientEncryption {
     // Convert to base64 without using spread operator to avoid TS2802 error
     let binaryString = '';
     for (let i = 0; i < combined.length; i++) {
-      binaryString += String.fromCharCode(combined[i]);
+      const byte = combined[i];
+      if (byte !== undefined) {
+        binaryString += String.fromCharCode(byte);
+      }
     }
     return btoa(binaryString);
   }
@@ -91,7 +94,10 @@ class ClientEncryption {
     const randomArray = crypto.getRandomValues(new Uint8Array(length));
     
     for (let i = 0; i < length; i++) {
-      result += chars.charAt(randomArray[i] % chars.length);
+      const randomValue = randomArray[i];
+      if (randomValue !== undefined) {
+        result += chars.charAt(randomValue % chars.length);
+      }
     }
     
     return result;

@@ -641,7 +641,9 @@ async function createScript(data: any) {
     })
     .returning();
 
-  console.log(`Created script: ${script.name} (${script.type})`);
+  if (script) {
+    console.log(`Created script: ${script.name} (${script.type})`);
+  }
   return script;
 }
 

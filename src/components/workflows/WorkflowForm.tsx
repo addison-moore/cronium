@@ -113,8 +113,6 @@ export default function WorkflowForm({
     offset: 0,
     search: "",
     status: undefined,
-    sortBy: "name",
-    sortOrder: "asc",
   });
 
   const {
@@ -207,7 +205,7 @@ export default function WorkflowForm({
       icon: <Hand className="h-4 w-4" />,
     },
     {
-      value: WorkflowTriggerType.SCHEDULED,
+      value: WorkflowTriggerType.SCHEDULE,
       label: "Scheduled",
       description: "Triggered on a schedule",
       icon: <Calendar className="h-4 w-4" />,
@@ -244,8 +242,8 @@ export default function WorkflowForm({
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-2">
-            <Tab value="details">Details</Tab>
-            <Tab value="workflow">Workflow</Tab>
+            <Tab value="details" label="Details" />
+            <Tab value="workflow" label="Workflow" />
           </TabsList>
 
           <TabsContent value="details" className="space-y-6">
@@ -332,7 +330,7 @@ export default function WorkflowForm({
                       <FormControl>
                         <TagsInput
                           value={field.value || []}
-                          onValueChange={field.onChange}
+                          onChange={field.onChange}
                           placeholder="Add tags"
                         />
                       </FormControl>
@@ -395,7 +393,7 @@ export default function WorkflowForm({
 
                 {/* Schedule Configuration */}
                 {form.watch("triggerType") ===
-                  WorkflowTriggerType.SCHEDULED && (
+                  WorkflowTriggerType.SCHEDULE && (
                   <Card className="bg-muted p-4">
                     <div className="space-y-4">
                       <FormField
@@ -634,13 +632,13 @@ export default function WorkflowForm({
                   </div>
                 ) : (
                   <WorkflowCanvas
-                    events={events}
+                    availableEvents={events}
                     initialNodes={workflowNodes}
                     initialEdges={workflowEdges}
-                    onNodesChange={(nodes, edges) =>
+                    onChange={(nodes, edges) =>
                       handleCanvasChange(nodes, edges)
                     }
-                    onRefreshEvents={updateEvents}
+                    updateEvents={updateEvents}
                   />
                 )}
               </CardContent>
