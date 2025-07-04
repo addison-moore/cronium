@@ -178,31 +178,31 @@ export const eventsRouter = createTRPCRouter({
           await storage.setEventServers(event.id, input.selectedServerIds);
         }
 
-        // Handle conditional events - Fixed to use proper storage methods and data structure
-        if (input.onSuccessEvents && input.onSuccessEvents.length > 0) {
-          for (const conditionalEvent of input.onSuccessEvents) {
-            await storage.createEvent({
-              type: conditionalEvent.action as ConditionalActionType, // Use action, not type
+        // Handle conditional actions - Fixed to use proper storage methods and data structure
+        if (input.onSuccessActions && input.onSuccessActions.length > 0) {
+          for (const conditionalAction of input.onSuccessActions) {
+            await storage.createAction({
+              type: conditionalAction.action as ConditionalActionType, // Use action, not type
               successEventId: event.id, // Link to parent event
-              targetEventId: conditionalEvent.details?.targetEventId || null,
-              toolId: conditionalEvent.details?.toolId || null,
-              message: conditionalEvent.details?.message || "",
-              emailAddresses: conditionalEvent.details?.emailAddresses || "",
-              emailSubject: conditionalEvent.details?.emailSubject || "",
+              targetEventId: conditionalAction.details?.targetEventId || null,
+              toolId: conditionalAction.details?.toolId || null,
+              message: conditionalAction.details?.message || "",
+              emailAddresses: conditionalAction.details?.emailAddresses || "",
+              emailSubject: conditionalAction.details?.emailSubject || "",
             });
           }
         }
 
-        if (input.onFailEvents && input.onFailEvents.length > 0) {
-          for (const conditionalEvent of input.onFailEvents) {
-            await storage.createEvent({
-              type: conditionalEvent.action as ConditionalActionType, // Use action, not type
+        if (input.onFailActions && input.onFailActions.length > 0) {
+          for (const conditionalAction of input.onFailActions) {
+            await storage.createAction({
+              type: conditionalAction.action as ConditionalActionType, // Use action, not type
               failEventId: event.id, // Link to parent event
-              targetEventId: conditionalEvent.details?.targetEventId || null,
-              toolId: conditionalEvent.details?.toolId || null,
-              message: conditionalEvent.details?.message || "",
-              emailAddresses: conditionalEvent.details?.emailAddresses || "",
-              emailSubject: conditionalEvent.details?.emailSubject || "",
+              targetEventId: conditionalAction.details?.targetEventId || null,
+              toolId: conditionalAction.details?.toolId || null,
+              message: conditionalAction.details?.message || "",
+              emailAddresses: conditionalAction.details?.emailAddresses || "",
+              emailSubject: conditionalAction.details?.emailSubject || "",
             });
           }
         }
@@ -236,8 +236,8 @@ export const eventsRouter = createTRPCRouter({
         const {
           id,
           envVars,
-          onSuccessEvents,
-          onFailEvents,
+          onSuccessActions,
+          onFailActions,
           selectedServerIds,
           ...eventData
         } = input;
@@ -282,37 +282,37 @@ export const eventsRouter = createTRPCRouter({
           await storage.setEventServers(id, selectedServerIds);
         }
 
-        // Handle conditional events - Fixed to use proper storage methods and data structure
-        if (onSuccessEvents !== undefined || onFailEvents !== undefined) {
-          // Delete existing conditional events
-          await storage.deleteEventsByEventId(id);
+        // Handle conditional actions - Fixed to use proper storage methods and data structure
+        if (onSuccessActions !== undefined || onFailActions !== undefined) {
+          // Delete existing conditional actions
+          await storage.deleteActionsByEventId(id);
 
           // Create new success events
-          if (onSuccessEvents && onSuccessEvents.length > 0) {
-            for (const conditionalEvent of onSuccessEvents) {
-              await storage.createEvent({
-                type: conditionalEvent.action as ConditionalActionType, // Use action, not type
+          if (onSuccessActions && onSuccessActions.length > 0) {
+            for (const conditionalAction of onSuccessActions) {
+              await storage.createAction({
+                type: conditionalAction.action as ConditionalActionType, // Use action, not type
                 successEventId: id, // Link to parent event
-                targetEventId: conditionalEvent.details?.targetEventId || null,
-                toolId: conditionalEvent.details?.toolId || null,
-                message: conditionalEvent.details?.message || "",
-                emailAddresses: conditionalEvent.details?.emailAddresses || "",
-                emailSubject: conditionalEvent.details?.emailSubject || "",
+                targetEventId: conditionalAction.details?.targetEventId || null,
+                toolId: conditionalAction.details?.toolId || null,
+                message: conditionalAction.details?.message || "",
+                emailAddresses: conditionalAction.details?.emailAddresses || "",
+                emailSubject: conditionalAction.details?.emailSubject || "",
               });
             }
           }
 
           // Create new failure events
-          if (onFailEvents && onFailEvents.length > 0) {
-            for (const conditionalEvent of onFailEvents) {
-              await storage.createEvent({
-                type: conditionalEvent.action as ConditionalActionType, // Use action, not type
+          if (onFailActions && onFailActions.length > 0) {
+            for (const conditionalAction of onFailActions) {
+              await storage.createAction({
+                type: conditionalAction.action as ConditionalActionType, // Use action, not type
                 failEventId: id, // Link to parent event
-                targetEventId: conditionalEvent.details?.targetEventId || null,
-                toolId: conditionalEvent.details?.toolId || null,
-                message: conditionalEvent.details?.message || "",
-                emailAddresses: conditionalEvent.details?.emailAddresses || "",
-                emailSubject: conditionalEvent.details?.emailSubject || "",
+                targetEventId: conditionalAction.details?.targetEventId || null,
+                toolId: conditionalAction.details?.toolId || null,
+                message: conditionalAction.details?.message || "",
+                emailAddresses: conditionalAction.details?.emailAddresses || "",
+                emailSubject: conditionalAction.details?.emailSubject || "",
               });
             }
           }

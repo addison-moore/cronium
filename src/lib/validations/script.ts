@@ -68,8 +68,8 @@ export const scriptSchema = z
     timeoutUnit: z.nativeEnum(TimeUnit),
     retries: z.number().min(0, "Retries must be at least 0"),
     envVars: z.array(envVarSchema).default([]),
-    onSuccessEvents: z.array(eventSchema).default([]),
-    onFailEvents: z.array(eventSchema).default([]),
+    onSuccessActions: z.array(eventSchema).default([]),
+    onFailActions: z.array(eventSchema).default([]),
   })
   .refine(
     (data) => {

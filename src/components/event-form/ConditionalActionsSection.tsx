@@ -306,7 +306,7 @@ export default function ConditionalActionsSection({
     setSelectedTemplate("");
   }, [selectedToolType]);
 
-  // Load existing conditional events ONCE when component mounts or eventData/eventId changes
+  // Load existing conditional actions ONCE when component mounts or eventData/eventId changes
   useEffect(() => {
     if (!eventData) {
       setConditionalActions([]);

@@ -13,10 +13,10 @@ import { events } from "@/shared/schema";
 // Import modules
 import { executeScript } from "./execute-script";
 import {
-  handleSuccessEvents,
-  handleFailureEvents,
-  handleAlwaysEvents,
-  handleConditionEvents,
+  handleSuccessActions,
+  handleFailureActions,
+  handleAlwaysActions,
+  handleConditionActions,
   processEvent,
 } from "./event-handlers";
 import { handleExecutionCount } from "./execution-counter";
@@ -580,10 +580,10 @@ export class ScriptScheduler {
       const result = await executeScript(
         event,
         this.executingEvents, // Pass the actual Set we're tracking
-        this.handleSuccessEvents.bind(this),
-        this.handleFailureEvents.bind(this),
-        this.handleAlwaysEvents.bind(this),
-        this.handleConditionEvents.bind(this),
+        this.handleSuccessActions.bind(this),
+        this.handleFailureActions.bind(this),
+        this.handleAlwaysActions.bind(this),
+        this.handleConditionActions.bind(this),
         this.handleExecutionCount.bind(this),
         {}, // No input data for scheduled executions
         undefined, // No workflowId for regular script executions
@@ -613,20 +613,20 @@ export class ScriptScheduler {
     return handleExecutionCount(eventId);
   }
 
-  private async handleSuccessEvents(eventId: number) {
-    return handleSuccessEvents(eventId, this.processEvent.bind(this));
+  private async handleSuccessActions(eventId: number) {
+    return handleSuccessActions(eventId, this.processEvent.bind(this));
   }
 
-  private async handleFailureEvents(eventId: number) {
-    return handleFailureEvents(eventId, this.processEvent.bind(this));
+  private async handleFailureActions(eventId: number) {
+    return handleFailureActions(eventId, this.processEvent.bind(this));
   }
 
-  private async handleAlwaysEvents(eventId: number) {
-    return handleAlwaysEvents(eventId, this.processEvent.bind(this));
+  private async handleAlwaysActions(eventId: number) {
+    return handleAlwaysActions(eventId, this.processEvent.bind(this));
   }
 
-  private async handleConditionEvents(eventId: number, condition: boolean) {
-    return handleConditionEvents(
+  private async handleConditionActions(eventId: number, condition: boolean) {
+    return handleConditionActions(
       eventId,
       condition,
       this.processEvent.bind(this),
@@ -677,10 +677,10 @@ export class ScriptScheduler {
     const result = await executeScript(
       event,
       new Set<number>(), // Empty set to avoid double checking
-      this.handleSuccessEvents.bind(this),
-      this.handleFailureEvents.bind(this),
-      this.handleAlwaysEvents.bind(this),
-      this.handleConditionEvents.bind(this),
+      this.handleSuccessActions.bind(this),
+      this.handleFailureActions.bind(this),
+      this.handleAlwaysActions.bind(this),
+      this.handleConditionActions.bind(this),
       this.handleExecutionCount.bind(this),
       input,
       workflowId,
@@ -710,10 +710,10 @@ export class ScriptScheduler {
     return executeScript(
       event,
       new Set<number>(), // Empty set to avoid double checking
-      this.handleSuccessEvents.bind(this),
-      this.handleFailureEvents.bind(this),
-      this.handleAlwaysEvents.bind(this),
-      this.handleConditionEvents.bind(this),
+      this.handleSuccessActions.bind(this),
+      this.handleFailureActions.bind(this),
+      this.handleAlwaysActions.bind(this),
+      this.handleConditionActions.bind(this),
       this.handleExecutionCount.bind(this),
       {}, // No input data for immediate execution
       undefined, // No workflowId for immediate script executions

@@ -31,7 +31,7 @@ export const httpHeaderSchema = z.object({
 });
 
 // Conditional event schema - Updated to match frontend data structure
-export const conditionalEventSchema = z.object({
+export const conditionalActionSchema = z.object({
   type: z.string(), // ON_SUCCESS, ON_FAILURE, ALWAYS, ON_CONDITION
   action: z.nativeEnum(ConditionalActionType), // SCRIPT or SEND_MESSAGE
   details: z.object({
@@ -83,8 +83,8 @@ export const createEventSchema = z.object({
   
   // Environment variables and conditional events
   envVars: z.array(envVarSchema).default([]),
-  onSuccessEvents: z.array(conditionalEventSchema).default([]),
-  onFailEvents: z.array(conditionalEventSchema).default([]),
+  onSuccessActions: z.array(conditionalActionSchema).default([]),
+  onFailActions: z.array(conditionalActionSchema).default([]),
 })
 .refine((data) => {
   // Validate HTTP request fields
@@ -155,8 +155,8 @@ export const updateEventSchema = z.object({
   maxExecutions: z.number().min(0).optional(),
   resetCounterOnActive: z.boolean().optional(),
   envVars: z.array(envVarSchema).optional(),
-  onSuccessEvents: z.array(conditionalEventSchema).optional(),
-  onFailEvents: z.array(conditionalEventSchema).optional(),
+  onSuccessActions: z.array(conditionalActionSchema).optional(),
+  onFailActions: z.array(conditionalActionSchema).optional(),
 });
 
 // Event ID parameter schema
@@ -201,4 +201,4 @@ export type EventActivationInput = z.infer<typeof eventActivationSchema>;
 export type EventDownloadInput = z.infer<typeof eventDownloadSchema>;
 export type EnvVar = z.infer<typeof envVarSchema>;
 export type HttpHeader = z.infer<typeof httpHeaderSchema>;
-export type ConditionalEvent = z.infer<typeof conditionalEventSchema>;
+export type ConditionalAction = z.infer<typeof conditionalActionSchema>;
