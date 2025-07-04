@@ -36,7 +36,7 @@ export function LoadingState({
     >
       <div className="text-center">
         <div
-          className={`border-t-primary rounded-full animate-spin mx-auto mb-2 ${spinnerSizes[size]}`}
+          className={`border-t-primary mx-auto mb-2 animate-spin rounded-full ${spinnerSizes[size]}`}
         ></div>
         {!spinnerOnly && (
           <p className={`text-muted-foreground ${textSizes[size]}`}>{text}</p>

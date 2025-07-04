@@ -1,20 +1,51 @@
-import React from 'react';
-import DocsLayout from '@/components/docs/docs-layout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { CheckCircle, ArrowRight, Terminal, Server, Clock, Play } from 'lucide-react';
+import React from "react";
+import DocsLayout from "@/components/docs/docs-layout";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  CheckCircle,
+  ArrowRight,
+  Terminal,
+  Server,
+  Clock,
+  Play,
+} from "lucide-react";
 
 const tableOfContents = [
-  { title: 'Prerequisites', href: '#prerequisites', level: 2 },
-  { title: 'Step 1: Sign In', href: '#step-1-sign-in', level: 2 },
-  { title: 'Step 2: Add Your First Server', href: '#step-2-add-server', level: 2 },
-  { title: 'Step 3: Create Your First Event', href: '#step-3-create-event', level: 2 },
-  { title: 'Step 4: Test Your Event', href: '#step-4-test-event', level: 2 },
-  { title: 'Step 5: Schedule Your Event', href: '#step-5-schedule-event', level: 2 },
-  { title: 'Next Steps', href: '#next-steps', level: 2 },
+  { title: "Prerequisites", href: "#prerequisites", level: 2 },
+  { title: "Step 1: Sign In", href: "#step-1-sign-in", level: 2 },
+  {
+    title: "Step 2: Add Your First Server",
+    href: "#step-2-add-server",
+    level: 2,
+  },
+  {
+    title: "Step 3: Create Your First Event",
+    href: "#step-3-create-event",
+    level: 2,
+  },
+  { title: "Step 4: Test Your Event", href: "#step-4-test-event", level: 2 },
+  {
+    title: "Step 5: Schedule Your Event",
+    href: "#step-5-schedule-event",
+    level: 2,
+  },
+  { title: "Next Steps", href: "#next-steps", level: 2 },
 ];
 
-function StepCard({ step, title, description, children, completed = false }: {
+function StepCard({
+  step,
+  title,
+  description,
+  children,
+  completed = false,
+}: {
   step: number;
   title: string;
   description: string;
@@ -24,10 +55,14 @@ function StepCard({ step, title, description, children, completed = false }: {
   return (
     <Card className="mb-8">
       <CardHeader>
-        <div className="flex items-center gap-3 mb-2">
-          <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
-            completed ? 'bg-green-500 text-white' : 'bg-primary text-primary-foreground'
-          }`}>
+        <div className="mb-2 flex items-center gap-3">
+          <div
+            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+              completed
+                ? "bg-green-500 text-white"
+                : "bg-primary text-primary-foreground"
+            }`}
+          >
             {completed ? <CheckCircle className="h-5 w-5" /> : step}
           </div>
           <div>
@@ -36,63 +71,72 @@ function StepCard({ step, title, description, children, completed = false }: {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
-        {children}
-      </CardContent>
+      <CardContent>{children}</CardContent>
     </Card>
   );
 }
 
-function CodeBlock({ children, language = 'bash' }: { children: string; language?: string }) {
+function CodeBlock({
+  children,
+  language = "bash",
+}: {
+  children: string;
+  language?: string;
+}) {
   return (
-    <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm">
+    <pre className="overflow-x-auto rounded-lg bg-gray-900 p-4 text-sm text-gray-100">
       <code>{children}</code>
     </pre>
   );
 }
 
-export default async function QuickStartPage({ params }: { params: Promise<{ lang: string }> }) {
+export default async function QuickStartPage({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}) {
   const { lang } = await params;
 
   return (
     <DocsLayout lang={lang} tableOfContents={tableOfContents}>
-      <div className="max-w-4xl mx-auto">
+      <div className="mx-auto max-w-4xl">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-4">Quick Start Guide</h1>
-          <p className="text-xl text-muted-foreground">
-            Get up and running with Cronium in just a few minutes. This guide will walk you through 
-            creating your first automated script.
+          <h1 className="mb-4 text-4xl font-bold">Quick Start Guide</h1>
+          <p className="text-muted-foreground text-xl">
+            Get up and running with Cronium in just a few minutes. This guide
+            will walk you through creating your first automated script.
           </p>
         </div>
 
-        <div className="mb-8 p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
-          <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+        <div className="mb-8 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
+          <h3 className="mb-2 font-semibold text-blue-900 dark:text-blue-100">
             Estimated Time: 10 minutes
           </h3>
-          <p className="text-blue-800 dark:text-blue-200 text-sm">
-            By the end of this guide, you'll have a working automated script that runs on a schedule.
+          <p className="text-sm text-blue-800 dark:text-blue-200">
+            By the end of this guide, you'll have a working automated script
+            that runs on a schedule.
           </p>
         </div>
 
         <section id="prerequisites" className="mb-12">
-          <h2 className="text-2xl font-bold mb-4">Prerequisites</h2>
+          <h2 className="mb-4 text-2xl font-bold">Prerequisites</h2>
           <Card>
             <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="flex items-start gap-3">
-                  <CheckCircle className="h-5 w-5 text-green-500 mt-1" />
+                  <CheckCircle className="mt-1 h-5 w-5 text-green-500" />
                   <div>
                     <h4 className="font-semibold">Cronium Account</h4>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       You'll need a Cronium account to get started.
                     </p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <Server className="h-5 w-5 text-blue-500 mt-1" />
+                  <Server className="mt-1 h-5 w-5 text-blue-500" />
                   <div>
                     <h4 className="font-semibold">Server Access (Optional)</h4>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       SSH access to a server for remote execution.
                     </p>
                   </div>
@@ -109,12 +153,14 @@ export default async function QuickStartPage({ params }: { params: Promise<{ lan
         >
           <div className="space-y-4">
             <p>
-              Navigate to your Cronium instance and sign in with your credentials. If you don't have 
-              an account yet, you can create one using the sign-up form.
+              Navigate to your Cronium instance and sign in with your
+              credentials. If you don't have an account yet, you can create one
+              using the sign-up form.
             </p>
-            <div className="bg-muted p-4 rounded-lg">
+            <div className="bg-muted rounded-lg p-4">
               <p className="text-sm">
-                <strong>Tip:</strong> Make sure to verify your email address if this is your first time signing in.
+                <strong>Tip:</strong> Make sure to verify your email address if
+                this is your first time signing in.
               </p>
             </div>
           </div>
@@ -127,32 +173,41 @@ export default async function QuickStartPage({ params }: { params: Promise<{ lan
         >
           <div className="space-y-4">
             <p>
-              Before creating events, you'll need to add at least one server where your scripts can run.
+              Before creating events, you'll need to add at least one server
+              where your scripts can run.
             </p>
-            
+
             <div className="space-y-3">
               <div>
-                <h4 className="font-semibold mb-2">1. Navigate to Servers</h4>
-                <p className="text-sm text-muted-foreground">
+                <h4 className="mb-2 font-semibold">1. Navigate to Servers</h4>
+                <p className="text-muted-foreground text-sm">
                   Go to <strong>Dashboard → Servers → Add Server</strong>
                 </p>
               </div>
-              
+
               <div>
-                <h4 className="font-semibold mb-2">2. Enter Server Details</h4>
-                <div className="bg-muted p-4 rounded-lg">
+                <h4 className="mb-2 font-semibold">2. Enter Server Details</h4>
+                <div className="bg-muted rounded-lg p-4">
                   <ul className="space-y-2 text-sm">
-                    <li><strong>Name:</strong> My Production Server</li>
-                    <li><strong>Address:</strong> your-server.com</li>
-                    <li><strong>Username:</strong> root (or your SSH username)</li>
-                    <li><strong>Port:</strong> 22 (default SSH port)</li>
+                    <li>
+                      <strong>Name:</strong> My Production Server
+                    </li>
+                    <li>
+                      <strong>Address:</strong> your-server.com
+                    </li>
+                    <li>
+                      <strong>Username:</strong> root (or your SSH username)
+                    </li>
+                    <li>
+                      <strong>Port:</strong> 22 (default SSH port)
+                    </li>
                   </ul>
                 </div>
               </div>
-              
+
               <div>
-                <h4 className="font-semibold mb-2">3. Add SSH Key</h4>
-                <p className="text-sm text-muted-foreground mb-2">
+                <h4 className="mb-2 font-semibold">3. Add SSH Key</h4>
+                <p className="text-muted-foreground mb-2 text-sm">
                   Paste your private SSH key or generate a new key pair:
                 </p>
                 <CodeBlock>{`# Generate a new SSH key pair
@@ -163,10 +218,11 @@ ssh-copy-id user@your-server.com`}</CodeBlock>
               </div>
             </div>
 
-            <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 p-4 rounded-lg">
+            <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950">
               <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                <strong>Security Note:</strong> Your SSH keys are encrypted and stored securely. 
-                Cronium uses industry-standard encryption to protect your credentials.
+                <strong>Security Note:</strong> Your SSH keys are encrypted and
+                stored securely. Cronium uses industry-standard encryption to
+                protect your credentials.
               </p>
             </div>
           </div>
@@ -179,31 +235,38 @@ ssh-copy-id user@your-server.com`}</CodeBlock>
         >
           <div className="space-y-4">
             <p>
-              Now let's create a simple event that will run a basic script on your server.
+              Now let's create a simple event that will run a basic script on
+              your server.
             </p>
-            
+
             <div className="space-y-3">
               <div>
-                <h4 className="font-semibold mb-2">1. Create New Event</h4>
-                <p className="text-sm text-muted-foreground">
+                <h4 className="mb-2 font-semibold">1. Create New Event</h4>
+                <p className="text-muted-foreground text-sm">
                   Go to <strong>Dashboard → Events → Create Event</strong>
                 </p>
               </div>
-              
+
               <div>
-                <h4 className="font-semibold mb-2">2. Basic Information</h4>
-                <div className="bg-muted p-4 rounded-lg">
+                <h4 className="mb-2 font-semibold">2. Basic Information</h4>
+                <div className="bg-muted rounded-lg p-4">
                   <ul className="space-y-2 text-sm">
-                    <li><strong>Name:</strong> My First Script</li>
-                    <li><strong>Description:</strong> A simple hello world script</li>
-                    <li><strong>Type:</strong> Bash Script</li>
+                    <li>
+                      <strong>Name:</strong> My First Script
+                    </li>
+                    <li>
+                      <strong>Description:</strong> A simple hello world script
+                    </li>
+                    <li>
+                      <strong>Type:</strong> Bash Script
+                    </li>
                   </ul>
                 </div>
               </div>
-              
+
               <div>
-                <h4 className="font-semibold mb-2">3. Script Content</h4>
-                <p className="text-sm text-muted-foreground mb-2">
+                <h4 className="mb-2 font-semibold">3. Script Content</h4>
+                <p className="text-muted-foreground mb-2 text-sm">
                   Add this simple script:
                 </p>
                 <CodeBlock>{`#!/bin/bash
@@ -220,10 +283,10 @@ echo "Script executed at $(date)" >> /tmp/cronium-test.log
 echo "System uptime:"
 uptime`}</CodeBlock>
               </div>
-              
+
               <div>
-                <h4 className="font-semibold mb-2">4. Select Server</h4>
-                <p className="text-sm text-muted-foreground">
+                <h4 className="mb-2 font-semibold">4. Select Server</h4>
+                <p className="text-muted-foreground text-sm">
                   Choose the server you added in the previous step.
                 </p>
               </div>
@@ -238,24 +301,26 @@ uptime`}</CodeBlock>
         >
           <div className="space-y-4">
             <p>
-              Before scheduling your event, let's test it to make sure everything works correctly.
+              Before scheduling your event, let's test it to make sure
+              everything works correctly.
             </p>
-            
+
             <div className="space-y-3">
               <div>
-                <h4 className="font-semibold mb-2">1. Run Test Execution</h4>
-                <p className="text-sm text-muted-foreground">
-                  Click the <strong>"Run Now"</strong> button next to your event.
+                <h4 className="mb-2 font-semibold">1. Run Test Execution</h4>
+                <p className="text-muted-foreground text-sm">
+                  Click the <strong>"Run Now"</strong> button next to your
+                  event.
                 </p>
               </div>
-              
+
               <div>
-                <h4 className="font-semibold mb-2">2. Monitor Execution</h4>
-                <p className="text-sm text-muted-foreground mb-2">
+                <h4 className="mb-2 font-semibold">2. Monitor Execution</h4>
+                <p className="text-muted-foreground mb-2 text-sm">
                   Watch the real-time logs as your script executes:
                 </p>
-                <div className="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm">
-                  <div className="flex items-center gap-2 mb-2">
+                <div className="rounded-lg bg-gray-900 p-4 font-mono text-sm text-green-400">
+                  <div className="mb-2 flex items-center gap-2">
                     <Play className="h-4 w-4" />
                     <span>Execution started...</span>
                   </div>
@@ -263,25 +328,26 @@ uptime`}</CodeBlock>
                   <div>Current date: Mon Jan 20 2024 14:30:00</div>
                   <div>Server hostname: production-server</div>
                   <div>System uptime: 15:30:42 up 5 days, 2:15</div>
-                  <div className="flex items-center gap-2 mt-2 text-green-500">
+                  <div className="mt-2 flex items-center gap-2 text-green-500">
                     <CheckCircle className="h-4 w-4" />
                     <span>Execution completed successfully</span>
                   </div>
                 </div>
               </div>
-              
+
               <div>
-                <h4 className="font-semibold mb-2">3. Review Results</h4>
-                <p className="text-sm text-muted-foreground">
-                  Check the execution logs and verify that your script ran without errors.
+                <h4 className="mb-2 font-semibold">3. Review Results</h4>
+                <p className="text-muted-foreground text-sm">
+                  Check the execution logs and verify that your script ran
+                  without errors.
                 </p>
               </div>
             </div>
 
-            <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 p-4 rounded-lg">
+            <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950">
               <p className="text-sm text-green-800 dark:text-green-200">
-                <strong>Success!</strong> If you see the output above, your event is working correctly 
-                and ready to be scheduled.
+                <strong>Success!</strong> If you see the output above, your
+                event is working correctly and ready to be scheduled.
               </p>
             </div>
           </div>
@@ -294,24 +360,27 @@ uptime`}</CodeBlock>
         >
           <div className="space-y-4">
             <p>
-              Now that your event is working, let's schedule it to run automatically.
+              Now that your event is working, let's schedule it to run
+              automatically.
             </p>
-            
+
             <div className="space-y-3">
               <div>
-                <h4 className="font-semibold mb-2">1. Edit Event Schedule</h4>
-                <p className="text-sm text-muted-foreground">
-                  Click <strong>"Edit"</strong> on your event and navigate to the Schedule section.
+                <h4 className="mb-2 font-semibold">1. Edit Event Schedule</h4>
+                <p className="text-muted-foreground text-sm">
+                  Click <strong>"Edit"</strong> on your event and navigate to
+                  the Schedule section.
                 </p>
               </div>
-              
+
               <div>
-                <h4 className="font-semibold mb-2">2. Set Schedule</h4>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Choose when you want your script to run. Here are some common examples:
+                <h4 className="mb-2 font-semibold">2. Set Schedule</h4>
+                <p className="text-muted-foreground mb-2 text-sm">
+                  Choose when you want your script to run. Here are some common
+                  examples:
                 </p>
-                <div className="bg-muted p-4 rounded-lg">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div className="bg-muted rounded-lg p-4">
+                  <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
                     <div>
                       <strong>Every minute:</strong> <code>* * * * *</code>
                     </div>
@@ -326,33 +395,36 @@ uptime`}</CodeBlock>
                     </div>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mt-2">
-                  For testing, let's use <code>*/5 * * * *</code> to run every 5 minutes.
+                <p className="text-muted-foreground mt-2 text-sm">
+                  For testing, let's use <code>*/5 * * * *</code> to run every 5
+                  minutes.
                 </p>
               </div>
-              
+
               <div>
-                <h4 className="font-semibold mb-2">3. Enable Event</h4>
-                <p className="text-sm text-muted-foreground">
-                  Make sure the event is set to <strong>"Active"</strong> status.
+                <h4 className="mb-2 font-semibold">3. Enable Event</h4>
+                <p className="text-muted-foreground text-sm">
+                  Make sure the event is set to <strong>"Active"</strong>{" "}
+                  status.
                 </p>
               </div>
-              
+
               <div>
-                <h4 className="font-semibold mb-2">4. Save Changes</h4>
-                <p className="text-sm text-muted-foreground">
+                <h4 className="mb-2 font-semibold">4. Save Changes</h4>
+                <p className="text-muted-foreground text-sm">
                   Click <strong>"Save Event"</strong> to activate the schedule.
                 </p>
               </div>
             </div>
 
-            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
               <div className="flex items-start gap-3">
-                <Clock className="h-5 w-5 text-blue-500 mt-1" />
+                <Clock className="mt-1 h-5 w-5 text-blue-500" />
                 <div>
                   <p className="text-sm text-blue-800 dark:text-blue-200">
-                    <strong>Congratulations!</strong> Your event is now scheduled and will run automatically. 
-                    You can monitor its execution in the Events dashboard.
+                    <strong>Congratulations!</strong> Your event is now
+                    scheduled and will run automatically. You can monitor its
+                    execution in the Events dashboard.
                   </p>
                 </div>
               </div>
@@ -361,8 +433,8 @@ uptime`}</CodeBlock>
         </StepCard>
 
         <section id="next-steps" className="mb-12">
-          <h2 className="text-2xl font-bold mb-4">Next Steps</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <h2 className="mb-4 text-2xl font-bold">Next Steps</h2>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -371,12 +443,13 @@ uptime`}</CodeBlock>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Learn about advanced features like workflows, environment variables, and monitoring.
+                <p className="text-muted-foreground mb-3 text-sm">
+                  Learn about advanced features like workflows, environment
+                  variables, and monitoring.
                 </p>
-                <a 
+                <a
                   href={`/${lang}/docs/features`}
-                  className="inline-flex items-center gap-1 text-primary hover:underline text-sm"
+                  className="text-primary inline-flex items-center gap-1 text-sm hover:underline"
                 >
                   View Features Guide <ArrowRight className="h-4 w-4" />
                 </a>
@@ -391,12 +464,13 @@ uptime`}</CodeBlock>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Create complex automation workflows with multiple events and conditional logic.
+                <p className="text-muted-foreground mb-3 text-sm">
+                  Create complex automation workflows with multiple events and
+                  conditional logic.
                 </p>
-                <a 
+                <a
                   href={`/${lang}/docs/workflows`}
-                  className="inline-flex items-center gap-1 text-primary hover:underline text-sm"
+                  className="text-primary inline-flex items-center gap-1 text-sm hover:underline"
                 >
                   Learn Workflows <ArrowRight className="h-4 w-4" />
                 </a>
@@ -411,12 +485,13 @@ uptime`}</CodeBlock>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Integrate Cronium with your applications using our comprehensive API.
+                <p className="text-muted-foreground mb-3 text-sm">
+                  Integrate Cronium with your applications using our
+                  comprehensive API.
                 </p>
-                <a 
+                <a
                   href={`/${lang}/docs/api`}
-                  className="inline-flex items-center gap-1 text-primary hover:underline text-sm"
+                  className="text-primary inline-flex items-center gap-1 text-sm hover:underline"
                 >
                   View API Docs <ArrowRight className="h-4 w-4" />
                 </a>
@@ -431,12 +506,12 @@ uptime`}</CodeBlock>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground mb-3">
+                <p className="text-muted-foreground mb-3 text-sm">
                   Step-by-step guides for common tasks and advanced use cases.
                 </p>
-                <a 
+                <a
                   href={`/${lang}/docs/how-to`}
-                  className="inline-flex items-center gap-1 text-primary hover:underline text-sm"
+                  className="text-primary inline-flex items-center gap-1 text-sm hover:underline"
                 >
                   Browse Guides <ArrowRight className="h-4 w-4" />
                 </a>
@@ -445,15 +520,40 @@ uptime`}</CodeBlock>
           </div>
         </section>
 
-        <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-6 rounded-lg">
-          <h3 className="font-semibold mb-2">Need Help?</h3>
-          <p className="text-sm text-muted-foreground mb-3">
-            If you run into any issues or have questions, here are some resources:
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-900">
+          <h3 className="mb-2 font-semibold">Need Help?</h3>
+          <p className="text-muted-foreground mb-3 text-sm">
+            If you run into any issues or have questions, here are some
+            resources:
           </p>
           <ul className="space-y-1 text-sm">
-            <li>• Check the <a href={`/${lang}/docs/how-to/troubleshooting`} className="text-primary hover:underline">Troubleshooting Guide</a></li>
-            <li>• Review the <a href={`/${lang}/docs/api`} className="text-primary hover:underline">API Documentation</a></li>
-            <li>• Browse <a href={`/${lang}/docs/how-to`} className="text-primary hover:underline">How-to Guides</a></li>
+            <li>
+              • Check the{" "}
+              <a
+                href={`/${lang}/docs/how-to/troubleshooting`}
+                className="text-primary hover:underline"
+              >
+                Troubleshooting Guide
+              </a>
+            </li>
+            <li>
+              • Review the{" "}
+              <a
+                href={`/${lang}/docs/api`}
+                className="text-primary hover:underline"
+              >
+                API Documentation
+              </a>
+            </li>
+            <li>
+              • Browse{" "}
+              <a
+                href={`/${lang}/docs/how-to`}
+                className="text-primary hover:underline"
+              >
+                How-to Guides
+              </a>
+            </li>
           </ul>
         </div>
       </div>

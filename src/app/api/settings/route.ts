@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -95,7 +96,7 @@ export async function PUT(req: NextRequest) {
         const stringValue =
           typeof value === "boolean" || typeof value === "number"
             ? String(value)
-            : (value as string);
+            : value;
         updates.push(storage.upsertSetting(key, stringValue));
       }
     }

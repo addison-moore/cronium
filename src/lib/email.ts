@@ -33,7 +33,7 @@ export async function getSmtpSettings() {
     allSettings.find((s) => s.key === "smtpEnabled")?.value === "true";
   const smtpHost = allSettings.find((s) => s.key === "smtpHost")?.value;
   const smtpPort = Number(
-    allSettings.find((s) => s.key === "smtpPort")?.value || 587,
+    allSettings.find((s) => s.key === "smtpPort")?.value ?? 587,
   );
   const smtpUser = allSettings.find((s) => s.key === "smtpUser")?.value;
   const smtpPassword = allSettings.find((s) => s.key === "smtpPassword")?.value;
@@ -44,7 +44,7 @@ export async function getSmtpSettings() {
 
   // System name for email sender fallback
   const systemName =
-    allSettings.find((s) => s.key === "systemName")?.value || "Cronium";
+    allSettings.find((s) => s.key === "systemName")?.value ?? "Cronium";
 
   return {
     enabled: smtpEnabled,
@@ -52,8 +52,8 @@ export async function getSmtpSettings() {
     port: smtpPort,
     user: smtpUser,
     password: smtpPassword,
-    fromEmail: smtpFromEmail || "noreply@example.com",
-    fromName: smtpFromName || systemName,
+    fromEmail: smtpFromEmail ?? "noreply@example.com",
+    fromName: smtpFromName ?? systemName,
   };
 }
 
@@ -127,7 +127,7 @@ export async function sendEmail(
 
 // Send an invitation email
 export async function sendInvitationEmail(email: string, inviteToken: string) {
-  const baseUrl = env.HOST_URL || `http://localhost:5000`;
+  const baseUrl = env.HOST_URL ?? `http://localhost:5000`;
 
   // Create invitation URL
   const inviteUrl = `${baseUrl}/auth/activate?token=${inviteToken}`;
@@ -135,7 +135,7 @@ export async function sendInvitationEmail(email: string, inviteToken: string) {
   // Get system name for personalization
   const allSettings = await db.select().from(systemSettings);
   const systemName =
-    allSettings.find((s) => s.key === "systemName")?.value || "Cronium";
+    allSettings.find((s) => s.key === "systemName")?.value ?? "Cronium";
 
   // Get HTML template and replace placeholders
   const htmlTemplate = getEmailTemplate("invitation", {
@@ -166,7 +166,7 @@ export async function sendPasswordResetEmail(
   resetToken: string,
 ) {
   // Get base URL from environment or default
-  const baseUrl = env.HOST_URL || `http://localhost:5000`;
+  const baseUrl = env.HOST_URL ?? `http://localhost:5000`;
 
   // Create reset URL
   const resetUrl = `${baseUrl}/en/auth/reset-password?token=${resetToken}`;
@@ -174,7 +174,7 @@ export async function sendPasswordResetEmail(
   // Get system name for personalization
   const allSettings = await db.select().from(systemSettings);
   const systemName =
-    allSettings.find((s) => s.key === "systemName")?.value || "Cronium";
+    allSettings.find((s) => s.key === "systemName")?.value ?? "Cronium";
 
   // Get HTML template and replace placeholders
   const htmlTemplate = getEmailTemplate("password-reset", {
@@ -223,8 +223,8 @@ function getEmailTemplate(
     console.error(`Error processing email template ${templateName}:`, error);
     // Fallback to simple HTML if template can't be loaded
     return `<html><body>
-      <h2>${replacements.subject || "Notification"}</h2>
-      <p>${replacements.message || "Please check your dashboard for details."}</p>
+      <h2>${replacements.subject ?? "Notification"}</h2>
+      <p>${replacements.message ?? "Please check your dashboard for details."}</p>
     </body></html>`;
   }
 }
@@ -242,7 +242,7 @@ export async function sendEventSuccessEmail(
   // Get system name for personalization
   const allSettings = await db.select().from(systemSettings);
   const systemName =
-    allSettings.find((s) => s.key === "systemName")?.value || "Cronium";
+    allSettings.find((s) => s.key === "systemName")?.value ?? "Cronium";
 
   // Prepare replacements for the template
   const replacements = {
@@ -250,7 +250,7 @@ export async function sendEventSuccessEmail(
     eventName,
     executionTime,
     duration,
-    output: output || "No output available",
+    output: output ?? "No output available",
   };
 
   // Get HTML from template
@@ -265,7 +265,7 @@ Execution Time: ${executionTime}
 Duration: ${duration} seconds
 
 Output:
-${output || "No output available"}
+${output ?? "No output available"}
 
 This is an automated message from ${systemName}.
   `;
@@ -292,7 +292,7 @@ export async function sendEventFailureEmail(
   // Get system name for personalization
   const allSettings = await db.select().from(systemSettings);
   const systemName =
-    allSettings.find((s) => s.key === "systemName")?.value || "Cronium";
+    allSettings.find((s) => s.key === "systemName")?.value ?? "Cronium";
 
   // Prepare replacements for the template
   const replacements = {
@@ -300,8 +300,8 @@ export async function sendEventFailureEmail(
     eventName,
     executionTime,
     duration,
-    error: error || "Unknown error",
-    output: output || "No output available",
+    error: error ?? "Unknown error",
+    output: output ?? "No output available",
   };
 
   // Get HTML from template
@@ -316,10 +316,10 @@ Execution Time: ${executionTime}
 Duration: ${duration} seconds
 
 Error:
-${error || "Unknown error"}
+${error ?? "Unknown error"}
 
 Output:
-${output || "No output available"}
+${output ?? "No output available"}
 
 This is an automated message from ${systemName}.
   `;

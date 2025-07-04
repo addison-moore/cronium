@@ -1,17 +1,22 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { UserRole } from "@/shared/schema";
-import { supportedLocales, defaultLocale, SupportedLocale } from "@shared/i18n";
+import {
+  supportedLocales,
+  defaultLocale,
+  type SupportedLocale,
+} from "@shared/i18n";
 
 // Simplified function to get the preferred locale from the request
 function getLocale(request: NextRequest): string {
   // Get Accept-Language header
-  const acceptLanguage = request.headers.get("accept-language") || "";
+  const acceptLanguage = request.headers.get("accept-language") ?? "";
 
   // Parse the Accept-Language header
   const userLanguages = acceptLanguage.split(",").map((lang) => {
     const parts = lang.split(";");
-    return (parts[0] || lang).trim();
+    return (parts[0] ?? lang).trim();
   });
 
   // Find the first supported locale that matches the user's language

@@ -1,4 +1,4 @@
-import { EventStatus, EventType } from "@/shared/schema";
+import { type EventStatus, type EventType } from "@/shared/schema";
 
 export interface Log {
   id: number;

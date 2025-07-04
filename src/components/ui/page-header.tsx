@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Plus } from "lucide-react";
@@ -39,7 +39,7 @@ export function PageHeader({
         {backLink && (
           <Button variant="ghost" size="sm" className="mb-2 h-8 p-0" asChild>
             <Link href={backLink.href}>
-              <ArrowLeft className="h-4 w-4 mr-1" />
+              <ArrowLeft className="mr-1 h-4 w-4" />
               {backLink.label}
             </Link>
           </Button>
@@ -52,7 +52,7 @@ export function PageHeader({
         {createButton && (
           <Button asChild className="flex items-center gap-2">
             <Link href={createButton.href}>
-              {createButton.icon || <Plus className="h-4 w-4" />}
+              {createButton.icon ?? <Plus className="h-4 w-4" />}
               <span>{createButton.label}</span>
             </Link>
           </Button>

@@ -73,16 +73,16 @@ export function WebhookForm({
       ? {
           workflowId: webhook.workflowId,
           key: webhook.key,
-          description: webhook.description || "",
+          description: webhook.description ?? "",
           isActive: webhook.isActive,
-          allowedMethods: webhook.allowedMethods || ["POST"],
-          rateLimitPerMinute: webhook.rateLimitPerMinute || 60,
-          requireAuth: webhook.requireAuth || false,
-          authToken: webhook.authToken || "",
-          responseFormat: webhook.responseFormat || "json",
+          allowedMethods: webhook.allowedMethods ?? ["POST"],
+          rateLimitPerMinute: webhook.rateLimitPerMinute ?? 60,
+          requireAuth: webhook.requireAuth ?? false,
+          authToken: webhook.authToken ?? "",
+          responseFormat: webhook.responseFormat ?? "json",
         }
       : {
-          workflowId: workflowId || 0,
+          workflowId: workflowId ?? 0,
           key: "",
           description: "",
           isActive: true,
@@ -361,7 +361,7 @@ export function WebhookForm({
                   <p>
                     Include this token in the Authorization header:
                     <code className="ml-1 rounded bg-amber-100 px-1 dark:bg-amber-900">
-                      Bearer {form.watch("authToken") || "your-token"}
+                      Bearer {form.watch("authToken") ?? "your-token"}
                     </code>
                   </p>
                 </div>

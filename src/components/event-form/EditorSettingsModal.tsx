@@ -81,11 +81,7 @@ export default function EditorSettingsModal({
     try {
       await saveSettingsMutation.mutateAsync({
         fontSize: settings.fontSize,
-        theme: settings.theme as
-          | "vs-dark"
-          | "vs-light"
-          | "hc-black"
-          | "hc-light",
+        theme: settings.theme,
         wordWrap: settings.wordWrap,
         minimap: settings.minimap,
         lineNumbers: settings.lineNumbers,

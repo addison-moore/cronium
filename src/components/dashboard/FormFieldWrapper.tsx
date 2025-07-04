@@ -9,10 +9,10 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
-  UseFormReturn,
-  FieldValues,
-  Path,
-  ControllerProps,
+  type UseFormReturn,
+  type FieldValues,
+  type Path,
+  type ControllerProps,
 } from "react-hook-form";
 
 interface FormFieldWrapperProps<T extends FieldValues> {
@@ -43,7 +43,7 @@ export function FormFieldWrapper<T extends FieldValues>({
       control={form.control}
       name={name}
       render={
-        render ||
+        render ??
         (({ field }) => (
           <FormItem className={className}>
             <FormLabel>{label}</FormLabel>

@@ -11,7 +11,7 @@ export const Code = React.forwardRef<HTMLPreElement, CodeProps>(
       <pre
         ref={ref}
         className={cn(
-          "px-4 py-3 font-mono text-sm rounded-md bg-muted",
+          "bg-muted rounded-md px-4 py-3 font-mono text-sm",
           className,
         )}
         data-language={language}

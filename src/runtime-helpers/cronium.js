@@ -8,14 +8,14 @@ class Cronium {
     } catch (error) {
       this._inputData = {};
     }
-    
+
     // Load event data automatically
     try {
       this._eventData = JSON.parse(fs.readFileSync("event.json", "utf8"));
     } catch (error) {
       this._eventData = {};
     }
-    
+
     // Initialize condition state
     this._condition = null;
   }
@@ -39,14 +39,17 @@ class Cronium {
   setCondition(condition) {
     // Convert the condition to a boolean and store it
     this._condition = Boolean(condition);
-    
+
     // Write the condition result to a file for the executor to read
     try {
-      fs.writeFileSync("condition.json", JSON.stringify({ condition: this._condition }, null, 2));
+      fs.writeFileSync(
+        "condition.json",
+        JSON.stringify({ condition: this._condition }, null, 2),
+      );
     } catch (error) {
       console.error("Error writing condition:", error.message);
     }
-    
+
     return this._condition;
   }
 
@@ -56,7 +59,9 @@ class Cronium {
 
   getVariable(key) {
     try {
-      const variablesData = JSON.parse(fs.readFileSync("variables.json", "utf8"));
+      const variablesData = JSON.parse(
+        fs.readFileSync("variables.json", "utf8"),
+      );
       return variablesData[key] || null;
     } catch (error) {
       return null;
@@ -66,21 +71,24 @@ class Cronium {
   setVariable(key, value) {
     try {
       let variablesData = {};
-      
+
       // Read existing variables if file exists
       try {
         variablesData = JSON.parse(fs.readFileSync("variables.json", "utf8"));
       } catch (error) {
         // File doesn't exist, use empty object
       }
-      
+
       // Set the new variable
       variablesData[key] = value;
-      variablesData['__updated__'] = new Date().toISOString();
-      
+      variablesData["__updated__"] = new Date().toISOString();
+
       // Write back to file
-      fs.writeFileSync("variables.json", JSON.stringify(variablesData, null, 2));
-      
+      fs.writeFileSync(
+        "variables.json",
+        JSON.stringify(variablesData, null, 2),
+      );
+
       return true;
     } catch (error) {
       console.error(`Error setting variable ${key}:`, error.message);

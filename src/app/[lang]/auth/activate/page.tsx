@@ -41,7 +41,6 @@ type AccountActivationFormData = z.infer<typeof accountActivationSchema>;
 
 export default function ActivatePage() {
   const t = useTranslations("Auth");
-  const tCommon = useTranslations("Common");
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
@@ -84,13 +83,13 @@ export default function ActivatePage() {
         if (!response.ok) {
           setTokenVerified(false);
           setErrorMessage(
-            data.message || "Invalid or expired invitation token",
+            data.message ?? "Invalid or expired invitation token",
           );
           return;
         }
 
         setTokenVerified(true);
-        setUserEmail(data.email || "");
+        setUserEmail(data.email ?? "");
       } catch (error) {
         console.error("Error verifying token:", error);
         setTokenVerified(false);
@@ -121,7 +120,7 @@ export default function ActivatePage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to activate account");
+        throw new Error(errorData.message ?? "Failed to activate account");
       }
 
       setActivationStatus("success");
@@ -134,7 +133,7 @@ export default function ActivatePage() {
       console.error("Error activating account:", error);
       setActivationStatus("error");
       setErrorMessage(
-        error.message || "Failed to activate your account. Please try again.",
+        error.message ?? "Failed to activate your account. Please try again.",
       );
     } finally {
       setIsSubmitting(false);

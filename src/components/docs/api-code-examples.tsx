@@ -87,17 +87,17 @@ export function CodeBlock({
 
   return (
     <div className="mb-4">
-      {title && <h4 className="font-semibold mb-3">{title}</h4>}
+      {title && <h4 className="mb-3 font-semibold">{title}</h4>}
 
       {/* Language Switcher */}
-      <div className="flex items-center gap-1 mb-3 p-1 bg-muted rounded-lg w-fit">
+      <div className="bg-muted mb-3 flex w-fit items-center gap-1 rounded-lg p-1">
         {languages.map((lang) => (
           <Button
             key={lang.key}
             variant={selectedLanguage === lang.key ? "default" : "ghost"}
             size="sm"
             onClick={() => setSelectedLanguage(lang.key)}
-            className="text-xs px-3 py-1"
+            className="px-3 py-1 text-xs"
           >
             {lang.label}
           </Button>
@@ -106,7 +106,7 @@ export function CodeBlock({
 
       {/* Code Block */}
       <div className="relative">
-        <pre className="bg-stone-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm border border-border">
+        <pre className="border-border overflow-x-auto rounded-lg border bg-stone-900 p-4 text-sm text-gray-100">
           <code
             className={`language-${getSyntaxLanguage(selectedLanguage)}`}
             dangerouslySetInnerHTML={{ __html: highlightedCode }}
@@ -114,7 +114,7 @@ export function CodeBlock({
         </pre>
         <button
           onClick={copyToClipboard}
-          className="absolute top-2 right-2 p-2 text-gray-400 hover:text-gray-200 transition-colors"
+          className="absolute top-2 right-2 p-2 text-gray-400 transition-colors hover:text-gray-200"
           title="Copy to clipboard"
         >
           <Copy className="h-4 w-4" />
@@ -167,7 +167,9 @@ export function SimpleCodeBlock({
 
   return (
     <div className="relative">
-      <pre className={`bg-grey-800 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm ${className || ''}`}>
+      <pre
+        className={`bg-grey-800 overflow-x-auto rounded-lg p-4 text-sm text-gray-100 ${className || ""}`}
+      >
         <code
           className={`language-${language}`}
           dangerouslySetInnerHTML={{ __html: highlightedCode }}
@@ -175,7 +177,7 @@ export function SimpleCodeBlock({
       </pre>
       <button
         onClick={copyToClipboard}
-        className="absolute top-2 right-2 p-2 text-gray-400 hover:text-gray-200 transition-colors"
+        className="absolute top-2 right-2 p-2 text-gray-400 transition-colors hover:text-gray-200"
         title="Copy to clipboard"
       >
         <Copy className="h-4 w-4" />

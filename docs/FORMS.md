@@ -1,4 +1,3 @@
-
 ---
 
 ### 📄 `docs/FORMS.md`
@@ -42,16 +41,30 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-export function WorkflowForm({ onSubmit }: { onSubmit: (data: FormData) => void }) {
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+export function WorkflowForm({
+  onSubmit,
+}: {
+  onSubmit: (data: FormData) => void;
+}) {
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <input {...register("name")} placeholder="Workflow name" className="input" />
+      <input
+        {...register("name")}
+        placeholder="Workflow name"
+        className="input"
+      />
       {errors.name && <p className="text-red-500">{errors.name.message}</p>}
-      <button type="submit" className="btn">Save</button>
+      <button type="submit" className="btn">
+        Save
+      </button>
     </form>
   );
 }

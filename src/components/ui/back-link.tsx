@@ -34,7 +34,7 @@ export function BackLink({
       asChild
     >
       <Link href={href}>
-        <ArrowLeft className="h-4 w-4 mr-1" />
+        <ArrowLeft className="mr-1 h-4 w-4" />
         {label}
       </Link>
     </Button>

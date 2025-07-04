@@ -31,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { LogStatus } from "@/shared/schema";
+import { type LogStatus } from "@/shared/schema";
 import { Spinner } from "@/components/ui/spinner";
 
 interface ActivityEntry {
@@ -118,7 +118,7 @@ export function ActivityTable({
           <CardTitle>{title}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex justify-center items-center h-64">
+          <div className="flex h-64 items-center justify-center">
             <Spinner size="lg" variant="primary" />
           </div>
         </CardContent>
@@ -151,7 +151,7 @@ export function ActivityTable({
       <CardContent>
         {data.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10">
-            <FileText className="h-16 w-16 text-muted-foreground mb-4" />
+            <FileText className="text-muted-foreground mb-4 h-16 w-16" />
             <p className="text-muted-foreground text-center">
               {emptyStateMessage}
             </p>
@@ -211,11 +211,11 @@ export function ActivityTable({
             {/* Pagination Controls */}
             {showPagination && totalItems > 0 && (
               <div className="mt-4 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   {/* Items per page selector */}
                   {onPageSizeChange && (
                     <div className="flex items-center space-x-2">
-                      <span className="text-sm text-muted-foreground">
+                      <span className="text-muted-foreground text-sm">
                         Items per page:
                       </span>
                       <Select
@@ -241,7 +241,7 @@ export function ActivityTable({
                   <Pagination
                     currentPage={currentPage}
                     totalPages={totalPages}
-                    onPageChange={onPageChange || (() => {})}
+                    onPageChange={onPageChange ?? (() => {})}
                     itemsPerPage={itemsPerPage}
                     totalItems={totalItems}
                   />

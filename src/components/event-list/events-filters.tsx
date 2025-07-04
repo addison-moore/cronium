@@ -14,7 +14,12 @@ import {
 import { ComboBox } from "@/components/ui/combo-box";
 import { Search, X, ArrowUp, ArrowDown } from "lucide-react";
 import { EventTypeIcon } from "@/components/ui/event-type-icon";
-import { Event, ServerData, WorkflowData, EventListFilters } from "./types";
+import {
+  type Event,
+  type ServerData,
+  type WorkflowData,
+  type EventListFilters,
+} from "./types";
 
 interface EventsFiltersProps {
   filters: EventListFilters;
@@ -69,27 +74,27 @@ export function EventsFilters({
   return (
     <div className="mb-4 space-y-4">
       {/* Responsive Grid Layout for Filters */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {/* Search Bar - spans 1 column */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1 block">
+          <label className="text-foreground mb-1 block text-sm font-medium">
             {t("Search")}
           </label>
           <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Search className="text-muted-foreground absolute top-2.5 left-2.5 h-4 w-4" />
             <Input
               placeholder={t("SearchPlaceholder")}
               value={filters.searchTerm}
               onChange={(e) => {
                 onFiltersChange({ searchTerm: e.target.value });
               }}
-              className="pl-8 pr-8"
+              className="pr-8 pl-8"
             />
             {filters.searchTerm && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="absolute right-0 top-0 h-9 w-9 p-0"
+                className="absolute top-0 right-0 h-9 w-9 p-0"
                 onClick={() => onFiltersChange({ searchTerm: "" })}
               >
                 <X className="h-4 w-4" />
@@ -101,7 +106,7 @@ export function EventsFilters({
 
         {/* Sort By */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1 block">
+          <label className="text-foreground mb-1 block text-sm font-medium">
             {t("SortBy") || "Sort By"}
           </label>
           <div className="flex gap-2">
@@ -111,15 +116,15 @@ export function EventsFilters({
                 onFiltersChange({ sortBy: value });
               }}
             >
-              <SelectTrigger className="w-full h-10 rounded-md focus:ring-2 focus:ring-primary/20 transition-all text-foreground">
+              <SelectTrigger className="focus:ring-primary/20 text-foreground h-10 w-full rounded-md transition-all focus:ring-2">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-background border border-border shadow-lg rounded-md overflow-hidden">
+              <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
                 {sortOptions.map((option) => (
                   <SelectItem
                     key={option.value}
                     value={option.value}
-                    className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground py-2 pl-8 pr-3 text-sm text-foreground"
+                    className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm"
                   >
                     {option.label}
                   </SelectItem>
@@ -129,7 +134,7 @@ export function EventsFilters({
             <Button
               variant="outline"
               size="sm"
-              className="h-10 w-10 p-0 flex-shrink-0"
+              className="h-10 w-10 flex-shrink-0 p-0"
               onClick={() => {
                 onFiltersChange({
                   sortOrder: filters.sortOrder === "asc" ? "desc" : "asc",
@@ -152,7 +157,7 @@ export function EventsFilters({
 
         {/* Event Type */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1 block">
+          <label className="text-foreground mb-1 block text-sm font-medium">
             {t("EventType")}
           </label>
           <Select
@@ -161,19 +166,19 @@ export function EventsFilters({
               onFiltersChange({ typeFilter: value });
             }}
           >
-            <SelectTrigger className="w-full h-10 rounded-md focus:ring-2 focus:ring-primary/20 transition-all text-foreground">
+            <SelectTrigger className="focus:ring-primary/20 text-foreground h-10 w-full rounded-md transition-all focus:ring-2">
               <SelectValue placeholder={t("AllTypes")} />
             </SelectTrigger>
-            <SelectContent className="bg-background border border-border shadow-lg rounded-md overflow-hidden">
+            <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
               <SelectItem
                 value="all"
-                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground py-2 pl-8 pr-3 text-sm font-medium text-foreground "
+                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm font-medium"
               >
                 {t("AllTypes")}
               </SelectItem>
               <SelectItem
                 value={EventType.NODEJS}
-                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground py-2 pl-8 pr-3 text-sm text-foreground "
+                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm"
               >
                 <div className="flex items-center">
                   <EventTypeIcon
@@ -186,7 +191,7 @@ export function EventsFilters({
               </SelectItem>
               <SelectItem
                 value={EventType.PYTHON}
-                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground py-2 pl-8 pr-3 text-sm text-foreground "
+                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm"
               >
                 <div className="flex items-center">
                   <EventTypeIcon
@@ -199,7 +204,7 @@ export function EventsFilters({
               </SelectItem>
               <SelectItem
                 value={EventType.BASH}
-                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground py-2 pl-8 pr-3 text-sm text-foreground "
+                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm"
               >
                 <div className="flex items-center">
                   <EventTypeIcon
@@ -212,7 +217,7 @@ export function EventsFilters({
               </SelectItem>
               <SelectItem
                 value={EventType.HTTP_REQUEST}
-                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground py-2 pl-8 pr-3 text-sm text-foreground "
+                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm"
               >
                 <div className="flex items-center">
                   <EventTypeIcon
@@ -229,7 +234,7 @@ export function EventsFilters({
 
         {/* Status */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1 block">
+          <label className="text-foreground mb-1 block text-sm font-medium">
             {t("StatusLabel")}
           </label>
           <Select
@@ -238,50 +243,50 @@ export function EventsFilters({
               onFiltersChange({ statusFilter: value });
             }}
           >
-            <SelectTrigger className="w-full h-10 rounded-md focus:ring-2 focus:ring-primary/20 transition-all text-foreground">
+            <SelectTrigger className="focus:ring-primary/20 text-foreground h-10 w-full rounded-md transition-all focus:ring-2">
               <SelectValue placeholder={t("AllStatuses")} />
             </SelectTrigger>
-            <SelectContent className="bg-background border border-border shadow-lg rounded-md overflow-hidden">
+            <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
               <SelectItem
                 value="all"
-                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground py-2 pl-8 pr-3 text-sm font-medium text-foreground "
+                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm font-medium"
               >
                 {t("AllStatuses")}
               </SelectItem>
               <SelectItem
                 value={EventStatus.ACTIVE}
-                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground py-2 pl-8 pr-3 text-sm text-foreground "
+                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm"
               >
                 <div className="flex items-center">
-                  <span className="flex h-2 w-2 rounded-full bg-green-500 mr-2"></span>
+                  <span className="mr-2 flex h-2 w-2 rounded-full bg-green-500"></span>
                   {t("StatusActive")}
                 </div>
               </SelectItem>
               <SelectItem
                 value={EventStatus.PAUSED}
-                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground py-2 pl-8 pr-3 text-sm text-foreground "
+                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm"
               >
                 <div className="flex items-center">
-                  <span className="flex h-2 w-2 rounded-full bg-yellow-500 mr-2"></span>
+                  <span className="mr-2 flex h-2 w-2 rounded-full bg-yellow-500"></span>
                   {t("StatusPaused")}
                 </div>
               </SelectItem>
               <SelectItem
                 value={EventStatus.DRAFT}
-                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground py-2 pl-8 pr-3 text-sm text-foreground "
+                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm"
               >
                 <div className="flex items-center">
-                  <span className="flex h-2 w-2 rounded-full bg-gray-500 mr-2"></span>
+                  <span className="mr-2 flex h-2 w-2 rounded-full bg-gray-500"></span>
                   {t("StatusDraft")}
                 </div>
               </SelectItem>
-              <div className="border-t border-border my-1"></div>
+              <div className="border-border my-1 border-t"></div>
               <SelectItem
                 value={EventStatus.ARCHIVED}
-                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground py-2 pl-8 pr-3 text-sm text-foreground "
+                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm"
               >
                 <div className="flex items-center">
-                  <span className="flex h-2 w-2 rounded-full bg-slate-400 mr-2"></span>
+                  <span className="mr-2 flex h-2 w-2 rounded-full bg-slate-400"></span>
                   {t("StatusArchived")}
                 </div>
               </SelectItem>
@@ -291,7 +296,7 @@ export function EventsFilters({
 
         {/* Execution Server */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1 block">
+          <label className="text-foreground mb-1 block text-sm font-medium">
             {t("ExecutionServer")}
           </label>
           <Select
@@ -300,22 +305,22 @@ export function EventsFilters({
               onFiltersChange({ serverFilter: value });
             }}
           >
-            <SelectTrigger className="w-full h-10 rounded-md focus:ring-2 focus:ring-primary/20 transition-all text-foreground">
+            <SelectTrigger className="focus:ring-primary/20 text-foreground h-10 w-full rounded-md transition-all focus:ring-2">
               <SelectValue placeholder={t("AllServers")} />
             </SelectTrigger>
-            <SelectContent className="bg-background border border-border shadow-lg rounded-md overflow-hidden">
+            <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
               <SelectItem
                 value="all"
-                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground py-2 pl-8 pr-3 text-sm font-medium text-foreground "
+                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm font-medium"
               >
                 {t("AllServers")}
               </SelectItem>
               <SelectItem
                 value="local"
-                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground py-2 pl-8 pr-3 text-sm text-foreground "
+                className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm"
               >
                 <div className="flex items-center">
-                  <span className="flex h-2 w-2 rounded-full bg-blue-500 mr-2"></span>
+                  <span className="mr-2 flex h-2 w-2 rounded-full bg-blue-500"></span>
                   Local
                 </div>
               </SelectItem>
@@ -323,10 +328,10 @@ export function EventsFilters({
                 <SelectItem
                   key={server.id}
                   value={server.id.toString()}
-                  className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground py-2 pl-8 pr-3 text-sm text-foreground "
+                  className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm"
                 >
                   <div className="flex items-center">
-                    <span className="flex h-2 w-2 rounded-full bg-green-500 mr-2"></span>
+                    <span className="mr-2 flex h-2 w-2 rounded-full bg-green-500"></span>
                     {server.name}
                   </div>
                 </SelectItem>
@@ -337,7 +342,7 @@ export function EventsFilters({
 
         {/* Workflow */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1 block">
+          <label className="text-foreground mb-1 block text-sm font-medium">
             Workflow
           </label>
           <ComboBox
@@ -354,7 +359,7 @@ export function EventsFilters({
 
         {/* Tags */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1 block">
+          <label className="text-foreground mb-1 block text-sm font-medium">
             {t("Tags")}
           </label>
           <ComboBox
@@ -377,7 +382,7 @@ export function EventsFilters({
             onClick={onClearFilters}
             className="h-10 w-full"
           >
-            <X className="h-4 w-4 mr-2" />
+            <X className="mr-2 h-4 w-4" />
             Clear Filters
           </Button>
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Log, LogStatus } from "@/shared/schema";
+import { type Log, type LogStatus } from "@/shared/schema";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Card,
@@ -49,12 +49,12 @@ export default function LogDetail({ log, onRefresh }: LogDetailProps) {
     <Card className="mb-6">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
-          <CardTitle className="text-xl flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-xl">
             Execution Log #{log.id}
             {getBadgeStatus(log.status)}
           </CardTitle>
           <CardDescription>
-            {log.eventName || `Script #${log.eventId}`} - {formattedTime}
+            {log.eventName ?? `Script #${log.eventId}`} - {formattedTime}
             {formattedDuration && (
               <span className="ml-2">({formattedDuration})</span>
             )}
@@ -63,7 +63,7 @@ export default function LogDetail({ log, onRefresh }: LogDetailProps) {
         {onRefresh && (
           <button
             onClick={onRefresh}
-            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="rounded-full p-2 hover:bg-gray-100 dark:hover:bg-gray-800"
             aria-label="Refresh log"
           >
             <RefreshCw size={16} />
@@ -71,11 +71,11 @@ export default function LogDetail({ log, onRefresh }: LogDetailProps) {
         )}
       </CardHeader>
       <CardContent>
-        <div className="flex items-center mb-2">
+        <div className="mb-2 flex items-center">
           <Terminal size={18} className="mr-2" />
           <h3 className="font-medium">Output</h3>
         </div>
-        <div className="bg-black text-white p-4 rounded-md overflow-auto max-h-80 font-mono text-sm">
+        <div className="max-h-80 overflow-auto rounded-md bg-black p-4 font-mono text-sm text-white">
           {log.output ? (
             <pre className="whitespace-pre-wrap">{log.output}</pre>
           ) : (

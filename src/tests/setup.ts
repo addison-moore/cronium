@@ -1,16 +1,16 @@
-import { jest } from '@jest/globals';
-import fs from 'fs';
-import path from 'path';
+import { jest } from "@jest/globals";
+import fs from "fs";
+import path from "path";
 
 // Global test setup
 beforeAll(() => {
   // Ensure test directories exist
   const testDirs = [
-    path.join(process.cwd(), 'tests/temp'),
-    path.join(process.cwd(), 'tests/fixtures')
+    path.join(process.cwd(), "tests/temp"),
+    path.join(process.cwd(), "tests/fixtures"),
   ];
-  
-  testDirs.forEach(dir => {
+
+  testDirs.forEach((dir) => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
@@ -21,12 +21,12 @@ beforeAll(() => {
 afterEach(() => {
   try {
     // Clean up temporary test files with retry logic
-    const tempDir = path.join(process.cwd(), 'tests/temp');
+    const tempDir = path.join(process.cwd(), "tests/temp");
     if (fs.existsSync(tempDir)) {
       // Change to a safe directory before cleanup
       const originalCwd = process.cwd();
-      process.chdir(path.join(process.cwd(), 'tests'));
-      
+      process.chdir(path.join(process.cwd(), "tests"));
+
       try {
         fs.rmSync(tempDir, { recursive: true, force: true });
         fs.mkdirSync(tempDir, { recursive: true });
@@ -35,7 +35,10 @@ afterEach(() => {
       }
     }
   } catch (error) {
-    console.warn('Cleanup warning:', error instanceof Error ? error.message : String(error));
+    console.warn(
+      "Cleanup warning:",
+      error instanceof Error ? error.message : String(error),
+    );
   }
 });
 

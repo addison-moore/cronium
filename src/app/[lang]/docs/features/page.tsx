@@ -56,9 +56,9 @@ function FeatureCard({
   return (
     <Card className="h-full">
       <CardHeader>
-        <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 bg-primary/10 rounded-lg">
-            <Icon className="h-6 w-6 text-primary" />
+        <div className="mb-2 flex items-center gap-3">
+          <div className="bg-primary/10 rounded-lg p-2">
+            <Icon className="text-primary h-6 w-6" />
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2">
@@ -74,7 +74,7 @@ function FeatureCard({
           {features.map((feature, index) => (
             <li
               key={index}
-              className="text-sm text-muted-foreground flex items-start gap-2"
+              className="text-muted-foreground flex items-start gap-2 text-sm"
             >
               <span className="text-primary">•</span>
               <span>{feature}</span>
@@ -97,8 +97,8 @@ function CodeExample({
 }) {
   return (
     <div className="mb-6">
-      <h4 className="font-semibold mb-3">{title}</h4>
-      <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm">
+      <h4 className="mb-3 font-semibold">{title}</h4>
+      <pre className="overflow-x-auto rounded-lg bg-gray-900 p-4 text-sm text-gray-100">
         <code>{code}</code>
       </pre>
     </div>
@@ -114,16 +114,16 @@ export default async function FeaturesPage({
 
   return (
     <DocsLayout lang={lang} tableOfContents={tableOfContents}>
-      <div className="max-w-4xl mx-auto">
+      <div className="mx-auto max-w-4xl">
         <div className="mb-12">
-          <h1 className="text-4xl font-bold mb-4">Cronium Features</h1>
-          <p className="text-xl text-muted-foreground">
+          <h1 className="mb-4 text-4xl font-bold">Cronium Features</h1>
+          <p className="text-muted-foreground text-xl">
             Discover all the powerful features that make Cronium the ultimate
             automation platform for modern development teams.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+        <div className="mb-12 grid grid-cols-1 gap-6 md:grid-cols-2">
           <FeatureCard
             icon={Terminal}
             title="Script Automation"
@@ -205,15 +205,15 @@ export default async function FeaturesPage({
         </div>
 
         <section id="script-automation" className="mb-12">
-          <h2 className="text-3xl font-bold mb-6">Script Automation</h2>
+          <h2 className="mb-6 text-3xl font-bold">Script Automation</h2>
           <div className="space-y-6">
-            <p className="text-lg text-muted-foreground">
+            <p className="text-muted-foreground text-lg">
               Cronium supports multiple scripting languages and execution
               environments, making it easy to automate any task regardless of
               your technology stack.
             </p>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div>
                 <CodeExample
                   title="Bash Script Example"
@@ -269,19 +269,19 @@ if __name__ == "__main__":
         </section>
 
         <section id="remote-execution" className="mb-12">
-          <h2 className="text-3xl font-bold mb-6">Remote Execution</h2>
+          <h2 className="mb-6 text-3xl font-bold">Remote Execution</h2>
           <div className="space-y-6">
-            <p className="text-lg text-muted-foreground">
+            <p className="text-muted-foreground text-lg">
               Execute scripts on multiple remote servers simultaneously with
               secure SSH connections and comprehensive monitoring.
             </p>
 
-            <div className="bg-muted p-6 rounded-lg">
-              <h3 className="font-semibold mb-4">Server Management Features</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-muted rounded-lg p-6">
+              <h3 className="mb-4 font-semibold">Server Management Features</h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <h4 className="font-medium mb-2">Connection Management</h4>
-                  <ul className="text-sm space-y-1 text-muted-foreground">
+                  <h4 className="mb-2 font-medium">Connection Management</h4>
+                  <ul className="text-muted-foreground space-y-1 text-sm">
                     <li>• Persistent SSH connections</li>
                     <li>• Connection pooling</li>
                     <li>• Automatic reconnection</li>
@@ -289,8 +289,8 @@ if __name__ == "__main__":
                   </ul>
                 </div>
                 <div>
-                  <h4 className="font-medium mb-2">Security</h4>
-                  <ul className="text-sm space-y-1 text-muted-foreground">
+                  <h4 className="mb-2 font-medium">Security</h4>
+                  <ul className="text-muted-foreground space-y-1 text-sm">
                     <li>• SSH key authentication</li>
                     <li>• Encrypted credential storage</li>
                     <li>• Access logging</li>
@@ -303,9 +303,9 @@ if __name__ == "__main__":
         </section>
 
         <section id="workflow-engine" className="mb-12">
-          <h2 className="text-3xl font-bold mb-6">Workflow Engine</h2>
+          <h2 className="mb-6 text-3xl font-bold">Workflow Engine</h2>
           <div className="space-y-6">
-            <p className="text-lg text-muted-foreground">
+            <p className="text-muted-foreground text-lg">
               Create sophisticated automation workflows with our visual editor.
               Chain multiple events together with conditional logic and error
               handling.
@@ -316,13 +316,13 @@ if __name__ == "__main__":
                 <CardTitle>Workflow Capabilities</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                   <div>
-                    <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <h4 className="mb-3 flex items-center gap-2 font-semibold">
                       <GitFork className="h-4 w-4" />
                       Conditional Logic
                     </h4>
-                    <ul className="text-sm space-y-1 text-muted-foreground">
+                    <ul className="text-muted-foreground space-y-1 text-sm">
                       <li>• If/else conditions</li>
                       <li>• Switch statements</li>
                       <li>• Exit code handling</li>
@@ -330,11 +330,11 @@ if __name__ == "__main__":
                     </ul>
                   </div>
                   <div>
-                    <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <h4 className="mb-3 flex items-center gap-2 font-semibold">
                       <Zap className="h-4 w-4" />
                       Execution Control
                     </h4>
-                    <ul className="text-sm space-y-1 text-muted-foreground">
+                    <ul className="text-muted-foreground space-y-1 text-sm">
                       <li>• Parallel execution</li>
                       <li>• Sequential flows</li>
                       <li>• Delay and timeout</li>
@@ -342,11 +342,11 @@ if __name__ == "__main__":
                     </ul>
                   </div>
                   <div>
-                    <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <h4 className="mb-3 flex items-center gap-2 font-semibold">
                       <Database className="h-4 w-4" />
                       Data Flow
                     </h4>
-                    <ul className="text-sm space-y-1 text-muted-foreground">
+                    <ul className="text-muted-foreground space-y-1 text-sm">
                       <li>• Variable passing</li>
                       <li>• Output transformation</li>
                       <li>• Data validation</li>
@@ -360,14 +360,14 @@ if __name__ == "__main__":
         </section>
 
         <section id="scheduling-system" className="mb-12">
-          <h2 className="text-3xl font-bold mb-6">Scheduling System</h2>
+          <h2 className="mb-6 text-3xl font-bold">Scheduling System</h2>
           <div className="space-y-6">
-            <p className="text-lg text-muted-foreground">
+            <p className="text-muted-foreground text-lg">
               Flexible scheduling system supporting cron expressions, one-time
               executions, and complex recurring patterns.
             </p>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <Card>
                 <CardHeader>
                   <CardTitle>Schedule Types</CardTitle>
@@ -376,22 +376,22 @@ if __name__ == "__main__":
                   <div className="space-y-4">
                     <div>
                       <h4 className="font-medium">Cron Expressions</h4>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-muted-foreground text-sm">
                         Standard cron syntax with second precision
                       </p>
-                      <div className="bg-muted p-2 rounded mt-2 font-mono text-sm">
+                      <div className="bg-muted mt-2 rounded p-2 font-mono text-sm">
                         0 2 * * * # Daily at 2 AM
                       </div>
                     </div>
                     <div>
                       <h4 className="font-medium">One-time Execution</h4>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-muted-foreground text-sm">
                         Schedule for specific date and time
                       </p>
                     </div>
                     <div>
                       <h4 className="font-medium">Interval-based</h4>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-muted-foreground text-sm">
                         Run every N minutes, hours, or days
                       </p>
                     </div>
@@ -407,19 +407,19 @@ if __name__ == "__main__":
                   <div className="space-y-4">
                     <div>
                       <h4 className="font-medium">Timezone Support</h4>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-muted-foreground text-sm">
                         Execute in specific timezones
                       </p>
                     </div>
                     <div>
                       <h4 className="font-medium">Conflict Detection</h4>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-muted-foreground text-sm">
                         Prevent overlapping executions
                       </p>
                     </div>
                     <div>
                       <h4 className="font-medium">Execution Windows</h4>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-muted-foreground text-sm">
                         Define valid execution periods
                       </p>
                     </div>
@@ -431,23 +431,23 @@ if __name__ == "__main__":
         </section>
 
         <section id="real-time-monitoring" className="mb-12">
-          <h2 className="text-3xl font-bold mb-6">Real-time Monitoring</h2>
+          <h2 className="mb-6 text-3xl font-bold">Real-time Monitoring</h2>
           <div className="space-y-6">
-            <p className="text-lg text-muted-foreground">
+            <p className="text-muted-foreground text-lg">
               Comprehensive monitoring and analytics to track performance,
               identify issues, and optimize your automation workflows.
             </p>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
                     <Activity className="h-4 w-4" />
                     Live Execution
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ul className="text-sm space-y-1 text-muted-foreground">
+                  <ul className="text-muted-foreground space-y-1 text-sm">
                     <li>• Real-time log streaming</li>
                     <li>• Progress indicators</li>
                     <li>• Resource usage tracking</li>
@@ -458,13 +458,13 @@ if __name__ == "__main__":
 
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
                     <Database className="h-4 w-4" />
                     Analytics
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ul className="text-sm space-y-1 text-muted-foreground">
+                  <ul className="text-muted-foreground space-y-1 text-sm">
                     <li>• Execution history</li>
                     <li>• Performance metrics</li>
                     <li>• Success/failure rates</li>
@@ -475,13 +475,13 @@ if __name__ == "__main__":
 
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
                     <Bell className="h-4 w-4" />
                     Alerting
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ul className="text-sm space-y-1 text-muted-foreground">
+                  <ul className="text-muted-foreground space-y-1 text-sm">
                     <li>• Failure notifications</li>
                     <li>• Performance alerts</li>
                     <li>• Custom thresholds</li>
@@ -494,14 +494,14 @@ if __name__ == "__main__":
         </section>
 
         <section id="security-features" className="mb-12">
-          <h2 className="text-3xl font-bold mb-6">Security Features</h2>
+          <h2 className="mb-6 text-3xl font-bold">Security Features</h2>
           <div className="space-y-6">
-            <p className="text-lg text-muted-foreground">
+            <p className="text-muted-foreground text-lg">
               Enterprise-grade security features to protect your infrastructure
               and ensure compliance with security best practices.
             </p>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -512,19 +512,19 @@ if __name__ == "__main__":
                 <CardContent className="space-y-3">
                   <div>
                     <h4 className="font-medium">Encryption at Rest</h4>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       All sensitive data encrypted using AES-256
                     </p>
                   </div>
                   <div>
                     <h4 className="font-medium">Encryption in Transit</h4>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       TLS 1.3 for all API communications
                     </p>
                   </div>
                   <div>
                     <h4 className="font-medium">Credential Management</h4>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       Secure storage of SSH keys and API tokens
                     </p>
                   </div>
@@ -541,19 +541,19 @@ if __name__ == "__main__":
                 <CardContent className="space-y-3">
                   <div>
                     <h4 className="font-medium">Role-Based Access</h4>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       Granular permissions and user roles
                     </p>
                   </div>
                   <div>
                     <h4 className="font-medium">API Authentication</h4>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       Token-based API access with scopes
                     </p>
                   </div>
                   <div>
                     <h4 className="font-medium">Audit Logging</h4>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       Complete audit trail of all actions
                     </p>
                   </div>
@@ -564,35 +564,35 @@ if __name__ == "__main__":
         </section>
 
         <section id="api-integration" className="mb-12">
-          <h2 className="text-3xl font-bold mb-6">API Integration</h2>
+          <h2 className="mb-6 text-3xl font-bold">API Integration</h2>
           <div className="space-y-6">
-            <p className="text-lg text-muted-foreground">
+            <p className="text-muted-foreground text-lg">
               Comprehensive REST API for integrating Cronium with your existing
               tools and workflows.
             </p>
 
-            <div className="bg-muted p-6 rounded-lg">
-              <h3 className="font-semibold mb-4">API Features</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="bg-muted rounded-lg p-6">
+              <h3 className="mb-4 font-semibold">API Features</h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <div>
-                  <h4 className="font-medium mb-2">Event Management</h4>
-                  <ul className="text-sm space-y-1 text-muted-foreground">
+                  <h4 className="mb-2 font-medium">Event Management</h4>
+                  <ul className="text-muted-foreground space-y-1 text-sm">
                     <li>• Create and update events</li>
                     <li>• Execute events remotely</li>
                     <li>• Retrieve execution logs</li>
                   </ul>
                 </div>
                 <div>
-                  <h4 className="font-medium mb-2">Workflow Control</h4>
-                  <ul className="text-sm space-y-1 text-muted-foreground">
+                  <h4 className="mb-2 font-medium">Workflow Control</h4>
+                  <ul className="text-muted-foreground space-y-1 text-sm">
                     <li>• Trigger workflows</li>
                     <li>• Monitor progress</li>
                     <li>• Handle callbacks</li>
                   </ul>
                 </div>
                 <div>
-                  <h4 className="font-medium mb-2">System Integration</h4>
-                  <ul className="text-sm space-y-1 text-muted-foreground">
+                  <h4 className="mb-2 font-medium">System Integration</h4>
+                  <ul className="text-muted-foreground space-y-1 text-sm">
                     <li>• Webhook notifications</li>
                     <li>• Event streaming</li>
                     <li>• Third-party connectors</li>
@@ -604,18 +604,18 @@ if __name__ == "__main__":
         </section>
 
         <section id="environment-management" className="mb-12">
-          <h2 className="text-3xl font-bold mb-6">Environment Management</h2>
-          <p className="text-lg text-muted-foreground mb-6">
+          <h2 className="mb-6 text-3xl font-bold">Environment Management</h2>
+          <p className="text-muted-foreground mb-6 text-lg">
             Manage environment variables and configuration across different
             deployment environments.
           </p>
 
           <Card>
             <CardContent className="pt-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <div>
-                  <h4 className="font-semibold mb-3">Environment Variables</h4>
-                  <ul className="space-y-2 text-sm text-muted-foreground">
+                  <h4 className="mb-3 font-semibold">Environment Variables</h4>
+                  <ul className="text-muted-foreground space-y-2 text-sm">
                     <li>• Global and event-specific variables</li>
                     <li>• Encrypted storage of sensitive values</li>
                     <li>• Environment-based configuration</li>
@@ -623,10 +623,10 @@ if __name__ == "__main__":
                   </ul>
                 </div>
                 <div>
-                  <h4 className="font-semibold mb-3">
+                  <h4 className="mb-3 font-semibold">
                     Configuration Management
                   </h4>
-                  <ul className="space-y-2 text-sm text-muted-foreground">
+                  <ul className="text-muted-foreground space-y-2 text-sm">
                     <li>• Environment profiles (dev, staging, prod)</li>
                     <li>• Configuration templating</li>
                     <li>• Version control integration</li>
@@ -639,19 +639,19 @@ if __name__ == "__main__":
         </section>
 
         <section id="notification-system" className="mb-12">
-          <h2 className="text-3xl font-bold mb-6">Notification System</h2>
-          <p className="text-lg text-muted-foreground mb-6">
+          <h2 className="mb-6 text-3xl font-bold">Notification System</h2>
+          <p className="text-muted-foreground mb-6 text-lg">
             Stay informed about your automation status with comprehensive
             notification options.
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Email Notifications</CardTitle>
               </CardHeader>
               <CardContent>
-                <ul className="text-sm space-y-1 text-muted-foreground">
+                <ul className="text-muted-foreground space-y-1 text-sm">
                   <li>• Success/failure alerts</li>
                   <li>• Scheduled reports</li>
                   <li>• Custom templates</li>
@@ -665,7 +665,7 @@ if __name__ == "__main__":
                 <CardTitle className="text-base">Webhook Integration</CardTitle>
               </CardHeader>
               <CardContent>
-                <ul className="text-sm space-y-1 text-muted-foreground">
+                <ul className="text-muted-foreground space-y-1 text-sm">
                   <li>• Real-time event streaming</li>
                   <li>• Custom payload formats</li>
                   <li>• Retry mechanisms</li>
@@ -681,7 +681,7 @@ if __name__ == "__main__":
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ul className="text-sm space-y-1 text-muted-foreground">
+                <ul className="text-muted-foreground space-y-1 text-sm">
                   <li>• Slack integration</li>
                   <li>• Microsoft Teams</li>
                   <li>• PagerDuty alerts</li>
@@ -693,18 +693,18 @@ if __name__ == "__main__":
         </section>
 
         <section id="role-based-access" className="mb-12">
-          <h2 className="text-3xl font-bold mb-6">Role-Based Access Control</h2>
-          <p className="text-lg text-muted-foreground mb-6">
+          <h2 className="mb-6 text-3xl font-bold">Role-Based Access Control</h2>
+          <p className="text-muted-foreground mb-6 text-lg">
             Granular permission system to control user access and maintain
             security.
           </p>
 
           <Card>
             <CardContent className="pt-6">
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
                 <div>
-                  <h4 className="font-semibold mb-3">Admin</h4>
-                  <ul className="space-y-1 text-sm text-muted-foreground">
+                  <h4 className="mb-3 font-semibold">Admin</h4>
+                  <ul className="text-muted-foreground space-y-1 text-sm">
                     <li>• Full system access</li>
                     <li>• User management</li>
                     <li>• System configuration</li>
@@ -712,8 +712,8 @@ if __name__ == "__main__":
                   </ul>
                 </div>
                 <div>
-                  <h4 className="font-semibold mb-3">Developer</h4>
-                  <ul className="space-y-1 text-sm text-muted-foreground">
+                  <h4 className="mb-3 font-semibold">Developer</h4>
+                  <ul className="text-muted-foreground space-y-1 text-sm">
                     <li>• Create/edit events</li>
                     <li>• Execute workflows</li>
                     <li>• View logs</li>
@@ -721,8 +721,8 @@ if __name__ == "__main__":
                   </ul>
                 </div>
                 <div>
-                  <h4 className="font-semibold mb-3">Operator</h4>
-                  <ul className="space-y-1 text-sm text-muted-foreground">
+                  <h4 className="mb-3 font-semibold">Operator</h4>
+                  <ul className="text-muted-foreground space-y-1 text-sm">
                     <li>• Execute events</li>
                     <li>• Monitor status</li>
                     <li>• View logs</li>
@@ -730,8 +730,8 @@ if __name__ == "__main__":
                   </ul>
                 </div>
                 <div>
-                  <h4 className="font-semibold mb-3">Viewer</h4>
-                  <ul className="space-y-1 text-sm text-muted-foreground">
+                  <h4 className="mb-3 font-semibold">Viewer</h4>
+                  <ul className="text-muted-foreground space-y-1 text-sm">
                     <li>• Read-only access</li>
                     <li>• View events</li>
                     <li>• Monitor status</li>
@@ -743,22 +743,22 @@ if __name__ == "__main__":
           </Card>
         </section>
 
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border border-blue-200 dark:border-blue-800 p-6 rounded-lg">
-          <h3 className="font-semibold mb-2">Ready to Get Started?</h3>
-          <p className="text-sm text-muted-foreground mb-4">
+        <div className="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 dark:border-blue-800 dark:from-blue-950 dark:to-indigo-950">
+          <h3 className="mb-2 font-semibold">Ready to Get Started?</h3>
+          <p className="text-muted-foreground mb-4 text-sm">
             Explore our comprehensive documentation to learn how to use these
             features in your automation workflows.
           </p>
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <a
               href={`/${lang}/docs/quick-start`}
-              className="inline-flex items-center justify-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-sm"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center justify-center rounded-md px-4 py-2 text-sm transition-colors"
             >
               Quick Start Guide
             </a>
             <a
               href={`/${lang}/docs/api`}
-              className="inline-flex items-center justify-center px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm"
+              className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"
             >
               API Documentation
             </a>

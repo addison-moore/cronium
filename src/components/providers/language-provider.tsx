@@ -5,10 +5,10 @@ import {
   useContext,
   useState,
   useEffect,
-  ReactNode,
+  type ReactNode,
 } from "react";
 import { useTranslations } from "next-intl";
-import { supportedLocales, SupportedLocale } from "@shared/i18n";
+import { supportedLocales, type SupportedLocale } from "@shared/i18n";
 
 // Create a context to manage the current locale
 type LanguageContextType = {

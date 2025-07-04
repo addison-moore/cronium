@@ -43,18 +43,34 @@ export const bulkUserOperationSchema = z.object({
 
 // Variables schemas
 export const createVariableSchema = z.object({
-  key: z.string().min(1, "Variable key is required").max(100, "Key must be less than 100 characters")
-    .regex(/^[A-Z_][A-Z0-9_]*$/, "Key must contain only uppercase letters, numbers, and underscores"),
+  key: z
+    .string()
+    .min(1, "Variable key is required")
+    .max(100, "Key must be less than 100 characters")
+    .regex(
+      /^[A-Z_][A-Z0-9_]*$/,
+      "Key must contain only uppercase letters, numbers, and underscores",
+    ),
   value: z.string().max(1000, "Value must be less than 1000 characters"),
-  description: z.string().max(500, "Description must be less than 500 characters").optional(),
+  description: z
+    .string()
+    .max(500, "Description must be less than 500 characters")
+    .optional(),
   isGlobal: z.boolean().default(true),
   isEncrypted: z.boolean().default(false),
 });
 
 export const updateVariableSchema = z.object({
   id: z.number().int().positive("Variable ID must be a positive integer"),
-  key: z.string().min(1).max(100)
-    .regex(/^[A-Z_][A-Z0-9_]*$/, "Key must contain only uppercase letters, numbers, and underscores").optional(),
+  key: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(
+      /^[A-Z_][A-Z0-9_]*$/,
+      "Key must contain only uppercase letters, numbers, and underscores",
+    )
+    .optional(),
   value: z.string().max(1000).optional(),
   description: z.string().max(500).optional(),
   isGlobal: z.boolean().optional(),

@@ -1,4 +1,3 @@
-
 # Cronium Styling Guide
 
 This document outlines the styling conventions and architecture of the Cronium application, which uses Next.js 15 and is styled with TailwindCSS 4.
@@ -61,7 +60,6 @@ Based on the latest TailwindCSS 4 best practices, here are some recommendations 
 4.  **Component Abstraction**: We should continue to create reusable components in React to encapsulate our styles and markup. This will help to keep our codebase clean and maintainable.
 
 5.  **Remove Redundant `postcss.config.mjs`**: Since we are using Next.js 15, which has built-in support for PostCSS, and TailwindCSS 4 is an all-in-one tool, we can likely remove the `postcss.config.mjs` file entirely. Next.js will automatically configure PostCSS for us.
-
 
 ## Component Styling
 

@@ -22,22 +22,25 @@ Use this checklist when migrating a form from `useState` or other state manageme
 ### 1. Setup
 
 - [ ] Install required packages:
+
   ```bash
   npm install react-hook-form zod @hookform/resolvers
   ```
 
 - [ ] Create Zod schema for validation:
+
   ```tsx
   const formSchema = z.object({
     // Add your fields here
   });
-  
+
   type FormData = z.infer<typeof formSchema>;
   ```
 
 ### 2. Form Initialization
 
 - [ ] Replace state hooks with `useForm`:
+
   ```tsx
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -77,9 +80,11 @@ For each form input:
 - [ ] Replace error state with `form.formState.errors`
 - [ ] Update error display:
   ```tsx
-  {form.formState.errors.fieldName && (
-    <span>{form.formState.errors.fieldName.message}</span>
-  )}
+  {
+    form.formState.errors.fieldName && (
+      <span>{form.formState.errors.fieldName.message}</span>
+    );
+  }
   ```
 - [ ] Add accessibility attributes:
   ```tsx

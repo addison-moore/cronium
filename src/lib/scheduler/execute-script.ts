@@ -25,7 +25,10 @@ export async function executeScript(
   handleSuccessActions: (eventId: number) => Promise<void>,
   handleFailureActions: (eventId: number) => Promise<void>,
   handleAlwaysActions: (eventId: number) => Promise<void>,
-  handleConditionActions: (eventId: number, condition: boolean) => Promise<void>,
+  handleConditionActions: (
+    eventId: number,
+    condition: boolean,
+  ) => Promise<void>,
   handleExecutionCount: (eventId: number) => Promise<void>,
   input: Record<string, any> = {},
   workflowId?: number,
@@ -178,7 +181,7 @@ async function executeOnMultipleServers(
         }
 
         if (!result) {
-          throw lastError || new Error("Unknown execution failure");
+          throw lastError ?? new Error("Unknown execution failure");
         }
 
         console.log(`Multi-server: Server ${server.name} execution result:`, {
@@ -226,7 +229,7 @@ async function executeOnMultipleServers(
 
   // Get condition value from the first successful server execution
   const firstSuccessfulResult = results.find((r) => r.success);
-  const conditionValue = firstSuccessfulResult?.condition || false;
+  const conditionValue = firstSuccessfulResult?.condition ?? false;
 
   // Create combined output
   const combinedOutput = results
@@ -234,7 +237,7 @@ async function executeOnMultipleServers(
       (r) =>
         `Server: ${r.serverName}\n` +
         `Status: ${r.success ? "SUCCESS" : "FAILED"}\n` +
-        `Output: ${r.output || r.error || "No output"}\n` +
+        `Output: ${r.output ?? r.error ?? "No output"}\n` +
         `${"=".repeat(50)}`,
     )
     .join("\n\n");
@@ -296,11 +299,11 @@ async function executeOnMultipleServers(
   await storage.updateScript(event.id, {
     lastRunAt: startTime,
     successCount: overallSuccess
-      ? (event.successCount || 0) + 1
+      ? (event.successCount ?? 0) + 1
       : event.successCount,
     failureCount: overallSuccess
       ? event.failureCount
-      : (event.failureCount || 0) + 1,
+      : (event.failureCount ?? 0) + 1,
   });
 
   // Handle success/failure events - partial successes trigger failure events
@@ -353,7 +356,10 @@ async function executeSingleScript(
   handleSuccessActions: (eventId: number) => Promise<void>,
   handleFailureActions: (eventId: number) => Promise<void>,
   handleAlwaysActions: (eventId: number) => Promise<void>,
-  handleConditionActions: (eventId: number, condition: boolean) => Promise<void>,
+  handleConditionActions: (
+    eventId: number,
+    condition: boolean,
+  ) => Promise<void>,
   handleExecutionCount: (eventId: number) => Promise<void>,
   input: Record<string, any> = {},
   workflowId?: number,
@@ -437,7 +443,7 @@ async function executeSingleScript(
       stdout: "",
       stderr: "",
     };
-    let scriptContent = event.content || "";
+    const scriptContent = event.content ?? "";
     let envVars: Record<string, string> = {};
 
     // Check if there are environment variables
@@ -555,8 +561,8 @@ async function executeSingleScript(
                   address: event.server.address,
                 }
               : null,
-            successCount: event.successCount || 0,
-            failureCount: event.failureCount || 0,
+            successCount: event.successCount ?? 0,
+            failureCount: event.failureCount ?? 0,
             lastRunAt: event.lastRunAt,
           };
 
@@ -588,7 +594,7 @@ async function executeSingleScript(
     } else if (event.type === EventType.HTTP_REQUEST) {
       // Execute HTTP request
       try {
-        const httpSettings = JSON.parse(event.content || "{}");
+        const httpSettings = JSON.parse(event.content ?? "{}");
         const httpResult = await executeHttpRequest(
           httpSettings.method,
           httpSettings.url,
@@ -596,8 +602,8 @@ async function executeSingleScript(
           httpSettings.body,
         );
         result = {
-          stdout: JSON.stringify(httpResult.data || {}, null, 2),
-          stderr: httpResult.error || "",
+          stdout: JSON.stringify(httpResult.data ?? {}, null, 2),
+          stderr: httpResult.error ?? "",
         };
       } catch (err) {
         const error = err as Error;
@@ -630,8 +636,8 @@ async function executeSingleScript(
               address: event.server.address,
             }
           : null,
-        successCount: event.successCount || 0,
-        failureCount: event.failureCount || 0,
+        successCount: event.successCount ?? 0,
+        failureCount: event.failureCount ?? 0,
         lastRunAt: event.lastRunAt,
       };
 
@@ -656,7 +662,7 @@ async function executeSingleScript(
       // Handle successful execution
       // Update the database
       await storage.updateScript(event.id, {
-        successCount: (event.successCount || 0) + 1,
+        successCount: (event.successCount ?? 0) + 1,
       });
 
       // Update the existing log with success information if we have a log ID and not multi-server
@@ -694,7 +700,7 @@ async function executeSingleScript(
 
       // Update the database - timeouts are counted as failures
       await storage.updateScript(event.id, {
-        failureCount: (event.failureCount || 0) + 1,
+        failureCount: (event.failureCount ?? 0) + 1,
       });
 
       // Determine the appropriate log status
@@ -777,15 +783,15 @@ async function executeSingleScript(
       success,
       output: success ? output : result.stderr,
     };
-    
+
     if ((result as any).scriptOutput !== undefined) {
       returnValue.scriptOutput = (result as any).scriptOutput;
     }
-    
+
     if (conditionValue !== undefined) {
       returnValue.condition = conditionValue;
     }
-    
+
     return returnValue;
   } catch (err) {
     const error = err as Error;
@@ -794,7 +800,7 @@ async function executeSingleScript(
     // Handle exceptions during execution
     // Update failure count
     await storage.updateScript(event.id, {
-      failureCount: (event.failureCount || 0) + 1,
+      failureCount: (event.failureCount ?? 0) + 1,
     });
 
     const endTime = new Date();

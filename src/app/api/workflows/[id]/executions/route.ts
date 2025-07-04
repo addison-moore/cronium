@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { db } from "@/server/db";
 import { workflowExecutions, workflows } from "@/shared/schema";
 import { eq, and, or, desc, count } from "drizzle-orm";
@@ -80,8 +81,8 @@ export async function GET(
 
     // Get query parameters for pagination
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
+    const page = parseInt(searchParams.get("page") ?? "1");
+    const limit = parseInt(searchParams.get("limit") ?? "20");
     const offset = (page - 1) * limit;
 
     // Get workflow execution history
@@ -99,7 +100,7 @@ export async function GET(
       .from(workflowExecutions)
       .where(eq(workflowExecutions.workflowId, workflowId));
 
-    const total = countResult?.count || 0;
+    const total = countResult?.count ?? 0;
 
     return NextResponse.json({
       success: true,

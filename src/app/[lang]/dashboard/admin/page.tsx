@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Tabs, TabsContent, TabsList, Tab } from "@/components/ui/tabs";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
 import { Mail, Users, Sparkles, UserCog, Shield } from "lucide-react";
 import { z } from "zod";
-import { UserRole, UserStatus } from "@/shared/schema";
+import { UserStatus } from "@/shared/schema";
+import type { UserRole } from "@/shared/schema";
 import {
   SmtpSettings,
   RegistrationSettings,
@@ -57,22 +57,6 @@ interface SystemSettings {
   logRetentionDays?: number;
 }
 
-interface User {
-  id: string;
-  email: string | null;
-  username: string | null;
-  password?: string | null;
-  firstName: string | null;
-  lastName: string | null;
-  profileImageUrl?: string | null;
-  role: UserRole;
-  status: UserStatus;
-  createdAt: string;
-  updatedAt: string;
-  lastLogin: Date | null;
-  inviteToken?: string | null;
-}
-
 // Validation schemas
 const smtpSettingsSchema = z.object({
   smtpHost: z.string().min(1, "SMTP host is required"),
@@ -97,9 +81,7 @@ const aiSettingsSchema = z.object({
 });
 
 export default function AdminPage() {
-  const router = useRouter();
   const t = useTranslations("Admin");
-  const tCommon = useTranslations("Common");
 
   // Hash-based tab navigation
   const { activeTab, changeTab } = useHashTabNavigation({
@@ -108,11 +90,8 @@ export default function AdminPage() {
   });
 
   // tRPC queries and mutations
-  const {
-    data: systemSettings,
-    isLoading: isSettingsLoading,
-    refetch: refetchSettings,
-  } = trpc.admin.getSystemSettings.useQuery();
+  const { data: systemSettings, refetch: refetchSettings } =
+    trpc.admin.getSystemSettings.useQuery();
 
   const {
     data: usersData,
@@ -138,7 +117,7 @@ export default function AdminPage() {
     onSuccess: (data) => {
       toast({
         title: "Success",
-        description: `Invitation sent to ${data.email}`,
+        description: `Invitation sent to ${data.email ?? ""}`,
       });
       refetchUsers();
     },
@@ -185,8 +164,8 @@ export default function AdminPage() {
     },
   });
 
-  const users = usersData?.users || [];
-  const settings: SystemSettings = (systemSettings || {}) as SystemSettings;
+  const users = usersData?.users ?? [];
+  const settings: SystemSettings = (systemSettings ?? {}) as SystemSettings;
   const [roles, setRoles] = useState<Role[]>([]);
   const [isRolesLoading, setIsRolesLoading] = useState(true);
 

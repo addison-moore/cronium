@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import { Handle, Position, NodeProps } from "@xyflow/react";
+import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Info } from "lucide-react";
@@ -30,7 +30,7 @@ const eventTypeStyles: Record<string, { bg: string; text: string }> = {
 };
 
 function EventNode({ data, selected }: NodeProps) {
-  let {
+  const {
     label,
     type,
     eventId,
@@ -64,7 +64,7 @@ function EventNode({ data, selected }: NodeProps) {
   };
 
   // Ensure type is a valid EventType
-  const eventType = (type as EventType) || EventType.BASH;
+  const eventType = type || EventType.BASH;
 
   // Get styling based on script type
   const style = eventTypeStyles[eventType] || {
@@ -74,27 +74,27 @@ function EventNode({ data, selected }: NodeProps) {
 
   return (
     <div
-      className={`event-node rounded-lg ${selected ? "ring-2 ring-primary ring-offset-2 dark:ring-offset-background" : ""}`}
+      className={`event-node rounded-lg ${selected ? "ring-primary dark:ring-offset-background ring-2 ring-offset-2" : ""}`}
     >
       {/* Input Handle */}
       <Handle
         type="target"
         position={Position.Left}
-        className="w-3 h-3 bg-gray-300 dark:bg-gray-600 border-2 border-background dark:border-gray-800"
+        className="border-background h-3 w-3 border-2 bg-gray-300 dark:border-gray-800 dark:bg-gray-600"
       />
 
-      <Card className="w-48 shadow-sm border-border">
+      <Card className="border-border w-48 shadow-sm">
         <CardHeader
-          className={`flex flex-row items-center justify-between py-2 px-3 ${style.bg} rounded-lg`}
+          className={`flex flex-row items-center justify-between px-3 py-2 ${style.bg} rounded-lg`}
         >
-          <div className="flex items-center m-0">
+          <div className="m-0 flex items-center">
             <EventTypeIcon
               type={eventType}
               size={16}
               className={`mr-1 ${style.text}`}
             />
             <span
-              className={`truncate max-w-[128px] inline-block text-sm font-medium ${style.text}`}
+              className={`inline-block max-w-[128px] truncate text-sm font-medium ${style.text}`}
             >
               {label || "Untitled"}
             </span>
@@ -104,13 +104,17 @@ function EventNode({ data, selected }: NodeProps) {
               eventId={eventId || 0}
               eventName={label || "Untitled"}
               eventType={eventType}
-              {...(description !== undefined && { eventDescription: description })}
+              {...(description !== undefined && {
+                eventDescription: description,
+              })}
               {...(tags !== undefined && { eventTags: tags })}
               {...(serverId !== undefined && { eventServerId: serverId })}
               {...(serverName !== undefined && { eventServerName: serverName })}
               {...(createdAt !== undefined && { createdAt })}
               {...(updatedAt !== undefined && { updatedAt })}
-              {...(handleEventUpdated !== undefined && { onEventUpdated: handleEventUpdated })}
+              {...(handleEventUpdated !== undefined && {
+                onEventUpdated: handleEventUpdated,
+              })}
             >
               <Button
                 variant="ghost"
@@ -129,7 +133,7 @@ function EventNode({ data, selected }: NodeProps) {
       <Handle
         type="source"
         position={Position.Right}
-        className="w-3 h-3 bg-gray-300 dark:bg-gray-600 border-2 border-background dark:border-gray-800"
+        className="border-background h-3 w-3 border-2 bg-gray-300 dark:border-gray-800 dark:bg-gray-600"
       />
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, KeyboardEvent } from "react";
+import React, { useState, type KeyboardEvent } from "react";
 import { X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -69,7 +69,7 @@ export function TagsInput({
         disabled={value.length >= maxTags}
         className="w-full"
       />
-      <div className="flex flex-wrap gap-2 mb-2">
+      <div className="mb-2 flex flex-wrap gap-2">
         {value.map((tag, index) => (
           <Badge
             key={index}
@@ -91,7 +91,7 @@ export function TagsInput({
       </div>
 
       {value.length > 0 && (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           {value.length}/{maxTags} tags
         </p>
       )}

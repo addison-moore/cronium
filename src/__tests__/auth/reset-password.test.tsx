@@ -28,7 +28,7 @@ describe("ResetPassword", () => {
     expect(screen.getByLabelText("New Password")).toBeInTheDocument();
     expect(screen.getByLabelText("Confirm Password")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Reset Password" })
+      screen.getByRole("button", { name: "Reset Password" }),
     ).toBeInTheDocument();
   });
 });

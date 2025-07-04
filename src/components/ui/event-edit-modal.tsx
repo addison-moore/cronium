@@ -124,7 +124,7 @@ export function EventEditModal({
           />
         </div>
       ) : (
-        <div className="text-center py-8">
+        <div className="py-8 text-center">
           <p className="text-muted-foreground">Failed to load event data</p>
         </div>
       )}

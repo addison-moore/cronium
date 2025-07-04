@@ -1,6 +1,6 @@
-import { ReactNode } from 'react';
-import { NextIntlClientProvider } from 'next-intl';
-import { getMessages } from '@/lib/get-messages';
+import type { ReactNode } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import { getMessages } from "@/lib/get-messages";
 
 export async function generateMetadata({
   params,
@@ -9,17 +9,20 @@ export async function generateMetadata({
 }) {
   try {
     const { lang } = await params;
-    const messages = await getMessages(lang || 'en');
-    
+    const messages = await getMessages(lang || "en");
+
     return {
-      title: messages?.Documentation?.Title || 'Cronium Documentation',
-      description: messages?.Documentation?.Description || 'Learn how to use Cronium to automate your events and workflows',
+      title: messages?.Documentation?.Title || "Cronium Documentation",
+      description:
+        messages?.Documentation?.Description ||
+        "Learn how to use Cronium to automate your events and workflows",
     };
   } catch (error) {
-    console.error('Error generating metadata:', error);
+    console.error("Error generating metadata:", error);
     return {
-      title: 'Cronium Documentation',
-      description: 'Learn how to use Cronium to automate your events and workflows',
+      title: "Cronium Documentation",
+      description:
+        "Learn how to use Cronium to automate your events and workflows",
     };
   }
 }
@@ -33,15 +36,15 @@ export default async function DocsLayout({
 }) {
   try {
     const { lang } = await params;
-    const messages = await getMessages(lang || 'en');
+    const messages = await getMessages(lang || "en");
 
     return (
-      <NextIntlClientProvider locale={lang || 'en'} messages={messages}>
+      <NextIntlClientProvider locale={lang || "en"} messages={messages}>
         {children}
       </NextIntlClientProvider>
     );
   } catch (error) {
-    console.error('Error in DocsLayout:', error);
+    console.error("Error in DocsLayout:", error);
     // Fallback to a basic layout with no translations
     return <>{children}</>;
   }

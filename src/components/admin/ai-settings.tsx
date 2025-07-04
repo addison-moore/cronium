@@ -43,18 +43,18 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
   const form = useForm<z.infer<typeof aiSettingsSchema>>({
     resolver: zodResolver(aiSettingsSchema),
     defaultValues: {
-      aiEnabled: settings.aiEnabled || false,
-      aiModel: settings.aiModel || "gpt-4o",
-      openaiApiKey: settings.openaiApiKey || "",
+      aiEnabled: settings.aiEnabled ?? false,
+      aiModel: settings.aiModel ?? "gpt-4o",
+      openaiApiKey: settings.openaiApiKey ?? "",
     },
   });
 
   // Update form when settings change
   React.useEffect(() => {
     form.reset({
-      aiEnabled: settings.aiEnabled || false,
-      aiModel: settings.aiModel || "gpt-4o",
-      openaiApiKey: settings.openaiApiKey || "",
+      aiEnabled: settings.aiEnabled ?? false,
+      aiModel: settings.aiModel ?? "gpt-4o",
+      openaiApiKey: settings.openaiApiKey ?? "",
     });
   }, [settings, form]);
 
@@ -91,7 +91,9 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
                   <Select
                     value={field.value}
                     onValueChange={field.onChange}
-                    aria-describedby={fieldState.error ? "aiModel-error" : undefined}
+                    aria-describedby={
+                      fieldState.error ? "aiModel-error" : undefined
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select AI model" />
@@ -100,7 +102,9 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
                       <SelectItem value="gpt-4o">GPT-4o</SelectItem>
                       <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
                       <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
-                      <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
+                      <SelectItem value="gpt-3.5-turbo">
+                        GPT-3.5 Turbo
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                   {fieldState.error && (
@@ -122,7 +126,9 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
                     id="openaiApiKey"
                     type="password"
                     placeholder="sk-..."
-                    aria-describedby={fieldState.error ? "openaiApiKey-error" : undefined}
+                    aria-describedby={
+                      fieldState.error ? "openaiApiKey-error" : undefined
+                    }
                     {...field}
                   />
                   {fieldState.error && (

@@ -13,9 +13,9 @@ import {
   Activity,
   Info,
 } from "lucide-react";
-import { LogStatus, EventType } from "@/shared/schema";
+import { LogStatus } from "@/shared/schema";
+import type { EventType } from "@/shared/schema";
 import { EventDetailsPopover } from "@/components/ui/event-details-popover";
-import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/use-toast";
 
 interface WorkflowNode {
@@ -142,8 +142,8 @@ export default function WorkflowExecutionGraph({
             // Update internal execution state based on actual status
             if (execution) {
               const isCompleted =
-                execution.status === "SUCCESS" ||
-                execution.status === "FAILURE" ||
+                execution.status === LogStatus.SUCCESS ||
+                execution.status === LogStatus.FAILURE ||
                 execution.status === "completed" ||
                 execution.status === "failed";
 
@@ -271,8 +271,8 @@ export default function WorkflowExecutionGraph({
     } else if (!isExecuting && actuallyExecuting && currentExecution) {
       // Execution completed, check if execution data confirms completion
       const isCompleted =
-        currentExecution.status === "SUCCESS" ||
-        currentExecution.status === "FAILURE" ||
+        currentExecution.status === LogStatus.SUCCESS ||
+        currentExecution.status === LogStatus.FAILURE ||
         currentExecution.status === "completed" ||
         currentExecution.status === "failed";
       if (isCompleted) {

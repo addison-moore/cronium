@@ -1,15 +1,16 @@
-import { NextAuthOptions } from "next-auth";
+import { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { compare } from "bcrypt";
 import { storage } from "@/server/storage";
-import { UserRole, UserStatus } from "@/shared/schema";
+import { UserStatus } from "@/shared/schema";
+import type { UserRole } from "@/shared/schema";
 
 // Helper function to get the locale from a URL path
 const getLocaleFromPath = (path: string | null): string => {
   if (!path) return "en"; // Default to English if no path
 
   // Extract locale from the path (e.g., "/es/dashboard" -> "es")
-  const match = path.match(/^\/([a-z]{2})(?:\/|$)/);
+  const match = /^\/([a-z]{2})(?:\/|$)/.exec(path);
   return match?.[1] ?? "en";
 };
 
@@ -58,7 +59,7 @@ export const authOptions: NextAuthOptions = {
           // Validate the password directly (no encryption handling needed)
           const isValidPassword = await compare(
             credentials.password,
-            user.password || "",
+            user.password ?? "",
           );
 
           if (!isValidPassword) {
@@ -103,13 +104,13 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (token && session.user) {
-        session.user.id = token.id as string;
-        session.user.username = token.username as string;
-        session.user.firstName = token.firstName as string;
-        session.user.lastName = token.lastName as string;
-        session.user.profileImageUrl = token.profileImageUrl as string;
-        session.user.role = token.role as UserRole;
-        session.user.status = token.status as UserStatus;
+        session.user.id = token.id;
+        session.user.username = token.username!;
+        session.user.firstName = token.firstName!;
+        session.user.lastName = token.lastName!;
+        session.user.profileImageUrl = token.profileImageUrl!;
+        session.user.role = token.role;
+        session.user.status = token.status;
       }
       return session;
     },

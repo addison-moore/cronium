@@ -57,14 +57,14 @@ export function TemplateForm({
 
   const isAdmin = user?.role === "ADMIN";
   const isEditing = !!template;
-  const isSystemTemplate = template?.isSystemTemplate || false;
+  const isSystemTemplate = template?.isSystemTemplate ?? false;
 
   const form = useForm({
     resolver: zodResolver(templateSchema),
     defaultValues: {
-      name: template?.name || "",
-      content: template?.content || "",
-      subject: template?.subject || "",
+      name: template?.name ?? "",
+      content: template?.content ?? "",
+      subject: template?.subject ?? "",
       isSystemTemplate: isSystemTemplate,
     },
   });
@@ -149,7 +149,7 @@ export function TemplateForm({
       {/* System Template Switch (Admin only) */}
       {isAdmin && (
         <div className="space-y-2">
-          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-border">
+          <div className="bg-muted/50 border-border flex items-center justify-between rounded-lg border p-3">
             <div className="flex items-center gap-2">
               <Shield className="h-4 w-4 text-blue-500" />
               <div>
@@ -159,7 +159,7 @@ export function TemplateForm({
                 >
                   System Template
                 </Label>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-xs">
                   System templates are visible to all users but only editable by
                   admins
                 </p>
@@ -178,7 +178,7 @@ export function TemplateForm({
 
       {/* System Template Badge (for non-admins viewing system templates) */}
       {!isAdmin && isSystemTemplate && (
-        <div className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+        <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-2 dark:border-blue-800 dark:bg-blue-950/20">
           <Shield className="h-4 w-4 text-blue-500" />
           <Badge
             variant="secondary"
@@ -211,7 +211,7 @@ export function TemplateForm({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                <Info className="text-muted-foreground h-4 w-4 cursor-help" />
               </TooltipTrigger>
               <TooltipContent className="max-w-sm">
                 <div className="space-y-1 text-xs">
@@ -244,8 +244,8 @@ export function TemplateForm({
             </Tooltip>
           </TooltipProvider>
         </div>
-        <p className="text-xs text-muted-foreground">{getHelperText()}</p>
-        <div className="border border-border rounded-md">
+        <p className="text-muted-foreground text-xs">{getHelperText()}</p>
+        <div className="border-border rounded-md border">
           <MonacoEditor
             height="300px"
             language={getContentLanguage()}

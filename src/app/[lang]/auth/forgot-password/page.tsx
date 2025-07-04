@@ -5,7 +5,6 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { z } from "zod";
 import { useLanguage } from "@/components/providers/language-provider";
@@ -29,8 +28,7 @@ const forgotPasswordSchema = z.object({
 type FormData = z.infer<typeof forgotPasswordSchema>;
 
 export default function ForgotPassword() {
-  const router = useRouter();
-  const { locale, t } = useLanguage();
+  const { locale } = useLanguage();
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submittedEmail, setSubmittedEmail] = useState("");
 
@@ -64,10 +62,10 @@ export default function ForgotPassword() {
       } else {
         form.setError("root.general", {
           type: "manual",
-          message: result.message || "An error occurred. Please try again.",
+          message: result.message ?? "An error occurred. Please try again.",
         });
       }
-    } catch (error) {
+    } catch {
       form.setError("root.general", {
         type: "manual",
         message: "An error occurred. Please try again.",

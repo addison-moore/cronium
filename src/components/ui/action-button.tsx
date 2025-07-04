@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { type ReactNode } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
@@ -40,7 +40,7 @@ export function ActionButton({
     <>
       {isLoading ? (
         <>
-          <div className="animate-spin mr-2">
+          <div className="mr-2 animate-spin">
             <Loader2 className="h-4 w-4" />
           </div>
           <span>{`${label}...`}</span>

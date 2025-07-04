@@ -37,7 +37,7 @@ type FormData = z.infer<typeof resetPasswordSchema>;
 export default function ResetPassword() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { locale, t } = useLanguage();
+  const { locale } = useLanguage();
 
   const [token, setToken] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
@@ -86,10 +86,10 @@ export default function ResetPassword() {
       } else {
         form.setError("root.general", {
           type: "manual",
-          message: result.message || "An error occurred. Please try again.",
+          message: result.message ?? "An error occurred. Please try again.",
         });
       }
-    } catch (error) {
+    } catch {
       form.setError("root.general", {
         type: "manual",
         message: "An error occurred. Please try again.",

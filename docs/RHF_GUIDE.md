@@ -236,9 +236,9 @@ Display general form errors at the top of your form:
 
 ```tsx
 function MyForm() {
-  const { 
-    handleSubmit, 
-    formState: { errors } 
+  const {
+    handleSubmit,
+    formState: { errors },
   } = useForm();
 
   return (
@@ -330,10 +330,10 @@ describe("MyFormWithSelect", () => {
 
     // Open select dropdown
     await user.click(screen.getByRole("combobox"));
-    
+
     // Select an option
     await user.click(screen.getByRole("option", { name: "Admin" }));
-    
+
     // Submit form
     await user.click(screen.getByRole("button", { name: /submit/i }));
 
@@ -352,14 +352,14 @@ describe("MyFormWithSelect", () => {
 describe("Form with async validation", () => {
   it("should show error for duplicate username", async () => {
     const user = userEvent.setup();
-    
+
     // Mock the API call
     jest.mocked(checkUsernameAvailability).mockResolvedValue(false);
-    
+
     render(<SignUpForm />);
 
     await user.type(screen.getByLabelText(/username/i), "existinguser");
-    
+
     // Trigger validation by moving to next field
     await user.tab();
 
@@ -379,7 +379,7 @@ it("should reset form after successful submission", async () => {
 
   const input = screen.getByLabelText(/name/i);
   await user.type(input, "John Doe");
-  
+
   await user.click(screen.getByRole("button", { name: /submit/i }));
 
   await waitFor(() => {
@@ -446,7 +446,7 @@ const formSchema = z
     {
       message: "Company name is required for business accounts",
       path: ["companyName"],
-    }
+    },
   )
   .refine(
     (data) => {
@@ -458,7 +458,7 @@ const formSchema = z
     {
       message: "Tax ID is required for business accounts",
       path: ["taxId"],
-    }
+    },
   );
 ```
 
@@ -614,6 +614,7 @@ function EditUserForm({ userId }: { userId: string }) {
 ### 1. Forgetting to spread field props
 
 **❌ Wrong:**
+
 ```tsx
 <Controller
   name="email"
@@ -625,6 +626,7 @@ function EditUserForm({ userId }: { userId: string }) {
 ```
 
 **✅ Correct:**
+
 ```tsx
 <Controller
   name="email"
@@ -636,42 +638,54 @@ function EditUserForm({ userId }: { userId: string }) {
 ### 2. Using useState for form values
 
 **❌ Wrong:**
+
 ```tsx
 const [name, setName] = useState("");
-<input value={name} onChange={(e) => setName(e.target.value)} />
+<input value={name} onChange={(e) => setName(e.target.value)} />;
 ```
 
 **✅ Correct:**
+
 ```tsx
 const { register } = useForm();
-<input {...register("name")} />
+<input {...register("name")} />;
 ```
 
 ### 3. Not handling loading states properly
 
 **❌ Wrong:**
+
 ```tsx
 <button type="submit">Submit</button>
 ```
 
 **✅ Correct:**
+
 ```tsx
-const { formState: { isSubmitting } } = useForm();
+const {
+  formState: { isSubmitting },
+} = useForm();
 <button type="submit" disabled={isSubmitting}>
   {isSubmitting ? "Submitting..." : "Submit"}
-</button>
+</button>;
 ```
 
 ### 4. Incorrect error display
 
 **❌ Wrong:**
+
 ```tsx
-{errors.email && <span>{errors.email}</span>}
+{
+  errors.email && <span>{errors.email}</span>;
+}
 ```
 
 **✅ Correct:**
+
 ```tsx
-{errors.email && <span>{errors.email.message}</span>}
+{
+  errors.email && <span>{errors.email.message}</span>;
+}
 ```
 
 ## Complex Form Patterns
@@ -682,12 +696,14 @@ const { formState: { isSubmitting } } = useForm();
 import { useFieldArray } from "react-hook-form";
 
 const schema = z.object({
-  users: z.array(
-    z.object({
-      name: z.string().min(1, "Name is required"),
-      email: z.string().email("Invalid email"),
-    })
-  ).min(1, "At least one user is required"),
+  users: z
+    .array(
+      z.object({
+        name: z.string().min(1, "Name is required"),
+        email: z.string().email("Invalid email"),
+      }),
+    )
+    .min(1, "At least one user is required"),
 });
 
 function UserListForm() {
@@ -722,10 +738,7 @@ function UserListForm() {
           </Button>
         </div>
       ))}
-      <Button
-        type="button"
-        onClick={() => append({ name: "", email: "" })}
-      >
+      <Button type="button" onClick={() => append({ name: "", email: "" })}>
         Add User
       </Button>
     </form>
@@ -745,10 +758,8 @@ function MultiStepForm() {
 
   const nextStep = async () => {
     // Validate current step fields
-    const fields = step === 1 
-      ? ["firstName", "lastName"] 
-      : ["email", "phone"];
-    
+    const fields = step === 1 ? ["firstName", "lastName"] : ["email", "phone"];
+
     const isValid = await form.trigger(fields);
     if (isValid) setStep(step + 1);
   };
@@ -767,9 +778,11 @@ function MultiStepForm() {
           <Input {...form.register("phone")} />
         </>
       )}
-      
+
       {step < 2 ? (
-        <Button type="button" onClick={nextStep}>Next</Button>
+        <Button type="button" onClick={nextStep}>
+          Next
+        </Button>
       ) : (
         <Button type="submit">Submit</Button>
       )}
@@ -797,7 +810,7 @@ function DependentFieldsForm() {
           </Select>
         )}
       />
-      
+
       {country === "us" && (
         <Controller
           name="state"
@@ -810,7 +823,7 @@ function DependentFieldsForm() {
           )}
         />
       )}
-      
+
       {country === "ca" && (
         <Controller
           name="province"

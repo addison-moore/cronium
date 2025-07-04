@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
 import { nanoid } from "nanoid";
 import { UserRole, UserStatus } from "@/shared/schema";
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
       const inviteOnly = inviteOnlySetting?.value === "true";
 
       // Check if registration is allowed
-      if (inviteOnly || !allowRegistration) {
+      if (inviteOnly ?? !allowRegistration) {
         return NextResponse.json(
           { message: "Registration is currently closed" },
           { status: 403 },
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
       }
     } else {
       // Admin users are always active by default
-      status = status || UserStatus.ACTIVE;
+      status = status ?? UserStatus.ACTIVE;
     }
 
     // Create user

@@ -29,7 +29,12 @@ import {
 } from "@/components/ui/form";
 import { useToast } from "@/components/ui/use-toast";
 import { Clock, Globe, User, CheckCircle, ServerIcon } from "lucide-react";
-import { Workflow, WorkflowTriggerType, EventStatus, TimeUnit } from "@/shared/schema";
+import {
+  type Workflow,
+  WorkflowTriggerType,
+  EventStatus,
+  TimeUnit,
+} from "@/shared/schema";
 import { trpc } from "@/lib/trpc";
 
 interface WorkflowDetailsFormProps {
@@ -373,9 +378,15 @@ export default function WorkflowDetailsForm({
                             <SelectValue placeholder="Select unit" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value={TimeUnit.MINUTES}>Minute(s)</SelectItem>
-                            <SelectItem value={TimeUnit.HOURS}>Hour(s)</SelectItem>
-                            <SelectItem value={TimeUnit.DAYS}>Day(s)</SelectItem>
+                            <SelectItem value={TimeUnit.MINUTES}>
+                              Minute(s)
+                            </SelectItem>
+                            <SelectItem value={TimeUnit.HOURS}>
+                              Hour(s)
+                            </SelectItem>
+                            <SelectItem value={TimeUnit.DAYS}>
+                              Day(s)
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

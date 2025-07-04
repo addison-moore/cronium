@@ -153,7 +153,7 @@ export function RolesManagement({
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="w-full justify-between">
                     <div className="flex items-center gap-2">
-                      {selectedRole?.name || "Select a role"}
+                      {selectedRole?.name ?? "Select a role"}
                       {selectedRole?.isDefault && (
                         <Badge variant="secondary" className="text-xs">
                           Default

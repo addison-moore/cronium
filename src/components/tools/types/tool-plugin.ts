@@ -1,5 +1,5 @@
-import { LucideIcon } from "lucide-react";
-import { z } from "zod";
+import { type LucideIcon } from "lucide-react";
+import { type z } from "zod";
 import { type Tool } from "@/shared/schema";
 
 // Base interface for all tool plugins
@@ -61,7 +61,7 @@ export interface TemplateManagerProps {
 
 // Registry for tool plugins
 export class ToolPluginRegistry {
-  private static plugins: Map<string, ToolPlugin> = new Map();
+  private static plugins = new Map<string, ToolPlugin>();
 
   static register(plugin: ToolPlugin) {
     this.plugins.set(plugin.id, plugin);

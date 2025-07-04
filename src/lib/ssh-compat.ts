@@ -8,7 +8,7 @@
  * in development environments while gracefully handling the lack of actual SSH functionality.
  */
 
-import { EventType } from "@/shared/schema";
+import { type EventType } from "@/shared/schema";
 
 // Define interfaces to match the real SSH service
 interface ExecuteScriptResult {
@@ -44,7 +44,7 @@ interface ServerInfo {
 
 // Mock SSH Service class that gracefully handles the absence of real SSH functionality
 export class SSHCompatService {
-  private isNativeAvailable: boolean = false;
+  private isNativeAvailable = false;
   private nativeSSH: any = null;
 
   constructor() {
@@ -71,8 +71,8 @@ export class SSHCompatService {
   async connect(
     host: string,
     privateKey: string,
-    username: string = "root",
-    port: number = 22,
+    username = "root",
+    port = 22,
   ): Promise<void> {
     if (!this.isNativeAvailable) {
       console.log(
@@ -96,8 +96,8 @@ export class SSHCompatService {
   async testConnection(
     host: string,
     privateKey: string,
-    username: string = "root",
-    port: number = 22,
+    username = "root",
+    port = 22,
   ): Promise<{ success: boolean; message: string }> {
     if (!this.isNativeAvailable) {
       console.log("[SSH Compat] Test connection called in compatibility mode");
@@ -121,7 +121,7 @@ export class SSHCompatService {
       username: string;
       port: number;
     },
-    timeoutMs: number = 900000,
+    timeoutMs = 900000,
     inputData: Record<string, any> = {},
     eventData: Record<string, any> = {},
   ): Promise<ExecuteScriptResult> {

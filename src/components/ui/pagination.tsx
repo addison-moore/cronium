@@ -27,7 +27,7 @@ export function Pagination({
   if (totalPages <= 1) {
     return (
       <div className={`flex items-center justify-end ${className}`}>
-        <div className="text-sm text-muted-foreground">
+        <div className="text-muted-foreground text-sm">
           Showing {startItem} to {endItem} of {totalItems}
         </div>
       </div>
@@ -36,7 +36,7 @@ export function Pagination({
 
   return (
     <div className={`flex items-center justify-between ${className}`}>
-      <div className="text-sm text-muted-foreground mr-2">
+      <div className="text-muted-foreground mr-2 text-sm">
         Showing {startItem} to {endItem} of {totalItems}
       </div>
 
@@ -47,7 +47,7 @@ export function Pagination({
           onClick={() => onPageChange(Math.max(1, currentPage - 1))}
           disabled={currentPage === 1}
         >
-          <ChevronLeft className="h-4 w-4 mr-1" />
+          <ChevronLeft className="mr-1 h-4 w-4" />
           Previous
         </Button>
 
@@ -62,7 +62,7 @@ export function Pagination({
           disabled={currentPage === totalPages}
         >
           Next
-          <ChevronRight className="h-4 w-4 ml-1" />
+          <ChevronRight className="ml-1 h-4 w-4" />
         </Button>
       </div>
     </div>

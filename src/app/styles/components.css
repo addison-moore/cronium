@@ -207,7 +207,7 @@
     background-color: var(--primary-color);
     color: white;
   }
-  
+
   .btn-primary:hover,
   button[class*="btn-primary"]:hover {
     filter: brightness(0.9);
@@ -218,7 +218,7 @@
     background-color: var(--secondary-color);
     color: white;
   }
-  
+
   .btn-secondary:hover,
   button[class*="btn-secondary"]:hover {
     filter: brightness(0.9);
@@ -229,7 +229,7 @@
     background-color: var(--destructive-color);
     color: white;
   }
-  
+
   .btn-destructive:hover,
   button[class*="btn-destructive"]:hover {
     filter: brightness(0.9);
@@ -241,7 +241,7 @@
     border: 1px solid var(--border-color);
     color: var(--foreground-color);
   }
-  
+
   .btn-outline:hover,
   button[class*="btn-outline"]:hover {
     background-color: var(--muted-color);
@@ -299,7 +299,8 @@
     background-color: var(--info-color);
     color: var(--info-foreground-color);
     border-color: var(--info-color);
-  },
+  }
+  ,
   /* Solarized terminal specific utility classes */
   .console-container {
     background-color: var(--terminal-background);

@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { useToast } from '@/components/ui/use-toast';
+import { useState, useCallback, useEffect, useRef } from "react";
+import { useToast } from "@/components/ui/use-toast";
 
 interface UseOptimisticUpdateOptions<T> {
   items: T[];
@@ -21,16 +21,16 @@ export function useOptimisticUpdate<T>({
   const safeItems = Array.isArray(items) ? items : [];
   const [optimisticItems, setOptimisticItems] = useState<T[]>(safeItems);
   const { toast } = useToast();
-  
+
   // Use useEffect to safely update optimistic items when items change
   const initializedRef = useRef(false);
-  
+
   useEffect(() => {
     if (!initializedRef.current) {
       initializedRef.current = true;
       return;
     }
-    
+
     if (items !== undefined && items.length > 0) {
       setOptimisticItems(safeItems);
     }
@@ -42,21 +42,21 @@ export function useOptimisticUpdate<T>({
       updater: (item: T) => T,
       apiCall: () => Promise<any>,
       successMessage?: string,
-      errorMessage?: string
+      errorMessage?: string,
     ) => {
       try {
         // Find the item to update
         const itemIndex = optimisticItems.findIndex(
-          (item) => keyExtractor(item) === itemId
+          (item) => keyExtractor(item) === itemId,
         );
 
         if (itemIndex === -1) {
-          throw new Error('Item not found');
+          throw new Error("Item not found");
         }
 
         // Make a copy of the current items
         const originalItems = [...optimisticItems];
-        
+
         // Apply the optimistic update
         const currentItem = originalItems[itemIndex];
         if (!currentItem) {
@@ -66,48 +66,48 @@ export function useOptimisticUpdate<T>({
         const updatedItem = updater(currentItem);
         const updatedItems = [...originalItems];
         updatedItems[itemIndex] = updatedItem;
-        
+
         // Update the state immediately for optimistic UI
         setOptimisticItems(updatedItems);
-        
+
         // Make the API call to persist the changes
         await apiCall();
-        
+
         // If successful, show success message and call onSuccess
         if (successMessage) {
           toast({
-            title: 'Success',
+            title: "Success",
             description: successMessage,
           });
         }
-        
+
         if (onSuccess) {
           onSuccess(updatedItems);
         }
-        
+
         return true;
       } catch (error) {
         // Revert to the original items on error
         setOptimisticItems(safeItems);
-        
+
         // Show error message and call onError
         if (errorMessage) {
           toast({
-            title: 'Error',
+            title: "Error",
             description: errorMessage,
-            variant: 'destructive',
+            variant: "destructive",
           });
         }
-        
+
         if (onError && error instanceof Error) {
           onError(error, safeItems);
         }
-        
-        console.error('Optimistic update failed:', error);
+
+        console.error("Optimistic update failed:", error);
         return false;
       }
     },
-    [optimisticItems, safeItems, keyExtractor, toast, onSuccess, onError]
+    [optimisticItems, safeItems, keyExtractor, toast, onSuccess, onError],
   );
 
   const deleteItem = useCallback(
@@ -115,58 +115,58 @@ export function useOptimisticUpdate<T>({
       itemId: string | number,
       apiCall: () => Promise<any>,
       successMessage?: string,
-      errorMessage?: string
+      errorMessage?: string,
     ) => {
       try {
         // Make a copy of the current items
         const originalItems = [...optimisticItems];
-        
+
         // Filter out the item to delete
         const updatedItems = originalItems.filter(
-          (item) => keyExtractor(item) !== itemId
+          (item) => keyExtractor(item) !== itemId,
         );
-        
+
         // Update the state immediately for optimistic UI
         setOptimisticItems(updatedItems);
-        
+
         // Make the API call to persist the changes
         await apiCall();
-        
+
         // If successful, show success message and call onSuccess
         if (successMessage) {
           toast({
-            title: 'Success',
+            title: "Success",
             description: successMessage,
           });
         }
-        
+
         if (onSuccess) {
           onSuccess(updatedItems);
         }
-        
+
         return true;
       } catch (error) {
         // Revert to the original items on error
         setOptimisticItems(safeItems);
-        
+
         // Show error message and call onError
         if (errorMessage) {
           toast({
-            title: 'Error',
+            title: "Error",
             description: errorMessage,
-            variant: 'destructive',
+            variant: "destructive",
           });
         }
-        
+
         if (onError && error instanceof Error) {
           onError(error, safeItems);
         }
-        
-        console.error('Optimistic delete failed:', error);
+
+        console.error("Optimistic delete failed:", error);
         return false;
       }
     },
-    [optimisticItems, safeItems, keyExtractor, toast, onSuccess, onError]
+    [optimisticItems, safeItems, keyExtractor, toast, onSuccess, onError],
   );
 
   const addItem = useCallback(
@@ -174,56 +174,56 @@ export function useOptimisticUpdate<T>({
       newItem: T,
       apiCall: () => Promise<any>,
       successMessage?: string,
-      errorMessage?: string
+      errorMessage?: string,
     ) => {
       try {
         // Make a copy of the current items
         const originalItems = [...optimisticItems];
-        
+
         // Add the new item
         const updatedItems = [newItem, ...originalItems];
-        
+
         // Update the state immediately for optimistic UI
         setOptimisticItems(updatedItems);
-        
+
         // Make the API call to persist the changes
         await apiCall();
-        
+
         // If successful, show success message and call onSuccess
         if (successMessage) {
           toast({
-            title: 'Success',
+            title: "Success",
             description: successMessage,
           });
         }
-        
+
         if (onSuccess) {
           onSuccess(updatedItems);
         }
-        
+
         return true;
       } catch (error) {
         // Revert to the original items on error
         setOptimisticItems(safeItems);
-        
+
         // Show error message and call onError
         if (errorMessage) {
           toast({
-            title: 'Error',
+            title: "Error",
             description: errorMessage,
-            variant: 'destructive',
+            variant: "destructive",
           });
         }
-        
+
         if (onError && error instanceof Error) {
           onError(error, safeItems);
         }
-        
-        console.error('Optimistic add failed:', error);
+
+        console.error("Optimistic add failed:", error);
         return false;
       }
     },
-    [optimisticItems, safeItems, toast, onSuccess, onError]
+    [optimisticItems, safeItems, toast, onSuccess, onError],
   );
 
   return {

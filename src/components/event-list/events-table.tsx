@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   StandardizedTable,
-  StandardizedTableColumn,
+  type StandardizedTableColumn,
   StandardizedTableLink,
-  StandardizedTableAction,
+  type StandardizedTableAction,
 } from "@/components/ui/standardized-table";
 import { EventTypeIcon } from "@/components/ui/event-type-icon";
 import { ClickableStatusBadge } from "@/components/ui/clickable-status-badge";
@@ -22,7 +22,7 @@ import {
   Trash2,
   Play,
 } from "lucide-react";
-import { Event, ServerData } from "./types";
+import { type Event, type ServerData } from "./types";
 
 interface EventsTableProps {
   events: Event[];
@@ -144,7 +144,7 @@ export function EventsTable({
           checked={selectedEvents.size === events.length && events.length > 0}
           onCheckedChange={handleSelectAll}
           aria-label="Select all events"
-          className="cursor-pointer hover:bg-accent/10"
+          className="hover:bg-accent/10 cursor-pointer"
         />
       ),
       cell: (event) => (
@@ -152,7 +152,7 @@ export function EventsTable({
           checked={selectedEvents.has(event.id)}
           onCheckedChange={(checked) => handleEventSelect(event.id, !!checked)}
           aria-label={`Select event ${event.name}`}
-          className="cursor-pointer hover:bg-accent/10"
+          className="hover:bg-accent/10 cursor-pointer"
         />
       ),
       className: "w-12",
@@ -177,7 +177,7 @@ export function EventsTable({
       key: "server",
       header: t("Server"),
       cell: (event) => (
-        <span className="text-sm text-muted-foreground">
+        <span className="text-muted-foreground text-sm">
           {formatServerLocation(event)}
         </span>
       ),
@@ -211,7 +211,7 @@ export function EventsTable({
         <Button
           variant="outline"
           size="sm"
-          className="h-8 w-8 p-0 border-green-500 dark:border-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 hover:text-green-600 dark:hover:text-green-500 transition-colors rounded-full cursor-pointer"
+          className="h-8 w-8 cursor-pointer rounded-full border-green-500 p-0 transition-colors hover:bg-green-50 hover:text-green-600 dark:border-green-600 dark:hover:bg-green-900/30 dark:hover:text-green-500"
           onClick={() => onEventRun(event.id)}
           disabled={isRunning[event.id]}
           title={t("RunEvent")}

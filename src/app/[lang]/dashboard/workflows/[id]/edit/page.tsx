@@ -12,9 +12,9 @@ import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { EventStatus, WorkflowTriggerType, RunLocation } from "@/shared/schema";
 import WorkflowForm, {
-  WorkflowFormValues,
+  type WorkflowFormValues,
 } from "@/components/workflows/WorkflowForm";
-import { Node, Edge } from "@xyflow/react";
+import type { Node, Edge } from "@xyflow/react";
 import { Spinner } from "@/components/ui/spinner";
 
 // Workflow form schema
@@ -58,7 +58,7 @@ export default function EditWorkflowPage() {
   const router = useRouter();
   const params = useParams<{ lang: string; id: string }>();
   const t = useTranslations("Workflows");
-  const lang = params.lang as string;
+  const lang = params.lang;
   const workflowId = parseInt(params.id);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -173,13 +173,13 @@ export default function EditWorkflowPage() {
 
   // Update form when workflow data is loaded
   useEffect(() => {
-    if (workflowData && workflowData.workflow && !loadingWorkflow) {
+    if (workflowData?.workflow && !loadingWorkflow) {
       console.log("Resetting form with workflow data:", workflowData);
       const workflow = workflowData.workflow;
       const formData = {
         name: workflow.name,
-        description: workflow.description || "",
-        tags: workflow.tags || [],
+        description: workflow.description ?? "",
+        tags: workflow.tags ?? [],
         triggerType: workflow.triggerType,
         runLocation: workflow.runLocation,
         status: workflow.status,
@@ -188,8 +188,8 @@ export default function EditWorkflowPage() {
         customSchedule: workflow.customSchedule,
         useCronScheduling: !!workflow.customSchedule,
         shared: workflow.shared,
-        overrideEventServers: workflow.overrideEventServers || false,
-        overrideServerIds: workflow.overrideServerIds || [],
+        overrideEventServers: workflow.overrideEventServers ?? false,
+        overrideServerIds: workflow.overrideServerIds ?? [],
       };
       console.log("Form data to set:", formData);
       form.reset(formData);
@@ -249,8 +249,8 @@ export default function EditWorkflowPage() {
           isLoading={isLoading}
           submitButtonText={t("SaveWorkflow")}
           showActionsAtTop={true}
-          initialNodes={workflowData?.nodes || []}
-          initialEdges={workflowData?.edges || []}
+          initialNodes={workflowData?.nodes ?? []}
+          initialEdges={workflowData?.edges ?? []}
           workflowId={workflowId}
         />
       </div>

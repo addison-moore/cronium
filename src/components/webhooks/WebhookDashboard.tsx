@@ -48,20 +48,17 @@ import {
   Plus,
   MoreHorizontal,
   Copy,
-  Edit,
   Trash2,
   Shield,
   BarChart3,
   Clock,
   CheckCircle,
   XCircle,
-  AlertTriangle,
   ExternalLink,
   RefreshCw,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { trpc } from "@/components/providers/TrpcProvider";
-import { cn } from "@/lib/utils";
 import { WebhookForm } from "./WebhookForm";
 import { WebhookSecurityForm } from "./WebhookSecurityForm";
 import { WebhookMonitor } from "./WebhookMonitor";

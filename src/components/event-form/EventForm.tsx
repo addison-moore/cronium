@@ -25,7 +25,9 @@ import { MonacoEditor } from "@/components/ui/monaco-editor";
 import { TagsInput } from "@/components/ui/tags-input";
 import AIScriptAssistant from "@/components/dashboard/AIScriptAssistant";
 import ConditionalActionsSection from "./ConditionalActionsSection";
-import EditorSettingsModal, { EditorSettings } from "./EditorSettingsModal";
+import EditorSettingsModal, {
+  type EditorSettings,
+} from "./EditorSettingsModal";
 import { Eye, EyeOff, Trash2, Settings } from "lucide-react";
 
 import {
@@ -192,17 +194,19 @@ export default function EventForm({
 
     try {
       // Build conditional events array from the managed state
-      const conditionalActionsForSubmission = conditionalActions.map((action) => ({
-        type: action.type,
-        action: action.action,
-        details: {
-          emailAddresses: action.emailAddresses || "",
-          emailSubject: action.emailSubject || "",
-          targetEventId: action.targetEventId || null,
-          toolId: action.toolId || null,
-          message: action.message || "",
-        },
-      }));
+      const conditionalActionsForSubmission = conditionalActions.map(
+        (action) => ({
+          type: action.type,
+          action: action.action,
+          details: {
+            emailAddresses: action.emailAddresses || "",
+            emailSubject: action.emailSubject || "",
+            targetEventId: action.targetEventId || null,
+            toolId: action.toolId || null,
+            message: action.message || "",
+          },
+        }),
+      );
 
       // Prepare form data
       const formData = {

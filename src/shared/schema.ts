@@ -268,7 +268,9 @@ export const eventServers = pgTable("event_servers", {
 
 export const conditionalActions = pgTable("conditional_actions", {
   id: serial("id").primaryKey(),
-  type: varchar("type", { length: 50 }).$type<ConditionalActionType>().notNull(),
+  type: varchar("type", { length: 50 })
+    .$type<ConditionalActionType>()
+    .notNull(),
   value: varchar("value", { length: 255 }),
   successEventId: integer("success_event_id").references(() => events.id),
   failEventId: integer("fail_event_id").references(() => events.id),
@@ -353,9 +355,7 @@ export const toolCredentials = pgTable("tool_credentials", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 255 }).notNull(),
-  type: varchar("type", { length: 50 })
-    .$type<ToolType>()
-    .notNull(),
+  type: varchar("type", { length: 50 }).$type<ToolType>().notNull(),
   credentials: text("credentials").notNull(), // Encrypted JSON
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at")
@@ -368,12 +368,11 @@ export const toolCredentials = pgTable("tool_credentials", {
 
 export const templates = pgTable("templates", {
   id: serial("id").primaryKey(),
-  userId: varchar("user_id", { length: 255 })
-    .references(() => users.id, { onDelete: "cascade" }),
+  userId: varchar("user_id", { length: 255 }).references(() => users.id, {
+    onDelete: "cascade",
+  }),
   name: varchar("name", { length: 255 }).notNull(),
-  type: varchar("type", { length: 50 })
-    .$type<ToolType>()
-    .notNull(),
+  type: varchar("type", { length: 50 }).$type<ToolType>().notNull(),
   content: text("content").notNull(),
   subject: varchar("subject", { length: 500 }), // For email templates
   isSystemTemplate: boolean("is_system_template").default(false).notNull(),
@@ -386,17 +385,21 @@ export const templates = pgTable("templates", {
 });
 
 // User variables table for cronium.getVariable() and cronium.setVariable()
-export const userVariables = pgTable("user_variables", {
-  id: serial("id").primaryKey(),
-  userId: varchar("user_id", { length: 255 }).notNull(),
-  key: varchar("key", { length: 255 }).notNull(),
-  value: text("value").notNull(),
-  description: text("description"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => ({
-  uniqueUserKey: unique("unique_user_key").on(table.userId, table.key),
-}));
+export const userVariables = pgTable(
+  "user_variables",
+  {
+    id: serial("id").primaryKey(),
+    userId: varchar("user_id", { length: 255 }).notNull(),
+    key: varchar("key", { length: 255 }).notNull(),
+    value: text("value").notNull(),
+    description: text("description"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueUserKey: unique("unique_user_key").on(table.userId, table.key),
+  }),
+);
 
 // User settings table for editor preferences and other user-specific settings
 export const userSettings = pgTable("user_settings", {
@@ -449,8 +452,12 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   onSuccessEvents: many(conditionalActions, {
     relationName: "successEventRelations",
   }),
-  onFailEvents: many(conditionalActions, { relationName: "failEventRelations" }),
-  onAlwaysEvents: many(conditionalActions, { relationName: "alwaysEventRelations" }),
+  onFailEvents: many(conditionalActions, {
+    relationName: "failEventRelations",
+  }),
+  onAlwaysEvents: many(conditionalActions, {
+    relationName: "alwaysEventRelations",
+  }),
 }));
 
 export const envVarsRelations = relations(envVars, ({ one }) => ({
@@ -771,19 +778,25 @@ export const apiTokensRelations = relations(apiTokens, ({ one }) => ({
   }),
 }));
 
-export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
-  user: one(users, {
-    fields: [passwordResetTokens.userId],
-    references: [users.id],
+export const passwordResetTokensRelations = relations(
+  passwordResetTokens,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [passwordResetTokens.userId],
+      references: [users.id],
+    }),
   }),
-}));
+);
 
-export const toolCredentialsRelations = relations(toolCredentials, ({ one }) => ({
-  user: one(users, {
-    fields: [toolCredentials.userId],
-    references: [users.id],
+export const toolCredentialsRelations = relations(
+  toolCredentials,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [toolCredentials.userId],
+      references: [users.id],
+    }),
   }),
-}));
+);
 
 export const templatesRelations = relations(templates, ({ one }) => ({
   user: one(users, {

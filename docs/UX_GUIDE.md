@@ -47,7 +47,6 @@ In addition to our core principles, we will also incorporate the following emerg
 
 - **User Preference:** We will continue to offer a dark mode option to reduce eye strain and improve battery life. The user's preference should be respected and easy to change.
 
-
 ## Conclusion
 
 By following these UX design principles and best practices, we can create a user experience that is not only functional but also enjoyable and accessible to all users. This will help us to build a successful and sustainable product that our users will love.

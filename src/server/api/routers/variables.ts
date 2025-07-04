@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure } from "../trpc";
-import { EventType, EventStatus } from "@/shared/schema";
+import { type EventType, type EventStatus, UserRole } from "@/shared/schema";
 import {
   variableQuerySchema,
   createUserVariableSchema,
@@ -29,7 +29,9 @@ const variableProcedure = publicProcedure.use(async ({ ctx, next }) => {
       // For development, get first admin user
       if (process.env.NODE_ENV === "development") {
         const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter((user) => user.role === "ADMIN");
+        const adminUsers = allUsers.filter(
+          (user) => user.role === UserRole.ADMIN,
+        );
         const firstAdmin = adminUsers[0];
         if (firstAdmin) {
           userId = firstAdmin.id;
@@ -224,7 +226,7 @@ export const variablesRouter = createTRPCRouter({
         const { id, ...rawUpdateData } = input;
         // Filter out undefined values for exactOptionalPropertyTypes
         const updateData = Object.fromEntries(
-          Object.entries(rawUpdateData).filter(([_, v]) => v !== undefined)
+          Object.entries(rawUpdateData).filter(([_, v]) => v !== undefined),
         );
 
         // Check if variable exists and belongs to user

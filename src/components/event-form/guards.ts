@@ -365,9 +365,9 @@ export function validateEventFormData<T extends EventType>(
     assertValidEnvironmentVariables(data.envVars);
   } catch (error) {
     if (error instanceof ValidationError) {
-      if (error.field && error.field.startsWith("envVars.")) {
-        const match = error.field.match(/envVars\.(\d+)/);
-        if (match && match[1]) {
+      if (error.field?.startsWith("envVars.")) {
+        const match = /envVars\.(\d+)/.exec(error.field);
+        if (match?.[1]) {
           const index = parseInt(match[1], 10);
           errors.envVars = errors.envVars || {};
           errors.envVars[index] =

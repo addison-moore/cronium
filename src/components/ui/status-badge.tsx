@@ -1,11 +1,11 @@
 "use client";
 
-import { ReactNode, cloneElement, isValidElement } from "react";
+import { type ReactNode, cloneElement, isValidElement } from "react";
 import {
   EventStatus,
   LogStatus,
   UserStatus,
-  TokenStatus,
+  type TokenStatus,
 } from "@/shared/schema";
 import {
   CheckCircle,
@@ -72,7 +72,7 @@ export const getStatusConfig = (
         textColor: "text-green-700 dark:text-green-300",
         bgColor: "bg-green-50 dark:bg-green-900/20",
         indicator: "bg-green-500",
-        icon: icon || <CheckCircle />,
+        icon: icon ?? <CheckCircle />,
         border: "border-green-300 dark:border-green-600",
       };
     case LogStatus.SUCCESS:
@@ -83,7 +83,7 @@ export const getStatusConfig = (
         textColor: "text-green-700 dark:text-green-300",
         bgColor: "bg-green-50 dark:bg-green-900/20",
         indicator: "bg-green-500",
-        icon: icon || <CheckCircle />,
+        icon: icon ?? <CheckCircle />,
         border: "border-green-300 dark:border-green-600",
       };
     case "online":
@@ -93,7 +93,7 @@ export const getStatusConfig = (
         textColor: "text-green-700 dark:text-green-300",
         bgColor: "bg-green-50 dark:bg-green-900/20",
         indicator: "bg-green-500",
-        icon: icon || <Circle className="fill-current" />,
+        icon: icon ?? <Circle className="fill-current" />,
         border: "border-green-300 dark:border-green-600",
       };
     case "offline":
@@ -103,7 +103,7 @@ export const getStatusConfig = (
         textColor: "text-red-700 dark:text-red-300",
         bgColor: "bg-red-50 dark:bg-red-900/20",
         indicator: "bg-red-500",
-        icon: icon || <XCircle />,
+        icon: icon ?? <XCircle />,
         border: "border-red-300 dark:border-red-600",
       };
     case EventStatus.PAUSED:
@@ -114,7 +114,7 @@ export const getStatusConfig = (
         textColor: "text-yellow-700 dark:text-yellow-300",
         bgColor: "bg-yellow-50 dark:bg-yellow-900/20",
         indicator: "bg-yellow-500",
-        icon: icon || <Pause />,
+        icon: icon ?? <Pause />,
         border: "border-yellow-300 dark:border-yellow-600",
       };
     case LogStatus.TIMEOUT:
@@ -124,7 +124,7 @@ export const getStatusConfig = (
         textColor: "text-amber-700 dark:text-amber-300",
         bgColor: "bg-amber-50 dark:bg-amber-900/20",
         indicator: "bg-amber-500",
-        icon: icon || <Clock />,
+        icon: icon ?? <Clock />,
         border: "border-amber-300 dark:border-amber-600",
       };
     case LogStatus.PARTIAL:
@@ -134,7 +134,7 @@ export const getStatusConfig = (
         textColor: "text-orange-700 dark:text-orange-300",
         bgColor: "bg-orange-50 dark:bg-orange-900/20",
         indicator: "bg-orange-500",
-        icon: icon || <AlertTriangle />,
+        icon: icon ?? <AlertTriangle />,
         border: "border-orange-300 dark:border-orange-600",
       };
     case "warning":
@@ -144,7 +144,7 @@ export const getStatusConfig = (
         textColor: "text-yellow-700 dark:text-yellow-300",
         bgColor: "bg-yellow-50 dark:bg-yellow-900/20",
         indicator: "bg-yellow-500",
-        icon: icon || <AlertCircle />,
+        icon: icon ?? <AlertCircle />,
         border: "border-yellow-300 dark:border-yellow-600",
       };
     case EventStatus.DRAFT:
@@ -154,7 +154,7 @@ export const getStatusConfig = (
         textColor: "text-gray-700 dark:text-gray-300",
         bgColor: "bg-gray-50 dark:bg-gray-800",
         indicator: "bg-gray-500",
-        icon: icon || <Circle />,
+        icon: icon ?? <Circle />,
         border: "border-gray-300 dark:border-gray-600",
       };
     case LogStatus.PENDING:
@@ -165,7 +165,7 @@ export const getStatusConfig = (
         textColor: "text-gray-700 dark:text-gray-300",
         bgColor: "bg-gray-50 dark:bg-gray-800",
         indicator: "bg-gray-500",
-        icon: icon || <Clock />,
+        icon: icon ?? <Clock />,
         border: "border-gray-300 dark:border-gray-600",
       };
     case EventStatus.ARCHIVED:
@@ -175,7 +175,7 @@ export const getStatusConfig = (
         textColor: "text-slate-700 dark:text-slate-300",
         bgColor: "bg-slate-50 dark:bg-slate-800",
         indicator: "bg-slate-500",
-        icon: icon || <Archive />,
+        icon: icon ?? <Archive />,
         border: "border-slate-300 dark:border-slate-600",
       };
     case LogStatus.RUNNING:
@@ -186,7 +186,7 @@ export const getStatusConfig = (
         textColor: "text-blue-700 dark:text-blue-300",
         bgColor: "bg-blue-50 dark:bg-blue-900/20",
         indicator: "bg-blue-500",
-        icon: icon || <RefreshCw className="animate-spin" />,
+        icon: icon ?? <RefreshCw className="animate-spin" />,
         border: "border-blue-300 dark:border-blue-600",
       };
     case LogStatus.FAILURE:
@@ -197,7 +197,7 @@ export const getStatusConfig = (
         textColor: "text-red-700 dark:text-red-300",
         bgColor: "bg-red-50 dark:bg-red-900/20",
         indicator: "bg-red-500",
-        icon: icon || <XCircle />,
+        icon: icon ?? <XCircle />,
         border: "border-red-300 dark:border-red-600",
       };
     case UserStatus.INVITED:
@@ -207,7 +207,7 @@ export const getStatusConfig = (
         textColor: "text-purple-700 dark:text-purple-300",
         bgColor: "bg-purple-50 dark:bg-purple-900/20",
         indicator: "bg-purple-500",
-        icon: icon || <Clock />,
+        icon: icon ?? <Clock />,
         border: "border-purple-300 dark:border-purple-600",
       };
     case UserStatus.DISABLED:
@@ -217,7 +217,7 @@ export const getStatusConfig = (
         textColor: "text-red-700 dark:text-red-300",
         bgColor: "bg-red-50 dark:bg-red-900/20",
         indicator: "bg-red-500",
-        icon: icon || <XCircle />,
+        icon: icon ?? <XCircle />,
         border: "border-red-300 dark:border-red-600",
       };
     case UserStatus.PENDING:
@@ -227,7 +227,7 @@ export const getStatusConfig = (
         textColor: "text-yellow-700 dark:text-yellow-300",
         bgColor: "bg-yellow-50 dark:bg-yellow-900/20",
         indicator: "bg-yellow-500",
-        icon: icon || <Clock />,
+        icon: icon ?? <Clock />,
         border: "border-yellow-300 dark:border-yellow-600",
       };
     case "info":
@@ -237,7 +237,7 @@ export const getStatusConfig = (
         textColor: "text-indigo-700 dark:text-indigo-300",
         bgColor: "bg-indigo-50 dark:bg-indigo-900/20",
         indicator: "bg-indigo-500",
-        icon: icon || <Info />,
+        icon: icon ?? <Info />,
         border: "border-indigo-300 dark:border-indigo-600",
       };
     default:
@@ -247,7 +247,7 @@ export const getStatusConfig = (
         textColor: "text-gray-700 dark:text-gray-300",
         bgColor: "bg-gray-50 dark:bg-gray-800",
         indicator: "bg-gray-500",
-        icon: icon || <Circle />,
+        icon: icon ?? <Circle />,
         border: "border-gray-300 dark:border-gray-600",
       };
   }
@@ -283,11 +283,11 @@ export function StatusBadge({
   className = "",
 }: StatusBadgeProps) {
   const config = getStatusConfig(status, icon);
-  const displayLabel = label || config.label;
+  const displayLabel = label ?? config.label;
 
   return (
     <div
-      className={`inline-flex items-center font-medium rounded-full border ${config.border} ${sizeClasses[size]} ${config.bgColor} ${config.textColor} ${className}`}
+      className={`inline-flex items-center rounded-full border font-medium ${config.border} ${sizeClasses[size]} ${config.bgColor} ${config.textColor} ${className}`}
     >
       {config.icon ? (
         <span className="mr-0.5 flex-shrink-0">

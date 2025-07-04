@@ -1,9 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { storage } from "@/server/storage";
 import { db } from "@/server/db";
-import { logs, events, workflows, EventStatus } from "@/shared/schema";
+import {
+  logs,
+  events,
+  workflows,
+  EventStatus,
+  LogStatus,
+} from "@/shared/schema";
 import { eq, desc, gte, and } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
@@ -62,10 +69,10 @@ export async function GET(req: NextRequest) {
 
     // Now manually filter to only count SUCCESS and FAILURE logs (not PAUSED)
     const successLogs = recentLogsQuery.filter(
-      (log) => log.status === "SUCCESS",
+      (log) => log.status === LogStatus.SUCCESS,
     );
     const failureLogs = recentLogsQuery.filter(
-      (log) => log.status === "FAILURE",
+      (log) => log.status === LogStatus.FAILURE,
     );
 
     // Get the actual execution counts (success + failure only)

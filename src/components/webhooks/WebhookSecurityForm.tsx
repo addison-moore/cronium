@@ -63,12 +63,12 @@ export function WebhookSecurityForm({
     resolver: zodResolver(securityFormSchema),
     defaultValues: {
       enableIpWhitelist: webhook.allowedIps && webhook.allowedIps.length > 0,
-      allowedIps: webhook.allowedIps || [],
+      allowedIps: webhook.allowedIps ?? [],
       enableRateLimit: webhook.rateLimitPerMinute > 0,
-      rateLimitPerMinute: webhook.rateLimitPerMinute || 60,
-      enableAuth: webhook.requireAuth || false,
+      rateLimitPerMinute: webhook.rateLimitPerMinute ?? 60,
+      enableAuth: webhook.requireAuth ?? false,
       authType: "bearer" as const,
-      authToken: webhook.authToken || "",
+      authToken: webhook.authToken ?? "",
       customAuthHeader: "",
       enableSignatureVerification: false,
       signatureSecret: "",
@@ -116,7 +116,7 @@ export function WebhookSecurityForm({
       return;
     }
 
-    const currentIps = form.getValues("allowedIps") || [];
+    const currentIps = form.getValues("allowedIps") ?? [];
     if (currentIps.includes(newIpInput.trim())) {
       toast({
         title: "Duplicate IP",
@@ -131,7 +131,7 @@ export function WebhookSecurityForm({
   };
 
   const removeIpAddress = (ip: string) => {
-    const currentIps = form.getValues("allowedIps") || [];
+    const currentIps = form.getValues("allowedIps") ?? [];
     form.setValue(
       "allowedIps",
       currentIps.filter((i) => i !== ip),
@@ -164,9 +164,7 @@ export function WebhookSecurityForm({
 
   return (
     <form
-      onSubmit={form.handleSubmit((data) =>
-        handleSubmit(data as SecurityFormData),
-      )}
+      onSubmit={form.handleSubmit((data) => handleSubmit(data))}
       className="space-y-6"
     >
       {/* IP Whitelist */}
@@ -204,11 +202,11 @@ export function WebhookSecurityForm({
                 </Button>
               </div>
 
-              {(watchedAllowedIps || []).length > 0 && (
+              {(watchedAllowedIps ?? []).length > 0 && (
                 <div className="space-y-2">
                   <Label>Allowed IP Addresses</Label>
                   <div className="space-y-2">
-                    {(watchedAllowedIps || []).map((ip, index) => (
+                    {(watchedAllowedIps ?? []).map((ip, index) => (
                       <div
                         key={index}
                         className="flex items-center justify-between rounded border p-2"
@@ -328,7 +326,7 @@ export function WebhookSecurityForm({
                   />
                   <p className="text-muted-foreground text-xs">
                     Include this token in the Authorization header: Bearer{" "}
-                    {form.watch("authToken") || "your-token"}
+                    {form.watch("authToken") ?? "your-token"}
                   </p>
                 </div>
               )}
@@ -449,7 +447,7 @@ export function WebhookSecurityForm({
               <span className="text-sm">
                 IP Whitelist:{" "}
                 {watchedIpWhitelist
-                  ? `${(watchedAllowedIps || []).length} IPs`
+                  ? `${(watchedAllowedIps ?? []).length} IPs`
                   : "Disabled"}
               </span>
             </div>

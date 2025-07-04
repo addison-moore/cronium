@@ -1,7 +1,7 @@
-import createNextIntlPlugin from 'next-intl/plugin';
-import { env } from './src/env.mjs';
+import createNextIntlPlugin from "next-intl/plugin";
+import { env } from "./src/env.mjs";
 
-const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -10,8 +10,8 @@ const nextConfig = {
   },
   webpack: (config, { isServer }) => {
     // Handle SSH binary modules properly
-    config.externals = [...(config.externals || []), 'ssh2'];
-    
+    config.externals = [...(config.externals || []), "ssh2"];
+
     // Handle xterm.js packages properly for dynamic imports
     if (!isServer) {
       // This fixes Node.js modules used in browser context
@@ -30,23 +30,23 @@ const nextConfig = {
       const originalExternals = config.externals || [];
       config.externals = [
         ...originalExternals,
-        '@xterm/xterm',
-        '@xterm/addon-fit', 
-        '@xterm/addon-unicode11',
-        '@xterm/addon-web-links',
+        "@xterm/xterm",
+        "@xterm/addon-fit",
+        "@xterm/addon-unicode11",
+        "@xterm/addon-web-links",
       ];
     }
-    
+
     return config;
   },
   serverExternalPackages: [
-    'ssh2',
-    'node-ssh',
-    'handlebars',
-    '@xterm/xterm',
-    '@xterm/addon-fit',
-    '@xterm/addon-unicode11',
-    '@xterm/addon-web-links'
+    "ssh2",
+    "node-ssh",
+    "handlebars",
+    "@xterm/xterm",
+    "@xterm/addon-fit",
+    "@xterm/addon-unicode11",
+    "@xterm/addon-web-links",
   ],
   eslint: {
     // Disable ESLint during builds for now

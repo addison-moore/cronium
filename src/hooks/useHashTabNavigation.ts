@@ -25,7 +25,7 @@ export function useHashTabNavigation({
   // Get tab from URL hash on mount and when hash changes
   const getTabFromHash = useCallback(() => {
     if (typeof window === "undefined") return defaultTab;
-    
+
     const hash = window.location.hash.substring(1); // Remove the # symbol
     return validTabs.includes(hash) ? hash : defaultTab;
   }, [defaultTab, validTabs]);
@@ -43,26 +43,31 @@ export function useHashTabNavigation({
 
     // Listen for hash changes
     window.addEventListener("hashchange", handleHashChange);
-    
+
     return () => {
       window.removeEventListener("hashchange", handleHashChange);
     };
   }, [getTabFromHash, onTabChange]);
 
   // Function to change tab and update URL hash
-  const changeTab = useCallback((newTab: string) => {
-    if (!validTabs.includes(newTab)) {
-      console.warn(`Invalid tab: ${newTab}. Valid tabs are: ${validTabs.join(", ")}`);
-      return;
-    }
+  const changeTab = useCallback(
+    (newTab: string) => {
+      if (!validTabs.includes(newTab)) {
+        console.warn(
+          `Invalid tab: ${newTab}. Valid tabs are: ${validTabs.join(", ")}`,
+        );
+        return;
+      }
 
-    setActiveTab(newTab);
-    onTabChange?.(newTab);
+      setActiveTab(newTab);
+      onTabChange?.(newTab);
 
-    // Update URL hash without triggering a page reload
-    const newUrl = `${pathname}#${newTab}`;
-    window.history.replaceState(null, "", newUrl);
-  }, [validTabs, onTabChange, pathname]);
+      // Update URL hash without triggering a page reload
+      const newUrl = `${pathname}#${newTab}`;
+      window.history.replaceState(null, "", newUrl);
+    },
+    [validTabs, onTabChange, pathname],
+  );
 
   return {
     activeTab,

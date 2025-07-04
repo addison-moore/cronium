@@ -42,10 +42,10 @@ export function EventDetailsTab({
   const t = useTranslations("Events");
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(event.content || "");
+  const [editedContent, setEditedContent] = useState(event.content ?? "");
 
   // Cast event to Event for UI-specific properties
-  const Event = event as Event;
+  const Event = event;
 
   // tRPC mutation for updating event content
   const updateEventMutation = trpc.events.update.useMutation({
@@ -64,7 +64,7 @@ export function EventDetailsTab({
       console.error("Error updating event:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to update event",
+        description: error.message ?? "Failed to update event",
         variant: "destructive",
       });
     },
@@ -82,7 +82,7 @@ export function EventDetailsTab({
   };
 
   const handleCancel = () => {
-    setEditedContent(event.content || "");
+    setEditedContent(event.content ?? "");
     setIsEditing(false);
   };
 
@@ -159,7 +159,7 @@ export function EventDetailsTab({
 
   const renderScriptDetails = () => {
     if (
-      !event ||
+      !event ??
       ![EventType.NODEJS, EventType.PYTHON, EventType.BASH].includes(event.type)
     )
       return null;
@@ -204,7 +204,7 @@ export function EventDetailsTab({
                       : "plaintext"
               }
               value={editedContent}
-              onChange={(value) => setEditedContent(value || "")}
+              onChange={(value) => setEditedContent(value ?? "")}
               editorSettings={{
                 fontSize: 14,
                 theme: "vs-dark",
@@ -246,7 +246,7 @@ export function EventDetailsTab({
                       ? "bash"
                       : "plaintext"
               }
-              value={event.content || ""}
+              value={event.content ?? ""}
               readOnly={true}
               editorSettings={{
                 fontSize: 12,

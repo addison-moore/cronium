@@ -9,18 +9,18 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { 
-  Zap, 
-  Send, 
-  Play, 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
+import {
+  Zap,
+  Send,
+  Play,
+  CheckCircle,
+  XCircle,
+  Clock,
   Settings,
   ArrowRight,
   Mail,
   MessageSquare,
-  Code
+  Code,
 } from "lucide-react";
 
 const tableOfContents = [
@@ -33,42 +33,47 @@ const tableOfContents = [
   { title: "Best Practices", href: "#best-practices", level: 2 },
 ];
 
-export default async function ConditionalActionsPage({ 
-  params 
-}: { 
-  params: Promise<{ lang: string }> 
+export default async function ConditionalActionsPage({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
 }) {
   const { lang } = await params;
 
   return (
     <DocsLayout lang={lang} tableOfContents={tableOfContents}>
-      <div className="max-w-4xl mx-auto">
+      <div className="mx-auto max-w-4xl">
         {/* Header */}
         <div className="mb-12">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Zap className="h-6 w-6 text-primary" />
+          <div className="mb-4 flex items-center gap-3">
+            <div className="bg-primary/10 rounded-lg p-2">
+              <Zap className="text-primary h-6 w-6" />
             </div>
-            <h1 className="text-4xl font-bold tracking-tight">Conditional Actions</h1>
+            <h1 className="text-4xl font-bold tracking-tight">
+              Conditional Actions
+            </h1>
           </div>
-          <p className="text-xl text-muted-foreground">
-            Automate responses to event outcomes with powerful conditional actions that trigger based on success, failure, or custom conditions.
+          <p className="text-muted-foreground text-xl">
+            Automate responses to event outcomes with powerful conditional
+            actions that trigger based on success, failure, or custom
+            conditions.
           </p>
         </div>
 
         {/* Overview */}
         <section id="overview" className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">Overview</h2>
-          
-          <div className="prose prose-gray dark:prose-invert max-w-none mb-8">
+          <h2 className="mb-6 text-2xl font-bold">Overview</h2>
+
+          <div className="prose prose-gray dark:prose-invert mb-8 max-w-none">
             <p>
-              Conditional actions allow you to automatically trigger responses based on the outcome of your events. 
-              Whether an event succeeds, fails, or meets specific conditions, you can configure automated actions 
-              to handle the results appropriately.
+              Conditional actions allow you to automatically trigger responses
+              based on the outcome of your events. Whether an event succeeds,
+              fails, or meets specific conditions, you can configure automated
+              actions to handle the results appropriately.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -76,7 +81,8 @@ export default async function ConditionalActionsPage({
                   Send Message
                 </CardTitle>
                 <CardDescription>
-                  Send notifications via email, Slack, or Discord when events complete
+                  Send notifications via email, Slack, or Discord when events
+                  complete
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -129,16 +135,17 @@ export default async function ConditionalActionsPage({
 
         {/* Trigger Types */}
         <section id="trigger-types" className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">Trigger Types</h2>
-          
-          <div className="prose prose-gray dark:prose-invert max-w-none mb-6">
+          <h2 className="mb-6 text-2xl font-bold">Trigger Types</h2>
+
+          <div className="prose prose-gray dark:prose-invert mb-6 max-w-none">
             <p>
-              Conditional actions can be triggered based on different event outcomes. Choose the appropriate 
-              trigger type for your automation needs.
+              Conditional actions can be triggered based on different event
+              outcomes. Choose the appropriate trigger type for your automation
+              needs.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2">
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
@@ -147,10 +154,13 @@ export default async function ConditionalActionsPage({
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground mb-3">
+                <p className="text-muted-foreground mb-3 text-sm">
                   Triggers when the event completes successfully without errors.
                 </p>
-                <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200">
+                <Badge
+                  variant="secondary"
+                  className="border-green-200 bg-green-50 text-green-700"
+                >
                   Success Trigger
                 </Badge>
               </CardContent>
@@ -164,10 +174,14 @@ export default async function ConditionalActionsPage({
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Triggers when the event fails, times out, or encounters errors.
+                <p className="text-muted-foreground mb-3 text-sm">
+                  Triggers when the event fails, times out, or encounters
+                  errors.
                 </p>
-                <Badge variant="secondary" className="bg-red-50 text-red-700 border-red-200">
+                <Badge
+                  variant="secondary"
+                  className="border-red-200 bg-red-50 text-red-700"
+                >
                   Failure Trigger
                 </Badge>
               </CardContent>
@@ -181,10 +195,13 @@ export default async function ConditionalActionsPage({
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground mb-3">
+                <p className="text-muted-foreground mb-3 text-sm">
                   Triggers regardless of the event outcome - success or failure.
                 </p>
-                <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">
+                <Badge
+                  variant="secondary"
+                  className="border-blue-200 bg-blue-50 text-blue-700"
+                >
                   Always Trigger
                 </Badge>
               </CardContent>
@@ -198,10 +215,14 @@ export default async function ConditionalActionsPage({
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Triggers when a custom condition is met using cronium.setCondition().
+                <p className="text-muted-foreground mb-3 text-sm">
+                  Triggers when a custom condition is met using
+                  cronium.setCondition().
                 </p>
-                <Badge variant="secondary" className="bg-purple-50 text-purple-700 border-purple-200">
+                <Badge
+                  variant="secondary"
+                  className="border-purple-200 bg-purple-50 text-purple-700"
+                >
                   Conditional Trigger
                 </Badge>
               </CardContent>
@@ -211,11 +232,12 @@ export default async function ConditionalActionsPage({
 
         {/* Action Types */}
         <section id="action-types" className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">Action Types</h2>
-          
-          <div className="prose prose-gray dark:prose-invert max-w-none mb-6">
+          <h2 className="mb-6 text-2xl font-bold">Action Types</h2>
+
+          <div className="prose prose-gray dark:prose-invert mb-6 max-w-none">
             <p>
-              Cronium supports two main types of conditional actions that can be triggered based on event outcomes.
+              Cronium supports two main types of conditional actions that can be
+              triggered based on event outcomes.
             </p>
           </div>
 
@@ -232,31 +254,31 @@ export default async function ConditionalActionsPage({
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-3 border rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div className="rounded-lg border p-3">
+                      <div className="mb-2 flex items-center gap-2">
                         <Mail className="h-4 w-4 text-blue-500" />
                         <span className="font-medium">Email</span>
                       </div>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-muted-foreground text-sm">
                         Send HTML or text emails with custom templates
                       </p>
                     </div>
-                    <div className="p-3 border rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
+                    <div className="rounded-lg border p-3">
+                      <div className="mb-2 flex items-center gap-2">
                         <MessageSquare className="h-4 w-4 text-green-500" />
                         <span className="font-medium">Slack</span>
                       </div>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-muted-foreground text-sm">
                         Post messages with rich formatting and blocks
                       </p>
                     </div>
-                    <div className="p-3 border rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
+                    <div className="rounded-lg border p-3">
+                      <div className="mb-2 flex items-center gap-2">
                         <MessageSquare className="h-4 w-4 text-purple-500" />
                         <span className="font-medium">Discord</span>
                       </div>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-muted-foreground text-sm">
                         Send webhook messages with embeds
                       </p>
                     </div>
@@ -278,19 +300,20 @@ export default async function ConditionalActionsPage({
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <ArrowRight className="h-5 w-5 text-muted-foreground mt-0.5" />
+                    <ArrowRight className="text-muted-foreground mt-0.5 h-5 w-5" />
                     <div>
                       <p className="font-medium">Event Chaining</p>
-                      <p className="text-sm text-muted-foreground">
-                        Trigger other events based on the current event's outcome
+                      <p className="text-muted-foreground text-sm">
+                        Trigger other events based on the current event's
+                        outcome
                       </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <ArrowRight className="h-5 w-5 text-muted-foreground mt-0.5" />
+                    <ArrowRight className="text-muted-foreground mt-0.5 h-5 w-5" />
                     <div>
                       <p className="font-medium">Workflow Automation</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-muted-foreground text-sm">
                         Create complex multi-step automation processes
                       </p>
                     </div>
@@ -303,12 +326,13 @@ export default async function ConditionalActionsPage({
 
         {/* Send Message Actions */}
         <section id="send-message" className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">Send Message Actions</h2>
-          
-          <div className="prose prose-gray dark:prose-invert max-w-none mb-6">
+          <h2 className="mb-6 text-2xl font-bold">Send Message Actions</h2>
+
+          <div className="prose prose-gray dark:prose-invert mb-6 max-w-none">
             <p>
-              Send Message actions allow you to notify team members or external systems about event outcomes. 
-              Each message type supports templates with dynamic content from your event execution.
+              Send Message actions allow you to notify team members or external
+              systems about event outcomes. Each message type supports templates
+              with dynamic content from your event execution.
             </p>
           </div>
 
@@ -322,10 +346,10 @@ export default async function ConditionalActionsPage({
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                      <h4 className="font-medium mb-2">Configuration</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1">
+                      <h4 className="mb-2 font-medium">Configuration</h4>
+                      <ul className="text-muted-foreground space-y-1 text-sm">
                         <li>• Email credentials (SMTP settings)</li>
                         <li>• Recipient addresses</li>
                         <li>• Subject line with templates</li>
@@ -333,8 +357,8 @@ export default async function ConditionalActionsPage({
                       </ul>
                     </div>
                     <div>
-                      <h4 className="font-medium mb-2">Use Cases</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1">
+                      <h4 className="mb-2 font-medium">Use Cases</h4>
+                      <ul className="text-muted-foreground space-y-1 text-sm">
                         <li>• Success notifications</li>
                         <li>• Error alerts</li>
                         <li>• Daily reports</li>
@@ -355,10 +379,10 @@ export default async function ConditionalActionsPage({
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                      <h4 className="font-medium mb-2">Configuration</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1">
+                      <h4 className="mb-2 font-medium">Configuration</h4>
+                      <ul className="text-muted-foreground space-y-1 text-sm">
                         <li>• Webhook URL credentials</li>
                         <li>• Channel targeting via webhook</li>
                         <li>• Plain text or JSON block format</li>
@@ -366,8 +390,8 @@ export default async function ConditionalActionsPage({
                       </ul>
                     </div>
                     <div>
-                      <h4 className="font-medium mb-2">Features</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1">
+                      <h4 className="mb-2 font-medium">Features</h4>
+                      <ul className="text-muted-foreground space-y-1 text-sm">
                         <li>• Slack Block Kit support</li>
                         <li>• Attachments and colors</li>
                         <li>• Mentions and channels</li>
@@ -388,10 +412,10 @@ export default async function ConditionalActionsPage({
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                      <h4 className="font-medium mb-2">Configuration</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1">
+                      <h4 className="mb-2 font-medium">Configuration</h4>
+                      <ul className="text-muted-foreground space-y-1 text-sm">
                         <li>• Discord webhook URL</li>
                         <li>• Channel targeting via webhook</li>
                         <li>• Plain text or JSON embed format</li>
@@ -399,8 +423,8 @@ export default async function ConditionalActionsPage({
                       </ul>
                     </div>
                     <div>
-                      <h4 className="font-medium mb-2">Features</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1">
+                      <h4 className="mb-2 font-medium">Features</h4>
+                      <ul className="text-muted-foreground space-y-1 text-sm">
                         <li>• Discord embeds</li>
                         <li>• Custom colors and fields</li>
                         <li>• Thumbnail and images</li>
@@ -413,17 +437,23 @@ export default async function ConditionalActionsPage({
             </Card>
           </div>
 
-          <div className="mt-8 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <div className="mt-8 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/20">
             <div className="flex items-start gap-3">
-              <div className="p-1 bg-blue-100 dark:bg-blue-900 rounded">
+              <div className="rounded bg-blue-100 p-1 dark:bg-blue-900">
                 <Settings className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-1">Template Support</h4>
+                <h4 className="mb-1 font-medium text-blue-800 dark:text-blue-200">
+                  Template Support
+                </h4>
                 <p className="text-sm text-blue-700 dark:text-blue-300">
-                  All message types support Handlebars templates with event data, variables, and runtime helpers. 
-                  See the <a href={`/${lang}/docs/templates`} className="underline">Templates documentation</a> for 
-                  detailed information on template syntax and available variables.
+                  All message types support Handlebars templates with event
+                  data, variables, and runtime helpers. See the{" "}
+                  <a href={`/${lang}/docs/templates`} className="underline">
+                    Templates documentation
+                  </a>{" "}
+                  for detailed information on template syntax and available
+                  variables.
                 </p>
               </div>
             </div>
@@ -432,12 +462,13 @@ export default async function ConditionalActionsPage({
 
         {/* Run Another Event */}
         <section id="run-event" className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">Run Another Event</h2>
-          
-          <div className="prose prose-gray dark:prose-invert max-w-none mb-6">
+          <h2 className="mb-6 text-2xl font-bold">Run Another Event</h2>
+
+          <div className="prose prose-gray dark:prose-invert mb-6 max-w-none">
             <p>
-              The "Run Another Event" action allows you to chain events together, creating complex automation 
-              workflows that respond dynamically to different outcomes.
+              The "Run Another Event" action allows you to chain events
+              together, creating complex automation workflows that respond
+              dynamically to different outcomes.
             </p>
           </div>
 
@@ -450,36 +481,36 @@ export default async function ConditionalActionsPage({
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex items-center gap-4 p-3 bg-muted/50 rounded-lg">
+                <div className="bg-muted/50 flex items-center gap-4 rounded-lg p-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    <div className="h-3 w-3 rounded-full bg-blue-500"></div>
                     <span className="font-medium">Event A</span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                  <ArrowRight className="text-muted-foreground h-4 w-4" />
                   <div className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-green-500" />
                     <span className="text-sm">On Success</span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                  <ArrowRight className="text-muted-foreground h-4 w-4" />
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <div className="h-3 w-3 rounded-full bg-green-500"></div>
                     <span className="font-medium">Event B</span>
                   </div>
                 </div>
-                
-                <div className="flex items-center gap-4 p-3 bg-muted/50 rounded-lg">
+
+                <div className="bg-muted/50 flex items-center gap-4 rounded-lg p-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    <div className="h-3 w-3 rounded-full bg-blue-500"></div>
                     <span className="font-medium">Event A</span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                  <ArrowRight className="text-muted-foreground h-4 w-4" />
                   <div className="flex items-center gap-2">
                     <XCircle className="h-4 w-4 text-red-500" />
                     <span className="text-sm">On Failure</span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                  <ArrowRight className="text-muted-foreground h-4 w-4" />
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                    <div className="h-3 w-3 rounded-full bg-red-500"></div>
                     <span className="font-medium">Error Handler</span>
                   </div>
                 </div>
@@ -487,7 +518,7 @@ export default async function ConditionalActionsPage({
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Configuration</CardTitle>
@@ -495,15 +526,16 @@ export default async function ConditionalActionsPage({
               <CardContent>
                 <div className="space-y-3">
                   <div>
-                    <h4 className="font-medium mb-1">Target Event</h4>
-                    <p className="text-sm text-muted-foreground">
+                    <h4 className="mb-1 font-medium">Target Event</h4>
+                    <p className="text-muted-foreground text-sm">
                       Select which event to run from your available events
                     </p>
                   </div>
                   <div>
-                    <h4 className="font-medium mb-1">Trigger Condition</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Choose when to trigger: Success, Failure, Always, or Custom Condition
+                    <h4 className="mb-1 font-medium">Trigger Condition</h4>
+                    <p className="text-muted-foreground text-sm">
+                      Choose when to trigger: Success, Failure, Always, or
+                      Custom Condition
                     </p>
                   </div>
                 </div>
@@ -517,20 +549,24 @@ export default async function ConditionalActionsPage({
               <CardContent>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">Cleanup after data processing</span>
+                    <ArrowRight className="text-muted-foreground h-4 w-4" />
+                    <span className="text-sm">
+                      Cleanup after data processing
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                    <ArrowRight className="text-muted-foreground h-4 w-4" />
                     <span className="text-sm">Error recovery workflows</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                    <ArrowRight className="text-muted-foreground h-4 w-4" />
                     <span className="text-sm">Multi-stage deployments</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">Conditional processing flows</span>
+                    <ArrowRight className="text-muted-foreground h-4 w-4" />
+                    <span className="text-sm">
+                      Conditional processing flows
+                    </span>
                   </div>
                 </div>
               </CardContent>
@@ -540,12 +576,15 @@ export default async function ConditionalActionsPage({
 
         {/* Setup */}
         <section id="setup" className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">Setting Up Conditional Actions</h2>
-          
-          <div className="prose prose-gray dark:prose-invert max-w-none mb-6">
+          <h2 className="mb-6 text-2xl font-bold">
+            Setting Up Conditional Actions
+          </h2>
+
+          <div className="prose prose-gray dark:prose-invert mb-6 max-w-none">
             <p>
-              Conditional actions are configured in the event form under the "Conditional Actions" section. 
-              You can add multiple actions with different trigger conditions for comprehensive automation.
+              Conditional actions are configured in the event form under the
+              "Conditional Actions" section. You can add multiple actions with
+              different trigger conditions for comprehensive automation.
             </p>
           </div>
 
@@ -556,49 +595,55 @@ export default async function ConditionalActionsPage({
             <CardContent>
               <div className="space-y-6">
                 <div className="flex items-start gap-4">
-                  <div className="flex items-center justify-center w-8 h-8 bg-primary/10 text-primary rounded-full font-bold text-sm">
+                  <div className="bg-primary/10 text-primary flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold">
                     1
                   </div>
                   <div>
-                    <h4 className="font-medium mb-1">Choose Trigger Type</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Select when the action should trigger: On Success, On Failure, Always, or On Condition
+                    <h4 className="mb-1 font-medium">Choose Trigger Type</h4>
+                    <p className="text-muted-foreground text-sm">
+                      Select when the action should trigger: On Success, On
+                      Failure, Always, or On Condition
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-4">
-                  <div className="flex items-center justify-center w-8 h-8 bg-primary/10 text-primary rounded-full font-bold text-sm">
+                  <div className="bg-primary/10 text-primary flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold">
                     2
                   </div>
                   <div>
-                    <h4 className="font-medium mb-1">Select Action Type</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Choose between "Send Message" for notifications or "Run Another Event" for chaining
+                    <h4 className="mb-1 font-medium">Select Action Type</h4>
+                    <p className="text-muted-foreground text-sm">
+                      Choose between "Send Message" for notifications or "Run
+                      Another Event" for chaining
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-4">
-                  <div className="flex items-center justify-center w-8 h-8 bg-primary/10 text-primary rounded-full font-bold text-sm">
+                  <div className="bg-primary/10 text-primary flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold">
                     3
                   </div>
                   <div>
-                    <h4 className="font-medium mb-1">Configure Action Details</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Set up message content and credentials for Send Message, or select target event for Run Another Event
+                    <h4 className="mb-1 font-medium">
+                      Configure Action Details
+                    </h4>
+                    <p className="text-muted-foreground text-sm">
+                      Set up message content and credentials for Send Message,
+                      or select target event for Run Another Event
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-4">
-                  <div className="flex items-center justify-center w-8 h-8 bg-primary/10 text-primary rounded-full font-bold text-sm">
+                  <div className="bg-primary/10 text-primary flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold">
                     4
                   </div>
                   <div>
-                    <h4 className="font-medium mb-1">Add and Test</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Add the conditional action to your event and test the automation workflow
+                    <h4 className="mb-1 font-medium">Add and Test</h4>
+                    <p className="text-muted-foreground text-sm">
+                      Add the conditional action to your event and test the
+                      automation workflow
                     </p>
                   </div>
                 </div>
@@ -609,9 +654,9 @@ export default async function ConditionalActionsPage({
 
         {/* Best Practices */}
         <section id="best-practices" className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">Best Practices</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <h2 className="mb-6 text-2xl font-bold">Best Practices</h2>
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg text-green-600">Do's</CardTitle>
@@ -619,24 +664,30 @@ export default async function ConditionalActionsPage({
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
                     <div>
                       <p className="font-medium">Use descriptive templates</p>
-                      <p className="text-sm text-muted-foreground">Include event name, status, and relevant context</p>
+                      <p className="text-muted-foreground text-sm">
+                        Include event name, status, and relevant context
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
                     <div>
                       <p className="font-medium">Test your workflows</p>
-                      <p className="text-sm text-muted-foreground">Verify conditional actions work as expected</p>
+                      <p className="text-muted-foreground text-sm">
+                        Verify conditional actions work as expected
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
                     <div>
                       <p className="font-medium">Use system templates</p>
-                      <p className="text-sm text-muted-foreground">Leverage built-in templates for consistency</p>
+                      <p className="text-muted-foreground text-sm">
+                        Leverage built-in templates for consistency
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -650,24 +701,30 @@ export default async function ConditionalActionsPage({
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <XCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                    <XCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
                     <div>
                       <p className="font-medium">Create infinite loops</p>
-                      <p className="text-sm text-muted-foreground">Avoid events that trigger themselves</p>
+                      <p className="text-muted-foreground text-sm">
+                        Avoid events that trigger themselves
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <XCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                    <XCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
                     <div>
                       <p className="font-medium">Ignore error handling</p>
-                      <p className="text-sm text-muted-foreground">Always set up failure notifications</p>
+                      <p className="text-muted-foreground text-sm">
+                        Always set up failure notifications
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <XCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                    <XCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
                     <div>
                       <p className="font-medium">Hardcode values</p>
-                      <p className="text-sm text-muted-foreground">Use templates and variables for flexibility</p>
+                      <p className="text-muted-foreground text-sm">
+                        Use templates and variables for flexibility
+                      </p>
                     </div>
                   </div>
                 </div>

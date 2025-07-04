@@ -1,4 +1,4 @@
-import { UserRole, UserStatus } from "@/shared/schema";
+import type { UserRole, UserStatus } from "@/shared/schema";
 import "next-auth";
 
 declare module "next-auth" {

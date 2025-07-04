@@ -39,7 +39,7 @@ export default function EditServerPage({
   const fetchServer = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/servers/${serverId}`);
+      const response = await fetch(`/api/servers/${String(serverId)}`);
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -60,7 +60,7 @@ export default function EditServerPage({
   };
 
   const handleSuccess = (updatedServerId?: number) => {
-    router.push(`/dashboard/servers/${updatedServerId || serverId}`);
+    router.push(`/dashboard/servers/${String(updatedServerId ?? serverId)}`);
   };
 
   if (isLoading) {
@@ -89,7 +89,7 @@ export default function EditServerPage({
     );
   }
 
-  if (error || !server) {
+  if (error ?? !server) {
     return (
       <div className="container mx-auto p-4">
         <div className="mb-6 flex items-center">
@@ -108,7 +108,7 @@ export default function EditServerPage({
               <AlertCircle className="mb-4 h-16 w-16 text-red-500" />
               <h2 className="mb-2 text-xl font-semibold">Server Not Found</h2>
               <p className="mb-4 text-center text-gray-500">
-                {error ||
+                {error ??
                   "The server you're trying to edit doesn't exist or has been deleted."}
               </p>
               <Button asChild>

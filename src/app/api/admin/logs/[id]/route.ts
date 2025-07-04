@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { UserRole, LogStatus } from "@/shared/schema";
@@ -26,7 +27,7 @@ export async function GET(
     // Check if the user is authenticated and is an admin
     const session = await getServerSession(authOptions);
 
-    if (!session || !session.user) {
+    if (!session ?? !session.user) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
@@ -53,7 +54,7 @@ export async function GET(
     }
 
     // Get script name if available
-    let eventName = log.eventName || "";
+    let eventName = log.eventName ?? "";
     let scriptType = "";
     let username = "";
 
@@ -70,7 +71,7 @@ export async function GET(
     if (log.userId) {
       const user = await storage.getUser(log.userId);
       if (user) {
-        username = user.username || user.email || `User ID: ${user.id}`;
+        username = user.username ?? user.email ?? `User ID: ${user.id}`;
       }
     }
 
@@ -97,7 +98,7 @@ export async function PATCH(
     // Check if the user is authenticated and is an admin
     const session = await getServerSession(authOptions);
 
-    if (!session || !session.user) {
+    if (!session ?? !session.user) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
@@ -142,7 +143,7 @@ export async function PATCH(
 
     if (
       existingLog.status === LogStatus.RUNNING &&
-      (validatedData.status === LogStatus.SUCCESS ||
+      (validatedData.status === LogStatus.SUCCESS ??
         validatedData.status === LogStatus.FAILURE) &&
       validatedData.endTime &&
       existingLog.startTime
@@ -181,7 +182,7 @@ export async function DELETE(
     // Check if the user is authenticated and is an admin
     const session = await getServerSession(authOptions);
 
-    if (!session || !session.user) {
+    if (!session ?? !session.user) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 

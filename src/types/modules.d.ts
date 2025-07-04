@@ -3,7 +3,7 @@
  */
 
 declare module "archiver" {
-  import { Stream } from "stream";
+  import type { Stream } from "stream";
 
   interface ArchiverOptions {
     zlib?: any;

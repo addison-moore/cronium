@@ -88,12 +88,12 @@ function NavSection({
       <div className="mb-2">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center w-full text-left py-2 px-3 text-sm font-medium text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
+          className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-medium text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
         >
           {isOpen ? (
-            <ChevronDown className="h-4 w-4 mr-2" />
+            <ChevronDown className="mr-2 h-4 w-4" />
           ) : (
-            <ChevronRight className="h-4 w-4 mr-2" />
+            <ChevronRight className="mr-2 h-4 w-4" />
           )}
           {item.title}
         </button>
@@ -119,10 +119,10 @@ function NavSection({
     <Link
       href={`/${lang}${item.href}`}
       className={cn(
-        "block py-2 px-3 text-sm rounded-md transition-colors",
+        "block rounded-md px-3 py-2 text-sm transition-colors",
         isActive
           ? "bg-primary text-primary-foreground"
-          : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800",
+          : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800",
       )}
     >
       {item.title}
@@ -138,10 +138,10 @@ function TableOfContents({
   if (!items || items.length === 0) return null;
 
   return (
-    <aside className="hidden xl:block w-64 shrink-0">
+    <aside className="hidden w-64 shrink-0 xl:block">
       <div className="sticky top-24 p-4">
-        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4">
-          <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100 mb-3">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+          <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">
             On this page
           </h3>
           <nav className="space-y-1">
@@ -150,7 +150,7 @@ function TableOfContents({
                 key={index}
                 href={item.href}
                 className={cn(
-                  "block text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 py-1",
+                  "block py-1 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100",
                   item.level === 2
                     ? "pl-0"
                     : item.level === 3
@@ -176,14 +176,14 @@ export default function DocsLayout({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="flex min-h-screen flex-col">
       <Navbar lang={lang} />
 
-      <div className="flex-1 flex">
+      <div className="flex flex-1">
         {/* Mobile sidebar overlay */}
         {isSidebarOpen && (
           <div
-            className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
+            className="bg-opacity-50 fixed inset-0 z-40 bg-black lg:hidden"
             onClick={() => setIsSidebarOpen(false)}
           />
         )}
@@ -191,16 +191,16 @@ export default function DocsLayout({
         {/* Sidebar */}
         <aside
           className={cn(
-            "fixed top-16 left-0 z-50 w-72 h-[calc(100vh-4rem)] bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-y-auto transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)]",
+            "fixed top-16 left-0 z-50 h-[calc(100vh-4rem)] w-72 transform overflow-y-auto border-r border-gray-200 bg-white transition-transform duration-200 ease-in-out lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:translate-x-0 dark:border-gray-800 dark:bg-gray-900",
             isSidebarOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >
           <div className="p-6">
-            <div className="flex items-center justify-between mb-6 lg:hidden">
+            <div className="mb-6 flex items-center justify-between lg:hidden">
               <h2 className="text-lg font-semibold">Documentation</h2>
               <button
                 onClick={() => setIsSidebarOpen(false)}
-                className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="rounded-md p-2 hover:bg-gray-100 dark:hover:bg-gray-800"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -215,20 +215,20 @@ export default function DocsLayout({
         </aside>
 
         {/* Main content area with table of contents */}
-        <div className="flex-1 flex lg:ml-0">
+        <div className="flex flex-1 lg:ml-0">
           {/* Main content */}
-          <main className="flex-1 min-w-0">
+          <main className="min-w-0 flex-1">
             {/* Mobile menu button */}
-            <div className="lg:hidden fixed top-20 left-4 z-30">
+            <div className="fixed top-20 left-4 z-30 lg:hidden">
               <button
                 onClick={() => setIsSidebarOpen(true)}
-                className="p-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+                className="rounded-md border border-gray-200 bg-white p-2 shadow-sm hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800"
               >
                 <Menu className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="py-8 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto xl:max-w-none xl:mx-0 xl:pr-0">
+            <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8 xl:mx-0 xl:max-w-none xl:pr-0">
               {children}
             </div>
           </main>

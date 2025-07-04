@@ -16,14 +16,14 @@ const Progress = React.forwardRef<
     <div
       ref={ref}
       className={cn(
-        "relative h-2 w-full overflow-hidden rounded-full bg-secondary",
+        "bg-secondary relative h-2 w-full overflow-hidden rounded-full",
         className,
       )}
       {...props}
     >
       <div
         className={cn(
-          "h-full w-full flex-1 bg-primary transition-all",
+          "bg-primary h-full w-full flex-1 transition-all",
           indicatorColor,
         )}
         style={{ width: `${(percentage / max) * 100}%` }}

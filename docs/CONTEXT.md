@@ -27,21 +27,27 @@ Users can create workflows with multiple "events" (bash, Node.js, Python, HTTP c
 ## 🔑 Core Concepts
 
 ### Events
+
 Scheduled scripts (bash, Node.js, Python) or HTTP requests that can be executed on local or remote servers.
 
 ### Workflows
+
 Multi-step event chains with conditional logic and data passing between events.
 
 ### Servers
+
 Remote execution targets accessed via SSH for distributed script execution.
 
 ### Variables
+
 Global and user-defined runtime variables for dynamic script configuration.
 
 ### Tools & Integrations
+
 Plugin system supporting Slack, Discord, Email, and webhook integrations.
 
 ### Runtime Helpers
+
 - `cronium.input()` / `cronium.output()` - Pass data between events
 - `cronium.getVariable(name)` / `cronium.setVariable(name, value)` - Variable management
 - `cronium.event()` - Access current event metadata
@@ -51,6 +57,7 @@ Plugin system supporting Slack, Discord, Email, and webhook integrations.
 ## 🏗️ Architecture Status
 
 ### Migration Progress (95% Complete)
+
 The project has undergone a major migration from REST APIs to type-safe tRPC infrastructure:
 
 - **✅ tRPC Backend:** 16 routers covering ~150 endpoints (100% complete)
@@ -59,7 +66,9 @@ The project has undergone a major migration from REST APIs to type-safe tRPC inf
 - **🚧 Code Cleanup:** Component naming standardization needed
 
 ### Type Safety Initiative
+
 Comprehensive type safety improvements are ongoing:
+
 - **Target:** Eliminate 6,172+ TypeScript errors (77.6% unsafe `any` types)
 - **Progress:** 5 phases implemented with significant error reduction
 - **Status:** Foundation, core business logic, and UI components largely completed
@@ -71,7 +80,7 @@ Comprehensive type safety improvements are ongoing:
 - **Current Implementation:** Next-Auth with email/password
 - **User Roles:** Admin, User, Viewer with comprehensive permission system
 - **Admin Features:** User management, invitation system, role assignment
-- **Security Goals:** 
+- **Security Goals:**
   - Script execution containerization (Docker/LXC planned)
   - API token management
   - SSH key management for remote servers
@@ -116,21 +125,25 @@ pnpm db:generate      # Generate Drizzle migrations
 ## 🎯 Current Priorities
 
 ### 1. **Type Safety Completion**
+
 - Continue systematic elimination of `any` types
 - Focus on test files and integration patterns
 - Implement advanced TypeScript patterns
 
 ### 2. **Component Architecture Cleanup**
+
 - Remove redundant REST components (moved to backups)
 - Standardize tRPC component naming conventions
 - Clean up import statements and function exports
 
 ### 3. **Security Enhancement**
+
 - Implement containerized script execution
 - Complete API token management system
 - Enhance role-based access controls
 
 ### 4. **Form System Modernization**
+
 - Complete migration to React Hook Form + Zod
 - Standardize validation patterns
 - Implement comprehensive error handling
@@ -140,30 +153,35 @@ pnpm db:generate      # Generate Drizzle migrations
 ## 🧠 Implementation Guidelines
 
 ### tRPC Patterns
+
 ```typescript
 // Standard query pattern
 const { data, isLoading, error } = trpc.events.getAll.useQuery({
   limit: 10,
-  offset: 0
+  offset: 0,
 });
 
-// Standard mutation pattern  
+// Standard mutation pattern
 const createEvent = trpc.events.create.useMutation({
   onSuccess: () => toast.success("Event created"),
-  onError: (error) => toast.error(error.message)
+  onError: (error) => toast.error(error.message),
 });
 ```
 
 ### Form Patterns
+
 ```typescript
 // React Hook Form + Zod pattern
 const form = useForm<CreateEventInput>({
   resolver: zodResolver(createEventSchema),
-  defaultValues: { /* ... */ }
+  defaultValues: {
+    /* ... */
+  },
 });
 ```
 
 ### Error Handling
+
 - Use tRPC error codes (UNAUTHORIZED, FORBIDDEN, NOT_FOUND)
 - Implement consistent toast notifications
 - Provide user-friendly error messages
@@ -173,12 +191,14 @@ const form = useForm<CreateEventInput>({
 ## 🔧 Testing Strategy
 
 ### Test Infrastructure
+
 - **tRPC Testing:** Custom `renderWithTrpc` utilities
 - **Mock Handlers:** Comprehensive tRPC mock patterns
 - **Performance:** API response time measurement
 - **Integration:** End-to-end workflow testing
 
 ### Testing Priorities
+
 1. Critical business logic (events, workflows, authentication)
 2. User interface components and interactions
 3. Integration with external services
@@ -189,12 +209,14 @@ const form = useForm<CreateEventInput>({
 ## 📊 Key Metrics & Goals
 
 ### Development Metrics
+
 - **Type Safety:** Target 90%+ reduction in TypeScript errors
 - **Test Coverage:** Maintain >90% coverage for critical paths
 - **Performance:** <200ms for simple queries, <500ms for complex operations
 - **Bundle Size:** Monitor and optimize client bundle size
 
 ### User Experience Goals
+
 - **Reliability:** Zero data loss, comprehensive error recovery
 - **Performance:** Fast loading times, responsive interactions
 - **Security:** Proper access controls, secure script execution
@@ -205,16 +227,19 @@ const form = useForm<CreateEventInput>({
 ## 🚨 Important Considerations
 
 ### Script Execution Security
+
 - **Current State:** Scripts execute directly on host (security risk)
 - **Migration Goal:** Container isolation (Docker/LXC)
 - **User Permissions:** Role-based execution controls
 
 ### Data Management
+
 - **Database:** PostgreSQL with Drizzle ORM
 - **Migrations:** Use `pnpm db:generate` and `pnpm db:push`
 - **Backup:** Consider data backup strategies for production
 
 ### External Integrations
+
 - **API Tokens:** Encrypted storage for third-party credentials
 - **Webhooks:** Public endpoints for external webhook consumption
 - **SSH:** Secure key management for remote server access
@@ -245,6 +270,7 @@ When working with this codebase:
 7. **Performance Aware:** Monitor bundle size and response times
 
 ### Code Style Preferences
+
 - **Forms:** Use React Hook Form + Zod for new forms
 - **APIs:** Use tRPC for all new endpoints
 - **Components:** Preserve existing styling and layout

@@ -41,7 +41,7 @@ passport.use(
         }
 
         // Verify password
-        const isValidPassword = await compare(password, user.password || "");
+        const isValidPassword = await compare(password, user.password ?? "");
         if (!isValidPassword) {
           return done(null, false, {
             message: "Invalid username/email or password",

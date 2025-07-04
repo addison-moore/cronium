@@ -44,13 +44,13 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
   const form = useForm<z.infer<typeof smtpSettingsSchema>>({
     resolver: zodResolver(smtpSettingsSchema),
     defaultValues: {
-      smtpHost: settings.smtpHost || "",
-      smtpPort: settings.smtpPort || "25",
-      smtpUser: settings.smtpUser || "",
-      smtpPassword: settings.smtpPassword || "",
-      smtpFromEmail: settings.smtpFromEmail || "",
-      smtpFromName: settings.smtpFromName || "",
-      smtpEnabled: settings.smtpEnabled || false,
+      smtpHost: settings.smtpHost ?? "",
+      smtpPort: settings.smtpPort ?? "25",
+      smtpUser: settings.smtpUser ?? "",
+      smtpPassword: settings.smtpPassword ?? "",
+      smtpFromEmail: settings.smtpFromEmail ?? "",
+      smtpFromName: settings.smtpFromName ?? "",
+      smtpEnabled: settings.smtpEnabled ?? false,
     },
   });
 
@@ -59,12 +59,12 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
     if (settings.smtpHost) {
       form.reset({
         smtpHost: settings.smtpHost,
-        smtpPort: settings.smtpPort || "25",
-        smtpUser: settings.smtpUser || "",
-        smtpPassword: settings.smtpPassword || "",
-        smtpFromEmail: settings.smtpFromEmail || "",
-        smtpFromName: settings.smtpFromName || "",
-        smtpEnabled: settings.smtpEnabled || false,
+        smtpPort: settings.smtpPort ?? "25",
+        smtpUser: settings.smtpUser ?? "",
+        smtpPassword: settings.smtpPassword ?? "",
+        smtpFromEmail: settings.smtpFromEmail ?? "",
+        smtpFromName: settings.smtpFromName ?? "",
+        smtpEnabled: settings.smtpEnabled ?? false,
       });
     }
   }, [settings, form]);
@@ -82,7 +82,9 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
             <Input
               id="smtpHost"
               placeholder="smtp.gmail.com"
-              aria-describedby={form.formState.errors.smtpHost ? "smtpHost-error" : undefined}
+              aria-describedby={
+                form.formState.errors.smtpHost ? "smtpHost-error" : undefined
+              }
               {...form.register("smtpHost")}
             />
             {form.formState.errors.smtpHost && (
@@ -97,7 +99,9 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
             <Input
               id="smtpPort"
               placeholder="587"
-              aria-describedby={form.formState.errors.smtpPort ? "smtpPort-error" : undefined}
+              aria-describedby={
+                form.formState.errors.smtpPort ? "smtpPort-error" : undefined
+              }
               {...form.register("smtpPort")}
             />
             {form.formState.errors.smtpPort && (
@@ -112,7 +116,9 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
             <Input
               id="smtpUser"
               placeholder="your-email@gmail.com"
-              aria-describedby={form.formState.errors.smtpUser ? "smtpUser-error" : undefined}
+              aria-describedby={
+                form.formState.errors.smtpUser ? "smtpUser-error" : undefined
+              }
               {...form.register("smtpUser")}
             />
             {form.formState.errors.smtpUser && (
@@ -130,7 +136,11 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
               id="smtpPassword"
               type="password"
               placeholder="your-app-password"
-              aria-describedby={form.formState.errors.smtpPassword ? "smtpPassword-error" : undefined}
+              aria-describedby={
+                form.formState.errors.smtpPassword
+                  ? "smtpPassword-error"
+                  : undefined
+              }
               {...form.register("smtpPassword")}
             />
             {form.formState.errors.smtpPassword && (
@@ -148,7 +158,11 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
               id="smtpFromEmail"
               type="email"
               placeholder="noreply@yourcompany.com"
-              aria-describedby={form.formState.errors.smtpFromEmail ? "smtpFromEmail-error" : undefined}
+              aria-describedby={
+                form.formState.errors.smtpFromEmail
+                  ? "smtpFromEmail-error"
+                  : undefined
+              }
               {...form.register("smtpFromEmail")}
             />
             {form.formState.errors.smtpFromEmail && (
@@ -163,7 +177,11 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
             <Input
               id="smtpFromName"
               placeholder="Your Company"
-              aria-describedby={form.formState.errors.smtpFromName ? "smtpFromName-error" : undefined}
+              aria-describedby={
+                form.formState.errors.smtpFromName
+                  ? "smtpFromName-error"
+                  : undefined
+              }
               {...form.register("smtpFromName")}
             />
             {form.formState.errors.smtpFromName && (

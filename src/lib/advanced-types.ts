@@ -7,12 +7,12 @@
 
 import {
   EventType,
-  RunLocation,
-  TimeUnit,
-  ConditionalActionType,
-  EventTriggerType,
+  type RunLocation,
+  type TimeUnit,
+  type ConditionalActionType,
+  type EventTriggerType,
   UserRole,
-  ToolType,
+  type ToolType,
 } from "@/shared/schema";
 
 // ===== UTILITY TYPES =====
@@ -218,9 +218,7 @@ export type EnumToOptions<T extends Record<string, string>> = {
 /**
  * Extract valid transitions between states
  */
-export type StateTransitions<T extends string> = {
-  [K in T]: T[];
-};
+export type StateTransitions<T extends string> = Record<T, T[]>;
 
 // ===== COMPLEX UTILITY TYPES =====
 
@@ -438,7 +436,7 @@ export class ValidationError extends Error {
   constructor(
     message: string,
     public field: string,
-    public code: string = "VALIDATION_ERROR",
+    public code = "VALIDATION_ERROR",
   ) {
     super(message);
     this.name = "ValidationError";
@@ -447,7 +445,7 @@ export class ValidationError extends Error {
 
 export class AuthorizationError extends Error {
   constructor(
-    message: string = "Unauthorized access",
+    message = "Unauthorized access",
     public requiredRole?: UserRole,
   ) {
     super(message);

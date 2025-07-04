@@ -5,9 +5,8 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { useToast } from "@/components/ui/use-toast";
 import { Spinner } from "@/components/ui/spinner";
-import { LogStatus } from "@/shared/schema";
+import { LogStatus, UserRole } from "@/shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import {
   Users,
@@ -22,6 +21,7 @@ import {
   Mail,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import type { RouterOutputs } from "@/server/api/root";
 
 // Types for monitoring data
 interface MonitoringData {
@@ -51,17 +51,17 @@ interface MonitoringData {
     total: number;
     online: number;
     offline: number;
-  };
+  } | undefined;
   activity?: {
     last24Hours: number;
     lastWeek: number;
     lastMonth: number;
-  };
+  } | undefined;
   recentActivity: Array<{
     id: number;
     eventId: number;
     eventName: string;
-    status: string;
+    status: LogStatus;
     duration: number;
     startTime: string;
   }>;
@@ -92,20 +92,19 @@ interface MonitoringData {
       arch: string;
       hostname: string;
     };
-  };
+  } | undefined;
 }
 
 export default function MonitoringPage() {
   const router = useRouter();
-  const { toast } = useToast();
   const { user } = useAuth();
   const [currentUptime, setCurrentUptime] = useState<number | null>(null);
 
-  // tRPC queries
+  // tRPC queries with proper typing
   const {
     data: monitoringData,
     isLoading,
-    refetch: refetchMonitoring,
+    refetch,
     error,
   } = trpc.monitoring.getSystemMonitoring.useQuery(
     {
@@ -119,42 +118,56 @@ export default function MonitoringPage() {
     },
   );
 
+  // Type the monitoring data from tRPC
+  type SystemMonitoringData =
+    RouterOutputs["monitoring"]["getSystemMonitoring"];
+
+  // Helper function to safely extract event stats
+  function getEventStats(
+    events: SystemMonitoringData["events"],
+  ): MonitoringData["events"] {
+    // The API returns only total and active, so we default paused and draft to 0
+    return {
+      total: events.total ?? 0,
+      active: events.active ?? 0,
+      paused: 0, // Not provided by API
+      draft: 0,  // Not provided by API
+    };
+  }
+
   // Transform tRPC data to match expected interface
   const transformedData: MonitoringData | null = monitoringData
-    ? ({
+    ? {
         time: monitoringData.timestamp,
         users: monitoringData.users,
-        events: {
-          total: monitoringData.events.total || 0,
-          active: monitoringData.events.active || 0,
-          paused: (monitoringData.events as any).paused || 0,
-          draft: (monitoringData.events as any).draft || 0,
-        },
+        events: getEventStats(monitoringData.events),
         executions: {
-          total: monitoringData.executions.total || 0,
-          success: monitoringData.executions.successful || 0,
-          failure: monitoringData.executions.failed || 0,
-          running: monitoringData.executions.running || 0,
-          successRate: monitoringData.executions.successRate || 0,
-          failureRate: monitoringData.executions.failureRate || 0,
+          total: monitoringData.executions.total ?? 0,
+          success: monitoringData.executions.successful ?? 0,
+          failure: monitoringData.executions.failed ?? 0,
+          running: monitoringData.executions.running ?? 0,
+          successRate: monitoringData.executions.successRate ?? 0,
+          failureRate: monitoringData.executions.failureRate ?? 0,
         },
         servers: monitoringData.servers
           ? {
-              total: monitoringData.servers.total || 0,
-              online: monitoringData.servers.online || 0,
+              total: monitoringData.servers.total ?? 0,
+              online: monitoringData.servers.online ?? 0,
               offline:
-                (monitoringData.servers.total || 0) -
-                (monitoringData.servers.online || 0),
+                (monitoringData.servers.total ?? 0) -
+                (monitoringData.servers.online ?? 0),
             }
           : undefined,
         activity: monitoringData.activity,
         recentActivity: monitoringData.recentActivity.map((activity) => ({
           id: activity.id,
           eventId: activity.eventId,
-          eventName: activity.eventName || "Unknown",
-          status: String(activity.status),
-          duration: activity.duration || 0,
-          startTime: activity.startTime.toISOString(),
+          eventName: activity.eventName ?? "Unknown",
+          status: activity.status as LogStatus,
+          duration: activity.duration ?? 0,
+          startTime: typeof activity.startTime === 'string' 
+            ? activity.startTime 
+            : activity.startTime.toISOString(),
         })),
         system: monitoringData.system
           ? {
@@ -164,7 +177,7 @@ export default function MonitoringPage() {
                 currentLoad: monitoringData.system.cpu.currentLoad,
                 systemLoad: monitoringData.system.cpu.systemLoad,
                 userLoad: monitoringData.system.cpu.userLoad,
-                temperature: monitoringData.system.cpu.temperature || 0,
+                temperature: monitoringData.system.cpu.temperature ?? 0,
                 manufacturer: "N/A",
                 brand: "N/A",
                 speed: 0,
@@ -175,11 +188,11 @@ export default function MonitoringPage() {
                 distro: "N/A",
                 release: monitoringData.system.os.version,
                 arch: monitoringData.system.os.arch,
-                hostname: monitoringData.system.os.hostname || "localhost",
+                hostname: monitoringData.system.os.hostname ?? "localhost",
               },
             }
           : undefined,
-      } as MonitoringData)
+      }
     : null;
 
   // Effect for updating uptime every second without refetching data
@@ -240,7 +253,9 @@ export default function MonitoringPage() {
           </span>
           <Button
             variant="outline"
-            onClick={() => refetchMonitoring()}
+            onClick={() => {
+              if (typeof refetch === 'function') refetch();
+            }}
             disabled={isLoading}
             className="bg-background"
           >
@@ -301,7 +316,7 @@ export default function MonitoringPage() {
                     <div className="flex min-w-[70px] flex-1 flex-col items-center rounded-lg bg-gray-50 p-2 dark:bg-gray-900">
                       <Mail className="mb-1 h-4 w-4 text-amber-500" />
                       <span className="text-sm font-bold">
-                        {transformedData.users.invited || 0}
+                        {transformedData.users.invited ?? 0}
                       </span>
                       <span className="text-xs text-gray-500">Invited</span>
                     </div>
@@ -312,14 +327,14 @@ export default function MonitoringPage() {
                     <div className="flex min-w-[70px] flex-1 flex-col items-center rounded-lg bg-gray-50 p-2 dark:bg-gray-900">
                       <XCircle className="mb-1 h-4 w-4 text-red-500" />
                       <span className="text-sm font-bold">
-                        {transformedData.users.disabled || 0}
+                        {transformedData.users.disabled ?? 0}
                       </span>
                       <span className="text-xs text-gray-500">Disabled</span>
                     </div>
                   )}
               </div>
 
-              {user?.role === "ADMIN" && (
+              {user?.role === UserRole.ADMIN && (
                 <div className="pt-3">
                   <Button
                     variant="outline"
@@ -681,7 +696,7 @@ export default function MonitoringPage() {
                     <span className="text-sm font-medium">Uptime</span>
                     <span className="text-sm">
                       {formatUptime(
-                        currentUptime || transformedData.system.uptime,
+                        currentUptime ?? transformedData.system.uptime,
                       )}
                     </span>
                   </div>
@@ -741,7 +756,7 @@ export default function MonitoringPage() {
       {error && (
         <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-4">
           <p className="text-red-700">
-            Error: {error.message || "Failed to load monitoring data"}
+            Error: {error.message ?? "Failed to load monitoring data"}
           </p>
         </div>
       )}

@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { RunLocation } from "@/shared/schema";
+import { RunLocation, ConnectionType, UserRole } from "@/shared/schema";
 import { authenticateApiRequest } from "@/lib/api-auth";
 
 // Helper function to authenticate user via session or API token
@@ -37,7 +38,7 @@ async function authenticateUser(
         // Simplified session callback for API routes
         session: async ({ session, token }) => {
           if (token?.id && session?.user) {
-            session.user.id = token.id as string;
+            session.user.id = token.id;
           }
           return session;
         },
@@ -59,7 +60,7 @@ async function authenticateUser(
       if (allUsers.length > 0) {
         // Use the first admin user for development browser sessions
         const adminUser =
-          allUsers.find((u) => u.role === "ADMIN") || allUsers[0];
+          allUsers.find((u) => u.role === UserRole.ADMIN) || allUsers[0];
         if (!adminUser) {
           throw new Error("No admin user found for development session");
         }
@@ -293,16 +294,16 @@ export async function PATCH(
           emailSubject: condAction.details.emailSubject || null,
         };
 
-        if (condAction.type === "ON_SUCCESS") {
+        if (condAction.type === ConnectionType.ON_SUCCESS) {
           eventData.successEventId = eventId;
           await storage.createAction(eventData);
-        } else if (condAction.type === "ON_FAILURE") {
+        } else if (condAction.type === ConnectionType.ON_FAILURE) {
           eventData.failEventId = eventId;
           await storage.createAction(eventData);
-        } else if (condAction.type === "ALWAYS") {
+        } else if (condAction.type === ConnectionType.ALWAYS) {
           eventData.alwaysEventId = eventId;
           await storage.createAction(eventData);
-        } else if (condAction.type === "ON_CONDITION") {
+        } else if (condAction.type === ConnectionType.ON_CONDITION) {
           eventData.conditionEventId = eventId;
           await storage.createAction(eventData);
         }

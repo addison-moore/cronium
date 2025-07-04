@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useQuery } from "@tanstack/react-query";
 import { UserRole } from "@/shared/schema";
@@ -15,7 +15,7 @@ type User = {
 
 /**
  * Custom hook for accessing the authenticated user
- * This uses next-auth session and adds additional 
+ * This uses next-auth session and adds additional
  * functionality to fetch the full user profile
  */
 export function useAuth() {
@@ -30,13 +30,13 @@ export function useAuth() {
   } = useQuery<User>({
     queryKey: ["/api/auth/user"],
     queryFn: async () => {
-      const res = await fetch('/api/auth/user');
+      const res = await fetch("/api/auth/user");
       if (!res.ok) {
         // Don't throw error, just return null for unauthenticated
         if (res.status === 401) {
           return null;
         }
-        throw new Error('Failed to fetch user data');
+        throw new Error("Failed to fetch user data");
       }
       return res.json();
     },
@@ -46,10 +46,11 @@ export function useAuth() {
 
   return {
     user,
-    isLoading: sessionStatus === "loading" || isUserLoading,
+    isLoading: sessionStatus === "loading" ?? isUserLoading,
     isAuthenticated: !!session?.user,
-    role: user?.role || session?.user?.role,
-    isAdmin: user?.role === UserRole.ADMIN || session?.user?.role === UserRole.ADMIN,
+    role: user?.role ?? session?.user?.role,
+    isAdmin:
+      user?.role === UserRole.ADMIN ?? session?.user?.role === UserRole.ADMIN,
     error,
     session,
   };

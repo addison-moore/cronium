@@ -1,8 +1,8 @@
 "use client";
 
 import { NextIntlClientProvider } from "next-intl";
-import { ReactNode } from "react";
-import { SupportedLocale } from "@shared/i18n";
+import { type ReactNode } from "react";
+import { type SupportedLocale } from "@shared/i18n";
 
 interface NextIntlProviderProps {
   locale: SupportedLocale;

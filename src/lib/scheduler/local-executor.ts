@@ -19,7 +19,7 @@ export async function executeLocalScript(
   eventType: EventType,
   scriptContent: string,
   envVars: Record<string, string> = {},
-  timeoutMs: number = 30000,
+  timeoutMs = 30000,
   input: Record<string, any> = {},
   eventData: Record<string, any> = {},
 ): Promise<{
@@ -300,15 +300,15 @@ export async function executeLocalScript(
         stdout: result.stdout,
         stderr: result.stderr,
       };
-      
+
       if (output !== undefined) {
         returnValue.output = output;
       }
-      
+
       if (condition !== undefined) {
         returnValue.condition = condition;
       }
-      
+
       return returnValue;
     } finally {
       // Restore original working directory
@@ -341,11 +341,11 @@ export async function executeLocalScript(
       stdout: "",
       stderr: error.message || "Unknown error executing local script",
     };
-    
+
     if (isTimeout) {
       errorReturn.isTimeout = isTimeout;
     }
-    
+
     return errorReturn;
   }
 }

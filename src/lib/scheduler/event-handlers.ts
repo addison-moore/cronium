@@ -39,11 +39,11 @@ export async function handleSuccessActions(
           latestLog.startTime?.toISOString() || new Date().toISOString(),
         output: latestLog.output || "No output available",
       };
-      
+
       if (latestLog.duration !== null && latestLog.duration !== undefined) {
         (executionDataFromLog as any).duration = latestLog.duration;
       }
-      
+
       if (latestLog.error) {
         (executionDataFromLog as any).error = latestLog.error;
       }
@@ -55,7 +55,10 @@ export async function handleSuccessActions(
     }
   } catch (err) {
     const error = err as Error;
-    console.error(`Error handling success events for event ${eventId}:`, error);
+    console.error(
+      `Error handling success events for event ${String(eventId)}:`,
+      error,
+    );
   }
 }
 
@@ -103,7 +106,10 @@ export async function handleFailureActions(
     }
   } catch (err) {
     const error = err as Error;
-    console.error(`Error handling failure events for event ${eventId}:`, error);
+    console.error(
+      `Error handling failure events for event ${String(eventId)}:`,
+      error,
+    );
   }
 }
 
@@ -132,7 +138,10 @@ export async function handleAlwaysActions(
     }
   } catch (err) {
     const error = err as Error;
-    console.error(`Error handling always events for event ${eventId}:`, error);
+    console.error(
+      `Error handling always events for event ${String(eventId)}:`,
+      error,
+    );
   }
 }
 
@@ -157,7 +166,7 @@ export async function handleConditionActions(
     const conditionEvents = await storage.getConditionActions(eventId);
 
     console.log(
-      `Processing ${conditionEvents.length} condition events for event ${eventId} with condition: ${condition}`,
+      `Processing ${conditionEvents.length} condition events for event ${String(eventId)} with condition: ${String(condition)}`,
     );
 
     // Process each condition event based on the condition state
@@ -165,19 +174,19 @@ export async function handleConditionActions(
       // Only trigger condition events if the condition is true
       if (condition) {
         console.log(
-          `Triggering condition event ${condEvent.id} for event ${eventId} (condition: true)`,
+          `Triggering condition event ${String(condEvent.id)} for event ${String(eventId)} (condition: true)`,
         );
         await processEventCallback(condEvent, event, true);
       } else {
         console.log(
-          `Skipping condition event ${condEvent.id} for event ${eventId} (condition: false)`,
+          `Skipping condition event ${String(condEvent.id)} for event ${String(eventId)} (condition: false)`,
         );
       }
     }
   } catch (err) {
     const error = err as Error;
     console.error(
-      `Error handling condition events for event ${eventId}:`,
+      `Error handling condition events for event ${String(eventId)}:`,
       error,
     );
   }
@@ -199,10 +208,10 @@ export async function processEvent(
 ) {
   try {
     console.log(
-      `Processing conditional action ${conditional_event.id} for script ${event.id}: ${event.name}`,
+      `Processing conditional action ${String(conditional_event.id)} for script ${String(event.id)}: ${event.name ?? ""}`,
     );
     console.log(
-      `Conditional event type: ${conditional_event.type}, isSuccess: ${isSuccess}`,
+      `Conditional event type: ${conditional_event.type ?? ""}, isSuccess: ${String(isSuccess)}`,
     );
 
     // Check for tool message sending (SEND_MESSAGE)
@@ -211,7 +220,7 @@ export async function processEvent(
       conditional_event.message
     ) {
       console.log(
-        `Processing SEND_MESSAGE conditional action for tool ${conditional_event.toolId}`,
+        `Processing SEND_MESSAGE conditional action for tool ${String(conditional_event.toolId)}`,
       );
       console.log(`Conditional event details:`, {
         type: conditional_event.type,
@@ -261,7 +270,7 @@ export async function processEvent(
           const tool = toolResults[0];
           if (!tool) {
             console.error(
-              `Tool ${conditional_event.toolId} not found for SEND_MESSAGE event`,
+              `Tool ${String(conditional_event.toolId)} not found for SEND_MESSAGE event`,
             );
             return;
           }
@@ -276,7 +285,7 @@ export async function processEvent(
           const recipients = conditional_event.emailAddresses || "";
           const subject =
             conditional_event.emailSubject ||
-            `Event ${isSuccess ? "Success" : "Failure"}: ${event.name}`;
+            `Event ${isSuccess ? "Success" : "Failure"}: ${event.name ?? ""}`;
           const message = conditional_event.message;
 
           if (!recipients) {
@@ -286,8 +295,10 @@ export async function processEvent(
             return;
           }
 
-          console.log(`Sending email directly via SMTP to: ${recipients}`);
-          console.log(`Subject: ${subject}`);
+          console.log(
+            `Sending email directly via SMTP to: ${recipients ?? ""}`,
+          );
+          console.log(`Subject: ${subject ?? ""}`);
 
           // Get user variables for template context
           const userVariables = await storage.getUserVariables(event.userId);
@@ -353,10 +364,12 @@ export async function processEvent(
 
           if (emailSent) {
             console.log(
-              `SEND_MESSAGE email sent successfully to ${recipients}`,
+              `SEND_MESSAGE email sent successfully to ${recipients ?? ""}`,
             );
           } else {
-            console.error(`Failed to send SEND_MESSAGE email to ${recipients}`);
+            console.error(
+              `Failed to send SEND_MESSAGE email to ${recipients ?? ""}`,
+            );
           }
         } else if (toolType === "SLACK" || toolType === "DISCORD") {
           // Get user variables for template context
@@ -401,7 +414,9 @@ export async function processEvent(
             templateContext,
           );
 
-          console.log(`Sending ${toolType} message with processed template`);
+          console.log(
+            `Sending ${toolType ?? ""} message with processed template`,
+          );
           console.log(
             `Message content: ${processedMessage.substring(0, 100)}...`,
           );
@@ -444,7 +459,9 @@ export async function processEvent(
                 );
               } else {
                 const errorText = await slackResponse.text();
-                console.error(`Failed to send Slack message: ${errorText}`);
+                console.error(
+                  `Failed to send Slack message: ${errorText ?? ""}`,
+                );
               }
             } catch (error) {
               console.error(`Error sending Slack message:`, error);
@@ -486,14 +503,18 @@ export async function processEvent(
                 );
               } else {
                 const errorText = await discordResponse.text();
-                console.error(`Failed to send Discord message: ${errorText}`);
+                console.error(
+                  `Failed to send Discord message: ${errorText ?? ""}`,
+                );
               }
             } catch (error) {
               console.error(`Error sending Discord message:`, error);
             }
           }
         } else {
-          console.error(`Unsupported tool type for SEND_MESSAGE: ${toolType}`);
+          console.error(
+            `Unsupported tool type for SEND_MESSAGE: ${toolType ?? ""}`,
+          );
         }
       } catch (err) {
         const error = err as Error;
@@ -515,10 +536,10 @@ export async function processEvent(
 
       if (targetScript) {
         console.log(
-          `Executing target script ${targetScript.id}: ${targetScript.name} (type: ${targetScript.type}) as a result of conditional action`,
+          `Executing target script ${String(targetScript.id)}: ${targetScript.name ?? ""} (type: ${targetScript.type ?? ""}) as a result of conditional action`,
         );
         console.log(
-          `Target script content preview: ${targetScript.content?.substring(0, 100)}...`,
+          `Target script content preview: ${targetScript.content?.substring(0, 100) ?? ""}...`,
         );
 
         try {
@@ -531,18 +552,18 @@ export async function processEvent(
           const result = await scheduler.runScriptImmediately(targetScript.id);
 
           console.log(
-            `Conditional script ${targetScript.id} execution completed with result: ${result.success}`,
+            `Conditional script ${String(targetScript.id)} execution completed with result: ${String(result.success)}`,
           );
         } catch (execErr) {
           const execError = execErr as Error;
           console.error(
-            `Failed to execute target script ${targetScript.id}:`,
+            `Failed to execute target script ${String(targetScript.id)}:`,
             execError,
           );
         }
       } else {
         console.error(
-          `Target script ${conditional_event.targetEventId} not found`,
+          `Target script ${String(conditional_event.targetEventId)} not found`,
         );
       }
     }

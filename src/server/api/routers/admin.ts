@@ -45,7 +45,9 @@ const adminProcedure = publicProcedure.use(async ({ ctx, next }) => {
       // For development, get first admin user
       if (process.env.NODE_ENV === "development") {
         const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter((user) => user.role === "ADMIN");
+        const adminUsers = allUsers.filter(
+          (user) => user.role === UserRole.ADMIN,
+        );
         const firstAdmin = adminUsers[0];
         if (firstAdmin) {
           userId = firstAdmin.id;
@@ -103,9 +105,9 @@ export const adminRouter = createTRPCRouter({
           const searchLower = input.search.toLowerCase();
           filteredUsers = filteredUsers.filter(
             (user) =>
-              (user.email?.toLowerCase() || "").includes(searchLower) ||
-              (user.firstName?.toLowerCase() || "").includes(searchLower) ||
-              (user.lastName?.toLowerCase() || "").includes(searchLower),
+              (user.email?.toLowerCase() ?? "").includes(searchLower) ||
+              (user.firstName?.toLowerCase() ?? "").includes(searchLower) ||
+              (user.lastName?.toLowerCase() ?? "").includes(searchLower),
           );
         }
 
@@ -360,7 +362,7 @@ export const adminRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       try {
         // For now, use user variables. In the future, implement global variables
-        const targetUserId = input.userId || ctx.userId;
+        const targetUserId = input.userId ?? ctx.userId;
         const variables = await storage.getUserVariables(targetUserId);
 
         // Apply filters

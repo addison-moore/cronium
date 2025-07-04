@@ -1,4 +1,3 @@
-
 ---
 
 ### 📄 `docs/EXECUTION.md`
@@ -23,17 +22,20 @@
 ### Target Isolation Strategies
 
 #### 🧱 LXC (Preferred)
+
 - Create isolated containers per user/session/event
 - Control CPU, memory, network, filesystem
 - Pre-provisioned or ephemeral containers
 
 #### 🐳 Docker (Alt. Option)
+
 - Use `docker run` with:
   - Memory & CPU limits
   - Mounted volumes for input/output
   - Non-root users inside container
 
 #### 🛑 chroot (Limited)
+
 - Simple FS isolation, but lacks namespace separation
 - Use with AppArmor/SELinux if necessary
 
@@ -51,32 +53,36 @@
 ---
 
 ## Sample Command Runner (Docker)
+
 ```ts
-import { spawn } from 'child_process';
+import { spawn } from "child_process";
 
 export function runInDocker(script: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn('docker', [
-      'run',
-      '--rm',
-      '--cpus', '0.5',
-      '--memory', '256m',
-      '-i',
-      'ubuntu',
-      'bash', '-c', script,
+    const child = spawn("docker", [
+      "run",
+      "--rm",
+      "--cpus",
+      "0.5",
+      "--memory",
+      "256m",
+      "-i",
+      "ubuntu",
+      "bash",
+      "-c",
+      script,
     ]);
 
-    let output = '';
-    child.stdout.on('data', data => output += data);
-    child.stderr.on('data', data => output += data);
-    child.on('exit', code => {
+    let output = "";
+    child.stdout.on("data", (data) => (output += data));
+    child.stderr.on("data", (data) => (output += data));
+    child.on("exit", (code) => {
       if (code === 0) resolve(output);
       else reject(new Error(`Exit ${code}: ${output}`));
     });
   });
 }
 ```
-
 
 ### Planned Enhancements
 

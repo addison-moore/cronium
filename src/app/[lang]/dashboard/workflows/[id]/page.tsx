@@ -33,7 +33,11 @@ import {
   Edit,
   GitFork,
 } from "lucide-react";
-import { Workflow, EventStatus, WorkflowTriggerType } from "@/shared/schema";
+import {
+  type Workflow,
+  EventStatus,
+  WorkflowTriggerType,
+} from "@/shared/schema";
 import { WorkflowDetailsHeader } from "@/components/workflow-details/WorkflowDetailsHeader";
 import { StatusBadge } from "@/components/ui/status-badge";
 
@@ -84,10 +88,10 @@ export default function WorkflowDetailsPage({
       }
 
       const data = await response.json();
-      const workflowData = data.workflow || data;
+      const workflowData = data.workflow ?? data;
       setWorkflow(workflowData);
-      setWorkflowNodes(data.nodes || []);
-      setWorkflowEdges(data.edges || []);
+      setWorkflowNodes(data.nodes ?? []);
+      setWorkflowEdges(data.edges ?? []);
 
       setHasInitialData(true);
       setHasUnsavedChanges(false);
@@ -98,7 +102,7 @@ export default function WorkflowDetailsPage({
       );
       if (executionsResponse.ok) {
         const executionsData = await executionsResponse.json();
-        const executions = executionsData.executions || [];
+        const executions = executionsData.executions ?? [];
 
         const stats = {
           totalExecutions: executions.length,
@@ -141,7 +145,7 @@ export default function WorkflowDetailsPage({
         const data = await response.json();
         console.log("Events API response:", data); // Debug log
         // The API returns an array directly, not wrapped in an events property
-        setAvailableEvents(Array.isArray(data) ? data : data.events || []);
+        setAvailableEvents(Array.isArray(data) ? data : (data.events ?? []));
       }
     } catch (error) {
       console.error("Error fetching events:", error);
@@ -230,8 +234,8 @@ export default function WorkflowDetailsPage({
       if (event) {
         // Check if the event data has changed
         const eventDataChanged =
-          node.data.label !== event.name ||
-          node.data.type !== event.type ||
+          node.data.label !== event.name ??
+          node.data.type !== event.type ??
           node.data.eventTypeIcon !== event.type;
 
         if (!eventDataChanged && node.data.updateEvents === updateEvents) {
@@ -246,8 +250,8 @@ export default function WorkflowDetailsPage({
             label: event.name,
             type: event.type,
             eventTypeIcon: event.type,
-            description: event.description || "",
-            tags: event.tags || [],
+            description: event.description ?? "",
+            tags: event.tags ?? [],
             serverId: event.serverId,
             serverName: event.serverName,
             createdAt: event.createdAt,
@@ -295,7 +299,7 @@ export default function WorkflowDetailsPage({
     const pollInterval = setInterval(async () => {
       try {
         const response = await fetch(
-          `/api/workflows/${resolvedParams.id}/executions/${currentExecution.id}`,
+          `/api/workflows/${resolvedParams.id}/executions/${String(currentExecution.id)}`,
         );
 
         if (response.ok) {
@@ -340,7 +344,7 @@ export default function WorkflowDetailsPage({
       );
       if (executionsResponse.ok) {
         const executionsData = await executionsResponse.json();
-        const executions = executionsData.executions || [];
+        const executions = executionsData.executions ?? [];
 
         const stats = {
           totalExecutions: executions.length,
@@ -357,7 +361,7 @@ export default function WorkflowDetailsPage({
   };
 
   const handleRunWorkflow = async () => {
-    if (!workflow || isExecuting) return;
+    if (!workflow ?? isExecuting) return;
 
     try {
       setIsExecuting(true);
@@ -423,7 +427,7 @@ export default function WorkflowDetailsPage({
       }
 
       const updatedWorkflow = await response.json();
-      setWorkflow(updatedWorkflow.workflow || updatedWorkflow);
+      setWorkflow(updatedWorkflow.workflow ?? updatedWorkflow);
 
       toast({
         title: "Status Updated",
@@ -500,7 +504,7 @@ export default function WorkflowDetailsPage({
       <Badge variant="outline">
         {triggerIcons[triggerType]}
         <span className="ml-1">
-          {triggerLabels[triggerType] || triggerType}
+          {triggerLabels[triggerType] ?? triggerType}
         </span>
       </Badge>
     );
@@ -679,21 +683,21 @@ export default function WorkflowDetailsPage({
                         <CheckCircle className="h-4 w-4 text-green-500" />
                         <span className="text-sm font-medium">Successful:</span>
                         <span className="text-sm font-bold text-green-600">
-                          {executionStats.successCount || 0}
+                          {executionStats.successCount ?? 0}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
                         <XCircle className="h-4 w-4 text-red-500" />
                         <span className="text-sm font-medium">Failed:</span>
                         <span className="text-sm font-bold text-red-600">
-                          {executionStats.failureCount || 0}
+                          {executionStats.failureCount ?? 0}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Hash className="text-muted-foreground h-4 w-4" />
                         <span className="text-sm font-medium">Total:</span>
                         <span className="text-sm font-bold">
-                          {executionStats.totalExecutions || 0}
+                          {executionStats.totalExecutions ?? 0}
                         </span>
                       </div>
                     </div>
@@ -704,7 +708,7 @@ export default function WorkflowDetailsPage({
           </Card>
 
           {/* Schedule Configuration */}
-          {workflow.triggerType === "SCHEDULE" && (
+          {workflow.triggerType === WorkflowTriggerType.SCHEDULE && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

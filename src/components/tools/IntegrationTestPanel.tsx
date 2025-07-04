@@ -15,12 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { 
-  TestTube, 
-  Send, 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
+import {
+  TestTube,
+  Send,
+  CheckCircle,
+  XCircle,
+  Clock,
   AlertCircle,
   Zap,
   Mail,
@@ -44,11 +44,18 @@ interface TestResult {
   timestamp: Date;
 }
 
-export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelProps) {
+export function IntegrationTestPanel({
+  toolId,
+  onClose,
+}: IntegrationTestPanelProps) {
   const [selectedTool, setSelectedTool] = useState<any>(null);
-  const [testResults, setTestResults] = useState<Record<string, TestResult>>({});
+  const [testResults, setTestResults] = useState<Record<string, TestResult>>(
+    {},
+  );
   const [isRunningTest, setIsRunningTest] = useState<string | null>(null);
-  const [testMessage, setTestMessage] = useState("Hello from Cronium! This is a test message.");
+  const [testMessage, setTestMessage] = useState(
+    "Hello from Cronium! This is a test message.",
+  );
   const [testRecipient, setTestRecipient] = useState("test@example.com");
   const [testSubject, setTestSubject] = useState("Cronium Test Message");
   const { toast } = useToast();
@@ -57,7 +64,7 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
   const { data: toolsData } = trpc.tools.getAll.useQuery({ limit: 100 });
   const { data: toolData } = trpc.tools.getById.useQuery(
     { id: toolId! },
-    { enabled: !!toolId }
+    { enabled: !!toolId },
   );
 
   const testConnectionMutation = trpc.integrations.testMessage.useMutation();
@@ -72,20 +79,20 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
 
   const getToolIcon = (type: string) => {
     switch (type.toLowerCase()) {
-      case 'email':
+      case "email":
         return Mail;
-      case 'slack':
+      case "slack":
         return MessageSquare;
-      case 'discord':
+      case "discord":
         return MessageSquare;
-      case 'webhook':
+      case "webhook":
         return Webhook;
       default:
         return TestTube;
     }
   };
 
-  const runTest = async (testType: 'connection' | 'send', tool: any) => {
+  const runTest = async (testType: "connection" | "send", tool: any) => {
     if (!tool) return;
 
     const testKey = `${tool.id}-${testType}`;
@@ -96,29 +103,29 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
     try {
       let result: any;
 
-      if (testType === 'connection') {
+      if (testType === "connection") {
         result = await testConnectionMutation.mutateAsync({
           toolId: tool.id,
-          testType: 'connection',
+          testType: "connection",
         });
       } else {
         // Send test based on tool type
         switch (tool.type.toLowerCase()) {
-          case 'slack':
+          case "slack":
             result = await slackSendMutation.mutateAsync({
               toolId: tool.id,
               message: testMessage,
-              username: 'Cronium Test Bot',
+              username: "Cronium Test Bot",
             });
             break;
-          case 'discord':
+          case "discord":
             result = await discordSendMutation.mutateAsync({
               toolId: tool.id,
               message: testMessage,
-              username: 'Cronium Test Bot',
+              username: "Cronium Test Bot",
             });
             break;
-          case 'email':
+          case "email":
             result = await emailSendMutation.mutateAsync({
               toolId: tool.id,
               recipients: testRecipient,
@@ -126,16 +133,16 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
               message: testMessage,
             });
             break;
-          case 'webhook':
+          case "webhook":
             result = await webhookSendMutation.mutateAsync({
               toolId: tool.id,
               message: testMessage,
               payload: { message: testMessage, test: true },
-              method: 'POST',
+              method: "POST",
             });
             break;
           default:
-            throw new Error('Unsupported tool type for testing');
+            throw new Error("Unsupported tool type for testing");
         }
       }
 
@@ -150,14 +157,13 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
         timestamp: new Date(),
       };
 
-      setTestResults(prev => ({ ...prev, [testKey]: testResult }));
+      setTestResults((prev) => ({ ...prev, [testKey]: testResult }));
 
       toast({
         title: result.success ? "Test Successful" : "Test Failed",
         description: result.message,
         variant: result.success ? "default" : "destructive",
       });
-
     } catch (error: any) {
       const endTime = performance.now();
       const duration = endTime - startTime;
@@ -169,7 +175,7 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
         timestamp: new Date(),
       };
 
-      setTestResults(prev => ({ ...prev, [testKey]: testResult }));
+      setTestResults((prev) => ({ ...prev, [testKey]: testResult }));
 
       toast({
         title: "Test Failed",
@@ -183,9 +189,9 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
 
   const getTestResultIcon = (result: TestResult) => {
     if (result.success) {
-      return <CheckCircle className="w-4 h-4 text-green-500" />;
+      return <CheckCircle className="h-4 w-4 text-green-500" />;
     } else {
-      return <XCircle className="w-4 h-4 text-red-500" />;
+      return <XCircle className="h-4 w-4 text-red-500" />;
     }
   };
 
@@ -200,9 +206,9 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
   const runAllTests = async () => {
     if (!currentTool) return;
 
-    await runTest('connection', currentTool);
-    await new Promise(resolve => setTimeout(resolve, 500)); // Small delay between tests
-    await runTest('send', currentTool);
+    await runTest("connection", currentTool);
+    await new Promise((resolve) => setTimeout(resolve, 500)); // Small delay between tests
+    await runTest("send", currentTool);
   };
 
   return (
@@ -210,7 +216,7 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <TestTube className="w-5 h-5" />
+            <TestTube className="h-5 w-5" />
             Integration Testing Panel
           </CardTitle>
           {onClose && (
@@ -227,7 +233,7 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
             <Select
               value={selectedTool?.id?.toString() || ""}
               onValueChange={(value) => {
-                const tool = tools.find(t => t.id === parseInt(value));
+                const tool = tools.find((t) => t.id === parseInt(value));
                 setSelectedTool(tool);
                 setTestResults({}); // Clear previous results
               }}
@@ -241,7 +247,7 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
                   return (
                     <SelectItem key={tool.id} value={tool.id.toString()}>
                       <div className="flex items-center gap-2">
-                        <IconComponent className="w-4 h-4" />
+                        <IconComponent className="h-4 w-4" />
                         <span>{tool.name}</span>
                         <Badge variant="outline" className="text-xs">
                           {tool.type}
@@ -258,19 +264,20 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
         {currentTool && (
           <div className="space-y-6">
             {/* Tool Information */}
-            <div className="p-4 bg-muted/50 rounded-lg">
-              <div className="flex items-center gap-3 mb-2">
-                {React.createElement(getToolIcon(currentTool.type), { 
-                  className: "w-6 h-6 text-primary" 
+            <div className="bg-muted/50 rounded-lg p-4">
+              <div className="mb-2 flex items-center gap-3">
+                {React.createElement(getToolIcon(currentTool.type), {
+                  className: "w-6 h-6 text-primary",
                 })}
-                <h3 className="font-semibold text-lg">{currentTool.name}</h3>
+                <h3 className="text-lg font-semibold">{currentTool.name}</h3>
                 <Badge variant={currentTool.isActive ? "default" : "secondary"}>
                   {currentTool.isActive ? "Active" : "Inactive"}
                 </Badge>
                 <Badge variant="outline">{currentTool.type}</Badge>
               </div>
-              <p className="text-sm text-muted-foreground">
-                Tool ID: {currentTool.id} • Created: {new Date(currentTool.createdAt).toLocaleDateString()}
+              <p className="text-muted-foreground text-sm">
+                Tool ID: {currentTool.id} • Created:{" "}
+                {new Date(currentTool.createdAt).toLocaleDateString()}
               </p>
             </div>
 
@@ -282,30 +289,36 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
               </TabsList>
 
               <TabsContent value="quick-test" className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <Button
-                    onClick={() => runTest('connection', currentTool)}
-                    disabled={!currentTool.isActive || isRunningTest === `${currentTool.id}-connection`}
-                    className="h-20 flex flex-col items-center gap-2"
+                    onClick={() => runTest("connection", currentTool)}
+                    disabled={
+                      !currentTool.isActive ||
+                      isRunningTest === `${currentTool.id}-connection`
+                    }
+                    className="flex h-20 flex-col items-center gap-2"
                   >
                     {isRunningTest === `${currentTool.id}-connection` ? (
-                      <Clock className="w-6 h-6 animate-spin" />
+                      <Clock className="h-6 w-6 animate-spin" />
                     ) : (
-                      <Zap className="w-6 h-6" />
+                      <Zap className="h-6 w-6" />
                     )}
                     <span>Test Connection</span>
                   </Button>
 
                   <Button
-                    onClick={() => runTest('send', currentTool)}
-                    disabled={!currentTool.isActive || isRunningTest === `${currentTool.id}-send`}
-                    className="h-20 flex flex-col items-center gap-2"
+                    onClick={() => runTest("send", currentTool)}
+                    disabled={
+                      !currentTool.isActive ||
+                      isRunningTest === `${currentTool.id}-send`
+                    }
+                    className="flex h-20 flex-col items-center gap-2"
                     variant="outline"
                   >
                     {isRunningTest === `${currentTool.id}-send` ? (
-                      <Clock className="w-6 h-6 animate-spin" />
+                      <Clock className="h-6 w-6 animate-spin" />
                     ) : (
-                      <Send className="w-6 h-6" />
+                      <Send className="h-6 w-6" />
                     )}
                     <span>Send Test Message</span>
                   </Button>
@@ -313,13 +326,13 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
                   <Button
                     onClick={() => runAllTests()}
                     disabled={!currentTool.isActive || isRunningTest !== null}
-                    className="h-20 flex flex-col items-center gap-2"
+                    className="flex h-20 flex-col items-center gap-2"
                     variant="secondary"
                   >
                     {isRunningTest ? (
-                      <Clock className="w-6 h-6 animate-spin" />
+                      <Clock className="h-6 w-6 animate-spin" />
                     ) : (
-                      <TestTube className="w-6 h-6" />
+                      <TestTube className="h-6 w-6" />
                     )}
                     <span>Run All Tests</span>
                   </Button>
@@ -327,30 +340,34 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
 
                 {/* Quick Test Results */}
                 <div className="space-y-2">
-                  {['connection', 'send'].map((testType) => {
+                  {["connection", "send"].map((testType) => {
                     const testKey = `${currentTool.id}-${testType}`;
                     const result = testResults[testKey];
-                    
+
                     if (!result) return null;
 
                     return (
                       <div
                         key={testType}
                         className={cn(
-                          "p-3 rounded-lg border flex items-center justify-between",
-                          result.success 
-                            ? "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800"
-                            : "bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800"
+                          "flex items-center justify-between rounded-lg border p-3",
+                          result.success
+                            ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950"
+                            : "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950",
                         )}
                       >
                         <div className="flex items-center gap-3">
                           {getTestResultIcon(result)}
                           <div>
-                            <p className="font-medium capitalize">{testType} Test</p>
-                            <p className="text-sm text-muted-foreground">{result.message}</p>
+                            <p className="font-medium capitalize">
+                              {testType} Test
+                            </p>
+                            <p className="text-muted-foreground text-sm">
+                              {result.message}
+                            </p>
                           </div>
                         </div>
-                        <div className="text-right text-sm text-muted-foreground">
+                        <div className="text-muted-foreground text-right text-sm">
                           <p>{formatDuration(result.duration || 0)}</p>
                           <p>{result.timestamp.toLocaleTimeString()}</p>
                         </div>
@@ -373,7 +390,7 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
                     />
                   </div>
 
-                  {currentTool.type.toLowerCase() === 'email' && (
+                  {currentTool.type.toLowerCase() === "email" && (
                     <>
                       <div className="space-y-2">
                         <Label htmlFor="test-recipient">Test Recipient</Label>
@@ -398,18 +415,18 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
                   )}
 
                   <Button
-                    onClick={() => runTest('send', currentTool)}
+                    onClick={() => runTest("send", currentTool)}
                     disabled={!currentTool.isActive || isRunningTest !== null}
                     className="w-full"
                   >
                     {isRunningTest ? (
                       <>
-                        <Clock className="w-4 h-4 mr-2 animate-spin" />
+                        <Clock className="mr-2 h-4 w-4 animate-spin" />
                         Sending Test...
                       </>
                     ) : (
                       <>
-                        <Send className="w-4 h-4 mr-2" />
+                        <Send className="mr-2 h-4 w-4" />
                         Send Custom Test
                       </>
                     )}
@@ -420,37 +437,43 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
               <TabsContent value="results" className="space-y-4">
                 <div className="space-y-3">
                   {Object.entries(testResults).length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <AlertCircle className="w-8 h-8 mx-auto mb-2" />
+                    <div className="text-muted-foreground py-8 text-center">
+                      <AlertCircle className="mx-auto mb-2 h-8 w-8" />
                       <p>No test results yet.</p>
-                      <p className="text-sm">Run some tests to see results here.</p>
+                      <p className="text-sm">
+                        Run some tests to see results here.
+                      </p>
                     </div>
                   ) : (
                     Object.entries(testResults).map(([testKey, result]) => {
-                      const [toolId, testType] = testKey.split('-');
-                      
+                      const [toolId, testType] = testKey.split("-");
+
                       return (
                         <div
                           key={testKey}
-                          className="p-4 border rounded-lg space-y-2"
+                          className="space-y-2 rounded-lg border p-4"
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               {getTestResultIcon(result)}
-                              <span className="font-medium capitalize">{testType} Test</span>
+                              <span className="font-medium capitalize">
+                                {testType} Test
+                              </span>
                               <Badge variant="outline" className="text-xs">
                                 {formatDuration(result.duration || 0)}
                               </Badge>
                             </div>
-                            <span className="text-sm text-muted-foreground">
+                            <span className="text-muted-foreground text-sm">
                               {result.timestamp.toLocaleString()}
                             </span>
                           </div>
                           <p className="text-sm">{result.message}</p>
                           {result.details && (
-                            <details className="text-xs text-muted-foreground">
-                              <summary className="cursor-pointer">View Details</summary>
-                              <pre className="mt-2 p-2 bg-muted rounded overflow-auto">
+                            <details className="text-muted-foreground text-xs">
+                              <summary className="cursor-pointer">
+                                View Details
+                              </summary>
+                              <pre className="bg-muted mt-2 overflow-auto rounded p-2">
                                 {JSON.stringify(result.details, null, 2)}
                               </pre>
                             </details>
@@ -466,10 +489,12 @@ export function IntegrationTestPanel({ toolId, onClose }: IntegrationTestPanelPr
         )}
 
         {!currentTool && !toolId && (
-          <div className="text-center py-8 text-muted-foreground">
-            <TestTube className="w-12 h-12 mx-auto mb-4" />
+          <div className="text-muted-foreground py-8 text-center">
+            <TestTube className="mx-auto mb-4 h-12 w-12" />
             <p>Select a tool to start testing integrations.</p>
-            <p className="text-sm">Test connections, send messages, and validate configurations.</p>
+            <p className="text-sm">
+              Test connections, send messages, and validate configurations.
+            </p>
           </div>
         )}
       </CardContent>

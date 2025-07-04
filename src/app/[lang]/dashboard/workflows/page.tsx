@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/ui/page-header";
 export default function WorkflowsPage() {
   const params = useParams<{ lang: string }>();
   const t = useTranslations("Workflows");
-  const lang = params.lang as string;
+  const lang = params.lang;
 
   return (
     <div className="container mx-auto p-4">

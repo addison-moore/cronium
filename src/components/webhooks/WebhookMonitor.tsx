@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  BarChart3,
   Activity,
   Clock,
   CheckCircle,
@@ -32,7 +31,6 @@ import {
   Download,
   Filter,
   Eye,
-  Calendar,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { trpc } from "@/components/providers/TrpcProvider";
@@ -152,7 +150,7 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
           exec.method,
           exec.sourceIp,
           exec.responseTime,
-          exec.responseCode || "N/A",
+          exec.responseCode ?? "N/A",
         ].join(","),
       ),
     ].join("\n");
@@ -182,7 +180,7 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
     );
   }
 
-  const monitoring = monitoringData || {
+  const monitoring = monitoringData ?? {
     metrics: {
       totalRequests: 0,
       successRate: 0,
@@ -195,7 +193,7 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
     recentActivity: [],
   };
 
-  const stats = statsData || {
+  const stats = statsData ?? {
     totalExecutions: 0,
     successfulExecutions: 0,
     failedExecutions: 0,
@@ -203,7 +201,7 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
     byMethod: {},
   };
 
-  const executions = executionHistory?.executions || [];
+  const executions = executionHistory?.executions ?? [];
 
   return (
     <div className="space-y-6">
@@ -583,7 +581,7 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
                         {getStatusIcon(status)}
                         <span className="capitalize">{status}</span>
                       </div>
-                      <Badge variant="outline">{count as number}</Badge>
+                      <Badge variant="outline">{count}</Badge>
                     </div>
                   ))}
                 </div>
@@ -604,7 +602,7 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
                       <Badge variant="outline" className="font-mono">
                         {method}
                       </Badge>
-                      <Badge variant="outline">{count as number}</Badge>
+                      <Badge variant="outline">{count}</Badge>
                     </div>
                   ))}
                 </div>

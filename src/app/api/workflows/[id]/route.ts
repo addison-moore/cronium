@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { db } from "@/server/db";
 import { and, eq, or } from "drizzle-orm";
 import {
@@ -130,7 +131,7 @@ export async function GET(
         and(
           eq(workflows.id, workflowId),
           or(
-            eq(workflows.userId, userId as string), // User's own workflow
+            eq(workflows.userId, userId), // User's own workflow
             eq(workflows.shared, true), // Shared workflow from others
           ),
         ),
@@ -265,12 +266,7 @@ export async function PATCH(
     const [existingWorkflow] = await db
       .select()
       .from(workflows)
-      .where(
-        and(
-          eq(workflows.id, workflowId),
-          eq(workflows.userId, userId as string),
-        ),
-      )
+      .where(and(eq(workflows.id, workflowId), eq(workflows.userId, userId)))
       .limit(1);
 
     if (!existingWorkflow) {
@@ -421,12 +417,7 @@ export async function DELETE(
     const [existingWorkflow] = await db
       .select()
       .from(workflows)
-      .where(
-        and(
-          eq(workflows.id, workflowId),
-          eq(workflows.userId, userId as string),
-        ),
-      )
+      .where(and(eq(workflows.id, workflowId), eq(workflows.userId, userId)))
       .limit(1);
 
     if (!existingWorkflow) {

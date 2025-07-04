@@ -60,14 +60,14 @@ export function StandardizedTable<T extends { id: number | string }>({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+        <div className="text-muted-foreground animate-pulse">Loading...</div>
       </div>
     );
   }
 
   if (data.length === 0) {
     return (
-      <div className="text-center py-8 text-muted-foreground">
+      <div className="text-muted-foreground py-8 text-center">
         {emptyMessage}
       </div>
     );
@@ -127,7 +127,7 @@ export function StandardizedTableLink({
     <Link
       href={href}
       className={cn(
-        "font-medium hover:text-primary transition-colors cursor-pointer underline-offset-4 hover:underline",
+        "hover:text-primary cursor-pointer font-medium underline-offset-4 transition-colors hover:underline",
         className,
       )}
     >

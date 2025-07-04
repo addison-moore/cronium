@@ -86,7 +86,7 @@ export const userAuthRouter = createTRPCRouter({
           }
         } else {
           // Admin users are always active by default
-          status = status || UserStatus.ACTIVE;
+          status = status ?? UserStatus.ACTIVE;
         }
 
         // Create user

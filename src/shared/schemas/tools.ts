@@ -13,8 +13,13 @@ export const toolQuerySchema = z.object({
 
 // Slack credentials schema
 export const slackCredentialsSchema = z.object({
-  webhookUrl: z.string().url("Must be a valid webhook URL")
-    .refine(url => url.includes("hooks.slack.com"), "Must be a valid Slack webhook URL"),
+  webhookUrl: z
+    .string()
+    .url("Must be a valid webhook URL")
+    .refine(
+      (url) => url.includes("hooks.slack.com"),
+      "Must be a valid Slack webhook URL",
+    ),
   channel: z.string().optional(),
   username: z.string().optional(),
   iconEmoji: z.string().optional(),
@@ -23,8 +28,13 @@ export const slackCredentialsSchema = z.object({
 
 // Discord credentials schema
 export const discordCredentialsSchema = z.object({
-  webhookUrl: z.string().url("Must be a valid webhook URL")
-    .refine(url => url.includes("discord.com/api/webhooks"), "Must be a valid Discord webhook URL"),
+  webhookUrl: z
+    .string()
+    .url("Must be a valid webhook URL")
+    .refine(
+      (url) => url.includes("discord.com/api/webhooks"),
+      "Must be a valid Discord webhook URL",
+    ),
   username: z.string().optional(),
   avatarUrl: z.string().url().optional(),
 });
@@ -32,7 +42,11 @@ export const discordCredentialsSchema = z.object({
 // Email credentials schema
 export const emailCredentialsSchema = z.object({
   smtpHost: z.string().min(1, "SMTP host is required"),
-  smtpPort: z.number().int().min(1).max(65535, "Port must be between 1 and 65535"),
+  smtpPort: z
+    .number()
+    .int()
+    .min(1)
+    .max(65535, "Port must be between 1 and 65535"),
   smtpUser: z.string().min(1, "SMTP username is required"),
   smtpPassword: z.string().min(1, "SMTP password is required"),
   fromEmail: z.string().email("Must be a valid email address"),
@@ -68,65 +82,79 @@ export const httpCredentialsSchema = z.object({
 });
 
 // Create tool schema with dynamic credentials validation
-export const createToolSchema = z.object({
-  name: z.string().min(1, "Tool name is required").max(100, "Name must be less than 100 characters"),
-  type: z.nativeEnum(ToolType, { required_error: "Tool type is required" }),
-  description: z.string().max(500, "Description must be less than 500 characters").optional(),
-  credentials: z.record(z.any()), // Will be validated based on type
-  tags: z.array(z.string()).default([]),
-  isActive: z.boolean().default(true),
-})
-.refine((data) => {
-  // Validate credentials based on tool type
-  try {
-    switch (data.type) {
-      case ToolType.SLACK:
-        slackCredentialsSchema.parse(data.credentials);
-        break;
-      case ToolType.DISCORD:
-        discordCredentialsSchema.parse(data.credentials);
-        break;
-      case ToolType.EMAIL:
-        emailCredentialsSchema.parse(data.credentials);
-        break;
-      case ToolType.WEBHOOK:
-        webhookCredentialsSchema.parse(data.credentials);
-        break;
-      case ToolType.HTTP:
-        httpCredentialsSchema.parse(data.credentials);
-        break;
-      default:
+export const createToolSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1, "Tool name is required")
+      .max(100, "Name must be less than 100 characters"),
+    type: z.nativeEnum(ToolType, { required_error: "Tool type is required" }),
+    description: z
+      .string()
+      .max(500, "Description must be less than 500 characters")
+      .optional(),
+    credentials: z.record(z.any()), // Will be validated based on type
+    tags: z.array(z.string()).default([]),
+    isActive: z.boolean().default(true),
+  })
+  .refine(
+    (data) => {
+      // Validate credentials based on tool type
+      try {
+        switch (data.type) {
+          case ToolType.SLACK:
+            slackCredentialsSchema.parse(data.credentials);
+            break;
+          case ToolType.DISCORD:
+            discordCredentialsSchema.parse(data.credentials);
+            break;
+          case ToolType.EMAIL:
+            emailCredentialsSchema.parse(data.credentials);
+            break;
+          case ToolType.WEBHOOK:
+            webhookCredentialsSchema.parse(data.credentials);
+            break;
+          case ToolType.HTTP:
+            httpCredentialsSchema.parse(data.credentials);
+            break;
+          default:
+            return false;
+        }
+        return true;
+      } catch {
         return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}, {
-  message: "Invalid credentials for the selected tool type",
-  path: ["credentials"],
-});
+      }
+    },
+    {
+      message: "Invalid credentials for the selected tool type",
+      path: ["credentials"],
+    },
+  );
 
 // Update tool schema
-export const updateToolSchema = z.object({
-  id: z.number().int().positive("Tool ID must be a positive integer"),
-  name: z.string().min(1).max(100).optional(),
-  description: z.string().max(500).optional(),
-  credentials: z.record(z.any()).optional(),
-  tags: z.array(z.string()).optional(),
-  isActive: z.boolean().optional(),
-})
-.refine((data) => {
-  // Only validate credentials if they are provided
-  if (!data.credentials) return true;
-  
-  // Note: We can't validate type-specific credentials here without knowing the tool type
-  // This validation will be done in the router after fetching the existing tool
-  return true;
-}, {
-  message: "Invalid credentials format",
-  path: ["credentials"],
-});
+export const updateToolSchema = z
+  .object({
+    id: z.number().int().positive("Tool ID must be a positive integer"),
+    name: z.string().min(1).max(100).optional(),
+    description: z.string().max(500).optional(),
+    credentials: z.record(z.any()).optional(),
+    tags: z.array(z.string()).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine(
+    (data) => {
+      // Only validate credentials if they are provided
+      if (!data.credentials) return true;
+
+      // Note: We can't validate type-specific credentials here without knowing the tool type
+      // This validation will be done in the router after fetching the existing tool
+      return true;
+    },
+    {
+      message: "Invalid credentials format",
+      path: ["credentials"],
+    },
+  );
 
 // Tool ID parameter schema
 export const toolIdSchema = z.object({
@@ -141,7 +169,9 @@ export const testToolSchema = z.object({
 
 // Bulk tool operations schema
 export const bulkToolOperationSchema = z.object({
-  toolIds: z.array(z.number().int().positive()).min(1, "At least one tool must be selected"),
+  toolIds: z
+    .array(z.number().int().positive())
+    .min(1, "At least one tool must be selected"),
   operation: z.enum(["delete", "activate", "deactivate", "test"]),
 });
 
@@ -162,7 +192,9 @@ export const validateToolCredentialsSchema = z.object({
 
 // Tool export/import schemas
 export const toolExportSchema = z.object({
-  toolIds: z.array(z.number().int().positive()).min(1, "At least one tool must be selected"),
+  toolIds: z
+    .array(z.number().int().positive())
+    .min(1, "At least one tool must be selected"),
   format: z.enum(["json", "yaml"]).default("json"),
   includeCredentials: z.boolean().default(false), // Security consideration
   includeInactive: z.boolean().default(false),
@@ -195,7 +227,9 @@ export type UpdateToolInput = z.infer<typeof updateToolSchema>;
 export type TestToolInput = z.infer<typeof testToolSchema>;
 export type BulkToolOperationInput = z.infer<typeof bulkToolOperationSchema>;
 export type ToolUsageInput = z.infer<typeof toolUsageSchema>;
-export type ValidateToolCredentialsInput = z.infer<typeof validateToolCredentialsSchema>;
+export type ValidateToolCredentialsInput = z.infer<
+  typeof validateToolCredentialsSchema
+>;
 export type ToolExportInput = z.infer<typeof toolExportSchema>;
 export type ToolImportInput = z.infer<typeof toolImportSchema>;
 export type ToolStatsInput = z.infer<typeof toolStatsSchema>;

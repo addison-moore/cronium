@@ -531,11 +531,7 @@ export const SlackPluginTrpc: ToolPlugin = {
   },
 
   // New method for testing Slack functionality using tRPC
-  async test(
-    credentials: any,
-    testType: string = "connection",
-    trpcClient?: any,
-  ) {
+  async test(credentials: any, testType = "connection", trpcClient?: any) {
     try {
       if (!trpcClient) {
         return {

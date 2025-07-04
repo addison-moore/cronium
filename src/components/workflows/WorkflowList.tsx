@@ -69,7 +69,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
   const router = useRouter();
   const t = useTranslations("Workflows");
   const { data: session } = useSession();
-  const lang = params.lang as string;
+  const lang = params.lang;
 
   const [filteredWorkflows, setFilteredWorkflows] = useState<WorkflowItem[]>(
     [],
@@ -158,12 +158,16 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
   });
 
   // Extract workflows from tRPC response
-  const workflows: WorkflowItem[] = (workflowsData?.workflows || []).map((w: any) => ({
-    ...w,
-    createdAt: w.createdAt instanceof Date ? w.createdAt.toISOString() : w.createdAt,
-    updatedAt: w.updatedAt instanceof Date ? w.updatedAt.toISOString() : w.updatedAt,
-    lastRunAt: null // TODO: Get lastRunAt from workflow execution data
-  }));
+  const workflows: WorkflowItem[] = (workflowsData?.workflows || []).map(
+    (w: any) => ({
+      ...w,
+      createdAt:
+        w.createdAt instanceof Date ? w.createdAt.toISOString() : w.createdAt,
+      updatedAt:
+        w.updatedAt instanceof Date ? w.updatedAt.toISOString() : w.updatedAt,
+      lastRunAt: null, // TODO: Get lastRunAt from workflow execution data
+    }),
+  );
 
   useEffect(() => {
     // Filter workflows based on search term, status, and tags
@@ -175,10 +179,8 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
       filtered = filtered.filter(
         (workflow) =>
           workflow.name.toLowerCase().includes(term) ||
-          (workflow.description &&
-            workflow.description.toLowerCase().includes(term)) ||
-          (workflow.tags &&
-            workflow.tags.some((tag: any) => tag.toLowerCase().includes(term))),
+          workflow.description?.toLowerCase().includes(term) ||
+          workflow.tags?.some((tag: any) => tag.toLowerCase().includes(term)),
       );
     }
 
@@ -191,8 +193,8 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
 
     // Tag filter
     if (tagFilter !== "all") {
-      filtered = filtered.filter(
-        (workflow) => workflow.tags && workflow.tags.includes(tagFilter),
+      filtered = filtered.filter((workflow) =>
+        workflow.tags?.includes(tagFilter),
       );
     }
 

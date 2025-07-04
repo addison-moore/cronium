@@ -3,7 +3,7 @@
 import { useTranslations, useLocale } from "next-intl";
 import { StatCard } from "@/components/ui/stat-card";
 import { ActivityTable } from "@/components/activity";
-import { LogStatus } from "@/shared/schema";
+import { type LogStatus } from "@/shared/schema";
 import {
   Code,
   Clock,
@@ -62,16 +62,16 @@ export default function DashboardStats() {
 
   // Transform tRPC data to match expected interface
   const stats: DashboardStats = {
-    totalScripts: dashboardData?.totalScripts || 0,
-    activeScripts: dashboardData?.activeScripts || 0,
-    pausedScripts: dashboardData?.pausedScripts || 0,
-    draftScripts: dashboardData?.draftScripts || 0,
-    recentExecutions: dashboardData?.recentExecutions || 0,
-    successRate: dashboardData?.successRate || 0,
-    failureRate: dashboardData?.failureRate || 0,
-    eventsCount: dashboardData?.eventsCount || 0,
-    workflowsCount: dashboardData?.workflowsCount || 0,
-    serversCount: dashboardData?.serversCount || 0,
+    totalScripts: dashboardData?.totalScripts ?? 0,
+    activeScripts: dashboardData?.activeScripts ?? 0,
+    pausedScripts: dashboardData?.pausedScripts ?? 0,
+    draftScripts: dashboardData?.draftScripts ?? 0,
+    recentExecutions: dashboardData?.recentExecutions ?? 0,
+    successRate: dashboardData?.successRate ?? 0,
+    failureRate: dashboardData?.failureRate ?? 0,
+    eventsCount: dashboardData?.eventsCount ?? 0,
+    workflowsCount: dashboardData?.workflowsCount ?? 0,
+    serversCount: dashboardData?.serversCount ?? 0,
     recentActivity:
       dashboardData?.recentActivity?.map((activity) => ({
         id: activity.id,
@@ -79,10 +79,10 @@ export default function DashboardStats() {
         eventName: activity.eventName,
         status: activity.status,
         duration: activity.duration,
-        startTime: activity.startTime || new Date().toISOString(),
+        startTime: activity.startTime ?? new Date().toISOString(),
         workflowId: activity.workflowId,
         workflowName: activity.workflowName,
-      })) || [],
+      })) ?? [],
   };
 
   const refreshData = useCallback(async () => {
@@ -188,9 +188,9 @@ export default function DashboardStats() {
       </div>
 
       <ActivityTable
-        title={t("Dashboard.RecentActivity.Title") || "Recent Activity"}
+        title={t("Dashboard.RecentActivity.Title") ?? "Recent Activity"}
         description={
-          t("Dashboard.RecentActivity.Description") ||
+          t("Dashboard.RecentActivity.Description") ??
           "Recent event and workflow executions"
         }
         data={stats.recentActivity.map((activity) => ({
@@ -207,12 +207,12 @@ export default function DashboardStats() {
         isLoading={isLoading}
         onRefresh={refreshData}
         emptyStateMessage={
-          t("Dashboard.RecentActivity.EmptyState") || "No recent activity"
+          t("Dashboard.RecentActivity.EmptyState") ?? "No recent activity"
         }
       />
       {error && (
         <p className="text-red-500">
-          Error: {error.message || "Failed to load dashboard data"}
+          Error: {error.message ?? "Failed to load dashboard data"}
         </p>
       )}
     </div>

@@ -114,9 +114,6 @@ jest.mock("@/components/dashboard/AIScriptAssistant", () => ({
 jest.mock("@/components/event-form/ConditionalActionsSection", () => ({
   __esModule: true,
   default: ({
-    eventData,
-    availableEvents = [],
-    eventId,
     onConditionalActionsChange,
   }: {
     eventData?: any;

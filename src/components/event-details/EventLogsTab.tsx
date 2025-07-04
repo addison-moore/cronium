@@ -33,7 +33,7 @@ import {
 import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Log } from "./types";
+import { type Log } from "./types";
 
 interface EventLogsTabProps {
   logs: Log[];
@@ -136,7 +136,7 @@ export function EventLogsTab({
       <CardContent>
         {logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10">
-            <FileText className="h-16 w-16 text-muted-foreground mb-4" />
+            <FileText className="text-muted-foreground mb-4 h-16 w-16" />
             <p className="text-muted-foreground text-center">
               {t("noLogsFound")}
             </p>
@@ -174,7 +174,7 @@ export function EventLogsTab({
                               Quick View
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="max-w-4xl max-h-[80vh]">
+                          <DialogContent className="max-h-[80vh] max-w-4xl">
                             <DialogHeader>
                               <DialogTitle>
                                 Execution Log - {formatDate(log.startTime)}
@@ -182,7 +182,7 @@ export function EventLogsTab({
                             </DialogHeader>
                             <ScrollArea className="max-h-[60vh]">
                               <div className="space-y-4 p-4">
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                                <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-3">
                                   <div>
                                     <span className="font-medium">Status:</span>{" "}
                                     {getStatusBadge(log.status)}
@@ -212,7 +212,7 @@ export function EventLogsTab({
                                     <h4 className="text-sm font-medium">
                                       {t("output")}:
                                     </h4>
-                                    <pre className="text-xs p-3 bg-muted rounded-md overflow-auto max-h-[300px] whitespace-pre-wrap">
+                                    <pre className="bg-muted max-h-[300px] overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
                                       {log.output}
                                     </pre>
                                   </div>
@@ -223,7 +223,7 @@ export function EventLogsTab({
                                     <h4 className="text-sm font-medium">
                                       {t("error")}:
                                     </h4>
-                                    <pre className="text-xs p-3 bg-red-50 text-red-800 border border-red-200 rounded-md overflow-auto max-h-[300px] whitespace-pre-wrap">
+                                    <pre className="max-h-[300px] overflow-auto rounded-md border border-red-200 bg-red-50 p-3 text-xs whitespace-pre-wrap text-red-800">
                                       {log.error}
                                     </pre>
                                   </div>
@@ -241,10 +241,10 @@ export function EventLogsTab({
 
             {totalLogs > 0 && (
               <div className="mt-4 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   {/* Items per page selector */}
                   <div className="flex items-center space-x-2">
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-muted-foreground text-sm">
                       Items per page:
                     </span>
                     <Select

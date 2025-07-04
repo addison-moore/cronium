@@ -307,12 +307,12 @@ export default async function UnifiedIOPage({
   return (
     <DocsLayout lang={lang} tableOfContents={tableOfContents}>
       <ApiCodeExamples>
-        <div className="max-w-4xl mx-auto">
+        <div className="mx-auto max-w-4xl">
           <div className="mb-8">
-            <h1 className="text-4xl font-bold mb-4">
+            <h1 className="mb-4 text-4xl font-bold">
               Unified Input/Output System
             </h1>
-            <p className="text-xl text-muted-foreground">
+            <p className="text-muted-foreground text-xl">
               Enable seamless data exchange between events across Python,
               Node.js, and Bash scripts with standardized functions and API
               integration.
@@ -320,7 +320,7 @@ export default async function UnifiedIOPage({
           </div>
 
           <section id="overview" className="mb-12">
-            <h2 className="text-2xl font-bold mb-4">Overview</h2>
+            <h2 className="mb-4 text-2xl font-bold">Overview</h2>
             <Card className="mb-6">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -335,26 +335,26 @@ export default async function UnifiedIOPage({
                   programming language. This enables powerful data processing
                   pipelines and external system integration.
                 </p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-semibold mb-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="rounded-lg border p-4">
+                    <h4 className="mb-2 font-semibold">
                       Cross-Language Support
                     </h4>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       Works consistently across Python, Node.js, and Bash
                       scripts
                     </p>
                   </div>
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-semibold mb-2">API Integration</h4>
-                    <p className="text-sm text-muted-foreground">
+                  <div className="rounded-lg border p-4">
+                    <h4 className="mb-2 font-semibold">API Integration</h4>
+                    <p className="text-muted-foreground text-sm">
                       Accept input data via REST API endpoints for external
                       integrations
                     </p>
                   </div>
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-semibold mb-2">Workflow Chaining</h4>
-                    <p className="text-sm text-muted-foreground">
+                  <div className="rounded-lg border p-4">
+                    <h4 className="mb-2 font-semibold">Workflow Chaining</h4>
+                    <p className="text-muted-foreground text-sm">
                       Automatic data flow between connected workflow nodes
                     </p>
                   </div>
@@ -364,8 +364,8 @@ export default async function UnifiedIOPage({
           </section>
 
           <section id="cronium-input" className="mb-12">
-            <h2 className="text-2xl font-bold mb-4">Using cronium.input()</h2>
-            <p className="mb-6 text-muted-foreground">
+            <h2 className="mb-4 text-2xl font-bold">Using cronium.input()</h2>
+            <p className="text-muted-foreground mb-6">
               The <code>cronium</code> object is automatically injected into
               every script. No imports, requires, or sourcing needed - just
               start using <code>cronium.input()</code> and{" "}
@@ -377,11 +377,11 @@ export default async function UnifiedIOPage({
               title="Accessing Input Data"
             />
 
-            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">
+            <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
+              <h4 className="mb-2 font-semibold text-blue-800 dark:text-blue-200">
                 Automatic Injection
               </h4>
-              <ul className="text-blue-700 dark:text-blue-300 text-sm space-y-1">
+              <ul className="space-y-1 text-sm text-blue-700 dark:text-blue-300">
                 <li>
                   • <strong>Python:</strong> <code>cronium</code> object
                   available globally
@@ -401,8 +401,8 @@ export default async function UnifiedIOPage({
           </section>
 
           <section id="cronium-output" className="mb-12">
-            <h2 className="text-2xl font-bold mb-4">Using cronium.output()</h2>
-            <p className="mb-6 text-muted-foreground">
+            <h2 className="mb-4 text-2xl font-bold">Using cronium.output()</h2>
+            <p className="text-muted-foreground mb-6">
               Set output data using the simple <code>cronium.output()</code>{" "}
               function. This data can be accessed by subsequent workflow nodes
               or retrieved via API. The cronium object is automatically
@@ -417,11 +417,11 @@ export default async function UnifiedIOPage({
             <Separator className="my-8" />
 
             <div className="mb-8">
-              <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <h3 className="mb-4 flex items-center gap-2 text-xl font-semibold">
                 <Code2 className="h-5 w-5 text-green-600" />
                 Standard Logging
               </h3>
-              <p className="mb-4 text-muted-foreground">
+              <p className="text-muted-foreground mb-4">
                 Use standard logging methods in each language. The cronium
                 object is automatically available if you need to access input
                 data within your logging.
@@ -435,8 +435,8 @@ export default async function UnifiedIOPage({
           </section>
 
           <section id="cronium-event" className="mb-12">
-            <h2 className="text-2xl font-bold mb-4">Using cronium.event()</h2>
-            <p className="mb-6 text-muted-foreground">
+            <h2 className="mb-4 text-2xl font-bold">Using cronium.event()</h2>
+            <p className="text-muted-foreground mb-6">
               Access event metadata using the <code>cronium.event()</code>{" "}
               function. This returns information about the current event such as
               its ID, name, type, server details, and execution statistics.
@@ -447,25 +447,44 @@ export default async function UnifiedIOPage({
               title="Accessing Event Metadata"
             />
 
-            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">
+            <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
+              <h4 className="mb-2 font-semibold text-blue-800 dark:text-blue-200">
                 Available Event Data
               </h4>
-              <ul className="text-blue-700 dark:text-blue-300 text-sm space-y-1">
-                <li>• <strong>id:</strong> Unique event identifier</li>
-                <li>• <strong>name:</strong> Event display name</li>
-                <li>• <strong>description:</strong> Event description</li>
-                <li>• <strong>type:</strong> Script type (PYTHON, NODEJS, BASH)</li>
-                <li>• <strong>runLocation:</strong> Execution location (LOCAL, REMOTE)</li>
-                <li>• <strong>server:</strong> Server details (if running remotely)</li>
-                <li>• <strong>successCount/failureCount:</strong> Execution statistics</li>
-                <li>• <strong>createdAt/updatedAt:</strong> Timestamps</li>
+              <ul className="space-y-1 text-sm text-blue-700 dark:text-blue-300">
+                <li>
+                  • <strong>id:</strong> Unique event identifier
+                </li>
+                <li>
+                  • <strong>name:</strong> Event display name
+                </li>
+                <li>
+                  • <strong>description:</strong> Event description
+                </li>
+                <li>
+                  • <strong>type:</strong> Script type (PYTHON, NODEJS, BASH)
+                </li>
+                <li>
+                  • <strong>runLocation:</strong> Execution location (LOCAL,
+                  REMOTE)
+                </li>
+                <li>
+                  • <strong>server:</strong> Server details (if running
+                  remotely)
+                </li>
+                <li>
+                  • <strong>successCount/failureCount:</strong> Execution
+                  statistics
+                </li>
+                <li>
+                  • <strong>createdAt/updatedAt:</strong> Timestamps
+                </li>
               </ul>
             </div>
           </section>
 
           <section id="api-integration" className="mb-12">
-            <h2 className="text-2xl font-bold mb-4">API Integration</h2>
+            <h2 className="mb-4 text-2xl font-bold">API Integration</h2>
             <Card>
               <CardHeader>
                 <CardTitle>Passing Input via API</CardTitle>
@@ -476,7 +495,7 @@ export default async function UnifiedIOPage({
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
-                  <h4 className="font-semibold mb-3">HTTP Request Format</h4>
+                  <h4 className="mb-3 font-semibold">HTTP Request Format</h4>
                   <SimpleCodeBlock language="http">{`POST /api/events/{event_id}/execute
 Content-Type: application/json
 Authorization: Bearer YOUR_API_TOKEN
@@ -498,7 +517,7 @@ Authorization: Bearer YOUR_API_TOKEN
                 </div>
 
                 <div>
-                  <h4 className="font-semibold mb-3">Example API Calls</h4>
+                  <h4 className="mb-3 font-semibold">Example API Calls</h4>
                   <CodeBlock
                     examples={runtimeExamples.apiIntegration}
                     title="API Integration Examples"
@@ -509,7 +528,7 @@ Authorization: Bearer YOUR_API_TOKEN
           </section>
 
           <section id="quick-reference" className="mb-12">
-            <h2 className="text-2xl font-bold mb-4">Quick Reference</h2>
+            <h2 className="mb-4 text-2xl font-bold">Quick Reference</h2>
             <Card>
               <CardContent className="pt-6">
                 <CodeBlock
@@ -521,15 +540,15 @@ Authorization: Bearer YOUR_API_TOKEN
           </section>
 
           <section id="best-practices" className="mb-12">
-            <h2 className="text-2xl font-bold mb-4">Best Practices</h2>
+            <h2 className="mb-4 text-2xl font-bold">Best Practices</h2>
             <Card>
               <CardContent className="pt-6">
                 <div className="space-y-6">
                   <div>
-                    <h4 className="font-semibold mb-2">
+                    <h4 className="mb-2 font-semibold">
                       Data Structure Guidelines
                     </h4>
-                    <ul className="list-disc pl-6 space-y-1 text-muted-foreground">
+                    <ul className="text-muted-foreground list-disc space-y-1 pl-6">
                       <li>
                         Use JSON-compatible data types (objects, arrays,
                         strings, numbers, booleans)
@@ -546,8 +565,8 @@ Authorization: Bearer YOUR_API_TOKEN
                   </div>
 
                   <div>
-                    <h4 className="font-semibold mb-2">Error Handling</h4>
-                    <ul className="list-disc pl-6 space-y-1 text-muted-foreground">
+                    <h4 className="mb-2 font-semibold">Error Handling</h4>
+                    <ul className="text-muted-foreground list-disc space-y-1 pl-6">
                       <li>
                         Always check if input data exists before accessing
                         fields
@@ -564,10 +583,10 @@ Authorization: Bearer YOUR_API_TOKEN
                   </div>
 
                   <div>
-                    <h4 className="font-semibold mb-2">
+                    <h4 className="mb-2 font-semibold">
                       Performance Considerations
                     </h4>
-                    <ul className="list-disc pl-6 space-y-1 text-muted-foreground">
+                    <ul className="text-muted-foreground list-disc space-y-1 pl-6">
                       <li>
                         Keep input/output data reasonably sized (&lt; 1MB
                         recommended)
@@ -583,38 +602,38 @@ Authorization: Bearer YOUR_API_TOKEN
           </section>
 
           <section id="troubleshooting" className="mb-12">
-            <h2 className="text-2xl font-bold mb-4">Troubleshooting</h2>
+            <h2 className="mb-4 text-2xl font-bold">Troubleshooting</h2>
             <Card>
               <CardContent className="pt-6">
                 <div className="space-y-6">
                   <div>
-                    <h4 className="font-semibold mb-3">Common Issues</h4>
+                    <h4 className="mb-3 font-semibold">Common Issues</h4>
                     <div className="space-y-4">
-                      <div className="p-4 border-l-4 border-red-500 bg-red-50 dark:bg-red-950">
+                      <div className="border-l-4 border-red-500 bg-red-50 p-4 dark:bg-red-950">
                         <h5 className="font-medium text-red-800 dark:text-red-200">
                           Runtime helper not found
                         </h5>
-                        <p className="text-red-700 dark:text-red-300 text-sm mt-1">
+                        <p className="mt-1 text-sm text-red-700 dark:text-red-300">
                           Ensure the import path is correct:{" "}
                           <code>/tmp/runtime-helpers/cronium.py</code>
                         </p>
                       </div>
 
-                      <div className="p-4 border-l-4 border-yellow-500 bg-yellow-50 dark:bg-yellow-950">
+                      <div className="border-l-4 border-yellow-500 bg-yellow-50 p-4 dark:bg-yellow-950">
                         <h5 className="font-medium text-yellow-800 dark:text-yellow-200">
                           cronium.input is empty
                         </h5>
-                        <p className="text-yellow-700 dark:text-yellow-300 text-sm mt-1">
+                        <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
                           Check if input is being passed via API or if workflow
                           connections are properly configured.
                         </p>
                       </div>
 
-                      <div className="p-4 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-950">
+                      <div className="border-l-4 border-blue-500 bg-blue-50 p-4 dark:bg-blue-950">
                         <h5 className="font-medium text-blue-800 dark:text-blue-200">
                           JSON output errors
                         </h5>
-                        <p className="text-blue-700 dark:text-blue-300 text-sm mt-1">
+                        <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
                           Validate JSON structure before calling
                           cronium.output(). Use JSON validators or linters.
                         </p>
@@ -623,8 +642,8 @@ Authorization: Bearer YOUR_API_TOKEN
                   </div>
 
                   <div>
-                    <h4 className="font-semibold mb-3">Debugging Tips</h4>
-                    <ul className="list-disc pl-6 space-y-1 text-muted-foreground">
+                    <h4 className="mb-3 font-semibold">Debugging Tips</h4>
+                    <ul className="text-muted-foreground list-disc space-y-1 pl-6">
                       <li>
                         Use standard logging (print, console.log, echo) to
                         output debug information

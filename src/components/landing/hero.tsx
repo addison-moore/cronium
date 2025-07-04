@@ -25,11 +25,11 @@ export default function Hero({ lang = "en" }: { lang?: string }) {
     t = langT;
   }
   return (
-    <div className="relative overflow-hidden bg-gradient-to-b from-white to-gray-100 dark:from-slate-950 dark:to-slate-900 pb-16 pt-10">
+    <div className="relative overflow-hidden bg-gradient-to-b from-white to-gray-100 pt-10 pb-16 dark:from-slate-950 dark:to-slate-900">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <h1
-            className="text-4xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-6xl animate-fadeIn"
+            className="animate-fadeIn text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl dark:text-white"
             style={{ animationDelay: "0.1s" }}
           >
             <span className="text-primary dark:text-secondary">
@@ -37,19 +37,19 @@ export default function Hero({ lang = "en" }: { lang?: string }) {
             </span>
           </h1>
           <p
-            className="mt-6 text-lg leading-8 text-gray-700 dark:text-gray-200 animate-fadeIn"
+            className="animate-fadeIn mt-6 text-lg leading-8 text-gray-700 dark:text-gray-200"
             style={{ animationDelay: "0.3s" }}
           >
             {t("Home.Hero.Subtitle")}
           </p>
           <div
-            className="mt-10 flex items-center justify-center gap-x-6 animate-fadeIn"
+            className="animate-fadeIn mt-10 flex items-center justify-center gap-x-6"
             style={{ animationDelay: "0.5s" }}
           >
             <Link href={`/${lang}/auth/signup`}>
               <Button
                 size="lg"
-                className="rounded-full font-semibold px-8 bg-primary hover:bg-primary/90 dark:bg-primary dark:hover:bg-primary/90 text-primary-foreground"
+                className="bg-primary hover:bg-primary/90 dark:bg-primary dark:hover:bg-primary/90 text-primary-foreground rounded-full px-8 font-semibold"
               >
                 {t("Home.Hero.ButtonPrimary")}{" "}
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -57,7 +57,7 @@ export default function Hero({ lang = "en" }: { lang?: string }) {
             </Link>
             <Link
               href={`/${lang}/docs`}
-              className="text-sm font-semibold leading-6 text-gray-700 dark:text-gray-200 hover:text-primary dark:hover:text-secondary"
+              className="hover:text-primary dark:hover:text-secondary text-sm leading-6 font-semibold text-gray-700 dark:text-gray-200"
             >
               {t("Home.Hero.ButtonSecondary")} <span aria-hidden="true">→</span>
             </Link>
@@ -65,12 +65,12 @@ export default function Hero({ lang = "en" }: { lang?: string }) {
         </div>
 
         <div
-          className="mt-16 flow-root sm:mt-24 animate-fadeInUp"
+          className="animate-fadeInUp mt-16 flow-root sm:mt-24"
           style={{ animationDelay: "0.7s" }}
         >
-          <div className="-m-2 rounded-xl bg-gray-100 dark:bg-gray-800 p-2 ring-1 ring-inset ring-gray-300 dark:ring-gray-700 lg:-m-4 lg:rounded-2xl lg:p-4">
-            <div className="rounded-md bg-white dark:bg-gray-900 shadow-2xl ring-1 ring-gray-900/10 dark:ring-gray-700/30">
-              <div className="bg-zinc-800 rounded-t-md p-2 flex items-center gap-1">
+          <div className="-m-2 rounded-xl bg-gray-100 p-2 ring-1 ring-gray-300 ring-inset lg:-m-4 lg:rounded-2xl lg:p-4 dark:bg-gray-800 dark:ring-gray-700">
+            <div className="rounded-md bg-white shadow-2xl ring-1 ring-gray-900/10 dark:bg-gray-900 dark:ring-gray-700/30">
+              <div className="flex items-center gap-1 rounded-t-md bg-zinc-800 p-2">
                 <div className="h-3 w-3 rounded-full bg-red-500"></div>
                 <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
                 <div className="h-3 w-3 rounded-full bg-green-500"></div>
@@ -78,22 +78,22 @@ export default function Hero({ lang = "en" }: { lang?: string }) {
                   Cronium Dashboard
                 </div>
               </div>
-              <div className="px-6 py-10 border border-gray-200 dark:border-gray-700">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center justify-between mb-4">
+              <div className="border border-gray-200 px-6 py-10 dark:border-gray-700">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <div className="rounded-lg border border-gray-200 bg-gray-100 p-6 dark:border-gray-700 dark:bg-gray-800">
+                    <div className="mb-4 flex items-center justify-between">
                       <h3 className="font-semibold text-gray-800 dark:text-gray-100">
                         Daily Database Backup
                       </h3>
-                      <span className="text-xs bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400 px-2 py-1 rounded-full border border-green-200 dark:border-green-800">
+                      <span className="rounded-full border border-green-200 bg-green-100 px-2 py-1 text-xs text-green-600 dark:border-green-800 dark:bg-green-900 dark:text-green-400">
                         Active
                       </span>
                     </div>
-                    <div className="flex items-center text-sm text-gray-600 dark:text-gray-300 space-x-3 mb-4">
+                    <div className="mb-4 flex items-center space-x-3 text-sm text-gray-600 dark:text-gray-300">
                       <div>Schedule: Every day at 03:00 AM</div>
                     </div>
-                    <div className="bg-white dark:bg-gray-900 p-3 rounded-md text-xs font-mono text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
-                      <div className="flex items-center gap-2 text-green-600 dark:text-green-400 mb-1">
+                    <div className="rounded-md border border-gray-200 bg-white p-3 font-mono text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                      <div className="mb-1 flex items-center gap-2 text-green-600 dark:text-green-400">
                         <Terminal className="h-3 w-3" />
                         <span>Last execution: Success (2m 34s)</span>
                       </div>
@@ -106,20 +106,20 @@ export default function Hero({ lang = "en" }: { lang?: string }) {
                     </div>
                   </div>
 
-                  <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center justify-between mb-4">
+                  <div className="rounded-lg border border-gray-200 bg-gray-100 p-6 dark:border-gray-700 dark:bg-gray-800">
+                    <div className="mb-4 flex items-center justify-between">
                       <h3 className="font-semibold text-gray-800 dark:text-gray-100">
                         Server Monitoring
                       </h3>
-                      <span className="text-xs bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400 px-2 py-1 rounded-full border border-green-200 dark:border-green-800">
+                      <span className="rounded-full border border-green-200 bg-green-100 px-2 py-1 text-xs text-green-600 dark:border-green-800 dark:bg-green-900 dark:text-green-400">
                         Active
                       </span>
                     </div>
-                    <div className="flex items-center text-sm text-gray-600 dark:text-gray-300 space-x-3 mb-4">
+                    <div className="mb-4 flex items-center space-x-3 text-sm text-gray-600 dark:text-gray-300">
                       <div>Schedule: Every 5 minutes</div>
                     </div>
-                    <div className="bg-white dark:bg-gray-900 p-3 rounded-md text-xs font-mono text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
-                      <div className="flex items-center gap-2 text-green-600 dark:text-green-400 mb-1">
+                    <div className="rounded-md border border-gray-200 bg-white p-3 font-mono text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                      <div className="mb-1 flex items-center gap-2 text-green-600 dark:text-green-400">
                         <Terminal className="h-3 w-3" />
                         <span>Last execution: Success (0m 12s)</span>
                       </div>
@@ -139,10 +139,10 @@ export default function Hero({ lang = "en" }: { lang?: string }) {
 
         <div className="mt-16">
           <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-base font-semibold leading-7 text-primary dark:text-secondary">
+            <h2 className="text-primary dark:text-secondary text-base leading-7 font-semibold">
               {t("Home.Features.Title")}
             </h2>
-            <p className="mt-2 text-3xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-4xl">
+            <p className="mt-2 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl dark:text-white">
               {t("Home.Features.Subtitle")}
             </p>
           </div>
@@ -151,10 +151,10 @@ export default function Hero({ lang = "en" }: { lang?: string }) {
             <dl className="grid max-w-xl grid-cols-1 gap-x-8 gap-y-10 lg:max-w-none lg:grid-cols-2 lg:gap-y-16">
               {features.map((feature) => (
                 <div key={feature.name} className="relative pl-12">
-                  <dt className="text-lg font-semibold leading-7 text-gray-900 dark:text-white">
-                    <div className="absolute left-0 top-1 flex h-8 w-8 items-center justify-center rounded-lg bg-primary dark:bg-primary">
+                  <dt className="text-lg leading-7 font-semibold text-gray-900 dark:text-white">
+                    <div className="bg-primary dark:bg-primary absolute top-1 left-0 flex h-8 w-8 items-center justify-center rounded-lg">
                       <feature.icon
-                        className="h-5 w-5 text-primary-foreground"
+                        className="text-primary-foreground h-5 w-5"
                         aria-hidden="true"
                       />
                     </div>
@@ -165,8 +165,8 @@ export default function Hero({ lang = "en" }: { lang?: string }) {
                   </dd>
                   <div className="mt-4">
                     {feature.benefits.map((benefit, i) => (
-                      <div key={i} className="flex items-center mt-2">
-                        <CheckCircle className="h-4 w-4 text-secondary dark:text-secondary mr-2" />
+                      <div key={i} className="mt-2 flex items-center">
+                        <CheckCircle className="text-secondary dark:text-secondary mr-2 h-4 w-4" />
                         <span className="text-sm text-gray-600 dark:text-gray-400">
                           {benefit}
                         </span>

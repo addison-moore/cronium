@@ -23,16 +23,18 @@ function processData(data: any): any {
 }
 
 // ✅ Use specific types or generics
-function processData<T extends { someProperty: unknown }>(data: T): T['someProperty'] {
+function processData<T extends { someProperty: unknown }>(
+  data: T,
+): T["someProperty"] {
   return data.someProperty;
 }
 
 // ✅ Use 'unknown' when type is truly unknown
 function processUnknownData(data: unknown): string {
-  if (typeof data === 'object' && data !== null && 'name' in data) {
+  if (typeof data === "object" && data !== null && "name" in data) {
     return String(data.name);
   }
-  throw new Error('Invalid data structure');
+  throw new Error("Invalid data structure");
 }
 ```
 
@@ -41,7 +43,7 @@ function processUnknownData(data: unknown): string {
 ```typescript
 // ❌ Convenient but unsafe
 const config = JSON.parse(configString);
-config.database.host = 'localhost';
+config.database.host = "localhost";
 
 // ✅ Type-safe with validation
 interface Config {
@@ -66,14 +68,14 @@ function getUserRole(user: any): string {
 // ✅ Compile-time safe
 interface User {
   id: string;
-  role: 'admin' | 'user' | 'viewer';
+  role: "admin" | "user" | "viewer";
 }
 
-function getUserRole(user: User): User['role'] {
+function getUserRole(user: User): User["role"] {
   return user.role; // TypeScript ensures user has role property
 }
 
-function getUserRoleSafe(user: User | null): User['role'] | null {
+function getUserRoleSafe(user: User | null): User["role"] | null {
   return user?.role ?? null; // Handles null case explicitly
 }
 ```
@@ -84,38 +86,38 @@ function getUserRoleSafe(user: User | null): User['role'] | null {
 
 ```typescript
 // Core utility types
-import type { 
-  Nullable, 
-  Optional, 
+import type {
+  Nullable,
+  Optional,
   SafeAny, // Use instead of 'any' - resolves to 'never'
   ApiResponse,
   PaginatedResponse,
   ErrorResponse,
-  LoadingState
-} from '@/types';
+  LoadingState,
+} from "@/types";
 
 // API-specific types
 import type {
   EventsResponse,
   EventResponse,
   UserResponse,
-  DashboardStatsResponse
-} from '@/types/api';
+  DashboardStatsResponse,
+} from "@/types/api";
 
 // Event handler types
 import type {
   ClickHandler,
   FormSubmitHandler,
   ValueChangeHandler,
-  EventExecutionData
-} from '@/types/events';
+  EventExecutionData,
+} from "@/types/events";
 ```
 
 ### Database Entity Types
 
 ```typescript
 // Use Drizzle-generated types
-import type { Event, User, Server } from '@shared/schema';
+import type { Event, User, Server } from "@shared/schema";
 
 // Extend with computed properties
 interface EventWithStats extends Event {
@@ -132,15 +134,15 @@ interface EventWithStats extends Event {
 ```typescript
 // ❌ Unsafe API responses
 async function fetchEvents(): Promise<any> {
-  const response = await fetch('/api/events');
+  const response = await fetch("/api/events");
   return response.json();
 }
 
 // ✅ Type-safe API responses
-import type { EventsResponse } from '@/types/api';
+import type { EventsResponse } from "@/types/api";
 
 async function fetchEvents(): Promise<EventsResponse> {
-  const response = await fetch('/api/events');
+  const response = await fetch("/api/events");
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }
@@ -150,7 +152,7 @@ async function fetchEvents(): Promise<EventsResponse> {
 // ✅ Even better with tRPC (auto-typed)
 const { data: events, error } = trpc.events.getAll.useQuery({
   limit: 20,
-  offset: 0
+  offset: 0,
 });
 // events is automatically typed as Event[]
 ```
@@ -166,7 +168,7 @@ function handleSubmit(event: any) {
 }
 
 // ✅ Type-safe form handling
-import type { FormSubmitHandler } from '@/types/events';
+import type { FormSubmitHandler } from "@/types/events";
 
 interface EventFormData {
   name: string;
@@ -178,22 +180,22 @@ interface EventFormData {
 const handleSubmit: FormSubmitHandler = (event) => {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
-  
+
   const data: EventFormData = {
-    name: formData.get('name') as string,
-    type: formData.get('type') as EventType,
-    content: formData.get('content') as string,
-    status: formData.get('status') as EventStatus,
+    name: formData.get("name") as string,
+    type: formData.get("type") as EventType,
+    content: formData.get("content") as string,
+    status: formData.get("status") as EventStatus,
   };
-  
+
   // Validate data before submission
   createEvent(data);
 };
 
 // ✅ Even better with React Hook Form + Zod
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { createEventSchema } from '@shared/schemas/events';
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { createEventSchema } from "@shared/schemas/events";
 
 const form = useForm<EventFormData>({
   resolver: zodResolver(createEventSchema),
@@ -208,19 +210,19 @@ const form = useForm<EventFormData>({
 const [data, setData] = useState<any>(null);
 
 // ✅ Typed state with discriminated unions
-type DataState = 
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'success'; data: Event[] }
-  | { status: 'error'; error: string };
+type DataState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "success"; data: Event[] }
+  | { status: "error"; error: string };
 
-const [state, setState] = useState<DataState>({ status: 'idle' });
+const [state, setState] = useState<DataState>({ status: "idle" });
 
 // ✅ Use LoadingState utility type
-import type { LoadingState } from '@/types';
+import type { LoadingState } from "@/types";
 
-const [eventState, setEventState] = useState<LoadingState<Event[]>>({ 
-  status: 'idle' 
+const [eventState, setEventState] = useState<LoadingState<Event[]>>({
+  status: "idle",
 });
 ```
 
@@ -237,7 +239,7 @@ const handleChange = (event: any) => {
 };
 
 // ✅ Specific typed event handlers
-import type { ClickHandler, ChangeEventHandler } from '@/types/events';
+import type { ClickHandler, ChangeEventHandler } from "@/types/events";
 
 const handleClick: ClickHandler<HTMLButtonElement> = (event) => {
   console.log(event.currentTarget.textContent);
@@ -248,7 +250,7 @@ const handleChange: ChangeEventHandler<HTMLInputElement> = (event) => {
 };
 
 // ✅ Value-based handlers for controlled components
-import type { StringChangeHandler } from '@/types/events';
+import type { StringChangeHandler } from "@/types/events";
 
 const handleValueChange: StringChangeHandler = (value) => {
   setValue(value);
@@ -261,21 +263,21 @@ const handleValueChange: StringChangeHandler = (value) => {
 // ❌ Untyped third-party responses
 async function sendSlackMessage(message: string): Promise<any> {
   const response = await slackClient.chat.postMessage({
-    channel: '#general',
+    channel: "#general",
     text: message,
   });
   return response;
 }
 
 // ✅ Typed third-party responses
-import type { SlackApiResponse } from '@/types/api';
+import type { SlackApiResponse } from "@/types/api";
 
 async function sendSlackMessage(message: string): Promise<SlackApiResponse> {
   const response = await slackClient.chat.postMessage({
-    channel: '#general',
+    channel: "#general",
     text: message,
   });
-  
+
   return {
     ok: response.ok,
     channel: response.channel,
@@ -297,12 +299,12 @@ user.email.toLowerCase(); // Runtime error if userData.email is undefined
 // ✅ Validated type assertion
 function isUser(data: unknown): data is User {
   return (
-    typeof data === 'object' &&
+    typeof data === "object" &&
     data !== null &&
-    'id' in data &&
-    'email' in data &&
-    typeof (data as any).id === 'string' &&
-    typeof (data as any).email === 'string'
+    "id" in data &&
+    "email" in data &&
+    typeof (data as any).id === "string" &&
+    typeof (data as any).email === "string"
   );
 }
 
@@ -322,7 +324,9 @@ function processEvent(event: object): object {
 }
 
 // ✅ Generic with constraints
-function processEvent<T extends { id: number }>(event: T): T & { processed: true } {
+function processEvent<T extends { id: number }>(
+  event: T,
+): T & { processed: true } {
   return { ...event, processed: true };
 }
 ```
@@ -337,8 +341,8 @@ function formatUserName(user: User): string {
 
 // ✅ Handle optional properties
 function formatUserName(user: User): string {
-  const firstName = user.firstName ?? 'Unknown';
-  const lastName = user.lastName ?? 'User';
+  const firstName = user.firstName ?? "Unknown";
+  const lastName = user.lastName ?? "User";
   return `${firstName} ${lastName}`;
 }
 ```
@@ -355,10 +359,10 @@ function processApiResponse(response: any): any {
 
 // Step 2: Add input validation
 function processApiResponse(response: unknown): unknown {
-  if (typeof response === 'object' && response !== null && 'data' in response) {
+  if (typeof response === "object" && response !== null && "data" in response) {
     return (response as { data: unknown }).data;
   }
-  throw new Error('Invalid API response');
+  throw new Error("Invalid API response");
 }
 
 // Step 3: Define proper types
@@ -411,18 +415,18 @@ const TypedEventComponent = withTypedProps<UpdatedProps>(LegacyEventComponent);
 // ❌ Untyped test mocks
 const mockEvent = {
   id: 1,
-  name: 'test'
+  name: "test",
 } as any;
 
 // ✅ Typed test factories
 function createMockEvent(overrides: Partial<Event> = {}): Event {
   return {
     id: 1,
-    name: 'Test Event',
+    name: "Test Event",
     type: EventType.PYTHON,
     content: 'print("hello")',
     status: EventStatus.DRAFT,
-    userId: 'user-1',
+    userId: "user-1",
     shared: false,
     // ... other required fields
     ...overrides,
@@ -430,7 +434,7 @@ function createMockEvent(overrides: Partial<Event> = {}): Event {
 }
 
 // Usage in tests
-const testEvent = createMockEvent({ name: 'Custom Test Event' });
+const testEvent = createMockEvent({ name: "Custom Test Event" });
 ```
 
 ## Tool Configuration
@@ -475,10 +479,7 @@ The following rules are enforced to prevent unsafe `any` usage:
 // package.json
 {
   "lint-staged": {
-    "*.{ts,tsx}": [
-      "eslint --fix",
-      "bash -c 'tsc --noEmit'"
-    ]
+    "*.{ts,tsx}": ["eslint --fix", "bash -c 'tsc --noEmit'"]
   }
 }
 ```
@@ -489,16 +490,16 @@ The following rules are enforced to prevent unsafe `any` usage:
 
 ```typescript
 function isString(value: unknown): value is string {
-  return typeof value === 'string';
+  return typeof value === "string";
 }
 
 function isEvent(value: unknown): value is Event {
   return (
-    typeof value === 'object' &&
+    typeof value === "object" &&
     value !== null &&
-    'id' in value &&
-    'name' in value &&
-    'type' in value
+    "id" in value &&
+    "name" in value &&
+    "type" in value
   );
 }
 
@@ -512,7 +513,7 @@ if (isEvent(unknownData)) {
 ### 2. Use Discriminated Unions
 
 ```typescript
-type ApiState<T> = 
+type ApiState<T> =
   | { status: 'loading' }
   | { status: 'success'; data: T }
   | { status: 'error'; error: string };
@@ -536,10 +537,10 @@ function handleApiState<T>(state: ApiState<T>) {
 type PartialEvent = Partial<Event>;
 
 // Make specific properties required
-type RequiredEventFields = Required<Pick<Event, 'name' | 'type'>>;
+type RequiredEventFields = Required<Pick<Event, "name" | "type">>;
 
 // Create update types automatically
-type UpdateEvent = Partial<Omit<Event, 'id' | 'createdAt' | 'updatedAt'>>;
+type UpdateEvent = Partial<Omit<Event, "id" | "createdAt" | "updatedAt">>;
 ```
 
 ### 4. Use Template Literal Types
@@ -550,25 +551,23 @@ type ApiRoute = `/api/${string}`;
 type EventApiRoute = `/api/events/${number}`;
 
 // For status values
-type EventStatus = 'ACTIVE' | 'PAUSED' | 'DRAFT' | 'ARCHIVED';
-type LogStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILURE';
+type EventStatus = "ACTIVE" | "PAUSED" | "DRAFT" | "ARCHIVED";
+type LogStatus = "PENDING" | "RUNNING" | "SUCCESS" | "FAILURE";
 ```
 
 ### 5. Use Conditional Types for Complex Logic
 
 ```typescript
 // Different return types based on input
-type ApiResult<T extends 'success' | 'error'> = T extends 'success'
+type ApiResult<T extends "success" | "error"> = T extends "success"
   ? { data: unknown; error?: never }
   : { data?: never; error: string };
 
-function apiCall<T extends 'success' | 'error'>(
-  type: T
-): ApiResult<T> {
-  if (type === 'success') {
+function apiCall<T extends "success" | "error">(type: T): ApiResult<T> {
+  if (type === "success") {
     return { data: {} } as ApiResult<T>;
   } else {
-    return { error: 'Failed' } as ApiResult<T>;
+    return { error: "Failed" } as ApiResult<T>;
   }
 }
 ```

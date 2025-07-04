@@ -3,7 +3,7 @@
     "enabled": true
   },
   "fileFiltering": {
-  "respectGitIgnore": true,
-  "enableRecursiveFileSearch": false
-}
+    "respectGitIgnore": true,
+    "enableRecursiveFileSearch": false
+  }
 }

@@ -13,7 +13,7 @@ import {
   workflowDownloadSchema,
 } from "@shared/schemas/workflows";
 import { storage } from "@/server/storage";
-import { EventStatus, LogStatus } from "@shared/schema";
+import { EventStatus, LogStatus, UserRole } from "@shared/schema";
 
 // Custom procedure that handles auth for tRPC fetch adapter
 const workflowProcedure = publicProcedure.use(async ({ ctx, next }) => {
@@ -29,7 +29,9 @@ const workflowProcedure = publicProcedure.use(async ({ ctx, next }) => {
     } else {
       if (process.env.NODE_ENV === "development") {
         const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter((user) => user.role === "ADMIN");
+        const adminUsers = allUsers.filter(
+          (user) => user.role === UserRole.ADMIN,
+        );
         if (adminUsers.length > 0) {
           userId = adminUsers[0]!.id;
           session = { user: { id: adminUsers[0]!.id } };

@@ -16,6 +16,7 @@ import {
   testMessageSchema,
 } from "@shared/schemas/integrations";
 import { storage } from "@/server/storage";
+import { UserRole } from "@/shared/schema";
 import { ToolType, templates } from "@shared/schema";
 import { db } from "@/server/db";
 import { eq, and, sql, or } from "drizzle-orm";
@@ -32,7 +33,9 @@ const integrationProcedure = publicProcedure.use(async ({ ctx, next }) => {
     } else {
       if (process.env.NODE_ENV === "development") {
         const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter((user) => user.role === "ADMIN");
+        const adminUsers = allUsers.filter(
+          (user) => user.role === UserRole.ADMIN,
+        );
         const firstAdmin = adminUsers[0];
         if (firstAdmin) {
           userId = firstAdmin.id;
@@ -171,8 +174,8 @@ export const integrationsRouter = createTRPCRouter({
           // Mock sending Slack message
           console.log(`Sending Slack message to tool ${input.toolId}:`, {
             message: input.message,
-            channel: input.channel || tool.credentials.channel,
-            username: input.username || tool.credentials.username,
+            channel: input.channel ?? tool.credentials.channel,
+            username: input.username ?? tool.credentials.username,
           });
 
           // Simulate API call delay
@@ -231,7 +234,7 @@ export const integrationsRouter = createTRPCRouter({
           // Mock sending Discord message
           console.log(`Sending Discord message to tool ${input.toolId}:`, {
             message: input.message,
-            username: input.username || tool.credentials.username,
+            username: input.username ?? tool.credentials.username,
             embeds: input.embeds,
           });
 
@@ -246,7 +249,7 @@ export const integrationsRouter = createTRPCRouter({
             details: {
               timestamp: new Date().toISOString(),
               messageId: `discord_${Date.now()}`,
-              embedCount: input.embeds?.length || 0,
+              embedCount: input.embeds?.length ?? 0,
             },
           };
         } catch (error) {
@@ -804,13 +807,13 @@ export const integrationsRouter = createTRPCRouter({
           { length: Math.min(input.limit, 50) },
           (_, i) => ({
             id: i + 1,
-            toolId: input.toolId || Math.floor(Math.random() * 3) + 1,
+            toolId: input.toolId ?? Math.floor(Math.random() * 3) + 1,
             type:
-              input.type ||
+              input.type ??
               (["EMAIL", "SLACK", "DISCORD"] as const)[
                 Math.floor(Math.random() * 3)
               ],
-            recipient: input.recipient || `recipient${i + 1}@example.com`,
+            recipient: input.recipient ?? `recipient${i + 1}@example.com`,
             subject: `Test Message ${i + 1}`,
             content: `This is test message content ${i + 1}`,
             status: (["sent", "delivered", "failed"] as const)[
@@ -914,7 +917,7 @@ export const integrationsRouter = createTRPCRouter({
             result.details = {
               toolType: tool.type,
               messageLength: input.message.length,
-              recipient: input.recipient || "test@example.com",
+              recipient: input.recipient ?? "test@example.com",
               timestamp: new Date().toISOString(),
             };
             break;

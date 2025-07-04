@@ -3,7 +3,13 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { storage } from "@/server/storage";
 import { db } from "@/server/db";
-import { logs, events, workflows, EventStatus } from "@/shared/schema";
+import {
+  logs,
+  events,
+  workflows,
+  EventStatus,
+  LogStatus,
+} from "@/shared/schema";
 import { eq, desc, gte, and } from "drizzle-orm";
 
 // Schemas
@@ -18,7 +24,7 @@ export const dashboardRouter = createTRPCRouter({
     .query(async ({ ctx, input = {} }) => {
       try {
         const userId = ctx.session.user.id;
-        const days = input.days || 30;
+        const days = input.days ?? 30;
 
         // Get script counts
         const allScripts = await storage.getAllEvents(userId);
@@ -64,10 +70,10 @@ export const dashboardRouter = createTRPCRouter({
 
         // Filter to only count SUCCESS and FAILURE logs (not PAUSED)
         const successLogs = recentLogsQuery.filter(
-          (log) => log.status === "SUCCESS",
+          (log) => log.status === LogStatus.SUCCESS,
         );
         const failureLogs = recentLogsQuery.filter(
-          (log) => log.status === "FAILURE",
+          (log) => log.status === LogStatus.FAILURE,
         );
 
         // Get the actual execution counts
@@ -105,9 +111,9 @@ export const dashboardRouter = createTRPCRouter({
             id: log.id,
             eventId: log.eventId,
             eventName:
-              script?.name || log.eventName || `Script #${log.eventId}`,
+              script?.name ?? log.eventName ?? `Script #${log.eventId}`,
             status: log.status,
-            duration: log.duration || 0,
+            duration: log.duration ?? 0,
             startTime:
               log.startTime instanceof Date
                 ? log.startTime.toISOString()
@@ -147,7 +153,7 @@ export const dashboardRouter = createTRPCRouter({
     .query(async ({ ctx, input = {} }) => {
       try {
         const userId = ctx.session.user.id;
-        const limit = input.limit || 10;
+        const limit = input.limit ?? 10;
 
         // Get all user scripts for name lookup
         const allScripts = await storage.getAllEvents(userId);
@@ -177,9 +183,9 @@ export const dashboardRouter = createTRPCRouter({
             id: log.id,
             eventId: log.eventId,
             eventName:
-              script?.name || log.eventName || `Script #${log.eventId}`,
+              script?.name ?? log.eventName ?? `Script #${log.eventId}`,
             status: log.status,
-            duration: log.duration || 0,
+            duration: log.duration ?? 0,
             startTime:
               log.startTime instanceof Date
                 ? log.startTime.toISOString()

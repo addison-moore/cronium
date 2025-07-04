@@ -122,12 +122,12 @@ export default function Features() {
   return (
     <section
       id="features"
-      className="py-16 md:py-24 bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900"
+      className="bg-gradient-to-br from-gray-50 via-white to-gray-50 py-16 md:py-24 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900"
     >
-      <div className="container px-4 md:px-6 max-w-7xl mx-auto">
+      <div className="container mx-auto max-w-7xl px-4 md:px-6">
         {/* Header */}
-        <div className="text-center mb-16 space-y-4">
-          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+        <div className="mb-16 space-y-4 text-center">
+          <h2 className="bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-3xl font-bold tracking-tight text-transparent sm:text-4xl md:text-5xl dark:from-white dark:to-gray-300">
             {t("Title")}
           </h2>
           <p className="mx-auto max-w-3xl text-lg text-gray-600 dark:text-gray-300">
@@ -135,11 +135,11 @@ export default function Features() {
           </p>
 
           {/* Category Pills */}
-          <div className="flex flex-wrap justify-center gap-2 mt-8">
+          <div className="mt-8 flex flex-wrap justify-center gap-2">
             {categories.map((category) => (
               <span
                 key={category.name}
-                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium text-white ${category.color}`}
+                className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium text-white ${category.color}`}
               >
                 {category.name}
               </span>
@@ -148,7 +148,7 @@ export default function Features() {
         </div>
 
         {/* Features Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
           {coreFeatures.map((feature, index) => {
             const category = categories.find(
               (cat) => cat.name === feature.category,
@@ -156,27 +156,27 @@ export default function Features() {
             return (
               <div
                 key={index}
-                className="group relative p-6 bg-white dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
+                className="group relative rounded-2xl border border-gray-200 bg-white p-6 transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 hover:shadow-lg dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-gray-600"
               >
                 {/* Category Badge */}
                 <div className="absolute top-4 right-4">
                   <span
-                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white ${category?.color || "bg-gray-500"}`}
+                    className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium text-white ${category?.color ?? "bg-gray-500"}`}
                   >
                     {feature.category}
                   </span>
                 </div>
 
                 {/* Icon */}
-                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-primary/10 to-primary/20 text-primary mb-4 group-hover:scale-110 transition-transform duration-300">
+                <div className="from-primary/10 to-primary/20 text-primary mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br transition-transform duration-300 group-hover:scale-110">
                   {feature.icon}
                 </div>
 
                 {/* Content */}
-                <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white group-hover:text-primary transition-colors">
+                <h3 className="group-hover:text-primary mb-3 text-lg font-semibold text-gray-900 transition-colors dark:text-white">
                   {feature.title}
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-300">
                   {feature.description}
                 </p>
               </div>
@@ -185,15 +185,15 @@ export default function Features() {
         </div>
 
         {/* Feature Highlights */}
-        <div className="mt-20 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div className="mt-20 grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
           <div className="space-y-6">
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
               Enterprise-Grade Platform
             </h3>
             <div className="space-y-4">
               <div className="flex items-start space-x-3">
-                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center mt-0.5">
-                  <div className="w-2 h-2 rounded-full bg-green-600"></div>
+                <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
+                  <div className="h-2 w-2 rounded-full bg-green-600"></div>
                 </div>
                 <div>
                   <h4 className="font-semibold text-gray-900 dark:text-white">
@@ -207,8 +207,8 @@ export default function Features() {
               </div>
 
               <div className="flex items-start space-x-3">
-                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center mt-0.5">
-                  <div className="w-2 h-2 rounded-full bg-blue-600"></div>
+                <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900">
+                  <div className="h-2 w-2 rounded-full bg-blue-600"></div>
                 </div>
                 <div>
                   <h4 className="font-semibold text-gray-900 dark:text-white">
@@ -222,8 +222,8 @@ export default function Features() {
               </div>
 
               <div className="flex items-start space-x-3">
-                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center mt-0.5">
-                  <div className="w-2 h-2 rounded-full bg-purple-600"></div>
+                <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900">
+                  <div className="h-2 w-2 rounded-full bg-purple-600"></div>
                 </div>
                 <div>
                   <h4 className="font-semibold text-gray-900 dark:text-white">
@@ -239,11 +239,11 @@ export default function Features() {
           </div>
 
           <div className="relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-secondary/20 rounded-2xl blur-3xl"></div>
-            <div className="relative bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 shadow-xl">
+            <div className="from-primary/20 to-secondary/20 absolute inset-0 rounded-2xl bg-gradient-to-r blur-3xl"></div>
+            <div className="relative rounded-2xl border border-gray-200 bg-white p-8 shadow-xl dark:border-gray-700 dark:bg-gray-800">
               <div className="space-y-4">
                 <div className="flex items-center space-x-3">
-                  <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                  <div className="h-3 w-3 rounded-full bg-green-500"></div>
                   <span className="text-sm font-medium text-gray-900 dark:text-white">
                     System Status: Operational
                   </span>
@@ -282,7 +282,7 @@ export default function Features() {
                     </div>
                   </div>
                 </div>
-                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="border-t border-gray-200 pt-4 dark:border-gray-700">
                   <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                     <span>Last updated: 2 minutes ago</span>
                     <span>Uptime: 99.99%</span>

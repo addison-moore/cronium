@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Info, Calendar, Globe, Hand, GitFork, Edit } from "lucide-react";
+import { Calendar, Globe, Hand, GitFork } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -33,15 +33,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { TagsInput } from "@/components/ui/tags-input";
-import { UseFormReturn } from "react-hook-form";
-import {
-  EventStatus,
-  EventType,
-  WorkflowTriggerType,
-  RunLocation,
-} from "@/shared/schema";
+import type { UseFormReturn } from "react-hook-form";
+import { EventStatus, WorkflowTriggerType } from "@/shared/schema";
+import type { EventType, RunLocation } from "@/shared/schema";
 import WorkflowCanvas from "@/components/workflows/WorkflowCanvas";
-import { Node, Edge } from "@xyflow/react";
+import type { Node, Edge } from "@xyflow/react";
 import { trpc } from "@/lib/trpc";
 
 export interface WorkflowFormValues {
@@ -95,8 +91,6 @@ export default function WorkflowForm({
   initialNodes = [],
   initialEdges = [],
 }: WorkflowFormProps) {
-  const t = useTranslations("Workflows");
-
   // Internal state management
   const [workflowNodes, setWorkflowNodes] = useState<Node[]>(initialNodes);
   const [workflowEdges, setWorkflowEdges] = useState<Edge[]>(initialEdges);
@@ -115,16 +109,13 @@ export default function WorkflowForm({
     status: undefined,
   });
 
-  const {
-    data: serversData,
-    isLoading: loadingServers,
-    error: serversError,
-  } = trpc.servers.getAll.useQuery({
-    limit: 1000,
-    offset: 0,
-    search: "",
-    online: undefined,
-  });
+  const { data: serversData, error: serversError } =
+    trpc.servers.getAll.useQuery({
+      limit: 1000,
+      offset: 0,
+      search: "",
+      online: undefined,
+    });
 
   // Transform tRPC data
   const events: EventItem[] = useMemo(() => {
@@ -132,7 +123,7 @@ export default function WorkflowForm({
     return eventsData.events.map((event) => ({
       id: event.id,
       name: event.name,
-      type: event.type as EventType,
+      type: event.type,
     }));
   }, [eventsData]);
 
@@ -392,8 +383,7 @@ export default function WorkflowForm({
                 />
 
                 {/* Schedule Configuration */}
-                {form.watch("triggerType") ===
-                  WorkflowTriggerType.SCHEDULE && (
+                {form.watch("triggerType") === WorkflowTriggerType.SCHEDULE && (
                   <Card className="bg-muted p-4">
                     <div className="space-y-4">
                       <FormField
@@ -430,7 +420,7 @@ export default function WorkflowForm({
                                 <Input
                                   placeholder="0 0 * * *"
                                   {...field}
-                                  value={field.value || ""}
+                                  value={field.value ?? ""}
                                 />
                               </FormControl>
                               <FormDescription>
@@ -455,7 +445,7 @@ export default function WorkflowForm({
                                     min="1"
                                     placeholder="1"
                                     {...field}
-                                    value={field.value || ""}
+                                    value={field.value ?? ""}
                                     onChange={(e) =>
                                       field.onChange(
                                         e.target.value
@@ -477,7 +467,7 @@ export default function WorkflowForm({
                                 <FormLabel>Unit</FormLabel>
                                 <Select
                                   onValueChange={field.onChange}
-                                  defaultValue={field.value || ""}
+                                  defaultValue={field.value ?? ""}
                                 >
                                   <FormControl>
                                     <SelectTrigger>

@@ -1,7 +1,7 @@
 "use client";
 
-import React, { ReactNode } from "react";
-import { Input, InputProps } from "@/components/ui/input";
+import React, { type ReactNode } from "react";
+import { Input, type InputProps } from "@/components/ui/input";
 
 interface IconInputProps extends InputProps {
   icon: ReactNode;
@@ -13,7 +13,7 @@ interface IconInputProps extends InputProps {
 export function IconInput({ icon, className = "", ...props }: IconInputProps) {
   return (
     <div className="relative">
-      <div className="absolute left-2 top-2.5 text-muted-foreground">
+      <div className="text-muted-foreground absolute top-2.5 left-2">
         {icon}
       </div>
       <Input className={`pl-8 ${className}`} {...props} />

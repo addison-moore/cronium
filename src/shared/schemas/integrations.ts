@@ -26,33 +26,50 @@ export const discordSendSchema = baseSendMessageSchema.extend({
   username: z.string().optional(), // Override webhook username
   avatarUrl: z.string().url().optional(), // Override webhook avatar
   tts: z.boolean().default(false), // Text-to-speech
-  embeds: z.array(z.object({
-    title: z.string().optional(),
-    description: z.string().optional(),
-    url: z.string().url().optional(),
-    timestamp: z.string().datetime().optional(),
-    color: z.number().int().min(0).max(16777215).optional(), // 0x000000 to 0xFFFFFF
-    footer: z.object({
-      text: z.string(),
-      iconUrl: z.string().url().optional(),
-    }).optional(),
-    image: z.object({
-      url: z.string().url(),
-    }).optional(),
-    thumbnail: z.object({
-      url: z.string().url(),
-    }).optional(),
-    author: z.object({
-      name: z.string(),
-      url: z.string().url().optional(),
-      iconUrl: z.string().url().optional(),
-    }).optional(),
-    fields: z.array(z.object({
-      name: z.string(),
-      value: z.string(),
-      inline: z.boolean().default(false),
-    })).optional(),
-  })).max(10).optional(), // Discord allows max 10 embeds
+  embeds: z
+    .array(
+      z.object({
+        title: z.string().optional(),
+        description: z.string().optional(),
+        url: z.string().url().optional(),
+        timestamp: z.string().datetime().optional(),
+        color: z.number().int().min(0).max(16777215).optional(), // 0x000000 to 0xFFFFFF
+        footer: z
+          .object({
+            text: z.string(),
+            iconUrl: z.string().url().optional(),
+          })
+          .optional(),
+        image: z
+          .object({
+            url: z.string().url(),
+          })
+          .optional(),
+        thumbnail: z
+          .object({
+            url: z.string().url(),
+          })
+          .optional(),
+        author: z
+          .object({
+            name: z.string(),
+            url: z.string().url().optional(),
+            iconUrl: z.string().url().optional(),
+          })
+          .optional(),
+        fields: z
+          .array(
+            z.object({
+              name: z.string(),
+              value: z.string(),
+              inline: z.boolean().default(false),
+            }),
+          )
+          .optional(),
+      }),
+    )
+    .max(10)
+    .optional(), // Discord allows max 10 embeds
   components: z.array(z.any()).optional(), // Discord components (buttons, etc.)
 });
 
@@ -65,12 +82,16 @@ export const emailSendSchema = baseSendMessageSchema.extend({
   replyTo: z.string().email().optional(),
   priority: z.enum(["low", "normal", "high"]).default("normal"),
   isHtml: z.boolean().default(false),
-  attachments: z.array(z.object({
-    filename: z.string(),
-    content: z.string(), // Base64 encoded content
-    contentType: z.string().optional(),
-    size: z.number().int().min(0).optional(),
-  })).optional(),
+  attachments: z
+    .array(
+      z.object({
+        filename: z.string(),
+        content: z.string(), // Base64 encoded content
+        contentType: z.string().optional(),
+        size: z.number().int().min(0).optional(),
+      }),
+    )
+    .optional(),
   trackOpens: z.boolean().default(false),
   trackClicks: z.boolean().default(false),
 });
@@ -81,7 +102,13 @@ export const webhookSendSchema = baseSendMessageSchema.extend({
   headers: z.record(z.string()).optional(),
   queryParams: z.record(z.string()).optional(),
   payload: z.record(z.any()).optional(), // Custom payload structure
-  contentType: z.enum(["application/json", "application/x-www-form-urlencoded", "text/plain"]).default("application/json"),
+  contentType: z
+    .enum([
+      "application/json",
+      "application/x-www-form-urlencoded",
+      "text/plain",
+    ])
+    .default("application/json"),
   timeout: z.number().int().min(1).max(300).default(30),
 });
 
@@ -98,15 +125,20 @@ export const httpRequestSchema = z.object({
 
 // Bulk message sending schema
 export const bulkSendSchema = z.object({
-  messages: z.array(z.object({
-    toolId: z.number().int().positive(),
-    message: z.string().min(1),
-    recipients: z.string().optional(), // For email
-    subject: z.string().optional(), // For email
-    channel: z.string().optional(), // For Slack/Discord
-    templateId: z.number().int().positive().optional(),
-    variables: z.record(z.string()).optional(),
-  })).min(1, "At least one message is required").max(100, "Cannot send more than 100 messages at once"),
+  messages: z
+    .array(
+      z.object({
+        toolId: z.number().int().positive(),
+        message: z.string().min(1),
+        recipients: z.string().optional(), // For email
+        subject: z.string().optional(), // For email
+        channel: z.string().optional(), // For Slack/Discord
+        templateId: z.number().int().positive().optional(),
+        variables: z.record(z.string()).optional(),
+      }),
+    )
+    .min(1, "At least one message is required")
+    .max(100, "Cannot send more than 100 messages at once"),
   delayBetweenMessages: z.number().int().min(0).max(60).default(1), // Delay in seconds
   stopOnError: z.boolean().default(false),
 });
@@ -122,17 +154,27 @@ export const templateQuerySchema = z.object({
 });
 
 export const createTemplateSchema = z.object({
-  name: z.string().min(1, "Template name is required").max(100, "Name must be less than 100 characters"),
+  name: z
+    .string()
+    .min(1, "Template name is required")
+    .max(100, "Name must be less than 100 characters"),
   type: z.enum(["EMAIL", "SLACK", "DISCORD", "WEBHOOK", "HTTP"]),
   content: z.string().min(1, "Template content is required"),
   subject: z.string().optional(), // For email templates
-  description: z.string().max(500, "Description must be less than 500 characters").optional(),
-  variables: z.array(z.object({
-    name: z.string().min(1),
-    description: z.string().optional(),
-    required: z.boolean().default(false),
-    defaultValue: z.string().optional(),
-  })).default([]),
+  description: z
+    .string()
+    .max(500, "Description must be less than 500 characters")
+    .optional(),
+  variables: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        description: z.string().optional(),
+        required: z.boolean().default(false),
+        defaultValue: z.string().optional(),
+      }),
+    )
+    .default([]),
   isSystemTemplate: z.boolean().default(false),
   tags: z.array(z.string()).default([]),
 });
@@ -143,12 +185,16 @@ export const updateTemplateSchema = z.object({
   content: z.string().min(1).optional(),
   subject: z.string().optional(),
   description: z.string().max(500).optional(),
-  variables: z.array(z.object({
-    name: z.string().min(1),
-    description: z.string().optional(),
-    required: z.boolean().default(false),
-    defaultValue: z.string().optional(),
-  })).optional(),
+  variables: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        description: z.string().optional(),
+        required: z.boolean().default(false),
+        defaultValue: z.string().optional(),
+      }),
+    )
+    .optional(),
   tags: z.array(z.string()).optional(),
 });
 
@@ -162,7 +208,9 @@ export const messageHistorySchema = z.object({
   offset: z.number().min(0).default(0),
   toolId: z.number().int().positive().optional(),
   type: z.enum(["EMAIL", "SLACK", "DISCORD", "WEBHOOK", "HTTP"]).optional(),
-  status: z.enum(["sent", "failed", "pending", "delivered", "bounced"]).optional(),
+  status: z
+    .enum(["sent", "failed", "pending", "delivered", "bounced"])
+    .optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
   recipient: z.string().optional(), // Filter by recipient/channel

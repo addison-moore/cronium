@@ -1,6 +1,6 @@
 /**
  * System Template Seeding Service
- * 
+ *
  * Seeds the database with default system templates on first application run
  * System templates are visible to all users but only editable by admins
  */
@@ -12,19 +12,19 @@ import { count } from "drizzle-orm";
 
 export async function seedSystemTemplates(): Promise<void> {
   try {
-    console.log('Checking if system templates need seeding...');
-    
+    console.log("Checking if system templates need seeding...");
+
     // Check if any templates exist in the database
     const templateCount = await db.select({ count: count() }).from(templates);
-    const totalTemplates = templateCount[0]?.count || 0;
-    
+    const totalTemplates = templateCount[0]?.count ?? 0;
+
     if (totalTemplates > 0) {
       console.log(`Found ${totalTemplates} existing templates, skipping seed.`);
       return;
     }
-    
-    console.log('No templates found, seeding system templates...');
-    
+
+    console.log("No templates found, seeding system templates...");
+
     // Seed system templates for each tool type
     const systemTemplatesToSeed: {
       userId: null;
@@ -34,22 +34,22 @@ export async function seedSystemTemplates(): Promise<void> {
       subject: string | null;
       isSystemTemplate: true;
     }[] = [];
-    
+
     // Email system templates
-    const emailTemplates = defaultTemplates.EMAIL || [];
+    const emailTemplates = defaultTemplates.EMAIL ?? [];
     emailTemplates.forEach((template) => {
       systemTemplatesToSeed.push({
         userId: null, // System templates have no owner
         name: template.name,
         type: ToolType.EMAIL,
         content: template.content,
-        subject: template.subject || null,
+        subject: template.subject ?? null,
         isSystemTemplate: true,
       });
     });
-    
+
     // Slack system templates
-    const slackTemplates = defaultTemplates.SLACK || [];
+    const slackTemplates = defaultTemplates.SLACK ?? [];
     slackTemplates.forEach((template) => {
       systemTemplatesToSeed.push({
         userId: null,
@@ -60,9 +60,9 @@ export async function seedSystemTemplates(): Promise<void> {
         isSystemTemplate: true,
       });
     });
-    
+
     // Discord system templates
-    const discordTemplates = defaultTemplates.DISCORD || [];
+    const discordTemplates = defaultTemplates.DISCORD ?? [];
     discordTemplates.forEach((template) => {
       systemTemplatesToSeed.push({
         userId: null,
@@ -73,14 +73,15 @@ export async function seedSystemTemplates(): Promise<void> {
         isSystemTemplate: true,
       });
     });
-    
+
     if (systemTemplatesToSeed.length > 0) {
       await db.insert(templates).values(systemTemplatesToSeed);
-      console.log(`Successfully seeded ${systemTemplatesToSeed.length} system templates`);
+      console.log(
+        `Successfully seeded ${systemTemplatesToSeed.length} system templates`,
+      );
     }
-    
   } catch (error) {
-    console.error('Error seeding system templates:', error);
+    console.error("Error seeding system templates:", error);
     throw error;
   }
 }
@@ -93,7 +94,7 @@ export async function initializeSystemTemplates(): Promise<void> {
   try {
     await seedSystemTemplates();
   } catch (error) {
-    console.error('Failed to initialize system templates:', error);
+    console.error("Failed to initialize system templates:", error);
     // Don't throw - allow application to continue even if seeding fails
   }
 }

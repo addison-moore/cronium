@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Edit,
-  Trash2,
   RefreshCw,
   AlertCircle,
   Code,
@@ -39,32 +38,6 @@ import ServerEventsList from "@/components/dashboard/ServerEventsList";
 import ServerForm from "@/components/dashboard/ServerForm";
 import { ServerDetailsHeader } from "@/components/server-details/ServerDetailsHeader";
 import { trpc } from "@/lib/trpc";
-
-interface ServerData {
-  id: number;
-  name: string;
-  address: string;
-  username: string;
-  port: number;
-  createdAt: string;
-  updatedAt: string;
-  online?: boolean;
-  lastChecked?: string;
-  systemInfo?: {
-    platform?: string;
-    release?: string;
-    cpuCores?: number;
-    totalMemory?: string;
-    freeMemory?: string;
-    uptime?:
-      | number
-      | {
-          days: number;
-          hours: number;
-          minutes: number;
-        };
-  };
-}
 
 interface ServerDetailsPageProps {
   params: Promise<{ id: string; lang: string }>;
@@ -157,7 +130,7 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
   };
 
   const formatMemory = (memoryString?: string) => {
-    if (!memoryString || memoryString === "Unknown") return "Unknown";
+    if (!memoryString ?? memoryString === "Unknown") return "Unknown";
 
     // Handle memory strings like "457Mi", "1Gi", etc.
     const match = memoryString.match(/^(\d+(?:\.\d+)?)(.*)/);
@@ -338,7 +311,7 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
         server={{
           id: serverId,
           name: server.name,
-          online: server.online || false,
+          online: server.online ?? false,
         }}
         langParam={resolvedParams.lang}
         onDelete={() => setIsDeleteDialogOpen(true)}

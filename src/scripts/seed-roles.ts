@@ -51,11 +51,12 @@ async function seedRoles() {
         .set({ roleId: defaultRole!.id })
         .where(isNull(users.roleId));
 
-      console.log(`✓ Updated ${usersWithoutRoles.length} users to use default role`);
+      console.log(
+        `✓ Updated ${usersWithoutRoles.length} users to use default role`,
+      );
     }
 
     console.log("Role seeding completed successfully!");
-
   } catch (error) {
     console.error("Error seeding roles:", error);
     process.exit(1);

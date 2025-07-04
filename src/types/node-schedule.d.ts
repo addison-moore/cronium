@@ -1,4 +1,4 @@
-declare module 'node-schedule' {
+declare module "node-schedule" {
   export type Job = {
     cancel: () => void;
   };
@@ -15,7 +15,7 @@ declare module 'node-schedule' {
 
   export function scheduleJob(
     rule: RecurrenceRule | string | Date,
-    callback: () => void
+    callback: () => void,
   ): Job;
 
   export function gracefulShutdown(): void;

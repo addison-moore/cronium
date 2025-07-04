@@ -4,8 +4,6 @@ import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
-  Node,
-  Edge,
   Background,
   Controls,
   MiniMap,
@@ -13,11 +11,15 @@ import {
   useNodesState,
   useEdgesState,
   addEdge,
+  applyNodeChanges,
+  ConnectionLineType,
+} from "@xyflow/react";
+import type {
+  Node,
+  Edge,
   Connection,
   NodeChange,
   EdgeChange,
-  applyNodeChanges,
-  ConnectionLineType,
   NodeTypes,
   EdgeTypes,
   ReactFlowInstance,
@@ -423,7 +425,9 @@ export default function WorkflowCanvas({
 
       // Keep track of selected node
       const selectedNodes = updatedNodes.filter((node) => node.selected);
-      setSelectedNode(selectedNodes.length > 0 && selectedNodes[0] ? selectedNodes[0] : null);
+      setSelectedNode(
+        selectedNodes.length > 0 && selectedNodes[0] ? selectedNodes[0] : null,
+      );
     },
     [
       nodes,
@@ -710,7 +714,7 @@ export default function WorkflowCanvas({
   return (
     <ReactFlowProvider>
       <div
-        className="h-full border border-border rounded-md overflow-hidden relative"
+        className="border-border relative h-full overflow-hidden rounded-md border"
         ref={reactFlowWrapper}
       >
         <ReactFlow
@@ -739,29 +743,29 @@ export default function WorkflowCanvas({
           <Background color="#aaa" gap={16} size={1} />
           <Controls
             showInteractive={false}
-            className="bg-background border border-border fill-foreground"
+            className="bg-background border-border fill-foreground border"
           />
           <MiniMap
             nodeStrokeWidth={3}
             zoomable
             pannable
-            className="bg-background border rounded-md"
+            className="bg-background rounded-md border"
           />
           {/* Instructions overlay for empty canvas */}
           {nodes.length === 0 && !readOnly && (
-            <div className="z-0 h-full inset-0 flex items-center justify-center bg-pointer-events-none">
-              <div className="text-center max-w-md p-6">
-                <div className="mb-4 mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Plus className="h-6 w-6 text-primary" />
+            <div className="bg-pointer-events-none inset-0 z-0 flex h-full items-center justify-center">
+              <div className="max-w-md p-6 text-center">
+                <div className="bg-primary/10 mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full">
+                  <Plus className="text-primary h-6 w-6" />
                 </div>
-                <h3 className="text-lg font-medium mb-2">
+                <h3 className="mb-2 text-lg font-medium">
                   {t("EmptyCanvasTitle")}
                 </h3>
                 <p className="text-muted-foreground mb-4">
                   {t("EmptyCanvasDescription")}
                 </p>
                 {availableEvents.length === 0 && (
-                  <p className="text-xs text-muted-foreground border-t border-border pt-4 mt-4">
+                  <p className="text-muted-foreground border-border mt-4 border-t pt-4 text-xs">
                     {t("NoEventsHint")}
                   </p>
                 )}
@@ -772,7 +776,7 @@ export default function WorkflowCanvas({
           {!readOnly && (
             <Panel
               position="top-right"
-              className="mr-1 mt-1 z-100 bg-background/90 backdrop-blur-sm border border-border rounded-lg p-2 shadow-lg"
+              className="bg-background/90 border-border z-100 mt-1 mr-1 rounded-lg border p-2 shadow-lg backdrop-blur-sm"
             >
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
@@ -822,7 +826,7 @@ export default function WorkflowCanvas({
                   {onSave && (
                     <>
                       {/* Separator */}
-                      <div className="w-px h-6 bg-border" />
+                      <div className="bg-border h-6 w-px" />
 
                       <TooltipProvider>
                         <Tooltip>
@@ -831,16 +835,16 @@ export default function WorkflowCanvas({
                               onClick={onSave}
                               disabled={isSaving || !hasUnsavedChanges}
                               size="sm"
-                              className="flex items-center gap-1 h-8"
+                              className="flex h-8 items-center gap-1"
                             >
                               {isSaving ? (
                                 <>
-                                  <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
                                   <span className="text-xs">Saving</span>
                                 </>
                               ) : (
                                 <>
-                                  <CheckCircle className="w-3 h-3" />
+                                  <CheckCircle className="h-3 w-3" />
                                   <span className="text-xs">Save</span>
                                 </>
                               )}
@@ -853,7 +857,7 @@ export default function WorkflowCanvas({
                       </TooltipProvider>
 
                       {/* Separator */}
-                      <div className="w-px h-6 bg-border" />
+                      <div className="bg-border h-6 w-px" />
                     </>
                   )}
 
@@ -887,14 +891,14 @@ export default function WorkflowCanvas({
           {!readOnly && (
             <Panel
               position="top-left"
-              className={`border border-border rounded-md max-h-[calc(100vh-20rem)] ml-1 mt-1 z-100 transition-all duration-300 ease-in-out ${
+              className={`border-border z-100 mt-1 ml-1 max-h-[calc(100vh-20rem)] rounded-md border transition-all duration-300 ease-in-out ${
                 sidebarOpen ? "w-64 overflow-scroll" : "w-8 overflow-hidden"
               }`}
             >
               {/* Events List Sidebar */}
-              <div className="bg-white dark:bg-gray-900 shadow-md rounded-md h-full overflow-hidden flex flex-col z-100">
+              <div className="z-100 flex h-full flex-col overflow-hidden rounded-md bg-white shadow-md dark:bg-gray-900">
                 <div
-                  className={`bg-slate-100 dark:bg-gray-800 border-b border-border font-medium text-sm transition-all duration-300 ease-in-out ${
+                  className={`border-border border-b bg-slate-100 text-sm font-medium transition-all duration-300 ease-in-out dark:bg-gray-800 ${
                     sidebarOpen ? "p-3" : "p-2"
                   }`}
                 >
@@ -907,7 +911,7 @@ export default function WorkflowCanvas({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6 hover:bg-accent/50 transition-colors"
+                      className="hover:bg-accent/50 h-6 w-6 transition-colors"
                       onClick={() => setSidebarOpen(!sidebarOpen)}
                     >
                       <span className="sr-only">
@@ -922,23 +926,23 @@ export default function WorkflowCanvas({
                   </div>
                 </div>
                 {sidebarOpen && (
-                  <div className="overflow-y-auto flex-1 p-2 pb-16">
+                  <div className="flex-1 overflow-y-auto p-2 pb-16">
                     {/* Search Bar */}
-                    <div className="mb-3 relative">
+                    <div className="relative mb-3">
                       <div className="relative">
-                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                        <Search className="text-muted-foreground absolute top-1/2 left-2 h-3 w-3 -translate-y-1/2 transform" />
                         <Input
                           type="text"
                           placeholder="Search events..."
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          className="pl-7 pr-8 h-7 text-xs bg-tertiary-bg border-border/40 focus:border-border focus:ring-1 focus:ring-ring"
+                          className="bg-tertiary-bg border-border/40 focus:border-border focus:ring-ring h-7 pr-8 pl-7 text-xs focus:ring-1"
                         />
                         {searchQuery && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="absolute right-1 top-1/2 transform -translate-y-1/2 h-5 w-5 p-0 hover:bg-accent/50"
+                            className="hover:bg-accent/50 absolute top-1/2 right-1 h-5 w-5 -translate-y-1/2 transform p-0"
                             onClick={() => setSearchQuery("")}
                           >
                             <X className="h-3 w-3" />
@@ -948,24 +952,24 @@ export default function WorkflowCanvas({
                     </div>
 
                     {isLoading ? (
-                      <div className="p-4 text-center text-muted-foreground text-sm">
+                      <div className="text-muted-foreground p-4 text-center text-sm">
                         <Spinner size="md" className="mx-auto mb-2" />
                         <p>Loading events...</p>
                       </div>
                     ) : filteredEvents && filteredEvents.length > 0 ? (
-                      <ul className="space-y-1.5 pb-6 overflow-scroll">
+                      <ul className="space-y-1.5 overflow-scroll pb-6">
                         {filteredEvents.map((event) => (
                           <li key={event.id} className="group">
                             <div
-                              className="p-2 rounded-md border border-border/40 text-xs font-medium flex items-center justify-between bg-tertiary-bg hover:bg-accent/50 transition-colors cursor-grab"
+                              className="border-border/40 bg-tertiary-bg hover:bg-accent/50 flex cursor-grab items-center justify-between rounded-md border p-2 text-xs font-medium transition-colors"
                               draggable
                               onDragStart={(e) => onDragStart(e, event.id)}
                             >
-                              <div className="flex items-center mr-1.5 flex-1 min-w-0">
+                              <div className="mr-1.5 flex min-w-0 flex-1 items-center">
                                 <div className="mr-2">
                                   <EventTypeIcon type={event.type} size={16} />
                                 </div>
-                                <span className="truncate max-w-[140px]">
+                                <span className="max-w-[140px] truncate">
                                   {event.name}
                                 </span>
                               </div>
@@ -989,7 +993,7 @@ export default function WorkflowCanvas({
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-5 w-5 p-0 hover:bg-white/20 opacity-70 hover:opacity-100 transition-opacity flex-shrink-0"
+                                  className="h-5 w-5 flex-shrink-0 p-0 opacity-70 transition-opacity hover:bg-white/20 hover:opacity-100"
                                   onClick={(e) => e.stopPropagation()}
                                   onDragStart={(e) => e.preventDefault()}
                                   draggable={false}
@@ -1004,14 +1008,14 @@ export default function WorkflowCanvas({
                     ) : searchQuery &&
                       availableEvents &&
                       availableEvents.length > 0 ? (
-                      <div className="p-4 text-center text-muted-foreground text-sm">
-                        <Search className="h-4 w-4 mx-auto mb-2" />
+                      <div className="text-muted-foreground p-4 text-center text-sm">
+                        <Search className="mx-auto mb-2 h-4 w-4" />
                         <p>No events match your search</p>
                         <p className="mt-1 text-xs">Try different keywords</p>
                       </div>
                     ) : (
-                      <div className="p-4 text-center text-muted-foreground text-sm">
-                        <AlertCircle className="h-4 w-4 mx-auto mb-2" />
+                      <div className="text-muted-foreground p-4 text-center text-sm">
+                        <AlertCircle className="mx-auto mb-2 h-4 w-4" />
                         <p>{t("NoEventsAvailable")}</p>
                         <p className="mt-1 text-xs">{t("CreateEventsFirst")}</p>
                       </div>

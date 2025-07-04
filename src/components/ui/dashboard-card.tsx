@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { type ReactNode } from "react";
 import Link from "next/link";
 import {
   Card,
@@ -30,12 +30,12 @@ export function DashboardCard({
 }: DashboardCardProps) {
   return (
     <Card className="transition-all hover:shadow-md">
-      <CardHeader className="space-y-0 flex flex-row items-start justify-between pb-2">
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
         <div>
-          <CardTitle className="text-xl mb-1 tracking-tight">{title}</CardTitle>
+          <CardTitle className="mb-1 text-xl tracking-tight">{title}</CardTitle>
           <CardDescription className="text-sm">{description}</CardDescription>
         </div>
-        <div className="p-2 bg-primary/10 text-primary rounded-md">{icon}</div>
+        <div className="bg-primary/10 text-primary rounded-md p-2">{icon}</div>
       </CardHeader>
       <CardContent className="pt-4 pb-6">
         <Button

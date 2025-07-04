@@ -3,7 +3,11 @@
 import { useRouter, usePathname } from "next/navigation";
 import { useTransition } from "react";
 import { useLanguage } from "@/components/providers/language-provider";
-import { supportedLocales, localeNames, SupportedLocale } from "@shared/i18n";
+import {
+  supportedLocales,
+  localeNames,
+  type SupportedLocale,
+} from "@shared/i18n";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -35,7 +39,7 @@ export default function LanguageSelector() {
         <Button
           variant="ghost"
           size="sm"
-          className="h-9 w-9 px-0 hover-theme-button"
+          className="hover-theme-button h-9 w-9 px-0"
           disabled={isPending}
         >
           <Globe className="h-5 w-5" />

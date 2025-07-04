@@ -1,6 +1,8 @@
 const { fixupConfigRules, fixupPluginRules } = require("@eslint/compat");
 const typescriptEslint = require("@typescript-eslint/eslint-plugin");
 const _import = require("eslint-plugin-import");
+const prettier = require("eslint-plugin-prettier");
+const prettierConfig = require("eslint-config-prettier");
 const { FlatCompat } = require("@eslint/eslintrc");
 const js = require("@eslint/js");
 const typescriptEslintParser = require("@typescript-eslint/parser");
@@ -32,15 +34,18 @@ module.exports = [
   },
   ...fixupConfigRules(
     compat.extends(
-      "next/core-web-vitals",
+      "plugin:@next/next/recommended",
       "plugin:@typescript-eslint/recommended-type-checked",
       "plugin:@typescript-eslint/stylistic-type-checked",
     ),
   ),
+  prettierConfig,
+
   {
     plugins: {
       "@typescript-eslint": fixupPluginRules(typescriptEslint),
       import: fixupPluginRules(_import),
+      prettier: fixupPluginRules(prettier),
     },
 
     languageOptions: {
@@ -55,6 +60,7 @@ module.exports = [
     },
 
     rules: {
+      "prettier/prettier": "warn",
       "@typescript-eslint/array-type": "off",
       "@typescript-eslint/consistent-type-definitions": "off",
 
@@ -91,7 +97,6 @@ module.exports = [
       "@typescript-eslint/no-unsafe-call": "error",
       "@typescript-eslint/no-unsafe-return": "error",
       "@typescript-eslint/no-unsafe-argument": "warn",
-      "@typescript-eslint/prefer-nullish-coalescing": "warn",
       "@typescript-eslint/no-unnecessary-type-assertion": "warn",
       "@typescript-eslint/prefer-optional-chain": "warn",
       "@typescript-eslint/restrict-template-expressions": [

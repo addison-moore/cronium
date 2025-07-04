@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { io, Socket } from "socket.io-client";
+import { io } from "socket.io-client";
+import type { Socket } from "socket.io-client";
 import { useAuth } from "@/hooks/useAuth";
 
 interface TerminalProps {
@@ -21,7 +22,7 @@ export default function Terminal({
   const termRef = useRef<any>(null);
   const fitAddonRef = useRef<any>(null);
   const { user, isLoading: isUserLoading } = useAuth();
-  
+
   const [loading, setLoading] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const socketRef = useRef<Socket | null>(null);
@@ -65,7 +66,8 @@ export default function Terminal({
             cursor: "#839496",
           },
           fontSize: 14,
-          fontFamily: '"FiraCode Nerd Font Mono", "Fira Code", "Consolas", "Monaco", monospace',
+          fontFamily:
+            '"FiraCode Nerd Font Mono", "Fira Code", "Consolas", "Monaco", monospace',
           cursorBlink: true,
           rows: 30,
           cols: 120,
@@ -93,7 +95,8 @@ export default function Terminal({
         term.unicode.activeVersion = "11";
 
         // Connect to Socket.IO server
-        const socket = io("http://localhost:5002", { // Connect to standalone Socket.IO server
+        const socket = io("http://localhost:5002", {
+          // Connect to standalone Socket.IO server
           path: "/api/socketio",
           transports: ["websocket"], // Explicitly use websockets
         });
@@ -102,7 +105,10 @@ export default function Terminal({
         socket.on("connect", () => {
           console.log("Terminal: Socket.IO connected");
           setLoading(true);
-          console.log("Terminal: Emitting 'create-terminal' with userId:", user.id);
+          console.log(
+            "Terminal: Emitting 'create-terminal' with userId:",
+            user.id,
+          );
           socket.emit("create-terminal", {
             userId: user.id,
             serverId: serverId || undefined,
@@ -111,14 +117,20 @@ export default function Terminal({
           });
         });
 
-        socket.on("terminal-created", ({ sessionId }: { sessionId: string }) => {
-          sessionIdRef.current = sessionId;
-          setLoading(false);
-          console.log("Terminal: 'terminal-created' event received, sessionId:", sessionId);
-          term.write(`Welcome to Cronium Terminal - ${serverName}\r\n`);
-          term.write("Using your default shell configuration...\r\n\r\n");
-          // The actual prompt will be sent by the backend shell
-        })
+        socket.on(
+          "terminal-created",
+          ({ sessionId }: { sessionId: string }) => {
+            sessionIdRef.current = sessionId;
+            setLoading(false);
+            console.log(
+              "Terminal: 'terminal-created' event received, sessionId:",
+              sessionId,
+            );
+            term.write(`Welcome to Cronium Terminal - ${serverName}\r\n`);
+            term.write("Using your default shell configuration...\r\n\r\n");
+            // The actual prompt will be sent by the backend shell
+          },
+        );
 
         socket.on("terminal-output", ({ data }: { data: string }) => {
           // console.log("Terminal: 'terminal-output' event received, data:", data);
@@ -126,14 +138,20 @@ export default function Terminal({
         });
 
         socket.on("terminal-exit", ({ exitCode }: { exitCode: number }) => {
-          console.log("Terminal: 'terminal-exit' event received, exitCode:", exitCode);
+          console.log(
+            "Terminal: 'terminal-exit' event received, exitCode:",
+            exitCode,
+          );
           term.write(`\r\n[Process exited with code ${exitCode}]\r\n`);
           term.dispose();
           socket.disconnect();
         });
 
         socket.on("terminal-error", ({ error }: { error: string }) => {
-          console.error("Terminal: 'terminal-error' event received, error:", error);
+          console.error(
+            "Terminal: 'terminal-error' event received, error:",
+            error,
+          );
           term.write(`\r\nError: ${error}\r\n`);
           setLoading(false);
         });
@@ -173,7 +191,9 @@ export default function Terminal({
           }
           if (socketRef.current) {
             if (sessionIdRef.current) {
-              socketRef.current.emit("destroy-terminal", { sessionId: sessionIdRef.current });
+              socketRef.current.emit("destroy-terminal", {
+                sessionId: sessionIdRef.current,
+              });
             }
             socketRef.current.disconnect();
           }
@@ -188,24 +208,24 @@ export default function Terminal({
       // Store cleanup function to call on unmount
       return cleanupFn;
     });
-    
+
     // Return empty cleanup for now
     return () => {};
   }, [serverId, serverName, isClient, user, isUserLoading]);
 
   if (!isClient || isUserLoading) {
     return (
-      <div className="bg-solarized-base03 h-[60vh] w-full overflow-hidden relative rounded pb-2 border flex items-center justify-center">
+      <div className="bg-solarized-base03 relative flex h-[60vh] w-full items-center justify-center overflow-hidden rounded border pb-2">
         <div className="text-gray-400">Loading terminal...</div>
       </div>
     );
   }
 
   return (
-    <div className="bg-solarized-base03 h-[60vh] w-full overflow-auto relative rounded pb-2 border">
+    <div className="bg-solarized-base03 relative h-[60vh] w-full overflow-auto rounded border pb-2">
       <div ref={terminalRef} className="h-full w-full p-2" />
       {loading && (
-        <div className="absolute top-2 right-2 bg-blue-500/20 text-blue-300 px-2 py-1 rounded text-xs">
+        <div className="absolute top-2 right-2 rounded bg-blue-500/20 px-2 py-1 text-xs text-blue-300">
           Executing...
         </div>
       )}

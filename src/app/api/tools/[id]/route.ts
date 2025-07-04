@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/server/db";
@@ -50,7 +51,12 @@ export async function PUT(
     const [updatedTool] = await db
       .update(toolCredentials)
       .set(updateData)
-      .where(and(eq(toolCredentials.id, toolId), eq(toolCredentials.userId, session.user.id)))
+      .where(
+        and(
+          eq(toolCredentials.id, toolId),
+          eq(toolCredentials.userId, session.user.id),
+        ),
+      )
       .returning();
 
     if (!updatedTool) {
@@ -95,7 +101,12 @@ export async function DELETE(
 
     const [deletedTool] = await db
       .delete(toolCredentials)
-      .where(and(eq(toolCredentials.id, toolId), eq(toolCredentials.userId, session.user.id)))
+      .where(
+        and(
+          eq(toolCredentials.id, toolId),
+          eq(toolCredentials.userId, session.user.id),
+        ),
+      )
       .returning();
 
     if (!deletedTool) {

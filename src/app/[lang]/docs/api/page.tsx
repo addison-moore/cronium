@@ -66,7 +66,7 @@ function SimpleCodeBlock({
 }) {
   return (
     <div className="relative">
-      <pre className="bg-stone-900 text-gray-100 p-4 border border-border rounded-lg overflow-x-auto text-sm">
+      <pre className="border-border overflow-x-auto rounded-lg border bg-stone-900 p-4 text-sm text-gray-100">
         <code>{children}</code>
       </pre>
       <button className="absolute top-2 right-2 p-2 text-gray-400 hover:text-gray-200">
@@ -87,7 +87,7 @@ function APISection({
 }) {
   return (
     <section id={id} className="mb-12">
-      <h2 className="text-2xl font-bold mb-4">{title}</h2>
+      <h2 className="mb-4 text-2xl font-bold">{title}</h2>
       {children}
     </section>
   );
@@ -119,10 +119,10 @@ function EndpointCard({
     <Accordion type="single" collapsible className="mb-1">
       <AccordionItem
         value={accordionId}
-        className="border rounded-lg bg-secondary-bg"
+        className="bg-secondary-bg rounded-lg border"
       >
         <AccordionTrigger className="px-6 py-3 hover:no-underline">
-          <div className="flex items-center gap-2 w-full">
+          <div className="flex w-full items-center gap-2">
             <Badge
               variant={
                 method === "GET"
@@ -134,10 +134,10 @@ function EndpointCard({
             >
               {method}
             </Badge>
-            <code className="text-sm bg-muted px-2 py-1 rounded">
+            <code className="bg-muted rounded px-2 py-1 text-sm">
               {endpoint}
             </code>
-            <span className="text-sm text-muted-foreground ml-auto mr-4 text-left">
+            <span className="text-muted-foreground mr-4 ml-auto text-left text-sm">
               {description}
             </span>
           </div>
@@ -145,19 +145,19 @@ function EndpointCard({
         <AccordionContent className="px-6 pb-6">
           {examples && (
             <div className="mb-6">
-              <h4 className="font-semibold mb-3">Example</h4>
+              <h4 className="mb-3 font-semibold">Example</h4>
               <CodeBlock examples={examples} />
             </div>
           )}
 
           {parameters && (
             <div className="mb-4">
-              <h4 className="font-semibold mb-2">Parameters</h4>
+              <h4 className="mb-2 font-semibold">Parameters</h4>
               <div className="space-y-2">
                 {parameters.map((param, index) => (
-                  <div key={index} className="border-l-2 border-primary pl-3">
+                  <div key={index} className="border-primary border-l-2 pl-3">
                     <div className="flex items-center gap-2">
-                      <code className="text-sm font-mono">{param.name}</code>
+                      <code className="font-mono text-sm">{param.name}</code>
                       <Badge variant="outline">{param.type}</Badge>
                       {param.required && (
                         <Badge variant="destructive" className="text-xs">
@@ -165,7 +165,7 @@ function EndpointCard({
                         </Badge>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <p className="text-muted-foreground mt-1 text-sm">
                       {param.description}
                     </p>
                   </div>
@@ -176,7 +176,7 @@ function EndpointCard({
 
           {response && (
             <div className="mb-4">
-              <h4 className="font-semibold mb-2">Response</h4>
+              <h4 className="mb-2 font-semibold">Response</h4>
               <SimpleCodeBlock language="json">{response}</SimpleCodeBlock>
             </div>
           )}
@@ -196,10 +196,10 @@ export default async function APIDocsPage({
   return (
     <DocsLayout lang={lang} tableOfContents={tableOfContents}>
       <ApiCodeExamples>
-        <div className="max-w-4xl mx-auto">
+        <div className="mx-auto max-w-4xl">
           <div className="mb-8">
-            <h1 className="text-4xl font-bold mb-4">API Reference</h1>
-            <p className="text-xl text-muted-foreground">
+            <h1 className="mb-4 text-4xl font-bold">API Reference</h1>
+            <p className="text-muted-foreground text-xl">
               Complete API documentation for integrating with Cronium
               programmatically.
             </p>
@@ -227,31 +227,31 @@ export default async function APIDocsPage({
               <CardContent>
                 <div className="space-y-4">
                   <div>
-                    <h4 className="font-semibold mb-2">
+                    <h4 className="mb-2 font-semibold">
                       Step 1: Navigate to API Settings
                     </h4>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       Go to your account settings and select the "API Tokens"
                       tab.
                     </p>
                   </div>
                   <div>
-                    <h4 className="font-semibold mb-2">
+                    <h4 className="mb-2 font-semibold">
                       Step 2: Create New Token
                     </h4>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       Click "Create New Token" and provide a descriptive name
                       for your token.
                     </p>
                   </div>
                   <div>
-                    <h4 className="font-semibold mb-2">
+                    <h4 className="mb-2 font-semibold">
                       Step 3: Set Permissions
                     </h4>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       Choose the appropriate permissions for your use case:
                     </p>
-                    <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-muted-foreground">
+                    <ul className="text-muted-foreground mt-2 list-inside list-disc space-y-1 text-sm">
                       <li>
                         <strong>Read:</strong> View events, workflows, and logs
                       </li>
@@ -268,10 +268,10 @@ export default async function APIDocsPage({
                     </ul>
                   </div>
                   <div>
-                    <h4 className="font-semibold mb-2">
+                    <h4 className="mb-2 font-semibold">
                       Step 4: Copy Your Token
                     </h4>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       Copy the generated token immediately. For security
                       reasons, you won't be able to view it again.
                     </p>
@@ -834,11 +834,11 @@ export default async function APIDocsPage({
               examples={variablesApiExamples.deleteVariable}
             />
 
-            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-              <h4 className="font-semibold mb-2 text-blue-900 dark:text-blue-100">
+            <div className="mt-6 rounded-lg bg-blue-50 p-4 dark:bg-blue-950/20">
+              <h4 className="mb-2 font-semibold text-blue-900 dark:text-blue-100">
                 Using Variables in Scripts
               </h4>
-              <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
+              <p className="mb-3 text-sm text-blue-700 dark:text-blue-300">
                 Variables created via the API can be accessed in your scripts
                 using runtime helpers:
               </p>
@@ -898,8 +898,8 @@ cronium.setVariable "LAST_RUN" "$(date -Iseconds)"`}
                 </SimpleCodeBlock>
 
                 <div className="mt-6">
-                  <h4 className="font-semibold mb-3">HTTP Status Codes</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <h4 className="mb-3 font-semibold">HTTP Status Codes</h4>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div className="flex items-center gap-3">
                       <Badge>200</Badge>
                       <span className="text-sm">Success</span>
