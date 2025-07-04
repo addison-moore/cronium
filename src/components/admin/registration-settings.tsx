@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTranslations } from "next-intl";
@@ -91,10 +91,18 @@ export function RegistrationSettings({
       <form onSubmit={form.handleSubmit(onSave)} className="space-y-6">
         <div className="space-y-4">
           <div className="flex items-center space-x-2">
-            <Switch
-              id="allowRegistration"
-              checked={form.watch("allowRegistration") ?? false}
-              onCheckedChange={handleAllowRegistrationChange}
+            <Controller
+              name="allowRegistration"
+              control={form.control}
+              render={({ field }) => (
+                <Switch
+                  id="allowRegistration"
+                  checked={field.value ?? false}
+                  onCheckedChange={(checked) => {
+                    handleAllowRegistrationChange(checked);
+                  }}
+                />
+              )}
             />
             <Label htmlFor="allowRegistration">
               {t("RegistrationSettings.AllowRegistration")}
@@ -102,10 +110,18 @@ export function RegistrationSettings({
           </div>
 
           <div className="flex items-center space-x-2">
-            <Switch
-              id="requireAdminApproval"
-              checked={form.watch("requireAdminApproval") ?? false}
-              onCheckedChange={handleRequireAdminApprovalChange}
+            <Controller
+              name="requireAdminApproval"
+              control={form.control}
+              render={({ field }) => (
+                <Switch
+                  id="requireAdminApproval"
+                  checked={field.value ?? false}
+                  onCheckedChange={(checked) => {
+                    handleRequireAdminApprovalChange(checked);
+                  }}
+                />
+              )}
             />
             <Label htmlFor="requireAdminApproval">
               {t("RegistrationSettings.RequireAdminApproval")}
@@ -113,10 +129,18 @@ export function RegistrationSettings({
           </div>
 
           <div className="flex items-center space-x-2">
-            <Switch
-              id="inviteOnly"
-              checked={form.watch("inviteOnly") ?? false}
-              onCheckedChange={handleInviteOnlyChange}
+            <Controller
+              name="inviteOnly"
+              control={form.control}
+              render={({ field }) => (
+                <Switch
+                  id="inviteOnly"
+                  checked={field.value ?? false}
+                  onCheckedChange={(checked) => {
+                    handleInviteOnlyChange(checked);
+                  }}
+                />
+              )}
             />
             <Label htmlFor="inviteOnly">
               {t("RegistrationSettings.InviteOnly")}

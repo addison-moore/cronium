@@ -60,8 +60,8 @@ export default function ServerForm({
   };
 
   // Initialize the form with the provided server data or defaults
-  const form = useForm({
-    resolver: zodResolver(serverFormSchema) as any,
+  const form = useForm<UpdateServerFormValues>({
+    resolver: zodResolver(serverFormSchema),
     defaultValues: initialServer
       ? {
           name: initialServer.name,
@@ -142,7 +142,7 @@ export default function ServerForm({
   }, [form]);
 
   // Form submission handler
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: UpdateServerFormValues) => {
     // Build request payload
     const payload = {
       ...data,
@@ -169,10 +169,10 @@ export default function ServerForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <div className="space-y-4">
           <FormField
-            control={form.control as any}
+            control={form.control}
             name="name"
             render={({ field }) => (
               <FormItem>
@@ -193,7 +193,7 @@ export default function ServerForm({
           />
 
           <FormField
-            control={form.control as any}
+            control={form.control}
             name="address"
             render={({ field }) => (
               <FormItem>
@@ -215,7 +215,7 @@ export default function ServerForm({
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <FormField
-              control={form.control as any}
+              control={form.control}
               name="username"
               render={({ field }) => (
                 <FormItem>
@@ -236,7 +236,7 @@ export default function ServerForm({
             />
 
             <FormField
-              control={form.control as any}
+              control={form.control}
               name="port"
               render={({ field }) => (
                 <FormItem>
@@ -261,7 +261,7 @@ export default function ServerForm({
           </div>
 
           <FormField
-            control={form.control as any}
+            control={form.control}
             name="sshKey"
             render={({ field }) => (
               <FormItem>
@@ -302,7 +302,7 @@ MIIEpAIBAAKCAQEAxyz...
           />
 
           <FormField
-            control={form.control as any}
+            control={form.control}
             name="shared"
             render={({ field }) => (
               <FormItem className="flex flex-row items-start space-y-0 space-x-3 rounded-md border p-4">
