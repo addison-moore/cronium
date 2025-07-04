@@ -1,4 +1,5 @@
-import { SupportedLocale, supportedLocales, defaultLocale } from "@shared/i18n";
+import { supportedLocales, defaultLocale } from "@shared/i18n";
+import type { SupportedLocale } from "@shared/i18n";
 import { redirect } from "next/navigation";
 import React from "react";
 import { Providers } from "@/components/providers/Providers";

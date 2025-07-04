@@ -128,7 +128,7 @@ export default function ServerForm({
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
       if (name === "sshKey" || name === undefined) {
-        const sshKeyValue = value.sshKey as string;
+        const sshKeyValue = value.sshKey!;
         if (sshKeyValue) {
           const warning = validateSshKey(sshKeyValue);
           setSshKeyWarning(warning);

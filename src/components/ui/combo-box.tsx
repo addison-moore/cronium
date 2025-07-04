@@ -127,7 +127,7 @@ export function ComboBox({
             role="ComboBox"
             aria-expanded={open}
             className={cn(
-              "w-full justify-between h-10 border border-gray-300 rounded-md hover:cursor-pointer disabled:pointer-events-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all hover:border-gray-400 dark:bg-gray-800 dark:border-gray-600 dark:hover:border-gray-500",
+              "focus:ring-primary/20 focus:border-primary h-10 w-full justify-between rounded-md border border-gray-300 transition-all hover:cursor-pointer hover:border-gray-400 focus:ring-2 disabled:pointer-events-none dark:border-gray-600 dark:bg-gray-800 dark:hover:border-gray-500",
               className,
             )}
           >
@@ -136,11 +136,11 @@ export function ComboBox({
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-full p-0  pb-1 shadow-md rounded-md border border-border bg-background"
+          className="border-border bg-background w-full rounded-md border p-0 pb-1 shadow-md"
           align="start"
         >
-          <div className="flex items-center px-3 py-2 border-b border-gray-200 dark:border-gray-700">
-            <Search className="h-4 w-4 mr-2 text-gray-400" />
+          <div className="flex items-center border-b border-gray-200 px-3 py-2 dark:border-gray-700">
+            <Search className="mr-2 h-4 w-4 text-gray-400" />
             <input
               ref={inputRef}
               value={searchTerm}
@@ -167,13 +167,13 @@ export function ComboBox({
                     }}
                     onClick={() => handleSelect(option.value)}
                     className={cn(
-                      "flex items-center px-2 py-2 text-sm rounded-md cursor-pointer",
+                      "flex cursor-pointer items-center rounded-md px-2 py-2 text-sm",
                       "hover:bg-gray-100 dark:hover:bg-gray-800",
                       value === option.value
                         ? "bg-gray-100 dark:bg-gray-800"
                         : "",
                       highlightedIndex === index
-                        ? "bg-primary dark:bg-primary/30 border border-primary"
+                        ? "bg-primary dark:bg-primary/30 border-primary border"
                         : "",
                     )}
                   >

@@ -1,8 +1,6 @@
 "use client";
 
 import { useRouter, useParams } from "next/navigation";
-import { useCallback } from "react";
-import { toast } from "@/components/ui/use-toast";
 import EventForm from "@/components/event-form/EventForm";
 
 export default function NewEventPage() {

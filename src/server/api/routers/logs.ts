@@ -12,7 +12,7 @@ import {
   workflowLogsSchema,
 } from "@shared/schemas/logs";
 import { storage } from "@/server/storage";
-import { UserRole } from "@shared/schema";
+import { UserRole, LogStatus } from "@shared/schema";
 
 // Custom procedure that handles auth for tRPC fetch adapter
 const logProcedure = publicProcedure.use(async ({ ctx, next }) => {
@@ -28,7 +28,9 @@ const logProcedure = publicProcedure.use(async ({ ctx, next }) => {
       // For development, get first admin user
       if (process.env.NODE_ENV === "development") {
         const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter((user) => user.role === "ADMIN");
+        const adminUsers = allUsers.filter(
+          (user) => user.role === UserRole.ADMIN,
+        );
         const firstAdmin = adminUsers[0];
         if (firstAdmin) {
           userId = firstAdmin.id;
@@ -76,7 +78,9 @@ const adminLogProcedure = publicProcedure.use(async ({ ctx, next }) => {
       // For development, get first admin user
       if (process.env.NODE_ENV === "development") {
         const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter((user) => user.role === "ADMIN");
+        const adminUsers = allUsers.filter(
+          (user) => user.role === UserRole.ADMIN,
+        );
         const firstAdmin = adminUsers[0];
         if (firstAdmin) {
           userId = firstAdmin.id;
@@ -439,9 +443,9 @@ export const logsRouter = createTRPCRouter({
 
       const stats = {
         total: logs.length,
-        success: logs.filter((log) => log.status === "SUCCESS").length,
-        failure: logs.filter((log) => log.status === "FAILURE").length,
-        running: logs.filter((log) => log.status === "RUNNING").length,
+        success: logs.filter((log) => log.status === LogStatus.SUCCESS).length,
+        failure: logs.filter((log) => log.status === LogStatus.FAILURE).length,
+        running: logs.filter((log) => log.status === LogStatus.RUNNING).length,
         successRate: 0,
         failureRate: 0,
         averageDuration: 0,

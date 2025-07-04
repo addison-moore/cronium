@@ -3,6 +3,7 @@ import { createTRPCRouter, protectedProcedure, adminProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { scheduler } from "@/lib/scheduler";
 import { initializeSystemTemplates } from "@/lib/template-seeding";
+import { UserRole } from "@/shared/schema";
 
 export const systemRouter = createTRPCRouter({
   // Get system health status
@@ -47,7 +48,7 @@ export const systemRouter = createTRPCRouter({
   // Get system status information
   getSystemInfo: protectedProcedure.query(async ({ ctx }) => {
     try {
-      const isAdmin = ctx.session.user.role === "ADMIN";
+      const isAdmin = ctx.session.user.role === UserRole.ADMIN;
 
       // Basic system info available to all users
       const systemInfo = {

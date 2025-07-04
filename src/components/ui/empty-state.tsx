@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
@@ -34,11 +34,11 @@ export function EmptyState({
   className = "",
 }: EmptyStateProps) {
   // Determine if we have an action through individual props or the action object
-  const hasAction = action || (actionLabel && actionHref);
+  const hasAction = action ?? (actionLabel && actionHref);
 
   // Extract action details from either source
   const actionDetails =
-    action ||
+    action ??
     (actionLabel && actionHref
       ? {
           label: actionLabel,
@@ -49,10 +49,10 @@ export function EmptyState({
 
   return (
     <div
-      className={`flex flex-col items-center justify-center text-center p-8 ${className}`}
+      className={`flex flex-col items-center justify-center p-8 text-center ${className}`}
     >
       <div className="text-muted-foreground mb-4">{icon}</div>
-      <h3 className="text-lg font-medium mb-2">{title}</h3>
+      <h3 className="mb-2 text-lg font-medium">{title}</h3>
       {description && (
         <p className="text-muted-foreground mb-4 max-w-md">{description}</p>
       )}

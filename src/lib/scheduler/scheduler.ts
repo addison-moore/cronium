@@ -1,10 +1,6 @@
 import { EventStatus, TimeUnit } from "@/shared/schema";
-import {
-  scheduleJob,
-  RecurrenceRule,
-  Job as NodeScheduleJob,
-  gracefulShutdown,
-} from "node-schedule";
+import { scheduleJob, RecurrenceRule, gracefulShutdown } from "node-schedule";
+import type { Job as NodeScheduleJob } from "node-schedule";
 import { db } from "@/server/db";
 import { sql } from "drizzle-orm";
 import { storage } from "@/server/storage";
@@ -22,16 +18,16 @@ import {
 import { handleExecutionCount } from "./execution-counter";
 
 export class ScriptScheduler {
-  private jobs: Map<number, NodeScheduleJob> = new Map();
+  private jobs = new Map<number, NodeScheduleJob>();
   private isInitialized = false;
   private initializationInProgress = false;
   private lastInitializedAt: Date | null = null;
   // Track event execution times to prevent duplicate runs
-  private lastExecutionTimes: Map<number, Date> = new Map();
+  private lastExecutionTimes = new Map<number, Date>();
   // Track events that are currently executing to prevent parallel execution
-  private executingEvents: Set<number> = new Set();
+  private executingEvents = new Set<number>();
   // Track events that are currently being scheduled to prevent duplicate job creation
-  private schedulingInProgress: Set<number> = new Set();
+  private schedulingInProgress = new Set<number>();
 
   constructor() {}
 
@@ -73,7 +69,7 @@ export class ScriptScheduler {
       console.log("Cancelling all existing scheduled jobs");
       this.jobs.forEach((job, eventId) => {
         console.log(
-          `Cancelling existing job for event ${eventId} during initialization`,
+          `Cancelling existing job for event ${String(eventId)} during initialization`,
         );
         job.cancel();
         this.jobs.delete(eventId);
@@ -89,12 +85,14 @@ export class ScriptScheduler {
         .from(events)
         .where(sql`${events.status} = 'ACTIVE'`);
 
-      console.log(`Found ${activeEvents.length} active events to schedule`);
+      console.log(
+        `Found ${String(activeEvents.length)} active events to schedule`,
+      );
 
       // Schedule each active event with a fresh state
       for (const event of activeEvents) {
         const fullEvent = await storage.getEventWithRelations(event.id);
-        if (fullEvent && fullEvent.status === "ACTIVE") {
+        if (fullEvent && fullEvent.status === EventStatus.ACTIVE) {
           await this.scheduleScript(fullEvent);
         }
       }
@@ -102,7 +100,7 @@ export class ScriptScheduler {
       this.isInitialized = true;
       this.lastInitializedAt = now;
       console.log(
-        `Event scheduler initialized with ${activeEvents.length} active events`,
+        `Event scheduler initialized with ${String(activeEvents.length)} active events`,
       );
 
       // Handle graceful shutdown
@@ -128,25 +126,29 @@ export class ScriptScheduler {
   }
 
   async scheduleScript(event: any) {
-    console.log(`Attempting to schedule event ${event.id}: ${event.name}`);
+    console.log(
+      `Attempting to schedule event ${String(event.id)}: ${event.name ?? ""}`,
+    );
 
     // Prevent duplicate scheduling attempts during the process
     if (this.schedulingInProgress.has(event.id)) {
       console.log(
-        `Event ${event.id} is already being scheduled elsewhere. Skipping duplicate attempt.`,
+        `Event ${String(event.id)} is already being scheduled elsewhere. Skipping duplicate attempt.`,
       );
       return;
     }
 
     // Cancel existing job if it exists
     if (this.jobs.has(event.id)) {
-      console.log(`Cancelling existing job for event ${event.id}`);
+      console.log(`Cancelling existing job for event ${String(event.id)}`);
       this.jobs.get(event.id)?.cancel();
       this.jobs.delete(event.id);
     }
 
     if (event.status !== "ACTIVE") {
-      console.log(`Script ${event.id} is not active, skipping scheduling`);
+      console.log(
+        `Script ${String(event.id)} is not active, skipping scheduling`,
+      );
       return;
     }
 
@@ -155,16 +157,18 @@ export class ScriptScheduler {
       // This is important for when a event transitions from DRAFT to ACTIVE
       const refreshedScript = await storage.getEventWithRelations(event.id);
       if (!refreshedScript) {
-        console.error(`Script ${event.id} not found during scheduling refresh`);
+        console.error(
+          `Script ${String(event.id)} not found during scheduling refresh`,
+        );
         return;
       }
 
       // Debug log to help diagnose issues
       console.log(
-        `Scheduling event ${refreshedScript.id} (${refreshedScript.name})`,
+        `Scheduling event ${String(refreshedScript.id)} (${refreshedScript.name ?? ""})`,
       );
       console.log(
-        `Script status: ${refreshedScript.status}, Start time: ${refreshedScript.startTime ? new Date(refreshedScript.startTime).toISOString() : "Not set"}`,
+        `Script status: ${refreshedScript.status ?? ""}, Start time: ${refreshedScript.startTime ? new Date(refreshedScript.startTime).toISOString() : "Not set"}`,
       );
 
       // Check if event has a start time in the future
@@ -181,13 +185,13 @@ export class ScriptScheduler {
 
       if (startTimeInFuture) {
         console.log(
-          `Script ${refreshedScript.id} has future start time: ${startDate?.toISOString()}. Scheduling initial activation.`,
+          `Script ${String(refreshedScript.id)} has future start time: ${startDate?.toISOString() ?? ""}. Scheduling initial activation.`,
         );
 
         // Schedule a one-time job at the start time
         const initialJob = scheduleJob(startDate, async () => {
           console.log(
-            `Start time reached for event ${refreshedScript.id}. Executing and activating recurring schedule.`,
+            `Start time reached for event ${String(refreshedScript.id)}. Executing and activating recurring schedule.`,
           );
 
           // Execute the event immediately when the start time is reached
@@ -200,17 +204,17 @@ export class ScriptScheduler {
         // Store the initial job
         this.jobs.set(refreshedScript.id, initialJob);
         console.log(
-          `Initial job scheduled for event ${refreshedScript.id}: ${refreshedScript.name} at ${startDate?.toISOString()}`,
+          `Initial job scheduled for event ${String(refreshedScript.id)}: ${refreshedScript.name ?? ""} at ${startDate?.toISOString() ?? ""}`,
         );
       } else {
         // Set up the recurring schedule immediately
         console.log(
-          `Script ${refreshedScript.id} has no future start time or start time has passed. Setting up recurring schedule immediately.`,
+          `Script ${String(refreshedScript.id)} has no future start time or start time has passed. Setting up recurring schedule immediately.`,
         );
         this.setupRecurringSchedule(refreshedScript);
       }
     } catch (error) {
-      console.error(`Error scheduling event ${event.id}:`, error);
+      console.error(`Error scheduling event ${String(event.id)}:`, error);
     }
   }
 
@@ -221,13 +225,13 @@ export class ScriptScheduler {
     // Create a unique ID for this setup process for better debugging
     const setupId = `setup-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     console.log(
-      `[${setupId}] Setting up schedule for event ${event.id}: ${event.name}`,
+      `[${setupId}] Setting up schedule for event ${String(event.id)}: ${event.name ?? ""}`,
     );
 
     // Prevent duplicate scheduling attempts
     if (this.schedulingInProgress.has(event.id)) {
       console.log(
-        `[${setupId}] Event ${event.id} is already being scheduled. Skipping duplicate attempt.`,
+        `[${setupId}] Event ${String(event.id)} is already being scheduled. Skipping duplicate attempt.`,
       );
       return;
     }
@@ -235,7 +239,7 @@ export class ScriptScheduler {
     // Check if a job already exists for this event
     if (this.jobs.has(event.id)) {
       console.log(
-        `[${setupId}] Event ${event.id} already has an active job. Skipping duplicate scheduling.`,
+        `[${setupId}] Event ${String(event.id)} already has an active job. Skipping duplicate scheduling.`,
       );
       return;
     }
@@ -247,7 +251,7 @@ export class ScriptScheduler {
       // This is critical to prevent multiple executions of the same event
       if (this.jobs.has(event.id)) {
         console.log(
-          `[${setupId}] Cancelling existing job for event ${event.id}`,
+          `[${setupId}] Cancelling existing job for event ${String(event.id)}`,
         );
         const job = this.jobs.get(event.id);
         if (job) {
@@ -269,7 +273,7 @@ export class ScriptScheduler {
         // Use custom cron schedule
         rule = event.customSchedule;
         console.log(
-          `[${setupId}] Using custom schedule: ${event.customSchedule}`,
+          `[${setupId}] Using custom schedule: ${event.customSchedule ?? ""}`,
         );
       } else {
         // Create a precise recurrence rule
@@ -287,7 +291,7 @@ export class ScriptScheduler {
               rule.second = event.scheduleNumber;
             }
             console.log(
-              `[${setupId}] For ${event.scheduleNumber}-second schedule, using precise schedule`,
+              `[${setupId}] For ${String(event.scheduleNumber)}-second schedule, using precise schedule`,
             );
             break;
           }
@@ -300,7 +304,7 @@ export class ScriptScheduler {
             rule.minute = minutesArray;
             rule.second = 0; // Only at the start of each minute
             console.log(
-              `[${setupId}] For ${event.scheduleNumber}-minute schedule, using minutes: ${minutesArray.join(", ")}`,
+              `[${setupId}] For ${String(event.scheduleNumber)}-minute schedule, using minutes: ${minutesArray.join(", ")}`,
             );
             break;
           }
@@ -314,7 +318,7 @@ export class ScriptScheduler {
             rule.minute = 0; // At the start of the hour
             rule.second = 0; // At the start of the minute
             console.log(
-              `[${setupId}] For ${event.scheduleNumber}-hour schedule, using hours: ${hoursArray.join(", ")}`,
+              `[${setupId}] For ${String(event.scheduleNumber)}-hour schedule, using hours: ${hoursArray.join(", ")}`,
             );
             break;
           }
@@ -329,15 +333,17 @@ export class ScriptScheduler {
             rule.minute = 0; // At the start of the hour
             rule.second = 0; // At the start of the minute
             console.log(
-              `[${setupId}] For ${event.scheduleNumber}-day schedule, using days: ${daysArray.join(", ")}`,
+              `[${setupId}] For ${String(event.scheduleNumber)}-day schedule, using days: ${daysArray.join(", ")}`,
             );
             break;
           }
           default:
             console.error(
-              `[${setupId}] Unsupported schedule unit: ${event.scheduleUnit}`,
+              `[${setupId}] Unsupported schedule unit: ${event.scheduleUnit ?? ""}`,
             );
-            throw new Error(`Unsupported schedule unit: ${event.scheduleUnit}`);
+            throw new Error(
+              `Unsupported schedule unit: ${event.scheduleUnit ?? ""}`,
+            );
         }
       }
 
@@ -349,14 +355,16 @@ export class ScriptScheduler {
       const job = scheduleJob(rule, async () => {
         // Create a unique execution ID for this particular scheduled run
         const execId = `exec-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-        console.log(`[${execId}] Scheduled trigger for event ${eventId}`);
+        console.log(
+          `[${execId}] Scheduled trigger for event ${String(eventId)}`,
+        );
 
         try {
           // CRITICAL: Check if this event is already executing FIRST
           // This prevents duplicate executions from multiple jobs
           if (this.executingEvents.has(eventId)) {
             console.log(
-              `[${execId}] Event ${eventId} is already executing. Skipping this run.`,
+              `[${execId}] Event ${String(eventId)} is already executing. Skipping this run.`,
             );
             return;
           }
@@ -371,7 +379,7 @@ export class ScriptScheduler {
             // Basic checks - is the event still active?
             if (!currentScript) {
               console.log(
-                `[${execId}] Event ${eventId} no longer exists. Removing schedule.`,
+                `[${execId}] Event ${String(eventId)} no longer exists. Removing schedule.`,
               );
               this.jobs.get(eventId)?.cancel();
               this.jobs.delete(eventId);
@@ -380,7 +388,7 @@ export class ScriptScheduler {
 
             if (currentScript.status !== EventStatus.ACTIVE) {
               console.log(
-                `[${execId}] Script ${eventId} is no longer active. Cancelling schedule.`,
+                `[${execId}] Script ${String(eventId)} is no longer active. Cancelling schedule.`,
               );
               // Cancel this job since the script is no longer active
               this.jobs.get(eventId)?.cancel();
@@ -408,7 +416,7 @@ export class ScriptScheduler {
 
                 if (timeSinceLastExecution < minimumInterval) {
                   console.log(
-                    `[${execId}] Too soon after last execution (${timeSinceLastExecution}ms < ${minimumInterval}ms). Skipping.`,
+                    `[${execId}] Too soon after last execution (${String(timeSinceLastExecution)}ms < ${String(minimumInterval)}ms). Skipping.`,
                   );
                   return;
                 }
@@ -424,7 +432,7 @@ export class ScriptScheduler {
 
                 if (timeSinceLastExecution < minimumInterval) {
                   console.log(
-                    `[${execId}] Too soon after last execution (${timeSinceLastExecution}ms < ${minimumInterval}ms). Skipping.`,
+                    `[${execId}] Too soon after last execution (${String(timeSinceLastExecution)}ms < ${String(minimumInterval)}ms). Skipping.`,
                   );
                   return;
                 }
@@ -432,7 +440,7 @@ export class ScriptScheduler {
                 // For custom schedules, use a small fixed buffer
                 if (timeSinceLastExecution < 500) {
                   console.log(
-                    `[${execId}] Too soon after last execution for custom schedule (${timeSinceLastExecution}ms < 500ms). Skipping.`,
+                    `[${execId}] Too soon after last execution for custom schedule (${String(timeSinceLastExecution)}ms < 500ms). Skipping.`,
                   );
                   return;
                 }
@@ -440,7 +448,7 @@ export class ScriptScheduler {
                 // Default case - minimal buffer
                 if (timeSinceLastExecution < 500) {
                   console.log(
-                    `[${execId}] Too soon after last execution (${timeSinceLastExecution}ms < 500ms). Skipping.`,
+                    `[${execId}] Too soon after last execution (${String(timeSinceLastExecution)}ms < 500ms). Skipping.`,
                   );
                   return;
                 }
@@ -451,7 +459,7 @@ export class ScriptScheduler {
             // Record the timestamp before executing
             this.lastExecutionTimes.set(eventId, now);
             console.log(
-              `[${execId}] Starting execution for event ${eventId} at ${now.toISOString()}`,
+              `[${execId}] Starting execution for event ${String(eventId)} at ${now.toISOString()}`,
             );
 
             // Execute the event using our managed method
@@ -462,7 +470,7 @@ export class ScriptScheduler {
             // Always clear the executing flag when done to prevent stuck jobs
             this.executingEvents.delete(eventId);
             console.log(
-              `[${execId}] Cleared executing state for event ${eventId}`,
+              `[${execId}] Cleared executing state for event ${String(eventId)}`,
             );
           }
 
@@ -499,7 +507,7 @@ export class ScriptScheduler {
       // Final check before storing the job - this is critical to prevent duplicates
       if (this.jobs.has(event.id)) {
         console.log(
-          `[${setupId}] Another job was created for event ${event.id} during setup. Cancelling the new job.`,
+          `[${setupId}] Another job was created for event ${String(event.id)} during setup. Cancelling the new job.`,
         );
         job.cancel();
         return;
@@ -532,7 +540,7 @@ export class ScriptScheduler {
       }
 
       console.log(
-        `[${setupId}] Successfully scheduled event ${event.id}: ${event.name}`,
+        `[${setupId}] Successfully scheduled event ${String(event.id)}: ${event.name ?? ""}`,
       );
     } catch (error) {
       console.error(`[${setupId}] Error setting up schedule:`, error);
@@ -548,7 +556,7 @@ export class ScriptScheduler {
     // Create a unique execution ID to help with debugging
     const executionId = `exec-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     console.log(
-      `[${executionId}] Starting execution of script ${event.id}: ${event.name}`,
+      `[${executionId}] Starting execution of script ${String(event.id)}: ${event.name ?? ""}`,
     );
 
     // Check for existing execution locks before we do anything else
@@ -564,7 +572,7 @@ export class ScriptScheduler {
       // Let's RESET our tracking state completely and start fresh with this execution
       if (this.executingEvents.has(event.id)) {
         console.log(
-          `[${executionId}] Clearing previous execution state for script ${event.id}`,
+          `[${executionId}] Clearing previous execution state for script ${String(event.id)}`,
         );
         this.executingEvents.delete(event.id);
       }
@@ -572,7 +580,7 @@ export class ScriptScheduler {
       // Mark it as executing
       this.executingEvents.add(event.id);
       console.log(
-        `[${executionId}] Added script ${event.id} to executing set: ${Array.from(this.executingEvents).join(", ")}`,
+        `[${executionId}] Added script ${String(event.id)} to executing set: ${Array.from(this.executingEvents).join(", ")}`,
       );
 
       // Execute the script through the modular function
@@ -590,12 +598,12 @@ export class ScriptScheduler {
       );
 
       console.log(
-        `[${executionId}] Finished execution of script ${event.id}: ${event.name}, success: ${result.success}`,
+        `[${executionId}] Finished execution of script ${String(event.id)}: ${event.name ?? ""}, success: ${String(result.success)}`,
       );
       return result;
     } catch (error) {
       console.error(
-        `[${executionId}] Error executing script ${event.id}:`,
+        `[${executionId}] Error executing script ${String(event.id)}:`,
         error,
       );
       throw error;
@@ -603,7 +611,7 @@ export class ScriptScheduler {
       // Make sure we ALWAYS clear the executing state, even on errors
       this.executingEvents.delete(event.id);
       console.log(
-        `[${executionId}] Cleared executing state for script ${event.id}, remaining: ${Array.from(this.executingEvents).join(", ")}`,
+        `[${executionId}] Cleared executing state for script ${String(event.id)}, remaining: ${Array.from(this.executingEvents).join(", ")}`,
       );
     }
   }
@@ -662,10 +670,10 @@ export class ScriptScheduler {
     condition?: boolean;
   }> {
     const event = await storage.getEventWithRelations(eventId);
-    if (!event) throw new Error(`Event with ID ${eventId} not found`);
+    if (!event) throw new Error(`Event with ID ${String(eventId)} not found`);
 
     console.log(
-      `Executing event ${eventId} for workflow execution ${workflowExecutionId || "standalone"}`,
+      `Executing event ${String(eventId)} for workflow execution ${workflowExecutionId ?? "standalone"}`,
     );
 
     const startTime = Date.now();
@@ -699,9 +707,9 @@ export class ScriptScheduler {
     eventId: number,
   ): Promise<{ success: boolean; output: string }> {
     const event = await storage.getEventWithRelations(eventId);
-    if (!event) throw new Error(`Script with ID ${eventId} not found`);
+    if (!event) throw new Error(`Script with ID ${String(eventId)} not found`);
 
-    console.log(`Running script ${eventId} immediately`);
+    console.log(`Running script ${String(eventId)} immediately`);
 
     // Make sure we're not tracking it as already executing
     this.executingEvents.delete(eventId);
@@ -725,7 +733,9 @@ export class ScriptScheduler {
     try {
       // Get the current job and cancel it
       if (this.jobs.has(eventId)) {
-        console.log(`Cancelling job for event ${eventId} during update`);
+        console.log(
+          `Cancelling job for event ${String(eventId)} during update`,
+        );
         this.jobs.get(eventId)?.cancel();
         this.jobs.delete(eventId);
       }
@@ -733,20 +743,22 @@ export class ScriptScheduler {
       // Get the script details and check if it's still active
       const event = await storage.getEventWithRelations(eventId);
       if (!event) {
-        console.log(`Event ${eventId} not found. Skipping update.`);
+        console.log(`Event ${String(eventId)} not found. Skipping update.`);
         return;
       }
 
       if (event.status === EventStatus.ACTIVE) {
-        console.log(`Re-scheduling updated event ${eventId}: ${event.name}`);
+        console.log(
+          `Re-scheduling updated event ${String(eventId)}: ${event.name ?? ""}`,
+        );
         await this.scheduleScript(event);
       } else {
         console.log(
-          `Updated script ${eventId}: ${event.name} is not active. Skipping scheduling.`,
+          `Updated script ${String(eventId)}: ${event.name ?? ""} is not active. Skipping scheduling.`,
         );
       }
     } catch (error) {
-      console.error(`Error updating event ${eventId}:`, error);
+      console.error(`Error updating event ${String(eventId)}:`, error);
     }
   }
 
@@ -755,12 +767,14 @@ export class ScriptScheduler {
     try {
       // Get the current job and cancel it
       if (this.jobs.has(eventId)) {
-        console.log(`Cancelling job for event ${eventId} during deletion`);
+        console.log(
+          `Cancelling job for event ${String(eventId)} during deletion`,
+        );
         this.jobs.get(eventId)?.cancel();
         this.jobs.delete(eventId);
       }
     } catch (error) {
-      console.error(`Error deleting event ${eventId} schedule:`, error);
+      console.error(`Error deleting event ${String(eventId)} schedule:`, error);
     }
   }
 }

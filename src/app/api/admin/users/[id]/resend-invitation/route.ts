@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { UserRole, UserStatus } from "@/shared/schema";
@@ -59,11 +60,11 @@ export async function POST(
     if (user.email) {
       await sendInvitationEmail(user.email, inviteToken);
       console.log(
-        `New invitation token generated for user ${id}: ${inviteToken.substring(0, 8)}...`,
+        `New invitation token generated for user ${String(id)}: ${inviteToken.substring(0, 8)}...`,
       );
     }
 
-    console.log(`Invitation email has been sent to ${user.email}`);
+    console.log(`Invitation email has been sent to ${user.email ?? ""}`);
 
     return NextResponse.json({ message: "Invitation resent successfully" });
   } catch (error) {

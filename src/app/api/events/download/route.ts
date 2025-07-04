@@ -1,9 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { authenticateApiRequest } from "@/lib/api-auth";
 import archiver from "archiver";
+import { UserRole } from "@/shared/schema";
 
 // Helper function to authenticate user via session or API token
 async function authenticateUser(
@@ -28,7 +30,7 @@ async function authenticateUser(
         ...authOptions.callbacks,
         session: async ({ session, token }) => {
           if (token?.id && session?.user) {
-            session.user.id = token.id as string;
+            session.user.id = token.id;
           }
           return session;
         },
@@ -48,7 +50,7 @@ async function authenticateUser(
       const allUsers = await storage.getAllUsers();
       if (allUsers.length > 0) {
         const adminUser =
-          allUsers.find((u) => u.role === "ADMIN") || allUsers[0];
+          allUsers.find((u) => u.role === UserRole.ADMIN) || allUsers[0];
         if (!adminUser) {
           throw new Error("No admin user found for development session");
         }

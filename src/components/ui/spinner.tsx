@@ -106,7 +106,7 @@ export function SpinnerContainer({
   return (
     <div
       className={cn(
-        "w-full flex items-center justify-center min-h-[100px] py-8",
+        "flex min-h-[100px] w-full items-center justify-center py-8",
         className,
       )}
       {...props}

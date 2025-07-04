@@ -472,7 +472,9 @@ export const EmailPluginTrpc: ToolPlugin = {
   CredentialDisplay: EmailCredentialDisplay,
   TemplateManager: EmailTemplateManagerTrpc,
 
-  async validate(credentials: Record<string, any>): Promise<{ isValid: boolean; error?: string }> {
+  async validate(
+    credentials: Record<string, any>,
+  ): Promise<{ isValid: boolean; error?: string }> {
     const result = emailSchema.safeParse(credentials);
     // With exactOptionalPropertyTypes: true, we need to handle undefined differently
     if (result.success) {
@@ -488,13 +490,17 @@ export const EmailPluginTrpc: ToolPlugin = {
       } else {
         // When no error message, don't include the error property at all
         return {
-          isValid: false
+          isValid: false,
         };
       }
     }
   },
 
-  async send(credentials: Record<string, any>, data: any, trpcClient?: any): Promise<{ success: boolean; message?: string }> {
+  async send(
+    credentials: Record<string, any>,
+    data: any,
+    trpcClient?: any,
+  ): Promise<{ success: boolean; message?: string }> {
     try {
       const { recipients, subject, message } = data;
 
@@ -552,11 +558,7 @@ export const EmailPluginTrpc: ToolPlugin = {
   },
 
   // New method for testing email functionality using tRPC
-  async test(
-    credentials: any,
-    testType: string = "connection",
-    trpcClient?: any,
-  ) {
+  async test(credentials: any, testType = "connection", trpcClient?: any) {
     try {
       if (!trpcClient) {
         return {

@@ -12,9 +12,9 @@ import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { EventStatus, WorkflowTriggerType, RunLocation } from "@/shared/schema";
 import WorkflowForm, {
-  WorkflowFormValues,
+  type WorkflowFormValues,
 } from "@/components/workflows/WorkflowForm";
-import { Node, Edge } from "@xyflow/react";
+import type { Node, Edge } from "@xyflow/react";
 
 // Workflow form schema
 const workflowFormSchema = z.object({
@@ -37,7 +37,7 @@ export default function NewWorkflowPage() {
   const router = useRouter();
   const params = useParams<{ lang: string }>();
   const t = useTranslations("Workflows");
-  const lang = params.lang as string;
+  const lang = params.lang;
   const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<WorkflowFormValues>({

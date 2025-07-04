@@ -108,7 +108,7 @@ export default function ConsolePage() {
           <span className="text-sm font-medium">{t("selectServer")}:</span>
         </div>
         <Select
-          value={selectedServerId || ""}
+          value={selectedServerId ?? ""}
           onValueChange={setSelectedServerId}
           disabled={isLoading || permissionsLoading}
         >
@@ -186,7 +186,7 @@ export default function ConsolePage() {
             serverName={
               selectedServerId === "local"
                 ? "Local Server"
-                : selectedServer?.name || "Unknown Server"
+                : (selectedServer?.name ?? "Unknown Server")
             }
           />
         ) : (

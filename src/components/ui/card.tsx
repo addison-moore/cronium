@@ -30,7 +30,7 @@ const CardHeader = React.forwardRef<
       "flex flex-col space-y-1.5 p-6",
       "text-[var(--card-foreground-color)]",
       "dark:text-[var(--card-foreground-color)]",
-      "border-b border-border/10",
+      "border-border/10 border-b",
       className,
     )}
     {...props}
@@ -45,7 +45,7 @@ const CardTitle = React.forwardRef<
   <h3
     ref={ref}
     className={cn(
-      "text-2xl font-semibold leading-none tracking-tight",
+      "text-2xl leading-none font-semibold tracking-tight",
       "text-[var(--card-foreground-color)]",
       "dark:text-[var(--card-foreground-color)]",
       className,

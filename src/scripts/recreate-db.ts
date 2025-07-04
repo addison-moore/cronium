@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 async function main() {
   try {
     console.log("Dropping all existing tables...");
-    
+
     // Drop tables in reverse order to avoid foreign key constraints
     await db.execute(sql`DROP TABLE IF EXISTS "sessions" CASCADE`);
     await db.execute(sql`DROP TABLE IF EXISTS "settings" CASCADE`);
@@ -14,9 +14,9 @@ async function main() {
     await db.execute(sql`DROP TABLE IF EXISTS "scripts" CASCADE`);
     await db.execute(sql`DROP TABLE IF EXISTS "servers" CASCADE`);
     await db.execute(sql`DROP TABLE IF EXISTS "users" CASCADE`);
-    
+
     console.log("All tables dropped successfully");
-    
+
     // Create tables from schema
     console.log("Creating tables from schema...");
     await db.execute(sql`
@@ -32,7 +32,7 @@ async function main() {
         "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
       )
     `);
-    
+
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "sessions" (
         "sid" VARCHAR PRIMARY KEY,
@@ -40,11 +40,11 @@ async function main() {
         "expire" TIMESTAMP NOT NULL
       )
     `);
-    
+
     await db.execute(sql`
       CREATE INDEX "IDX_session_expire" ON "sessions" ("expire")
     `);
-    
+
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "servers" (
         "id" SERIAL PRIMARY KEY,
@@ -56,7 +56,7 @@ async function main() {
         "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
       )
     `);
-    
+
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "scripts" (
         "id" SERIAL PRIMARY KEY,
@@ -79,7 +79,7 @@ async function main() {
         "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
       )
     `);
-    
+
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "env_vars" (
         "id" SERIAL PRIMARY KEY,
@@ -90,7 +90,7 @@ async function main() {
         "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
       )
     `);
-    
+
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "logs" (
         "id" SERIAL PRIMARY KEY,
@@ -103,7 +103,7 @@ async function main() {
         "successful" BOOLEAN DEFAULT false
       )
     `);
-    
+
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "events" (
         "id" SERIAL PRIMARY KEY,
@@ -116,7 +116,7 @@ async function main() {
         "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
       )
     `);
-    
+
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "settings" (
         "id" SERIAL PRIMARY KEY,
@@ -126,9 +126,8 @@ async function main() {
         "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
       )
     `);
-    
+
     console.log("All tables created successfully");
-    
   } catch (error) {
     console.error("Error recreating database:", error);
   } finally {

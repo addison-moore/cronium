@@ -109,16 +109,16 @@ function DiscordCredentialDisplay({
         return (
           <div
             key={tool.id}
-            className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/50"
+            className="border-border hover:bg-muted/50 flex items-center justify-between rounded-lg border p-4"
           >
             <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
+              <div className="mb-2 flex items-center gap-3">
                 <h4 className="font-medium">{tool.name}</h4>
                 <Badge variant={tool.isActive ? "default" : "secondary"}>
                   {tool.isActive ? "Active" : "Inactive"}
                 </Badge>
               </div>
-              <div className="text-sm text-muted-foreground">
+              <div className="text-muted-foreground text-sm">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">Webhook URL:</span>
                   <span>
@@ -236,7 +236,7 @@ function DiscordTemplateManager({ toolType }: TemplateManagerProps) {
   };
 
   if (loading) {
-    return <div className="text-center py-8">Loading templates...</div>;
+    return <div className="py-8 text-center">Loading templates...</div>;
   }
 
   return (
@@ -261,7 +261,7 @@ function DiscordTemplateManager({ toolType }: TemplateManagerProps) {
         {templates.map((template) => (
           <div
             key={template.id}
-            className="border border-border rounded-lg hover:bg-muted/50"
+            className="border-border hover:bg-muted/50 rounded-lg border"
           >
             <Accordion type="single" collapsible className="w-full">
               <AccordionItem
@@ -269,8 +269,8 @@ function DiscordTemplateManager({ toolType }: TemplateManagerProps) {
                 className="border-none"
               >
                 <div className="flex items-center justify-between p-4">
-                  <div className="flex items-center gap-2 flex-1">
-                    <AccordionTrigger className="flex-1 hover:no-underline [&[data-state=open]>svg]:rotate-180 p-0">
+                  <div className="flex flex-1 items-center gap-2">
+                    <AccordionTrigger className="flex-1 p-0 hover:no-underline [&[data-state=open]>svg]:rotate-180">
                       <div className="flex items-center gap-2">
                         <h4 className="font-medium">{template.name}</h4>
                         {template.isSystemTemplate && (
@@ -285,7 +285,7 @@ function DiscordTemplateManager({ toolType }: TemplateManagerProps) {
                       </div>
                     </AccordionTrigger>
                   </div>
-                  <div className="flex items-center gap-2 ml-4">
+                  <div className="ml-4 flex items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
@@ -305,10 +305,10 @@ function DiscordTemplateManager({ toolType }: TemplateManagerProps) {
                   </div>
                 </div>
                 <AccordionContent className="px-4 pb-4">
-                  <div className="text-sm text-muted-foreground space-y-2">
+                  <div className="text-muted-foreground space-y-2 text-sm">
                     <div>
                       <span className="font-medium">Content:</span>
-                      <div className="mt-1 p-3 bg-muted rounded border font-mono text-xs whitespace-pre-wrap">
+                      <div className="bg-muted mt-1 rounded border p-3 font-mono text-xs whitespace-pre-wrap">
                         {template.content}
                       </div>
                     </div>
@@ -321,7 +321,7 @@ function DiscordTemplateManager({ toolType }: TemplateManagerProps) {
       </div>
 
       {templates.length === 0 && (
-        <div className="text-center py-8 text-muted-foreground">
+        <div className="text-muted-foreground py-8 text-center">
           <p>No Discord message templates configured yet.</p>
           <p className="text-sm">
             Templates will help you create consistent Discord notifications.
@@ -354,9 +354,9 @@ export const DiscordPlugin: ToolPlugin = {
     if (result.success) {
       return { isValid: true };
     } else {
-      return { 
-        isValid: false, 
-        error: result.error.issues[0]?.message || "Validation failed" 
+      return {
+        isValid: false,
+        error: result.error.issues[0]?.message || "Validation failed",
       };
     }
   },

@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { exec, execSync } from "child_process";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -11,8 +12,8 @@ import fs from "fs";
 import { promisify } from "util";
 
 // Store the current directory for each user session (for local and remote)
-const userSessions: Map<string, string> = new Map();
-const remoteUserSessions: Map<string, string> = new Map();
+const userSessions = new Map<string, string>();
+const remoteUserSessions = new Map<string, string>();
 const DEFAULT_DIR = process.cwd();
 
 // Execute a shell command and return the result
@@ -289,7 +290,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           );
         }
 
-        const sessionKey = `${userId}-${serverId}`;
+        const sessionKey = `${String(userId)}-${String(serverId)}`;
         const remoteCwd = remoteUserSessions.get(sessionKey) || "~";
 
         // Handle autocomplete request for remote server

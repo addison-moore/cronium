@@ -1,25 +1,42 @@
 /**
  * DOM and Custom Event Types for Type Safety
- * 
+ *
  * This file provides type-safe alternatives to 'any' event handlers
  * throughout the React application.
  */
 
-import type { SyntheticEvent, FormEvent, ChangeEvent, MouseEvent, KeyboardEvent, FocusEvent } from 'react';
+import type {
+  SyntheticEvent,
+  FormEvent,
+  ChangeEvent,
+  MouseEvent,
+  KeyboardEvent,
+  FocusEvent,
+} from "react";
 
 // Generic Event Handler Types
 export type EventHandler<T = HTMLElement> = (event: SyntheticEvent<T>) => void;
 export type VoidEventHandler = () => void;
 
 // Form Event Types
-export type FormSubmitHandler<T = HTMLFormElement> = (event: FormEvent<T>) => void;
-export type FormChangeHandler<T = HTMLInputElement> = (event: ChangeEvent<T>) => void;
-export type FormFocusHandler<T = HTMLInputElement> = (event: FocusEvent<T>) => void;
+export type FormSubmitHandler<T = HTMLFormElement> = (
+  event: FormEvent<T>,
+) => void;
+export type FormChangeHandler<T = HTMLInputElement> = (
+  event: ChangeEvent<T>,
+) => void;
+export type FormFocusHandler<T = HTMLInputElement> = (
+  event: FocusEvent<T>,
+) => void;
 
 // Input-specific Event Types
 export type InputChangeHandler = (event: ChangeEvent<HTMLInputElement>) => void;
-export type TextareaChangeHandler = (event: ChangeEvent<HTMLTextAreaElement>) => void;
-export type SelectChangeHandler = (event: ChangeEvent<HTMLSelectElement>) => void;
+export type TextareaChangeHandler = (
+  event: ChangeEvent<HTMLTextAreaElement>,
+) => void;
+export type SelectChangeHandler = (
+  event: ChangeEvent<HTMLSelectElement>,
+) => void;
 
 // Value-based Event Handlers (for controlled components)
 export type ValueChangeHandler<T = string> = (value: T) => void;
@@ -34,7 +51,9 @@ export type ButtonClickHandler = ClickHandler<HTMLButtonElement>;
 export type DivClickHandler = ClickHandler<HTMLDivElement>;
 
 // Keyboard Event Types
-export type KeyPressHandler<T = HTMLElement> = (event: KeyboardEvent<T>) => void;
+export type KeyPressHandler<T = HTMLElement> = (
+  event: KeyboardEvent<T>,
+) => void;
 export type KeyDownHandler<T = HTMLElement> = (event: KeyboardEvent<T>) => void;
 export type KeyUpHandler<T = HTMLElement> = (event: KeyboardEvent<T>) => void;
 
@@ -55,7 +74,7 @@ export interface EventExecutionData {
   duration?: number;
   output?: string;
   error?: string;
-  status: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILURE' | 'TIMEOUT';
+  status: "PENDING" | "RUNNING" | "SUCCESS" | "FAILURE" | "TIMEOUT";
 }
 
 export interface WorkflowExecutionData {
@@ -63,7 +82,7 @@ export interface WorkflowExecutionData {
   executionId: number;
   currentStep: number;
   totalSteps: number;
-  status: 'RUNNING' | 'COMPLETED' | 'FAILED' | 'PAUSED';
+  status: "RUNNING" | "COMPLETED" | "FAILED" | "PAUSED";
   events: EventExecutionData[];
 }
 
@@ -76,7 +95,7 @@ export interface WebSocketMessage<T = unknown> {
 }
 
 export interface TerminalMessage extends WebSocketMessage {
-  type: 'terminal_output' | 'terminal_input' | 'terminal_resize';
+  type: "terminal_output" | "terminal_input" | "terminal_resize";
   payload: {
     data?: string;
     cols?: number;
@@ -86,7 +105,7 @@ export interface TerminalMessage extends WebSocketMessage {
 }
 
 export interface LogStreamMessage extends WebSocketMessage {
-  type: 'log_update' | 'log_complete';
+  type: "log_update" | "log_complete";
   payload: {
     logId: number;
     eventId: number;
@@ -113,7 +132,7 @@ export interface DialogEventHandlers extends ModalEventHandlers {
 export interface TableEventHandlers<T = unknown> {
   onRowClick?: (item: T, index: number) => void;
   onRowSelect?: (items: T[]) => void;
-  onSort?: (column: string, direction: 'asc' | 'desc') => void;
+  onSort?: (column: string, direction: "asc" | "desc") => void;
   onFilter?: (filters: Record<string, unknown>) => void;
   onPageChange?: (page: number) => void;
 }
@@ -152,7 +171,11 @@ export interface DatePickerEventHandlers {
 }
 
 export interface TimePickerEventHandlers {
-  onTimeSelect?: (time: { hours: number; minutes: number; seconds?: number }) => void;
+  onTimeSelect?: (time: {
+    hours: number;
+    minutes: number;
+    seconds?: number;
+  }) => void;
   onTimeClear?: VoidEventHandler;
 }
 
@@ -162,7 +185,7 @@ export interface SearchEventHandlers {
   onSearchClear?: VoidEventHandler;
   onSearchSubmit?: (query: string) => void;
   onFilterChange?: (filters: Record<string, unknown>) => void;
-  onSortChange?: (field: string, direction: 'asc' | 'desc') => void;
+  onSortChange?: (field: string, direction: "asc" | "desc") => void;
 }
 
 // Navigation Event Types
@@ -196,38 +219,41 @@ export type OptionalEventHandlers<T> = {
   [K in keyof T]?: T[K];
 };
 
-export type RequiredEventHandlers<T, K extends keyof T> = T & Required<Pick<T, K>>;
+export type RequiredEventHandlers<T, K extends keyof T> = T &
+  Required<Pick<T, K>>;
 
 // Event Handler Guards (Type Guards)
 export const isFormEvent = (event: SyntheticEvent): event is FormEvent => {
-  return event.type === 'submit' || event.type === 'reset';
+  return event.type === "submit" || event.type === "reset";
 };
 
 export const isChangeEvent = (event: SyntheticEvent): event is ChangeEvent => {
-  return event.type === 'change';
+  return event.type === "change";
 };
 
 export const isClickEvent = (event: SyntheticEvent): event is MouseEvent => {
-  return event.type === 'click' || event.type === 'dblclick';
+  return event.type === "click" || event.type === "dblclick";
 };
 
-export const isKeyboardEvent = (event: SyntheticEvent): event is KeyboardEvent => {
-  return event.type.startsWith('key');
+export const isKeyboardEvent = (
+  event: SyntheticEvent,
+): event is KeyboardEvent => {
+  return event.type.startsWith("key");
 };
 
 // Event Factory Functions for Type Safety
 export const createEventHandler = <T extends HTMLElement>(
-  handler: (event: SyntheticEvent<T>) => void
+  handler: (event: SyntheticEvent<T>) => void,
 ): EventHandler<T> => handler;
 
 export const createFormHandler = <T extends HTMLFormElement>(
-  handler: (event: FormEvent<T>) => void
+  handler: (event: FormEvent<T>) => void,
 ): FormSubmitHandler<T> => handler;
 
 export const createChangeHandler = <T extends HTMLInputElement>(
-  handler: (event: ChangeEvent<T>) => void
+  handler: (event: ChangeEvent<T>) => void,
 ): FormChangeHandler<T> => handler;
 
 export const createValueHandler = <T>(
-  handler: (value: T) => void
+  handler: (value: T) => void,
 ): ValueChangeHandler<T> => handler;

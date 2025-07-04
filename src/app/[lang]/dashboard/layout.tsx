@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Code,
   FileText,
@@ -71,7 +72,7 @@ export default function DashboardLayout({
   };
 
   // Extract the locale from the pathname
-  const locale = pathname.split("/")[1];
+  const locale = pathname.split("/")[1] ?? "";
 
   const navItems = [
     {
@@ -353,9 +354,11 @@ export default function DashboardLayout({
                 >
                   <div className="flex-shrink-0">
                     {user.profileImageUrl ? (
-                      <img
+                      <Image
                         src={user.profileImageUrl}
                         alt="User avatar"
+                        width={32}
+                        height={32}
                         className="h-8 w-8 rounded-full object-cover"
                       />
                     ) : (
@@ -366,7 +369,7 @@ export default function DashboardLayout({
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">
-                      {user.firstName || user.email || "User"}
+                      {user.firstName ?? user.email ?? "User"}
                     </p>
                     <p className="text-muted-foreground truncate text-xs">
                       {user.role === UserRole.ADMIN

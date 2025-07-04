@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { UserRole, UserStatus } from "@/shared/schema";
@@ -43,7 +44,9 @@ export async function POST(
     // Delete the user (deny registration)
     await storage.deleteUser(id);
 
-    console.log(`User ${user.email} denied by admin ${session.user.email}`);
+    console.log(
+      `User ${user.email ?? ""} denied by admin ${session.user.email ?? ""}`,
+    );
 
     return NextResponse.json({
       message: "User registration denied successfully",

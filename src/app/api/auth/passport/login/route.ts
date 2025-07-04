@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { compare } from "bcrypt";
 import { storage } from "@/server/storage";
 import { UserStatus } from "@/shared/schema";

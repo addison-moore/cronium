@@ -37,7 +37,7 @@ export async function handleExecutionCount(eventId: number) {
         try {
           // Cancel any currently scheduled job for this event
           const schedulerInstance = scheduler as any;
-          if (schedulerInstance.jobs && schedulerInstance.jobs.has(eventId)) {
+          if (schedulerInstance.jobs?.has(eventId)) {
             console.log(
               `Cancelling job for event ${eventId} after reaching max executions`,
             );

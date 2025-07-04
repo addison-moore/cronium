@@ -12,7 +12,6 @@ import superjson from "superjson";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../lib/auth";
 import { UserRole } from "../../shared/schema";
-import { cookies } from "next/headers";
 
 /**
  * 1. CONTEXT
@@ -56,22 +55,33 @@ export const createTRPCContext = async (opts: CreateNextContextOptions) => {
     // For App Router with tRPC, we need to use getServerSession without req/res
     // since the fetch adapter doesn't provide the proper NextAuth context
     session = await getServerSession(authOptions);
-    console.log('tRPC Context - Session:', session ? 'Found' : 'NULL', session?.user?.id);
-    
+    console.log(
+      "tRPC Context - Session:",
+      session ? "Found" : "NULL",
+      session?.user?.id,
+    );
+
     // If that fails, try with req/res for Pages Router compatibility
     if (!session && req && res) {
-      const authRes = res && typeof res.getHeader === 'function' ? res : {
-        getHeader: () => undefined,
-        setHeader: () => {},
-        status: () => {},
-        json: () => {},
-      } as any;
-      
+      const authRes =
+        res && typeof res.getHeader === "function"
+          ? res
+          : ({
+              getHeader: () => undefined,
+              setHeader: () => {},
+              status: () => {},
+              json: () => {},
+            } as any);
+
       session = await getServerSession(req, authRes, authOptions);
-      console.log('tRPC Context (Fallback) - Session:', session ? 'Found' : 'NULL', session?.user?.id);
+      console.log(
+        "tRPC Context (Fallback) - Session:",
+        session ? "Found" : "NULL",
+        session?.user?.id,
+      );
     }
   } catch (error) {
-    console.warn('Session retrieval failed in tRPC context:', error);
+    console.warn("Session retrieval failed in tRPC context:", error);
     session = null;
   }
 
@@ -95,8 +105,7 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
       data: {
         ...shape.data,
         zodError:
-          error.cause instanceof Error &&
-          error.cause.name === "ZodError"
+          error.cause instanceof Error && error.cause.name === "ZodError"
             ? error.cause.message
             : null,
       },

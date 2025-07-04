@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -56,7 +56,7 @@ export function StatCard({
         )}
 
         {footer && (
-          <div className="mt-4 text-xs text-muted-foreground">{footer}</div>
+          <div className="text-muted-foreground mt-4 text-xs">{footer}</div>
         )}
       </CardContent>
     </>

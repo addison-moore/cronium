@@ -26,7 +26,7 @@ import {
   EventTypeIcon,
   getEventTypeDisplayName,
 } from "@/components/ui/event-type-icon";
-import { EventType } from "@/shared/schema";
+import { type EventType } from "@/shared/schema";
 import { formatDate } from "@/lib/utils";
 import { EventEditModal } from "@/components/ui/event-edit-modal";
 
@@ -69,14 +69,14 @@ export function EventDetailsPopover({
         {children}
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0" side="right" align="start">
-        <div className="p-4 space-y-4">
+        <div className="space-y-4 p-4">
           {/* Header with Event Name and Type */}
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <EventTypeIcon type={eventType} size={20} />
               <Link
                 href={`/en/dashboard/events/${eventId}`}
-                className="font-semibold text-lg hover:text-primary transition-colors flex items-center gap-1"
+                className="hover:text-primary flex items-center gap-1 text-lg font-semibold transition-colors"
                 onClick={() => setOpen(false)}
               >
                 {eventName}
@@ -95,9 +95,9 @@ export function EventDetailsPopover({
             <div className="space-y-3">
               {/* Event ID */}
               <div className="flex items-center gap-2 text-sm">
-                <Info className="h-4 w-4 text-muted-foreground" />
+                <Info className="text-muted-foreground h-4 w-4" />
                 <span className="text-muted-foreground">Event ID:</span>
-                <span className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+                <span className="bg-muted rounded px-1 py-0.5 font-mono text-xs">
                   {eventId}
                 </span>
               </div>
@@ -105,7 +105,7 @@ export function EventDetailsPopover({
               {/* Description */}
               {eventDescription && (
                 <div className="flex items-start gap-2 text-sm">
-                  <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  <FileText className="text-muted-foreground mt-0.5 h-4 w-4" />
                   <div>
                     <span className="text-muted-foreground">Description:</span>
                     <p className="text-foreground mt-1">{eventDescription}</p>
@@ -116,10 +116,10 @@ export function EventDetailsPopover({
               {/* Tags */}
               {eventTags.length > 0 && (
                 <div className="flex items-start gap-2 text-sm">
-                  <Tag className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  <Tag className="text-muted-foreground mt-0.5 h-4 w-4" />
                   <div>
                     <span className="text-muted-foreground">Tags:</span>
-                    <div className="flex flex-wrap gap-1 mt-1">
+                    <div className="mt-1 flex flex-wrap gap-1">
                       {eventTags.map((tag, index) => (
                         <Badge
                           key={index}
@@ -137,7 +137,7 @@ export function EventDetailsPopover({
               {/* Server */}
               {eventServerId && eventServerName && (
                 <div className="flex items-center gap-2 text-sm">
-                  <Server className="h-4 w-4 text-muted-foreground" />
+                  <Server className="text-muted-foreground h-4 w-4" />
                   <span className="text-muted-foreground">Server:</span>
                   <span className="font-medium">{eventServerName}</span>
                 </div>
@@ -146,7 +146,7 @@ export function EventDetailsPopover({
               {/* Created Date */}
               {createdAt && (
                 <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <Calendar className="text-muted-foreground h-4 w-4" />
                   <span className="text-muted-foreground">Created:</span>
                   <span>{formatDate(createdAt)}</span>
                 </div>
@@ -155,7 +155,7 @@ export function EventDetailsPopover({
               {/* Updated Date */}
               {updatedAt && (
                 <div className="flex items-center gap-2 text-sm">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <Clock className="text-muted-foreground h-4 w-4" />
                   <span className="text-muted-foreground">Updated:</span>
                   <span>{formatDate(updatedAt)}</span>
                 </div>
@@ -175,7 +175,7 @@ export function EventDetailsPopover({
                 setOpen(false);
               }}
             >
-              <Edit className="h-4 w-4 mr-2" />
+              <Edit className="mr-2 h-4 w-4" />
               Edit Event
             </Button>
 
@@ -186,7 +186,7 @@ export function EventDetailsPopover({
               onClick={() => setOpen(false)}
             >
               <Link href={`/en/dashboard/events/${eventId}`}>
-                <ExternalLink className="h-4 w-4 mr-2" />
+                <ExternalLink className="mr-2 h-4 w-4" />
                 View Full Details
               </Link>
             </Button>

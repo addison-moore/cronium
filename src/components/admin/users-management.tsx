@@ -273,8 +273,8 @@ export function UsersManagement({
     >
       <div className="space-y-6">
         {/* Header Actions */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-between">
-          <div className="flex items-center space-x-2 flex-1 max-w-sm">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row">
+          <div className="flex max-w-sm flex-1 items-center space-x-2">
             <Search className="h-4 w-4 text-gray-400" />
             <Input
               placeholder="Search users..."
@@ -322,7 +322,11 @@ export function UsersManagement({
                         id="email"
                         type="email"
                         placeholder="user@example.com"
-                        aria-describedby={inviteForm.formState.errors.email ? "email-error" : undefined}
+                        aria-describedby={
+                          inviteForm.formState.errors.email
+                            ? "email-error"
+                            : undefined
+                        }
                         {...inviteForm.register("email")}
                       />
                       {inviteForm.formState.errors.email && (
@@ -346,8 +350,12 @@ export function UsersManagement({
                               <SelectValue placeholder="Select role" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value={UserRole.USER}>User</SelectItem>
-                              <SelectItem value={UserRole.ADMIN}>Admin</SelectItem>
+                              <SelectItem value={UserRole.USER}>
+                                User
+                              </SelectItem>
+                              <SelectItem value={UserRole.ADMIN}>
+                                Admin
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                         )}
@@ -393,13 +401,13 @@ export function UsersManagement({
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8">
+                <TableCell colSpan={6} className="py-8 text-center">
                   Loading users...
                 </TableCell>
               </TableRow>
             ) : totalItems === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8">
+                <TableCell colSpan={6} className="py-8 text-center">
                   {searchQuery
                     ? "No users found matching your search."
                     : "No users found."}
@@ -527,10 +535,10 @@ export function UsersManagement({
         {/* Pagination Controls */}
         {totalItems > 0 && (
           <div className="mt-4 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               {/* Items per page selector */}
               <div className="flex items-center space-x-2">
-                <span className="text-sm text-muted-foreground">
+                <span className="text-muted-foreground text-sm">
                   Items per page:
                 </span>
                 <Select

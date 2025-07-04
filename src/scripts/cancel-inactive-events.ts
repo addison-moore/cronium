@@ -11,46 +11,50 @@ import { scheduler } from "../lib/scheduler";
 
 async function cancelInactiveEvents() {
   console.log("Checking for inactive events that need cancellation");
-  
+
   try {
     // Find all inactive events
     const inactiveEvents = await db.query.events.findMany({
       where: ne(events.status, EventStatus.ACTIVE),
-      columns: { 
+      columns: {
         id: true,
         name: true,
-        status: true
-      }
+        status: true,
+      },
     });
-    
+
     console.log(`Found ${inactiveEvents.length} inactive events to check`);
-    
+
     // Force cancel each one in the scheduler
     for (const event of inactiveEvents) {
       const schedulerInstance = scheduler as any;
-      
+
       if (schedulerInstance.jobs.has(event.id)) {
-        console.log(`Cancelling inactive event ${event.id} (${event.name}) in scheduler`);
-        
+        console.log(
+          `Cancelling inactive event ${event.id} (${event.name}) in scheduler`,
+        );
+
         // Cancel the job
         schedulerInstance.jobs.get(event.id)?.cancel();
         schedulerInstance.jobs.delete(event.id);
-        
+
         // Remove from tracking
         schedulerInstance.executingEvents.delete(event.id);
         schedulerInstance.lastExecutionTimes.delete(event.id);
-        
+
         // Also clear any nextRunAt in database
-        await db.update(events)
+        await db
+          .update(events)
           .set({ nextRunAt: null })
           .where(eq(events.id, event.id));
-          
+
         console.log(`Successfully cancelled inactive event ${event.id}`);
       } else {
-        console.log(`Event ${event.id} (${event.name}) is already not scheduled`);
+        console.log(
+          `Event ${event.id} (${event.name}) is already not scheduled`,
+        );
       }
     }
-    
   } catch (error) {
     console.error(`Error cancelling inactive events:`, error);
   }
@@ -59,4 +63,4 @@ async function cancelInactiveEvents() {
 // Run the function immediately
 cancelInactiveEvents()
   .then(() => console.log("Finished cancelling inactive events"))
-  .catch(error => console.error("Failed to cancel inactive events:", error));
+  .catch((error) => console.error("Failed to cancel inactive events:", error));

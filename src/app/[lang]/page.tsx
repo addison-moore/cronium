@@ -17,7 +17,7 @@ export default async function Home({ params }: { params: { lang: string } }) {
   const translate = (key: string) => {
     try {
       // Split key by dots and traverse the object
-      return key.split(".").reduce((obj, part) => obj?.[part], t as any) || key;
+      return key.split(".").reduce((obj, part) => obj?.[part], t) || key;
     } catch (e) {
       return key;
     }

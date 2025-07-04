@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { type ReactNode } from "react";
 import { MoreVertical, Copy, Trash, Edit, Play, Pause } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,10 +37,9 @@ export function ActionMenu({
   actions,
   triggerIcon = <MoreVertical className="h-4 w-4 cursor-pointer" />,
   separatorIndices,
-  menuButtonLabel,
 }: ActionMenuProps) {
   // Use actions prop if provided, otherwise use items
-  const menuItems = actions || items || [];
+  const menuItems = actions ?? items ?? [];
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -76,41 +75,32 @@ export function ActionMenu({
  * Common action menu items for typical CRUD operations
  */
 export const commonActionItems = {
-  edit: (onClick: () => void, label: string = "Edit"): ActionMenuItem => ({
+  edit: (onClick: () => void, label = "Edit"): ActionMenuItem => ({
     label,
     onClick,
     icon: <Edit className="h-4 w-4" />,
   }),
 
-  delete: (onClick: () => void, label: string = "Delete"): ActionMenuItem => ({
+  delete: (onClick: () => void, label = "Delete"): ActionMenuItem => ({
     label,
     onClick,
     icon: <Trash className="h-4 w-4" />,
     variant: "destructive",
   }),
 
-  duplicate: (
-    onClick: () => void,
-    label: string = "Duplicate",
-  ): ActionMenuItem => ({
+  duplicate: (onClick: () => void, label = "Duplicate"): ActionMenuItem => ({
     label,
     onClick,
     icon: <Copy className="h-4 w-4" />,
   }),
 
-  activate: (
-    onClick: () => void,
-    label: string = "Activate",
-  ): ActionMenuItem => ({
+  activate: (onClick: () => void, label = "Activate"): ActionMenuItem => ({
     label,
     onClick,
     icon: <Play className="h-4 w-4" />,
   }),
 
-  deactivate: (
-    onClick: () => void,
-    label: string = "Deactivate",
-  ): ActionMenuItem => ({
+  deactivate: (onClick: () => void, label = "Deactivate"): ActionMenuItem => ({
     label,
     onClick,
     icon: <Pause className="h-4 w-4" />,

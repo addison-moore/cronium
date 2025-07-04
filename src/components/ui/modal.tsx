@@ -49,13 +49,13 @@ export function Modal({
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => e.stopPropagation()}
       >
-        {(title || description || showCloseButton) && (
+        {(title ?? description ?? showCloseButton) && (
           <DialogHeader className="relative">
             {showCloseButton && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute right-0 top-0 h-6 w-6"
+                className="absolute top-0 right-0 h-6 w-6"
                 onClick={onClose}
               >
                 <X className="h-4 w-4" />

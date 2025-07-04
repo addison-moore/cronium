@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure } from "../trpc";
-import { ConditionalActionType, EventStatus, LogStatus } from "@/shared/schema";
+import { EventStatus, LogStatus, UserRole, RunLocation } from "@/shared/schema";
+import type { ConditionalActionType } from "@/shared/schema";
 import {
   createEventSchema,
   updateEventSchema,
@@ -29,7 +30,9 @@ const eventProcedure = publicProcedure.use(async ({ ctx, next }) => {
       // For development, get first admin user
       if (process.env.NODE_ENV === "development") {
         const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter((user) => user.role === "ADMIN");
+        const adminUsers = allUsers.filter(
+          (user) => user.role === UserRole.ADMIN,
+        );
         const firstAdmin = adminUsers[0];
         if (firstAdmin) {
           userId = firstAdmin.id;
@@ -172,7 +175,7 @@ export const eventsRouter = createTRPCRouter({
 
         // Handle server associations for remote execution
         if (
-          input.runLocation === "REMOTE" &&
+          input.runLocation === RunLocation.REMOTE &&
           input.selectedServerIds.length > 0
         ) {
           await storage.setEventServers(event.id, input.selectedServerIds);
@@ -184,11 +187,11 @@ export const eventsRouter = createTRPCRouter({
             await storage.createAction({
               type: conditionalAction.action as ConditionalActionType, // Use action, not type
               successEventId: event.id, // Link to parent event
-              targetEventId: conditionalAction.details?.targetEventId || null,
-              toolId: conditionalAction.details?.toolId || null,
-              message: conditionalAction.details?.message || "",
-              emailAddresses: conditionalAction.details?.emailAddresses || "",
-              emailSubject: conditionalAction.details?.emailSubject || "",
+              targetEventId: conditionalAction.details?.targetEventId ?? null,
+              toolId: conditionalAction.details?.toolId ?? null,
+              message: conditionalAction.details?.message ?? "",
+              emailAddresses: conditionalAction.details?.emailAddresses ?? "",
+              emailSubject: conditionalAction.details?.emailSubject ?? "",
             });
           }
         }
@@ -198,11 +201,11 @@ export const eventsRouter = createTRPCRouter({
             await storage.createAction({
               type: conditionalAction.action as ConditionalActionType, // Use action, not type
               failEventId: event.id, // Link to parent event
-              targetEventId: conditionalAction.details?.targetEventId || null,
-              toolId: conditionalAction.details?.toolId || null,
-              message: conditionalAction.details?.message || "",
-              emailAddresses: conditionalAction.details?.emailAddresses || "",
-              emailSubject: conditionalAction.details?.emailSubject || "",
+              targetEventId: conditionalAction.details?.targetEventId ?? null,
+              toolId: conditionalAction.details?.toolId ?? null,
+              message: conditionalAction.details?.message ?? "",
+              emailAddresses: conditionalAction.details?.emailAddresses ?? "",
+              emailSubject: conditionalAction.details?.emailSubject ?? "",
             });
           }
         }
@@ -293,11 +296,11 @@ export const eventsRouter = createTRPCRouter({
               await storage.createAction({
                 type: conditionalAction.action as ConditionalActionType, // Use action, not type
                 successEventId: id, // Link to parent event
-                targetEventId: conditionalAction.details?.targetEventId || null,
-                toolId: conditionalAction.details?.toolId || null,
-                message: conditionalAction.details?.message || "",
-                emailAddresses: conditionalAction.details?.emailAddresses || "",
-                emailSubject: conditionalAction.details?.emailSubject || "",
+                targetEventId: conditionalAction.details?.targetEventId ?? null,
+                toolId: conditionalAction.details?.toolId ?? null,
+                message: conditionalAction.details?.message ?? "",
+                emailAddresses: conditionalAction.details?.emailAddresses ?? "",
+                emailSubject: conditionalAction.details?.emailSubject ?? "",
               });
             }
           }
@@ -308,11 +311,11 @@ export const eventsRouter = createTRPCRouter({
               await storage.createAction({
                 type: conditionalAction.action as ConditionalActionType, // Use action, not type
                 failEventId: id, // Link to parent event
-                targetEventId: conditionalAction.details?.targetEventId || null,
-                toolId: conditionalAction.details?.toolId || null,
-                message: conditionalAction.details?.message || "",
-                emailAddresses: conditionalAction.details?.emailAddresses || "",
-                emailSubject: conditionalAction.details?.emailSubject || "",
+                targetEventId: conditionalAction.details?.targetEventId ?? null,
+                toolId: conditionalAction.details?.toolId ?? null,
+                message: conditionalAction.details?.message ?? "",
+                emailAddresses: conditionalAction.details?.emailAddresses ?? "",
+                emailSubject: conditionalAction.details?.emailSubject ?? "",
               });
             }
           }

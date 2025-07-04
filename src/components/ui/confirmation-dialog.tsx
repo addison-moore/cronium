@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { X, AlertTriangle } from "lucide-react";
 import {
   AlertDialog,
@@ -89,7 +89,7 @@ export function ConfirmationDialog({
 
       <AlertDialogContent>
         <AlertDialogHeader>
-          <div className="flex items-center mb-2">
+          <div className="mb-2 flex items-center">
             {icon}
             <AlertDialogTitle className="ml-2">{title}</AlertDialogTitle>
           </div>
@@ -99,7 +99,7 @@ export function ConfirmationDialog({
         <AlertDialogFooter>
           <AlertDialogCancel asChild>
             <Button variant="outline" disabled={isConfirming}>
-              <X className="h-4 w-4 mr-2" />
+              <X className="mr-2 h-4 w-4" />
               {cancelText}
             </Button>
           </AlertDialogCancel>
@@ -113,7 +113,7 @@ export function ConfirmationDialog({
               {isConfirming ? (
                 <>
                   <Spinner size="lg" />
-                  {loadingText || confirmText}
+                  {loadingText ?? confirmText}
                 </>
               ) : (
                 confirmText

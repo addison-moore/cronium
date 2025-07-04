@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { toast } from '@/components/ui/use-toast';
+import { useState } from "react";
+import { toast } from "@/components/ui/use-toast";
 
 interface UseFormSubmitOptions<T> {
   endpoint: string;
-  method?: 'POST' | 'PUT';
+  method?: "POST" | "PUT";
   onSuccess?: (data: any) => void;
   onError?: (error: any) => void;
   successMessage?: string;
@@ -17,11 +17,11 @@ interface UseFormSubmitOptions<T> {
  */
 export function useFormSubmit<T>({
   endpoint,
-  method = 'POST',
+  method = "POST",
   onSuccess,
   onError,
-  successMessage = 'Successfully saved',
-  errorMessage = 'An error occurred',
+  successMessage = "Successfully saved",
+  errorMessage = "An error occurred",
 }: UseFormSubmitOptions<T>) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export function useFormSubmit<T>({
       const response = await fetch(endpoint, {
         method,
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(data),
       });
@@ -45,34 +45,34 @@ export function useFormSubmit<T>({
       }
 
       const responseData = await response.json();
-      
+
       toast({
-        title: 'Success',
+        title: "Success",
         description: successMessage,
-        variant: 'success',
+        variant: "success",
       });
 
       if (onSuccess) {
         onSuccess(responseData);
       }
-      
+
       return responseData;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : errorMessage;
       setError(errorMsg);
-      
+
       // Call the onError handler if provided
       if (onError) {
         onError(err);
       } else {
         // Default error toast if no custom handler
         toast({
-          title: 'Error',
+          title: "Error",
           description: errorMsg,
-          variant: 'destructive',
+          variant: "destructive",
         });
       }
-      
+
       throw err;
     } finally {
       setIsSubmitting(false);

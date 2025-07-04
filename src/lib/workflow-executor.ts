@@ -7,10 +7,11 @@ import {
   WorkflowTriggerType,
   WorkflowLogLevel,
 } from "@/shared/schema";
-import { scheduleJob, RecurrenceRule, Job } from "node-schedule";
+import { scheduleJob, RecurrenceRule } from "node-schedule";
+import type { Job } from "node-schedule";
 
 export class WorkflowExecutor {
-  private jobs: Map<number, Job> = new Map();
+  private jobs = new Map<number, Job>();
   private isInitialized = false;
 
   constructor() {}
@@ -565,8 +566,12 @@ export class WorkflowExecutor {
       nodeResults.set(node.id, {
         success: executionResult.success,
         output: executionResult.output || "",
-        ...(executionResult.scriptOutput !== undefined && { scriptOutput: executionResult.scriptOutput }),
-        ...(executionResult.condition !== undefined && { condition: executionResult.condition }),
+        ...(executionResult.scriptOutput !== undefined && {
+          scriptOutput: executionResult.scriptOutput,
+        }),
+        ...(executionResult.condition !== undefined && {
+          condition: executionResult.condition,
+        }),
       });
 
       // Create a workflow execution event record
@@ -575,7 +580,7 @@ export class WorkflowExecutor {
           workflowExecutionId,
           eventId: event.id,
           nodeId: node.id,
-          sequenceOrder: sequenceOrder || 1,
+          sequenceOrder: sequenceOrder ?? 1,
           status: executionResult.success
             ? LogStatus.SUCCESS
             : LogStatus.FAILURE,
@@ -692,7 +697,7 @@ export class WorkflowExecutor {
         sourceNodeResult,
       );
 
-      if (sourceNodeResult && sourceNodeResult.success) {
+      if (sourceNodeResult?.success) {
         // If the source node has scriptOutput (from cronium.output()), use it directly
         if (
           sourceNodeResult.scriptOutput !== undefined &&

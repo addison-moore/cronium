@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { 
-  EventType, 
-  EventStatus, 
-  RunLocation, 
-  TimeUnit, 
+import {
+  EventType,
+  EventStatus,
+  RunLocation,
+  TimeUnit,
   EventTriggerType,
-  ConditionalActionType
+  ConditionalActionType,
 } from "../schema";
 
 // Base event query schema
@@ -34,98 +34,134 @@ export const httpHeaderSchema = z.object({
 export const conditionalActionSchema = z.object({
   type: z.string(), // ON_SUCCESS, ON_FAILURE, ALWAYS, ON_CONDITION
   action: z.nativeEnum(ConditionalActionType), // SCRIPT or SEND_MESSAGE
-  details: z.object({
-    emailAddresses: z.string().optional(),
-    emailSubject: z.string().optional(),
-    targetEventId: z.number().optional().nullable(),
-    toolId: z.number().optional().nullable(),
-    message: z.string().optional(),
-  }).optional(),
+  details: z
+    .object({
+      emailAddresses: z.string().optional(),
+      emailSubject: z.string().optional(),
+      targetEventId: z.number().optional().nullable(),
+      toolId: z.number().optional().nullable(),
+      message: z.string().optional(),
+    })
+    .optional(),
   // Legacy fields for backward compatibility
   value: z.string().optional(),
   targetScriptId: z.number().optional().nullable(),
 });
 
 // Create event schema
-export const createEventSchema = z.object({
-  name: z.string().min(1, "Event name is required").max(100, "Event name must be less than 100 characters"),
-  description: z.string().max(500, "Description must be less than 500 characters").optional(),
-  shared: z.boolean().default(false),
-  tags: z.array(z.string()).default([]),
-  
-  // Event type and content
-  type: z.nativeEnum(EventType, { required_error: "Event type is required" }),
-  content: z.string().optional(),
-  
-  // HTTP Request specific fields
-  httpMethod: z.string().optional(),
-  httpUrl: z.string().url("Invalid URL format").optional(),
-  httpHeaders: z.array(httpHeaderSchema).default([]),
-  httpBody: z.string().optional(),
-  
-  // Status and scheduling
-  status: z.nativeEnum(EventStatus).default(EventStatus.DRAFT),
-  triggerType: z.nativeEnum(EventTriggerType).default(EventTriggerType.MANUAL),
-  scheduleNumber: z.number().min(1, "Schedule number must be at least 1").optional(),
-  scheduleUnit: z.nativeEnum(TimeUnit).default(TimeUnit.MINUTES),
-  customSchedule: z.string().optional(),
-  startTime: z.string().datetime().optional().nullable(),
-  
-  // Execution settings
-  runLocation: z.nativeEnum(RunLocation).default(RunLocation.LOCAL),
-  serverId: z.number().optional().nullable(),
-  selectedServerIds: z.array(z.number()).default([]),
-  timeoutValue: z.number().min(1, "Timeout must be at least 1").default(30),
-  timeoutUnit: z.nativeEnum(TimeUnit).default(TimeUnit.MINUTES),
-  retries: z.number().min(0, "Retries must be 0 or more").max(10, "Maximum 10 retries allowed").default(0),
-  maxExecutions: z.number().min(0, "Max executions must be 0 or more").default(0),
-  resetCounterOnActive: z.boolean().default(false),
-  
-  // Environment variables and conditional events
-  envVars: z.array(envVarSchema).default([]),
-  onSuccessActions: z.array(conditionalActionSchema).default([]),
-  onFailActions: z.array(conditionalActionSchema).default([]),
-})
-.refine((data) => {
-  // Validate HTTP request fields
-  if (data.type === EventType.HTTP_REQUEST) {
-    return data.httpUrl && data.httpMethod;
-  }
-  return true;
-}, {
-  message: "HTTP URL and method are required for HTTP request events",
-  path: ["httpUrl"],
-})
-.refine((data) => {
-  // Validate script content for non-HTTP events
-  if (data.type !== EventType.HTTP_REQUEST) {
-    return data.content && data.content.trim().length > 0;
-  }
-  return true;
-}, {
-  message: "Script content is required for script events",
-  path: ["content"],
-})
-.refine((data) => {
-  // Validate server selection for remote execution
-  if (data.runLocation === RunLocation.REMOTE) {
-    return data.serverId || data.selectedServerIds.length > 0;
-  }
-  return true;
-}, {
-  message: "Server selection is required for remote execution",
-  path: ["serverId"],
-})
-.refine((data) => {
-  // Validate schedule fields for scheduled events
-  if (data.triggerType === EventTriggerType.SCHEDULE && data.status === EventStatus.ACTIVE) {
-    return data.scheduleNumber || data.customSchedule;
-  }
-  return true;
-}, {
-  message: "Schedule configuration is required for active scheduled events",
-  path: ["scheduleNumber"],
-});
+export const createEventSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1, "Event name is required")
+      .max(100, "Event name must be less than 100 characters"),
+    description: z
+      .string()
+      .max(500, "Description must be less than 500 characters")
+      .optional(),
+    shared: z.boolean().default(false),
+    tags: z.array(z.string()).default([]),
+
+    // Event type and content
+    type: z.nativeEnum(EventType, { required_error: "Event type is required" }),
+    content: z.string().optional(),
+
+    // HTTP Request specific fields
+    httpMethod: z.string().optional(),
+    httpUrl: z.string().url("Invalid URL format").optional(),
+    httpHeaders: z.array(httpHeaderSchema).default([]),
+    httpBody: z.string().optional(),
+
+    // Status and scheduling
+    status: z.nativeEnum(EventStatus).default(EventStatus.DRAFT),
+    triggerType: z
+      .nativeEnum(EventTriggerType)
+      .default(EventTriggerType.MANUAL),
+    scheduleNumber: z
+      .number()
+      .min(1, "Schedule number must be at least 1")
+      .optional(),
+    scheduleUnit: z.nativeEnum(TimeUnit).default(TimeUnit.MINUTES),
+    customSchedule: z.string().optional(),
+    startTime: z.string().datetime().optional().nullable(),
+
+    // Execution settings
+    runLocation: z.nativeEnum(RunLocation).default(RunLocation.LOCAL),
+    serverId: z.number().optional().nullable(),
+    selectedServerIds: z.array(z.number()).default([]),
+    timeoutValue: z.number().min(1, "Timeout must be at least 1").default(30),
+    timeoutUnit: z.nativeEnum(TimeUnit).default(TimeUnit.MINUTES),
+    retries: z
+      .number()
+      .min(0, "Retries must be 0 or more")
+      .max(10, "Maximum 10 retries allowed")
+      .default(0),
+    maxExecutions: z
+      .number()
+      .min(0, "Max executions must be 0 or more")
+      .default(0),
+    resetCounterOnActive: z.boolean().default(false),
+
+    // Environment variables and conditional events
+    envVars: z.array(envVarSchema).default([]),
+    onSuccessActions: z.array(conditionalActionSchema).default([]),
+    onFailActions: z.array(conditionalActionSchema).default([]),
+  })
+  .refine(
+    (data) => {
+      // Validate HTTP request fields
+      if (data.type === EventType.HTTP_REQUEST) {
+        return data.httpUrl && data.httpMethod;
+      }
+      return true;
+    },
+    {
+      message: "HTTP URL and method are required for HTTP request events",
+      path: ["httpUrl"],
+    },
+  )
+  .refine(
+    (data) => {
+      // Validate script content for non-HTTP events
+      if (data.type !== EventType.HTTP_REQUEST) {
+        return data.content && data.content.trim().length > 0;
+      }
+      return true;
+    },
+    {
+      message: "Script content is required for script events",
+      path: ["content"],
+    },
+  )
+  .refine(
+    (data) => {
+      // Validate server selection for remote execution
+      if (data.runLocation === RunLocation.REMOTE) {
+        return data.serverId || data.selectedServerIds.length > 0;
+      }
+      return true;
+    },
+    {
+      message: "Server selection is required for remote execution",
+      path: ["serverId"],
+    },
+  )
+  .refine(
+    (data) => {
+      // Validate schedule fields for scheduled events
+      if (
+        data.triggerType === EventTriggerType.SCHEDULE &&
+        data.status === EventStatus.ACTIVE
+      ) {
+        return data.scheduleNumber || data.customSchedule;
+      }
+      return true;
+    },
+    {
+      message: "Schedule configuration is required for active scheduled events",
+      path: ["scheduleNumber"],
+    },
+  );
 
 // Update event schema (partial of create schema with id)
 export const updateEventSchema = z.object({
@@ -187,7 +223,9 @@ export const eventActivationSchema = z.object({
 
 // Event download schema
 export const eventDownloadSchema = z.object({
-  eventIds: z.array(z.number().int().positive()).min(1, "At least one event must be selected"),
+  eventIds: z
+    .array(z.number().int().positive())
+    .min(1, "At least one event must be selected"),
   format: z.enum(["json", "zip"]).default("json"),
 });
 

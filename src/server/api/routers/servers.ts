@@ -12,9 +12,9 @@ import {
   serverUsageStatsSchema,
   serverLogsSchema,
 } from "@shared/schemas/servers";
-import { type InsertServer } from "@shared/schema";
+import { type InsertServer, UserRole } from "@shared/schema";
 import { storage } from "@/server/storage";
-import { Log } from "@shared/schema";
+import { type Log } from "@shared/schema";
 
 // Custom procedure that handles auth for tRPC fetch adapter
 const serverProcedure = publicProcedure.use(async ({ ctx, next }) => {
@@ -31,7 +31,9 @@ const serverProcedure = publicProcedure.use(async ({ ctx, next }) => {
       // For development, get first admin user
       if (process.env.NODE_ENV === "development") {
         const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter((user) => user.role === "ADMIN");
+        const adminUsers = allUsers.filter(
+          (user) => user.role === UserRole.ADMIN,
+        );
         if (adminUsers.length > 0) {
           userId = adminUsers[0]!.id;
           session = { user: { id: adminUsers[0]!.id } };

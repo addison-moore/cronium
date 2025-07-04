@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-floating-promises */
 /* eslint-disable @typescript-eslint/no-base-to-string */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
@@ -9,13 +6,8 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import {
-  EventStatus,
-  TimeUnit,
-  RunLocation,
-  EventType,
-  ConditionalActionType,
-} from "@/shared/schema";
+import { EventStatus, ConditionalActionType } from "@/shared/schema";
+import type { TimeUnit, RunLocation, EventType } from "@/shared/schema";
 import { useToast } from "@/components/ui/use-toast";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Pagination } from "@/components/ui/pagination";
@@ -30,6 +22,8 @@ import {
   EventsFilters,
   EventsTable,
   BulkActionsToolbar,
+} from "@/components/event-list";
+import type {
   Event,
   WorkflowData,
   EventListFilters,
@@ -343,8 +337,7 @@ export default function EventsList() {
           ? event.runLocation === "local" ||
             (!event.serverId &&
               (!event.eventServers || event.eventServers.length === 0))
-          : (event.eventServers &&
-              event.eventServers.includes(parseInt(filters.serverFilter))) ||
+          : event.eventServers?.includes(parseInt(filters.serverFilter)) ||
             event.serverId === parseInt(filters.serverFilter);
     const matchesTag =
       filters.tagFilter === "all" || !filters.tagFilter

@@ -63,7 +63,6 @@ export default function UserDetailsPage() {
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
-  const t = useTranslations("Admin");
   const tCommon = useTranslations("Common");
 
   const [user, setUser] = useState<UserDetails | null>(null);
@@ -123,7 +122,7 @@ export default function UserDetailsPage() {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Failed to update user role",
+        description: error.message ?? "Failed to update user role",
         variant: "destructive",
       });
     } finally {
@@ -156,7 +155,7 @@ export default function UserDetailsPage() {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Failed to update user status",
+        description: error.message ?? "Failed to update user status",
         variant: "destructive",
       });
     } finally {
@@ -178,7 +177,7 @@ export default function UserDetailsPage() {
 
       if (!response.ok) {
         const errData = await response.json();
-        throw new Error(errData.message || "Failed to resend invitation");
+        throw new Error(errData.message ?? "Failed to resend invitation");
       }
 
       toast({
@@ -188,7 +187,7 @@ export default function UserDetailsPage() {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Failed to resend invitation",
+        description: error.message ?? "Failed to resend invitation",
         variant: "destructive",
       });
     } finally {
@@ -218,7 +217,7 @@ export default function UserDetailsPage() {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Failed to delete user",
+        description: error.message ?? "Failed to delete user",
         variant: "destructive",
       });
     } finally {
@@ -244,7 +243,7 @@ export default function UserDetailsPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 space-y-6">
+    <div className="container mx-auto space-y-6 py-8">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button
@@ -268,7 +267,7 @@ export default function UserDetailsPage() {
                 <CardTitle className="text-xl">{user.email}</CardTitle>
                 <CardDescription>
                   {user.firstName || user.lastName
-                    ? `${user.firstName || ""} ${user.lastName || ""}`.trim()
+                    ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim()
                     : "No name provided"}
                 </CardDescription>
               </div>
@@ -286,7 +285,7 @@ export default function UserDetailsPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <Mail className="h-4 w-4" />
@@ -394,7 +393,7 @@ export default function UserDetailsPage() {
           </div>
 
           {/* Danger Zone */}
-          <div className="border-t border-border pt-6">
+          <div className="border-border border-t pt-6">
             <div className="space-y-3">
               <label className="text-sm font-medium text-red-600">
                 Danger Zone

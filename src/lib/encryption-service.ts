@@ -89,10 +89,7 @@ class EncryptionService {
     }
 
     // If it doesn't look like encrypted data, return as-is
-    if (
-      encryptedData.length < 50 ||
-      !encryptedData.match(/^[A-Za-z0-9+/=]+$/)
-    ) {
+    if (encryptedData.length < 50 || !/^[A-Za-z0-9+/=]+$/.exec(encryptedData)) {
       return encryptedData;
     }
 
@@ -178,7 +175,7 @@ export function encryptSensitiveData<T extends Record<string, any>>(
   data: T,
   tableName: string,
 ): T {
-  const result = { ...data } as T;
+  const result = { ...data };
 
   Object.keys(data).forEach((key) => {
     if (
@@ -200,7 +197,7 @@ export function decryptSensitiveData<T extends Record<string, any>>(
   data: T,
   tableName: string,
 ): T {
-  const result = { ...data } as T;
+  const result = { ...data };
 
   Object.keys(data).forEach((key) => {
     if (
@@ -314,7 +311,7 @@ export class ClientEncryptionUtils {
   /**
    * Generate a secure random password/key
    */
-  static generateSecureKey(length: number = 32): string {
+  static generateSecureKey(length = 32): string {
     const chars =
       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
     let result = "";

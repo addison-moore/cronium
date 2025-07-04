@@ -1,13 +1,13 @@
-import '@testing-library/jest-dom';
+import "@testing-library/jest-dom";
 
 // Mock Next.js router
-jest.mock('next/router', () => ({
+jest.mock("next/router", () => ({
   useRouter() {
     return {
-      route: '/',
-      pathname: '/',
+      route: "/",
+      pathname: "/",
       query: {},
-      asPath: '/',
+      asPath: "/",
       push: jest.fn(),
       pop: jest.fn(),
       reload: jest.fn(),
@@ -24,7 +24,7 @@ jest.mock('next/router', () => ({
 }));
 
 // Mock Next.js navigation
-jest.mock('next/navigation', () => ({
+jest.mock("next/navigation", () => ({
   useRouter() {
     return {
       push: jest.fn(),
@@ -39,14 +39,14 @@ jest.mock('next/navigation', () => ({
     return new URLSearchParams();
   },
   usePathname() {
-    return '/';
+    return "/";
   },
 }));
 
 // Mock window.matchMedia
-Object.defineProperty(window, 'matchMedia', {
+Object.defineProperty(window, "matchMedia", {
   writable: true,
-  value: jest.fn().mockImplementation(query => ({
+  value: jest.fn().mockImplementation((query) => ({
     matches: false,
     media: query,
     onchange: null,
@@ -87,7 +87,7 @@ global.ResizeObserver = class ResizeObserver {
 };
 
 // Mock crypto for browser environment
-Object.defineProperty(global, 'crypto', {
+Object.defineProperty(global, "crypto", {
   value: {
     getRandomValues: (arr) => {
       for (let i = 0; i < arr.length; i++) {
@@ -109,8 +109,8 @@ const originalError = console.error;
 beforeAll(() => {
   console.error = (...args) => {
     if (
-      typeof args[0] === 'string' &&
-      args[0].includes('Warning: ReactDOM.render is no longer supported')
+      typeof args[0] === "string" &&
+      args[0].includes("Warning: ReactDOM.render is no longer supported")
     ) {
       return;
     }
@@ -133,7 +133,7 @@ global.testUtils = {
           if (result) {
             resolve(result);
           } else if (Date.now() - start > timeout) {
-            reject(new Error('Timeout'));
+            reject(new Error("Timeout"));
           } else {
             setTimeout(check, 100);
           }

@@ -16,12 +16,12 @@ export function ThemeToggle({ showLabel = true }: { showLabel?: boolean }) {
   }, []);
 
   if (!mounted) {
-    return <div className="h-9 w-[70px] rounded-md bg-muted animate-pulse" />;
+    return <div className="bg-muted h-9 w-[70px] animate-pulse rounded-md" />;
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="border-border bg-card rounded-lg border p-4">
+      <div className="mb-3 flex items-center justify-between">
         {showLabel && (
           <Label htmlFor="theme-toggle" className="text-base font-medium">
             Dark Mode
@@ -36,7 +36,7 @@ export function ThemeToggle({ showLabel = true }: { showLabel?: boolean }) {
           onClick={() => setTheme("light")}
           className="w-full"
         >
-          <Sun className="h-4 w-4 mr-1" />
+          <Sun className="mr-1 h-4 w-4" />
           Light
         </Button>
         <Button
@@ -45,7 +45,7 @@ export function ThemeToggle({ showLabel = true }: { showLabel?: boolean }) {
           onClick={() => setTheme("dark")}
           className="w-full"
         >
-          <Moon className="h-4 w-4 mr-1" />
+          <Moon className="mr-1 h-4 w-4" />
           Dark
         </Button>
         <Button
@@ -54,7 +54,7 @@ export function ThemeToggle({ showLabel = true }: { showLabel?: boolean }) {
           onClick={() => setTheme("system")}
           className="w-full"
         >
-          <Monitor className="h-4 w-4 mr-1" />
+          <Monitor className="mr-1 h-4 w-4" />
           System
         </Button>
       </div>

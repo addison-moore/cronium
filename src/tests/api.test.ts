@@ -22,20 +22,23 @@ describe("Cronium API Complete Test Suite", () => {
   let workflowId: number;
 
   beforeAll(async () => {
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   });
 
   afterAll(async () => {
     // Clean up any remaining resources that weren't deleted in the deletion tests
     // Only attempt deletion if the ID is still set (not reset to 0 by deletion tests)
     const cleanup = [
-      workflowId && apiClient.delete(`/workflows/${workflowId}`).catch(() => {}),
+      workflowId &&
+        apiClient.delete(`/workflows/${workflowId}`).catch(() => {}),
       httpEventId && apiClient.delete(`/events/${httpEventId}`).catch(() => {}),
-      nodejsEventId && apiClient.delete(`/events/${nodejsEventId}`).catch(() => {}),
-      pythonEventId && apiClient.delete(`/events/${pythonEventId}`).catch(() => {}),
-      bashEventId && apiClient.delete(`/events/${bashEventId}`).catch(() => {})
+      nodejsEventId &&
+        apiClient.delete(`/events/${nodejsEventId}`).catch(() => {}),
+      pythonEventId &&
+        apiClient.delete(`/events/${pythonEventId}`).catch(() => {}),
+      bashEventId && apiClient.delete(`/events/${bashEventId}`).catch(() => {}),
     ].filter(Boolean);
-    
+
     if (cleanup.length > 0) {
       console.log(`Cleaning up ${cleanup.length} remaining test resources...`);
       await Promise.allSettled(cleanup);
@@ -46,11 +49,12 @@ describe("Cronium API Complete Test Suite", () => {
     test("should reject unauthorized requests", async () => {
       const unauthorizedClient = axios.create({
         baseURL: API_BASE_URL,
-        headers: { "Content-Type": "application/json" }
+        headers: { "Content-Type": "application/json" },
       });
 
-      await expect(unauthorizedClient.get("/events"))
-        .rejects.toMatchObject({ response: { status: 401 } });
+      await expect(unauthorizedClient.get("/events")).rejects.toMatchObject({
+        response: { status: 401 },
+      });
     });
 
     test("should reject invalid tokens", async () => {
@@ -58,12 +62,13 @@ describe("Cronium API Complete Test Suite", () => {
         baseURL: API_BASE_URL,
         headers: {
           Authorization: "Bearer invalid_token",
-          "Content-Type": "application/json"
-        }
+          "Content-Type": "application/json",
+        },
       });
 
-      await expect(invalidClient.get("/events"))
-        .rejects.toMatchObject({ response: { status: 401 } });
+      await expect(invalidClient.get("/events")).rejects.toMatchObject({
+        response: { status: 401 },
+      });
     });
 
     test("should accept valid API token", async () => {
@@ -104,14 +109,14 @@ echo "Bash event completed"`,
         runLocation: "LOCAL",
         timeoutValue: 30,
         timeoutUnit: "SECONDS",
-        retries: 3
+        retries: 3,
       };
 
       const response = await apiClient.post("/events", bashEvent);
       expect(response.status).toBe(201);
       expect(response.data.name).toBe(bashEvent.name);
       expect(response.data.type).toBe("BASH");
-      
+
       bashEventId = response.data.id;
     });
 
@@ -147,14 +152,14 @@ print("Python event completed")`,
         runLocation: "LOCAL",
         timeoutValue: 30,
         timeoutUnit: "SECONDS",
-        retries: 3
+        retries: 3,
       };
 
       const response = await apiClient.post("/events", pythonEvent);
       expect(response.status).toBe(201);
       expect(response.data.name).toBe(pythonEvent.name);
       expect(response.data.type).toBe("PYTHON");
-      
+
       pythonEventId = response.data.id;
     });
 
@@ -188,14 +193,14 @@ console.log('Node.js event completed');`,
         runLocation: "LOCAL",
         timeoutValue: 30,
         timeoutUnit: "SECONDS",
-        retries: 3
+        retries: 3,
       };
 
       const response = await apiClient.post("/events", nodejsEvent);
       expect(response.status).toBe(201);
       expect(response.data.name).toBe(nodejsEvent.name);
       expect(response.data.type).toBe("NODEJS");
-      
+
       nodejsEventId = response.data.id;
     });
 
@@ -206,27 +211,25 @@ console.log('Node.js event completed');`,
         type: "HTTP_REQUEST",
         httpMethod: "POST",
         httpUrl: "https://jsonplaceholder.typicode.com/posts",
-        httpHeaders: [
-          { key: "Content-Type", value: "application/json" }
-        ],
+        httpHeaders: [{ key: "Content-Type", value: "application/json" }],
         httpBody: JSON.stringify({
           title: "Final API Test",
           body: "Testing HTTP event creation",
-          userId: 1
+          userId: 1,
         }),
         status: "ACTIVE",
         scheduleUnit: "DAYS",
         runLocation: "LOCAL",
         timeoutValue: 30,
         timeoutUnit: "SECONDS",
-        retries: 3
+        retries: 3,
       };
 
       const response = await apiClient.post("/events", httpEvent);
       expect(response.status).toBe(201);
       expect(response.data.name).toBe(httpEvent.name);
       expect(response.data.type).toBe("HTTP_REQUEST");
-      
+
       httpEventId = response.data.id;
     });
 
@@ -234,10 +237,13 @@ console.log('Node.js event completed');`,
       const updateData = {
         name: "Updated Final Test Bash Event",
         description: "Updated description for comprehensive testing",
-        timeoutValue: 45
+        timeoutValue: 45,
       };
 
-      const response = await apiClient.patch(`/events/${bashEventId}`, updateData);
+      const response = await apiClient.patch(
+        `/events/${bashEventId}`,
+        updateData,
+      );
       expect(response.status).toBe(200);
       expect(response.data.name).toBe(updateData.name);
       expect(response.data.timeoutValue).toBe(updateData.timeoutValue);
@@ -259,11 +265,14 @@ console.log('Node.js event completed');`,
         input: {
           user_id: "final_test_user",
           data: "comprehensive_test_data",
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       };
 
-      const response = await apiClient.post(`/events/${bashEventId}/execute`, inputData);
+      const response = await apiClient.post(
+        `/events/${bashEventId}/execute`,
+        inputData,
+      );
       expect(response.status).toBe(200);
       expect(response.data.success).toBe(true);
       expect(response.data.eventId).toBe(bashEventId);
@@ -282,37 +291,37 @@ console.log('Node.js event completed');`,
           {
             id: "bash_node",
             eventId: bashEventId,
-            position: { x: 100, y: 100 }
+            position: { x: 100, y: 100 },
           },
           {
             id: "python_node",
             eventId: pythonEventId,
-            position: { x: 300, y: 100 }
+            position: { x: 300, y: 100 },
           },
           {
             id: "nodejs_node",
             eventId: nodejsEventId,
-            position: { x: 500, y: 100 }
-          }
+            position: { x: 500, y: 100 },
+          },
         ],
         edges: [
           {
             id: "bash_to_python",
             source: "bash_node",
-            target: "python_node"
+            target: "python_node",
           },
           {
             id: "python_to_nodejs",
             source: "python_node",
-            target: "nodejs_node"
-          }
-        ]
+            target: "nodejs_node",
+          },
+        ],
       };
 
       const response = await apiClient.post("/workflows", workflow);
       expect(response.status).toBe(200);
       expect(response.data.name).toBe(workflow.name);
-      
+
       workflowId = response.data.id;
     });
 
@@ -321,11 +330,14 @@ console.log('Node.js event completed');`,
         input: {
           user_id: "final_workflow_test_user",
           data: "workflow_test_data",
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       };
 
-      const response = await apiClient.post(`/workflows/${workflowId}/execute`, workflowInput);
+      const response = await apiClient.post(
+        `/workflows/${workflowId}/execute`,
+        workflowInput,
+      );
       expect(response.status).toBe(200);
       expect(response.data.success).toBe(true);
       expect(response.data.workflowId).toBe(workflowId);
@@ -335,10 +347,13 @@ console.log('Node.js event completed');`,
       const updateData = {
         name: "Updated Final API Test Workflow",
         description: "Updated workflow description",
-        status: "ACTIVE"
+        status: "ACTIVE",
       };
 
-      const response = await apiClient.patch(`/workflows/${workflowId}`, updateData);
+      const response = await apiClient.patch(
+        `/workflows/${workflowId}`,
+        updateData,
+      );
       expect(response.status).toBe(200);
       expect(response.data.name).toBe(updateData.name);
     });
@@ -378,7 +393,9 @@ console.log('Node.js event completed');`,
       // Verify created workflow still exists
       const workflowResponse = await apiClient.get(`/workflows/${workflowId}`);
       expect(workflowResponse.status).toBe(200);
-      expect(workflowResponse.data.workflow.name).toBe("Updated Final API Test Workflow");
+      expect(workflowResponse.data.workflow.name).toBe(
+        "Updated Final API Test Workflow",
+      );
     });
   });
 
@@ -395,8 +412,9 @@ console.log('Node.js event completed');`,
       expect(response.status).toBe(204);
 
       // Verify event was deleted by trying to fetch it
-      await expect(apiClient.get(`/events/${httpEventId}`))
-        .rejects.toMatchObject({ response: { status: 404 } });
+      await expect(
+        apiClient.get(`/events/${httpEventId}`),
+      ).rejects.toMatchObject({ response: { status: 404 } });
 
       // Reset the ID to prevent afterAll cleanup from failing
       httpEventId = 0;
@@ -405,7 +423,9 @@ console.log('Node.js event completed');`,
     test("should delete workflow successfully", async () => {
       // Skip if no workflowId is available (test run order dependency)
       if (!workflowId) {
-        console.log("Skipping workflow deletion test - no workflow ID available");
+        console.log(
+          "Skipping workflow deletion test - no workflow ID available",
+        );
         return;
       }
 
@@ -414,8 +434,9 @@ console.log('Node.js event completed');`,
       expect(response.status).toBe(200);
 
       // Verify workflow was deleted by trying to fetch it
-      await expect(apiClient.get(`/workflows/${workflowId}`))
-        .rejects.toMatchObject({ response: { status: 404 } });
+      await expect(
+        apiClient.get(`/workflows/${workflowId}`),
+      ).rejects.toMatchObject({ response: { status: 404 } });
 
       // Reset the ID to prevent afterAll cleanup from failing
       workflowId = 0;
@@ -423,12 +444,14 @@ console.log('Node.js event completed');`,
 
     test("should handle deletion of non-existent resources gracefully", async () => {
       // Test deleting non-existent event
-      await expect(apiClient.delete("/events/99999"))
-        .rejects.toMatchObject({ response: { status: 404 } });
+      await expect(apiClient.delete("/events/99999")).rejects.toMatchObject({
+        response: { status: 404 },
+      });
 
       // Test deleting non-existent workflow
-      await expect(apiClient.delete("/workflows/99999"))
-        .rejects.toMatchObject({ response: { status: 404 } });
+      await expect(apiClient.delete("/workflows/99999")).rejects.toMatchObject({
+        response: { status: 404 },
+      });
     });
 
     test("should delete remaining test events in cleanup", async () => {
@@ -436,16 +459,17 @@ console.log('Node.js event completed');`,
       const eventsToDelete = [
         { id: bashEventId, name: "Bash Event" },
         { id: pythonEventId, name: "Python Event" },
-        { id: nodejsEventId, name: "Node.js Event" }
-      ].filter(event => event.id > 0);
+        { id: nodejsEventId, name: "Node.js Event" },
+      ].filter((event) => event.id > 0);
 
       for (const event of eventsToDelete) {
         const response = await apiClient.delete(`/events/${event.id}`);
         expect(response.status).toBe(204);
 
         // Verify deletion
-        await expect(apiClient.get(`/events/${event.id}`))
-          .rejects.toMatchObject({ response: { status: 404 } });
+        await expect(
+          apiClient.get(`/events/${event.id}`),
+        ).rejects.toMatchObject({ response: { status: 404 } });
       }
 
       // Reset IDs to prevent afterAll cleanup from failing

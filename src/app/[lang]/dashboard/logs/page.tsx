@@ -9,7 +9,7 @@ import { ActivityTableWithFilters } from "@/components/activity";
 import WorkflowExecutionHistory from "@/components/workflows/WorkflowExecutionHistory";
 import { Code, GitFork } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
-import { trpc, trpcClient } from "@/lib/trpc";
+import { trpcClient } from "@/lib/trpc";
 
 export default function LogsPage() {
   const t = useTranslations("Logs");
@@ -23,16 +23,16 @@ export default function LogsPage() {
   const getLogs = async (params: URLSearchParams) => {
     try {
       // Extract search parameters
-      const limit = parseInt(params.get("limit") || "20");
-      const offset = parseInt(params.get("offset") || "0");
-      const status = params.get("status") || undefined;
+      const limit = parseInt(params.get("limit") ?? "20");
+      const offset = parseInt(params.get("offset") ?? "0");
+      const status = params.get("status") ?? undefined;
       const eventId = params.get("eventId")
         ? parseInt(params.get("eventId")!)
         : undefined;
       const workflowId = params.get("workflowId")
         ? parseInt(params.get("workflowId")!)
         : undefined;
-      const date = params.get("date") || undefined;
+      const date = params.get("date") ?? undefined;
 
       const data = await trpcClient.logs.getAll.query({
         limit,
@@ -44,8 +44,8 @@ export default function LogsPage() {
       });
 
       return {
-        logs: data.logs || [],
-        total: data.total || 0,
+        logs: data.logs ?? [],
+        total: data.total ?? 0,
       };
     } catch (error) {
       console.error("Error fetching logs:", error);
@@ -69,7 +69,7 @@ export default function LogsPage() {
         data.events?.map((event: any) => ({
           id: event.id,
           name: event.name,
-        })) || []
+        })) ?? []
       );
     } catch (error) {
       console.error("Error fetching events:", error);
@@ -93,7 +93,7 @@ export default function LogsPage() {
         data.workflows?.map((workflow: any) => ({
           id: workflow.id,
           name: workflow.name,
-        })) || []
+        })) ?? []
       );
     } catch (error) {
       console.error("Error fetching workflows:", error);

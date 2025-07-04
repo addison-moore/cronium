@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { LogStatus, EventStatus, UserStatus, UserRole } from "../schema";
 
 // Base monitoring query schema
 export const monitoringQuerySchema = z.object({
@@ -22,7 +21,9 @@ export const systemMetricsSchema = z.object({
 export const activityFeedSchema = z.object({
   limit: z.number().min(1).max(100).default(20),
   offset: z.number().min(0).default(0),
-  types: z.array(z.enum(["execution", "user_action", "system_event", "error"])).optional(),
+  types: z
+    .array(z.enum(["execution", "user_action", "system_event", "error"]))
+    .optional(),
   userId: z.string().optional(),
   severity: z.enum(["low", "medium", "high", "critical"]).optional(),
   since: z.string().datetime().optional(),
@@ -46,24 +47,37 @@ export const healthCheckSchema = z.object({
 // Performance metrics schema
 export const performanceMetricsSchema = z.object({
   period: z.enum(["hour", "day", "week", "month"]).default("day"),
-  metrics: z.array(z.enum([
-    "response_time",
-    "throughput",
-    "error_rate",
-    "cpu_usage",
-    "memory_usage",
-    "disk_usage",
-    "network_io",
-    "database_connections"
-  ])).optional(),
+  metrics: z
+    .array(
+      z.enum([
+        "response_time",
+        "throughput",
+        "error_rate",
+        "cpu_usage",
+        "memory_usage",
+        "disk_usage",
+        "network_io",
+        "database_connections",
+      ]),
+    )
+    .optional(),
   granularity: z.enum(["minute", "hour", "day"]).default("hour"),
 });
 
 // Alert configuration schema
 export const alertConfigSchema = z.object({
-  type: z.enum(["cpu", "memory", "disk", "error_rate", "execution_failures", "system_health"]),
+  type: z.enum([
+    "cpu",
+    "memory",
+    "disk",
+    "error_rate",
+    "execution_failures",
+    "system_health",
+  ]),
   threshold: z.number().min(0).max(100),
-  comparison: z.enum(["greater_than", "less_than", "equals"]).default("greater_than"),
+  comparison: z
+    .enum(["greater_than", "less_than", "equals"])
+    .default("greater_than"),
   enabled: z.boolean().default(true),
   cooldown: z.number().min(1).max(1440).default(30), // Cooldown in minutes
   notifications: z.array(z.enum(["email", "slack", "webhook"])).default([]),
@@ -73,31 +87,39 @@ export const alertConfigSchema = z.object({
 export const userActivitySchema = z.object({
   userId: z.string().optional(),
   period: z.enum(["hour", "day", "week", "month"]).default("day"),
-  activities: z.array(z.enum([
-    "login",
-    "logout",
-    "event_created",
-    "event_executed",
-    "workflow_created",
-    "workflow_executed",
-    "server_added",
-    "variable_modified"
-  ])).optional(),
+  activities: z
+    .array(
+      z.enum([
+        "login",
+        "logout",
+        "event_created",
+        "event_executed",
+        "workflow_created",
+        "workflow_executed",
+        "server_added",
+        "variable_modified",
+      ]),
+    )
+    .optional(),
   limit: z.number().min(1).max(100).default(50),
   offset: z.number().min(0).default(0),
 });
 
 // System resource monitoring schema
 export const systemResourceSchema = z.object({
-  components: z.array(z.enum([
-    "cpu",
-    "memory",
-    "disk",
-    "network",
-    "database",
-    "cache",
-    "queue"
-  ])).optional(),
+  components: z
+    .array(
+      z.enum([
+        "cpu",
+        "memory",
+        "disk",
+        "network",
+        "database",
+        "cache",
+        "queue",
+      ]),
+    )
+    .optional(),
   detailed: z.boolean().default(false),
   historical: z.boolean().default(false),
   points: z.number().min(1).max(100).default(24),
@@ -106,7 +128,9 @@ export const systemResourceSchema = z.object({
 // Event execution analytics schema
 export const executionAnalyticsSchema = z.object({
   period: z.enum(["day", "week", "month", "quarter", "year"]).default("week"),
-  groupBy: z.enum(["status", "event", "user", "server", "hour", "day", "week"]).default("status"),
+  groupBy: z
+    .enum(["status", "event", "user", "server", "hour", "day", "week"])
+    .default("status"),
   eventId: z.number().int().positive().optional(),
   userId: z.string().optional(),
   serverId: z.number().int().positive().optional(),
@@ -129,7 +153,9 @@ export const workflowAnalyticsSchema = z.object({
 export const errorTrackingSchema = z.object({
   period: z.enum(["hour", "day", "week", "month"]).default("day"),
   severity: z.enum(["error", "warning", "critical"]).optional(),
-  component: z.enum(["execution", "database", "network", "system", "authentication"]).optional(),
+  component: z
+    .enum(["execution", "database", "network", "system", "authentication"])
+    .optional(),
   limit: z.number().min(1).max(100).default(50),
   offset: z.number().min(0).default(0),
   groupBy: z.enum(["message", "component", "user", "hour", "day"]).optional(),
@@ -138,25 +164,26 @@ export const errorTrackingSchema = z.object({
 // Audit log schema
 export const auditLogSchema = z.object({
   period: z.enum(["day", "week", "month", "year"]).default("week"),
-  actions: z.array(z.enum([
-    "create",
-    "update", 
-    "delete",
-    "execute",
-    "login",
-    "logout",
-    "invite",
-    "activate",
-    "deactivate"
-  ])).optional(),
-  entities: z.array(z.enum([
-    "user",
-    "event",
-    "workflow",
-    "server",
-    "variable",
-    "setting"
-  ])).optional(),
+  actions: z
+    .array(
+      z.enum([
+        "create",
+        "update",
+        "delete",
+        "execute",
+        "login",
+        "logout",
+        "invite",
+        "activate",
+        "deactivate",
+      ]),
+    )
+    .optional(),
+  entities: z
+    .array(
+      z.enum(["user", "event", "workflow", "server", "variable", "setting"]),
+    )
+    .optional(),
   userId: z.string().optional(),
   adminOnly: z.boolean().default(false),
   limit: z.number().min(1).max(100).default(50),
@@ -171,7 +198,7 @@ export const dashboardWidgetSchema = z.object({
     "activity_feed",
     "status_grid",
     "progress_bar",
-    "gauge"
+    "gauge",
   ]),
   title: z.string().min(1).max(100),
   config: z.record(z.any()), // Widget-specific configuration

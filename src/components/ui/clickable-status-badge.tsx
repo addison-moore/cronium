@@ -54,7 +54,7 @@ export function ClickableStatusBadge({
   if (disabled || isUpdating) {
     return (
       <div
-        className={`inline-flex items-center font-medium rounded-full border ${currentConfig.border} ${sizeClasses[size]} ${currentConfig.bgColor} ${currentConfig.textColor} ${isUpdating ? "opacity-60" : ""} ${className}`}
+        className={`inline-flex items-center rounded-full border font-medium ${currentConfig.border} ${sizeClasses[size]} ${currentConfig.bgColor} ${currentConfig.textColor} ${isUpdating ? "opacity-60" : ""} ${className}`}
       >
         {isUpdating ? (
           <>
@@ -69,7 +69,7 @@ export function ClickableStatusBadge({
               <span className="mr-0.5 flex-shrink-0">
                 {isValidElement(currentConfig.icon)
                   ? cloneElement(currentConfig.icon as any, {
-                      className: `${iconSizeClasses[size]} ${(currentConfig.icon as any).props?.className || ""}`,
+                      className: `${iconSizeClasses[size]} ${(currentConfig.icon as any).props?.className ?? ""}`,
                     })
                   : currentConfig.icon}
               </span>
@@ -85,13 +85,13 @@ export function ClickableStatusBadge({
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <div
-          className={`cursor-pointer hover:opacity-80 transition-opacity inline-flex items-center font-medium rounded-full border ${currentConfig.border} ${sizeClasses[size]} ${currentConfig.bgColor} ${currentConfig.textColor} ${className}`}
+          className={`inline-flex cursor-pointer items-center rounded-full border font-medium transition-opacity hover:opacity-80 ${currentConfig.border} ${sizeClasses[size]} ${currentConfig.bgColor} ${currentConfig.textColor} ${className}`}
         >
           {currentConfig.icon && (
             <span className="mr-0.5 flex-shrink-0">
               {isValidElement(currentConfig.icon)
                 ? cloneElement(currentConfig.icon as any, {
-                    className: `${iconSizeClasses[size]} ${(currentConfig.icon as any).props?.className || ""}`,
+                    className: `${iconSizeClasses[size]} ${(currentConfig.icon as any).props?.className ?? ""}`,
                   })
                 : currentConfig.icon}
             </span>
@@ -111,13 +111,13 @@ export function ClickableStatusBadge({
               disabled={status === currentStatus}
             >
               <div
-                className={`pointer-events-none inline-flex items-center font-medium rounded-full border ${config.border} ${sizeClasses[size]} ${config.bgColor} ${config.textColor}`}
+                className={`pointer-events-none inline-flex items-center rounded-full border font-medium ${config.border} ${sizeClasses[size]} ${config.bgColor} ${config.textColor}`}
               >
                 {config.icon && (
                   <span className="mr-0.5 flex-shrink-0">
                     {isValidElement(config.icon)
                       ? cloneElement(config.icon as any, {
-                          className: `${iconSizeClasses[size]} ${(config.icon as any).props?.className || ""}`,
+                          className: `${iconSizeClasses[size]} ${(config.icon as any).props?.className ?? ""}`,
                         })
                       : config.icon}
                   </span>

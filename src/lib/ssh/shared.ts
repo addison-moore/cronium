@@ -20,8 +20,8 @@ export interface SSHConnectionConfig {
 }
 
 export class SSHConnectionManager {
-  private connectionPool: Map<string, SSHConnection> = new Map();
-  private connectionLocks: Map<string, Promise<SSHConnection>> = new Map();
+  private connectionPool = new Map<string, SSHConnection>();
+  private connectionLocks = new Map<string, Promise<SSHConnection>>();
   private readonly maxPoolSize = 5;
   private readonly connectionTimeout = 30000;
   private readonly idleTimeout = 300000;
@@ -73,9 +73,9 @@ export class SSHConnectionManager {
   async getPooledConnection(
     host: string,
     privateKey: string,
-    username: string = "root",
-    port: number = 22,
-    forceNew: boolean = false,
+    username = "root",
+    port = 22,
+    forceNew = false,
   ): Promise<SSHConnection> {
     const connectionKey = this.getConnectionKey(host, username, port);
 
@@ -214,8 +214,8 @@ export class SSHConnectionManager {
   async testConnection(
     host: string,
     privateKey: string,
-    username: string = "root",
-    port: number = 22,
+    username = "root",
+    port = 22,
   ): Promise<{ success: boolean; message: string }> {
     try {
       const connection = await this.getPooledConnection(

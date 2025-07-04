@@ -1,7 +1,7 @@
 /**
  * Create a transitional storage adapter to support the table renames
  * from scripts → events and events → conditional_events
- * 
+ *
  * This file will help us handle the transition smoothly by providing
  * compatibility methods.
  */
@@ -38,7 +38,9 @@ const createStorageAdapter = () => {
         UPDATE "workflow_nodes" SET "event_id" = "script_id"
         WHERE "event_id" IS NULL AND "script_id" IS NOT NULL
       `);
-      console.log(`Updated ${workflowNodesResult.rowCount} rows in workflow_nodes table`);
+      console.log(
+        `Updated ${workflowNodesResult.rowCount} rows in workflow_nodes table`,
+      );
 
       // Update conditional_events table (previously events)
       const conditionalEventsResult = await db.execute(sql`
@@ -52,7 +54,9 @@ const createStorageAdapter = () => {
           ("fail_event_id" IS NULL AND "fail_script_id" IS NOT NULL) OR
           ("target_event_id" IS NULL AND "target_script_id" IS NOT NULL)
       `);
-      console.log(`Updated ${conditionalEventsResult.rowCount} rows in conditional_events table`);
+      console.log(
+        `Updated ${conditionalEventsResult.rowCount} rows in conditional_events table`,
+      );
     },
 
     /**
@@ -64,14 +68,14 @@ const createStorageAdapter = () => {
         CREATE OR REPLACE VIEW "scripts" AS
         SELECT * FROM "events"
       `);
-      console.log('Created scripts view');
+      console.log("Created scripts view");
 
       // Create a view to alias conditional_events as events
       await db.execute(sql`
         CREATE OR REPLACE VIEW "events_old" AS
         SELECT * FROM "conditional_events"
       `);
-      console.log('Created events_old view');
+      console.log("Created events_old view");
     },
 
     /**
@@ -80,8 +84,8 @@ const createStorageAdapter = () => {
     dropViewAliases: async () => {
       await db.execute(sql`DROP VIEW IF EXISTS "scripts"`);
       await db.execute(sql`DROP VIEW IF EXISTS "events_old"`);
-      console.log('Dropped view aliases');
-    }
+      console.log("Dropped view aliases");
+    },
   };
 };
 
@@ -90,44 +94,51 @@ export const storageAdapter = createStorageAdapter();
 // When run directly
 if (require.main === module) {
   const action = process.argv[2];
-  
+
   switch (action) {
-    case 'map-ids':
-      storageAdapter.mapScriptIdToEventId()
+    case "map-ids":
+      storageAdapter
+        .mapScriptIdToEventId()
         .then(() => {
-          console.log('Successfully mapped IDs from old column names to new ones');
+          console.log(
+            "Successfully mapped IDs from old column names to new ones",
+          );
           process.exit(0);
         })
-        .catch(error => {
-          console.error('Error mapping IDs:', error);
+        .catch((error) => {
+          console.error("Error mapping IDs:", error);
           process.exit(1);
         });
       break;
-      
-    case 'create-views':
-      storageAdapter.createViewAliases()
+
+    case "create-views":
+      storageAdapter
+        .createViewAliases()
         .then(() => {
-          console.log('Successfully created view aliases for backwards compatibility');
+          console.log(
+            "Successfully created view aliases for backwards compatibility",
+          );
           process.exit(0);
         })
-        .catch(error => {
-          console.error('Error creating view aliases:', error);
+        .catch((error) => {
+          console.error("Error creating view aliases:", error);
           process.exit(1);
         });
       break;
-      
-    case 'drop-views':
-      storageAdapter.dropViewAliases()
+
+    case "drop-views":
+      storageAdapter
+        .dropViewAliases()
         .then(() => {
-          console.log('Successfully dropped view aliases');
+          console.log("Successfully dropped view aliases");
           process.exit(0);
         })
-        .catch(error => {
-          console.error('Error dropping view aliases:', error);
+        .catch((error) => {
+          console.error("Error dropping view aliases:", error);
           process.exit(1);
         });
       break;
-      
+
     default:
       console.log(`
 Usage: 

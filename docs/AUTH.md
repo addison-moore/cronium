@@ -16,18 +16,22 @@ This document outlines the authentication and user management system in Cronium 
 ## 🔐 Authentication Features
 
 ### 1. Email Login
+
 - Users authenticate using email + password.
 - Session is created via `next-auth`'s credentials provider.
 
 ### 2. Password Reset
+
 - Token-based password reset flow implemented using `next-auth` and Nodemailer.
 - Tokens are time-limited and stored securely (e.g., in DB or encrypted).
 
 ### 3. Invite System
+
 - Admins can invite users by generating a tokenized invitation link.
 - Invite flow allows new users to register and set a password via the same link.
 
 ### 4. Roles and Permissions
+
 - Each user has a `role` (e.g., `admin`, `user`, `viewer`), stored in the database.
 - Role-based access is enforced both in the frontend UI and server APIs.
 - Admins can:
@@ -36,6 +40,7 @@ This document outlines the authentication and user management system in Cronium 
   - Change roles
 
 ### 5. Admin Dashboard
+
 - Lists all users with their status and roles
 - Provides controls for:
   - Inviting new users

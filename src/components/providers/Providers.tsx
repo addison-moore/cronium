@@ -1,8 +1,7 @@
 "use client";
 
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import { NextAuthProvider } from "./NextAuthProvider";
-import { QueryProvider } from "./QueryProvider";
 import { TrpcProvider } from "./TrpcProvider";
 import { ServiceInitializer } from "./ServiceInitializer";
 import { ThemeProvider } from "./ThemeProvider";

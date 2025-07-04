@@ -105,7 +105,7 @@ export class TemplateProcessor {
     this.handlebars.registerHelper(
       "lookup",
       function (obj: any, field: string) {
-        return obj && obj[field];
+        return obj?.[field];
       },
     );
   }

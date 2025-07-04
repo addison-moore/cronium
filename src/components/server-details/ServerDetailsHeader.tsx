@@ -21,16 +21,16 @@ export function ServerDetailsHeader({
   onDelete,
 }: ServerDetailsHeaderProps) {
   return (
-    <div className="flex flex-col lg:flex-row justify-between gap-4 mb-6">
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-        <Button variant="ghost" size="sm" asChild className="w-fit h-8">
+    <div className="mb-6 flex flex-col justify-between gap-4 lg:flex-row">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <Button variant="ghost" size="sm" asChild className="h-8 w-fit">
           <Link href={`/${langParam}/dashboard/servers`}>
-            <ArrowLeft className="h-4 w-4 mr-1" />
+            <ArrowLeft className="mr-1 h-4 w-4" />
             Back to Servers
           </Link>
         </Button>
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold truncate">{server.name}</h1>
+          <h1 className="truncate text-xl font-bold">{server.name}</h1>
           {server.online !== undefined && (
             <StatusBadge
               status={server.online ? "online" : "offline"}
@@ -47,7 +47,7 @@ export function ServerDetailsHeader({
           onClick={onDelete}
           className="flex items-center"
         >
-          <Trash2 className="h-4 w-4 mr-1" />
+          <Trash2 className="mr-1 h-4 w-4" />
           Delete Server
         </Button>
       </div>

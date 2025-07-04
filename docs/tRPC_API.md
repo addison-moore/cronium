@@ -29,7 +29,8 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
       ...shape,
       data: {
         ...shape.data,
-        zodError: error.cause instanceof ZodError ? error.cause.flatten() : null,
+        zodError:
+          error.cause instanceof ZodError ? error.cause.flatten() : null,
       },
     };
   },
@@ -86,10 +87,12 @@ export const userRouter = createTRPCRouter({
 
   // Query: List operations
   getAll: publicProcedure
-    .input(z.object({
-      limit: z.number().min(1).max(100).default(10),
-      offset: z.number().min(0).default(0),
-    }))
+    .input(
+      z.object({
+        limit: z.number().min(1).max(100).default(10),
+        offset: z.number().min(0).default(0),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       return ctx.db.user.findMany({
         take: input.limit,
@@ -100,11 +103,13 @@ export const userRouter = createTRPCRouter({
 
   // Mutation: Create operations
   create: publicProcedure
-    .input(z.object({
-      name: z.string().min(1).max(100),
-      email: z.string().email(),
-      role: z.enum(["USER", "ADMIN"]).default("USER"),
-    }))
+    .input(
+      z.object({
+        name: z.string().min(1).max(100),
+        email: z.string().email(),
+        role: z.enum(["USER", "ADMIN"]).default("USER"),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       return ctx.db.user.create({
         data: input,
@@ -113,11 +118,13 @@ export const userRouter = createTRPCRouter({
 
   // Mutation: Update operations
   update: publicProcedure
-    .input(z.object({
-      id: z.string(),
-      name: z.string().min(1).max(100).optional(),
-      email: z.string().email().optional(),
-    }))
+    .input(
+      z.object({
+        id: z.string(),
+        name: z.string().min(1).max(100).optional(),
+        email: z.string().email().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const { id, ...updateData } = input;
       return ctx.db.user.update({
@@ -147,24 +154,26 @@ import { z } from "zod";
 
 // Basic validation schema
 export const createUserSchema = z.object({
-  name: z.string()
+  name: z
+    .string()
     .min(1, "Name is required")
     .max(100, "Name must be less than 100 characters")
     .trim(),
-  email: z.string()
-    .email("Invalid email format")
-    .toLowerCase(),
-  age: z.number()
+  email: z.string().email("Invalid email format").toLowerCase(),
+  age: z
+    .number()
     .int("Age must be a whole number")
     .min(13, "Must be at least 13 years old")
     .max(120, "Invalid age"),
   role: z.enum(["USER", "ADMIN", "MODERATOR"], {
     required_error: "Please select a role",
   }),
-  preferences: z.object({
-    newsletter: z.boolean().default(false),
-    notifications: z.boolean().default(true),
-  }).optional(),
+  preferences: z
+    .object({
+      newsletter: z.boolean().default(false),
+      notifications: z.boolean().default(true),
+    })
+    .optional(),
 });
 
 // Infer TypeScript type from schema
@@ -238,12 +247,11 @@ export const userRouter = createTRPCRouter({
     }),
 
   // Protected - requires authentication
-  getProfile: protectedProcedure
-    .query(async ({ ctx }) => {
-      return ctx.db.user.findUnique({
-        where: { id: ctx.session.user.id },
-      });
-    }),
+  getProfile: protectedProcedure.query(async ({ ctx }) => {
+    return ctx.db.user.findUnique({
+      where: { id: ctx.session.user.id },
+    });
+  }),
 
   // Admin-only - requires admin role
   getAllUsers: adminProcedure
@@ -293,7 +301,8 @@ export const userRouter = createTRPCRouter({
           data: input,
         });
       } catch (error) {
-        if (error.code === "P2002") { // Prisma unique constraint
+        if (error.code === "P2002") {
+          // Prisma unique constraint
           throw new TRPCError({
             code: "CONFLICT",
             message: "User with this email already exists",
@@ -487,10 +496,12 @@ const ee = new EventEmitter();
 export const chatRouter = createTRPCRouter({
   // Send message
   sendMessage: publicProcedure
-    .input(z.object({
-      message: z.string(),
-      roomId: z.string(),
-    }))
+    .input(
+      z.object({
+        message: z.string(),
+        roomId: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const message = await ctx.db.message.create({
         data: {
@@ -529,6 +540,7 @@ export const chatRouter = createTRPCRouter({
 ### 12. Recommended Patterns
 
 **Schema Organization:**
+
 ```typescript
 // Group related schemas together
 // src/schemas/index.ts
@@ -538,6 +550,7 @@ export * from "./auth";
 ```
 
 **Error Handling:**
+
 ```typescript
 // Consistent error responses
 const handleDatabaseError = (error: unknown) => {
@@ -563,11 +576,18 @@ const handleDatabaseError = (error: unknown) => {
 ```
 
 **Performance Optimizations:**
+
 ```typescript
 // Batch queries
 const batchedQueries = api.useQueries([
-  { queryKey: ["user", userId], queryFn: () => api.user.getById.query({ id: userId }) },
-  { queryKey: ["posts", userId], queryFn: () => api.post.getByUserId.query({ userId }) },
+  {
+    queryKey: ["user", userId],
+    queryFn: () => api.user.getById.query({ id: userId }),
+  },
+  {
+    queryKey: ["posts", userId],
+    queryFn: () => api.post.getByUserId.query({ userId }),
+  },
 ]);
 
 // Optimistic updates

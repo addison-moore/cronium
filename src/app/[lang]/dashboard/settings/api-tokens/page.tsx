@@ -1,5 +1,5 @@
 import React from "react";
-import { Metadata } from "next";
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import ApiTokensManager from "@/components/dashboard/ApiTokensManager";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "API Tokens | Settings | Cronium",
@@ -101,9 +102,9 @@ export default async function ApiTokensPage() {
                   <h3 className="text-lg font-medium">Documentation</h3>
                   <p className="text-muted-foreground text-sm">
                     For complete API documentation, visit the{" "}
-                    <a href="/docs/api" className="text-primary underline">
+                    <Link href="/docs/api" className="text-primary underline">
                       API Reference
-                    </a>
+                    </Link>
                     .
                   </p>
                 </div>

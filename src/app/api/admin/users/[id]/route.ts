@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { UserRole, UserStatus, LogStatus } from "@/shared/schema";
+import { UserRole, UserStatus, type LogStatus } from "@/shared/schema";
 import { storage } from "@/server/storage";
 import { z } from "zod";
 
@@ -63,7 +64,14 @@ export async function GET(
 
     // Get logs for this user (we'll need to implement this)
     // For now, we'll return an empty array
-    const recentLogs: { id: number; eventId: number; eventName: string; status: LogStatus; startTime: Date; duration: number | null; }[] = [];
+    const recentLogs: {
+      id: number;
+      eventId: number;
+      eventName: string;
+      status: LogStatus;
+      startTime: Date;
+      duration: number | null;
+    }[] = [];
 
     // Combine everything
     const userData = {

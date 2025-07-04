@@ -1,4 +1,11 @@
-import { type EventType, type TimeUnit, type EventStatus, type RunLocation, type ConditionalActionType, type UserRole } from "@shared/schema";
+import {
+  type EventType,
+  type TimeUnit,
+  type EventStatus,
+  type RunLocation,
+  type ConditionalActionType,
+  type UserRole,
+} from "@shared/schema";
 import { type IconType } from "react-icons";
 
 // Extend NextAuth types
@@ -129,24 +136,24 @@ export interface FormState<T = unknown> {
 }
 
 // Event Handler Types (replace any event handlers)
-export interface CustomEventHandler<T = HTMLElement> {
-  (event: React.SyntheticEvent<T>): void;
-}
+export type CustomEventHandler<T = HTMLElement> = (
+  event: React.SyntheticEvent<T>,
+) => void;
 
-export interface FormEventHandler<T = HTMLFormElement> {
-  (event: React.FormEvent<T>): void;
-}
+export type FormEventHandler<T = HTMLFormElement> = (
+  event: React.FormEvent<T>,
+) => void;
 
-export interface ChangeEventHandler<T = HTMLInputElement> {
-  (event: React.ChangeEvent<T>): void;
-}
+export type ChangeEventHandler<T = HTMLInputElement> = (
+  event: React.ChangeEvent<T>,
+) => void;
 
 // Loading State Types
-export type LoadingState<T, E = Error> = 
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'success'; data: T }
-  | { status: 'error'; error: E };
+export type LoadingState<T, E = Error> =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "success"; data: T }
+  | { status: "error"; error: E };
 
 // Tool Integration Types
 export interface ToolCredentials {

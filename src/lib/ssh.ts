@@ -1,5 +1,6 @@
-import { EventType } from "@/shared/schema";
-import { Client, ClientChannel } from "ssh2"; // Import Client from ssh2
+import { type EventType } from "@/shared/schema";
+import { Client } from "ssh2"; // Import Client from ssh2
+import type { ClientChannel } from "ssh2";
 interface SSHConnection {
   ssh: Client; // Changed from NodeSSH to ssh2 Client
   isConnected: boolean;
@@ -9,10 +10,10 @@ interface SSHConnection {
 
 export class SSHService {
   private ssh?: Client; // Changed to optional ssh2 Client
-  private isConnected: boolean = false;
-  private connectionPool: Map<string, SSHConnection> = new Map();
-  private maxConnections: number = 8; // Reduced to prevent overwhelming servers
-  private connectionTimeout: number = 300000; // 5 minutes - longer for terminal sessions
+  private isConnected = false;
+  private connectionPool = new Map<string, SSHConnection>();
+  private maxConnections = 8; // Reduced to prevent overwhelming servers
+  private connectionTimeout = 300000; // 5 minutes - longer for terminal sessions
 
   constructor() {
     // Clean up stale connections every 2 minutes
@@ -45,24 +46,26 @@ export class SSHService {
     username: string,
     port: number,
   ): string {
-    return `${username}@${host}:${port}`;
+    return `${username ?? ""}@${host ?? ""}:${String(port)}`;
   }
 
-  private connectionLocks: Map<string, Promise<SSHConnection>> = new Map();
-  private shellCache: Map<string, string> = new Map(); // Cache user shells per server
+  private connectionLocks = new Map<string, Promise<SSHConnection>>();
+  private shellCache = new Map<string, string>(); // Cache user shells per server
 
   private async getPooledConnection(
     host: string,
     privateKey: string,
-    username: string = "root",
-    port: number = 22,
-    forceNew: boolean = false,
+    username = "root",
+    port = 22,
+    forceNew = false,
   ): Promise<SSHConnection> {
     const connectionKey = this.getConnectionKey(host, username, port);
 
     // Check if there's already a connection being established for this key
     if (this.connectionLocks.has(connectionKey)) {
-      console.log(`Waiting for existing connection to ${connectionKey}...`);
+      console.log(
+        `Waiting for existing connection to ${connectionKey ?? ""}...`,
+      );
       return await this.connectionLocks.get(connectionKey)!;
     }
 
@@ -79,11 +82,11 @@ export class SSHService {
             });
           });
           connection.lastUsed = Date.now();
-          console.log(`Reusing existing connection to ${connectionKey}`);
+          console.log(`Reusing existing connection to ${connectionKey ?? ""}`);
           return connection;
         } catch (error) {
           console.log(
-            `Existing connection to ${connectionKey} failed test, removing...`,
+            `Existing connection to ${connectionKey ?? ""} failed test, removing...`,
           );
           // Connection is dead, remove it
           try {
@@ -130,7 +133,7 @@ export class SSHService {
       this.cleanupStaleConnections();
     }
 
-    console.log(`Creating new SSH connection to ${connectionKey}...`);
+    console.log(`Creating new SSH connection to ${connectionKey ?? ""}...`);
 
     // Create new connection
     const ssh = new Client();
@@ -138,7 +141,7 @@ export class SSHService {
     return new Promise((resolve, reject) => {
       const connectionTimeout = setTimeout(() => {
         ssh.end();
-        reject(new Error(`Connection to ${host} timed out.`));
+        reject(new Error(`Connection to ${host ?? ""} timed out.`));
       }, 20000); // Use readyTimeout from connect options
 
       ssh.on("ready", () => {
@@ -150,23 +153,29 @@ export class SSHService {
           lastUsed: Date.now(),
         };
         this.connectionPool.set(connectionKey, connection);
-        console.log(`Successfully created SSH connection to ${connectionKey}`);
+        console.log(
+          `Successfully created SSH connection to ${connectionKey ?? ""}`,
+        );
         resolve(connection);
       });
       ssh.on("error", (err) => {
         clearTimeout(connectionTimeout);
         console.error(
-          `Failed to create SSH connection to ${connectionKey}:`,
+          `Failed to create SSH connection to ${connectionKey ?? ""}:`,
           err,
         );
-        reject(new Error(`Server ${host} is not reachable: ${err.message}`));
+        reject(
+          new Error(
+            `Server ${host ?? ""} is not reachable: ${err.message ?? ""}`,
+          ),
+        );
       });
       ssh.on("end", () => {
-        console.log(`SSH connection to ${connectionKey} ended.`);
+        console.log(`SSH connection to ${connectionKey ?? ""} ended.`);
         this.connectionPool.delete(connectionKey);
       });
       ssh.on("close", () => {
-        console.log(`SSH connection to ${connectionKey} closed.`);
+        console.log(`SSH connection to ${connectionKey ?? ""} closed.`);
         this.connectionPool.delete(connectionKey);
       });
       ssh.connect({
@@ -211,14 +220,14 @@ export class SSHService {
   public async connect(
     host: string,
     privateKey: string,
-    username: string = "root",
-    port: number = 22,
+    username = "root",
+    port = 22,
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const sshClient = new Client();
       const connectionTimeout = setTimeout(() => {
         sshClient.end();
-        reject(new Error(`Connection to ${host} timed out.`));
+        reject(new Error(`Connection to ${host ?? ""} timed out.`));
       }, 60000); // Use readyTimeout from connect options
 
       sshClient
@@ -263,8 +272,8 @@ export class SSHService {
   public async testConnection(
     host: string,
     privateKey: string,
-    username: string = "root",
-    port: number = 22,
+    username = "root",
+    port = 22,
   ): Promise<{ success: boolean; message: string }> {
     try {
       await this.connect(host, privateKey, username, port);
@@ -298,7 +307,7 @@ export class SSHService {
       username: string;
       port: number;
     },
-    timeoutMs: number = 900000,
+    timeoutMs = 900000,
     inputData: Record<string, any> = {},
     eventData: Record<string, any> = {},
     userVariables: Record<string, string> = {},
@@ -329,7 +338,7 @@ export class SSHService {
       }
 
       let command: string;
-      let tempFile: string = "";
+      let tempFile = "";
       const timestamp = Date.now();
       workingDir = `/tmp/cronium_${timestamp}`;
 
@@ -379,12 +388,12 @@ export class SSHService {
 
       // Set environment variables
       const envString = Object.entries(envVars)
-        .map(([key, value]) => `export ${key}="${value}"`)
+        .map(([key, value]) => `export ${key ?? ""}="${value ?? ""}"`)
         .join("; ");
 
       switch (scriptType) {
         case "BASH":
-          tempFile = `${workingDir}/script_${timestamp}.sh`;
+          tempFile = `${workingDir ?? ""}/script_${String(timestamp)}.sh`;
           // Create cronium.sh helper with full functionality
           const bashHelper = `#!/bin/bash
 
@@ -506,7 +515,7 @@ cronium_setVariable() {
           break;
 
         case "PYTHON":
-          tempFile = `${workingDir}/script_${timestamp}.py`;
+          tempFile = `${workingDir ?? ""}/script_${String(timestamp)}.py`;
           // Create cronium.py helper with full functionality
           const pythonHelper = `import json
 import os
@@ -643,7 +652,7 @@ cronium = _cronium_instance`;
           break;
 
         case "NODEJS":
-          tempFile = `${workingDir}/script_${timestamp}.js`;
+          tempFile = `${workingDir ?? ""}/script_${String(timestamp)}.js`;
           // Create cronium.js helper with full functionality
           const nodeHelper = `const fs = require("fs");
 
@@ -768,14 +777,14 @@ module.exports = croniumInstance;`;
           // For HTTP requests, we'll use curl
           const httpConfig = JSON.parse(scriptContent);
           const curlOptions = [
-            `-X ${httpConfig.method || "GET"}`,
+            `-X ${httpConfig.method ?? "GET"}`,
             httpConfig.headers
               ? Object.entries(httpConfig.headers)
-                  .map(([k, v]) => `-H "${k}: ${v}"`)
+                  .map(([k, v]) => `-H "${k ?? ""}: ${v ?? ""}"`)
                   .join(" ")
               : "",
             httpConfig.body ? `-d '${JSON.stringify(httpConfig.body)}'` : "",
-            httpConfig.url,
+            httpConfig.url ?? "",
           ]
             .filter(Boolean)
             .join(" ");
@@ -786,7 +795,7 @@ module.exports = croniumInstance;`;
           break;
 
         default:
-          throw new Error(`Unsupported script type: ${scriptType}`);
+          throw new Error(`Unsupported script type: ${scriptType ?? ""}`);
       }
 
       const result = await new Promise<{ stdout: string; stderr: string }>(
@@ -874,7 +883,7 @@ module.exports = croniumInstance;`;
           const conditionData = JSON.parse(conditionResult.stdout);
           condition = Boolean(conditionData.condition);
           console.log(
-            `Found condition file from SSH execution, condition: ${condition}`,
+            `Found condition file from SSH execution, condition: ${String(condition)}`,
           );
         }
       } catch (error) {
@@ -919,7 +928,7 @@ module.exports = croniumInstance;`;
 
             if (hasChanges) {
               console.log(
-                `Variables changed during SSH script execution, persisting to database for user ${eventData.userId}`,
+                `Variables changed during SSH script execution, persisting to database for user ${String(eventData.userId)}`,
               );
 
               // Import storage and persist updated variables
@@ -946,7 +955,7 @@ module.exports = croniumInstance;`;
                     String(value),
                   );
                   console.log(
-                    `Updated variable ${key} for user ${eventData.userId}`,
+                    `Updated variable ${key ?? ""} for user ${String(eventData.userId)}`,
                   );
                 }
               }
@@ -956,7 +965,7 @@ module.exports = croniumInstance;`;
                 if (!(key in updatedVariables)) {
                   await storage.deleteUserVariableByKey(eventData.userId, key);
                   console.log(
-                    `Deleted variable ${key} for user ${eventData.userId}`,
+                    `Deleted variable ${key ?? ""} for user ${String(eventData.userId)}`,
                   );
                 }
               }
@@ -1191,18 +1200,18 @@ module.exports = croniumInstance;`;
       if (memoryResult.stdout) {
         const memParts = memoryResult.stdout.trim().split(/\s+/);
         if (memParts.length >= 4) {
-          totalMemory = memParts[1] || "";
-          freeMemory = memParts[3] || "";
+          totalMemory = memParts[1] ?? "";
+          freeMemory = memParts[3] ?? "";
         }
       }
 
       // Parse uptime
-      let uptime = { days: 0, hours: 0, minutes: 0 };
+      const uptime = { days: 0, hours: 0, minutes: 0 };
       if (uptimeResult.stdout) {
         const uptimeStr = uptimeResult.stdout.replace("up ", "");
-        const dayMatch = uptimeStr.match(/(\d+) days?/);
-        const hourMatch = uptimeStr.match(/(\d+) hours?/);
-        const minuteMatch = uptimeStr.match(/(\d+) minutes?/);
+        const dayMatch = /(\d+) days?/.exec(uptimeStr);
+        const hourMatch = /(\d+) hours?/.exec(uptimeStr);
+        const minuteMatch = /(\d+) minutes?/.exec(uptimeStr);
 
         if (dayMatch?.[1]) uptime.days = parseInt(dayMatch[1]);
         if (hourMatch?.[1]) uptime.hours = parseInt(hourMatch[1]);
@@ -1245,8 +1254,8 @@ module.exports = croniumInstance;`;
   async executeCommand(
     host: string,
     privateKey: string,
-    username: string = "root",
-    port: number = 22,
+    username = "root",
+    port = 22,
     command: string,
     workingDirectory?: string,
   ): Promise<{ stdout: string; stderr: string }> {
@@ -1332,8 +1341,8 @@ module.exports = croniumInstance;`;
   private async getUserShell(
     host: string,
     privateKey: string,
-    username: string = "root",
-    port: number = 22,
+    username = "root",
+    port = 22,
   ): Promise<string> {
     const connectionKey = this.getConnectionKey(host, username, port);
 
@@ -1388,7 +1397,7 @@ module.exports = croniumInstance;`;
     host: string,
     privateKey: string,
     username: string,
-    port: number = 22,
+    port = 22,
     workingDirectory?: string,
   ): Promise<string> {
     try {
@@ -1425,18 +1434,18 @@ module.exports = croniumInstance;`;
         );
         const currentDir = pwdResult.stdout
           ? pwdResult.stdout.trim()
-          : workingDirectory || "~";
+          : (workingDirectory ?? "~");
 
         // Replace PS1 variables with actual values
         prompt = prompt
           .replace(/\\u/g, username)
-          .replace(/\\h/g, host.split(".")[0] || host) // hostname without domain
+          .replace(/\\h/g, host.split(".")[0] ?? host) // hostname without domain
           .replace(/\\H/g, host) // full hostname
           .replace(
             /\\w/g,
             currentDir.replace(new RegExp(`^/home/${username}`), "~"),
           )
-          .replace(/\\W/g, currentDir.split("/").pop() || "~")
+          .replace(/\\W/g, currentDir.split("/").pop() ?? "~")
           .replace(/\\$/g, username === "root" ? "#" : "$")
           .replace(/\\\[|\\\]/g, "") // Remove color escape sequences markers
           .replace(/\\033\[[0-9;]*m/g, ""); // Remove basic color codes
@@ -1458,7 +1467,7 @@ module.exports = croniumInstance;`;
     );
     const currentDir = pwdResult.stdout
       ? pwdResult.stdout.trim()
-      : workingDirectory || "~";
+      : (workingDirectory ?? "~");
     const shortDir = currentDir.replace(new RegExp(`^/home/${username}`), "~");
     return `${username}@${host.split(".")[0]}:${shortDir}${username === "root" ? "#" : "$"} `;
   }
@@ -1469,8 +1478,8 @@ module.exports = croniumInstance;`;
   async prewarmConnection(
     host: string,
     privateKey: string,
-    username: string = "root",
-    port: number = 22,
+    username = "root",
+    port = 22,
   ): Promise<boolean> {
     try {
       console.log(
@@ -1510,10 +1519,10 @@ module.exports = croniumInstance;`;
   async openShell(
     host: string,
     privateKey: string,
-    username: string = "root",
-    port: number = 22,
-    cols: number = 80,
-    rows: number = 30,
+    username = "root",
+    port = 22,
+    cols = 80,
+    rows = 30,
   ): Promise<{ shell: ClientChannel; connectionKey: string }> {
     const connection = await this.getPooledConnection(
       host,

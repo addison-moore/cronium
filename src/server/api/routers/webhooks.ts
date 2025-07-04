@@ -17,6 +17,7 @@ import {
   webhookResponseSchema,
 } from "@shared/schemas/webhooks";
 import { storage } from "@/server/storage";
+import { UserRole } from "@/shared/schema";
 
 // Custom procedure that handles auth for tRPC fetch adapter
 const webhookProcedure = publicProcedure.use(async ({ ctx, next }) => {
@@ -30,7 +31,9 @@ const webhookProcedure = publicProcedure.use(async ({ ctx, next }) => {
     } else {
       if (process.env.NODE_ENV === "development") {
         const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter((user) => user.role === "ADMIN");
+        const adminUsers = allUsers.filter(
+          (user) => user.role === UserRole.ADMIN,
+        );
         if (adminUsers.length > 0) {
           userId = adminUsers[0]!.id;
           session = { user: { id: adminUsers[0]!.id } };
@@ -430,9 +433,8 @@ export const webhooksRouter = createTRPCRouter({
         // Check authentication if required
         if (webhook.requireAuth && webhook.authToken) {
           const authHeader =
-            input.headers?.["authorization"] ||
-            input.headers?.["Authorization"];
-          if (!authHeader || !authHeader.includes(webhook.authToken)) {
+            input.headers?.authorization || input.headers?.Authorization;
+          if (!authHeader?.includes(webhook.authToken)) {
             throw new TRPCError({
               code: "UNAUTHORIZED",
               message: "Invalid authentication",

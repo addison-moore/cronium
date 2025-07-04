@@ -22,10 +22,11 @@ Conditional actions are automated actions that are triggered based on the outcom
 - Common use cases: Cleanup operations, logging, monitoring
 
 ### 4. **ON_CONDITION** - Conditional Actions
-<<<<<<< HEAD
-=======
 
->>>>>>> main
+# <<<<<<< HEAD
+
+> > > > > > > main
+
 - Triggered based on custom conditions evaluated from event output
 - Currently implemented but condition evaluation logic is minimal
 
@@ -260,7 +261,7 @@ await storage.getFailActions(eventId);
 await storage.getAlwaysActions(eventId);
 await storage.getConditionActions(eventId);
 
-// Mutation methods  
+// Mutation methods
 await storage.createAction(insertConditionalAction);
 await storage.deleteActionsByEventId(eventId);
 ```
@@ -269,14 +270,14 @@ await storage.deleteActionsByEventId(eventId);
 
 ```sql
 -- Get success events for an event
-SELECT * FROM conditional_actions 
+SELECT * FROM conditional_actions
 WHERE success_event_id = $1;
 
 -- Get failure events for an event
 SELECT * FROM conditional_actions
 WHERE fail_event_id = $1;
 
--- Get always events for an event  
+-- Get always events for an event
 SELECT * FROM conditional_actions
 WHERE always_event_id = $1;
 
@@ -474,4 +475,5 @@ const conditionalAction = {
 This documentation provides a complete picture of how conditional actions work in the Cronium system, from user interface to database storage to execution flow.
 =======
 This documentation provides a complete picture of how conditional events work in the Cronium system, from user interface to database storage to execution flow.
->>>>>>> main
+
+> > > > > > > main

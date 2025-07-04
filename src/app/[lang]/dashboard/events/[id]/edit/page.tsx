@@ -37,7 +37,7 @@ export default function EditEventPage() {
   const handleSuccess = useCallback(
     (eventId?: number) => {
       if (eventId) {
-        router.push(`/${lang}/dashboard/events/${eventId}`);
+        router.push(`/${String(lang)}/dashboard/events/${eventId}`);
       }
     },
     [router, lang],

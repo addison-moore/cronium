@@ -2,6 +2,7 @@
 
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 
 interface LogoProps {
   className?: string;
@@ -52,14 +53,13 @@ export function Logo({
   return (
     <div className={`flex items-center ${className}`}>
       <div
-        className={`${iconSizes[size]} mr-1.5 relative flex items-center justify-center`}
+        className={`${iconSizes[size]} relative mr-1.5 flex items-center justify-center`}
       >
-        <img
+        <Image
           src="/assets/logo-icon.svg"
           alt="Cronium Logo"
           width={pixelSizes[size]}
           height={pixelSizes[size]}
-          style={{ width: "auto", height: "auto", maxHeight: `${pixelSizes[size]}px` }}
           className="object-contain"
         />
       </div>

@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from './useAuth';
+import { useState, useEffect } from "react";
+import { useAuth } from "./useAuth";
+import { UserRole } from "@/shared/schema";
 
 interface Permissions {
   console: boolean;
@@ -34,7 +35,7 @@ export function usePermissions() {
         }
 
         // Admin users have all permissions
-        if (user.role === 'ADMIN') {
+        if (user.role === UserRole.ADMIN) {
           setPermissions({
             console: true,
             monitoring: true,
@@ -45,19 +46,19 @@ export function usePermissions() {
         }
 
         // Fetch user's role and permissions
-        const response = await fetch('/api/admin/roles');
+        const response = await fetch("/api/admin/roles");
         if (response.ok) {
           const roles: Role[] = await response.json();
-          
+
           // For now, assign the default "users" role to all non-admin users
-          const defaultRole = roles.find(role => role.isDefault);
+          const defaultRole = roles.find((role) => role.isDefault);
           if (defaultRole) {
             setUserRole(defaultRole);
             setPermissions(defaultRole.permissions);
           }
         }
       } catch (error) {
-        console.error('Error fetching permissions:', error);
+        console.error("Error fetching permissions:", error);
         // Default to no permissions on error
         setPermissions({
           console: false,
@@ -74,10 +75,10 @@ export function usePermissions() {
 
   const hasPermission = (feature: keyof Permissions): boolean => {
     // Admin users always have access to everything
-    if (user?.role === 'ADMIN') {
+    if (user?.role === UserRole.ADMIN) {
       return true;
     }
-    
+
     return permissions[feature];
   };
 

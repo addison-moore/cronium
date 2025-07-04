@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { UserRole, UserStatus } from "@/shared/schema";
@@ -46,7 +47,9 @@ export async function POST(
       updatedAt: new Date(),
     });
 
-    console.log(`User ${user.email} approved by admin ${session.user.email}`);
+    console.log(
+      `User ${user.email ?? ""} approved by admin ${session.user.email ?? ""}`,
+    );
 
     return NextResponse.json({ message: "User approved successfully" });
   } catch (error) {

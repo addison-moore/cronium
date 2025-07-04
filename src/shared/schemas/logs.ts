@@ -7,7 +7,7 @@ export const logsQuerySchema = z.object({
   offset: z.number().min(0).default(0),
   page: z.number().min(1).default(1),
   pageSize: z.number().min(1).max(100).default(20),
-  
+
   // Filtering options
   eventId: z.number().int().positive().optional(),
   status: z.nativeEnum(LogStatus).optional(),
@@ -15,16 +15,18 @@ export const logsQuerySchema = z.object({
   date: z.string().optional(), // ISO date string for filtering by date
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
-  
+
   // Advanced filtering
   ownEventsOnly: z.boolean().default(false),
   sharedOnly: z.boolean().default(false),
   search: z.string().optional(), // Search in event names, output, etc.
-  
+
   // Sorting options
-  sortBy: z.enum(["startTime", "endTime", "duration", "eventName", "status"]).default("startTime"),
+  sortBy: z
+    .enum(["startTime", "endTime", "duration", "eventName", "status"])
+    .default("startTime"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
-  
+
   // Admin-specific filters
   userId: z.string().optional(), // For admin to filter by specific user
 });
@@ -42,8 +44,14 @@ export const createLogSchema = z.object({
   eventId: z.number().int().positive("Event ID must be a positive integer"),
   eventName: z.string().min(1, "Event name is required").max(100),
   status: z.nativeEnum(LogStatus, { required_error: "Status is required" }),
-  output: z.string().max(100000, "Output must be less than 100,000 characters").optional(),
-  errorOutput: z.string().max(100000, "Error output must be less than 100,000 characters").optional(),
+  output: z
+    .string()
+    .max(100000, "Output must be less than 100,000 characters")
+    .optional(),
+  errorOutput: z
+    .string()
+    .max(100000, "Error output must be less than 100,000 characters")
+    .optional(),
   startTime: z.string().datetime().optional(),
   endTime: z.string().datetime().optional(),
   duration: z.number().min(0, "Duration must be non-negative").optional(),
@@ -73,7 +81,9 @@ export const logIdSchema = z.object({
 
 // Bulk log operations schema
 export const bulkLogOperationSchema = z.object({
-  logIds: z.array(z.number().int().positive()).min(1, "At least one log must be selected"),
+  logIds: z
+    .array(z.number().int().positive())
+    .min(1, "At least one log must be selected"),
   operation: z.enum(["delete", "export", "archive"]),
 });
 
@@ -94,7 +104,9 @@ export const logStatsSchema = z.object({
   endDate: z.string().datetime().optional(),
   eventId: z.number().int().positive().optional(),
   workflowId: z.number().int().positive().optional(),
-  groupBy: z.enum(["status", "event", "workflow", "server", "hour", "day"]).optional(),
+  groupBy: z
+    .enum(["status", "event", "workflow", "server", "hour", "day"])
+    .optional(),
 });
 
 // Real-time log streaming schema
@@ -108,7 +120,9 @@ export const logStreamSchema = z.object({
 // Log search schema (for full-text search in output)
 export const logSearchSchema = z.object({
   query: z.string().min(1, "Search query is required"),
-  searchFields: z.array(z.enum(["output", "errorOutput", "eventName"])).default(["output", "errorOutput"]),
+  searchFields: z
+    .array(z.enum(["output", "errorOutput", "eventName"]))
+    .default(["output", "errorOutput"]),
   caseSensitive: z.boolean().default(false),
   regex: z.boolean().default(false),
   eventId: z.number().int().positive().optional(),
@@ -119,21 +133,33 @@ export const logSearchSchema = z.object({
 });
 
 // Workflow-specific log schema
-export const workflowLogsSchema = z.object({
-  workflowId: z.number().int().positive("Workflow ID must be a positive integer").optional(),
-  executionId: z.number().int().positive("Execution ID must be a positive integer").optional(),
-  limit: z.number().min(1).max(100).default(20),
-  offset: z.number().min(0).default(0),
-  status: z.nativeEnum(LogStatus).optional(),
-  includeEventLogs: z.boolean().default(true),
-})
-.refine((data) => {
-  // Either workflowId or executionId must be provided
-  return data.workflowId !== undefined || data.executionId !== undefined;
-}, {
-  message: "Either workflowId or executionId must be provided",
-  path: ["workflowId", "executionId"],
-});
+export const workflowLogsSchema = z
+  .object({
+    workflowId: z
+      .number()
+      .int()
+      .positive("Workflow ID must be a positive integer")
+      .optional(),
+    executionId: z
+      .number()
+      .int()
+      .positive("Execution ID must be a positive integer")
+      .optional(),
+    limit: z.number().min(1).max(100).default(20),
+    offset: z.number().min(0).default(0),
+    status: z.nativeEnum(LogStatus).optional(),
+    includeEventLogs: z.boolean().default(true),
+  })
+  .refine(
+    (data) => {
+      // Either workflowId or executionId must be provided
+      return data.workflowId !== undefined || data.executionId !== undefined;
+    },
+    {
+      message: "Either workflowId or executionId must be provided",
+      path: ["workflowId", "executionId"],
+    },
+  );
 
 // Type definitions inferred from schemas
 export type LogsQueryInput = z.infer<typeof logsQuerySchema>;

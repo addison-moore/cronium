@@ -28,7 +28,7 @@ export class ScriptExecutorSSHService {
       username: string;
       port: number;
     },
-    timeoutMs: number = 30000,
+    timeoutMs = 30000,
     input?: any,
     eventData?: { id: number; name: string; userId: string },
     userVariables?: Record<string, string>,
@@ -455,7 +455,7 @@ cronium_setVariable() {
 
             // Compare with original variables to find changes
             const hasChanges =
-              JSON.stringify(userVariables || {}) !==
+              JSON.stringify(userVariables ?? {}) !==
               JSON.stringify(updatedVariables);
 
             if (hasChanges) {
@@ -517,18 +517,18 @@ cronium_setVariable() {
         scriptOutput?: any;
         condition?: boolean;
       } = {
-        stdout: result.stdout || "",
-        stderr: result.stderr || "",
+        stdout: result.stdout ?? "",
+        stderr: result.stderr ?? "",
       };
-      
+
       if (scriptOutput !== undefined) {
         returnValue.scriptOutput = scriptOutput;
       }
-      
+
       if (condition !== undefined) {
         returnValue.condition = condition;
       }
-      
+
       return returnValue;
     } catch (error) {
       const errorMessage =
@@ -561,8 +561,8 @@ cronium_setVariable() {
   async testConnection(
     host: string,
     privateKey: string,
-    username: string = "root",
-    port: number = 22,
+    username = "root",
+    port = 22,
   ): Promise<{ success: boolean; message: string }> {
     return this.connectionManager.testConnection(
       host,

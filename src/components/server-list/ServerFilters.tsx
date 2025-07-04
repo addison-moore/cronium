@@ -35,17 +35,17 @@ export function ServerFilters({
   ];
 
   return (
-    <div className="space-y-4 mb-6">
+    <div className="mb-6 space-y-4">
       {/* Filter Controls Row */}
       <div className="flex flex-wrap gap-4">
         {/* Search */}
-        <div className="relative flex-1 min-w-[300px]">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+        <div className="relative min-w-[300px] flex-1">
+          <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform" />
           <Input
             placeholder="Search servers..."
             value={filters.searchTerm}
             onChange={(e) => onFiltersChange({ searchTerm: e.target.value })}
-            className="pl-10 h-10 rounded-md focus:ring-2 focus:ring-primary/20 transition-all"
+            className="focus:ring-primary/20 h-10 rounded-md pl-10 transition-all focus:ring-2"
           />
         </div>
 
@@ -55,40 +55,40 @@ export function ServerFilters({
             value={filters.statusFilter}
             onValueChange={(value) => onFiltersChange({ statusFilter: value })}
           >
-            <SelectTrigger className="w-full h-10 rounded-md focus:ring-2 focus:ring-primary/20 transition-all">
+            <SelectTrigger className="focus:ring-primary/20 h-10 w-full rounded-md transition-all focus:ring-2">
               <SelectValue placeholder="All Statuses" />
             </SelectTrigger>
-            <SelectContent className="bg-background border border-border shadow-lg rounded-md overflow-hidden">
+            <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
               <SelectItem
                 value="all"
-                className="hover:bg-muted py-2 pl-8 pr-3 text-sm font-medium"
+                className="hover:bg-muted py-2 pr-3 pl-8 text-sm font-medium"
               >
                 All Statuses
               </SelectItem>
               <SelectItem
                 value="online"
-                className="hover:bg-muted py-2 pl-8 pr-3 text-sm"
+                className="hover:bg-muted py-2 pr-3 pl-8 text-sm"
               >
                 <div className="flex items-center">
-                  <span className="flex h-2 w-2 rounded-full bg-green-500 mr-2"></span>
+                  <span className="mr-2 flex h-2 w-2 rounded-full bg-green-500"></span>
                   Online
                 </div>
               </SelectItem>
               <SelectItem
                 value="offline"
-                className="hover:bg-muted py-2 pl-8 pr-3 text-sm"
+                className="hover:bg-muted py-2 pr-3 pl-8 text-sm"
               >
                 <div className="flex items-center">
-                  <span className="flex h-2 w-2 rounded-full bg-red-500 mr-2"></span>
+                  <span className="mr-2 flex h-2 w-2 rounded-full bg-red-500"></span>
                   Offline
                 </div>
               </SelectItem>
               <SelectItem
                 value="unknown"
-                className="hover:bg-muted py-2 pl-8 pr-3 text-sm"
+                className="hover:bg-muted py-2 pr-3 pl-8 text-sm"
               >
                 <div className="flex items-center">
-                  <span className="flex h-2 w-2 rounded-full bg-gray-500 mr-2"></span>
+                  <span className="mr-2 flex h-2 w-2 rounded-full bg-gray-500"></span>
                   Unknown
                 </div>
               </SelectItem>
@@ -102,15 +102,15 @@ export function ServerFilters({
             value={filters.sortBy}
             onValueChange={(value) => onFiltersChange({ sortBy: value })}
           >
-            <SelectTrigger className="w-[180px] h-10 rounded-md focus:ring-2 focus:ring-primary/20 transition-all">
+            <SelectTrigger className="focus:ring-primary/20 h-10 w-[180px] rounded-md transition-all focus:ring-2">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
-            <SelectContent className="bg-background border border-border shadow-lg rounded-md overflow-hidden">
+            <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
               {sortOptions.map((option) => (
                 <SelectItem
                   key={option.value}
                   value={option.value}
-                  className="hover:bg-muted py-2 pl-8 pr-3 text-sm"
+                  className="hover:bg-muted py-2 pr-3 pl-8 text-sm"
                 >
                   {option.label}
                 </SelectItem>
@@ -127,7 +127,7 @@ export function ServerFilters({
                 sortOrder: filters.sortOrder === "asc" ? "desc" : "asc",
               })
             }
-            className="px-3 h-10"
+            className="h-10 px-3"
           >
             {filters.sortOrder === "asc" ? (
               <ArrowUp className="h-4 w-4" />

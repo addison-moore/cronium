@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { storage } from "@/server/storage";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { nanoid } from "nanoid";
+import { UserStatus } from "@/shared/schema";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -26,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user is active
-    if (user.status !== "ACTIVE") {
+    if (user.status !== UserStatus.ACTIVE) {
       return NextResponse.json({
         success: true,
         message:

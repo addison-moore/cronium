@@ -1,22 +1,22 @@
 /**
  * API Response Types for Type Safety
- * 
+ *
  * This file contains all API response interfaces to replace 'any' types
  * throughout the application.
  */
 
-import type { 
-  Event, 
-  Log, 
-  Server, 
+import type {
+  Event,
+  Log,
+  Server,
   User,
   ConditionalAction,
   Workflow,
   UserVariable,
   Tool,
-  Template
-} from '@shared/schema';
-import type { ApiResponse, PaginatedResponse, ErrorResponse } from './index';
+  Template,
+} from "@shared/schema";
+import type { ApiResponse, PaginatedResponse, ErrorResponse } from "./index";
 
 // Generic API Response Types
 export interface SuccessResponse {
@@ -126,11 +126,13 @@ export interface TemplateResponse extends ApiResponse<Template> {
 }
 
 // Conditional Events API Types
-export interface ConditionalEventsResponse extends PaginatedResponse<ConditionalAction> {
+export interface ConditionalEventsResponse
+  extends PaginatedResponse<ConditionalAction> {
   conditionalEvents: ConditionalAction[];
 }
 
-export interface ConditionalEventResponse extends ApiResponse<ConditionalAction> {
+export interface ConditionalEventResponse
+  extends ApiResponse<ConditionalAction> {
   conditionalEvent?: ConditionalAction;
 }
 
@@ -147,7 +149,7 @@ export interface DashboardStatsResponse extends ApiResponse {
     failedExecutions: number;
     recentActivity: Array<{
       id: number;
-      type: 'event' | 'workflow';
+      type: "event" | "workflow";
       name: string;
       status: string;
       timestamp: string;
@@ -225,29 +227,31 @@ export interface EmailApiResponse {
 
 // Generic tRPC Response Wrapper
 export interface TRPCResponse<T = unknown> {
-  result: {
-    type: 'data';
-    data: T;
-  } | {
-    type: 'error';
-    error: {
-      message: string;
-      code: number;
-      data?: {
-        code: string;
-        httpStatus?: number;
-        stack?: string;
-        path: string;
+  result:
+    | {
+        type: "data";
+        data: T;
+      }
+    | {
+        type: "error";
+        error: {
+          message: string;
+          code: number;
+          data?: {
+            code: string;
+            httpStatus?: number;
+            stack?: string;
+            path: string;
+          };
+        };
       };
-    };
-  };
 }
 
 // Helper type for extracting data from tRPC responses
 export type ExtractTRPCData<T> = T extends TRPCResponse<infer U> ? U : never;
 
 // Union type for all possible API responses
-export type AnyApiResponse = 
+export type AnyApiResponse =
   | EventsResponse
   | EventResponse
   | LogsResponse

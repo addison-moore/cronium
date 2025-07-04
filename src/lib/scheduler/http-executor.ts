@@ -1,4 +1,4 @@
-import axios, { AxiosError } from "axios";
+import axios, { type AxiosError } from "axios";
 
 /**
  * Execute an HTTP request
@@ -8,8 +8,8 @@ import axios, { AxiosError } from "axios";
  * @param body Body content for POST/PUT requests
  */
 export async function executeHttpRequest(
-  method: string = "GET",
-  url: string = "",
+  method = "GET",
+  url = "",
   headers: Array<{ key: string; value: string }> = [],
   body: any = null,
 ): Promise<{ data: any; error?: string }> {
@@ -42,7 +42,7 @@ export async function executeHttpRequest(
       try {
         // Determine if body is JSON or form data
         const contentType =
-          headerObj["Content-Type"] || headerObj["content-type"];
+          headerObj["Content-Type"] ?? headerObj["content-type"];
 
         if (contentType?.includes("application/x-www-form-urlencoded")) {
           config.data = new URLSearchParams(body).toString();
@@ -81,10 +81,10 @@ export async function executeHttpRequest(
     // Return structured error response
     return {
       data: {
-        status: error.response?.status || 0,
-        statusText: error.response?.statusText || "Error",
-        headers: error.response?.headers || {},
-        body: error.response?.data || null,
+        status: error.response?.status ?? 0,
+        statusText: error.response?.statusText ?? "Error",
+        headers: error.response?.headers ?? {},
+        body: error.response?.data ?? null,
       },
       error: error.message || "HTTP request failed",
     };

@@ -35,8 +35,8 @@ import { formatDate } from "@/lib/utils";
 import { Play, Search, X, ArrowUp, ArrowDown, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import {
-  LogStatus,
+import { LogStatus } from "@/shared/schema";
+import type {
   WorkflowExecution,
   WorkflowExecutionEvent,
 } from "@/shared/schema";
@@ -108,8 +108,8 @@ export default function WorkflowExecutionHistory({
   );
 
   // Extract executions from tRPC response
-  const executions = executionsData?.executions?.executions || [];
-  const totalExecutions = executionsData?.executions?.total || 0;
+  const executions = executionsData?.executions?.executions ?? [];
+  const totalExecutions = executionsData?.executions?.total ?? 0;
 
   // Handle manual refresh
   const handleManualRefresh = async () => {
@@ -141,7 +141,7 @@ export default function WorkflowExecutionHistory({
 
       // Find the execution to get workflow ID
       const execution = executions.find((exec: any) => exec.id === executionId);
-      const targetWorkflowId = workflowId || execution?.workflowId;
+      const targetWorkflowId = workflowId ?? execution?.workflowId;
 
       if (!targetWorkflowId) {
         throw new Error(
@@ -546,15 +546,15 @@ export default function WorkflowExecutionHistory({
                     <TableCell>
                       <div className="flex gap-1">
                         <span className="text-green-600">
-                          {execution.successfulEvents || 0}
+                          {execution.successfulEvents ?? 0}
                         </span>
                         <span>/</span>
                         <span className="text-red-600">
-                          {execution.failedEvents || 0}
+                          {execution.failedEvents ?? 0}
                         </span>
                         <span>/</span>
                         <span className="text-muted-foreground">
-                          {execution.totalEvents || 0}
+                          {execution.totalEvents ?? 0}
                         </span>
                       </div>
                     </TableCell>
@@ -627,7 +627,7 @@ export default function WorkflowExecutionHistory({
                                                 href={`/${params.lang}/dashboard/events/${event.eventId}`}
                                                 className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
                                               >
-                                                {(event as any).eventName ||
+                                                {(event as any).eventName ??
                                                   `Event ${event.eventId}`}
                                               </Link>
                                               {getStatusBadge(event.status)}

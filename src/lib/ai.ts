@@ -11,7 +11,7 @@ export async function getOpenAIClient() {
   const apiKeySetting = await storage.getSetting("openaiApiKey");
 
   // Use environment variable first, then database setting
-  const apiKey = envApiKey || apiKeySetting?.value;
+  const apiKey = envApiKey ?? apiKeySetting?.value;
 
   if (!apiKey) {
     throw new Error("OpenAI API key not configured");
@@ -69,14 +69,14 @@ Generate code based on the user's request.`;
       max_tokens: 2000,
     });
 
-    const content = response.choices[0]?.message.content || "";
+    const content = response.choices[0]?.message.content ?? "";
 
     // Extract code from response if it's wrapped in markdown code blocks
     const codeBlockRegex = /```(?:\w+)?\s*\n([\s\S]+?)\n```/;
-    const match = content.match(codeBlockRegex);
+    const match = codeBlockRegex.exec(content);
 
     // If code block is found, return just the code inside it
-    if (match && match[1]) {
+    if (match?.[1]) {
       return match[1].trim();
     }
 

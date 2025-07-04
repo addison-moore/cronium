@@ -2,7 +2,7 @@ import React from "react";
 import Navbar from "@/components/landing/navbar";
 import Footer from "@/components/landing/footer";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import Image from "next/image";
 import { ArrowLeft, CheckCircle, ChevronRight } from "lucide-react";
 
 // Documentation Step Component
@@ -32,10 +32,12 @@ function DocStep({
 
         {image && (
           <div className="border-border mt-6 overflow-hidden rounded-md border">
-            <img
+            <Image
               src={image}
               alt={`Step ${number} - ${title}`}
-              className="w-full"
+              width={800}
+              height={400}
+              className="h-auto w-full"
             />
           </div>
         )}

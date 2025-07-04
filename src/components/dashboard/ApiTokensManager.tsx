@@ -44,6 +44,7 @@ import {
 import { formatDate } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
 import { trpc } from "@/lib/trpc";
+import { TokenStatus } from "@/shared/schema";
 
 type ApiToken = {
   id: number;
@@ -56,7 +57,10 @@ type ApiToken = {
 };
 
 const createTokenSchema = z.object({
-  name: z.string().min(1, "Token name is required").max(100, "Token name is too long"),
+  name: z
+    .string()
+    .min(1, "Token name is required")
+    .max(100, "Token name is too long"),
 });
 
 type CreateTokenFormData = z.infer<typeof createTokenSchema>;
@@ -194,10 +198,7 @@ export default function ApiTokensManager() {
                     render={({ field }) => (
                       <FormItem className="flex-1">
                         <FormControl>
-                          <Input
-                            {...field}
-                            placeholder="Enter token name"
-                          />
+                          <Input {...field} placeholder="Enter token name" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -206,7 +207,8 @@ export default function ApiTokensManager() {
                   <Button
                     type="submit"
                     disabled={
-                      createTokenMutation.isPending || form.formState.isSubmitting
+                      createTokenMutation.isPending ||
+                      form.formState.isSubmitting
                     }
                   >
                     {createTokenMutation.isPending ? (
@@ -273,7 +275,7 @@ export default function ApiTokensManager() {
                       )}
                     </div>
                     <div className="flex space-x-2">
-                      {token.status === "ACTIVE" && (
+                      {token.status === TokenStatus.ACTIVE && (
                         <Button
                           variant="outline"
                           size="sm"

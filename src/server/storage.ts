@@ -51,6 +51,7 @@ import {
   RunLocation,
   UserStatus,
   TokenStatus,
+  LogStatus,
 } from "../shared/schema";
 import { db } from "./db";
 import {
@@ -108,7 +109,9 @@ export interface IStorage {
   getFailActions(eventId: number): Promise<ConditionalAction[]>;
   getAlwaysActions(eventId: number): Promise<ConditionalAction[]>;
   getConditionActions(eventId: number): Promise<ConditionalAction[]>;
-  createAction(insertAction: InsertConditionalAction): Promise<ConditionalAction>;
+  createAction(
+    insertAction: InsertConditionalAction,
+  ): Promise<ConditionalAction>;
   deleteActionsByEventId(eventId: number): Promise<void>;
   deleteSuccessEventsByScriptId(eventId: number): Promise<void>;
   deleteFailEventsByScriptId(eventId: number): Promise<void>;
@@ -426,7 +429,7 @@ class DatabaseStorage implements IStorage {
   // Script methods (now renamed to events)
   async getEvent(id: number): Promise<Script | undefined> {
     const [script] = await db.select().from(events).where(eq(events.id, id));
-    return script || undefined;
+    return script ?? undefined;
   }
 
   // Check if a user has access to view an event (they own it or it's shared)
@@ -850,8 +853,8 @@ class DatabaseStorage implements IStorage {
   }
 
   async getAllLogs(
-    limit: number = 10,
-    page: number = 1,
+    limit = 10,
+    page = 1,
   ): Promise<{ logs: Log[]; total: number }> {
     const offset = (page - 1) * limit;
 
@@ -870,13 +873,13 @@ class DatabaseStorage implements IStorage {
 
   async getFilteredLogs(
     filters: any,
-    limit: number = 20,
-    page: number = 1,
+    limit = 20,
+    page = 1,
   ): Promise<{ logs: Log[]; total: number }> {
     const offset = (page - 1) * limit;
 
     // Build query conditions
-    let conditions = [];
+    const conditions = [];
 
     if (filters.eventId) {
       conditions.push(eq(logs.eventId, parseInt(filters.eventId)));
@@ -1060,8 +1063,8 @@ class DatabaseStorage implements IStorage {
 
   async getLogs(
     eventId: number,
-    limit: number = 10,
-    page: number = 1,
+    limit = 10,
+    page = 1,
   ): Promise<{ logs: Log[]; total: number }> {
     const offset = (page - 1) * limit;
 
@@ -1301,7 +1304,7 @@ class DatabaseStorage implements IStorage {
 
     const successCount = recentLogs.filter((log) => log.successful).length;
     const failureCount = recentLogs.filter(
-      (log) => !log.successful && log.status !== "RUNNING",
+      (log) => !log.successful && log.status !== LogStatus.RUNNING,
     ).length;
 
     // Recent logs (last 5)
@@ -1572,8 +1575,8 @@ class DatabaseStorage implements IStorage {
 
   async getWorkflowLogs(
     workflowId: number,
-    limit: number = 10,
-    page: number = 1,
+    limit = 10,
+    page = 1,
   ): Promise<{ logs: WorkflowLog[]; total: number }> {
     const offset = (page - 1) * limit;
 
@@ -1633,8 +1636,8 @@ class DatabaseStorage implements IStorage {
 
   async getWorkflowExecutions(
     workflowId: number,
-    limit: number = 50,
-    page: number = 1,
+    limit = 50,
+    page = 1,
   ): Promise<{ executions: WorkflowExecution[]; total: number }> {
     const offset = (page - 1) * limit;
 
@@ -1653,7 +1656,7 @@ class DatabaseStorage implements IStorage {
 
     return {
       executions,
-      total: totalResult?.count || 0,
+      total: totalResult?.count ?? 0,
     };
   }
 
@@ -1810,7 +1813,7 @@ class DatabaseStorage implements IStorage {
       .select()
       .from(apiTokens)
       .where(eq(apiTokens.id, id));
-    if (token && token.token && typeof token.token === "string") {
+    if (token?.token && typeof token.token === "string") {
       try {
         token.token = encryptionService.decrypt(token.token);
       } catch (error) {
@@ -1944,8 +1947,8 @@ class DatabaseStorage implements IStorage {
     eventId: number,
     options?: { limit?: number; offset?: number },
   ): Promise<{ logs: Log[]; total: number }> {
-    const limit = options?.limit || 10;
-    const offset = options?.offset || 0;
+    const limit = options?.limit ?? 10;
+    const offset = options?.offset ?? 0;
 
     const [countResult] = await db
       .select({ count: count() })
@@ -1975,7 +1978,7 @@ class DatabaseStorage implements IStorage {
       .from(userVariables)
       .where(and(eq(userVariables.userId, userId), eq(userVariables.key, key)));
 
-    return variable || undefined;
+    return variable ?? undefined;
   }
 
   async setUserVariable(
@@ -1992,7 +1995,7 @@ class DatabaseStorage implements IStorage {
         .update(userVariables)
         .set({
           value,
-          description: description || existingVariable.description,
+          description: description ?? existingVariable.description,
           updatedAt: new Date(),
         })
         .where(
@@ -2058,7 +2061,7 @@ class DatabaseStorage implements IStorage {
       .where(and(eq(userVariables.id, id), eq(userVariables.userId, userId)))
       .returning();
 
-    return variable || null;
+    return variable ?? null;
   }
 
   async deleteUserVariable(id: number, userId: string): Promise<boolean> {
@@ -2066,7 +2069,7 @@ class DatabaseStorage implements IStorage {
       .delete(userVariables)
       .where(and(eq(userVariables.id, id), eq(userVariables.userId, userId)));
 
-    return (result.rowCount || 0) > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   async deleteUserVariableByKey(userId: string, key: string): Promise<boolean> {
@@ -2074,7 +2077,7 @@ class DatabaseStorage implements IStorage {
       .delete(userVariables)
       .where(and(eq(userVariables.userId, userId), eq(userVariables.key, key)));
 
-    return (result.rowCount || 0) > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   // Password Reset Token methods

@@ -29,7 +29,9 @@ const adminMonitoringProcedure = publicProcedure.use(async ({ ctx, next }) => {
       // For development, get first admin user
       if (process.env.NODE_ENV === "development") {
         const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter((user) => user.role === "ADMIN");
+        const adminUsers = allUsers.filter(
+          (user) => user.role === UserRole.ADMIN,
+        );
         const firstAdmin = adminUsers[0];
         if (firstAdmin) {
           userId = firstAdmin.id;
@@ -85,7 +87,9 @@ const userMonitoringProcedure = publicProcedure.use(async ({ ctx, next }) => {
       // For development, get first admin user
       if (process.env.NODE_ENV === "development") {
         const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter((user) => user.role === "ADMIN");
+        const adminUsers = allUsers.filter(
+          (user) => user.role === UserRole.ADMIN,
+        );
         const firstAdmin = adminUsers[0];
         if (firstAdmin) {
           userId = firstAdmin.id;
@@ -186,6 +190,14 @@ export const monitoringRouter = createTRPCRouter({
         // Get basic statistics
         const allUsers = await storage.getAllUsers();
         const stats = await storage.getDashboardStats(ctx.userId); // Using user's dashboard stats as base
+        
+        // Type assertion for dashboard stats to ensure type safety
+        const dashboardStats = stats as {
+          totalEvents?: number;
+          activeEvents?: number;
+          totalServers?: number;
+          onlineServers?: number;
+        };
 
         // User statistics
         const userStats = {
@@ -265,27 +277,27 @@ export const monitoringRouter = createTRPCRouter({
         const settingsObj = systemSettings.reduce(
           (acc, setting) => {
             try {
-              acc[setting.key] = JSON.parse(setting.value);
+              acc[setting.key] = JSON.parse(setting.value) as unknown;
             } catch (e) {
               acc[setting.key] = setting.value;
             }
             return acc;
           },
-          {} as Record<string, any>,
+          {} as Record<string, unknown>,
         );
 
         return {
           users: userStats,
           events: {
-            total: stats.totalEvents || 0,
-            active: stats.activeEvents || 0,
+            total: dashboardStats.totalEvents ?? 0,
+            active: dashboardStats.activeEvents ?? 0,
             // Add more event stats as needed
           },
           executions: executionStats,
           activity: periodLogs,
           servers: {
-            total: stats.totalServers || 0,
-            online: stats.onlineServers || 0,
+            total: dashboardStats.totalServers ?? 0,
+            online: dashboardStats.onlineServers ?? 0,
           },
           recentActivity: input.includeRecentActivity ? recentActivity : [],
           system: systemInfo,
@@ -362,6 +374,15 @@ export const monitoringRouter = createTRPCRouter({
         }
 
         const stats = await storage.getDashboardStats(targetUserId);
+        
+        // Type assertion for dashboard stats
+        const typedStats = stats as {
+          totalEvents?: number;
+          activeEvents?: number;
+          totalServers?: number;
+          onlineServers?: number;
+          [key: string]: unknown;
+        };
 
         // Add period-specific data if requested
         let periodComparison = null;
@@ -375,7 +396,7 @@ export const monitoringRouter = createTRPCRouter({
         }
 
         return {
-          ...stats,
+          ...typedStats,
           period: input.period,
           userId: targetUserId,
           comparison: periodComparison,

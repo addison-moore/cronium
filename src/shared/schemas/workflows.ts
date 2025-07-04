@@ -204,7 +204,7 @@ export const createWorkflowSchema = z
         visited.add(node);
         recStack.add(node);
 
-        const neighbors = graph.get(node) || [];
+        const neighbors = graph.get(node) ?? [];
         for (const neighbor of neighbors) {
           if (hasCycle(neighbor)) return true;
         }

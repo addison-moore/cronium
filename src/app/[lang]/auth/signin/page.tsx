@@ -51,7 +51,7 @@ export default function SignIn() {
   const errorParam = searchParams?.get("error");
   // Use locale-prefixed dashboard URL as default callback if none provided
   const callbackUrl =
-    searchParams?.get("callbackUrl") || `/${locale}/dashboard`;
+    searchParams?.get("callbackUrl") ?? `/${locale}/dashboard`;
 
   // Set error message based on NextAuth error
   const getErrorFromParams = () => {
@@ -88,7 +88,7 @@ export default function SignIn() {
       if (!result.success) {
         setError("root.serverError", {
           type: "manual",
-          message: result.message || t("Auth.InvalidCredentials"),
+          message: result.message ?? t("Auth.InvalidCredentials"),
         });
         return;
       }
@@ -114,7 +114,7 @@ export default function SignIn() {
       // If the callback URL doesn't have a language prefix and it's a relative path
       if (
         redirectUrl.startsWith("/") &&
-        !redirectUrl.match(/^\/[a-z]{2}(?:\/|$)/)
+        !/^\/[a-z]{2}(?:\/|$)/.exec(redirectUrl)
       ) {
         // Add current language prefix to the URL
         redirectUrl = `/${locale}${redirectUrl}`;
@@ -152,7 +152,7 @@ export default function SignIn() {
           </p>
         </div>
 
-        {(errors.root?.serverError || errorFromParams) && (
+        {(errors.root?.serverError ?? errorFromParams) && (
           <div className="rounded-md bg-red-50 p-4">
             <div className="flex">
               <div className="ml-3">
@@ -160,7 +160,7 @@ export default function SignIn() {
                   {t("Common.Error")}
                 </h3>
                 <div className="mt-2 text-sm text-red-700">
-                  <p>{errors.root?.serverError?.message || errorFromParams}</p>
+                  <p>{errors.root?.serverError?.message ?? errorFromParams}</p>
                 </div>
               </div>
             </div>

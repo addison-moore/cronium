@@ -49,7 +49,7 @@ export function FormActions({
         onClick={() => router.push(cancelRoute)}
         disabled={isSubmitting}
       >
-        <X className="h-4 w-4 mr-2" />
+        <X className="mr-2 h-4 w-4" />
         {cancel}
       </Button>
 

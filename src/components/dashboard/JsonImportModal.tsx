@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { EventType } from "@/shared/schema";
 
 interface JsonImportModalProps {
   isOpen: boolean;
@@ -178,7 +179,7 @@ export function JsonImportModal({ isOpen, onClose }: JsonImportModalProps) {
       }
 
       // Handle HTTP-specific fields only for HTTP_REQUEST type
-      if (eventData.type === "HTTP_REQUEST") {
+      if (eventData.type === EventType.HTTP_REQUEST) {
         if (eventData.httpMethod) {
           cleanEventData.httpMethod = eventData.httpMethod;
         }
@@ -282,13 +283,13 @@ export function JsonImportModal({ isOpen, onClose }: JsonImportModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh]">
+      <DialogContent className="max-h-[80vh] max-w-4xl">
         <DialogHeader>
           <DialogTitle>Add Events from JSON</DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col gap-4 py-4">
-          <div className="text-sm text-muted-foreground">
+          <div className="text-muted-foreground text-sm">
             Paste your event JSON data below. The system will automatically
             ignore any existing IDs, user IDs, and timestamps to create a new
             event.

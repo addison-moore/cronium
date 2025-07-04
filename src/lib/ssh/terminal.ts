@@ -9,7 +9,7 @@ import { SSHConnectionManager } from "./shared";
 
 export class TerminalSSHService {
   private connectionManager: SSHConnectionManager;
-  private shellCache: Map<string, string> = new Map(); // Cache user shells per server
+  private shellCache = new Map<string, string>(); // Cache user shells per server
 
   constructor() {
     this.connectionManager = new SSHConnectionManager();
@@ -29,8 +29,8 @@ export class TerminalSSHService {
   private async getUserShell(
     host: string,
     privateKey: string,
-    username: string = "root",
-    port: number = 22,
+    username = "root",
+    port = 22,
   ): Promise<string> {
     const connectionKey = this.getConnectionKey(host, username, port);
 
@@ -70,8 +70,8 @@ export class TerminalSSHService {
   async executeCommand(
     host: string,
     privateKey: string,
-    username: string = "root",
-    port: number = 22,
+    username = "root",
+    port = 22,
     command: string,
     workingDirectory?: string,
   ): Promise<{ stdout: string; stderr: string }> {
@@ -131,7 +131,7 @@ export class TerminalSSHService {
     host: string,
     privateKey: string,
     username: string,
-    port: number = 22,
+    port = 22,
     workingDirectory?: string,
   ): Promise<string> {
     try {
@@ -168,18 +168,18 @@ export class TerminalSSHService {
         );
         const currentDir = pwdResult.stdout
           ? pwdResult.stdout.trim()
-          : workingDirectory || "~";
+          : (workingDirectory ?? "~");
 
         // Replace PS1 variables with actual values
         prompt = prompt
           .replace(/\\u/g, username)
-          .replace(/\\h/g, host.split(".")[0] || host) // hostname without domain
+          .replace(/\\h/g, host.split(".")[0] ?? host) // hostname without domain
           .replace(/\\H/g, host) // full hostname
           .replace(
             /\\w/g,
             currentDir.replace(new RegExp(`^/home/${username}`), "~"),
           )
-          .replace(/\\W/g, currentDir.split("/").pop() || "~")
+          .replace(/\\W/g, currentDir.split("/").pop() ?? "~")
           .replace(/\\$/g, username === "root" ? "#" : "$")
           .replace(/\\\[|\\\]/g, "") // Remove color escape sequences markers
           .replace(/\\033\[[0-9;]*m/g, ""); // Remove basic color codes
@@ -201,7 +201,7 @@ export class TerminalSSHService {
     );
     const currentDir = pwdResult.stdout
       ? pwdResult.stdout.trim()
-      : workingDirectory || "~";
+      : (workingDirectory ?? "~");
     const shortDir = currentDir.replace(new RegExp(`^/home/${username}`), "~");
     return `${username}@${host.split(".")[0]}:${shortDir}${username === "root" ? "#" : "$"} `;
   }
@@ -212,8 +212,8 @@ export class TerminalSSHService {
   async prewarmConnection(
     host: string,
     privateKey: string,
-    username: string = "root",
-    port: number = 22,
+    username = "root",
+    port = 22,
   ): Promise<boolean> {
     try {
       console.log(
@@ -232,9 +232,12 @@ export class TerminalSSHService {
       // Test connection with a simple command with timeout
       await Promise.race([
         connection.ssh.execCommand('echo "connection test"'),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('SSH command timed out after 5000ms')), 5000)
-        )
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("SSH command timed out after 5000ms")),
+            5000,
+          ),
+        ),
       ]);
 
       connection.lastUsed = Date.now();
@@ -256,8 +259,8 @@ export class TerminalSSHService {
   async testConnection(
     host: string,
     privateKey: string,
-    username: string = "root",
-    port: number = 22,
+    username = "root",
+    port = 22,
   ): Promise<{ success: boolean; message: string }> {
     return this.connectionManager.testConnection(
       host,

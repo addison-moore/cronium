@@ -60,11 +60,11 @@ function GuideCard({
 
   return (
     <Link href={href} className="group block">
-      <Card className="h-full transition-all duration-200 hover:shadow-md hover:border-primary/50">
+      <Card className="hover:border-primary/50 h-full transition-all duration-200 hover:shadow-md">
         <CardHeader>
-          <div className="flex items-start justify-between mb-2">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Icon className={`h-5 w-5 text-primary ${iconClassName}`} />
+          <div className="mb-2 flex items-start justify-between">
+            <div className="bg-primary/10 rounded-lg p-2">
+              <Icon className={`text-primary h-5 w-5 ${iconClassName ?? ""}`} />
             </div>
             <div className="flex gap-2">
               <Badge variant="outline" className={difficultyColors[difficulty]}>
@@ -72,15 +72,15 @@ function GuideCard({
               </Badge>
             </div>
           </div>
-          <CardTitle className="text-lg group-hover:text-primary transition-colors">
+          <CardTitle className="group-hover:text-primary text-lg transition-colors">
             {title}
           </CardTitle>
           <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">{duration}</span>
-            <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+            <span className="text-muted-foreground text-sm">{duration}</span>
+            <ArrowRight className="text-muted-foreground group-hover:text-primary h-4 w-4 transition-colors" />
           </div>
         </CardContent>
       </Card>
@@ -99,8 +99,8 @@ function GuideSection({
 }) {
   return (
     <section id={id} className="mb-12">
-      <h2 className="text-2xl font-bold mb-6">{title}</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <h2 className="mb-6 text-2xl font-bold">{title}</h2>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {children}
       </div>
     </section>
@@ -116,10 +116,10 @@ export default async function HowToPage({
 
   return (
     <DocsLayout lang={lang} tableOfContents={tableOfContents}>
-      <div className="max-w-6xl mx-auto">
+      <div className="mx-auto max-w-6xl">
         <div className="mb-12">
-          <h1 className="text-4xl font-bold mb-4">How-to Guides</h1>
-          <p className="text-xl text-muted-foreground">
+          <h1 className="mb-4 text-4xl font-bold">How-to Guides</h1>
+          <p className="text-muted-foreground text-xl">
             Step-by-step guides to help you accomplish specific tasks with
             Cronium. Each guide includes practical examples and best practices.
           </p>
@@ -130,7 +130,7 @@ export default async function HowToPage({
             icon={Server}
             title="Create Your First Event"
             description="Learn how to create and run your first automated script"
-            href={`/${lang}/docs/how-to/first-event`}
+            href={`/${String(lang)}/docs/how-to/first-event`}
             difficulty="Beginner"
             duration="10 min"
           />
@@ -139,7 +139,7 @@ export default async function HowToPage({
             icon={Terminal}
             title="Set Up SSH Connection"
             description="Configure secure SSH connections to your servers"
-            href={`/${lang}/docs/how-to/ssh-setup`}
+            href={`/${String(lang)}/docs/how-to/ssh-setup`}
             difficulty="Beginner"
             duration="15 min"
           />
@@ -148,7 +148,7 @@ export default async function HowToPage({
             icon={Clock}
             title="Schedule Events"
             description="Set up automated scheduling with cron expressions"
-            href={`/${lang}/docs/how-to/schedule-events`}
+            href={`/${String(lang)}/docs/how-to/schedule-events`}
             difficulty="Beginner"
             duration="8 min"
           />
@@ -159,7 +159,7 @@ export default async function HowToPage({
             icon={Server}
             title="Manage Multiple Servers"
             description="Configure and organize multiple server connections"
-            href={`/${lang}/docs/how-to/multiple-servers`}
+            href={`/${String(lang)}/docs/how-to/multiple-servers`}
             difficulty="Intermediate"
             duration="20 min"
           />
@@ -168,7 +168,7 @@ export default async function HowToPage({
             icon={Shield}
             title="Secure Server Access"
             description="Implement security best practices for server connections"
-            href={`/${lang}/docs/how-to/secure-access`}
+            href={`/${String(lang)}/docs/how-to/secure-access`}
             difficulty="Intermediate"
             duration="25 min"
           />
@@ -177,7 +177,7 @@ export default async function HowToPage({
             icon={SquareActivity}
             title="Monitor Server Health"
             description="Set up automated server health monitoring"
-            href={`/${lang}/docs/how-to/server-health`}
+            href={`/${String(lang)}/docs/how-to/server-health`}
             difficulty="Intermediate"
             duration="18 min"
           />
@@ -188,7 +188,7 @@ export default async function HowToPage({
             icon={Terminal}
             title="Write Effective Scripts"
             description="Best practices for writing maintainable automation scripts"
-            href={`/${lang}/docs/how-to/effective-scripts`}
+            href={`/${String(lang)}/docs/how-to/effective-scripts`}
             difficulty="Intermediate"
             duration="30 min"
           />
@@ -197,7 +197,7 @@ export default async function HowToPage({
             icon={Settings}
             title="Use Environment Variables"
             description="Manage configuration with environment variables"
-            href={`/${lang}/docs/how-to/environment-variables`}
+            href={`/${String(lang)}/docs/how-to/environment-variables`}
             difficulty="Beginner"
             duration="12 min"
           />
@@ -206,7 +206,7 @@ export default async function HowToPage({
             icon={AlertTriangle}
             title="Handle Errors Gracefully"
             description="Implement robust error handling in your scripts"
-            href={`/${lang}/docs/how-to/error-handling`}
+            href={`/${String(lang)}/docs/how-to/error-handling`}
             difficulty="Intermediate"
             duration="22 min"
           />
@@ -217,7 +217,7 @@ export default async function HowToPage({
             icon={Workflow}
             title="Build a Workflow"
             description="Create complex automation workflows with multiple steps"
-            href={`/${lang}/docs/how-to/build-workflow`}
+            href={`/${String(lang)}/docs/how-to/build-workflow`}
             difficulty="Intermediate"
             duration="35 min"
           />
@@ -226,7 +226,7 @@ export default async function HowToPage({
             icon={GitFork}
             title="Conditional Logic"
             description="Add conditional logic and branching to workflows"
-            href={`/${lang}/docs/how-to/conditional-logic`}
+            href={`/${String(lang)}/docs/how-to/conditional-logic`}
             difficulty="Advanced"
             duration="28 min"
             iconClassName="rotate-90"
@@ -236,7 +236,7 @@ export default async function HowToPage({
             icon={Zap}
             title="Parallel Execution"
             description="Run multiple tasks simultaneously in workflows"
-            href={`/${lang}/docs/how-to/parallel-execution`}
+            href={`/${String(lang)}/docs/how-to/parallel-execution`}
             difficulty="Advanced"
             duration="25 min"
           />
@@ -247,7 +247,7 @@ export default async function HowToPage({
             icon={SquareActivity}
             title="Monitor Performance"
             description="Track and analyze the performance of your automations"
-            href={`/${lang}/docs/how-to/monitor-performance`}
+            href={`/${String(lang)}/docs/how-to/monitor-performance`}
             difficulty="Intermediate"
             duration="20 min"
           />
@@ -256,7 +256,7 @@ export default async function HowToPage({
             icon={AlertTriangle}
             title="Troubleshooting"
             description="Debug common issues and resolve problems"
-            href={`/${lang}/docs/how-to/troubleshooting`}
+            href={`/${String(lang)}/docs/how-to/troubleshooting`}
             difficulty="Intermediate"
             duration="30 min"
           />
@@ -265,7 +265,7 @@ export default async function HowToPage({
             icon={Database}
             title="Analyze Execution Logs"
             description="Use logs effectively for debugging and optimization"
-            href={`/${lang}/docs/how-to/analyze-logs`}
+            href={`/${String(lang)}/docs/how-to/analyze-logs`}
             difficulty="Beginner"
             duration="15 min"
           />
@@ -276,7 +276,7 @@ export default async function HowToPage({
             icon={Shield}
             title="Deploy to Production"
             description="Best practices for production deployment"
-            href={`/${lang}/docs/how-to/deploy-production`}
+            href={`/${String(lang)}/docs/how-to/deploy-production`}
             difficulty="Advanced"
             duration="45 min"
           />
@@ -285,7 +285,7 @@ export default async function HowToPage({
             icon={Settings}
             title="API Integration"
             description="Integrate Cronium with external systems using the API"
-            href={`/${lang}/docs/how-to/api-integration`}
+            href={`/${String(lang)}/docs/how-to/api-integration`}
             difficulty="Advanced"
             duration="40 min"
           />
@@ -294,15 +294,15 @@ export default async function HowToPage({
             icon={Database}
             title="Backup and Recovery"
             description="Implement backup strategies and disaster recovery"
-            href={`/${lang}/docs/how-to/backup-recovery`}
+            href={`/${String(lang)}/docs/how-to/backup-recovery`}
             difficulty="Advanced"
             duration="35 min"
           />
         </GuideSection>
 
-        <div className="mt-16 bg-muted/50 border border-muted rounded-lg p-8">
+        <div className="bg-muted/50 border-muted mt-16 rounded-lg border p-8">
           <div className="text-center">
-            <h2 className="text-2xl font-bold mb-4">
+            <h2 className="mb-4 text-2xl font-bold">
               Can't Find What You're Looking For?
             </h2>
             <p className="text-muted-foreground mb-6">
@@ -310,16 +310,16 @@ export default async function HowToPage({
               questions or advanced scenarios, check out our comprehensive API
               documentation or browse our other resources.
             </p>
-            <div className="flex flex-col sm:flex-row justify-center gap-4">
+            <div className="flex flex-col justify-center gap-4 sm:flex-row">
               <Link
-                href={`/${lang}/docs/api`}
-                className="inline-flex items-center justify-center px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                href={`/${String(lang)}/docs/api`}
+                className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center justify-center rounded-md px-6 py-3 transition-colors"
               >
                 API Documentation
               </Link>
               <Link
-                href={`/${lang}/docs/features`}
-                className="inline-flex items-center justify-center px-6 py-3 bg-muted text-foreground border border-border rounded-md hover:bg-muted/80 transition-colors"
+                href={`/${String(lang)}/docs/features`}
+                className="bg-muted text-foreground border-border hover:bg-muted/80 inline-flex items-center justify-center rounded-md border px-6 py-3 transition-colors"
               >
                 Feature Overview
               </Link>

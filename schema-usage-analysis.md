@@ -69,7 +69,7 @@ This document analyzes which exports from `src/shared/schema.ts` are actually be
 
 1. **Storage Layer** (`src/server/storage.ts`):
    - Imports almost all types and tables
-   - Primary consumer of Insert* types
+   - Primary consumer of Insert\* types
    - Uses tables directly for database operations
 
 2. **API Routers** (`src/server/api/routers/*`):

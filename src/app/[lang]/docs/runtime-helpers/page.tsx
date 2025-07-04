@@ -9,7 +9,15 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Code2, Database, ArrowRight, Zap, Copy, Settings, FlaskConical } from "lucide-react";
+import {
+  Code2,
+  Database,
+  ArrowRight,
+  Zap,
+  Copy,
+  Settings,
+  FlaskConical,
+} from "lucide-react";
 import ApiCodeExamples, {
   CodeBlock,
   SimpleCodeBlock,
@@ -519,18 +527,17 @@ export default async function RuntimeHelpersPage({
   return (
     <DocsLayout lang={lang} tableOfContents={tableOfContents}>
       <ApiCodeExamples>
-        <div className="max-w-4xl mx-auto">
+        <div className="mx-auto max-w-4xl">
           <div className="mb-8">
-            <h1 className="text-4xl font-bold mb-4">
-              Cronium Runtime Helpers
-            </h1>
-            <p className="text-xl text-muted-foreground">
-              Powerful runtime functions for data exchange, state management, and workflow control across Python, Node.js, and Bash scripts.
+            <h1 className="mb-4 text-4xl font-bold">Cronium Runtime Helpers</h1>
+            <p className="text-muted-foreground text-xl">
+              Powerful runtime functions for data exchange, state management,
+              and workflow control across Python, Node.js, and Bash scripts.
             </p>
           </div>
 
           <section id="overview" className="mb-12">
-            <h2 className="text-2xl font-bold mb-4">Overview</h2>
+            <h2 className="mb-4 text-2xl font-bold">Overview</h2>
             <Card className="mb-6">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -540,57 +547,77 @@ export default async function RuntimeHelpersPage({
               </CardHeader>
               <CardContent className="space-y-4">
                 <p>
-                  Cronium provides a consistent set of runtime helper functions that are automatically available in all scripts. These functions enable powerful workflow capabilities including data exchange, persistent storage, conditional logic, and metadata access.
+                  Cronium provides a consistent set of runtime helper functions
+                  that are automatically available in all scripts. These
+                  functions enable powerful workflow capabilities including data
+                  exchange, persistent storage, conditional logic, and metadata
+                  access.
                 </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-semibold mb-2 flex items-center gap-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="rounded-lg border p-4">
+                    <h4 className="mb-2 flex items-center gap-2 font-semibold">
                       <ArrowRight className="h-4 w-4" />
                       Data Flow
                     </h4>
-                    <p className="text-sm text-muted-foreground">
-                      <code>cronium.input()</code> and <code>cronium.output()</code> for seamless data exchange between workflow nodes
+                    <p className="text-muted-foreground text-sm">
+                      <code>cronium.input()</code> and{" "}
+                      <code>cronium.output()</code> for seamless data exchange
+                      between workflow nodes
                     </p>
                   </div>
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-semibold mb-2 flex items-center gap-2">
+                  <div className="rounded-lg border p-4">
+                    <h4 className="mb-2 flex items-center gap-2 font-semibold">
                       <Database className="h-4 w-4" />
                       State Management
                     </h4>
-                    <p className="text-sm text-muted-foreground">
-                      <code>cronium.getVariable()</code> and <code>cronium.setVariable()</code> for persistent user data storage
+                    <p className="text-muted-foreground text-sm">
+                      <code>cronium.getVariable()</code> and{" "}
+                      <code>cronium.setVariable()</code> for persistent user
+                      data storage
                     </p>
                   </div>
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-semibold mb-2 flex items-center gap-2">
+                  <div className="rounded-lg border p-4">
+                    <h4 className="mb-2 flex items-center gap-2 font-semibold">
                       <FlaskConical className="h-4 w-4" />
                       Conditional Logic
                     </h4>
-                    <p className="text-sm text-muted-foreground">
-                      <code>cronium.setCondition()</code> and <code>cronium.getCondition()</code> for workflow routing control
+                    <p className="text-muted-foreground text-sm">
+                      <code>cronium.setCondition()</code> and{" "}
+                      <code>cronium.getCondition()</code> for workflow routing
+                      control
                     </p>
                   </div>
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-semibold mb-2 flex items-center gap-2">
+                  <div className="rounded-lg border p-4">
+                    <h4 className="mb-2 flex items-center gap-2 font-semibold">
                       <Settings className="h-4 w-4" />
                       Event Metadata
                     </h4>
-                    <p className="text-sm text-muted-foreground">
-                      <code>cronium.event()</code> for accessing event information, execution stats, and server details
+                    <p className="text-muted-foreground text-sm">
+                      <code>cronium.event()</code> for accessing event
+                      information, execution stats, and server details
                     </p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <div className="p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
+              <h4 className="mb-2 font-semibold text-blue-800 dark:text-blue-200">
                 Automatic Availability
               </h4>
-              <ul className="text-blue-700 dark:text-blue-300 text-sm space-y-1">
-                <li>• <strong>Python:</strong> <code>cronium</code> object available globally</li>
-                <li>• <strong>Node.js:</strong> <code>cronium</code> object available globally</li>
-                <li>• <strong>Bash:</strong> Helper functions like <code>cronium_input()</code> available</li>
+              <ul className="space-y-1 text-sm text-blue-700 dark:text-blue-300">
+                <li>
+                  • <strong>Python:</strong> <code>cronium</code> object
+                  available globally
+                </li>
+                <li>
+                  • <strong>Node.js:</strong> <code>cronium</code> object
+                  available globally
+                </li>
+                <li>
+                  • <strong>Bash:</strong> Helper functions like{" "}
+                  <code>cronium_input()</code> available
+                </li>
                 <li>• No imports, requires, or sourcing needed</li>
                 <li>• Works in both local and remote execution environments</li>
               </ul>
@@ -598,13 +625,16 @@ export default async function RuntimeHelpersPage({
           </section>
 
           <section id="input-output" className="mb-12">
-            <h2 className="text-2xl font-bold mb-4">Input & Output</h2>
-            <p className="mb-6 text-muted-foreground">
-              Exchange data between workflow nodes and external systems using <code>cronium.input()</code> and <code>cronium.output()</code>. Input data can come from API calls, previous workflow nodes, or manual triggers.
+            <h2 className="mb-4 text-2xl font-bold">Input & Output</h2>
+            <p className="text-muted-foreground mb-6">
+              Exchange data between workflow nodes and external systems using{" "}
+              <code>cronium.input()</code> and <code>cronium.output()</code>.
+              Input data can come from API calls, previous workflow nodes, or
+              manual triggers.
             </p>
 
             <div className="mb-8">
-              <h3 className="text-xl font-semibold mb-4">Reading Input Data</h3>
+              <h3 className="mb-4 text-xl font-semibold">Reading Input Data</h3>
               <CodeBlock
                 examples={runtimeExamples.input}
                 title="cronium.input()"
@@ -612,20 +642,27 @@ export default async function RuntimeHelpersPage({
             </div>
 
             <div className="mb-8">
-              <h3 className="text-xl font-semibold mb-4">Setting Output Data</h3>
+              <h3 className="mb-4 text-xl font-semibold">
+                Setting Output Data
+              </h3>
               <CodeBlock
                 examples={runtimeExamples.output}
                 title="cronium.output()"
               />
             </div>
 
-            <div className="mt-6 p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
-              <h4 className="font-semibold text-green-800 dark:text-green-200 mb-2">
+            <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950">
+              <h4 className="mb-2 font-semibold text-green-800 dark:text-green-200">
                 Data Flow
               </h4>
-              <ul className="text-green-700 dark:text-green-300 text-sm space-y-1">
-                <li>• Input from API: Include <code>"input": {"{...}"}</code> in request body</li>
-                <li>• Input from workflows: Automatic from previous node's output</li>
+              <ul className="space-y-1 text-sm text-green-700 dark:text-green-300">
+                <li>
+                  • Input from API: Include <code>"input": {"{...}"}</code> in
+                  request body
+                </li>
+                <li>
+                  • Input from workflows: Automatic from previous node's output
+                </li>
                 <li>• Output becomes input for connected workflow nodes</li>
                 <li>• JSON format ensures cross-language compatibility</li>
               </ul>
@@ -633,9 +670,12 @@ export default async function RuntimeHelpersPage({
           </section>
 
           <section id="variables" className="mb-12">
-            <h2 className="text-2xl font-bold mb-4">Variables</h2>
-            <p className="mb-6 text-muted-foreground">
-              Store and retrieve persistent data across script executions using <code>cronium.getVariable()</code> and <code>cronium.setVariable()</code>. Variables are scoped per user and persist across all events and workflows.
+            <h2 className="mb-4 text-2xl font-bold">Variables</h2>
+            <p className="text-muted-foreground mb-6">
+              Store and retrieve persistent data across script executions using{" "}
+              <code>cronium.getVariable()</code> and{" "}
+              <code>cronium.setVariable()</code>. Variables are scoped per user
+              and persist across all events and workflows.
             </p>
 
             <CodeBlock
@@ -643,24 +683,42 @@ export default async function RuntimeHelpersPage({
               title="Persistent Variables"
             />
 
-            <div className="mt-6 p-4 bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded-lg">
-              <h4 className="font-semibold text-purple-800 dark:text-purple-200 mb-2">
+            <div className="mt-6 rounded-lg border border-purple-200 bg-purple-50 p-4 dark:border-purple-800 dark:bg-purple-950">
+              <h4 className="mb-2 font-semibold text-purple-800 dark:text-purple-200">
                 Variable Features
               </h4>
-              <ul className="text-purple-700 dark:text-purple-300 text-sm space-y-1">
-                <li>• <strong>User-scoped:</strong> Each user has their own variable namespace</li>
-                <li>• <strong>Persistent:</strong> Values survive server restarts and deployments</li>
-                <li>• <strong>String storage:</strong> All values stored as strings (convert as needed)</li>
-                <li>• <strong>Cross-language:</strong> Variables set in Python can be read in Node.js or Bash</li>
-                <li>• <strong>Use cases:</strong> API keys, counters, last run timestamps, configuration</li>
+              <ul className="space-y-1 text-sm text-purple-700 dark:text-purple-300">
+                <li>
+                  • <strong>User-scoped:</strong> Each user has their own
+                  variable namespace
+                </li>
+                <li>
+                  • <strong>Persistent:</strong> Values survive server restarts
+                  and deployments
+                </li>
+                <li>
+                  • <strong>String storage:</strong> All values stored as
+                  strings (convert as needed)
+                </li>
+                <li>
+                  • <strong>Cross-language:</strong> Variables set in Python can
+                  be read in Node.js or Bash
+                </li>
+                <li>
+                  • <strong>Use cases:</strong> API keys, counters, last run
+                  timestamps, configuration
+                </li>
               </ul>
             </div>
           </section>
 
           <section id="conditions" className="mb-12">
-            <h2 className="text-2xl font-bold mb-4">Conditions</h2>
-            <p className="mb-6 text-muted-foreground">
-              Control workflow routing using <code>cronium.setCondition()</code> and <code>cronium.getCondition()</code>. Set boolean conditions to determine which workflow paths are executed based on runtime logic.
+            <h2 className="mb-4 text-2xl font-bold">Conditions</h2>
+            <p className="text-muted-foreground mb-6">
+              Control workflow routing using <code>cronium.setCondition()</code>{" "}
+              and <code>cronium.getCondition()</code>. Set boolean conditions to
+              determine which workflow paths are executed based on runtime
+              logic.
             </p>
 
             <CodeBlock
@@ -668,23 +726,36 @@ export default async function RuntimeHelpersPage({
               title="Conditional Workflow Routing"
             />
 
-            <div className="mt-6 p-4 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-lg">
-              <h4 className="font-semibold text-orange-800 dark:text-orange-200 mb-2">
+            <div className="mt-6 rounded-lg border border-orange-200 bg-orange-50 p-4 dark:border-orange-800 dark:bg-orange-950">
+              <h4 className="mb-2 font-semibold text-orange-800 dark:text-orange-200">
                 Workflow Connections
               </h4>
-              <ul className="text-orange-700 dark:text-orange-300 text-sm space-y-1">
-                <li>• <strong>Always:</strong> Connection always executes (default)</li>
-                <li>• <strong>On Success:</strong> Executes only if script succeeded</li>
-                <li>• <strong>On Failure:</strong> Executes only if script failed</li>
-                <li>• <strong>On Condition:</strong> Executes only if <code>cronium.setCondition(true)</code> was called</li>
+              <ul className="space-y-1 text-sm text-orange-700 dark:text-orange-300">
+                <li>
+                  • <strong>Always:</strong> Connection always executes
+                  (default)
+                </li>
+                <li>
+                  • <strong>On Success:</strong> Executes only if script
+                  succeeded
+                </li>
+                <li>
+                  • <strong>On Failure:</strong> Executes only if script failed
+                </li>
+                <li>
+                  • <strong>On Condition:</strong> Executes only if{" "}
+                  <code>cronium.setCondition(true)</code> was called
+                </li>
               </ul>
             </div>
           </section>
 
           <section id="event-metadata" className="mb-12">
-            <h2 className="text-2xl font-bold mb-4">Event Metadata</h2>
-            <p className="mb-6 text-muted-foreground">
-              Access comprehensive information about the current event execution using <code>cronium.event()</code>. This includes event details, execution statistics, and server information.
+            <h2 className="mb-4 text-2xl font-bold">Event Metadata</h2>
+            <p className="text-muted-foreground mb-6">
+              Access comprehensive information about the current event execution
+              using <code>cronium.event()</code>. This includes event details,
+              execution statistics, and server information.
             </p>
 
             <CodeBlock
@@ -692,26 +763,43 @@ export default async function RuntimeHelpersPage({
               title="Event Information"
             />
 
-            <div className="mt-6 p-4 bg-cyan-50 dark:bg-cyan-950 border border-cyan-200 dark:border-cyan-800 rounded-lg">
-              <h4 className="font-semibold text-cyan-800 dark:text-cyan-200 mb-2">
+            <div className="mt-6 rounded-lg border border-cyan-200 bg-cyan-50 p-4 dark:border-cyan-800 dark:bg-cyan-950">
+              <h4 className="mb-2 font-semibold text-cyan-800 dark:text-cyan-200">
                 Available Metadata
               </h4>
-              <ul className="text-cyan-700 dark:text-cyan-300 text-sm space-y-1">
-                <li>• <strong>id:</strong> Unique event identifier</li>
-                <li>• <strong>name:</strong> Event display name</li>
-                <li>• <strong>type:</strong> Script type (PYTHON, NODEJS, BASH, HTTP_REQUEST)</li>
-                <li>• <strong>runLocation:</strong> LOCAL or REMOTE execution</li>
-                <li>• <strong>successCount/failureCount:</strong> Execution statistics</li>
-                <li>• <strong>server:</strong> Server details for remote execution</li>
-                <li>• <strong>lastRunAt:</strong> Timestamp of last execution</li>
+              <ul className="space-y-1 text-sm text-cyan-700 dark:text-cyan-300">
+                <li>
+                  • <strong>id:</strong> Unique event identifier
+                </li>
+                <li>
+                  • <strong>name:</strong> Event display name
+                </li>
+                <li>
+                  • <strong>type:</strong> Script type (PYTHON, NODEJS, BASH,
+                  HTTP_REQUEST)
+                </li>
+                <li>
+                  • <strong>runLocation:</strong> LOCAL or REMOTE execution
+                </li>
+                <li>
+                  • <strong>successCount/failureCount:</strong> Execution
+                  statistics
+                </li>
+                <li>
+                  • <strong>server:</strong> Server details for remote execution
+                </li>
+                <li>
+                  • <strong>lastRunAt:</strong> Timestamp of last execution
+                </li>
               </ul>
             </div>
           </section>
 
           <section id="complete-examples" className="mb-12">
-            <h2 className="text-2xl font-bold mb-4">Complete Examples</h2>
-            <p className="mb-6 text-muted-foreground">
-              Comprehensive examples demonstrating how to combine all runtime helpers for powerful workflow automation.
+            <h2 className="mb-4 text-2xl font-bold">Complete Examples</h2>
+            <p className="text-muted-foreground mb-6">
+              Comprehensive examples demonstrating how to combine all runtime
+              helpers for powerful workflow automation.
             </p>
 
             <CodeBlock
@@ -721,25 +809,34 @@ export default async function RuntimeHelpersPage({
           </section>
 
           <section id="best-practices" className="mb-12">
-            <h2 className="text-2xl font-bold mb-4">Best Practices</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <h2 className="mb-4 text-2xl font-bold">Best Practices</h2>
+
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Data Handling</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div>
-                    <h5 className="font-semibold mb-1">Input Validation</h5>
-                    <p className="text-sm text-muted-foreground">Always provide defaults when accessing input fields to handle missing data gracefully.</p>
+                    <h5 className="mb-1 font-semibold">Input Validation</h5>
+                    <p className="text-muted-foreground text-sm">
+                      Always provide defaults when accessing input fields to
+                      handle missing data gracefully.
+                    </p>
                   </div>
                   <div>
-                    <h5 className="font-semibold mb-1">Structured Output</h5>
-                    <p className="text-sm text-muted-foreground">Use consistent JSON structures with success flags, data, and error information.</p>
+                    <h5 className="mb-1 font-semibold">Structured Output</h5>
+                    <p className="text-muted-foreground text-sm">
+                      Use consistent JSON structures with success flags, data,
+                      and error information.
+                    </p>
                   </div>
                   <div>
-                    <h5 className="font-semibold mb-1">Error Handling</h5>
-                    <p className="text-sm text-muted-foreground">Include error details in output for debugging and monitoring purposes.</p>
+                    <h5 className="mb-1 font-semibold">Error Handling</h5>
+                    <p className="text-muted-foreground text-sm">
+                      Include error details in output for debugging and
+                      monitoring purposes.
+                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -750,16 +847,25 @@ export default async function RuntimeHelpersPage({
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div>
-                    <h5 className="font-semibold mb-1">Naming Convention</h5>
-                    <p className="text-sm text-muted-foreground">Use UPPERCASE for configuration variables, lowercase for runtime state.</p>
+                    <h5 className="mb-1 font-semibold">Naming Convention</h5>
+                    <p className="text-muted-foreground text-sm">
+                      Use UPPERCASE for configuration variables, lowercase for
+                      runtime state.
+                    </p>
                   </div>
                   <div>
-                    <h5 className="font-semibold mb-1">Type Conversion</h5>
-                    <p className="text-sm text-muted-foreground">Remember variables are stored as strings - convert to needed types when reading.</p>
+                    <h5 className="mb-1 font-semibold">Type Conversion</h5>
+                    <p className="text-muted-foreground text-sm">
+                      Remember variables are stored as strings - convert to
+                      needed types when reading.
+                    </p>
                   </div>
                   <div>
-                    <h5 className="font-semibold mb-1">Default Values</h5>
-                    <p className="text-sm text-muted-foreground">Always provide fallback values when reading variables that might not exist.</p>
+                    <h5 className="mb-1 font-semibold">Default Values</h5>
+                    <p className="text-muted-foreground text-sm">
+                      Always provide fallback values when reading variables that
+                      might not exist.
+                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -770,16 +876,27 @@ export default async function RuntimeHelpersPage({
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div>
-                    <h5 className="font-semibold mb-1">Condition Logic</h5>
-                    <p className="text-sm text-muted-foreground">Use meaningful conditions that reflect business logic, not just technical success/failure.</p>
+                    <h5 className="mb-1 font-semibold">Condition Logic</h5>
+                    <p className="text-muted-foreground text-sm">
+                      Use meaningful conditions that reflect business logic, not
+                      just technical success/failure.
+                    </p>
                   </div>
                   <div>
-                    <h5 className="font-semibold mb-1">Single Responsibility</h5>
-                    <p className="text-sm text-muted-foreground">Keep each event focused on one task, use output to pass data to specialized nodes.</p>
+                    <h5 className="mb-1 font-semibold">
+                      Single Responsibility
+                    </h5>
+                    <p className="text-muted-foreground text-sm">
+                      Keep each event focused on one task, use output to pass
+                      data to specialized nodes.
+                    </p>
                   </div>
                   <div>
-                    <h5 className="font-semibold mb-1">Logging</h5>
-                    <p className="text-sm text-muted-foreground">Use standard logging methods while leveraging cronium functions for data flow.</p>
+                    <h5 className="mb-1 font-semibold">Logging</h5>
+                    <p className="text-muted-foreground text-sm">
+                      Use standard logging methods while leveraging cronium
+                      functions for data flow.
+                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -790,16 +907,25 @@ export default async function RuntimeHelpersPage({
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div>
-                    <h5 className="font-semibold mb-1">Minimize Variables</h5>
-                    <p className="text-sm text-muted-foreground">Don't overuse variables for temporary data - use output for workflow data passing.</p>
+                    <h5 className="mb-1 font-semibold">Minimize Variables</h5>
+                    <p className="text-muted-foreground text-sm">
+                      Don't overuse variables for temporary data - use output
+                      for workflow data passing.
+                    </p>
                   </div>
                   <div>
-                    <h5 className="font-semibold mb-1">Conditional Checks</h5>
-                    <p className="text-sm text-muted-foreground">Use getCondition() to build complex logic without unnecessary processing.</p>
+                    <h5 className="mb-1 font-semibold">Conditional Checks</h5>
+                    <p className="text-muted-foreground text-sm">
+                      Use getCondition() to build complex logic without
+                      unnecessary processing.
+                    </p>
                   </div>
                   <div>
-                    <h5 className="font-semibold mb-1">Event Metadata</h5>
-                    <p className="text-sm text-muted-foreground">Cache event() calls if you need to access metadata multiple times in a script.</p>
+                    <h5 className="mb-1 font-semibold">Event Metadata</h5>
+                    <p className="text-muted-foreground text-sm">
+                      Cache event() calls if you need to access metadata
+                      multiple times in a script.
+                    </p>
                   </div>
                 </CardContent>
               </Card>

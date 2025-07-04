@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { db } from "@/server/db";
 import { eq, or, and, ne } from "drizzle-orm";
 import {
@@ -114,7 +115,7 @@ export async function GET(request: NextRequest) {
 
     // Build base query conditions
     let whereConditions = or(
-      eq(workflows.userId, userId as string), // User's own workflows
+      eq(workflows.userId, userId), // User's own workflows
       eq(workflows.shared, true), // Shared workflows from other users
     );
 
@@ -183,7 +184,7 @@ export async function POST(request: NextRequest) {
     // Prepare workflow data with server override fields
     const workflowInsertData = {
       ...workflowData,
-      userId: userId as string,
+      userId: userId,
       webhookKey,
       overrideEventServers: workflowData.overrideEventServers || false,
       overrideServerIds: workflowData.overrideServerIds

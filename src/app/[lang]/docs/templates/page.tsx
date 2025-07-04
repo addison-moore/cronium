@@ -9,21 +9,19 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { 
-  FileText, 
-  Code, 
-  Database, 
+import {
+  FileText,
+  Code,
+  Database,
   Settings,
   ArrowRight,
   Zap,
   Clock,
   User,
   AlertCircle,
-  Shield
+  Shield,
 } from "lucide-react";
-import {
-  SimpleCodeBlock,
-} from "@/components/docs/api-code-examples";
+import { SimpleCodeBlock } from "@/components/docs/api-code-examples";
 
 const tableOfContents = [
   { title: "Overview", href: "#overview", level: 2 },
@@ -35,42 +33,44 @@ const tableOfContents = [
   { title: "Best Practices", href: "#best-practices", level: 2 },
 ];
 
-export default async function TemplatesPage({ 
-  params 
-}: { 
-  params: Promise<{ lang: string }> 
+export default async function TemplatesPage({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
 }) {
   const { lang } = await params;
 
   return (
     <DocsLayout lang={lang} tableOfContents={tableOfContents}>
-      <div className="max-w-4xl mx-auto">
+      <div className="mx-auto max-w-4xl">
         {/* Header */}
         <div className="mb-12">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <FileText className="h-6 w-6 text-primary" />
+          <div className="mb-4 flex items-center gap-3">
+            <div className="bg-primary/10 rounded-lg p-2">
+              <FileText className="text-primary h-6 w-6" />
             </div>
             <h1 className="text-4xl font-bold tracking-tight">Templates</h1>
           </div>
-          <p className="text-xl text-muted-foreground">
-            Create dynamic message templates with Handlebars syntax and runtime context variables for powerful automation messaging.
+          <p className="text-muted-foreground text-xl">
+            Create dynamic message templates with Handlebars syntax and runtime
+            context variables for powerful automation messaging.
           </p>
         </div>
 
         {/* Overview */}
         <section id="overview" className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">Overview</h2>
-          
-          <div className="prose prose-gray dark:prose-invert max-w-none mb-8">
+          <h2 className="mb-6 text-2xl font-bold">Overview</h2>
+
+          <div className="prose prose-gray dark:prose-invert mb-8 max-w-none">
             <p>
-              Templates in Cronium use Handlebars syntax to create dynamic messages that automatically include 
-              event data, runtime variables, and custom conditions. Templates are used in conditional actions 
+              Templates in Cronium use Handlebars syntax to create dynamic
+              messages that automatically include event data, runtime variables,
+              and custom conditions. Templates are used in conditional actions
               for email, Slack, and Discord notifications.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -79,8 +79,9 @@ export default async function TemplatesPage({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Use familiar Handlebars syntax with double curly braces for dynamic content
+                <p className="text-muted-foreground text-sm">
+                  Use familiar Handlebars syntax with double curly braces for
+                  dynamic content
                 </p>
               </CardContent>
             </Card>
@@ -93,8 +94,9 @@ export default async function TemplatesPage({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Access event details, variables, input data, and conditions automatically
+                <p className="text-muted-foreground text-sm">
+                  Access event details, variables, input data, and conditions
+                  automatically
                 </p>
               </CardContent>
             </Card>
@@ -107,8 +109,9 @@ export default async function TemplatesPage({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Built-in helpers for formatting, conditions, and safe data access
+                <p className="text-muted-foreground text-sm">
+                  Built-in helpers for formatting, conditions, and safe data
+                  access
                 </p>
               </CardContent>
             </Card>
@@ -117,12 +120,13 @@ export default async function TemplatesPage({
 
         {/* Handlebars Syntax */}
         <section id="handlebars-syntax" className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">Handlebars Syntax</h2>
-          
-          <div className="prose prose-gray dark:prose-invert max-w-none mb-6">
+          <h2 className="mb-6 text-2xl font-bold">Handlebars Syntax</h2>
+
+          <div className="prose prose-gray dark:prose-invert mb-6 max-w-none">
             <p>
-              Cronium templates use standard Handlebars syntax with the <code>cronium</code> namespace 
-              to access runtime data and context variables.
+              Cronium templates use standard Handlebars syntax with the{" "}
+              <code>cronium</code> namespace to access runtime data and context
+              variables.
             </p>
           </div>
 
@@ -136,13 +140,14 @@ export default async function TemplatesPage({
               </CardHeader>
               <CardContent>
                 <SimpleCodeBlock language="handlebars" className="mb-4">
-{`{{cronium.event.name}}
+                  {`{{cronium.event.name}}
 {{cronium.event.status}}
 {{cronium.event.duration}}
 {{cronium.event.executionTime}}`}
                 </SimpleCodeBlock>
-                <p className="text-sm text-muted-foreground">
-                  Use dot notation to access nested properties in the cronium context.
+                <p className="text-muted-foreground text-sm">
+                  Use dot notation to access nested properties in the cronium
+                  context.
                 </p>
               </CardContent>
             </Card>
@@ -156,7 +161,7 @@ export default async function TemplatesPage({
               </CardHeader>
               <CardContent>
                 <SimpleCodeBlock language="handlebars" className="mb-4">
-{`{{#ifEquals cronium.event.status "success"}}
+                  {`{{#ifEquals cronium.event.status "success"}}
   ✅ Event completed successfully!
 {{else}}
   ❌ Event failed or encountered errors.
@@ -166,8 +171,9 @@ export default async function TemplatesPage({
   Output: {{cronium.event.output}}
 {{/if}}`}
                 </SimpleCodeBlock>
-                <p className="text-sm text-muted-foreground">
-                  Use built-in helpers for conditional rendering based on event data.
+                <p className="text-muted-foreground text-sm">
+                  Use built-in helpers for conditional rendering based on event
+                  data.
                 </p>
               </CardContent>
             </Card>
@@ -181,12 +187,13 @@ export default async function TemplatesPage({
               </CardHeader>
               <CardContent>
                 <SimpleCodeBlock language="handlebars" className="mb-4">
-{`{{get cronium.getVariables "database.host" "localhost"}}
+                  {`{{get cronium.getVariables "database.host" "localhost"}}
 {{get cronium.input "user.name" "Unknown User"}}
 {{get cronium.event "server" "Local"}}`}
                 </SimpleCodeBlock>
-                <p className="text-sm text-muted-foreground">
-                  Use the <code>get</code> helper to safely access nested properties with default values.
+                <p className="text-muted-foreground text-sm">
+                  Use the <code>get</code> helper to safely access nested
+                  properties with default values.
                 </p>
               </CardContent>
             </Card>
@@ -195,12 +202,13 @@ export default async function TemplatesPage({
 
         {/* Context Variables */}
         <section id="context-variables" className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">Context Variables</h2>
-          
-          <div className="prose prose-gray dark:prose-invert max-w-none mb-6">
+          <h2 className="mb-6 text-2xl font-bold">Context Variables</h2>
+
+          <div className="prose prose-gray dark:prose-invert mb-6 max-w-none">
             <p>
-              Templates have access to a rich context of runtime data through the <code>cronium</code> namespace. 
-              All data is automatically populated based on the current event execution.
+              Templates have access to a rich context of runtime data through
+              the <code>cronium</code> namespace. All data is automatically
+              populated based on the current event execution.
             </p>
           </div>
 
@@ -217,40 +225,56 @@ export default async function TemplatesPage({
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="font-mono">id</Badge>
+                        <Badge variant="outline" className="font-mono">
+                          id
+                        </Badge>
                         <span className="text-sm">Event ID number</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="font-mono">name</Badge>
+                        <Badge variant="outline" className="font-mono">
+                          name
+                        </Badge>
                         <span className="text-sm">Event display name</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="font-mono">status</Badge>
+                        <Badge variant="outline" className="font-mono">
+                          status
+                        </Badge>
                         <span className="text-sm">Execution status</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="font-mono">duration</Badge>
+                        <Badge variant="outline" className="font-mono">
+                          duration
+                        </Badge>
                         <span className="text-sm">Runtime in milliseconds</span>
                       </div>
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="font-mono">executionTime</Badge>
+                        <Badge variant="outline" className="font-mono">
+                          executionTime
+                        </Badge>
                         <span className="text-sm">Start timestamp</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="font-mono">server</Badge>
+                        <Badge variant="outline" className="font-mono">
+                          server
+                        </Badge>
                         <span className="text-sm">Execution server name</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="font-mono">output</Badge>
+                        <Badge variant="outline" className="font-mono">
+                          output
+                        </Badge>
                         <span className="text-sm">Script output content</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="font-mono">error</Badge>
+                        <Badge variant="outline" className="font-mono">
+                          error
+                        </Badge>
                         <span className="text-sm">Error message (if any)</span>
                       </div>
                     </div>
@@ -272,12 +296,13 @@ export default async function TemplatesPage({
               <CardContent>
                 <div className="space-y-3">
                   <SimpleCodeBlock language="handlebars">
-{`{{cronium.getVariables.api_key}}
+                    {`{{cronium.getVariables.api_key}}
 {{cronium.getVariables.database_url}}
 {{get cronium.getVariables "config.timeout" "30"}}`}
                   </SimpleCodeBlock>
-                  <p className="text-sm text-muted-foreground">
-                    Access variables created through the Variables system in user settings.
+                  <p className="text-muted-foreground text-sm">
+                    Access variables created through the Variables system in
+                    user settings.
                   </p>
                 </div>
               </CardContent>
@@ -296,12 +321,13 @@ export default async function TemplatesPage({
               <CardContent>
                 <div className="space-y-3">
                   <SimpleCodeBlock language="handlebars">
-{`{{cronium.input.user_id}}
+                    {`{{cronium.input.user_id}}
 {{cronium.input.message}}
 {{get cronium.input "config.retries" "3"}}`}
                   </SimpleCodeBlock>
-                  <p className="text-sm text-muted-foreground">
-                    Data passed from workflow nodes or API calls to the current event.
+                  <p className="text-muted-foreground text-sm">
+                    Data passed from workflow nodes or API calls to the current
+                    event.
                   </p>
                 </div>
               </CardContent>
@@ -320,7 +346,7 @@ export default async function TemplatesPage({
               <CardContent>
                 <div className="space-y-3">
                   <SimpleCodeBlock language="handlebars">
-{`{{#if cronium.getCondition.data_valid}}
+                    {`{{#if cronium.getCondition.data_valid}}
   Data validation passed
 {{/if}}
 
@@ -328,8 +354,9 @@ export default async function TemplatesPage({
   Running in production mode
 {{/ifEquals}}`}
                   </SimpleCodeBlock>
-                  <p className="text-sm text-muted-foreground">
-                    Boolean conditions set during script execution using cronium.setCondition().
+                  <p className="text-muted-foreground text-sm">
+                    Boolean conditions set during script execution using
+                    cronium.setCondition().
                   </p>
                 </div>
               </CardContent>
@@ -339,12 +366,12 @@ export default async function TemplatesPage({
 
         {/* Template Helpers */}
         <section id="template-helpers" className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">Template Helpers</h2>
-          
-          <div className="prose prose-gray dark:prose-invert max-w-none mb-6">
+          <h2 className="mb-6 text-2xl font-bold">Template Helpers</h2>
+
+          <div className="prose prose-gray dark:prose-invert mb-6 max-w-none">
             <p>
-              Cronium provides built-in Handlebars helpers for common formatting, conditional logic, 
-              and safe data access operations.
+              Cronium provides built-in Handlebars helpers for common
+              formatting, conditional logic, and safe data access operations.
             </p>
           </div>
 
@@ -359,12 +386,13 @@ export default async function TemplatesPage({
               <CardContent>
                 <div className="space-y-4">
                   <SimpleCodeBlock language="handlebars">
-{`{{get cronium.event "output" "No output available"}}
+                    {`{{get cronium.event "output" "No output available"}}
 {{get cronium.getVariables "database.port" "5432"}}
 {{get cronium.input "user.email" "unknown@example.com"}}`}
                   </SimpleCodeBlock>
-                  <p className="text-sm text-muted-foreground">
-                    Parameters: <code>object</code>, <code>path</code>, <code>fallback</code> (optional)
+                  <p className="text-muted-foreground text-sm">
+                    Parameters: <code>object</code>, <code>path</code>,{" "}
+                    <code>fallback</code> (optional)
                   </p>
                 </div>
               </CardContent>
@@ -380,13 +408,13 @@ export default async function TemplatesPage({
               <CardContent>
                 <div className="space-y-4">
                   <SimpleCodeBlock language="handlebars">
-{`{{#ifEquals cronium.event.status "success"}}
+                    {`{{#ifEquals cronium.event.status "success"}}
   🎉 Success message
 {{else}}
   ⚠️ Error or failure message
 {{/ifEquals}}`}
                   </SimpleCodeBlock>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-muted-foreground text-sm">
                     Parameters: <code>value1</code>, <code>value2</code>
                   </p>
                 </div>
@@ -403,10 +431,10 @@ export default async function TemplatesPage({
               <CardContent>
                 <div className="space-y-4">
                   <SimpleCodeBlock language="handlebars">
-{`Duration: {{formatDuration cronium.event.duration}}
+                    {`Duration: {{formatDuration cronium.event.duration}}
 <!-- Output: "2.5s", "1.2m", "45ms", etc. -->`}
                   </SimpleCodeBlock>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-muted-foreground text-sm">
                     Converts milliseconds to readable format (ms, s, m, h)
                   </p>
                 </div>
@@ -423,10 +451,10 @@ export default async function TemplatesPage({
               <CardContent>
                 <div className="space-y-4">
                   <SimpleCodeBlock language="handlebars">
-{`Started: {{formatTime cronium.event.executionTime}}
+                    {`Started: {{formatTime cronium.event.executionTime}}
 <!-- Output: "12/27/2024, 2:30:45 PM" -->`}
                   </SimpleCodeBlock>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-muted-foreground text-sm">
                     Converts ISO timestamp to localized date/time string
                   </p>
                 </div>
@@ -443,10 +471,10 @@ export default async function TemplatesPage({
               <CardContent>
                 <div className="space-y-4">
                   <SimpleCodeBlock language="handlebars">
-{`Debug info: {{json cronium.input}}
+                    {`Debug info: {{json cronium.input}}
 Variables: {{json cronium.getVariables}}`}
                   </SimpleCodeBlock>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-muted-foreground text-sm">
                     Outputs pretty-printed JSON for complex objects
                   </p>
                 </div>
@@ -463,10 +491,10 @@ Variables: {{json cronium.getVariables}}`}
               <CardContent>
                 <div className="space-y-4">
                   <SimpleCodeBlock language="handlebars">
-{`{{lookup cronium.getVariables "api_key"}}
+                    {`{{lookup cronium.getVariables "api_key"}}
 {{lookup cronium.event "status"}}`}
                   </SimpleCodeBlock>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-muted-foreground text-sm">
                     Access object properties using dynamic field names
                   </p>
                 </div>
@@ -477,11 +505,12 @@ Variables: {{json cronium.getVariables}}`}
 
         {/* Examples */}
         <section id="examples" className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">Template Examples</h2>
-          
-          <div className="prose prose-gray dark:prose-invert max-w-none mb-6">
+          <h2 className="mb-6 text-2xl font-bold">Template Examples</h2>
+
+          <div className="prose prose-gray dark:prose-invert mb-6 max-w-none">
             <p>
-              Here are practical examples of templates for different communication tools and use cases.
+              Here are practical examples of templates for different
+              communication tools and use cases.
             </p>
           </div>
 
@@ -497,7 +526,7 @@ Variables: {{json cronium.getVariables}}`}
               </CardHeader>
               <CardContent>
                 <SimpleCodeBlock language="html">
-{`<h2>{{#ifEquals cronium.event.status "success"}}✅{{else}}❌{{/ifEquals}} Event: {{cronium.event.name}}</h2>
+                  {`<h2>{{#ifEquals cronium.event.status "success"}}✅{{else}}❌{{/ifEquals}} Event: {{cronium.event.name}}</h2>
 
 <p><strong>Status:</strong> {{cronium.event.status}}</p>
 <p><strong>Duration:</strong> {{formatDuration cronium.event.duration}}</p>
@@ -531,7 +560,7 @@ Variables: {{json cronium.getVariables}}`}
               </CardHeader>
               <CardContent>
                 <SimpleCodeBlock language="json">
-{`{
+                  {`{
   "blocks": [
     {
       "type": "header",
@@ -585,7 +614,7 @@ Variables: {{json cronium.getVariables}}`}
               </CardHeader>
               <CardContent>
                 <SimpleCodeBlock language="json">
-{`{
+                  {`{
   "embeds": [
     {
       "title": "{{cronium.event.name}}",
@@ -629,16 +658,17 @@ Variables: {{json cronium.getVariables}}`}
 
         {/* Template Types */}
         <section id="template-types" className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">System vs User Templates</h2>
-          
-          <div className="prose prose-gray dark:prose-invert max-w-none mb-6">
+          <h2 className="mb-6 text-2xl font-bold">System vs User Templates</h2>
+
+          <div className="prose prose-gray dark:prose-invert mb-6 max-w-none">
             <p>
-              Cronium provides two types of templates: system templates managed by administrators 
-              and user templates that you can create and customize.
+              Cronium provides two types of templates: system templates managed
+              by administrators and user templates that you can create and
+              customize.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -652,13 +682,13 @@ Variables: {{json cronium.getVariables}}`}
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <Badge className="bg-blue-50 text-blue-700 border-blue-200">
-                      <Shield className="h-3 w-3 mr-1" />
+                    <Badge className="border-blue-200 bg-blue-50 text-blue-700">
+                      <Shield className="mr-1 h-3 w-3" />
                       System
                     </Badge>
                     <span className="text-sm">Visible to all users</span>
                   </div>
-                  <div className="space-y-2 text-sm text-muted-foreground">
+                  <div className="text-muted-foreground space-y-2 text-sm">
                     <div className="flex items-center gap-2">
                       <ArrowRight className="h-4 w-4" />
                       <span>Consistent formatting across teams</span>
@@ -694,12 +724,12 @@ Variables: {{json cronium.getVariables}}`}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <Badge variant="outline">
-                      <User className="h-3 w-3 mr-1" />
+                      <User className="mr-1 h-3 w-3" />
                       Personal
                     </Badge>
                     <span className="text-sm">Private to creator</span>
                   </div>
-                  <div className="space-y-2 text-sm text-muted-foreground">
+                  <div className="text-muted-foreground space-y-2 text-sm">
                     <div className="flex items-center gap-2">
                       <ArrowRight className="h-4 w-4" />
                       <span>Fully customizable content</span>
@@ -722,16 +752,22 @@ Variables: {{json cronium.getVariables}}`}
             </Card>
           </div>
 
-          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/20">
             <div className="flex items-start gap-3">
-              <div className="p-1 bg-blue-100 dark:bg-blue-900 rounded">
+              <div className="rounded bg-blue-100 p-1 dark:bg-blue-900">
                 <Settings className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-1">Template Management</h4>
+                <h4 className="mb-1 font-medium text-blue-800 dark:text-blue-200">
+                  Template Management
+                </h4>
                 <p className="text-sm text-blue-700 dark:text-blue-300">
-                  Manage your templates in the <a href={`/${lang}/docs/tools`} className="underline">Tools section</a> of 
-                  user settings. Each communication tool has its own template manager for organizing templates by type.
+                  Manage your templates in the{" "}
+                  <a href={`/${lang}/docs/tools`} className="underline">
+                    Tools section
+                  </a>{" "}
+                  of user settings. Each communication tool has its own template
+                  manager for organizing templates by type.
                 </p>
               </div>
             </div>
@@ -740,41 +776,53 @@ Variables: {{json cronium.getVariables}}`}
 
         {/* Best Practices */}
         <section id="best-practices" className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">Best Practices</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <h2 className="mb-6 text-2xl font-bold">Best Practices</h2>
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg text-green-600">Template Design</CardTitle>
+                <CardTitle className="text-lg text-green-600">
+                  Template Design
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+                    <div className="mt-2 h-2 w-2 rounded-full bg-green-500"></div>
                     <div>
-                      <p className="font-medium">Use descriptive template names</p>
-                      <p className="text-sm text-muted-foreground">Make templates easy to identify and select</p>
+                      <p className="font-medium">
+                        Use descriptive template names
+                      </p>
+                      <p className="text-muted-foreground text-sm">
+                        Make templates easy to identify and select
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+                    <div className="mt-2 h-2 w-2 rounded-full bg-green-500"></div>
                     <div>
                       <p className="font-medium">Include relevant context</p>
-                      <p className="text-sm text-muted-foreground">Add event name, status, and timing information</p>
+                      <p className="text-muted-foreground text-sm">
+                        Add event name, status, and timing information
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+                    <div className="mt-2 h-2 w-2 rounded-full bg-green-500"></div>
                     <div>
                       <p className="font-medium">Use conditional blocks</p>
-                      <p className="text-sm text-muted-foreground">Show different content for success vs failure</p>
+                      <p className="text-muted-foreground text-sm">
+                        Show different content for success vs failure
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+                    <div className="mt-2 h-2 w-2 rounded-full bg-green-500"></div>
                     <div>
                       <p className="font-medium">Provide fallback values</p>
-                      <p className="text-sm text-muted-foreground">Use the get helper with defaults for optional data</p>
+                      <p className="text-muted-foreground text-sm">
+                        Use the get helper with defaults for optional data
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -783,36 +831,49 @@ Variables: {{json cronium.getVariables}}`}
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg text-orange-600">Common Pitfalls</CardTitle>
+                <CardTitle className="text-lg text-orange-600">
+                  Common Pitfalls
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="h-5 w-5 text-orange-500 mt-0.5 flex-shrink-0" />
+                    <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-500" />
                     <div>
                       <p className="font-medium">Missing fallbacks</p>
-                      <p className="text-sm text-muted-foreground">Always provide defaults for optional properties</p>
+                      <p className="text-muted-foreground text-sm">
+                        Always provide defaults for optional properties
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="h-5 w-5 text-orange-500 mt-0.5 flex-shrink-0" />
+                    <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-500" />
                     <div>
-                      <p className="font-medium">Invalid JSON in Slack/Discord</p>
-                      <p className="text-sm text-muted-foreground">Validate JSON syntax before saving templates</p>
+                      <p className="font-medium">
+                        Invalid JSON in Slack/Discord
+                      </p>
+                      <p className="text-muted-foreground text-sm">
+                        Validate JSON syntax before saving templates
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="h-5 w-5 text-orange-500 mt-0.5 flex-shrink-0" />
+                    <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-500" />
                     <div>
                       <p className="font-medium">Hardcoded values</p>
-                      <p className="text-sm text-muted-foreground">Use variables and context data instead of static text</p>
+                      <p className="text-muted-foreground text-sm">
+                        Use variables and context data instead of static text
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="h-5 w-5 text-orange-500 mt-0.5 flex-shrink-0" />
+                    <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-500" />
                     <div>
                       <p className="font-medium">Overly complex templates</p>
-                      <p className="text-sm text-muted-foreground">Keep templates simple and focused on essential information</p>
+                      <p className="text-muted-foreground text-sm">
+                        Keep templates simple and focused on essential
+                        information
+                      </p>
                     </div>
                   </div>
                 </div>

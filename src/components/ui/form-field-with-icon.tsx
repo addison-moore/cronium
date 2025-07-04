@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   FormField,
   FormItem,
@@ -10,8 +10,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { IconInput } from "@/components/ui/icon-input";
-import { InputProps } from "@/components/ui/input";
-import { Control } from "react-hook-form";
+import { type InputProps } from "@/components/ui/input";
+import { type Control } from "react-hook-form";
 
 interface FormFieldWithIconProps extends Omit<InputProps, "name"> {
   control: Control<any>;

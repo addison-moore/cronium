@@ -105,7 +105,7 @@ export default function SettingsPage() {
       toast({
         title: "Error",
         description:
-          error.message || "Failed to save profile. Please try again.",
+          error.message ?? "Failed to save profile. Please try again.",
         variant: "destructive",
       });
     },
@@ -138,9 +138,9 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (user) {
-      userSettingsForm.setValue("firstName", user.firstName || "");
-      userSettingsForm.setValue("lastName", user.lastName || "");
-      userSettingsForm.setValue("email", user.email || "");
+      userSettingsForm.setValue("firstName", user.firstName ?? "");
+      userSettingsForm.setValue("lastName", user.lastName ?? "");
+      userSettingsForm.setValue("email", user.email ?? "");
     }
   }, [user, userSettingsForm]);
 
@@ -223,7 +223,7 @@ export default function SettingsPage() {
     }
   };
 
-  if (isLoadingAuth || isLoadingSettings) {
+  if (isLoadingAuth ?? isLoadingSettings) {
     return (
       <div className="container mx-auto p-4">
         <div className="mb-6 flex items-center">

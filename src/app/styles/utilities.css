@@ -2,36 +2,38 @@
  * Custom utility classes that extend Tailwind's functionality
  */
 
-@layer utilities {    
+@layer utilities {
   /* === Text utilities === */
   .gradient-text {
     background-image: linear-gradient(to right, var(--primary-color), #3b82f6);
     background-clip: text;
     color: transparent;
   }
-  
+
   .text-balance {
     text-wrap: balance;
   }
-  
+
   .text-pretty {
     text-wrap: pretty;
   }
-  
+
   .text-ellipsis {
     text-overflow: ellipsis;
   }
-  
+
   /* === Card utilities === */
   .card-hover {
-    transition: box-shadow 200ms ease, transform 200ms ease;
+    transition:
+      box-shadow 200ms ease,
+      transform 200ms ease;
   }
-  
+
   .card-hover-active {
     box-shadow: var(--shadow-md);
     transform: translateY(-2px);
   }
-  
+
   .dashboard-stat-card {
     background-color: var(--card-color);
     color: var(--card-foreground-color);
@@ -40,19 +42,19 @@
     box-shadow: var(--shadow-sm);
     padding: 1rem;
   }
-  
+
   .dashboard-stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     gap: 1rem;
   }
-  
+
   /* Hide scrollbar but allow scrolling */
   .scrollbar-hidden {
     scrollbar-width: none; /* Firefox */
     -ms-overflow-style: none; /* IE and Edge */
   }
-  
+
   .scrollbar-hidden::-webkit-scrollbar {
     display: none; /* Chrome, Safari, and Opera */
   }
@@ -66,13 +68,25 @@
 
 /* Accordion animations */
 @keyframes accordion-down {
-  from { height: 0; opacity: 0; }
-  to { height: var(--radix-accordion-content-height); opacity: 1; }
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+    opacity: 1;
+  }
 }
 
 @keyframes accordion-up {
-  from { height: var(--radix-accordion-content-height); opacity: 1; }
-  to { height: 0; opacity: 0; }
+  from {
+    height: var(--radix-accordion-content-height);
+    opacity: 1;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
 }
 
 .animate-accordion-down {

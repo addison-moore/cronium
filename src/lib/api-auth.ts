@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
 import { TokenStatus } from "@/shared/schema";
 
@@ -14,7 +15,7 @@ export async function authenticateApiRequest(request: NextRequest): Promise<{
   // Check for authorization header
   const authHeader = request.headers.get("Authorization");
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader?.startsWith("Bearer ")) {
     return { authenticated: false, userId: "" };
   }
 

@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 
 /**
  * Migration script to add new execution counter fields to the scripts table.
- * 
+ *
  * This adds:
  * - execution_count: Tracks how many times an event has been executed
  * - max_executions: Sets a limit on how many times an event can run (0 means unlimited)

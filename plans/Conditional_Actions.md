@@ -44,12 +44,14 @@ This document outlines the plan to resolve naming inconsistencies between "condi
 ## Migration Plan
 
 ### Phase 1: Database Schema Migration
+
 1. Create migration to rename table from `conditional_events` to `conditional_actions`
 2. Update all foreign key constraints
 3. Update indexes if any
 4. Test migration in development environment
 
 ### Phase 2: Backend Code Updates
+
 1. **Storage Layer** (`src/server/storage.ts`)
    - Rename all methods: `getSuccessEvents` → `getSuccessActions`
    - Update import statements
@@ -70,6 +72,7 @@ This document outlines the plan to resolve naming inconsistencies between "condi
    - Update validation schemas
 
 ### Phase 3: Frontend Updates
+
 1. **Component Updates**
    - Update state variable names
    - Update prop names
@@ -84,12 +87,14 @@ This document outlines the plan to resolve naming inconsistencies between "condi
    - Update form data transformation logic
 
 ### Phase 4: Documentation Updates
+
 1. Rename `CONDITIONAL_EVENTS.md` → `CONDITIONAL_ACTIONS.md`
 2. Update all references within documentation
 3. Update CLAUDE.md to reference the new documentation
 4. Update changelog with migration notes
 
 ### Phase 5: Testing & Validation
+
 1. Run all existing tests
 2. Add migration tests
 3. Manual testing of all conditional action workflows
@@ -98,11 +103,13 @@ This document outlines the plan to resolve naming inconsistencies between "condi
 ## Implementation Checklist
 
 ### Database Changes
+
 - [ ] Create database migration script
 - [ ] Test migration on development database
 - [ ] Update SQL dump files
 
 ### Backend Changes
+
 - [ ] Update `src/shared/schema.ts`
 - [ ] Update `src/server/storage.ts`
 - [ ] Update `src/lib/scheduler/event-handlers.ts`
@@ -112,6 +119,7 @@ This document outlines the plan to resolve naming inconsistencies between "condi
 - [ ] Update type definitions
 
 ### Frontend Changes
+
 - [ ] Update EventForm component
 - [ ] Update ConditionalActionsSection (if needed)
 - [ ] Update dashboard components
@@ -119,12 +127,14 @@ This document outlines the plan to resolve naming inconsistencies between "condi
 - [ ] Update all type imports
 
 ### Documentation Changes
+
 - [ ] Rename documentation file
 - [ ] Update all documentation content
 - [ ] Update code comments
 - [ ] Update CLAUDE.md references
 
 ### Testing
+
 - [ ] Run unit tests
 - [ ] Run integration tests
 - [ ] Manual testing of conditional actions

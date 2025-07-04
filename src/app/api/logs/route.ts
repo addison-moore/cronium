@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -19,8 +20,8 @@ export async function GET(req: NextRequest) {
     const workflowId = searchParams.get("workflowId");
     const ownEventsOnly = searchParams.get("ownEventsOnly") === "true";
     const sharedOnly = searchParams.get("sharedOnly") === "true";
-    const page = parseInt(searchParams.get("page") || "1");
-    const pageSize = parseInt(searchParams.get("pageSize") || "20");
+    const page = parseInt(searchParams.get("page") ?? "1");
+    const pageSize = parseInt(searchParams.get("pageSize") ?? "20");
 
     // Build filter object for database query
     const filters: any = {};

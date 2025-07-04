@@ -10,7 +10,7 @@ export default function EventDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const routeParams = useParams<{ lang: string }>();
-  const langParam = routeParams.lang as string;
+  const langParam = routeParams.lang;
 
   const eventId = React.use(params).id;
 

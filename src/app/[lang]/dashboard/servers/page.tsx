@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -22,6 +22,8 @@ import {
 import {
   StandardizedTable,
   StandardizedTableLink,
+} from "@/components/ui/standardized-table";
+import type {
   StandardizedTableColumn,
   StandardizedTableAction,
 } from "@/components/ui/standardized-table";
@@ -72,7 +74,7 @@ export default function ServersPage() {
   } = trpc.servers.getAll.useQuery({
     limit: 1000, // Get all servers for client-side filtering
     offset: 0,
-    search: filters.searchTerm || undefined,
+    search: filters.searchTerm ?? undefined,
     online:
       filters.statusFilter === "online"
         ? true
@@ -105,12 +107,12 @@ export default function ServersPage() {
     },
   });
 
-  const servers = (serversData?.servers || []).map((server) => ({
+  const servers = (serversData?.servers ?? []).map((server) => ({
     ...server,
     createdAt: server.createdAt.toISOString(),
     updatedAt: server.updatedAt.toISOString(),
-    lastChecked: server.lastChecked?.toISOString() || undefined,
-    online: server.online === null ? undefined : server.online,
+    lastChecked: server.lastChecked?.toISOString() ?? undefined,
+    online: server.online ?? undefined,
   }));
 
   const checkServerStatus = async (serverId: number): Promise<void> => {
@@ -150,9 +152,9 @@ export default function ServersPage() {
       server.address.toLowerCase().includes(filters.searchTerm.toLowerCase());
 
     const matchesStatus =
-      filters.statusFilter === "all" ||
-      (filters.statusFilter === "online" && server.online === true) ||
-      (filters.statusFilter === "offline" && server.online === false) ||
+      (filters.statusFilter === "all" ||
+        (filters.statusFilter === "online" && server.online === true)) ??
+      (filters.statusFilter === "offline" && server.online === false) ??
       (filters.statusFilter === "unknown" && server.online === undefined);
 
     return matchesSearch && matchesStatus;

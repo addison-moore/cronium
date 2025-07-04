@@ -6,9 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useTranslations } from "next-intl";
-import { Event } from "./types";
+import { type Event } from "./types";
 import { EventTypeIcon } from "@/components/ui/event-type-icon";
 import WorkflowsCard from "./WorkflowsCard";
+import { RunLocation } from "@/shared/schema";
 
 interface EventOverviewTabProps {
   event: Event;
@@ -37,7 +38,7 @@ export function EventOverviewTab({
   const formatSchedule = () => {
     if (event.customSchedule) {
       return (
-        <span className="font-mono text-xs bg-muted p-1 rounded">
+        <span className="bg-muted rounded p-1 font-mono text-xs">
           {event.customSchedule}
         </span>
       );
@@ -48,20 +49,20 @@ export function EventOverviewTab({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {/* Event Info - Combined Card */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">
               <div className="flex items-center">
-                <Info className="h-5 w-5 mr-2 text-blue-500" />
+                <Info className="mr-2 h-5 w-5 text-blue-500" />
                 {t("eventInfo")}
               </div>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Event Basic Info */}
-            <div className="space-y-3 pb-3 border-b border-border">
+            <div className="border-border space-y-3 border-b pb-3">
               <div className="text-sm">
                 <span className="text-muted-foreground">
                   {t("eventName")}:{" "}
@@ -70,7 +71,7 @@ export function EventOverviewTab({
               </div>
               <div className="text-sm">
                 <span className="text-muted-foreground">{t("eventId")}: </span>
-                <span className="font-mono text-xs bg-muted p-1 rounded">
+                <span className="bg-muted rounded p-1 font-mono text-xs">
                   {event.id}
                 </span>
               </div>
@@ -79,14 +80,14 @@ export function EventOverviewTab({
                 event.tags.length > 0 && (
                   <div className="text-sm">
                     <span className="text-muted-foreground">{t("tags")}: </span>
-                    <div className="flex flex-wrap gap-1 mt-1">
+                    <div className="mt-1 flex flex-wrap gap-1">
                       {event.tags.map((tag: string, index: number) => (
                         <Badge
                           key={index}
                           variant="secondary"
                           className="text-xs"
                         >
-                          <Tag className="h-3 w-3 mr-1" />
+                          <Tag className="mr-1 h-3 w-3" />
                           {tag}
                         </Badge>
                       ))}
@@ -97,7 +98,7 @@ export function EventOverviewTab({
                 <span className="text-muted-foreground">
                   {t("scriptType")}:{" "}
                 </span>
-                <span className="font-medium flex items-center gap-1.5">
+                <span className="flex items-center gap-1.5 font-medium">
                   <EventTypeIcon type={event.type} size={16} />
                   {event.type}
                 </span>
@@ -106,8 +107,8 @@ export function EventOverviewTab({
 
             {/* Schedule Information */}
             <div className="space-y-3 pb-3">
-              <h4 className="text-sm font-medium text-muted-foreground flex items-center">
-                <RefreshCw className="h-4 w-4 mr-1.5" />
+              <h4 className="text-muted-foreground flex items-center text-sm font-medium">
+                <RefreshCw className="mr-1.5 h-4 w-4" />
                 {t("scheduleInfo")}
               </h4>
               <div className="text-sm">
@@ -141,28 +142,28 @@ export function EventOverviewTab({
           <CardHeader className="pb-2">
             <CardTitle className="text-base">
               <div className="flex items-center">
-                <Server className="h-5 w-5 mr-2 text-purple-500" />
+                <Server className="mr-2 h-5 w-5 text-purple-500" />
                 {t("executionInfo")}
               </div>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Execution Details */}
-            <div className="space-y-3 pb-3 border-b border-border">
+            <div className="border-border space-y-3 border-b pb-3">
               <div className="text-sm">
                 <span className="text-muted-foreground">
                   {t("executionLocation")}:{" "}
                 </span>
-                {event.runLocation === "REMOTE" &&
+                {event.runLocation === RunLocation.REMOTE &&
                 event.servers &&
                 event.servers.length > 0 ? (
-                  <div className="space-y-1 mt-1">
+                  <div className="mt-1 space-y-1">
                     {event.servers.map((server) => (
                       <div
                         key={server.id}
-                        className="font-medium flex items-center"
+                        className="flex items-center font-medium"
                       >
-                        <Server className="h-4 w-4 mr-2 text-purple-500" />
+                        <Server className="mr-2 h-4 w-4 text-purple-500" />
                         <span>{server.name}</span>
                         <span className="text-muted-foreground ml-2">
                           ({server.address})
@@ -171,8 +172,8 @@ export function EventOverviewTab({
                     ))}
                   </div>
                 ) : (
-                  <span className="font-medium flex items-center">
-                    <Server className="h-4 w-4 mr-1" />
+                  <span className="flex items-center font-medium">
+                    <Server className="mr-1 h-4 w-4" />
                     {event.runLocation}
                   </span>
                 )}
@@ -187,42 +188,42 @@ export function EventOverviewTab({
 
             {/* Execution Stats */}
             <div className="space-y-3">
-              <h4 className="text-sm font-medium text-muted-foreground flex items-center">
-                <CheckCircle2 className="h-4 w-4 mr-1.5" />
+              <h4 className="text-muted-foreground flex items-center text-sm font-medium">
+                <CheckCircle2 className="mr-1.5 h-4 w-4" />
                 {t("executionStats")}
               </h4>
-              <div className="flex items-center gap-4 mt-1">
+              <div className="mt-1 flex items-center gap-4">
                 <div className="flex items-center">
-                  <span className="text-green-500 mr-2 font-bold text-lg">
-                    {event.successCount || 0}
+                  <span className="mr-2 text-lg font-bold text-green-500">
+                    {event.successCount ?? 0}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-muted-foreground text-xs">
                     {t("successful")}
                   </span>
                 </div>
                 <div className="flex items-center">
-                  <span className="text-red-500 mr-2 font-bold text-lg">
-                    {event.failureCount || 0}
+                  <span className="mr-2 text-lg font-bold text-red-500">
+                    {event.failureCount ?? 0}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-muted-foreground text-xs">
                     {t("failed")}
                   </span>
                 </div>
                 <div className="flex items-center">
-                  <span className="text-blue-500 mr-2 font-bold text-lg">
-                    {(event.successCount || 0) + (event.failureCount || 0)}
+                  <span className="mr-2 text-lg font-bold text-blue-500">
+                    {(event.successCount ?? 0) + (event.failureCount ?? 0)}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-muted-foreground text-xs">
                     {t("total")}
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-4 mt-1">
+              <div className="mt-1 flex items-center gap-4">
                 <div className="flex items-center">
-                  <span className="text-purple-500 mr-2 font-bold text-lg">
-                    {event.executionCount || 0}
+                  <span className="mr-2 text-lg font-bold text-purple-500">
+                    {event.executionCount ?? 0}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-muted-foreground text-xs">
                     {t("executionCounter")}
                   </span>
                 </div>
@@ -233,16 +234,16 @@ export function EventOverviewTab({
                   size="sm"
                   onClick={onResetCounter}
                   disabled={isResettingCounter}
-                  className="bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
+                  className="border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
                   {isResettingCounter ? (
                     <>
-                      <RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />
+                      <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
                       <span className="sm:inline">{t("resetting")}</span>
                     </>
                   ) : (
                     <>
-                      <RefreshCw className="h-4 w-4 mr-1.5" />
+                      <RefreshCw className="mr-1.5 h-4 w-4" />
                       <span className="sm:inline">{t("resetCounter")}</span>
                     </>
                   )}
@@ -263,9 +264,9 @@ export function EventOverviewTab({
                   {t("resetCounterOnActive")}:{" "}
                 </span>
                 <span className="font-medium">
-                  {event.resetCounterOnActive === true ||
+                  {(event.resetCounterOnActive === true ??
                   (typeof event.resetCounterOnActive === "string" &&
-                    event.resetCounterOnActive === "t") ? (
+                    event.resetCounterOnActive === "t")) ? (
                     <span className="text-green-500">{t("enabled")}</span>
                   ) : (
                     <span className="text-gray-500">{t("disabled")}</span>

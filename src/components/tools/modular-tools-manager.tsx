@@ -39,14 +39,20 @@ import {
 // Create dynamic schema based on tool type
 const createTemplateSchema = (toolType: string) => {
   const baseSchema = {
-    name: z.string().min(1, "Template name is required").max(100, "Template name is too long"),
+    name: z
+      .string()
+      .min(1, "Template name is required")
+      .max(100, "Template name is too long"),
     content: z.string().min(1, "Content is required"),
   };
 
   if (toolType === "email") {
     return z.object({
       ...baseSchema,
-      subject: z.string().min(1, "Subject is required").max(200, "Subject is too long"),
+      subject: z
+        .string()
+        .min(1, "Subject is required")
+        .max(200, "Subject is too long"),
     });
   }
 
@@ -117,10 +123,7 @@ function TemplateForm({
             <FormItem>
               <FormLabel>Template Name</FormLabel>
               <FormControl>
-                <Input
-                  {...field}
-                  placeholder="Enter template name"
-                />
+                <Input {...field} placeholder="Enter template name" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -135,10 +138,7 @@ function TemplateForm({
               <FormItem>
                 <FormLabel>Subject</FormLabel>
                 <FormControl>
-                  <Input
-                    {...field}
-                    placeholder="Email subject"
-                  />
+                  <Input {...field} placeholder="Email subject" />
                 </FormControl>
                 <FormMessage />
               </FormItem>

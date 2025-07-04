@@ -10,6 +10,7 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
 import { trpc } from "@/lib/trpc";
+import { LogStatus } from "@/shared/schema";
 
 import {
   EventDetailsHeader,
@@ -17,7 +18,7 @@ import {
   EventEditTab,
   EventLogsTab,
   EventDeleteDialog,
-  Log,
+  type Log,
 } from "./index";
 import { EventStatus } from "@/shared/schema";
 import { Spinner } from "../ui/spinner";
@@ -157,7 +158,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
 
   // Check for running logs and update their status
   const checkRunningLogsStatus = useCallback(async () => {
-    const hasRunningLogs = logs.some((log) => log.status === "RUNNING");
+    const hasRunningLogs = logs.some((log) => log.status === LogStatus.RUNNING);
     if (hasRunningLogs) {
       // Refetch logs to get updated status
       refetchLogs();
@@ -169,7 +170,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
 
   // Start polling for log status updates when there are running logs
   useEffect(() => {
-    const hasRunningLogs = logs.some((log) => log.status === "RUNNING");
+    const hasRunningLogs = logs.some((log) => log.status === LogStatus.RUNNING);
 
     if (hasRunningLogs && !pollingActiveRef.current) {
       pollingActiveRef.current = true;
@@ -186,7 +187,10 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
         setLogPollingInterval(null);
       }
     }
-  }, [logs.some((log) => log.status === "RUNNING"), checkRunningLogsStatus]);
+  }, [
+    logs.some((log) => log.status === LogStatus.RUNNING),
+    checkRunningLogsStatus,
+  ]);
 
   // Cleanup polling on unmount
   useEffect(() => {

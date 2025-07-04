@@ -68,8 +68,10 @@ export default function WorkflowsCard({
 
   const workflows: WorkflowItem[] = (workflowsData || []).map((w) => ({
     ...w,
-    createdAt: w.createdAt instanceof Date ? w.createdAt.toISOString() : w.createdAt,
-    updatedAt: w.updatedAt instanceof Date ? w.updatedAt.toISOString() : w.updatedAt,
+    createdAt:
+      w.createdAt instanceof Date ? w.createdAt.toISOString() : w.createdAt,
+    updatedAt:
+      w.updatedAt instanceof Date ? w.updatedAt.toISOString() : w.updatedAt,
   }));
 
   const handleViewWorkflow = (workflowId: number) => {
