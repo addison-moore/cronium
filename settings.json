@@ -1,0 +1,9 @@
+{
+  "checkpointing": {
+    "enabled": true
+  },
+  "fileFiltering": {
+  "respectGitIgnore": true,
+  "enableRecursiveFileSearch": false
+}
+}

@@ -1,0 +1,47 @@
+import { createEnv } from "@t3-oss/env-nextjs";
+import { z } from "zod";
+
+export const env = createEnv({
+  server: {
+    NODE_ENV: z.enum(["development", "test", "production"]),
+    AUTH_SECRET: z.string(),
+    AUTH_URL: z.string().url(),
+    EMAIL_SERVER_HOST: z.string(),
+    EMAIL_SERVER_PORT: z.string(),
+    EMAIL_SERVER_USER: z.string(),
+    EMAIL_SERVER_PASSWORD: z.string(),
+    EMAIL_FROM: z.string(),
+    DATABASE_URL: z.string(),
+    OPENAI_API_KEY: z.string().optional(),
+    HOST_URL: z.string().url().optional(),
+    ENCRYPTION_MASTER_KEY: z.string(),
+    API_KEY: z.string().optional(),
+    RECIPIENT_EMAIL: z.string().email().optional(),
+    DATA_DIR: z.string().optional(),
+    OUTPUT_DIR: z.string().optional(),
+  },
+  client: {
+    NEXT_PUBLIC_APP_URL: z.string().url(),
+  },
+  runtimeEnv: {
+    NODE_ENV: process.env.NODE_ENV,
+    AUTH_SECRET: process.env.AUTH_SECRET,
+    AUTH_URL: process.env.AUTH_URL,
+    EMAIL_SERVER_HOST: process.env.EMAIL_SERVER_HOST,
+    EMAIL_SERVER_PORT: process.env.EMAIL_SERVER_PORT,
+    EMAIL_SERVER_USER: process.env.EMAIL_SERVER_USER,
+    EMAIL_SERVER_PASSWORD: process.env.EMAIL_SERVER_PASSWORD,
+    EMAIL_FROM: process.env.EMAIL_FROM,
+    DATABASE_URL: process.env.DATABASE_URL,
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    HOST_URL: process.env.HOST_URL,
+    ENCRYPTION_MASTER_KEY: process.env.ENCRYPTION_MASTER_KEY,
+    API_KEY: process.env.API_KEY,
+    RECIPIENT_EMAIL: process.env.RECIPIENT_EMAIL,
+    DATA_DIR: process.env.DATA_DIR,
+    OUTPUT_DIR: process.env.OUTPUT_DIR,
+  },
+  skipValidation: !!process.env.SKIP_ENV_VALIDATION,
+  emptyStringAsUndefined: true,
+});
