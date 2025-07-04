@@ -276,56 +276,53 @@ export async function PATCH(
       }
     }
 
-    // Handle conditional events
-    if (Array.isArray(body.conditionalEvents)) {
-      // Delete existing conditional events for this script
-      await storage.deleteSuccessEventsByScriptId(eventId);
-      await storage.deleteFailEventsByScriptId(eventId);
-      await storage.deleteAlwaysEventsByScriptId(eventId);
-      await storage.deleteConditionEventsByScriptId(eventId);
+    // Handle conditional actions
+    if (Array.isArray(body.conditionalActions)) {
+      // Delete existing conditional actions for this script
+      await storage.deleteActionsByEventId(eventId);
 
-      // Add new conditional events
-      for (const condEvent of body.conditionalEvents) {
+      // Add new conditional actions
+      for (const condAction of body.conditionalActions) {
         const eventData: any = {
-          type: condEvent.action,
-          value: condEvent.details.emailAddresses || "",
-          targetEventId: condEvent.details.targetEventId || null,
-          toolId: condEvent.details.toolId || null,
-          message: condEvent.details.message || null,
-          emailAddresses: condEvent.details.emailAddresses || null,
-          emailSubject: condEvent.details.emailSubject || null,
+          type: condAction.action,
+          value: condAction.details.emailAddresses || "",
+          targetEventId: condAction.details.targetEventId || null,
+          toolId: condAction.details.toolId || null,
+          message: condAction.details.message || null,
+          emailAddresses: condAction.details.emailAddresses || null,
+          emailSubject: condAction.details.emailSubject || null,
         };
 
-        if (condEvent.type === "ON_SUCCESS") {
+        if (condAction.type === "ON_SUCCESS") {
           eventData.successEventId = eventId;
-          await storage.createEvent(eventData);
-        } else if (condEvent.type === "ON_FAILURE") {
+          await storage.createAction(eventData);
+        } else if (condAction.type === "ON_FAILURE") {
           eventData.failEventId = eventId;
-          await storage.createEvent(eventData);
-        } else if (condEvent.type === "ALWAYS") {
+          await storage.createAction(eventData);
+        } else if (condAction.type === "ALWAYS") {
           eventData.alwaysEventId = eventId;
-          await storage.createEvent(eventData);
-        } else if (condEvent.type === "ON_CONDITION") {
+          await storage.createAction(eventData);
+        } else if (condAction.type === "ON_CONDITION") {
           eventData.conditionEventId = eventId;
-          await storage.createEvent(eventData);
+          await storage.createAction(eventData);
         }
       }
     }
 
     // If success events are provided, handle them (legacy support)
-    if (Array.isArray(body.onSuccessEvents)) {
-      // Delete only existing success events
-      await storage.deleteSuccessEventsByScriptId(eventId);
+    if (Array.isArray(body.onSuccessActions)) {
+      // Delete all existing conditional actions first
+      await storage.deleteActionsByEventId(eventId);
 
       // Add new success events
-      for (const event of body.onSuccessEvents) {
+      for (const action of body.onSuccessActions) {
         // Ensure event data is properly sanitized
         const sanitizedEvent = {
-          type: event.type,
-          value: typeof event.value === "string" ? event.value : "",
+          type: action.type,
+          value: typeof action.value === "string" ? action.value : "",
           successEventId: eventId,
-          targetEventId: event.targetScriptId
-            ? parseInt(String(event.targetScriptId), 10)
+          targetEventId: action.targetScriptId
+            ? parseInt(String(action.targetScriptId), 10)
             : null,
         };
 
@@ -334,24 +331,23 @@ export async function PATCH(
           continue;
         }
 
-        await storage.createEvent(sanitizedEvent);
+        await storage.createAction(sanitizedEvent);
       }
     }
 
     // If fail events are provided, handle them (legacy support)
-    if (Array.isArray(body.onFailEvents)) {
-      // Delete only existing fail events for this script
-      await storage.deleteFailEventsByScriptId(eventId);
+    if (Array.isArray(body.onFailActions)) {
+      // Note: conditional actions are already deleted above
 
       // Add new fail events
-      for (const event of body.onFailEvents) {
+      for (const action of body.onFailActions) {
         // Ensure event data is properly sanitized
         const sanitizedEvent = {
-          type: event.type,
-          value: typeof event.value === "string" ? event.value : "",
+          type: action.type,
+          value: typeof action.value === "string" ? action.value : "",
           failEventId: eventId,
-          targetEventId: event.targetScriptId
-            ? parseInt(String(event.targetScriptId), 10)
+          targetEventId: action.targetScriptId
+            ? parseInt(String(action.targetScriptId), 10)
             : null,
         };
 
@@ -360,7 +356,7 @@ export async function PATCH(
           continue;
         }
 
-        await storage.createEvent(sanitizedEvent);
+        await storage.createAction(sanitizedEvent);
       }
     }
 

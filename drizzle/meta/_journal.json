@@ -8,6 +8,13 @@
       "when": 1751401913084,
       "tag": "0000_many_vengeance",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1751402000000,
+      "tag": "0001_rename_conditional_events_to_actions",
+      "breakpoints": true
     }
   ]
 }

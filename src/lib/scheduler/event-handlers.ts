@@ -6,9 +6,9 @@ import {
 } from "@/lib/template-processor";
 
 /**
- * Handle conditional events that should be triggered on successful execution
+ * Handle conditional actions that should be triggered on successful execution
  */
-export async function handleSuccessEvents(
+export async function handleSuccessActions(
   eventId: number,
   processEventCallback: (
     conditional_event: any,
@@ -23,12 +23,12 @@ export async function handleSuccessEvents(
   ) => Promise<void>,
 ) {
   try {
-    // Get the event with its success conditional events
+    // Get the event with its success conditional actions
     const event = await storage.getEventWithRelations(eventId);
     if (!event) return;
 
     // Get all success events for this event
-    const successEvents = await storage.getSuccessEvents(eventId);
+    const successEvents = await storage.getSuccessActions(eventId);
 
     // Get the latest log for execution data
     const latestLog = await storage.getLatestLogForScript(eventId);
@@ -54,9 +54,9 @@ export async function handleSuccessEvents(
 }
 
 /**
- * Handle conditional events that should be triggered on failed execution
+ * Handle conditional actions that should be triggered on failed execution
  */
-export async function handleFailureEvents(
+export async function handleFailureActions(
   eventId: number,
   processEventCallback: (
     conditional_event: any,
@@ -71,12 +71,12 @@ export async function handleFailureEvents(
   ) => Promise<void>,
 ) {
   try {
-    // Get the event with its failure conditional events
+    // Get the event with its failure conditional actions
     const event = await storage.getEventWithRelations(eventId);
     if (!event) return;
 
     // Get all failure events for this event
-    const failureEvents = await storage.getFailEvents(eventId);
+    const failureEvents = await storage.getFailActions(eventId);
 
     // Get the latest log for execution data
     const latestLog = await storage.getLatestLogForScript(eventId);
@@ -102,9 +102,9 @@ export async function handleFailureEvents(
 }
 
 /**
- * Handle conditional events that should always be triggered regardless of success or failure
+ * Handle conditional actions that should always be triggered regardless of success or failure
  */
-export async function handleAlwaysEvents(
+export async function handleAlwaysActions(
   eventId: number,
   processEventCallback: (
     conditional_event: any,
@@ -113,12 +113,12 @@ export async function handleAlwaysEvents(
   ) => Promise<void>,
 ) {
   try {
-    // Get the event with its always conditional events
+    // Get the event with its always conditional actions
     const event = await storage.getEventWithRelations(eventId);
     if (!event) return;
 
     // Get all always events for this event
-    const alwaysEvents = await storage.getAlwaysEvents(eventId);
+    const alwaysEvents = await storage.getAlwaysActions(eventId);
 
     // Process each always event
     for (const condEvent of alwaysEvents) {
@@ -133,7 +133,7 @@ export async function handleAlwaysEvents(
 /**
  * Handle condition events for an event based on the condition state
  */
-export async function handleConditionEvents(
+export async function handleConditionActions(
   eventId: number,
   condition: boolean,
   processEventCallback: (
@@ -143,12 +143,12 @@ export async function handleConditionEvents(
   ) => Promise<void>,
 ) {
   try {
-    // Get the event with its condition conditional events
+    // Get the event with its condition conditional actions
     const event = await storage.getEventWithRelations(eventId);
     if (!event) return;
 
     // Get all condition events for this event
-    const conditionEvents = await storage.getConditionEvents(eventId);
+    const conditionEvents = await storage.getConditionActions(eventId);
 
     console.log(
       `Processing ${conditionEvents.length} condition events for event ${eventId} with condition: ${condition}`,
@@ -178,7 +178,7 @@ export async function handleConditionEvents(
 }
 
 /**
- * Process a conditional event based on the trigger type and event outcome
+ * Process a conditional action based on the trigger type and event outcome
  */
 export async function processEvent(
   conditional_event: any,
@@ -193,7 +193,7 @@ export async function processEvent(
 ) {
   try {
     console.log(
-      `Processing conditional event ${conditional_event.id} for script ${event.id}: ${event.name}`,
+      `Processing conditional action ${conditional_event.id} for script ${event.id}: ${event.name}`,
     );
     console.log(
       `Conditional event type: ${conditional_event.type}, isSuccess: ${isSuccess}`,
@@ -205,7 +205,7 @@ export async function processEvent(
       conditional_event.message
     ) {
       console.log(
-        `Processing SEND_MESSAGE conditional event for tool ${conditional_event.toolId}`,
+        `Processing SEND_MESSAGE conditional action for tool ${conditional_event.toolId}`,
       );
       console.log(`Conditional event details:`, {
         type: conditional_event.type,
@@ -492,7 +492,7 @@ export async function processEvent(
       } catch (err) {
         const error = err as Error;
         console.error(
-          `Error processing SEND_MESSAGE conditional event:`,
+          `Error processing SEND_MESSAGE conditional action:`,
           error,
         );
       }
@@ -509,7 +509,7 @@ export async function processEvent(
 
       if (targetScript) {
         console.log(
-          `Executing target script ${targetScript.id}: ${targetScript.name} (type: ${targetScript.type}) as a result of conditional event`,
+          `Executing target script ${targetScript.id}: ${targetScript.name} (type: ${targetScript.type}) as a result of conditional action`,
         );
         console.log(
           `Target script content preview: ${targetScript.content?.substring(0, 100)}...`,
@@ -542,6 +542,6 @@ export async function processEvent(
     }
   } catch (err) {
     const error = err as Error;
-    console.error(`Error processing conditional event:`, error);
+    console.error(`Error processing conditional action:`, error);
   }
 }

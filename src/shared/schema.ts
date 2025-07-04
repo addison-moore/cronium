@@ -266,7 +266,7 @@ export const eventServers = pgTable("event_servers", {
     .notNull(),
 });
 
-export const conditionalEvents = pgTable("conditional_events", {
+export const conditionalActions = pgTable("conditional_actions", {
   id: serial("id").primaryKey(),
   type: varchar("type", { length: 50 }).$type<ConditionalActionType>().notNull(),
   value: varchar("value", { length: 255 }),
@@ -446,11 +446,11 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   eventServers: many(eventServers),
   envVars: many(envVars),
   logs: many(logs),
-  onSuccessEvents: many(conditionalEvents, {
+  onSuccessEvents: many(conditionalActions, {
     relationName: "successEventRelations",
   }),
-  onFailEvents: many(conditionalEvents, { relationName: "failEventRelations" }),
-  onAlwaysEvents: many(conditionalEvents, { relationName: "alwaysEventRelations" }),
+  onFailEvents: many(conditionalActions, { relationName: "failEventRelations" }),
+  onAlwaysEvents: many(conditionalActions, { relationName: "alwaysEventRelations" }),
 }));
 
 export const envVarsRelations = relations(envVars, ({ one }) => ({
@@ -491,31 +491,31 @@ export const logsRelations = relations(logs, ({ one }) => ({
   }),
 }));
 
-export const conditionalEventsRelations = relations(
-  conditionalEvents,
+export const conditionalActionsRelations = relations(
+  conditionalActions,
   ({ one }) => ({
     successEvent: one(events, {
-      fields: [conditionalEvents.successEventId],
+      fields: [conditionalActions.successEventId],
       references: [events.id],
       relationName: "successEventRelations",
     }),
     failEvent: one(events, {
-      fields: [conditionalEvents.failEventId],
+      fields: [conditionalActions.failEventId],
       references: [events.id],
       relationName: "failEventRelations",
     }),
     alwaysEvent: one(events, {
-      fields: [conditionalEvents.alwaysEventId],
+      fields: [conditionalActions.alwaysEventId],
       references: [events.id],
       relationName: "alwaysEventRelations",
     }),
     conditionEvent: one(events, {
-      fields: [conditionalEvents.conditionEventId],
+      fields: [conditionalActions.conditionEventId],
       references: [events.id],
       relationName: "conditionEventRelations",
     }),
     targetEvent: one(events, {
-      fields: [conditionalEvents.targetEventId],
+      fields: [conditionalActions.targetEventId],
       references: [events.id],
     }),
   }),
@@ -822,8 +822,8 @@ export type InsertServer = typeof servers.$inferInsert;
 export type Log = typeof logs.$inferSelect;
 export type InsertLog = typeof logs.$inferInsert;
 
-export type ConditionalAction = typeof conditionalEvents.$inferSelect;
-export type InsertConditionalAction = typeof conditionalEvents.$inferInsert;
+export type ConditionalAction = typeof conditionalActions.$inferSelect;
+export type InsertConditionalAction = typeof conditionalActions.$inferInsert;
 
 export type Setting = typeof systemSettings.$inferSelect;
 export type InsertSetting = typeof systemSettings.$inferInsert;

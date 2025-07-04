@@ -233,13 +233,12 @@ function SlackCredentialDisplayTrpc({
   );
 }
 
-// Slack template manager component - migrated to use tRPC
+// Slack template manager component
 function SlackTemplateManagerTrpc({ toolType }: TemplateManagerProps) {
   const { toast } = useToast();
   const [showAddForm, setShowAddForm] = React.useState(false);
   const [editingTemplate, setEditingTemplate] = React.useState<any>(null);
 
-  // tRPC queries and mutations
   const {
     data: templatesData,
     isLoading,
@@ -418,27 +417,28 @@ function SlackTemplateManagerTrpc({ toolType }: TemplateManagerProps) {
                         {template.content}
                       </div>
                     </div>
-                    {template.variables && template.variables.length > 0 && (
-                      <div>
-                        <span className="font-medium">Variables:</span>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {template.variables.map(
-                            (variable: any, index: number) => (
-                              <Badge
-                                key={index}
-                                variant="outline"
-                                className="text-xs"
-                              >
-                                {variable.name}
-                                {variable.required && (
-                                  <span className="text-red-500">*</span>
-                                )}
-                              </Badge>
-                            ),
-                          )}
+                    {(template as any).variables &&
+                      (template as any).variables.length > 0 && (
+                        <div>
+                          <span className="font-medium">Variables:</span>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {(template as any).variables.map(
+                              (variable: any, index: number) => (
+                                <Badge
+                                  key={index}
+                                  variant="outline"
+                                  className="text-xs"
+                                >
+                                  {variable.name}
+                                  {variable.required && (
+                                    <span className="text-red-500">*</span>
+                                  )}
+                                </Badge>
+                              ),
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -478,15 +478,18 @@ export const SlackPluginTrpc: ToolPlugin = {
   CredentialDisplay: SlackCredentialDisplayTrpc,
   TemplateManager: SlackTemplateManagerTrpc,
 
-  async validate(credentials: any) {
+  async validate(credentials: Record<string, any>) {
     const result = slackSchema.safeParse(credentials);
-    return {
-      isValid: result.success,
-      error: result.success ? undefined : result.error.issues[0]?.message,
-    };
+    if (result.success) {
+      return { isValid: true };
+    } else {
+      return {
+        isValid: false,
+        error: result.error.issues[0]?.message || "Invalid credentials",
+      };
+    }
   },
 
-  // Updated send method to use tRPC integrations API
   async send(credentials: any, data: any, trpcClient?: any) {
     try {
       const { message, channel, username, iconEmoji } = data;
@@ -506,7 +509,6 @@ export const SlackPluginTrpc: ToolPlugin = {
         };
       }
 
-      // Use tRPC integrations API
       const result = await trpcClient.integrations.slack.send.mutate({
         toolId: credentials.id,
         message: message,

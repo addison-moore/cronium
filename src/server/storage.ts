@@ -4,7 +4,7 @@ import {
   envVars,
   logs,
   servers,
-  conditionalEvents,
+  conditionalActions,
   systemSettings,
   apiTokens,
   passwordResetTokens,
@@ -104,12 +104,12 @@ export interface IStorage {
   deleteEnvVarsByEventId(eventId: number): Promise<void>;
 
   // Event methods
-  getSuccessEvents(eventId: number): Promise<ConditionalAction[]>;
-  getFailEvents(eventId: number): Promise<ConditionalAction[]>;
-  getAlwaysEvents(eventId: number): Promise<ConditionalAction[]>;
-  getConditionEvents(eventId: number): Promise<ConditionalAction[]>;
-  createEvent(insertEvent: InsertConditionalAction): Promise<ConditionalAction>;
-  deleteEventsByEventId(eventId: number): Promise<void>;
+  getSuccessActions(eventId: number): Promise<ConditionalAction[]>;
+  getFailActions(eventId: number): Promise<ConditionalAction[]>;
+  getAlwaysActions(eventId: number): Promise<ConditionalAction[]>;
+  getConditionActions(eventId: number): Promise<ConditionalAction[]>;
+  createAction(insertAction: InsertConditionalAction): Promise<ConditionalAction>;
+  deleteActionsByEventId(eventId: number): Promise<void>;
   deleteSuccessEventsByScriptId(eventId: number): Promise<void>;
   deleteFailEventsByScriptId(eventId: number): Promise<void>;
   deleteAlwaysEventsByScriptId(eventId: number): Promise<void>;
@@ -479,10 +479,10 @@ class DatabaseStorage implements IStorage {
     }
 
     // Get success, failure, always, and condition events
-    const successEvents = await this.getSuccessEvents(id);
-    const failEvents = await this.getFailEvents(id);
-    const alwaysEvents = await this.getAlwaysEvents(id);
-    const conditionEvents = await this.getConditionEvents(id);
+    const successEvents = await this.getSuccessActions(id);
+    const failEvents = await this.getFailActions(id);
+    const alwaysEvents = await this.getAlwaysActions(id);
+    const conditionEvents = await this.getConditionActions(id);
 
     // Combine all data
     return {
@@ -602,17 +602,17 @@ class DatabaseStorage implements IStorage {
       console.log(`Deleting environment variables for script ${id}`);
       await this.deleteEnvVarsByEventId(id);
 
-      // 2. Delete conditional events that reference this event
-      console.log(`Deleting conditional events for script ${id}`);
+      // 2. Delete conditional actions that reference this event
+      console.log(`Deleting conditional actions for script ${id}`);
       await db
-        .delete(conditionalEvents)
-        .where(eq(conditionalEvents.successEventId, id));
+        .delete(conditionalActions)
+        .where(eq(conditionalActions.successEventId, id));
       await db
-        .delete(conditionalEvents)
-        .where(eq(conditionalEvents.failEventId, id));
+        .delete(conditionalActions)
+        .where(eq(conditionalActions.failEventId, id));
       await db
-        .delete(conditionalEvents)
-        .where(eq(conditionalEvents.targetEventId, id));
+        .delete(conditionalActions)
+        .where(eq(conditionalActions.targetEventId, id));
 
       // 3. Delete logs
       console.log(`Deleting logs for script ${id}`);
@@ -672,116 +672,116 @@ class DatabaseStorage implements IStorage {
     await db.delete(envVars).where(eq(envVars.eventId, eventId));
   }
 
-  // Event methods (now conditional events)
-  async getSuccessEvents(eventId: number): Promise<ConditionalAction[]> {
+  // Conditional action methods
+  async getSuccessActions(eventId: number): Promise<ConditionalAction[]> {
     const eventList = await db
       .select({
-        id: conditionalEvents.id,
-        type: conditionalEvents.type,
-        value: conditionalEvents.value,
-        successEventId: conditionalEvents.successEventId,
-        failEventId: conditionalEvents.failEventId,
-        alwaysEventId: conditionalEvents.alwaysEventId,
-        conditionEventId: conditionalEvents.conditionEventId,
-        targetEventId: conditionalEvents.targetEventId,
-        toolId: conditionalEvents.toolId,
-        message: conditionalEvents.message,
-        emailAddresses: conditionalEvents.emailAddresses,
-        emailSubject: conditionalEvents.emailSubject,
-        createdAt: conditionalEvents.createdAt,
-        updatedAt: conditionalEvents.updatedAt,
+        id: conditionalActions.id,
+        type: conditionalActions.type,
+        value: conditionalActions.value,
+        successEventId: conditionalActions.successEventId,
+        failEventId: conditionalActions.failEventId,
+        alwaysEventId: conditionalActions.alwaysEventId,
+        conditionEventId: conditionalActions.conditionEventId,
+        targetEventId: conditionalActions.targetEventId,
+        toolId: conditionalActions.toolId,
+        message: conditionalActions.message,
+        emailAddresses: conditionalActions.emailAddresses,
+        emailSubject: conditionalActions.emailSubject,
+        createdAt: conditionalActions.createdAt,
+        updatedAt: conditionalActions.updatedAt,
         targetEventName: events.name,
       })
-      .from(conditionalEvents)
-      .leftJoin(events, eq(conditionalEvents.targetEventId, events.id))
-      .where(eq(conditionalEvents.successEventId, eventId));
+      .from(conditionalActions)
+      .leftJoin(events, eq(conditionalActions.targetEventId, events.id))
+      .where(eq(conditionalActions.successEventId, eventId));
 
     return eventList;
   }
 
-  async getFailEvents(eventId: number): Promise<ConditionalAction[]> {
+  async getFailActions(eventId: number): Promise<ConditionalAction[]> {
     const eventList = await db
       .select({
-        id: conditionalEvents.id,
-        type: conditionalEvents.type,
-        value: conditionalEvents.value,
-        successEventId: conditionalEvents.successEventId,
-        failEventId: conditionalEvents.failEventId,
-        alwaysEventId: conditionalEvents.alwaysEventId,
-        conditionEventId: conditionalEvents.conditionEventId,
-        targetEventId: conditionalEvents.targetEventId,
-        toolId: conditionalEvents.toolId,
-        message: conditionalEvents.message,
-        emailAddresses: conditionalEvents.emailAddresses,
-        emailSubject: conditionalEvents.emailSubject,
-        createdAt: conditionalEvents.createdAt,
-        updatedAt: conditionalEvents.updatedAt,
+        id: conditionalActions.id,
+        type: conditionalActions.type,
+        value: conditionalActions.value,
+        successEventId: conditionalActions.successEventId,
+        failEventId: conditionalActions.failEventId,
+        alwaysEventId: conditionalActions.alwaysEventId,
+        conditionEventId: conditionalActions.conditionEventId,
+        targetEventId: conditionalActions.targetEventId,
+        toolId: conditionalActions.toolId,
+        message: conditionalActions.message,
+        emailAddresses: conditionalActions.emailAddresses,
+        emailSubject: conditionalActions.emailSubject,
+        createdAt: conditionalActions.createdAt,
+        updatedAt: conditionalActions.updatedAt,
         targetEventName: events.name,
       })
-      .from(conditionalEvents)
-      .leftJoin(events, eq(conditionalEvents.targetEventId, events.id))
-      .where(eq(conditionalEvents.failEventId, eventId));
+      .from(conditionalActions)
+      .leftJoin(events, eq(conditionalActions.targetEventId, events.id))
+      .where(eq(conditionalActions.failEventId, eventId));
 
     return eventList;
   }
 
-  async getAlwaysEvents(eventId: number): Promise<ConditionalAction[]> {
+  async getAlwaysActions(eventId: number): Promise<ConditionalAction[]> {
     const eventList = await db
       .select({
-        id: conditionalEvents.id,
-        type: conditionalEvents.type,
-        value: conditionalEvents.value,
-        successEventId: conditionalEvents.successEventId,
-        failEventId: conditionalEvents.failEventId,
-        alwaysEventId: conditionalEvents.alwaysEventId,
-        conditionEventId: conditionalEvents.conditionEventId,
-        targetEventId: conditionalEvents.targetEventId,
-        toolId: conditionalEvents.toolId,
-        message: conditionalEvents.message,
-        emailAddresses: conditionalEvents.emailAddresses,
-        emailSubject: conditionalEvents.emailSubject,
-        createdAt: conditionalEvents.createdAt,
-        updatedAt: conditionalEvents.updatedAt,
+        id: conditionalActions.id,
+        type: conditionalActions.type,
+        value: conditionalActions.value,
+        successEventId: conditionalActions.successEventId,
+        failEventId: conditionalActions.failEventId,
+        alwaysEventId: conditionalActions.alwaysEventId,
+        conditionEventId: conditionalActions.conditionEventId,
+        targetEventId: conditionalActions.targetEventId,
+        toolId: conditionalActions.toolId,
+        message: conditionalActions.message,
+        emailAddresses: conditionalActions.emailAddresses,
+        emailSubject: conditionalActions.emailSubject,
+        createdAt: conditionalActions.createdAt,
+        updatedAt: conditionalActions.updatedAt,
         targetEventName: events.name,
       })
-      .from(conditionalEvents)
-      .leftJoin(events, eq(conditionalEvents.targetEventId, events.id))
-      .where(eq(conditionalEvents.alwaysEventId, eventId));
+      .from(conditionalActions)
+      .leftJoin(events, eq(conditionalActions.targetEventId, events.id))
+      .where(eq(conditionalActions.alwaysEventId, eventId));
 
     return eventList;
   }
 
-  async getConditionEvents(eventId: number): Promise<ConditionalAction[]> {
+  async getConditionActions(eventId: number): Promise<ConditionalAction[]> {
     const eventList = await db
       .select({
-        id: conditionalEvents.id,
-        type: conditionalEvents.type,
-        value: conditionalEvents.value,
-        successEventId: conditionalEvents.successEventId,
-        failEventId: conditionalEvents.failEventId,
-        alwaysEventId: conditionalEvents.alwaysEventId,
-        conditionEventId: conditionalEvents.conditionEventId,
-        targetEventId: conditionalEvents.targetEventId,
-        toolId: conditionalEvents.toolId,
-        message: conditionalEvents.message,
-        emailAddresses: conditionalEvents.emailAddresses,
-        emailSubject: conditionalEvents.emailSubject,
-        createdAt: conditionalEvents.createdAt,
-        updatedAt: conditionalEvents.updatedAt,
+        id: conditionalActions.id,
+        type: conditionalActions.type,
+        value: conditionalActions.value,
+        successEventId: conditionalActions.successEventId,
+        failEventId: conditionalActions.failEventId,
+        alwaysEventId: conditionalActions.alwaysEventId,
+        conditionEventId: conditionalActions.conditionEventId,
+        targetEventId: conditionalActions.targetEventId,
+        toolId: conditionalActions.toolId,
+        message: conditionalActions.message,
+        emailAddresses: conditionalActions.emailAddresses,
+        emailSubject: conditionalActions.emailSubject,
+        createdAt: conditionalActions.createdAt,
+        updatedAt: conditionalActions.updatedAt,
         targetEventName: events.name,
       })
-      .from(conditionalEvents)
-      .leftJoin(events, eq(conditionalEvents.targetEventId, events.id))
-      .where(eq(conditionalEvents.conditionEventId, eventId));
+      .from(conditionalActions)
+      .leftJoin(events, eq(conditionalActions.targetEventId, events.id))
+      .where(eq(conditionalActions.conditionEventId, eventId));
 
     return eventList;
   }
 
-  async createEvent(
+  async createAction(
     insertEvent: InsertConditionalAction,
   ): Promise<ConditionalAction> {
     const [event] = await db
-      .insert(conditionalEvents)
+      .insert(conditionalActions)
       .values(insertEvent)
       .returning();
 
@@ -792,44 +792,44 @@ class DatabaseStorage implements IStorage {
     return event;
   }
 
-  async deleteEventsByEventId(eventId: number): Promise<void> {
+  async deleteActionsByEventId(eventId: number): Promise<void> {
     // Delete events where this script is the target
     await db
-      .delete(conditionalEvents)
-      .where(eq(conditionalEvents.successEventId, eventId));
+      .delete(conditionalActions)
+      .where(eq(conditionalActions.successEventId, eventId));
     await db
-      .delete(conditionalEvents)
-      .where(eq(conditionalEvents.failEventId, eventId));
+      .delete(conditionalActions)
+      .where(eq(conditionalActions.failEventId, eventId));
     await db
-      .delete(conditionalEvents)
-      .where(eq(conditionalEvents.alwaysEventId, eventId));
+      .delete(conditionalActions)
+      .where(eq(conditionalActions.alwaysEventId, eventId));
     await db
-      .delete(conditionalEvents)
-      .where(eq(conditionalEvents.targetEventId, eventId));
+      .delete(conditionalActions)
+      .where(eq(conditionalActions.targetEventId, eventId));
   }
 
   async deleteSuccessEventsByScriptId(eventId: number): Promise<void> {
     await db
-      .delete(conditionalEvents)
-      .where(eq(conditionalEvents.successEventId, eventId));
+      .delete(conditionalActions)
+      .where(eq(conditionalActions.successEventId, eventId));
   }
 
   async deleteFailEventsByScriptId(eventId: number): Promise<void> {
     await db
-      .delete(conditionalEvents)
-      .where(eq(conditionalEvents.failEventId, eventId));
+      .delete(conditionalActions)
+      .where(eq(conditionalActions.failEventId, eventId));
   }
 
   async deleteAlwaysEventsByScriptId(eventId: number): Promise<void> {
     await db
-      .delete(conditionalEvents)
-      .where(eq(conditionalEvents.alwaysEventId, eventId));
+      .delete(conditionalActions)
+      .where(eq(conditionalActions.alwaysEventId, eventId));
   }
 
   async deleteConditionEventsByScriptId(eventId: number): Promise<void> {
     await db
-      .delete(conditionalEvents)
-      .where(eq(conditionalEvents.conditionEventId, eventId));
+      .delete(conditionalActions)
+      .where(eq(conditionalActions.conditionEventId, eventId));
   }
 
   // Log methods
