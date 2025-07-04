@@ -1,0 +1,164 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.conditional_actions": {
+      "name": "conditional_actions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "success_event_id": {
+          "name": "success_event_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fail_event_id": {
+          "name": "fail_event_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "always_event_id": {
+          "name": "always_event_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "condition_event_id": {
+          "name": "condition_event_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "target_event_id": {
+          "name": "target_event_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tool_id": {
+          "name": "tool_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email_addresses": {
+          "name": "email_addresses",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email_subject": {
+          "name": "email_subject",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "conditional_actions_success_event_id_events_id_fk": {
+          "name": "conditional_actions_success_event_id_events_id_fk",
+          "tableFrom": "conditional_actions",
+          "tableTo": "events",
+          "columnsFrom": ["success_event_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "conditional_actions_fail_event_id_events_id_fk": {
+          "name": "conditional_actions_fail_event_id_events_id_fk",
+          "tableFrom": "conditional_actions",
+          "tableTo": "events",
+          "columnsFrom": ["fail_event_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "conditional_actions_always_event_id_events_id_fk": {
+          "name": "conditional_actions_always_event_id_events_id_fk",
+          "tableFrom": "conditional_actions",
+          "tableTo": "events",
+          "columnsFrom": ["always_event_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "conditional_actions_condition_event_id_events_id_fk": {
+          "name": "conditional_actions_condition_event_id_events_id_fk",
+          "tableFrom": "conditional_actions",
+          "tableTo": "events",
+          "columnsFrom": ["condition_event_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "conditional_actions_target_event_id_events_id_fk": {
+          "name": "conditional_actions_target_event_id_events_id_fk",
+          "tableFrom": "conditional_actions",
+          "tableTo": "events",
+          "columnsFrom": ["target_event_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "conditional_actions_tool_id_tool_credentials_id_fk": {
+          "name": "conditional_actions_tool_id_tool_credentials_id_fk",
+          "tableFrom": "conditional_actions",
+          "tableTo": "tool_credentials",
+          "columnsFrom": ["tool_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  }
+}

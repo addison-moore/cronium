@@ -1,12 +1,12 @@
-# Conditional Events Documentation
+# Conditional Actions Documentation
 
-This document provides a comprehensive overview of how conditional events are implemented, stored, and executed in the Cronium system.
+This document provides a comprehensive overview of how conditional actions are implemented, stored, and executed in the Cronium system.
 
 ## Overview
 
 Conditional events are automated actions that are triggered based on the outcome of event execution. They allow users to create complex workflows where one event can automatically trigger other actions when it succeeds, fails, or under specific conditions.
 
-## Types of Conditional Events
+## Types of Conditional Actions
 
 ### 1. **ON_SUCCESS** - Success Events
 - Triggered when the parent event completes successfully (exit code 0)
@@ -20,13 +20,13 @@ Conditional events are automated actions that are triggered based on the outcome
 - Triggered regardless of parent event success or failure
 - Common use cases: Cleanup operations, logging, monitoring
 
-### 4. **ON_CONDITION** - Conditional Events
+### 4. **ON_CONDITION** - Conditional Actions
 - Triggered based on custom conditions evaluated from event output
 - Currently implemented but condition evaluation logic is minimal
 
 ## Action Types
 
-Each conditional event can perform one of two action types:
+Each conditional action can perform one of two action types:
 
 ### **SCRIPT** - Trigger Another Event
 - Executes another event in the system
@@ -40,10 +40,10 @@ Each conditional event can perform one of two action types:
 
 ## Database Schema
 
-### ConditionalEvents Table Structure
+### ConditionalActions Table Structure
 
 ```sql
-CREATE TABLE conditional_events (
+CREATE TABLE conditional_actions (
   id SERIAL PRIMARY KEY,
   type VARCHAR(50) NOT NULL,                    -- ConditionalActionType enum
   value VARCHAR(255),                           -- Legacy field (unused)
@@ -95,15 +95,15 @@ interface ConditionalAction {
 }
 
 // Transformed for API submission
-const conditionalEventsForSubmission = conditionalEvents.map((event) => ({
-  type: event.type,
-  action: event.action,
+const conditionalActionsForSubmission = conditionalActions.map((action) => ({
+  type: action.type,
+  action: action.action,
   details: {
-    emailAddresses: event.emailAddresses || "",
-    emailSubject: event.emailSubject || "",
-    targetEventId: event.targetEventId || null,
-    toolId: event.toolId || null,
-    message: event.message || "",
+    emailAddresses: action.emailAddresses || "",
+    emailSubject: action.emailSubject || "",
+    targetEventId: action.targetEventId || null,
+    toolId: action.toolId || null,
+    message: action.message || "",
   },
 }));
 ```
@@ -113,10 +113,10 @@ const conditionalEventsForSubmission = conditionalEvents.map((event) => ({
 ### tRPC Event Creation/Update
 
 ```typescript
-// events.ts router handles conditional events
-if (input.onSuccessEvents && input.onSuccessEvents.length > 0) {
-  for (const conditionalEvent of input.onSuccessEvents) {
-    await storage.createEvent({
+// events.ts router handles conditional actions
+if (input.onSuccessActions && input.onSuccessActions.length > 0) {
+  for (const conditionalEvent of input.onSuccessActions) {
+    await storage.createAction({
       type: conditionalEvent.type as ConditionalActionType,
       value: conditionalEvent.value,
       successEventId: conditionalEvent.targetScriptId,
@@ -137,10 +137,10 @@ if (input.onSuccessEvents && input.onSuccessEvents.length > 0) {
 const result = await executeScript(
   event,
   this.executingEvents,
-  this.handleSuccessEvents.bind(this),
-  this.handleFailureEvents.bind(this),
-  this.handleAlwaysEvents.bind(this),
-  this.handleConditionEvents.bind(this),
+  this.handleSuccessActions.bind(this),
+  this.handleFailureActions.bind(this),
+  this.handleAlwaysActions.bind(this),
+  this.handleConditionActions.bind(this),
   this.handleExecutionCount.bind(this),
   input,
   workflowId,
@@ -153,17 +153,17 @@ Located in `src/lib/scheduler/event-handlers.ts`:
 
 ```typescript
 // Success handler
-export async function handleSuccessEvents(
+export async function handleSuccessActions(
   eventId: number,
   processEventCallback: Function
 ) {
-  const successEvents = await storage.getSuccessEvents(eventId);
+  const successEvents = await storage.getSuccessActions(eventId);
   for (const condEvent of successEvents) {
     await processEventCallback(condEvent, event, true, executionData);
   }
 }
 
-// Similar for handleFailureEvents, handleAlwaysEvents, handleConditionEvents
+// Similar for handleFailureActions, handleAlwaysActions, handleConditionActions
 ```
 
 ### 3. Event Processing Logic
@@ -241,33 +241,33 @@ Server: {{event.server}}
 
 ```typescript
 // Query methods
-await storage.getSuccessEvents(eventId);
-await storage.getFailEvents(eventId);
-await storage.getAlwaysEvents(eventId);
-await storage.getConditionEvents(eventId);
+await storage.getSuccessActions(eventId);
+await storage.getFailActions(eventId);
+await storage.getAlwaysActions(eventId);
+await storage.getConditionActions(eventId);
 
 // Mutation methods  
-await storage.createEvent(insertConditionalAction);
-await storage.deleteEventsByEventId(eventId);
+await storage.createAction(insertConditionalAction);
+await storage.deleteActionsByEventId(eventId);
 ```
 
 ### Database Queries
 
 ```sql
 -- Get success events for an event
-SELECT * FROM conditional_events 
+SELECT * FROM conditional_actions 
 WHERE success_event_id = $1;
 
 -- Get failure events for an event
-SELECT * FROM conditional_events
+SELECT * FROM conditional_actions
 WHERE fail_event_id = $1;
 
 -- Get always events for an event  
-SELECT * FROM conditional_events
+SELECT * FROM conditional_actions
 WHERE always_event_id = $1;
 
 -- Get condition events for an event
-SELECT * FROM conditional_events
+SELECT * FROM conditional_actions
 WHERE condition_event_id = $1;
 ```
 
@@ -373,7 +373,7 @@ executingEvents.delete(targetEventId);
 
 ### 4. **Tool Integration**
 - Only email, Slack, and Discord are supported
-- Plugin system exists but isn't fully utilized for conditional events
+- Plugin system exists but isn't fully utilized for conditional actions
 - Limited error handling for tool failures
 
 ## Recommendations
@@ -446,4 +446,4 @@ const conditionalAction = {
 };
 ```
 
-This documentation provides a complete picture of how conditional events work in the Cronium system, from user interface to database storage to execution flow.
+This documentation provides a complete picture of how conditional actions work in the Cronium system, from user interface to database storage to execution flow.

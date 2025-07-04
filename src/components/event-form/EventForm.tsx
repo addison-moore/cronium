@@ -135,7 +135,7 @@ export default function EventForm({
     eventData?.envVars || [],
   );
   const [tags, setTags] = useState<string[]>(eventData?.tags || []);
-  const [conditionalEvents, setConditionalActions] = useState<any[]>([]);
+  const [conditionalActions, setConditionalActions] = useState<any[]>([]);
   const [passwordVisibility, setPasswordVisibility] = useState<
     Record<number, boolean>
   >({});
@@ -192,15 +192,15 @@ export default function EventForm({
 
     try {
       // Build conditional events array from the managed state
-      const conditionalEventsForSubmission = conditionalEvents.map((event) => ({
-        type: event.type,
-        action: event.action,
+      const conditionalActionsForSubmission = conditionalActions.map((action) => ({
+        type: action.type,
+        action: action.action,
         details: {
-          emailAddresses: event.emailAddresses || "",
-          emailSubject: event.emailSubject || "",
-          targetEventId: event.targetEventId || null,
-          toolId: event.toolId || null,
-          message: event.message || "",
+          emailAddresses: action.emailAddresses || "",
+          emailSubject: action.emailSubject || "",
+          targetEventId: action.targetEventId || null,
+          toolId: action.toolId || null,
+          message: action.message || "",
         },
       }));
 
@@ -246,7 +246,7 @@ export default function EventForm({
         // Include tags
         tags,
         // Include conditional events
-        conditionalEvents: conditionalEventsForSubmission,
+        conditionalActions: conditionalActionsForSubmission,
       };
 
       // Use tRPC mutations instead of fetch
@@ -281,7 +281,7 @@ export default function EventForm({
     }
   }, [
     isSubmitting,
-    conditionalEvents,
+    conditionalActions,
     name,
     description,
     shared,

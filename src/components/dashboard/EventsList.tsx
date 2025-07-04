@@ -499,7 +499,7 @@ export default function EventsList() {
         maxExecutions?: number;
         resetCounterOnActive?: boolean;
         envVars?: Array<{ key: string; value: string }>;
-        onSuccessEvents?: Array<{
+        onSuccessActions?: Array<{
           type: string;
           action: ConditionalActionType;
           value?: string;
@@ -512,7 +512,7 @@ export default function EventsList() {
             emailSubject?: string;
           };
         }>;
-        onFailEvents?: Array<{
+        onFailActions?: Array<{
           type: string;
           action: ConditionalActionType;
           value?: string;
@@ -627,12 +627,12 @@ export default function EventsList() {
               : [],
 
           // Event triggers - Using tRPC expected format
-          onSuccessEvents: Array.isArray(
-            (eventData as unknown as Record<string, unknown>).onSuccessEvents,
+          onSuccessActions: Array.isArray(
+            (eventData as unknown as Record<string, unknown>).onSuccessActions,
           )
             ? (
                 (eventData as unknown as Record<string, unknown>)
-                  .onSuccessEvents as Array<Record<string, unknown>>
+                  .onSuccessActions as Array<Record<string, unknown>>
               ).map((e) => ({
                 action: (e.action ??
                   ConditionalActionType.SCRIPT) as ConditionalActionType,
@@ -651,12 +651,12 @@ export default function EventsList() {
               }))
             : [],
 
-          onFailEvents: Array.isArray(
-            (eventData as unknown as Record<string, unknown>).onFailEvents,
+          onFailActions: Array.isArray(
+            (eventData as unknown as Record<string, unknown>).onFailActions,
           )
             ? (
                 (eventData as unknown as Record<string, unknown>)
-                  .onFailEvents as Array<Record<string, unknown>>
+                  .onFailActions as Array<Record<string, unknown>>
               ).map((e) => ({
                 action: (e.action ??
                   ConditionalActionType.SCRIPT) as ConditionalActionType,

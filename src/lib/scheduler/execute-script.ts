@@ -22,10 +22,10 @@ interface ScriptExecutionResult {
 export async function executeScript(
   event: any,
   executingEvents: Set<number>,
-  handleSuccessEvents: (eventId: number) => Promise<void>,
-  handleFailureEvents: (eventId: number) => Promise<void>,
-  handleAlwaysEvents: (eventId: number) => Promise<void>,
-  handleConditionEvents: (eventId: number, condition: boolean) => Promise<void>,
+  handleSuccessActions: (eventId: number) => Promise<void>,
+  handleFailureActions: (eventId: number) => Promise<void>,
+  handleAlwaysActions: (eventId: number) => Promise<void>,
+  handleConditionActions: (eventId: number, condition: boolean) => Promise<void>,
   handleExecutionCount: (eventId: number) => Promise<void>,
   input: Record<string, any> = {},
   workflowId?: number,
@@ -39,10 +39,10 @@ export async function executeScript(
     return await executeOnMultipleServers(
       event,
       executingEvents,
-      handleSuccessEvents,
-      handleFailureEvents,
-      handleAlwaysEvents,
-      handleConditionEvents,
+      handleSuccessActions,
+      handleFailureActions,
+      handleAlwaysActions,
+      handleConditionActions,
       handleExecutionCount,
       input,
       workflowId,
@@ -53,10 +53,10 @@ export async function executeScript(
   return await executeSingleScript(
     event,
     executingEvents,
-    handleSuccessEvents,
-    handleFailureEvents,
-    handleAlwaysEvents,
-    handleConditionEvents,
+    handleSuccessActions,
+    handleFailureActions,
+    handleAlwaysActions,
+    handleConditionActions,
     handleExecutionCount,
     input,
     workflowId,
@@ -69,10 +69,10 @@ export async function executeScript(
 async function executeOnMultipleServers(
   event: any,
   executingEvents: Set<number>,
-  handleSuccessEvents: (eventId: number) => Promise<void>,
-  handleFailureEvents: (eventId: number) => Promise<void>,
-  handleAlwaysEvents: (eventId: number) => Promise<void>,
-  handleConditionEvents: (
+  handleSuccessActions: (eventId: number) => Promise<void>,
+  handleFailureActions: (eventId: number) => Promise<void>,
+  handleAlwaysActions: (eventId: number) => Promise<void>,
+  handleConditionActions: (
     eventId: number,
     conditionValue: boolean,
   ) => Promise<void>,
@@ -305,17 +305,17 @@ async function executeOnMultipleServers(
 
   // Handle success/failure events - partial successes trigger failure events
   if (overallSuccess) {
-    await handleSuccessEvents(event.id);
+    await handleSuccessActions(event.id);
   } else {
     // Both complete failures and partial successes trigger failure events
-    await handleFailureEvents(event.id);
+    await handleFailureActions(event.id);
   }
 
   // Always run "always" events regardless of success or failure
-  await handleAlwaysEvents(event.id);
+  await handleAlwaysActions(event.id);
 
   // Handle condition events if any condition was set
-  await handleConditionEvents(event.id, conditionValue);
+  await handleConditionActions(event.id, conditionValue);
 
   await handleExecutionCount(event.id);
 
@@ -350,10 +350,10 @@ async function executeOnMultipleServers(
 async function executeSingleScript(
   event: any,
   executingEvents: Set<number>,
-  handleSuccessEvents: (eventId: number) => Promise<void>,
-  handleFailureEvents: (eventId: number) => Promise<void>,
-  handleAlwaysEvents: (eventId: number) => Promise<void>,
-  handleConditionEvents: (eventId: number, condition: boolean) => Promise<void>,
+  handleSuccessActions: (eventId: number) => Promise<void>,
+  handleFailureActions: (eventId: number) => Promise<void>,
+  handleAlwaysActions: (eventId: number) => Promise<void>,
+  handleConditionActions: (eventId: number, condition: boolean) => Promise<void>,
   handleExecutionCount: (eventId: number) => Promise<void>,
   input: Record<string, any> = {},
   workflowId?: number,
@@ -687,7 +687,7 @@ async function executeSingleScript(
       };
 
       // Handle success events
-      await handleSuccessEvents(event.id);
+      await handleSuccessActions(event.id);
     } else {
       // Handle failed execution (including timeouts)
       const errorOutput = result.stderr || "Unknown error";
@@ -742,11 +742,11 @@ async function executeSingleScript(
       }
 
       // Both timeouts and failures should trigger "On failure" events
-      await handleFailureEvents(event.id);
+      await handleFailureActions(event.id);
     }
 
     // Always run "always" events regardless of success or failure
-    await handleAlwaysEvents(event.id);
+    await handleAlwaysActions(event.id);
 
     // Check for condition events - read condition.json file if it exists
     let conditionValue: boolean | undefined = undefined;
@@ -761,7 +761,7 @@ async function executeSingleScript(
         console.log(
           `Found condition from script execution for event ${event.id}, condition: ${conditionValue}`,
         );
-        await handleConditionEvents(event.id, conditionValue);
+        await handleConditionActions(event.id, conditionValue);
       }
     } catch (conditionError) {
       console.log(
@@ -835,8 +835,8 @@ async function executeSingleScript(
       });
     }
 
-    await handleFailureEvents(event.id);
-    await handleAlwaysEvents(event.id);
+    await handleFailureActions(event.id);
+    await handleAlwaysActions(event.id);
 
     return { success: false, output: error.toString(), condition: false };
   } finally {
