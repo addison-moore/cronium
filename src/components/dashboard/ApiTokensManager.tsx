@@ -1,6 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -31,6 +34,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormMessage,
+} from "@/components/ui/form";
 import { formatDate } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
 import { trpc } from "@/lib/trpc";
@@ -45,11 +55,23 @@ type ApiToken = {
   displayToken?: string; // Only present when a token is first created
 };
 
+const createTokenSchema = z.object({
+  name: z.string().min(1, "Token name is required").max(100, "Token name is too long"),
+});
+
+type CreateTokenFormData = z.infer<typeof createTokenSchema>;
+
 export default function ApiTokensManager() {
-  const [newTokenName, setNewTokenName] = useState<string>("");
   const [showNewTokenDialog, setShowNewTokenDialog] = useState<boolean>(false);
   const [newToken, setNewToken] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
+
+  const form = useForm<CreateTokenFormData>({
+    resolver: zodResolver(createTokenSchema),
+    defaultValues: {
+      name: "",
+    },
+  });
 
   // tRPC queries and mutations
   const {
@@ -63,7 +85,8 @@ export default function ApiTokensManager() {
     onSuccess: (data) => {
       refetch();
       setNewToken(data.displayToken);
-      setNewTokenName("");
+      form.reset();
+      setShowNewTokenDialog(true);
       toast({
         title: "Token created",
         description: "Your new API token has been created successfully.",
@@ -113,18 +136,8 @@ export default function ApiTokensManager() {
     },
   });
 
-  const handleCreateToken = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTokenName.trim()) {
-      toast({
-        title: "Token name required",
-        description: "Please enter a name for your token.",
-        variant: "destructive",
-      });
-      return;
-    }
-    createTokenMutation.mutate({ name: newTokenName });
-    setShowNewTokenDialog(true);
+  const onSubmit = (data: CreateTokenFormData) => {
+    createTokenMutation.mutate(data);
   };
 
   const copyToClipboard = (text: string) => {
@@ -171,31 +184,42 @@ export default function ApiTokensManager() {
               Generate a new API token to access Cronium programmatically
             </CardDescription>
           </CardHeader>
-          <form onSubmit={handleCreateToken}>
-            <CardContent>
-              <div className="flex space-x-4">
-                <Input
-                  placeholder="Enter token name"
-                  value={newTokenName}
-                  onChange={(e) => setNewTokenName(e.target.value)}
-                  className="flex-1"
-                />
-                <Button
-                  type="submit"
-                  disabled={
-                    createTokenMutation.isPending || !newTokenName.trim()
-                  }
-                >
-                  {createTokenMutation.isPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Plus className="mr-2 h-4 w-4" />
-                  )}
-                  Create Token
-                </Button>
-              </div>
-            </CardContent>
-          </form>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)}>
+              <CardContent>
+                <div className="flex space-x-4">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Enter token name"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={
+                      createTokenMutation.isPending || form.formState.isSubmitting
+                    }
+                  >
+                    {createTokenMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Plus className="mr-2 h-4 w-4" />
+                    )}
+                    Create Token
+                  </Button>
+                </div>
+              </CardContent>
+            </form>
+          </Form>
         </Card>
 
         {/* Existing Tokens */}
