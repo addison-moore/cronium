@@ -11,15 +11,15 @@ export interface TemplateContext {
   event: {
     id: number;
     name: string;
-    status: "success" | "failure" | "timeout" | "partial";
+    status: "success" | "failure" | "timeout" | "partial" | "unknown";
     duration?: number;
     executionTime?: string;
     server?: string;
     output?: string;
     error?: string;
   };
-  variables: Record<string, any>;
-  input: Record<string, any>;
+  variables: Record<string, unknown>;
+  input: Record<string, unknown>;
   conditions: Record<string, boolean>;
 }
 
@@ -39,25 +39,30 @@ export class TemplateProcessor {
     // Helper for safe property access with optional chaining
     this.handlebars.registerHelper(
       "get",
-      function (obj: any, path: string, fallback = "") {
+      function (obj: unknown, path: string, fallback = "") {
         const keys = path.split(".");
-        let current = obj;
+        let current: unknown = obj;
 
         for (const key of keys) {
           if (current == null || typeof current !== "object") {
             return fallback;
           }
-          current = current[key];
+          current = (current as Record<string, unknown>)[key];
         }
 
-        return current != null ? current : fallback;
+        return current ?? fallback;
       },
     );
 
     // Helper for conditional rendering
     this.handlebars.registerHelper(
       "ifEquals",
-      function (this: any, arg1: any, arg2: any, options: any) {
+      function (
+        this: unknown,
+        arg1: unknown,
+        arg2: unknown,
+        options: Handlebars.HelperOptions,
+      ) {
         return arg1 === arg2 ? options.fn(this) : options.inverse(this);
       },
     );
@@ -92,7 +97,7 @@ export class TemplateProcessor {
     });
 
     // Helper for JSON stringification (useful for debugging)
-    this.handlebars.registerHelper("json", function (obj: any) {
+    this.handlebars.registerHelper("json", function (obj: unknown) {
       return new Handlebars.SafeString(JSON.stringify(obj, null, 2));
     });
   }
@@ -104,8 +109,11 @@ export class TemplateProcessor {
     // Disable prototype pollution protection for our controlled environment
     this.handlebars.registerHelper(
       "lookup",
-      function (obj: any, field: string) {
-        return obj?.[field];
+      function (obj: unknown, field: string) {
+        if (obj && typeof obj === "object") {
+          return (obj as Record<string, unknown>)[field];
+        }
+        return undefined;
       },
     );
   }
@@ -172,16 +180,26 @@ export class TemplateProcessor {
    * Get template variables from execution context
    */
   static createTemplateContext(
-    event: any,
-    variables: Record<string, any> = {},
-    input: Record<string, any> = {},
+    event: {
+      id: number;
+      name: string;
+      status?: string;
+      duration?: number;
+      executionTime?: string;
+      server?: string;
+      output?: string;
+      error?: string;
+    },
+    variables: Record<string, unknown> = {},
+    input: Record<string, unknown> = {},
     conditions: Record<string, boolean> = {},
   ): TemplateContext {
     return {
       event: {
         id: event.id,
         name: event.name,
-        status: event.status || "unknown",
+        status: (event.status ??
+          "unknown") as TemplateContext["event"]["status"],
         duration: event.duration,
         executionTime: event.executionTime,
         server: event.server,
@@ -232,4 +250,10 @@ export class TemplateProcessor {
 export const templateProcessor = new TemplateProcessor();
 
 // Export helper for creating contexts
-export const createTemplateContext = TemplateProcessor.createTemplateContext;
+export const createTemplateContext = (
+  event: Parameters<typeof TemplateProcessor.createTemplateContext>[0],
+  variables?: Parameters<typeof TemplateProcessor.createTemplateContext>[1],
+  input?: Parameters<typeof TemplateProcessor.createTemplateContext>[2],
+  conditions?: Parameters<typeof TemplateProcessor.createTemplateContext>[3],
+) =>
+  TemplateProcessor.createTemplateContext(event, variables, input, conditions);

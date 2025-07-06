@@ -7,8 +7,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   Settings,
   Mail,
@@ -23,7 +21,6 @@ import {
   Shield,
   User,
   Eye,
-  EyeOff,
   Code,
 } from "lucide-react";
 import { SimpleCodeBlock } from "@/components/docs/api-code-examples";

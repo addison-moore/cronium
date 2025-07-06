@@ -1,35 +1,34 @@
 /**
  * This component initializes the Express API server and script scheduler
- * by calling our initialization API route when the app loads.
+ * by calling our tRPC system.startServices mutation when the app loads.
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { trpc } from "@/lib/trpc";
 
 export function ServiceInitializer() {
-  const [initialized, setInitialized] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // tRPC mutation for starting services
+  const startServicesMutation = trpc.system.startServices.useMutation({
+    onSuccess: (data) => {
+      console.log("Services initialized successfully:", data.message);
+    },
+    onError: (error) => {
+      console.error("Failed to initialize services:", error.message);
+    },
+  });
 
   useEffect(() => {
     const initializeServices = async () => {
       try {
-        const response = await fetch("/api/start-services");
-        const data = await response.json();
-
-        if (response.ok) {
-          console.log("Services initialized successfully:", data.message);
-          setInitialized(true);
-        } else {
-          console.error("Failed to initialize services:", data.error);
-          setError(data.error);
-        }
+        await startServicesMutation.mutateAsync();
       } catch (error) {
+        // Error is already handled by the mutation's onError callback
         console.error("Error initializing services:", error);
-        setError(error instanceof Error ? error.message : "Unknown error");
       }
     };
 
-    initializeServices();
+    void initializeServices();
   }, []);
 
   // This component doesn't render anything visible

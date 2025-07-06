@@ -29,6 +29,7 @@ import type {
 } from "@/components/ui/standardized-table";
 import { ServerFilters } from "@/components/server-list/ServerFilters";
 import { trpc } from "@/lib/trpc";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 
 interface ServerData {
   id: number;
@@ -71,17 +72,20 @@ export default function ServersPage() {
     data: serversData,
     isLoading,
     refetch: refetchServers,
-  } = trpc.servers.getAll.useQuery({
-    limit: 1000, // Get all servers for client-side filtering
-    offset: 0,
-    search: filters.searchTerm ?? undefined,
-    online:
-      filters.statusFilter === "online"
-        ? true
-        : filters.statusFilter === "offline"
-          ? false
-          : undefined,
-  });
+  } = trpc.servers.getAll.useQuery(
+    {
+      limit: 1000, // Get all servers for client-side filtering
+      offset: 0,
+      search: filters.searchTerm ?? undefined,
+      online:
+        filters.statusFilter === "online"
+          ? true
+          : filters.statusFilter === "offline"
+            ? false
+            : undefined,
+    },
+    QUERY_OPTIONS.dynamic,
+  );
 
   const checkHealthMutation = trpc.servers.checkHealth.useMutation({
     onSuccess: (data) => {
@@ -90,7 +94,7 @@ export default function ServersPage() {
         description: `Health check completed at ${new Date(data.lastChecked).toLocaleString()}`,
         variant: data.online ? "default" : "destructive",
       });
-      refetchServers();
+      void refetchServers();
     },
     onSettled: () => {
       setIsCheckingStatus(null);
@@ -103,7 +107,7 @@ export default function ServersPage() {
         title: "Server Deleted",
         description: "The server has been successfully deleted.",
       });
-      refetchServers();
+      void refetchServers();
     },
   });
 

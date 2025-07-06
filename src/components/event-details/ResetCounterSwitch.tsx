@@ -6,7 +6,6 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 
 interface ResetCounterSwitchProps {
@@ -22,7 +21,6 @@ export function ResetCounterSwitch({
 }: ResetCounterSwitchProps) {
   const [isChecked, setIsChecked] = useState(initialValue);
   const router = useRouter();
-  const t = useTranslations("Events");
 
   // tRPC mutation for saving reset counter setting
   const updateEventMutation = trpc.events.update.useMutation({
@@ -64,7 +62,7 @@ export function ResetCounterSwitch({
         id: eventId,
         resetCounterOnActive: isChecked,
       });
-    } catch (error) {
+    } catch {
       // Error handled by mutation onError
     }
   };

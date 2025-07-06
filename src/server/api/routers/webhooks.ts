@@ -1,5 +1,11 @@
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import {
+  createTRPCRouter,
+  publicProcedure,
+  withTiming,
+  withRateLimit,
+  withCache,
+} from "../trpc";
 import {
   webhookQuerySchema,
   createWebhookSchema,
@@ -21,13 +27,21 @@ import { UserRole } from "@/shared/schema";
 
 // Custom procedure that handles auth for tRPC fetch adapter
 const webhookProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  let session = null;
-  let userId = null;
+  let session: { user: { id: string } } | null = null;
+  let userId: string | null = null;
 
   try {
-    if (ctx.session?.user?.id) {
-      session = ctx.session;
-      userId = ctx.session.user.id;
+    if (
+      ctx.session &&
+      typeof ctx.session === "object" &&
+      "user" in ctx.session &&
+      ctx.session.user &&
+      typeof ctx.session.user === "object" &&
+      "id" in ctx.session.user
+    ) {
+      const typedSession = ctx.session as { user: { id: string } };
+      session = typedSession;
+      userId = typedSession.user.id;
     } else {
       if (process.env.NODE_ENV === "development") {
         const allUsers = await storage.getAllUsers();
@@ -52,7 +66,7 @@ const webhookProcedure = publicProcedure.use(async ({ ctx, next }) => {
       ctx: {
         ...ctx,
         session,
-        userId,
+        userId: userId,
       },
     });
   } catch (error) {
@@ -124,10 +138,13 @@ async function getWebhookByKey(key: string) {
 }
 
 // Helper function to get webhook execution history (mock implementation)
-async function getWebhookExecutions(key?: string, filters?: any) {
+async function getWebhookExecutions(
+  key?: string,
+  _filters?: Record<string, unknown>,
+) {
   const mockExecutions = Array.from({ length: 20 }, (_, i) => ({
     id: i + 1,
-    webhookKey: key || `webhook-${Math.floor(Math.random() * 3) + 1}`,
+    webhookKey: key ?? `webhook-${Math.floor(Math.random() * 3) + 1}`,
     workflowId: Math.floor(Math.random() * 3) + 1,
     status: (["success", "failure", "timeout", "rate_limited"] as const)[
       Math.floor(Math.random() * 4)
@@ -186,7 +203,7 @@ export const webhooksRouter = createTRPCRouter({
 
         // Apply sorting
         filteredWebhooks.sort((a, b) => {
-          let aValue: any, bValue: any;
+          let aValue: string | Date | number, bValue: string | Date | number;
 
           switch (input.sortBy) {
             case "name":
@@ -198,8 +215,8 @@ export const webhooksRouter = createTRPCRouter({
               bValue = b.createdAt;
               break;
             case "lastTriggered":
-              aValue = a.lastTriggered || new Date(0);
-              bValue = b.lastTriggered || new Date(0);
+              aValue = a.lastTriggered ?? new Date(0);
+              bValue = b.lastTriggered ?? new Date(0);
               break;
             case "triggerCount":
               aValue = a.triggerCount;
@@ -272,7 +289,7 @@ export const webhooksRouter = createTRPCRouter({
 
         // Generate key if not provided
         const key =
-          input.key ||
+          input.key ??
           `webhook-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
         // Check if key already exists
@@ -293,11 +310,11 @@ export const webhooksRouter = createTRPCRouter({
           description: input.description,
           isActive: input.isActive,
           allowedMethods: input.allowedMethods,
-          allowedIps: input.allowedIps || [],
+          allowedIps: input.allowedIps ?? [],
           rateLimitPerMinute: input.rateLimitPerMinute,
           requireAuth: input.requireAuth,
           authToken: input.authToken,
-          customHeaders: input.customHeaders || {},
+          customHeaders: input.customHeaders ?? {},
           responseFormat: input.responseFormat,
           triggerCount: 0,
           lastTriggered: null,
@@ -306,7 +323,7 @@ export const webhooksRouter = createTRPCRouter({
         };
 
         console.log(
-          `Created webhook "${key}" for workflow ${input.workflowId} by user ${ctx.userId}`,
+          `Created webhook "${key}" for workflow ${String(input.workflowId)} by user ${ctx.userId}`,
         );
 
         return newWebhook;
@@ -433,7 +450,7 @@ export const webhooksRouter = createTRPCRouter({
         // Check authentication if required
         if (webhook.requireAuth && webhook.authToken) {
           const authHeader =
-            input.headers?.authorization || input.headers?.Authorization;
+            input.headers?.authorization ?? input.headers?.Authorization;
           if (!authHeader?.includes(webhook.authToken)) {
             throw new TRPCError({
               code: "UNAUTHORIZED",
@@ -448,7 +465,7 @@ export const webhooksRouter = createTRPCRouter({
             webhook.customHeaders,
           )) {
             const actualValue =
-              input.headers?.[headerName] ||
+              input.headers?.[headerName] ??
               input.headers?.[headerName.toLowerCase()];
             if (actualValue !== expectedValue) {
               throw new TRPCError({
@@ -559,8 +576,10 @@ export const webhooksRouter = createTRPCRouter({
 
   // Get webhook execution history
   getExecutionHistory: webhookProcedure
+    .use(withTiming)
+    .use(withCache(30000)) // Cache for 30 seconds
     .input(webhookExecutionHistorySchema)
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input }) => {
       try {
         const executions = await getWebhookExecutions(input.key, input);
 
@@ -595,7 +614,7 @@ export const webhooksRouter = createTRPCRouter({
 
         // Apply sorting
         filteredExecutions.sort((a, b) => {
-          let aValue: any, bValue: any;
+          let aValue: string | Date | number, bValue: string | Date | number;
 
           switch (input.sortBy) {
             case "timestamp":
@@ -644,8 +663,10 @@ export const webhooksRouter = createTRPCRouter({
 
   // Get webhook statistics
   getStats: webhookProcedure
+    .use(withTiming)
+    .use(withCache(60000)) // Cache for 1 minute
     .input(webhookStatsSchema)
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input }) => {
       try {
         // Mock webhook statistics
         const stats = {
@@ -757,7 +778,7 @@ export const webhooksRouter = createTRPCRouter({
 
         // Mock updating security settings
         const updatedSecurity = {
-          ipWhitelist: input.enableIpWhitelist ? input.allowedIps || [] : [],
+          ipWhitelist: input.enableIpWhitelist ? (input.allowedIps ?? []) : [],
           rateLimit: input.enableRateLimit ? input.rateLimitPerMinute : 0,
           authentication: input.enableAuth
             ? {
@@ -794,12 +815,12 @@ export const webhooksRouter = createTRPCRouter({
   // Generate webhook URL
   generateUrl: webhookProcedure
     .input(generateWebhookUrlSchema)
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ input }) => {
       try {
         const baseUrl =
-          process.env.NEXT_PUBLIC_APP_URL || "http://localhost:5001";
+          process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:5001";
         const key =
-          input.customKey ||
+          input.customKey ??
           `webhook-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
         let url = `${baseUrl}/api/workflows/webhook/${key}`;
@@ -830,8 +851,11 @@ export const webhooksRouter = createTRPCRouter({
 
   // Get webhook monitoring data
   getMonitoring: webhookProcedure
+    .use(withTiming)
+    .use(withRateLimit(100, 60000)) // 100 requests per minute
+    .use(withCache(10000)) // Cache for 10 seconds
     .input(webhookMonitoringSchema)
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input }) => {
       try {
         // Mock monitoring data
         const monitoring = {

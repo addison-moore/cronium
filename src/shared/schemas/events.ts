@@ -137,7 +137,7 @@ export const createEventSchema = z
     (data) => {
       // Validate server selection for remote execution
       if (data.runLocation === RunLocation.REMOTE) {
-        return data.serverId || data.selectedServerIds.length > 0;
+        return data.serverId ?? data.selectedServerIds.length > 0;
       }
       return true;
     },
@@ -153,7 +153,7 @@ export const createEventSchema = z
         data.triggerType === EventTriggerType.SCHEDULE &&
         data.status === EventStatus.ACTIVE
       ) {
-        return data.scheduleNumber || data.customSchedule;
+        return data.scheduleNumber ?? data.customSchedule;
       }
       return true;
     },

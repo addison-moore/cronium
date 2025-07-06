@@ -6,8 +6,8 @@ import { toast } from "@/components/ui/use-toast";
 interface UseFormSubmitOptions<T> {
   endpoint: string;
   method?: "POST" | "PUT";
-  onSuccess?: (data: any) => void;
-  onError?: (error: any) => void;
+  onSuccess?: (data: T) => void;
+  onError?: (error: unknown) => void;
   successMessage?: string;
   errorMessage?: string;
 }
@@ -40,11 +40,11 @@ export function useFormSubmit<T>({
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || errorMessage);
+        const errorData = (await response.json()) as { message: string };
+        throw new Error(errorData.message ?? errorMessage);
       }
 
-      const responseData = await response.json();
+      const responseData = (await response.json()) as T;
 
       toast({
         title: "Success",

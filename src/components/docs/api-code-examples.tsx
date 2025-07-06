@@ -19,7 +19,9 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType>({
   selectedLanguage: "python",
-  setSelectedLanguage: () => {},
+  setSelectedLanguage: () => {
+    // Default empty implementation for context
+  },
 });
 
 function getSyntaxLanguage(language: Language): string {
@@ -82,7 +84,7 @@ export function CodeBlock({
   }, [code, selectedLanguage]);
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(code);
+    void navigator.clipboard.writeText(code);
   };
 
   return (
@@ -158,17 +160,17 @@ export function SimpleCodeBlock({
       }
     };
 
-    loadPrism();
+    void loadPrism();
   }, [children, language]);
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(children);
+    void navigator.clipboard.writeText(children);
   };
 
   return (
     <div className="relative">
       <pre
-        className={`bg-grey-800 overflow-x-auto rounded-lg p-4 text-sm text-gray-100 ${className || ""}`}
+        className={`bg-grey-800 overflow-x-auto rounded-lg p-4 text-sm text-gray-100 ${className ?? ""}`}
       >
         <code
           className={`language-${language}`}

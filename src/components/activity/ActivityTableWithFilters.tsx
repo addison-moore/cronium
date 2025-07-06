@@ -14,20 +14,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ComboBox } from "@/components/ui/combo-box";
-import { LogStatus } from "@/shared/schema";
+import {
+  LogStatus,
+  type Event,
+  type Log,
+  type Workflow,
+} from "@/shared/schema";
+import type { LogsResponse } from "@/types/api";
 import { ActivityTable } from "./ActivityTable";
-
-interface Script {
-  id: number;
-  name: string;
-}
 
 interface ActivityWithFiltersProps {
   title: string;
   description?: string;
-  getLogs: (params: URLSearchParams) => Promise<{ logs: any[]; total: number }>;
-  getEvents: () => Promise<Script[]>;
-  fetchWorkflows?: () => Promise<any[]>;
+  getLogs: (params: URLSearchParams) => Promise<LogsResponse>;
+  getEvents: () => Promise<Event[]>;
+  fetchWorkflows?: () => Promise<Workflow[]>;
   pageSize?: number;
   className?: string;
 }
@@ -42,10 +43,9 @@ export function ActivityTableWithFilters({
   className = "",
 }: ActivityWithFiltersProps) {
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [logs, setLogs] = useState<any[]>([]);
-  const [scripts, setScripts] = useState<Script[]>([]);
-  const [workflows, setWorkflows] = useState<any[]>([]);
+  const [logs, setLogs] = useState<Log[]>([]);
+  const [scripts, setScripts] = useState<Event[]>([]);
+  const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [filterEventId, setFilterEventId] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterDate, setFilterDate] = useState("");
@@ -57,15 +57,17 @@ export function ActivityTableWithFilters({
   const [totalItems, setTotalItems] = useState(0);
 
   useEffect(() => {
-    loadScripts();
-    loadWorkflows();
-    loadLogs();
+    const initializeData = async () => {
+      await Promise.all([loadScripts(), loadWorkflows()]);
+      await loadLogs();
+    };
+    void initializeData();
   }, []);
 
   // Effect to reload logs when filters change
   useEffect(() => {
     if (!isLoading) {
-      loadLogs();
+      void loadLogs();
     }
   }, [
     filterEventId,
@@ -77,7 +79,7 @@ export function ActivityTableWithFilters({
     itemsPerPage,
   ]);
 
-  const loadScripts = async () => {
+  const loadScripts = async (): Promise<void> => {
     try {
       const scriptData = await getEvents();
       setScripts(scriptData);
@@ -86,7 +88,7 @@ export function ActivityTableWithFilters({
     }
   };
 
-  const loadWorkflows = async () => {
+  const loadWorkflows = async (): Promise<void> => {
     if (!fetchWorkflows) return;
     try {
       const workflowData = await fetchWorkflows();
@@ -96,7 +98,7 @@ export function ActivityTableWithFilters({
     }
   };
 
-  const loadLogs = async () => {
+  const loadLogs = async (): Promise<void> => {
     try {
       setIsLoading(true);
 
@@ -121,7 +123,8 @@ export function ActivityTableWithFilters({
         queryParams.set("sharedOnly", "true");
       }
 
-      const { logs, total } = await getLogs(queryParams);
+      const response = await getLogs(queryParams);
+      const { logs, total } = response;
 
       setLogs(logs);
       setTotalItems(total);
@@ -133,16 +136,14 @@ export function ActivityTableWithFilters({
     }
   };
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
+  const handleRefresh = async (): Promise<void> => {
     await loadLogs();
-    setIsRefreshing(false);
   };
 
   const handleFilterChange = (
     type: "script" | "status" | "date",
     value: string,
-  ) => {
+  ): void => {
     // Update the appropriate filter state
     if (type === "script") setFilterEventId(value);
     if (type === "status") setFilterStatus(value);
@@ -152,7 +153,7 @@ export function ActivityTableWithFilters({
     setCurrentPage(1);
   };
 
-  const clearFilters = () => {
+  const clearFilters = (): void => {
     setFilterEventId("");
     setFilterStatus("");
     setFilterDate("");
@@ -161,11 +162,11 @@ export function ActivityTableWithFilters({
     setCurrentPage(1);
   };
 
-  const handlePageChange = (newPage: number) => {
+  const handlePageChange = (newPage: number): void => {
     setCurrentPage(newPage);
   };
 
-  const handlePageSizeChange = (newSize: number) => {
+  const handlePageSizeChange = (newSize: number): void => {
     setItemsPerPage(newSize);
     setCurrentPage(1);
   };
@@ -186,7 +187,9 @@ export function ActivityTableWithFilters({
                   })),
                 ]}
                 value={filterEventId}
-                onChange={(value) => handleFilterChange("script", value)}
+                onChange={(value: string) =>
+                  handleFilterChange("script", value)
+                }
                 placeholder="All Events"
                 maxDisplayItems={5}
                 className="h-10"
@@ -197,7 +200,9 @@ export function ActivityTableWithFilters({
               <Label htmlFor="statusFilter">Status</Label>
               <Select
                 value={filterStatus}
-                onValueChange={(value) => handleFilterChange("status", value)}
+                onValueChange={(value: string) =>
+                  handleFilterChange("status", value)
+                }
               >
                 <SelectTrigger id="statusFilter" className="w-full">
                   <SelectValue placeholder="All Statuses" />
@@ -230,7 +235,7 @@ export function ActivityTableWithFilters({
               <Label htmlFor="ownershipFilter">Event Ownership</Label>
               <Select
                 value={filterEventOwnership}
-                onValueChange={(value) => {
+                onValueChange={(value: string) => {
                   setFilterEventOwnership(value);
                   setCurrentPage(1);
                 }}
@@ -258,7 +263,7 @@ export function ActivityTableWithFilters({
                   })),
                 ]}
                 value={filterWorkflowId}
-                onChange={(value) => {
+                onChange={(value: string) => {
                   setFilterWorkflowId(value);
                   setCurrentPage(1);
                 }}
@@ -288,7 +293,17 @@ export function ActivityTableWithFilters({
       <ActivityTable
         title={title}
         description={description ?? ""}
-        data={logs}
+        data={logs.map((log) => ({
+          id: log.id,
+          eventId: log.eventId,
+          eventName: log.eventName ?? "Unknown Event",
+          status: log.status,
+          ...(log.output ? { output: log.output } : {}),
+          startTime: log.startTime.toISOString(),
+          endTime: log.endTime?.toISOString() ?? null,
+          duration: log.duration,
+          ...(log.workflowId ? { workflowId: log.workflowId } : {}),
+        }))}
         isLoading={isLoading}
         onRefresh={handleRefresh}
         emptyStateMessage={

@@ -30,6 +30,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { trpc } from "@/components/providers/TrpcProvider";
 import { cn } from "@/lib/utils";
+import { type Tool, ToolType } from "@/shared/schema";
 
 interface IntegrationTestPanelProps {
   toolId?: number;
@@ -39,16 +40,22 @@ interface IntegrationTestPanelProps {
 interface TestResult {
   success: boolean;
   message: string;
-  details?: any;
+  details?: unknown;
   duration?: number;
   timestamp: Date;
+}
+
+interface TestResponse {
+  success: boolean;
+  message: string;
+  details?: unknown;
 }
 
 export function IntegrationTestPanel({
   toolId,
   onClose,
 }: IntegrationTestPanelProps) {
-  const [selectedTool, setSelectedTool] = useState<any>(null);
+  const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [testResults, setTestResults] = useState<Record<string, TestResult>>(
     {},
   );
@@ -74,25 +81,27 @@ export function IntegrationTestPanel({
   const emailSendMutation = trpc.integrations.email.send.useMutation();
   const webhookSendMutation = trpc.integrations.webhook.send.useMutation();
 
-  const tools = toolsData?.tools || [];
+  const tools = toolsData?.tools ?? [];
   const currentTool = toolId ? toolData : selectedTool;
 
-  const getToolIcon = (type: string) => {
-    switch (type.toLowerCase()) {
-      case "email":
+  const getToolIcon = (type: ToolType) => {
+    switch (type) {
+      case ToolType.EMAIL:
         return Mail;
-      case "slack":
+      case ToolType.SLACK:
         return MessageSquare;
-      case "discord":
+      case ToolType.DISCORD:
         return MessageSquare;
-      case "webhook":
+      case ToolType.WEBHOOK:
+        return Webhook;
+      case ToolType.HTTP:
         return Webhook;
       default:
         return TestTube;
     }
   };
 
-  const runTest = async (testType: "connection" | "send", tool: any) => {
+  const runTest = async (testType: "connection" | "send", tool: Tool) => {
     if (!tool) return;
 
     const testKey = `${tool.id}-${testType}`;
@@ -101,45 +110,46 @@ export function IntegrationTestPanel({
     const startTime = performance.now();
 
     try {
-      let result: any;
+      let result: TestResponse;
 
       if (testType === "connection") {
-        result = await testConnectionMutation.mutateAsync({
+        result = (await testConnectionMutation.mutateAsync({
           toolId: tool.id,
           testType: "connection",
-        });
+        })) as TestResponse;
       } else {
         // Send test based on tool type
-        switch (tool.type.toLowerCase()) {
-          case "slack":
-            result = await slackSendMutation.mutateAsync({
+        switch (tool.type) {
+          case ToolType.SLACK:
+            result = (await slackSendMutation.mutateAsync({
               toolId: tool.id,
               message: testMessage,
               username: "Cronium Test Bot",
-            });
+            })) as TestResponse;
             break;
-          case "discord":
-            result = await discordSendMutation.mutateAsync({
+          case ToolType.DISCORD:
+            result = (await discordSendMutation.mutateAsync({
               toolId: tool.id,
               message: testMessage,
               username: "Cronium Test Bot",
-            });
+            })) as TestResponse;
             break;
-          case "email":
-            result = await emailSendMutation.mutateAsync({
+          case ToolType.EMAIL:
+            result = (await emailSendMutation.mutateAsync({
               toolId: tool.id,
               recipients: testRecipient,
               subject: testSubject,
               message: testMessage,
-            });
+            })) as TestResponse;
             break;
-          case "webhook":
-            result = await webhookSendMutation.mutateAsync({
+          case ToolType.WEBHOOK:
+          case ToolType.HTTP:
+            result = (await webhookSendMutation.mutateAsync({
               toolId: tool.id,
               message: testMessage,
               payload: { message: testMessage, test: true },
               method: "POST",
-            });
+            })) as TestResponse;
             break;
           default:
             throw new Error("Unsupported tool type for testing");
@@ -164,13 +174,16 @@ export function IntegrationTestPanel({
         description: result.message,
         variant: result.success ? "default" : "destructive",
       });
-    } catch (error: any) {
+    } catch (error) {
       const endTime = performance.now();
       const duration = endTime - startTime;
 
       const testResult: TestResult = {
         success: false,
-        message: error.message || "Test failed with unknown error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Test failed with unknown error",
         duration,
         timestamp: new Date(),
       };
@@ -179,7 +192,10 @@ export function IntegrationTestPanel({
 
       toast({
         title: "Test Failed",
-        description: error.message || "Test failed with unknown error",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Test failed with unknown error",
         variant: "destructive",
       });
     } finally {
@@ -231,10 +247,10 @@ export function IntegrationTestPanel({
           <div className="space-y-2">
             <Label>Select Tool to Test</Label>
             <Select
-              value={selectedTool?.id?.toString() || ""}
+              value={selectedTool?.id?.toString() ?? ""}
               onValueChange={(value) => {
                 const tool = tools.find((t) => t.id === parseInt(value));
-                setSelectedTool(tool);
+                setSelectedTool(tool ?? null);
                 setTestResults({}); // Clear previous results
               }}
             >
@@ -368,7 +384,7 @@ export function IntegrationTestPanel({
                           </div>
                         </div>
                         <div className="text-muted-foreground text-right text-sm">
-                          <p>{formatDuration(result.duration || 0)}</p>
+                          <p>{formatDuration(result.duration ?? 0)}</p>
                           <p>{result.timestamp.toLocaleTimeString()}</p>
                         </div>
                       </div>
@@ -390,7 +406,7 @@ export function IntegrationTestPanel({
                     />
                   </div>
 
-                  {currentTool.type.toLowerCase() === "email" && (
+                  {currentTool.type === ToolType.EMAIL && (
                     <>
                       <div className="space-y-2">
                         <Label htmlFor="test-recipient">Test Recipient</Label>
@@ -446,7 +462,7 @@ export function IntegrationTestPanel({
                     </div>
                   ) : (
                     Object.entries(testResults).map(([testKey, result]) => {
-                      const [toolId, testType] = testKey.split("-");
+                      const [, testType] = testKey.split("-");
 
                       return (
                         <div
@@ -460,7 +476,7 @@ export function IntegrationTestPanel({
                                 {testType} Test
                               </span>
                               <Badge variant="outline" className="text-xs">
-                                {formatDuration(result.duration || 0)}
+                                {formatDuration(result.duration ?? 0)}
                               </Badge>
                             </div>
                             <span className="text-muted-foreground text-sm">

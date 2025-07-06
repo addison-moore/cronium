@@ -8,7 +8,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   FileText,
   Code,
@@ -16,7 +15,6 @@ import {
   Settings,
   ArrowRight,
   Zap,
-  Clock,
   User,
   AlertCircle,
   Shield,

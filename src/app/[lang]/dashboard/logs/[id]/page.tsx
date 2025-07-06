@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   XCircle,
@@ -19,24 +20,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { toast } from "@/components/ui/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 import type { LogStatus } from "@/shared/schema";
 import { Spinner } from "@/components/ui/spinner";
-
-interface LogDetails {
-  id: number;
-  eventId: number;
-  eventName: string;
-  status: LogStatus;
-  output: string;
-  startTime: string;
-  endTime: string | null;
-  duration: number | null;
-  retries: number;
-  error?: string;
-  scriptContent: string;
-  scriptType: string;
-}
+import { trpc } from "@/lib/trpc";
 
 // Helper component for the Back to Logs button
 function BackButton({ lang }: { lang: string }) {
@@ -117,64 +104,67 @@ function getStatusBadge(status: LogStatus) {
   return <StatusBadge status={status} size="md" />;
 }
 
-export default function LogDetailsPage({
-  params,
-}: {
-  params: { id: string; lang: string };
-}) {
-  // We'll keep a default language until params are properly resolved
-  const [lang, setLang] = useState("en");
-  const [id, setId] = useState("");
-  const [logDetails, setLogDetails] = useState<LogDetails | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+interface LogDetailsPageProps {
+  params: Promise<{ id: string; lang: string }>;
+}
 
-  // Safely extract params for Next.js 15
+export default function LogDetailsPage({ params }: LogDetailsPageProps) {
+  const resolvedParams = use(params);
+  const logId = parseInt(resolvedParams.id);
+  const lang = resolvedParams.lang;
+  const router = useRouter();
+  const { toast } = useToast();
+
+  // Use tRPC query to fetch log details
+  const {
+    data: logDetails,
+    isLoading,
+    error: logError,
+  } = trpc.logs.getById.useQuery(
+    { id: logId },
+    {
+      enabled: !isNaN(logId),
+    },
+  );
+
+  // Handle invalid log ID
   useEffect(() => {
-    async function initializeParams() {
-      try {
-        const resolvedParams = await Promise.resolve(params);
-        setLang(resolvedParams.lang);
-        setId(resolvedParams.id);
-      } catch (error) {
-        console.error("Error resolving params:", error);
-        // Default to english if params can't be resolved
-        setLang("en");
-      }
-    }
-
-    initializeParams();
-  }, [params]);
-
-  // Fetch log details once we have an ID
-  useEffect(() => {
-    if (id) {
-      fetchLogDetails(id);
-    }
-  }, [id]);
-
-  // Fetch log details based on the ID
-  const fetchLogDetails = async (logId: string) => {
-    try {
-      setIsLoading(true);
-      const response = await fetch(`/api/logs/${logId}`);
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch log details");
-      }
-
-      const data = await response.json();
-      setLogDetails(data);
-    } catch (error) {
-      console.error("Error fetching log details:", error);
+    if (isNaN(logId)) {
       toast({
         title: "Error",
-        description: "Failed to load log details. Please try again.",
+        description: "Invalid log ID",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
+      router.push(`/${lang}/dashboard/logs`);
     }
-  };
+  }, [logId, router, lang, toast]);
+
+  // Handle log error
+  useEffect(() => {
+    if (logError) {
+      if (logError.data?.code === "NOT_FOUND") {
+        toast({
+          title: "Error",
+          description: "Log not found",
+          variant: "destructive",
+        });
+        router.push(`/${lang}/dashboard/logs`);
+      } else if (logError.data?.code === "FORBIDDEN") {
+        toast({
+          title: "Error",
+          description: "Access denied",
+          variant: "destructive",
+        });
+        router.push(`/${lang}/dashboard/logs`);
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to load log details. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
+  }, [logError, router, lang, toast]);
 
   // Show loading state while waiting for params and data
   if (isLoading) {
@@ -207,7 +197,9 @@ export default function LogDetailsPage({
           <CardContent>
             <div className="max-h-[400px] overflow-auto rounded-md bg-slate-950 p-4 font-mono text-sm text-slate-50">
               {logDetails.output ? (
-                <pre className="whitespace-pre-wrap">{logDetails.output}</pre>
+                <pre className="whitespace-pre-wrap">
+                  {logDetails.output ?? ""}
+                </pre>
               ) : (
                 <p className="text-slate-400 italic">No output recorded</p>
               )}
@@ -251,7 +243,9 @@ export default function LogDetailsPage({
                 <Calendar className="mr-2 h-4 w-4" />
                 Started At
               </p>
-              <p className="font-medium">{formatDate(logDetails.startTime)}</p>
+              <p className="font-medium">
+                {formatDate(logDetails.startTime.toISOString())}
+              </p>
             </div>
 
             {logDetails.endTime && (
@@ -260,7 +254,9 @@ export default function LogDetailsPage({
                   <Calendar className="mr-2 h-4 w-4" />
                   Ended At
                 </p>
-                <p className="font-medium">{formatDate(logDetails.endTime)}</p>
+                <p className="font-medium">
+                  {formatDate(logDetails.endTime.toISOString())}
+                </p>
               </div>
             )}
 
@@ -276,7 +272,7 @@ export default function LogDetailsPage({
 
             <div>
               <p className="text-sm font-medium text-gray-500">Retries</p>
-              <p className="font-medium">{logDetails.retries || 0}</p>
+              <p className="font-medium">{logDetails.retries ?? 0}</p>
             </div>
 
             <div>
@@ -300,7 +296,7 @@ export default function LogDetailsPage({
         <CardContent>
           <div className="max-h-[400px] overflow-auto rounded-md bg-slate-950 p-4 font-mono text-sm text-slate-50">
             <pre className="whitespace-pre-wrap">
-              {logDetails.scriptContent}
+              {logDetails.scriptContent ?? ""}
             </pre>
           </div>
         </CardContent>

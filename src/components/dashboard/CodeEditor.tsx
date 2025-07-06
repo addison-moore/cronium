@@ -2,6 +2,8 @@
 
 import { useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
+import type { OnMount } from "@monaco-editor/react";
+import type { editor } from "monaco-editor";
 import { EventType } from "@/shared/schema";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -20,10 +22,10 @@ export default function CodeEditor({
   disabled = false,
   height = "500px",
 }: CodeEditorProps) {
-  const editorRef = useRef<any>(null);
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const handleEditorDidMount = (editor: any) => {
+  const handleEditorDidMount: OnMount = (editor) => {
     editorRef.current = editor;
     setIsLoading(false);
   };
@@ -36,6 +38,8 @@ export default function CodeEditor({
         return "python";
       case EventType.BASH:
         return "shell";
+      case EventType.HTTP_REQUEST:
+        return "json";
       default:
         return "javascript";
     }
@@ -125,7 +129,7 @@ echo "Script execution completed!"`;
         language={getLanguage(scriptType)}
         value={getExampleCode(scriptType)}
         theme="vs-dark"
-        onChange={(value) => onChange(value || "")}
+        onChange={(value) => onChange(value ?? "")}
         onMount={handleEditorDidMount}
         options={{
           minimap: { enabled: false },

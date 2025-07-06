@@ -1,4 +1,4 @@
-import { createTRPCRouter } from "./trpc";
+import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 import { eventsRouter } from "./routers/events";
 import { workflowsRouter } from "./routers/workflows";
 import { adminRouter } from "./routers/admin";
@@ -15,7 +15,7 @@ import { aiRouter } from "./routers/ai";
 import { dashboardRouter } from "./routers/dashboard";
 import { systemRouter } from "./routers/system";
 import { userAuthRouter } from "./routers/userAuth";
-import type { inferRouterOutputs } from "@trpc/server";
+import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 
 /**
  * This is the primary router for your server.
@@ -45,4 +45,7 @@ export const appRouter = createTRPCRouter({
 export type AppRouter = typeof appRouter;
 
 // export type helpers for inferring types
+export type RouterInputs = inferRouterInputs<AppRouter>;
 export type RouterOutputs = inferRouterOutputs<AppRouter>;
+
+export const createCaller = createCallerFactory(appRouter);

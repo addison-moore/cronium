@@ -57,21 +57,24 @@ export function requiresServerSelection(runLocation: RunLocation): boolean {
  * Type guard for valid environment variable
  */
 export function isValidEnvironmentVariable(
-  envVar: any,
+  envVar: unknown,
 ): envVar is EnvironmentVariable {
+  const obj = envVar as Record<string, unknown>;
   return (
     typeof envVar === "object" &&
     envVar !== null &&
-    typeof envVar.key === "string" &&
-    typeof envVar.value === "string" &&
-    envVar.key.length > 0
+    typeof obj.key === "string" &&
+    typeof obj.value === "string" &&
+    obj.key.length > 0
   );
 }
 
 /**
  * Type guard for valid HTTP request configuration
  */
-export function isValidHttpConfig(config: any): config is HttpRequestConfig {
+export function isValidHttpConfig(
+  config: unknown,
+): config is HttpRequestConfig {
   const validMethods = [
     "GET",
     "POST",
@@ -82,14 +85,16 @@ export function isValidHttpConfig(config: any): config is HttpRequestConfig {
     "OPTIONS",
   ];
 
+  const obj = config as Record<string, unknown>;
   return (
     typeof config === "object" &&
     config !== null &&
-    validMethods.includes(config.method) &&
-    typeof config.url === "string" &&
-    config.url.length > 0 &&
-    Array.isArray(config.headers) &&
-    typeof config.body === "string"
+    typeof obj.method === "string" &&
+    validMethods.includes(obj.method) &&
+    typeof obj.url === "string" &&
+    obj.url.length > 0 &&
+    Array.isArray(obj.headers) &&
+    typeof obj.body === "string"
   );
 }
 
@@ -97,18 +102,20 @@ export function isValidHttpConfig(config: any): config is HttpRequestConfig {
  * Type guard for valid editor settings
  */
 export function isValidEditorSettings(
-  settings: any,
+  settings: unknown,
 ): settings is EditorSettings {
   const validThemes = ["vs-dark", "vs-light", "hc-black"];
+  const obj = settings as Record<string, unknown>;
 
   return (
     typeof settings === "object" &&
     settings !== null &&
-    typeof settings.fontSize === "number" &&
-    validThemes.includes(settings.theme) &&
-    typeof settings.wordWrap === "boolean" &&
-    typeof settings.minimap === "boolean" &&
-    typeof settings.lineNumbers === "boolean"
+    typeof obj.fontSize === "number" &&
+    typeof obj.theme === "string" &&
+    validThemes.includes(obj.theme) &&
+    typeof obj.wordWrap === "boolean" &&
+    typeof obj.minimap === "boolean" &&
+    typeof obj.lineNumbers === "boolean"
   );
 }
 
@@ -137,7 +144,7 @@ export function isValidUrl(url: string): boolean {
 /**
  * Type guard for valid positive integer
  */
-export function isValidPositiveInteger(value: any): value is number {
+export function isValidPositiveInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
@@ -369,7 +376,7 @@ export function validateEventFormData<T extends EventType>(
         const match = /envVars\.(\d+)/.exec(error.field);
         if (match?.[1]) {
           const index = parseInt(match[1], 10);
-          errors.envVars = errors.envVars || {};
+          errors.envVars ??= {};
           errors.envVars[index] =
             error.message ?? "Invalid environment variable";
         }
@@ -385,12 +392,12 @@ export function validateEventFormData<T extends EventType>(
  */
 export function validateFormField<T extends EventType>(
   fieldName: keyof EventFormData<T>,
-  value: any,
+  value: unknown,
   eventData: EventFormData<T>,
 ): string | null {
   switch (fieldName) {
     case "name":
-      if (!value || value.trim().length === 0) {
+      if (!value || typeof value !== "string" || value.trim().length === 0) {
         return "Event name is required";
       }
       if (!isValidEventName(value)) {
@@ -401,7 +408,7 @@ export function validateFormField<T extends EventType>(
     case "content":
       if (
         requiresScriptContent(eventData.type) &&
-        (!value || value.trim().length === 0)
+        (!value || typeof value !== "string" || value.trim().length === 0)
       ) {
         return "Script content is required";
       }
@@ -409,7 +416,7 @@ export function validateFormField<T extends EventType>(
 
     case "httpUrl":
       if (requiresHttpConfig(eventData.type)) {
-        if (!value || value.trim().length === 0) {
+        if (!value || typeof value !== "string" || value.trim().length === 0) {
           return "HTTP URL is required";
         }
         if (!isValidUrl(value)) {
@@ -427,7 +434,7 @@ export function validateFormField<T extends EventType>(
       break;
 
     case "customSchedule":
-      if (value && !isValidCronExpression(value)) {
+      if (value && typeof value === "string" && !isValidCronExpression(value)) {
         return "Invalid cron expression format";
       }
       break;
@@ -468,7 +475,7 @@ export function hasFormErrors(errors: EventFormErrors): boolean {
   return Object.values(errors).some((error) => {
     if (typeof error === "string") return error.length > 0;
     if (typeof error === "object" && error !== null) {
-      return Object.values(error).some(
+      return Object.values(error as Record<string, unknown>).some(
         (nestedError) =>
           typeof nestedError === "string" && nestedError.length > 0,
       );
@@ -481,12 +488,15 @@ export function hasFormErrors(errors: EventFormErrors): boolean {
  * Get first error message from form errors
  */
 export function getFirstFormError(errors: EventFormErrors): string | null {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   for (const [_field, error] of Object.entries(errors)) {
     if (typeof error === "string" && error.length > 0) {
       return error;
     }
     if (typeof error === "object" && error !== null) {
-      for (const nestedError of Object.values(error)) {
+      for (const nestedError of Object.values(
+        error as Record<string, unknown>,
+      )) {
         if (typeof nestedError === "string" && nestedError.length > 0) {
           return nestedError;
         }

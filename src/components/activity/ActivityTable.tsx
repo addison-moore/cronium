@@ -52,6 +52,7 @@ interface ActivityTableProps {
   description?: string;
   data: ActivityEntry[];
   isLoading: boolean;
+  isRefreshing?: boolean;
   onRefresh?: () => Promise<void>;
   emptyStateMessage?: string;
   showPagination?: boolean;
@@ -69,6 +70,7 @@ export function ActivityTable({
   description,
   data,
   isLoading,
+  isRefreshing: externalIsRefreshing,
   onRefresh,
   emptyStateMessage = "No activity found",
   showPagination = false,
@@ -81,16 +83,19 @@ export function ActivityTable({
   className = "",
 }: ActivityTableProps) {
   const params = useParams<{ lang: string }>();
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [internalIsRefreshing, setInternalIsRefreshing] = useState(false);
+
+  // Use external isRefreshing prop if provided, otherwise use internal state
+  const isRefreshing = externalIsRefreshing ?? internalIsRefreshing;
 
   const handleRefresh = async () => {
     if (!onRefresh) return;
 
-    setIsRefreshing(true);
+    setInternalIsRefreshing(true);
     try {
       await onRefresh();
     } finally {
-      setIsRefreshing(false);
+      setInternalIsRefreshing(false);
     }
   };
 
@@ -241,7 +246,7 @@ export function ActivityTable({
                   <Pagination
                     currentPage={currentPage}
                     totalPages={totalPages}
-                    onPageChange={onPageChange ?? (() => {})}
+                    onPageChange={onPageChange ?? (() => undefined)}
                     itemsPerPage={itemsPerPage}
                     totalItems={totalItems}
                   />

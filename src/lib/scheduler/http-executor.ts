@@ -1,4 +1,4 @@
-import axios, { type AxiosError } from "axios";
+import axios, { type AxiosError, type AxiosRequestConfig } from "axios";
 
 /**
  * Execute an HTTP request
@@ -7,12 +7,19 @@ import axios, { type AxiosError } from "axios";
  * @param headers Array of header objects with key/value pairs
  * @param body Body content for POST/PUT requests
  */
+interface HttpResponseData {
+  status: number;
+  statusText: string;
+  headers: Record<string, unknown>;
+  body: unknown;
+}
+
 export async function executeHttpRequest(
   method = "GET",
   url = "",
   headers: Array<{ key: string; value: string }> = [],
-  body: any = null,
-): Promise<{ data: any; error?: string }> {
+  body: unknown = null,
+): Promise<{ data: HttpResponseData | null; error?: string }> {
   if (!url) {
     return { data: null, error: "No URL provided for HTTP request" };
   }
@@ -27,8 +34,8 @@ export async function executeHttpRequest(
     });
 
     // Set up request configuration
-    const config: any = {
-      method: method || "GET",
+    const config: AxiosRequestConfig = {
+      method: method ?? "GET",
       url,
       headers: headerObj,
       timeout: 30000, // 30-second timeout
@@ -36,6 +43,7 @@ export async function executeHttpRequest(
 
     // Add body for POST/PUT/PATCH
     if (
+      config.method &&
       ["POST", "PUT", "PATCH"].includes(config.method.toUpperCase()) &&
       body
     ) {
@@ -45,13 +53,21 @@ export async function executeHttpRequest(
           headerObj["Content-Type"] ?? headerObj["content-type"];
 
         if (contentType?.includes("application/x-www-form-urlencoded")) {
-          config.data = new URLSearchParams(body).toString();
+          if (typeof body === "object" && body !== null) {
+            config.data = new URLSearchParams(
+              body as Record<string, string>,
+            ).toString();
+          } else {
+            config.data = String(body);
+          }
         } else if (contentType?.includes("multipart/form-data")) {
           // Handle form data
           const formData = new FormData();
-          Object.entries(body).forEach(([key, value]) => {
-            formData.append(key, value as string);
-          });
+          if (typeof body === "object" && body !== null) {
+            Object.entries(body).forEach(([key, value]) => {
+              formData.append(key, String(value));
+            });
+          }
           config.data = formData;
         } else {
           // Default to JSON
@@ -63,15 +79,15 @@ export async function executeHttpRequest(
       }
     }
 
-    console.log(`Executing HTTP ${config.method} request to ${url}`);
+    console.log(`Executing HTTP ${config.method ?? "GET"} request to ${url}`);
     const response = await axios(config);
 
     return {
       data: {
         status: response.status,
         statusText: response.statusText,
-        headers: response.headers,
-        body: response.data,
+        headers: response.headers as Record<string, unknown>,
+        body: response.data as unknown,
       },
     };
   } catch (err) {
@@ -86,7 +102,7 @@ export async function executeHttpRequest(
         headers: error.response?.headers ?? {},
         body: error.response?.data ?? null,
       },
-      error: error.message || "HTTP request failed",
+      error: error.message ?? "HTTP request failed",
     };
   }
 }

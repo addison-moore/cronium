@@ -115,7 +115,7 @@ async function getUserTools(userId: string) {
 // Helper function to validate credentials based on tool type
 function validateCredentialsForType(
   type: ToolType,
-  credentials: any,
+  credentials: Record<string, unknown>,
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
@@ -179,7 +179,7 @@ export const toolsRouter = createTRPCRouter({
 
       // Apply sorting
       filteredTools.sort((a, b) => {
-        let aValue: any, bValue: any;
+        let aValue: string | Date, bValue: string | Date;
 
         switch (input.sortBy) {
           case "name":
@@ -437,7 +437,7 @@ export const toolsRouter = createTRPCRouter({
           toolName: string;
           testDuration: number;
           timestamp: string;
-          [key: string]: any; // Allow additional properties
+          [key: string]: unknown; // Allow additional properties
         },
       };
 
@@ -447,7 +447,7 @@ export const toolsRouter = createTRPCRouter({
           testResults.details = {
             ...testResults.details,
             webhookUrl: tool.credentials.webhookUrl ? "Valid" : "Invalid",
-            channel: tool.credentials.channel || "Default",
+            channel: tool.credentials.channel ?? "Default",
           };
           break;
         case ToolType.EMAIL:
@@ -480,7 +480,7 @@ export const toolsRouter = createTRPCRouter({
   // Validate tool credentials
   validateCredentials: toolProcedure
     .input(validateToolCredentialsSchema)
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ input }) => {
       try {
         const validation = validateCredentialsForType(
           input.type,
@@ -653,12 +653,12 @@ export const toolsRouter = createTRPCRouter({
         switch (input.format) {
           case "json":
             fileContent = JSON.stringify(exportData, null, 2);
-            filename = `tools_${new Date().toISOString().split("T")[0]}.json`;
+            filename = `tools_${new Date().toISOString().split("T")[0] ?? "export"}.json`;
             break;
           case "yaml":
             // Mock YAML export - in real implementation, use a YAML library
             fileContent = `# Tools Export\ntools:\n${exportData.map((tool) => `  - name: "${tool.name}"\n    type: "${tool.type}"`).join("\n")}`;
-            filename = `tools_${new Date().toISOString().split("T")[0]}.yaml`;
+            filename = `tools_${new Date().toISOString().split("T")[0] ?? "export"}.yaml`;
             break;
           default:
             throw new TRPCError({

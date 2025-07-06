@@ -18,9 +18,11 @@ import {
   EventEditTab,
   EventLogsTab,
   EventDeleteDialog,
-  type Log,
 } from "./index";
-import { EventStatus } from "@/shared/schema";
+import { EventStatus, type Log } from "@/shared/schema";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type { EventWithRelations } from "@/server/storage";
+import type { Event } from "./types";
 import { Spinner } from "../ui/spinner";
 
 interface EventDetailsProps {
@@ -30,7 +32,9 @@ interface EventDetailsProps {
 
 export function EventDetails({ eventId, langParam }: EventDetailsProps) {
   // Convert eventId to number for tRPC
-  const numericEventId = parseInt(eventId);
+  const parsedId = parseInt(eventId);
+  // Ensure we have a valid number, not NaN
+  const numericEventId = !isNaN(parsedId) ? parsedId : -1; // Use -1 or another sentinel value
 
   // State
   const [logs, setLogs] = useState<Log[]>([]);
@@ -101,7 +105,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
         variant: "default",
       });
       // Refresh logs to show new execution
-      refetchLogs();
+      void refetchLogs();
     },
   });
 
@@ -111,7 +115,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
         title: "Event Activated",
         description: "Event has been activated successfully.",
       });
-      refetchEvent();
+      void refetchEvent();
     },
   });
 
@@ -121,7 +125,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
         title: "Event Paused",
         description: "Event has been paused successfully.",
       });
-      refetchEvent();
+      void refetchEvent();
     },
   });
 
@@ -131,7 +135,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
         title: "Counter Reset",
         description: "Execution counter has been reset to 0.",
       });
-      refetchEvent();
+      void refetchEvent();
     },
   });
 
@@ -141,17 +145,17 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
         title: "Event Updated",
         description: "Event status updated successfully.",
       });
-      refetchEvent();
+      void refetchEvent();
     },
   });
 
   // Extract logs data from tRPC response
   useEffect(() => {
     if (logsData) {
-      setLogs(logsData.logs || []);
-      setTotalLogs(logsData.logs?.length || 0);
+      setLogs(logsData.logs ?? []);
+      setTotalLogs(logsData.logs?.length ?? 0);
       setTotalLogPages(
-        Math.ceil((logsData.logs?.length || 0) / logsItemsPerPage),
+        Math.ceil((logsData.logs?.length ?? 0) / logsItemsPerPage),
       );
     }
   }, [logsData, logsItemsPerPage]);
@@ -161,7 +165,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
     const hasRunningLogs = logs.some((log) => log.status === LogStatus.RUNNING);
     if (hasRunningLogs) {
       // Refetch logs to get updated status
-      refetchLogs();
+      void refetchLogs();
     }
   }, [logs, refetchLogs]);
 
@@ -176,7 +180,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
       pollingActiveRef.current = true;
       // Poll every 2 seconds for log status updates
       const interval = setInterval(() => {
-        checkRunningLogsStatus();
+        void checkRunningLogsStatus();
       }, 2000);
       setLogPollingInterval(interval);
     } else if (!hasRunningLogs && pollingActiveRef.current) {
@@ -209,7 +213,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
 
   // Handle logs refresh
   const handleLogsRefresh = () => {
-    refetchLogs();
+    void refetchLogs();
   };
 
   // Handle page size change for logs
@@ -228,7 +232,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
     try {
       await deleteEventMutation.mutateAsync({ id: numericEventId });
       setIsDeleteDialogOpen(false);
-    } catch (error) {
+    } catch {
       // Error handling is done in the mutation onError callback
       setIsDeleteDialogOpen(false);
     }
@@ -240,7 +244,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
       if (!event) return;
       setIsResettingCounter(true);
       await resetCounterMutation.mutateAsync({ id: numericEventId });
-    } catch (error) {
+    } catch {
       // Error handling is done in the mutation onError callback
     } finally {
       setIsResettingCounter(false);
@@ -258,9 +262,9 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
 
       // Start monitoring immediately for the new running log
       setTimeout(() => {
-        checkRunningLogsStatus();
+        void checkRunningLogsStatus();
       }, 1000); // Give the log a second to be created
-    } catch (error) {
+    } catch {
       // Error handling is done in the mutation onError callback
     } finally {
       setIsRunning(false);
@@ -287,14 +291,14 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
           status: newStatus,
         });
       }
-    } catch (error) {
+    } catch {
       // Error handling is done in the mutation onError callbacks
     }
   };
 
   // Handle event update success callback
   const handleEventUpdateSuccess = () => {
-    refetchEvent();
+    void refetchEvent();
     // Switch back to overview tab after successful edit
     changeTab("overview");
   };
@@ -351,19 +355,70 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
     );
   }
 
+  // Transform EventWithRelations to Event type expected by components
+  const transformedEvent: Event | null = event
+    ? {
+        ...event,
+        environmentVariables:
+          event.envVars?.map((env) => ({ key: env.key, value: env.value })) ??
+          [],
+        events: [], // Add empty events array if needed by the Event type
+        // Convert Date objects to strings
+        createdAt:
+          event.createdAt instanceof Date
+            ? event.createdAt.toISOString()
+            : event.createdAt,
+        updatedAt:
+          event.updatedAt instanceof Date
+            ? event.updatedAt.toISOString()
+            : event.updatedAt,
+        lastRunAt:
+          event.lastRunAt instanceof Date
+            ? event.lastRunAt.toISOString()
+            : (event.lastRunAt ?? null),
+        nextRunAt:
+          event.nextRunAt instanceof Date
+            ? event.nextRunAt.toISOString()
+            : (event.nextRunAt ?? null),
+        // Add HTTP request fields if it's an HTTP_REQUEST type
+        httpRequest: event.httpMethod
+          ? {
+              method: event.httpMethod,
+              url: event.httpUrl ?? "",
+              headers:
+                (event.httpHeaders as Array<{ key: string; value: string }>) ??
+                [],
+              body: event.httpBody ?? null,
+            }
+          : null,
+        // Map conditional actions properly
+        successEvents: event.successEvents ?? [],
+        failEvents: event.failEvents ?? [],
+        alwaysEvents: event.alwaysEvents ?? [],
+        conditionEvents: event.conditionEvents ?? [],
+        // Add missing fields with defaults
+        description: event.description,
+        active: event.status === EventStatus.ACTIVE,
+        schedule:
+          event.customSchedule ??
+          `${event.scheduleNumber} ${event.scheduleUnit}`,
+        tags: (event.tags as string[]) ?? [],
+      }
+    : null;
+
   return (
     <div className="container mx-auto space-y-6 py-6">
       {/* Event Header with Actions */}
-      <EventDetailsHeader
-        event={event}
-        onDelete={confirmDelete}
-        onRun={handleRunEvent}
-        onResetCounter={handleResetCounter}
-        onStatusChange={handleStatusChange}
-        isRunning={isRunning}
-        isResettingCounter={isResettingCounter}
-        langParam={langParam}
-      />
+      {transformedEvent && (
+        <EventDetailsHeader
+          event={transformedEvent}
+          onDelete={confirmDelete}
+          onRun={handleRunEvent}
+          onStatusChange={handleStatusChange}
+          isRunning={isRunning}
+          langParam={langParam}
+        />
+      )}
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={changeTab} className="w-full">
@@ -389,22 +444,30 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
         </TabsList>
 
         <TabsContent value="overview" className="mt-6">
-          <EventOverviewTab
-            event={event}
-            onRefresh={() => refetchEvent()}
-            langParam={langParam}
-            onResetCounter={() => refetchEvent()}
-            isResettingCounter={false}
-          />
+          {transformedEvent && (
+            <EventOverviewTab
+              event={transformedEvent}
+              onRefresh={async (): Promise<void> => {
+                await refetchEvent();
+              }}
+              langParam={langParam}
+              onResetCounter={handleResetCounter}
+              isResettingCounter={isResettingCounter}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="edit" className="mt-6">
-          <EventEditTab
-            event={event}
-            langParam={langParam}
-            onEventUpdate={handleEventUpdateSuccess}
-            onRefreshLogs={() => refetchEvent()}
-          />
+          {transformedEvent && (
+            <EventEditTab
+              event={transformedEvent}
+              langParam={langParam}
+              onEventUpdate={handleEventUpdateSuccess}
+              onRefreshLogs={(): void => {
+                void refetchEvent();
+              }}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="logs" className="mt-6">

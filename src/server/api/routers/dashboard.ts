@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  withTiming,
+  withCache,
+} from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { storage } from "@/server/storage";
 import { db } from "@/server/db";
@@ -20,6 +25,8 @@ const dashboardStatsSchema = z.object({
 export const dashboardRouter = createTRPCRouter({
   // Get dashboard statistics
   getStats: protectedProcedure
+    .use(withTiming)
+    .use(withCache(30000)) // Cache for 30 seconds
     .input(dashboardStatsSchema.optional())
     .query(async ({ ctx, input = {} }) => {
       try {

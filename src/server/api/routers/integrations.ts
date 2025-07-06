@@ -187,7 +187,7 @@ export const integrationsRouter = createTRPCRouter({
             success: true,
             message: "Slack message sent successfully",
             details: {
-              channel: input.channel || tool.credentials.channel,
+              channel: input.channel ?? tool.credentials.channel,
               timestamp: new Date().toISOString(),
               messageId: `slack_${Date.now()}`,
             },
@@ -444,7 +444,7 @@ export const integrationsRouter = createTRPCRouter({
             success: true,
             message: "HTTP request completed successfully",
             details: {
-              url: `${tool.credentials.webhookUrl}${input.path}`,
+              url: `${tool.credentials.webhookUrl ?? ""}${input.path ?? ""}`,
               method: input.method,
               statusCode: 200,
               responseTime: Math.floor(Math.random() * 1000) + 100,
@@ -800,7 +800,7 @@ export const integrationsRouter = createTRPCRouter({
   // Message history and statistics
   getMessageHistory: integrationProcedure
     .input(messageHistorySchema)
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input }) => {
       try {
         // Mock message history
         const messages = Array.from(
@@ -842,7 +842,7 @@ export const integrationsRouter = createTRPCRouter({
 
   getMessageStats: integrationProcedure
     .input(messageStatsSchema)
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input }) => {
       try {
         // Mock message statistics
         const stats = {
@@ -892,7 +892,7 @@ export const integrationsRouter = createTRPCRouter({
         const result = {
           success: true,
           message: "",
-          details: {} as any,
+          details: {} as Record<string, unknown>,
         };
 
         switch (input.testType) {

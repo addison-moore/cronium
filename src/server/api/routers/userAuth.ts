@@ -7,6 +7,18 @@ import { UserRole, UserStatus } from "@/shared/schema";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { encryptionService } from "@/lib/encryption-service";
 
+// Type guard for checking if user email exists in session
+function hasUserEmail(
+  session: { user?: { email?: string | null } } | null,
+): session is { user: { email: string } } {
+  return (
+    session?.user?.email !== null &&
+    session?.user?.email !== undefined &&
+    typeof session?.user?.email === "string" &&
+    session.user.email.length > 0
+  );
+}
+
 // Schemas
 const registerSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters long"),
@@ -26,6 +38,20 @@ const resetPasswordSchema = z.object({
 });
 
 const verifyTokenSchema = z.object({
+  token: z.string().min(1, "Token is required"),
+});
+
+const loginSchema = z.object({
+  username: z.string().min(1, "Username or email is required"),
+  password: z.string().min(1, "Password is required"),
+});
+
+const activateAccountSchema = z.object({
+  token: z.string().min(1, "Token is required"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+const verifyInviteTokenSchema = z.object({
   token: z.string().min(1, "Token is required"),
 });
 
@@ -102,6 +128,7 @@ export const userAuthRouter = createTRPCRouter({
         });
 
         // Return user without password
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { password: _, ...userWithoutPassword } = user;
 
         return userWithoutPassword;
@@ -137,7 +164,7 @@ export const userAuthRouter = createTRPCRouter({
         }
 
         // Check if user is active
-        if (user.status !== "ACTIVE") {
+        if (user.status !== UserStatus.ACTIVE) {
           return {
             success: true,
             message:
@@ -265,6 +292,14 @@ export const userAuthRouter = createTRPCRouter({
   // Get current user profile (protected)
   getCurrentUser: protectedProcedure.query(async ({ ctx }) => {
     try {
+      // Type-safe access to user email
+      if (!hasUserEmail(ctx.session)) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User email not found in session",
+        });
+      }
+
       const user = await storage.getUserByEmail(ctx.session.user.email);
 
       if (!user) {
@@ -275,7 +310,8 @@ export const userAuthRouter = createTRPCRouter({
       }
 
       // Return user without password
-      const { password: _, ...userWithoutPassword } = user;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password: _password, ...userWithoutPassword } = user;
 
       return userWithoutPassword;
     } catch (error) {
@@ -300,6 +336,14 @@ export const userAuthRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        // Type-safe access to user email
+        if (!hasUserEmail(ctx.session)) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "User email not found in session",
+          });
+        }
+
         const user = await storage.getUserByEmail(ctx.session.user.email);
 
         if (!user) {
@@ -338,7 +382,8 @@ export const userAuthRouter = createTRPCRouter({
         });
 
         // Return user without password
-        const { password: _, ...userWithoutPassword } = updatedUser;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { password: _password, ...userWithoutPassword } = updatedUser;
 
         return userWithoutPassword;
       } catch (error) {
@@ -348,6 +393,221 @@ export const userAuthRouter = createTRPCRouter({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to update profile",
+          cause: error instanceof Error ? error : new Error(String(error)),
+        });
+      }
+    }),
+
+  // Delete user account
+  deleteAccount: protectedProcedure.mutation(async ({ ctx }) => {
+    try {
+      // Type-safe access to user email
+      if (!hasUserEmail(ctx.session)) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User email not found in session",
+        });
+      }
+
+      const user = await storage.getUserByEmail(ctx.session.user.email);
+
+      if (!user) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "User not found",
+        });
+      }
+
+      // Delete user account
+      await storage.deleteUser(user.id);
+
+      return { success: true };
+    } catch (error) {
+      if (error instanceof TRPCError) {
+        throw error;
+      }
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to delete account",
+        cause: error instanceof Error ? error : new Error(String(error)),
+      });
+    }
+  }),
+
+  // Login (passport compatibility)
+  login: publicProcedure.input(loginSchema).mutation(async ({ input }) => {
+    try {
+      const { username, password } = input;
+
+      // Find user by username or email
+      let user = await storage.getUserByUsername(username);
+      user ??= await storage.getUserByEmail(username);
+
+      if (!user) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Invalid username/email or password",
+        });
+      }
+
+      // Check user status
+      if (user.status === UserStatus.DISABLED) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Account is disabled",
+        });
+      }
+
+      if (user.status === UserStatus.PENDING) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Account is pending approval",
+        });
+      }
+
+      // Verify password
+      const isValidPassword = await encryptionService.verifyPassword(
+        password,
+        user.password ?? "",
+      );
+
+      if (!isValidPassword) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Invalid username/email or password",
+        });
+      }
+
+      // Update last login
+      await storage.updateUser(user.id, { lastLogin: new Date() });
+
+      // Return success with user data (without password)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password: _, ...userWithoutPassword } = user;
+
+      return {
+        success: true,
+        user: userWithoutPassword,
+      };
+    } catch (error) {
+      if (error instanceof TRPCError) {
+        throw error;
+      }
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Login failed",
+        cause: error instanceof Error ? error : new Error(String(error)),
+      });
+    }
+  }),
+
+  // Activate account with invite token
+  activateAccount: publicProcedure
+    .input(activateAccountSchema)
+    .mutation(async ({ input }) => {
+      try {
+        const { token, password } = input;
+
+        // Find user with this invite token
+        const user = await storage.getUserByInviteToken(token);
+
+        if (!user) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Invalid invitation token",
+          });
+        }
+
+        // Check if token is expired
+        if (user.inviteExpiry && new Date(user.inviteExpiry) < new Date()) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invitation token has expired",
+          });
+        }
+
+        // Check if user is in INVITED status
+        if (user.status !== UserStatus.INVITED) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "This account has already been activated",
+          });
+        }
+
+        // Hash the password
+        const passwordHash = await encryptionService.hashPassword(password);
+
+        // Update user status to ACTIVE and save password
+        await storage.updateUser(user.id, {
+          status: UserStatus.ACTIVE,
+          password: passwordHash,
+          inviteToken: null,
+          inviteExpiry: null,
+          updatedAt: new Date(),
+        });
+
+        return {
+          success: true,
+          message: "Account activated successfully",
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "An error occurred while activating your account",
+          cause: error instanceof Error ? error : new Error(String(error)),
+        });
+      }
+    }),
+
+  // Verify invite token
+  verifyInviteToken: publicProcedure
+    .input(verifyInviteTokenSchema)
+    .query(async ({ input }) => {
+      try {
+        const { token } = input;
+
+        // Find user with this invite token
+        const user = await storage.getUserByInviteToken(token);
+
+        if (!user) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Invalid invitation token",
+          });
+        }
+
+        // Check if token is expired
+        if (user.inviteExpiry && new Date(user.inviteExpiry) < new Date()) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invitation token has expired",
+          });
+        }
+
+        // Check if user is in INVITED status
+        if (user.status !== UserStatus.INVITED) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "This account has already been activated",
+          });
+        }
+
+        // Return user email and verification status
+        return {
+          valid: true,
+          message: "Token verified successfully",
+          email: user.email,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "An error occurred while verifying the invitation token",
           cause: error instanceof Error ? error : new Error(String(error)),
         });
       }

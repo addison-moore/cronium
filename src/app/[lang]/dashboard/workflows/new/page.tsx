@@ -15,6 +15,7 @@ import WorkflowForm, {
   type WorkflowFormValues,
 } from "@/components/workflows/WorkflowForm";
 import type { Node, Edge } from "@xyflow/react";
+import { trpc } from "@/lib/trpc";
 
 // Workflow form schema
 const workflowFormSchema = z.object({
@@ -41,7 +42,7 @@ export default function NewWorkflowPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<WorkflowFormValues>({
-    resolver: zodResolver(workflowFormSchema) as any,
+    resolver: zodResolver(workflowFormSchema),
     defaultValues: {
       name: "",
       description: "",
@@ -59,46 +60,42 @@ export default function NewWorkflowPage() {
     },
   });
 
-  const onSubmit = async (
-    values: WorkflowFormValues,
-    nodes: Node[],
-    edges: Edge[],
-  ) => {
-    try {
-      setIsLoading(true);
-
-      // Send both the form data and the workflow configuration to create a new workflow
-      const response = await fetch("/api/workflows", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({
-          ...values,
-          nodes: nodes,
-          edges: edges,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to create workflow");
-      }
-
+  // Use tRPC mutation to create workflow
+  const createWorkflowMutation = trpc.workflows.create.useMutation({
+    onSuccess: (data) => {
       toast({
         title: "Success",
         description: "Workflow created successfully",
         variant: "success",
       });
-
-      // Redirect to the workflows page
-      router.push(`/${lang}/dashboard/workflows`);
-    } catch (error) {
+      // Redirect to the newly created workflow
+      if (data?.id) {
+        router.push(`/${lang}/dashboard/workflows/${data.id}`);
+      } else {
+        router.push(`/${lang}/dashboard/workflows`);
+      }
+    },
+    onError: (error) => {
       console.error("Error creating workflow:", error);
       toast({
         title: "Error",
         description: "Failed to create workflow. Please try again.",
         variant: "destructive",
+      });
+    },
+  });
+
+  const onSubmit = async (
+    values: WorkflowFormValues,
+    nodes: Node[],
+    edges: Edge[],
+  ) => {
+    setIsLoading(true);
+    try {
+      await createWorkflowMutation.mutateAsync({
+        ...values,
+        nodes,
+        edges,
       });
     } finally {
       setIsLoading(false);

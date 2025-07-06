@@ -1,4 +1,4 @@
-import { type EventType } from "@/shared/schema";
+import { EventType } from "@/shared/schema";
 import { Client } from "ssh2"; // Import Client from ssh2
 import type { ClientChannel } from "ssh2";
 interface SSHConnection {
@@ -31,7 +31,7 @@ export class SSHService {
       if (now - connection.lastUsed > this.connectionTimeout) {
         try {
           connection.ssh.end();
-        } catch (error) {
+        } catch {
           // Ignore cleanup errors
         }
         keysToDelete.push(key);
@@ -84,14 +84,14 @@ export class SSHService {
           connection.lastUsed = Date.now();
           console.log(`Reusing existing connection to ${connectionKey ?? ""}`);
           return connection;
-        } catch (error) {
+        } catch {
           console.log(
             `Existing connection to ${connectionKey ?? ""} failed test, removing...`,
           );
           // Connection is dead, remove it
           try {
             connection.ssh.end();
-          } catch (endError) {
+          } catch {
             // Ignore disposal errors
           }
           this.connectionPool.delete(connectionKey);
@@ -307,11 +307,17 @@ export class SSHService {
       username: string;
       port: number;
     },
-    timeoutMs = 900000,
-    inputData: Record<string, any> = {},
-    eventData: Record<string, any> = {},
+    _timeoutMs = 900000,
+    inputData: Record<string, unknown> = {},
+    eventData: Record<string, unknown> = {},
     userVariables: Record<string, string> = {},
-  ): Promise<{ stdout: string; stderr: string; scriptOutput?: any }> {
+  ): Promise<{
+    stdout: string;
+    stderr: string;
+    scriptOutput?: unknown;
+    condition?: boolean;
+    isTimeout?: boolean;
+  }> {
     let connection: SSHConnection | null = null;
     let workingDir = "";
     let usePooledConnection = false;
@@ -392,7 +398,7 @@ export class SSHService {
         .join("; ");
 
       switch (scriptType) {
-        case "BASH":
+        case EventType.BASH:
           tempFile = `${workingDir ?? ""}/script_${String(timestamp)}.sh`;
           // Create cronium.sh helper with full functionality
           const bashHelper = `#!/bin/bash
@@ -514,7 +520,7 @@ cronium_setVariable() {
             : `cd ${workingDir} && ${tempFile}`;
           break;
 
-        case "PYTHON":
+        case EventType.PYTHON:
           tempFile = `${workingDir ?? ""}/script_${String(timestamp)}.py`;
           // Create cronium.py helper with full functionality
           const pythonHelper = `import json
@@ -651,7 +657,7 @@ cronium = _cronium_instance`;
             : `cd ${workingDir} && python3 ${tempFile}`;
           break;
 
-        case "NODEJS":
+        case EventType.NODEJS:
           tempFile = `${workingDir ?? ""}/script_${String(timestamp)}.js`;
           // Create cronium.js helper with full functionality
           const nodeHelper = `const fs = require("fs");
@@ -711,7 +717,7 @@ class Cronium {
       const variables = JSON.parse(fs.readFileSync("variables.json", "utf8"));
       return variables[key] || "";
     } catch (error) {
-      return ";
+      return "";
     }
   }
 
@@ -773,9 +779,14 @@ module.exports = croniumInstance;`;
             : `cd ${workingDir} && node ${tempFile}`;
           break;
 
-        case "HTTP_REQUEST":
+        case EventType.HTTP_REQUEST:
           // For HTTP requests, we'll use curl
-          const httpConfig = JSON.parse(scriptContent);
+          const httpConfig = JSON.parse(scriptContent) as {
+            method?: string;
+            headers?: Record<string, string>;
+            body?: unknown;
+            url?: string;
+          };
           const curlOptions = [
             `-X ${httpConfig.method ?? "GET"}`,
             httpConfig.headers
@@ -795,7 +806,7 @@ module.exports = croniumInstance;`;
           break;
 
         default:
-          throw new Error(`Unsupported script type: ${scriptType ?? ""}`);
+          throw new Error(`Unsupported script type: ${String(scriptType)}`);
       }
 
       const result = await new Promise<{ stdout: string; stderr: string }>(
@@ -817,7 +828,7 @@ module.exports = croniumInstance;`;
                 "data",
                 (data: Buffer) => (stderr += data.toString()),
               );
-              stream.on("close", (code: number, signal: string) => {
+              stream.on("close", () => {
                 resolve({ stdout, stderr });
               });
             },
@@ -848,15 +859,14 @@ module.exports = croniumInstance;`;
           });
         });
         if (outputResult.stdout && !outputResult.stderr) {
-          scriptOutput = JSON.parse(outputResult.stdout);
+          scriptOutput = JSON.parse(outputResult.stdout) as unknown;
           console.log(`SSH: Found output.json with data:`, scriptOutput);
         } else {
           console.log(
             `SSH: No output.json found or has errors. stdout: "${outputResult.stdout}", stderr: "${outputResult.stderr}"`,
           );
         }
-      } catch (error) {
-        console.log(`SSH: Error reading output.json:`, error);
+      } catch {
         // No output.json or parsing error, continue without it
       }
 
@@ -880,18 +890,21 @@ module.exports = croniumInstance;`;
           });
         });
         if (conditionResult.stdout && !conditionResult.stderr) {
-          const conditionData = JSON.parse(conditionResult.stdout);
+          const conditionData = JSON.parse(conditionResult.stdout) as {
+            condition?: boolean;
+          };
           condition = Boolean(conditionData.condition);
           console.log(
             `Found condition file from SSH execution, condition: ${String(condition)}`,
           );
         }
-      } catch (error) {
+      } catch {
         // No condition.json or parsing error, continue without it
       }
 
       // Try to read updated variables.json if it exists and persist to database
-      if (eventData?.userId) {
+      const userId = eventData?.userId as string | undefined;
+      if (userId) {
         try {
           const variablesResult = await new Promise<{
             stdout: string;
@@ -916,7 +929,9 @@ module.exports = croniumInstance;`;
             );
           });
           if (variablesResult.stdout && !variablesResult.stderr) {
-            const updatedVariables = JSON.parse(variablesResult.stdout);
+            const updatedVariables = JSON.parse(
+              variablesResult.stdout,
+            ) as Record<string, unknown>;
 
             // Remove metadata fields that aren't user variables
             delete updatedVariables.__updated__;
@@ -928,18 +943,16 @@ module.exports = croniumInstance;`;
 
             if (hasChanges) {
               console.log(
-                `Variables changed during SSH script execution, persisting to database for user ${String(eventData.userId)}`,
+                `Variables changed during SSH script execution, persisting to database for user ${userId}`,
               );
 
               // Import storage and persist updated variables
-              const { storage } = await import("@/server/storage");
+              const { storage } = await import("@server/storage");
 
               // Get current variables from database to compare
-              const currentDbVariables = await storage.getUserVariables(
-                eventData.userId,
-              );
+              const currentDbVariables = await storage.getUserVariables(userId);
               const currentDbVarMap = currentDbVariables.reduce(
-                (acc: Record<string, string>, variable: any) => {
+                (acc: Record<string, string>, variable) => {
                   acc[variable.key] = variable.value;
                   return acc;
                 },
@@ -949,13 +962,9 @@ module.exports = croniumInstance;`;
               // Update or create variables that have changed
               for (const [key, value] of Object.entries(updatedVariables)) {
                 if (currentDbVarMap[key] !== value) {
-                  await storage.setUserVariable(
-                    eventData.userId,
-                    key,
-                    String(value),
-                  );
+                  await storage.setUserVariable(userId, key, String(value));
                   console.log(
-                    `Updated variable ${key ?? ""} for user ${String(eventData.userId)}`,
+                    `Updated variable ${key ?? ""} for user ${userId}`,
                   );
                 }
               }
@@ -963,9 +972,9 @@ module.exports = croniumInstance;`;
               // Delete variables that were removed (exist in DB but not in updated file)
               for (const [key] of Object.entries(currentDbVarMap)) {
                 if (!(key in updatedVariables)) {
-                  await storage.deleteUserVariableByKey(eventData.userId, key);
+                  await storage.deleteUserVariableByKey(userId, key);
                   console.log(
-                    `Deleted variable ${key ?? ""} for user ${String(eventData.userId)}`,
+                    `Deleted variable ${key ?? ""} for user ${userId}`,
                   );
                 }
               }
@@ -1007,7 +1016,7 @@ module.exports = croniumInstance;`;
       } as {
         stdout: string;
         stderr: string;
-        scriptOutput?: any;
+        scriptOutput?: unknown;
         condition?: boolean;
         isTimeout?: boolean;
       };
@@ -1028,7 +1037,7 @@ module.exports = croniumInstance;`;
       } as {
         stdout: string;
         stderr: string;
-        scriptOutput?: any;
+        scriptOutput?: unknown;
         condition?: boolean;
         isTimeout?: boolean;
       };
@@ -1063,7 +1072,7 @@ module.exports = croniumInstance;`;
           }).catch(() => {
             // Ignore cleanup errors for stale directories
           });
-        } catch (cleanupError) {
+        } catch {
           console.log(
             `Final cleanup attempt completed with potential errors (ignored)`,
           );
@@ -1382,7 +1391,7 @@ module.exports = croniumInstance;`;
       this.shellCache.set(connectionKey, userShell);
 
       return userShell;
-    } catch (error) {
+    } catch {
       // Fallback to bash if we can't detect the shell
       const fallbackShell = "/bin/bash";
       this.shellCache.set(connectionKey, fallbackShell);
@@ -1419,7 +1428,7 @@ module.exports = croniumInstance;`;
         workingDirectory,
       );
 
-      if (result.stdout && result.stdout.trim()) {
+      if (result.stdout?.trim()) {
         // Process the PS1 variable to create a realistic prompt
         let prompt = result.stdout.trim();
 
@@ -1452,7 +1461,7 @@ module.exports = croniumInstance;`;
 
         return prompt;
       }
-    } catch (error) {
+    } catch {
       console.log("Failed to get shell prompt, using fallback");
     }
 
@@ -1469,7 +1478,7 @@ module.exports = croniumInstance;`;
       ? pwdResult.stdout.trim()
       : (workingDirectory ?? "~");
     const shortDir = currentDir.replace(new RegExp(`^/home/${username}`), "~");
-    return `${username}@${host.split(".")[0]}:${shortDir}${username === "root" ? "#" : "$"} `;
+    return `${username}@${host.split(".")[0] ?? host}:${shortDir}${username === "root" ? "#" : "$"} `;
   }
 
   /**

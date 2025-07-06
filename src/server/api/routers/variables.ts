@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure } from "../trpc";
 import { type EventType, type EventStatus, UserRole } from "@/shared/schema";
+import type { Session } from "next-auth";
 import {
   variableQuerySchema,
   createUserVariableSchema,
@@ -17,8 +18,8 @@ import { storage } from "@/server/storage";
 // Custom procedure that handles auth for tRPC fetch adapter
 const variableProcedure = publicProcedure.use(async ({ ctx, next }) => {
   // Try to get session from headers/cookies
-  let session = null;
-  let userId = null;
+  let session: Session | null = null;
+  let userId: string | null = null;
 
   try {
     // If session exists in context, use it
@@ -35,7 +36,19 @@ const variableProcedure = publicProcedure.use(async ({ ctx, next }) => {
         const firstAdmin = adminUsers[0];
         if (firstAdmin) {
           userId = firstAdmin.id;
-          session = { user: { id: firstAdmin.id } };
+          session = {
+            user: {
+              id: firstAdmin.id,
+              email: firstAdmin.email,
+              username: firstAdmin.username,
+              role: firstAdmin.role,
+              status: firstAdmin.status,
+              firstName: firstAdmin.firstName,
+              lastName: firstAdmin.lastName,
+              profileImageUrl: firstAdmin.profileImageUrl,
+            },
+            expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          } as Session;
         }
       }
     }
@@ -77,15 +90,16 @@ export const variablesRouter = createTRPCRouter({
           const searchLower = input.search.toLowerCase();
           filteredVariables = variables.filter(
             (variable) =>
-              variable.key.toLowerCase().includes(searchLower) ||
-              variable.description?.toLowerCase().includes(searchLower) ||
+              variable.key.toLowerCase().includes(searchLower) ??
+              variable.description?.toLowerCase().includes(searchLower) ??
               variable.value.toLowerCase().includes(searchLower),
           );
         }
 
         // Apply sorting
         filteredVariables.sort((a, b) => {
-          let aValue: any, bValue: any;
+          let aValue: string | Date | null;
+          let bValue: string | Date | null;
 
           switch (input.sortBy) {
             case "key":
@@ -104,6 +118,11 @@ export const variablesRouter = createTRPCRouter({
               aValue = a.key;
               bValue = b.key;
           }
+
+          // Handle null values
+          if (aValue === null && bValue === null) return 0;
+          if (aValue === null) return 1;
+          if (bValue === null) return -1;
 
           if (input.sortOrder === "desc") {
             return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
@@ -204,7 +223,7 @@ export const variablesRouter = createTRPCRouter({
           userId: ctx.userId,
           key: input.key,
           value: input.value,
-          description: input.description || null,
+          description: input.description ?? null,
         });
 
         return variable;
@@ -421,7 +440,7 @@ export const variablesRouter = createTRPCRouter({
               updatedAt: v.updatedAt,
             }));
             exportData = JSON.stringify(jsonData, null, 2);
-            filename = `variables_${new Date().toISOString().split("T")[0]}.json`;
+            filename = `variables_${new Date().toISOString().split("T")[0]!}.json`;
             break;
 
           case "env":
@@ -435,7 +454,7 @@ export const variablesRouter = createTRPCRouter({
                 return `${comment}${v.key}=${value}`;
               })
               .join("\n\n");
-            filename = `variables_${new Date().toISOString().split("T")[0]}.env`;
+            filename = `variables_${new Date().toISOString().split("T")[0]!}.env`;
             break;
 
           case "csv":
@@ -451,7 +470,7 @@ export const variablesRouter = createTRPCRouter({
                 if (input.includeValues)
                   row.push(`"${v.value.replace(/"/g, '""')}"`);
                 if (input.includeDescriptions)
-                  row.push(`"${(v.description || "").replace(/"/g, '""')}"`);
+                  row.push(`"${(v.description ?? "").replace(/"/g, '""')}"`);
                 row.push(
                   v.createdAt?.toISOString() || "",
                   v.updatedAt?.toISOString() || "",
@@ -460,7 +479,7 @@ export const variablesRouter = createTRPCRouter({
               }),
             ];
             exportData = csvData.join("\n");
-            filename = `variables_${new Date().toISOString().split("T")[0]}.csv`;
+            filename = `variables_${new Date().toISOString().split("T")[0]!}.csv`;
             break;
 
           default:
@@ -586,14 +605,16 @@ export const variablesRouter = createTRPCRouter({
           const events = await storage.getAllEvents(ctx.userId);
           const eventsUsingVariable = events.filter(
             (event) =>
-              event.content?.includes(
+              (event.content?.includes(
                 `cronium.getVariable("${variableKey}")`,
-              ) ||
-              event.content?.includes(
+              ) ??
+                false) ||
+              (event.content?.includes(
                 `cronium.getVariable('${variableKey}')`,
-              ) ||
-              event.content?.includes(`$${variableKey}`) ||
-              event.content?.includes(`process.env.${variableKey}`),
+              ) ??
+                false) ||
+              (event.content?.includes(`$${variableKey}`) ?? false) ||
+              (event.content?.includes(`process.env.${variableKey}`) ?? false),
           );
 
           usage.events = eventsUsingVariable.map((event) => ({

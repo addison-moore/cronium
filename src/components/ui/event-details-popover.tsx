@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   Popover,
@@ -59,7 +58,6 @@ export function EventDetailsPopover({
   className,
   onEventUpdated,
 }: EventDetailsPopoverProps) {
-  const t = useTranslations("Events");
   const [open, setOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
 

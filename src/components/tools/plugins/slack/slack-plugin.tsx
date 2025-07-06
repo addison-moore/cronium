@@ -34,20 +34,23 @@ const slackSchema = z.object({
     .min(1, "Webhook URL is required"),
 });
 
-// Slack credential form component - unchanged UI
+type SlackFormData = z.infer<typeof slackSchema>;
+type SlackCredentials = Omit<SlackFormData, "name">;
+
+// Slack credential form component
 function SlackCredentialForm({
   tool,
   onSubmit,
   onCancel,
 }: CredentialFormProps) {
-  const form = useForm({
+  const form = useForm<SlackFormData>({
     resolver: zodResolver(slackSchema),
     defaultValues: tool
       ? {
           name: tool.name,
           ...(typeof tool.credentials === "string"
-            ? JSON.parse(tool.credentials)
-            : tool.credentials),
+            ? (JSON.parse(tool.credentials) as SlackCredentials)
+            : (tool.credentials as SlackCredentials)),
         }
       : {
           name: "",
@@ -55,7 +58,7 @@ function SlackCredentialForm({
         },
   });
 
-  const handleSubmit = async (data: any) => {
+  const handleSubmit = async (data: SlackFormData) => {
     const { name, ...credentials } = data;
     await onSubmit({ name, credentials });
     form.reset();
@@ -104,6 +107,13 @@ function SlackCredentialDisplayTrpc({
   const [testingTool, setTestingTool] = React.useState<number | null>(null);
   const { toast } = useToast();
 
+  interface SlackTool {
+    id: number;
+    name: string;
+    isActive: boolean;
+    credentials: string | SlackCredentials;
+  }
+
   const testConnectionMutation = trpc.integrations.testMessage.useMutation({
     onSuccess: (result) => {
       toast({
@@ -131,7 +141,7 @@ function SlackCredentialDisplayTrpc({
     }));
   };
 
-  const handleTestConnection = async (tool: any) => {
+  const handleTestConnection = async (tool: SlackTool) => {
     setTestingTool(tool.id);
     await testConnectionMutation.mutateAsync({
       toolId: tool.id,
@@ -139,7 +149,7 @@ function SlackCredentialDisplayTrpc({
     });
   };
 
-  const handleSendTestMessage = async (tool: any) => {
+  const handleSendTestMessage = async (tool: SlackTool) => {
     setTestingTool(tool.id);
     await sendTestMessageMutation.mutateAsync({
       toolId: tool.id,
@@ -153,10 +163,10 @@ function SlackCredentialDisplayTrpc({
   return (
     <div className="space-y-3">
       {tools.map((tool) => {
-        const credentials =
+        const credentials: SlackCredentials =
           typeof tool.credentials === "string"
-            ? JSON.parse(tool.credentials)
-            : (tool.credentials as Record<string, any>);
+            ? (JSON.parse(tool.credentials) as SlackCredentials)
+            : (tool.credentials as SlackCredentials);
         const isTokenVisible = showTokens[tool.id];
         const isTesting = testingTool === tool.id;
 
@@ -197,7 +207,7 @@ function SlackCredentialDisplayTrpc({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleTestConnection(tool)}
+                    onClick={() => handleTestConnection(tool as SlackTool)}
                     disabled={isTesting}
                   >
                     <TestTube size={14} className="mr-1" />
@@ -206,7 +216,7 @@ function SlackCredentialDisplayTrpc({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleSendTestMessage(tool)}
+                    onClick={() => handleSendTestMessage(tool as SlackTool)}
                     disabled={isTesting}
                   >
                     {isTesting ? "Sending..." : "Send Test Message"}
@@ -233,11 +243,27 @@ function SlackCredentialDisplayTrpc({
   );
 }
 
+interface Template {
+  id: number;
+  name: string;
+  type: string;
+  content: string;
+  subject?: string | null;
+  description?: string | null;
+  variables?: Array<{ name: string; required: boolean }> | null;
+  isSystemTemplate: boolean;
+  tags?: string[] | null;
+}
+
 // Slack template manager component
-function SlackTemplateManagerTrpc({ toolType }: TemplateManagerProps) {
+function SlackTemplateManagerTrpc({
+  toolType: _toolType,
+}: TemplateManagerProps) {
   const { toast } = useToast();
   const [showAddForm, setShowAddForm] = React.useState(false);
-  const [editingTemplate, setEditingTemplate] = React.useState<any>(null);
+  const [editingTemplate, setEditingTemplate] = React.useState<Template | null>(
+    null,
+  );
 
   const {
     data: templatesData,
@@ -256,7 +282,7 @@ function SlackTemplateManagerTrpc({ toolType }: TemplateManagerProps) {
           title: "Success",
           description: "Slack template created successfully",
         });
-        refetchTemplates();
+        void refetchTemplates();
         setShowAddForm(false);
         setEditingTemplate(null);
       },
@@ -270,7 +296,7 @@ function SlackTemplateManagerTrpc({ toolType }: TemplateManagerProps) {
           title: "Success",
           description: "Slack template updated successfully",
         });
-        refetchTemplates();
+        void refetchTemplates();
         setShowAddForm(false);
         setEditingTemplate(null);
       },
@@ -284,23 +310,31 @@ function SlackTemplateManagerTrpc({ toolType }: TemplateManagerProps) {
           title: "Success",
           description: "Slack template deleted successfully",
         });
-        refetchTemplates();
+        void refetchTemplates();
       },
     },
   );
 
-  const templates = templatesData?.templates || [];
+  const templates = (templatesData?.templates ?? []) as Template[];
 
-  const handleSaveTemplate = async (data: any) => {
+  interface TemplateFormData {
+    name: string;
+    content: string;
+    description?: string;
+    variables?: Array<{ name: string; required: boolean }>;
+    tags?: string[];
+  }
+
+  const handleSaveTemplate = async (data: TemplateFormData) => {
     try {
       const templateData = {
         name: data.name,
-        type: "SLACK" as any,
+        type: "SLACK" as "EMAIL" | "SLACK" | "DISCORD",
         content: data.content,
-        description: data.description || "",
-        variables: data.variables || [],
+        description: data.description ?? "",
+        variables: data.variables ?? [],
         isSystemTemplate: false,
-        tags: data.tags || [],
+        tags: data.tags ?? [],
       };
 
       if (editingTemplate) {
@@ -316,7 +350,7 @@ function SlackTemplateManagerTrpc({ toolType }: TemplateManagerProps) {
     }
   };
 
-  const handleEditTemplate = (template: any) => {
+  const handleEditTemplate = (template: Template) => {
     setEditingTemplate(template);
     setShowAddForm(true);
   };
@@ -417,28 +451,25 @@ function SlackTemplateManagerTrpc({ toolType }: TemplateManagerProps) {
                         {template.content}
                       </div>
                     </div>
-                    {(template as any).variables &&
-                      (template as any).variables.length > 0 && (
-                        <div>
-                          <span className="font-medium">Variables:</span>
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {(template as any).variables.map(
-                              (variable: any, index: number) => (
-                                <Badge
-                                  key={index}
-                                  variant="outline"
-                                  className="text-xs"
-                                >
-                                  {variable.name}
-                                  {variable.required && (
-                                    <span className="text-red-500">*</span>
-                                  )}
-                                </Badge>
-                              ),
-                            )}
-                          </div>
+                    {template.variables && template.variables.length > 0 && (
+                      <div>
+                        <span className="font-medium">Variables:</span>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {template.variables?.map((variable, index) => (
+                            <Badge
+                              key={index}
+                              variant="outline"
+                              className="text-xs"
+                            >
+                              {variable.name}
+                              {variable.required && (
+                                <span className="text-red-500">*</span>
+                              )}
+                            </Badge>
+                          ))}
                         </div>
-                      )}
+                      </div>
+                    )}
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -460,6 +491,14 @@ function SlackTemplateManagerTrpc({ toolType }: TemplateManagerProps) {
   );
 }
 
+// Interface for Slack message data
+interface SendData {
+  message: string;
+  channel?: string;
+  username?: string;
+  iconEmoji?: string;
+}
+
 // Slack plugin definition with tRPC integration
 export const SlackPluginTrpc: ToolPlugin = {
   id: "slack",
@@ -478,19 +517,21 @@ export const SlackPluginTrpc: ToolPlugin = {
   CredentialDisplay: SlackCredentialDisplayTrpc,
   TemplateManager: SlackTemplateManagerTrpc,
 
-  async validate(credentials: Record<string, any>) {
+  async validate(credentials: Record<string, unknown>) {
     const result = slackSchema.safeParse(credentials);
     if (result.success) {
       return { isValid: true };
     } else {
       return {
         isValid: false,
-        error: result.error.issues[0]?.message || "Invalid credentials",
+        error: result.error.issues[0]?.message ?? "Invalid credentials",
       };
     }
   },
 
-  async send(credentials: any, data: any, trpcClient?: any) {
+  async send(credentials: Record<string, unknown>, data: SendData) {
+    // Extract trpcClient from credentials if available
+    const trpcClient = credentials.trpcClient;
     try {
       const { message, channel, username, iconEmoji } = data;
 
@@ -509,17 +550,52 @@ export const SlackPluginTrpc: ToolPlugin = {
         };
       }
 
-      const result = await trpcClient.integrations.slack.send.mutate({
-        toolId: credentials.id,
-        message: message,
-        channel: channel,
-        username: username,
-        iconEmoji: iconEmoji,
-      });
+      const typedClient = trpcClient as {
+        integrations: {
+          slack: {
+            send: {
+              mutate: (params: {
+                toolId: number;
+                message: string;
+                channel?: string;
+                username?: string;
+                iconEmoji?: string;
+              }) => Promise<{ success: boolean; message?: string }>;
+            };
+          };
+        };
+      };
+
+      // Ensure id exists and is a number
+      const id =
+        typeof credentials.id === "number" ? credentials.id : undefined;
+      if (id === undefined) {
+        return {
+          success: false,
+          message: "Missing credential ID",
+        };
+      }
+
+      const params: {
+        toolId: number;
+        message: string;
+        channel?: string;
+        username?: string;
+        iconEmoji?: string;
+      } = {
+        toolId: id,
+        message,
+      };
+
+      if (channel) params.channel = channel;
+      if (username) params.username = username;
+      if (iconEmoji) params.iconEmoji = iconEmoji;
+
+      const result = await typedClient.integrations.slack.send.mutate(params);
 
       return {
         success: result.success,
-        message: result.message || "Slack message sent successfully",
+        message: result.message ?? "Slack message sent successfully",
       };
     } catch (error) {
       console.error("Slack send error:", error);
@@ -531,7 +607,51 @@ export const SlackPluginTrpc: ToolPlugin = {
   },
 
   // New method for testing Slack functionality using tRPC
-  async test(credentials: any, testType = "connection", trpcClient?: any) {
+  async test(
+    credentials: Record<string, unknown>,
+  ): Promise<{ success: boolean; message: string }> {
+    // Extract id from credentials, ensuring it exists
+    const id = credentials.id as number;
+    if (!id) {
+      return {
+        success: false,
+        message: "Missing credential ID",
+      };
+    }
+
+    // Extract testType from credentials or use default
+    const testType = (credentials.testType as string) || "connection";
+    // Extract trpcClient with proper typing to avoid unsafe 'any' assignment
+    const trpcClient = credentials.trpcClient as
+      | {
+          integrations: {
+            slack: {
+              send: {
+                mutate: (params: {
+                  toolId: number;
+                  message: string;
+                  username?: string;
+                }) => Promise<{
+                  success: boolean;
+                  message?: string;
+                  details?: string;
+                }>;
+              };
+            };
+            testMessage: {
+              mutate: (params: {
+                toolId: number;
+                testType: string;
+              }) => Promise<{
+                success: boolean;
+                message?: string;
+                details?: string;
+              }>;
+            };
+          };
+        }
+      | undefined;
+
     try {
       if (!trpcClient) {
         return {
@@ -540,9 +660,12 @@ export const SlackPluginTrpc: ToolPlugin = {
         };
       }
 
+      // Since we've already typed trpcClient properly, we can use it directly
+      const typedClient = trpcClient;
+
       if (testType === "send_test_message") {
-        const result = await trpcClient.integrations.slack.send.mutate({
-          toolId: credentials.id,
+        const result = await typedClient.integrations.slack.send.mutate({
+          toolId: id,
           message:
             "🎉 Test message from Cronium! Your Slack integration is working correctly.",
           username: "Cronium Bot",
@@ -550,19 +673,17 @@ export const SlackPluginTrpc: ToolPlugin = {
 
         return {
           success: result.success,
-          message: result.message,
-          details: result.details,
+          message: result.message ?? "Test message sent successfully",
         };
       } else {
-        const result = await trpcClient.integrations.testMessage.mutate({
-          toolId: credentials.id,
+        const result = await typedClient.integrations.testMessage.mutate({
+          toolId: id,
           testType: "connection",
         });
 
         return {
           success: result.success,
-          message: result.message,
-          details: result.details,
+          message: result.message ?? "Connection test completed",
         };
       }
     } catch (error) {

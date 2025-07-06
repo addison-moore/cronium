@@ -27,26 +27,50 @@ import {
   Trash2,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { trpc } from "@/components/providers/TrpcProvider";
+import { trpc } from "@/lib/trpc";
+import type { TRPCClientErrorLike } from "@trpc/client";
+import type { AppRouter } from "@/server/api/root";
 
 const securityFormSchema = z.object({
-  enableIpWhitelist: z.boolean().default(false),
-  allowedIps: z.array(z.string()).default([]),
-  enableRateLimit: z.boolean().default(true),
-  rateLimitPerMinute: z.number().int().min(1).max(1000).default(60),
-  enableAuth: z.boolean().default(false),
-  authType: z.enum(["bearer", "basic", "custom_header"]).default("bearer"),
+  enableIpWhitelist: z.boolean(),
+  allowedIps: z.array(z.string()),
+  enableRateLimit: z.boolean(),
+  rateLimitPerMinute: z.number().int().min(1).max(1000),
+  enableAuth: z.boolean(),
+  authType: z.enum(["bearer", "basic", "custom_header"]),
   authToken: z.string().optional(),
   customAuthHeader: z.string().optional(),
-  enableSignatureVerification: z.boolean().default(false),
+  enableSignatureVerification: z.boolean(),
   signatureSecret: z.string().optional(),
-  signatureHeader: z.string().default("X-Webhook-Signature"),
+  signatureHeader: z.string(),
 });
 
 type SecurityFormData = z.infer<typeof securityFormSchema>;
 
+// Define the webhook type based on the mock data structure
+interface Webhook {
+  id: number;
+  userId: string;
+  workflowId: number;
+  key: string;
+  url: string;
+  description?: string;
+  isActive: boolean;
+  allowedMethods: string[];
+  allowedIps?: string[];
+  rateLimitPerMinute: number;
+  requireAuth: boolean;
+  authToken?: string | null;
+  customHeaders?: Record<string, string>;
+  responseFormat?: "json" | "text" | "xml";
+  createdAt: Date;
+  updatedAt: Date;
+  triggerCount: number;
+  lastTriggeredAt?: Date | null;
+}
+
 interface WebhookSecurityFormProps {
-  webhook: any;
+  webhook: Webhook;
   onSave: () => void;
   onCancel: () => void;
 }
@@ -59,10 +83,12 @@ export function WebhookSecurityForm({
   const { toast } = useToast();
   const [newIpInput, setNewIpInput] = React.useState("");
 
-  const form = useForm({
+  const form = useForm<SecurityFormData>({
     resolver: zodResolver(securityFormSchema),
     defaultValues: {
-      enableIpWhitelist: webhook.allowedIps && webhook.allowedIps.length > 0,
+      enableIpWhitelist: !!(
+        webhook.allowedIps && webhook.allowedIps.length > 0
+      ),
       allowedIps: webhook.allowedIps ?? [],
       enableRateLimit: webhook.rateLimitPerMinute > 0,
       rateLimitPerMinute: webhook.rateLimitPerMinute ?? 60,
@@ -86,7 +112,7 @@ export function WebhookSecurityForm({
         });
         onSave();
       },
-      onError: (error) => {
+      onError: (error: TRPCClientErrorLike<AppRouter>) => {
         toast({
           title: "Error",
           description: error.message || "Failed to update security settings",
@@ -159,14 +185,12 @@ export function WebhookSecurityForm({
       });
     } catch (error) {
       // Error handled by mutation
+      console.error("Security configuration failed:", error);
     }
   };
 
   return (
-    <form
-      onSubmit={form.handleSubmit((data) => handleSubmit(data))}
-      className="space-y-6"
-    >
+    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
       {/* IP Whitelist */}
       <Card>
         <CardHeader>
@@ -300,9 +324,15 @@ export function WebhookSecurityForm({
                 <Label>Authentication Type</Label>
                 <Select
                   value={watchedAuthType ?? "bearer"}
-                  onValueChange={(value) =>
-                    form.setValue("authType", value as any)
-                  }
+                  onValueChange={(value: string) => {
+                    if (
+                      value === "bearer" ||
+                      value === "basic" ||
+                      value === "custom_header"
+                    ) {
+                      form.setValue("authType", value);
+                    }
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue />

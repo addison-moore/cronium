@@ -1,26 +1,40 @@
-import { storage } from "@/server/storage";
+import { storage, type EventWithRelations } from "@/server/storage";
 import { sendEmail } from "@/lib/email";
 import {
   templateProcessor,
   createTemplateContext,
 } from "@/lib/template-processor";
+import type { ConditionalAction } from "@/shared/schema";
+
+interface ExecutionData {
+  executionTime?: string;
+  duration?: number;
+  output?: string;
+  error?: string;
+}
+
+interface SmtpCredentials {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  fromEmail: string;
+  fromName: string;
+}
+
+type ProcessEventCallback = (
+  conditional_event: ConditionalAction,
+  event: EventWithRelations,
+  isSuccess: boolean,
+  executionData?: ExecutionData,
+) => Promise<void>;
 
 /**
  * Handle conditional actions that should be triggered on successful execution
  */
 export async function handleSuccessActions(
   eventId: number,
-  processEventCallback: (
-    conditional_event: any,
-    event: any,
-    isSuccess: boolean,
-    executionData?: {
-      executionTime?: string;
-      duration?: number;
-      output?: string;
-      error?: string;
-    },
-  ) => Promise<void>,
+  processEventCallback: ProcessEventCallback,
 ) {
   try {
     // Get the event with its success conditional actions
@@ -32,20 +46,20 @@ export async function handleSuccessActions(
 
     // Get the latest log for execution data
     const latestLog = await storage.getLatestLogForScript(eventId);
-    let executionDataFromLog;
+    let executionDataFromLog: ExecutionData | undefined;
     if (latestLog) {
       executionDataFromLog = {
         executionTime:
-          latestLog.startTime?.toISOString() || new Date().toISOString(),
-        output: latestLog.output || "No output available",
+          latestLog.startTime?.toISOString() ?? new Date().toISOString(),
+        output: latestLog.output ?? "No output available",
       };
 
       if (latestLog.duration !== null && latestLog.duration !== undefined) {
-        (executionDataFromLog as any).duration = latestLog.duration;
+        executionDataFromLog.duration = latestLog.duration;
       }
 
       if (latestLog.error) {
-        (executionDataFromLog as any).error = latestLog.error;
+        executionDataFromLog.error = latestLog.error;
       }
     }
 
@@ -67,17 +81,7 @@ export async function handleSuccessActions(
  */
 export async function handleFailureActions(
   eventId: number,
-  processEventCallback: (
-    conditional_event: any,
-    event: any,
-    isSuccess: boolean,
-    executionData?: {
-      executionTime?: string;
-      duration?: number;
-      output?: string;
-      error?: string;
-    },
-  ) => Promise<void>,
+  processEventCallback: ProcessEventCallback,
 ) {
   try {
     // Get the event with its failure conditional actions
@@ -89,14 +93,14 @@ export async function handleFailureActions(
 
     // Get the latest log for execution data
     const latestLog = await storage.getLatestLogForScript(eventId);
-    let executionData;
+    let executionData: ExecutionData | undefined;
     if (latestLog) {
       executionData = {
         executionTime:
-          latestLog.startTime?.toISOString() || new Date().toISOString(),
-        duration: latestLog.duration || 0,
-        output: latestLog.output || "No output available",
-        error: latestLog.error || "Unknown error",
+          latestLog.startTime?.toISOString() ?? new Date().toISOString(),
+        duration: latestLog.duration ?? 0,
+        output: latestLog.output ?? "No output available",
+        error: latestLog.error ?? "Unknown error",
       };
     }
 
@@ -119,8 +123,8 @@ export async function handleFailureActions(
 export async function handleAlwaysActions(
   eventId: number,
   processEventCallback: (
-    conditional_event: any,
-    event: any,
+    conditional_event: ConditionalAction,
+    event: EventWithRelations,
     isSuccess: boolean,
   ) => Promise<void>,
 ) {
@@ -152,8 +156,8 @@ export async function handleConditionActions(
   eventId: number,
   condition: boolean,
   processEventCallback: (
-    conditional_event: any,
-    event: any,
+    conditional_event: ConditionalAction,
+    event: EventWithRelations,
     isSuccess: boolean,
   ) => Promise<void>,
 ) {
@@ -196,15 +200,10 @@ export async function handleConditionActions(
  * Process a conditional action based on the trigger type and event outcome
  */
 export async function processEvent(
-  conditional_event: any,
-  event: any,
+  conditional_event: ConditionalAction,
+  event: EventWithRelations,
   isSuccess: boolean,
-  executionData?: {
-    executionTime?: string;
-    duration?: number;
-    output?: string;
-    error?: string;
-  },
+  executionData?: ExecutionData,
 ) {
   try {
     console.log(
@@ -231,8 +230,8 @@ export async function processEvent(
       });
 
       try {
-        let credentials;
-        let toolType;
+        let credentials: SmtpCredentials | Record<string, unknown>;
+        let toolType: string;
 
         if (conditional_event.toolId === null) {
           // Use system SMTP settings
@@ -276,17 +275,19 @@ export async function processEvent(
           }
 
           // Decrypt credentials
-          credentials = JSON.parse(encryptionService.decrypt(tool.credentials));
+          credentials = JSON.parse(
+            encryptionService.decrypt(tool.credentials),
+          ) as Record<string, unknown>;
           toolType = tool.type;
         }
 
         // Handle email sending directly without plugin system
         if (toolType === "EMAIL") {
-          const recipients = conditional_event.emailAddresses || "";
+          const recipients = conditional_event.emailAddresses ?? "";
           const subject =
-            conditional_event.emailSubject ||
+            conditional_event.emailSubject ??
             `Event ${isSuccess ? "Success" : "Failure"}: ${event.name ?? ""}`;
-          const message = conditional_event.message;
+          const message = conditional_event.message ?? "";
 
           if (!recipients) {
             console.error(
@@ -307,7 +308,7 @@ export async function processEvent(
               acc[v.key] = v.value;
               return acc;
             },
-            {} as Record<string, any>,
+            {} as Record<string, unknown>,
           );
 
           // Create template context with cronium data
@@ -318,8 +319,8 @@ export async function processEvent(
               status: isSuccess ? "success" : "failure",
               duration: executionData?.duration,
               executionTime:
-                executionData?.executionTime || new Date().toISOString(),
-              server: event.server || "Local",
+                executionData?.executionTime ?? new Date().toISOString(),
+              server: event.server ?? "Local",
               output: executionData?.output,
               error: executionData?.error,
             },
@@ -351,12 +352,12 @@ export async function processEvent(
 
           // Prepare SMTP credentials in the format expected by sendEmail
           const smtpCredentials = {
-            host: credentials.host,
-            port: credentials.port,
-            user: credentials.user,
-            password: credentials.password,
-            fromEmail: credentials.fromEmail,
-            fromName: credentials.fromName,
+            host: String(credentials.host ?? ""),
+            port: Number(credentials.port ?? 587),
+            user: String(credentials.user ?? ""),
+            password: String(credentials.password ?? ""),
+            fromEmail: String(credentials.fromEmail ?? ""),
+            fromName: String(credentials.fromName ?? ""),
           };
 
           // Send the email
@@ -379,7 +380,7 @@ export async function processEvent(
               acc[v.key] = v.value;
               return acc;
             },
-            {} as Record<string, any>,
+            {} as Record<string, unknown>,
           );
 
           // Ensure duration is a valid number for template processing
@@ -398,8 +399,8 @@ export async function processEvent(
               status: isSuccess ? "success" : "failure",
               duration: validDuration,
               executionTime:
-                executionData?.executionTime || new Date().toISOString(),
-              server: event.server || "Local",
+                executionData?.executionTime ?? new Date().toISOString(),
+              server: event.server ?? "Local",
               output: executionData?.output,
               error: executionData?.error,
             },
@@ -430,13 +431,16 @@ export async function processEvent(
               }
 
               // Prepare payload for webhook
-              let payload: any;
+              let payload: { text: string } | Record<string, unknown>;
 
               // Check if message is JSON (for Slack blocks/attachments)
               if (processedMessage.trim().startsWith("{")) {
                 try {
-                  payload = JSON.parse(processedMessage);
-                } catch (e) {
+                  payload = JSON.parse(processedMessage) as Record<
+                    string,
+                    unknown
+                  >;
+                } catch {
                   // If JSON parsing fails, treat as plain text
                   payload = { text: processedMessage };
                 }
@@ -445,13 +449,16 @@ export async function processEvent(
               }
 
               // Send message directly to Slack webhook
-              const slackResponse = await fetch(credentials.webhookUrl, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
+              const slackResponse = await fetch(
+                String(credentials.webhookUrl ?? ""),
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify(payload),
                 },
-                body: JSON.stringify(payload),
-              });
+              );
 
               if (slackResponse.ok) {
                 console.log(
@@ -474,13 +481,16 @@ export async function processEvent(
               }
 
               // Prepare payload for Discord webhook
-              let payload: any;
+              let payload: { content: string } | Record<string, unknown>;
 
               // Check if message is JSON (for Discord embeds/components)
               if (processedMessage.trim().startsWith("{")) {
                 try {
-                  payload = JSON.parse(processedMessage);
-                } catch (e) {
+                  payload = JSON.parse(processedMessage) as Record<
+                    string,
+                    unknown
+                  >;
+                } catch {
                   // If JSON parsing fails, treat as plain text
                   payload = { content: processedMessage };
                 }
@@ -489,13 +499,16 @@ export async function processEvent(
               }
 
               // Send message directly to Discord webhook
-              const discordResponse = await fetch(credentials.webhookUrl, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
+              const discordResponse = await fetch(
+                String(credentials.webhookUrl ?? ""),
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify(payload),
                 },
-                body: JSON.stringify(payload),
-              });
+              );
 
               if (discordResponse.ok) {
                 console.log(

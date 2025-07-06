@@ -7,7 +7,7 @@ import { type SupportedLocale } from "@shared/i18n";
 interface NextIntlProviderProps {
   locale: SupportedLocale;
   children: ReactNode;
-  messages: Record<string, any>;
+  messages: Record<string, unknown>;
 }
 
 export function NextIntlProvider({

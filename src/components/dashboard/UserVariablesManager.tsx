@@ -32,6 +32,7 @@ import { Plus, Edit, Trash2, Variable } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 
 interface UserVariable {
   id: number;
@@ -72,6 +73,7 @@ export function UserVariablesManager() {
     },
     {
       enabled: !!user,
+      ...QUERY_OPTIONS.dynamic,
     },
   );
 
@@ -84,7 +86,14 @@ export function UserVariablesManager() {
       setIsDialogOpen(false);
       setEditingVariable(null);
       setFormData({ key: "", value: "", description: "" });
-      refetchVariables();
+      void refetchVariables();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message ?? "Failed to create variable",
+        variant: "destructive",
+      });
     },
   });
 
@@ -97,7 +106,14 @@ export function UserVariablesManager() {
       setIsDialogOpen(false);
       setEditingVariable(null);
       setFormData({ key: "", value: "", description: "" });
-      refetchVariables();
+      void refetchVariables();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message ?? "Failed to update variable",
+        variant: "destructive",
+      });
     },
   });
 
@@ -107,11 +123,18 @@ export function UserVariablesManager() {
         title: "Success",
         description: "Variable deleted successfully",
       });
-      refetchVariables();
+      void refetchVariables();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message ?? "Failed to delete variable",
+        variant: "destructive",
+      });
     },
   });
 
-  const variables = variablesData?.variables || [];
+  const variables = variablesData?.variables ?? [];
 
   const handleSaveVariable = async () => {
     try {
@@ -129,18 +152,33 @@ export function UserVariablesManager() {
         await updateVariableMutation.mutateAsync({
           id: editingVariable.id,
           value: formData.value,
-          description: formData.description || undefined,
+          description: formData.description ?? undefined,
         });
       } else {
         // Create new variable
         await createVariableMutation.mutateAsync({
           key: formData.key,
           value: formData.value,
-          description: formData.description || undefined,
+          description: formData.description ?? undefined,
         });
       }
     } catch (error) {
-      // Error handling is done in the mutation onError callbacks
+      // Additional error handling beyond what's in the mutation callbacks
+      console.error("Error saving variable:", error);
+
+      // Display a more specific error message if available
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : editingVariable
+            ? "Failed to update variable"
+            : "Failed to create variable";
+
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
     }
   };
 
@@ -148,7 +186,15 @@ export function UserVariablesManager() {
     try {
       await deleteVariableMutation.mutateAsync({ id });
     } catch (error) {
-      // Error handling is done in the mutation onError callback
+      // Additional error handling beyond what's in the mutation callbacks
+      console.error("Error deleting variable:", error);
+
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error ? error.message : "Failed to delete variable",
+        variant: "destructive",
+      });
     }
   };
 
@@ -157,7 +203,7 @@ export function UserVariablesManager() {
     setFormData({
       key: variable.key,
       value: variable.value,
-      description: variable.description || "",
+      description: variable.description ?? "",
     });
     setIsDialogOpen(true);
   };
@@ -227,7 +273,7 @@ export function UserVariablesManager() {
                     {variable.value}
                   </TableCell>
                   <TableCell className="max-w-[200px] truncate">
-                    {variable.description || "-"}
+                    {variable.description ?? "-"}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">

@@ -9,6 +9,7 @@ import { Tab, Tabs, TabsContent, TabsList } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
+import { trpc } from "@/lib/trpc";
 import WorkflowExecutionHistory from "@/components/workflows/WorkflowExecutionHistory";
 import WorkflowExecutionGraph from "@/components/workflows/WorkflowExecutionGraph";
 import WorkflowCanvas from "@/components/workflows/WorkflowCanvas";
@@ -35,9 +36,45 @@ import {
 } from "lucide-react";
 import {
   type Workflow,
+  type Event,
   EventStatus,
+  type EventType,
   WorkflowTriggerType,
+  type ConnectionType,
 } from "@/shared/schema";
+import type { Node, Edge } from "@xyflow/react";
+
+// Type definitions for WorkflowCanvas integration
+interface AvailableEvent {
+  id: number;
+  name: string;
+  type: EventType;
+  description?: string;
+  tags?: string[];
+  serverId?: number;
+  serverName?: string;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+}
+
+interface WorkflowNodeData {
+  eventId?: number;
+  label?: string;
+  type?: string;
+  eventTypeIcon?: string;
+  description?: string;
+  tags?: string[];
+  serverId?: number;
+  serverName?: string;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+  updateEvents?: () => Promise<void>;
+}
+
+// Type guard for WorkflowNodeData
+function isWorkflowNodeData(data: unknown): data is WorkflowNodeData {
+  return typeof data === "object" && data !== null;
+}
 import { WorkflowDetailsHeader } from "@/components/workflow-details/WorkflowDetailsHeader";
 import { StatusBadge } from "@/components/ui/status-badge";
 
@@ -50,14 +87,64 @@ export default function WorkflowDetailsPage({
 }: WorkflowDetailsPageProps) {
   const resolvedParams = use(params);
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
-  const [workflowNodes, setWorkflowNodes] = useState<any[]>([]);
-  const [workflowEdges, setWorkflowEdges] = useState<any[]>([]);
-  const [availableEvents, setAvailableEvents] = useState<any[]>([]);
-  const [currentExecution, setCurrentExecution] = useState<any>(null);
+  // Define types for workflow components
+  interface LocalWorkflowNode {
+    id: string;
+    type: string;
+    position: { x: number; y: number };
+    data: {
+      eventId?: number;
+      label?: string;
+      type?: string;
+      eventTypeIcon?: string;
+      description?: string;
+      tags?: string[];
+      serverId?: number | undefined;
+      serverName?: string;
+      createdAt?: Date | string | undefined;
+      updatedAt?: Date | string | undefined;
+      updateEvents?: () => Promise<void>;
+    };
+  }
+
+  interface WorkflowEdge {
+    id: string;
+    source: string;
+    target: string;
+    type?: string;
+    animated?: boolean;
+    markerEnd?: { type: string };
+  }
+
+  interface WorkflowExecutionDetailed {
+    id: number;
+    workflowId: number;
+    status: string;
+    startedAt: string;
+    completedAt: string | null;
+    totalDuration: number | null;
+    totalEvents: number;
+    successfulEvents: number;
+    failedEvents: number;
+  }
+
+  interface ExecutionStats {
+    totalExecutions: number;
+    successCount: number;
+    failureCount: number;
+  }
+
+  const [workflowNodes, setWorkflowNodes] = useState<LocalWorkflowNode[]>([]);
+  const [workflowEdges, setWorkflowEdges] = useState<WorkflowEdge[]>([]);
+  const [availableEvents, setAvailableEvents] = useState<Event[]>([]);
+  const [currentExecution, setCurrentExecution] =
+    useState<WorkflowExecutionDetailed | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadingEvents, setLoadingEvents] = useState(true);
-  const [executionStats, setExecutionStats] = useState<any>(null);
+  const [executionStats, setExecutionStats] = useState<ExecutionStats | null>(
+    null,
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [hasInitialData, setHasInitialData] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -72,86 +159,189 @@ export default function WorkflowDetailsPage({
     validTabs: ["overview", "edit", "canvas", "execution-history"],
   });
 
-  const fetchWorkflow = async () => {
-    try {
-      setIsLoading(true);
+  // Use tRPC queries
+  const workflowId = parseInt(resolvedParams.id);
+  const {
+    data: workflowData,
+    isLoading: isLoadingWorkflow,
+    error: workflowError,
+  } = trpc.workflows.getById.useQuery(
+    { id: workflowId },
+    {
+      enabled: !isNaN(workflowId),
+    },
+  );
 
-      // Fetch workflow details
-      const response = await fetch(`/api/workflows/${resolvedParams.id}`);
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          router.push(`/${resolvedParams.lang}/dashboard/workflows`);
-          return;
-        }
-        throw new Error("Failed to fetch workflow");
+  // Handle workflow data
+  useEffect(() => {
+    if (workflowData) {
+      setWorkflow(workflowData);
+      // Define proper types for workflow data from tRPC
+      interface WorkflowNode {
+        id: number;
+        eventId: number;
+        position_x: number;
+        position_y: number;
+        event?: {
+          id: number;
+          name: string;
+          type: string;
+          description?: string;
+          tags?: string[];
+          serverId?: number | undefined;
+          createdAt?: Date | string | undefined;
+          updatedAt?: Date | string | undefined;
+        };
       }
 
-      const data = await response.json();
-      const workflowData = data.workflow ?? data;
-      setWorkflow(workflowData);
-      setWorkflowNodes(data.nodes ?? []);
-      setWorkflowEdges(data.edges ?? []);
+      interface WorkflowConnection {
+        id: number;
+        sourceNodeId: number;
+        targetNodeId: number;
+        connectionType?: string;
+      }
+
+      // Convert workflow nodes and connections to local format
+      const typedNodes = workflowData.nodes as WorkflowNode[] | undefined;
+      const nodes: LocalWorkflowNode[] = (typedNodes ?? []).map((node) => ({
+        id: `node-${String(node.id)}`,
+        type: "workflowNode",
+        position: { x: node.position_x, y: node.position_y },
+        data: {
+          eventId: node.eventId,
+          label: node.event?.name ?? "",
+          type: node.event?.type ?? "",
+          eventTypeIcon: node.event?.type ?? "",
+          description: node.event?.description ?? "",
+          tags: node.event?.tags ?? [],
+          serverId: node.event?.serverId,
+          createdAt: node.event?.createdAt ?? "",
+          updatedAt: node.event?.updatedAt ?? "",
+        },
+      }));
+      setWorkflowNodes(nodes);
+
+      const typedConnections = workflowData.connections as
+        | WorkflowConnection[]
+        | undefined;
+      const edges: WorkflowEdge[] = (typedConnections ?? []).map((conn) => ({
+        id: `edge-${String(conn.id)}`,
+        source: `node-${String(conn.sourceNodeId)}`,
+        target: `node-${String(conn.targetNodeId)}`,
+        type: conn.connectionType ?? "default",
+        animated: false,
+      }));
+      setWorkflowEdges(edges);
 
       setHasInitialData(true);
       setHasUnsavedChanges(false);
-
-      // Fetch execution statistics
-      const executionsResponse = await fetch(
-        `/api/workflows/${resolvedParams.id}/executions?limit=1000`,
-      );
-      if (executionsResponse.ok) {
-        const executionsData = await executionsResponse.json();
-        const executions = executionsData.executions ?? [];
-
-        const stats = {
-          totalExecutions: executions.length,
-          successCount: executions.filter((e: any) => e.status === "completed")
-            .length,
-          failureCount: executions.filter((e: any) => e.status === "failed")
-            .length,
-        };
-        setExecutionStats(stats);
-
-        // Set current execution if there's a running one
-        const runningExecution = executions.find(
-          (e: any) => e.status === "running",
-        );
-        if (runningExecution) {
-          setCurrentExecution(runningExecution);
-          setIsExecuting(true);
-        } else {
-          // Ensure button is enabled if no running executions
-          setIsExecuting(false);
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching workflow:", error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch workflow details",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, [workflowData]);
+
+  // Handle workflow error
+  useEffect(() => {
+    if (workflowError) {
+      if (workflowError.data?.code === "NOT_FOUND") {
+        router.push(`/${resolvedParams.lang}/dashboard/workflows`);
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to fetch workflow details",
+          variant: "destructive",
+        });
+      }
+    }
+  }, [workflowError, router, resolvedParams.lang, toast]);
+
+  // Fetch execution statistics
+  const { data: executionsData } = trpc.workflows.getExecutions.useQuery(
+    { id: workflowId, limit: 1000, offset: 0 },
+    {
+      enabled: !isNaN(workflowId),
+    },
+  );
+
+  // Handle executions data
+  useEffect(() => {
+    if (executionsData?.executions) {
+      const executions = executionsData.executions.executions || [];
+
+      const stats: ExecutionStats = {
+        totalExecutions: executions.length,
+        successCount: executions.filter((e: unknown) => {
+          if (typeof e === "object" && e !== null && "status" in e) {
+            return (e as { status: string }).status === "completed";
+          }
+          return false;
+        }).length,
+        failureCount: executions.filter((e: unknown) => {
+          if (typeof e === "object" && e !== null && "status" in e) {
+            return (e as { status: string }).status === "failed";
+          }
+          return false;
+        }).length,
+      };
+      setExecutionStats(stats);
+
+      // Set current execution if there's a running one
+      const runningExecution = executions.find((e: unknown) => {
+        if (typeof e === "object" && e !== null && "status" in e) {
+          return (e as { status: string }).status === "running";
+        }
+        return false;
+      });
+      if (runningExecution) {
+        // Convert the execution data to match WorkflowExecutionDetailed interface
+        const execution: WorkflowExecutionDetailed = {
+          id: runningExecution.id,
+          workflowId: runningExecution.workflowId,
+          status: runningExecution.status,
+          startedAt:
+            runningExecution.startedAt instanceof Date
+              ? runningExecution.startedAt.toISOString()
+              : runningExecution.startedAt,
+          completedAt: runningExecution.completedAt
+            ? runningExecution.completedAt instanceof Date
+              ? runningExecution.completedAt.toISOString()
+              : runningExecution.completedAt
+            : null,
+          totalDuration: runningExecution.totalDuration ?? null,
+          totalEvents: 0,
+          successfulEvents: 0,
+          failedEvents: 0,
+        };
+        setCurrentExecution(execution);
+        setIsExecuting(true);
+      } else {
+        setIsExecuting(false);
+      }
+    }
+  }, [executionsData]);
+
+  // Combine loading states
+  useEffect(() => {
+    setIsLoading(isLoadingWorkflow);
+  }, [isLoadingWorkflow]);
+
+  // Use tRPC query for events
+  const { data: eventsData, isLoading: isLoadingEvents } =
+    trpc.events.getAll.useQuery({ limit: 1000, offset: 0 });
+
+  // Handle events data
+  useEffect(() => {
+    if (eventsData?.events) {
+      setAvailableEvents(eventsData.events);
+    }
+  }, [eventsData]);
+
+  useEffect(() => {
+    setLoadingEvents(isLoadingEvents);
+  }, [isLoadingEvents]);
 
   const fetchEvents = useCallback(async () => {
-    try {
-      setLoadingEvents(true);
-      const response = await fetch("/api/events");
-      if (response.ok) {
-        const data = await response.json();
-        console.log("Events API response:", data); // Debug log
-        // The API returns an array directly, not wrapped in an events property
-        setAvailableEvents(Array.isArray(data) ? data : (data.events ?? []));
-      }
-    } catch (error) {
-      console.error("Error fetching events:", error);
-    } finally {
-      setLoadingEvents(false);
-    }
+    // This is now handled by the tRPC query
+    // Keeping the function for compatibility with components that expect it
+    return Promise.resolve();
   }, []);
 
   // Update events function to refresh workflow nodes when events change
@@ -170,7 +360,7 @@ export default function WorkflowDetailsPage({
   }, [fetchEvents, toast]);
 
   const handleCanvasChange = useCallback(
-    (nodes: any[], edges: any[]) => {
+    (nodes: LocalWorkflowNode[], edges: WorkflowEdge[]) => {
       if (!hasInitialData) return;
 
       setWorkflowNodes(nodes);
@@ -184,45 +374,85 @@ export default function WorkflowDetailsPage({
 
   // Auto-save function removed - manual save only
 
-  const handleManualSave = async () => {
-    if (!workflow) return;
-
-    try {
-      setIsSaving(true);
-      const response = await fetch(`/api/workflows/${workflow.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          nodes: workflowNodes,
-          edges: workflowEdges,
-        }),
+  // Use tRPC mutation for saving
+  const updateWorkflowMutation = trpc.workflows.update.useMutation({
+    onSuccess: () => {
+      setHasUnsavedChanges(false);
+      toast({
+        title: "Saved",
+        description: "Workflow saved successfully",
       });
-
-      if (response.ok) {
-        setHasUnsavedChanges(false);
-        toast({
-          title: "Saved",
-          description: "Workflow saved successfully",
-        });
-      } else {
-        throw new Error("Failed to save workflow");
-      }
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error("Save failed:", error);
       toast({
         title: "Error",
         description: "Failed to save workflow",
         variant: "destructive",
       });
+    },
+  });
+
+  const handleManualSave = async () => {
+    if (!workflow) return;
+
+    setIsSaving(true);
+    try {
+      // Convert local nodes and edges back to tRPC format
+      // The schema expects full node/edge data, but the server only uses eventId and connectionType
+      const nodes = workflowNodes.map((node) => ({
+        id: node.id,
+        type: "eventNode" as const,
+        position: node.position,
+        data: {
+          eventId: node.data.eventId ?? 0,
+          label: node.data.label ?? "",
+          type: node.data.type ?? "",
+          eventTypeIcon: node.data.eventTypeIcon ?? "",
+          description: node.data.description,
+          tags: node.data.tags ?? [],
+          serverId: node.data.serverId,
+          serverName: node.data.serverName,
+          createdAt: node.data.createdAt
+            ? typeof node.data.createdAt === "string"
+              ? node.data.createdAt
+              : node.data.createdAt.toISOString()
+            : undefined,
+          updatedAt: node.data.updatedAt
+            ? typeof node.data.updatedAt === "string"
+              ? node.data.updatedAt
+              : node.data.updatedAt.toISOString()
+            : undefined,
+        },
+      }));
+
+      const edges = workflowEdges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        type: "connectionEdge" as const,
+        animated: edge.animated ?? true,
+        data: {
+          type: (edge.type ?? "default") as ConnectionType,
+          connectionType: (edge.type ?? "default") as ConnectionType,
+        },
+      }));
+
+      await updateWorkflowMutation.mutateAsync({
+        id: workflow.id,
+        nodes,
+        edges,
+      });
     } finally {
       setIsSaving(false);
     }
   };
 
+  const utils = trpc.useContext();
+
   const handleCanvasRefresh = () => {
-    fetchWorkflow();
+    // Refetch workflow data using tRPC
+    void utils.workflows.getById.invalidate({ id: workflowId });
   };
 
   // Memoize enriched nodes to prevent infinite re-renders and update when events change
@@ -234,8 +464,8 @@ export default function WorkflowDetailsPage({
       if (event) {
         // Check if the event data has changed
         const eventDataChanged =
-          node.data.label !== event.name ??
-          node.data.type !== event.type ??
+          node.data.label !== event.name ||
+          node.data.type !== event.type ||
           node.data.eventTypeIcon !== event.type;
 
         if (!eventDataChanged && node.data.updateEvents === updateEvents) {
@@ -253,7 +483,7 @@ export default function WorkflowDetailsPage({
             description: event.description ?? "",
             tags: event.tags ?? [],
             serverId: event.serverId,
-            serverName: event.serverName,
+            serverName: undefined, // serverName not available on Event type
             createdAt: event.createdAt,
             updatedAt: event.updatedAt,
             updateEvents: updateEvents,
@@ -276,7 +506,7 @@ export default function WorkflowDetailsPage({
     });
   }, [workflowNodes, availableEvents, updateEvents]);
 
-  const handleExecutionUpdate = (execution: any) => {
+  const handleExecutionUpdate = (execution: WorkflowExecutionDetailed) => {
     setCurrentExecution(execution);
     if (
       execution.status === "completed" ||
@@ -286,25 +516,42 @@ export default function WorkflowDetailsPage({
     ) {
       setIsExecuting(false);
       // Refresh execution statistics but don't reload entire workflow
-      fetchExecutionStats();
+      void fetchExecutionStats();
       // Trigger refresh of execution history tab
       setExecutionHistoryRefreshTrigger((prev) => prev + 1);
     }
   };
 
-  // Poll for execution status when a workflow is executing
+  // Create a compatible handler for the WorkflowExecutionGraph component
+  const handleWorkflowExecutionUpdate = (execution: {
+    id: number;
+    workflowId: number;
+    status: string;
+    startedAt: string;
+    completedAt: string | null;
+    totalDuration: number | null;
+  }) => {
+    // Convert to WorkflowExecutionDetailed format
+    const detailedExecution: WorkflowExecutionDetailed = {
+      ...execution,
+      totalEvents: 0,
+      successfulEvents: 0,
+      failedEvents: 0,
+    };
+    handleExecutionUpdate(detailedExecution);
+  };
+
+  // Poll for execution status using tRPC
   useEffect(() => {
     if (!isExecuting || !currentExecution?.id) return;
 
-    const pollInterval = setInterval(async () => {
-      try {
-        const response = await fetch(
-          `/api/workflows/${resolvedParams.id}/executions/${String(currentExecution.id)}`,
-        );
-
-        if (response.ok) {
-          const data = await response.json();
-          const execution = data.data?.execution;
+    const pollInterval = setInterval(() => {
+      void (async () => {
+        try {
+          const execution = await utils.workflows.getExecution.fetch({
+            workflowId: workflowId,
+            executionId: currentExecution.id,
+          });
 
           if (execution) {
             setCurrentExecution(execution);
@@ -315,14 +562,14 @@ export default function WorkflowDetailsPage({
               execution.status === "FAILURE"
             ) {
               setIsExecuting(false);
-              fetchExecutionStats();
+              void fetchExecutionStats();
               clearInterval(pollInterval);
             }
           }
+        } catch (error) {
+          console.error("Error polling execution status:", error);
         }
-      } catch (error) {
-        console.error("Error polling execution status:", error);
-      }
+      })();
     }, 2000); // Poll every 2 seconds
 
     // Safety timeout to re-enable button after 5 minutes in case polling fails
@@ -335,69 +582,38 @@ export default function WorkflowDetailsPage({
       clearInterval(pollInterval);
       clearTimeout(safetyTimeout);
     };
-  }, [isExecuting, currentExecution?.id, resolvedParams.id]);
+  }, [isExecuting, currentExecution?.id, workflowId, utils]);
 
   const fetchExecutionStats = async () => {
-    try {
-      const executionsResponse = await fetch(
-        `/api/workflows/${resolvedParams.id}/executions?limit=1000`,
-      );
-      if (executionsResponse.ok) {
-        const executionsData = await executionsResponse.json();
-        const executions = executionsData.executions ?? [];
-
-        const stats = {
-          totalExecutions: executions.length,
-          successCount: executions.filter((e: any) => e.status === "completed")
-            .length,
-          failureCount: executions.filter((e: any) => e.status === "failed")
-            .length,
-        };
-        setExecutionStats(stats);
-      }
-    } catch (error) {
-      console.error("Error fetching execution stats:", error);
-    }
+    // Refetch executions using tRPC
+    void utils.workflows.getExecutions.invalidate({ id: workflowId });
   };
 
-  const handleRunWorkflow = async () => {
-    if (!workflow ?? isExecuting) return;
+  // Use tRPC mutation for executing workflow
+  const executeWorkflowMutation = trpc.workflows.execute.useMutation({
+    onSuccess: (data) => {
+      if (data.executionId) {
+        const execution = {
+          id: data.executionId,
+          workflowId: workflow?.id ?? 0,
+          status: "running",
+          startedAt: new Date().toISOString(),
+          completedAt: null,
+          totalDuration: null,
+          totalEvents: 0,
+          successfulEvents: 0,
+          failedEvents: 0,
+        };
 
-    try {
-      setIsExecuting(true);
-      const response = await fetch(`/api/workflows/${workflow.id}/execute`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+        setCurrentExecution(execution);
 
-      if (!response.ok) {
-        throw new Error("Failed to start workflow execution");
+        toast({
+          title: "Workflow Started",
+          description: "Workflow execution has begun",
+        });
       }
-
-      const data = await response.json();
-
-      // Create execution object from response data
-      const execution = {
-        id: data.executionId,
-        workflowId: workflow.id,
-        status: "running",
-        startedAt: new Date().toISOString(),
-        completedAt: null,
-        totalDuration: null,
-        totalEvents: 0,
-        successfulEvents: 0,
-        failedEvents: 0,
-      };
-
-      setCurrentExecution(execution);
-
-      toast({
-        title: "Workflow Started",
-        description: "Workflow execution has begun",
-      });
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error("Error starting workflow:", error);
       setIsExecuting(false);
       toast({
@@ -405,44 +621,68 @@ export default function WorkflowDetailsPage({
         description: "Failed to start workflow execution",
         variant: "destructive",
       });
-    }
+    },
+  });
+
+  const handleRunWorkflow = async () => {
+    if (!workflow || isExecuting) return;
+
+    setIsExecuting(true);
+    await executeWorkflowMutation.mutateAsync({
+      id: workflow.id,
+      manual: true,
+    });
   };
 
-  const handleStatusChange = async (newStatus: EventStatus) => {
-    if (!workflow) return;
-
-    try {
-      const response = await fetch(`/api/workflows/${workflow.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          status: newStatus,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update workflow status");
+  // Use tRPC mutation for status change
+  const updateStatusMutation = trpc.workflows.update.useMutation({
+    onSuccess: (updatedWorkflow) => {
+      if (updatedWorkflow) {
+        setWorkflow(updatedWorkflow);
+        const status = updatedWorkflow.status;
+        toast({
+          title: "Status Updated",
+          description: `Workflow ${status === EventStatus.ACTIVE ? "activated" : status === EventStatus.PAUSED ? "paused" : "set to draft"}`,
+        });
       }
-
-      const updatedWorkflow = await response.json();
-      setWorkflow(updatedWorkflow.workflow ?? updatedWorkflow);
-
-      toast({
-        title: "Status Updated",
-        description: `Workflow ${newStatus === EventStatus.ACTIVE ? "activated" : newStatus === EventStatus.PAUSED ? "paused" : "set to draft"}`,
-      });
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error("Error updating workflow status:", error);
       toast({
         title: "Error",
         description: "Failed to update workflow status",
         variant: "destructive",
       });
-      throw error; // Re-throw to allow the clickable badge to handle the error state
-    }
+    },
+  });
+
+  const handleStatusChange = async (newStatus: EventStatus) => {
+    if (!workflow) return;
+
+    await updateStatusMutation.mutateAsync({
+      id: workflow.id,
+      status: newStatus,
+    });
   };
+
+  // Use tRPC mutation for deleting workflow
+  const deleteWorkflowMutation = trpc.workflows.delete.useMutation({
+    onSuccess: () => {
+      toast({
+        title: "Workflow Deleted",
+        description: "Workflow has been successfully deleted",
+      });
+      router.push(`/${resolvedParams.lang}/dashboard/workflows`);
+    },
+    onError: (error) => {
+      console.error("Error deleting workflow:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete workflow",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleDeleteWorkflow = async () => {
     if (!workflow) return;
@@ -455,35 +695,10 @@ export default function WorkflowDetailsPage({
       return;
     }
 
-    try {
-      const response = await fetch(`/api/workflows/${workflow.id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to delete workflow");
-      }
-
-      toast({
-        title: "Workflow Deleted",
-        description: "Workflow has been successfully deleted",
-      });
-
-      router.push(`/${resolvedParams.lang}/dashboard/workflows`);
-    } catch (error) {
-      console.error("Error deleting workflow:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete workflow",
-        variant: "destructive",
-      });
-    }
+    await deleteWorkflowMutation.mutateAsync({ id: workflow.id });
   };
 
-  useEffect(() => {
-    fetchWorkflow();
-    fetchEvents();
-  }, [resolvedParams.id]);
+  // Remove manual fetching as tRPC queries handle this automatically
 
   // Auto-save timeout cleanup removed since auto-save is disabled
 
@@ -570,13 +785,42 @@ export default function WorkflowDetailsPage({
 
         <TabsContent value="overview" className="space-y-6">
           {/* Workflow Execution Progress */}
+          {/* @ts-expect-error - exactOptionalPropertyTypes compatibility issue with conditional spread */}
           <WorkflowExecutionGraph
             workflowId={workflow.id}
-            nodes={enrichedWorkflowNodes}
-            connections={workflowEdges}
+            nodes={enrichedWorkflowNodes.map((node) => ({
+              id: node.id,
+              type: node.type,
+              position: node.position,
+              data: {
+                eventId: node.data.eventId ?? 0,
+                label: node.data.label ?? "",
+                type: node.data.type ?? "",
+                eventTypeIcon: node.data.eventTypeIcon ?? "",
+                description: node.data.description ?? "",
+                tags: Array.isArray(node.data.tags) ? node.data.tags : [],
+                ...(node.data.serverId !== null &&
+                  node.data.serverId !== undefined && {
+                    serverId: node.data.serverId,
+                  }),
+                ...(node.data.serverName && {
+                  serverName: node.data.serverName,
+                }),
+                ...(node.data.createdAt && { createdAt: node.data.createdAt }),
+                ...(node.data.updatedAt && { updatedAt: node.data.updatedAt }),
+              },
+            }))}
+            connections={workflowEdges.map((edge) => ({
+              id: edge.id,
+              source: edge.source,
+              target: edge.target,
+              data: {
+                connectionType: edge.type ?? "default",
+              },
+            }))}
             executionId={currentExecution?.id}
             isExecuting={isExecuting}
-            onExecutionUpdate={handleExecutionUpdate}
+            onExecutionUpdate={handleWorkflowExecutionUpdate}
             updateEvents={updateEvents}
           />
 
@@ -646,11 +890,13 @@ export default function WorkflowDetailsPage({
                     Array.isArray(workflow.overrideServerIds) &&
                     workflow.overrideServerIds.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
-                        {workflow.overrideServerIds.map((serverId: number) => (
-                          <Badge key={serverId} variant="outline">
-                            Server {serverId}
-                          </Badge>
-                        ))}
+                        {(workflow.overrideServerIds as number[]).map(
+                          (serverId) => (
+                            <Badge key={serverId} variant="outline">
+                              Server {serverId}
+                            </Badge>
+                          ),
+                        )}
                       </div>
                     ) : (
                       <Badge variant="outline">Event execution servers</Badge>
@@ -792,12 +1038,125 @@ export default function WorkflowDetailsPage({
           value="canvas"
           className="h-[calc(100vh-12rem)] overflow-hidden"
         >
-          <div className="bg-secondary-bg relative h-[calc(100%-4rem)] h-full w-full overflow-hidden p-0">
+          <div className="bg-secondary-bg relative h-full w-full overflow-hidden p-0">
             <WorkflowCanvas
-              availableEvents={availableEvents}
-              initialNodes={enrichedWorkflowNodes}
-              initialEdges={workflowEdges}
-              onChange={handleCanvasChange}
+              availableEvents={availableEvents.map((event): AvailableEvent => {
+                const mappedEvent: AvailableEvent = {
+                  id: event.id,
+                  name: event.name,
+                  type: event.type,
+                };
+
+                if (event.description) {
+                  mappedEvent.description = event.description;
+                }
+
+                if (Array.isArray(event.tags) && event.tags.length > 0) {
+                  mappedEvent.tags = event.tags as string[];
+                }
+
+                if (event.serverId) {
+                  mappedEvent.serverId = event.serverId;
+                }
+
+                mappedEvent.createdAt = event.createdAt;
+                mappedEvent.updatedAt = event.updatedAt;
+
+                return mappedEvent;
+              })}
+              initialNodes={enrichedWorkflowNodes.map(
+                (node): Node => ({
+                  id: node.id,
+                  type: node.type,
+                  position: node.position,
+                  data: {
+                    eventId: node.data.eventId,
+                    label: node.data.label,
+                    type: node.data.type,
+                    eventTypeIcon: node.data.eventTypeIcon,
+                    description: node.data.description,
+                    tags: node.data.tags,
+                    serverId: node.data.serverId,
+                    serverName: node.data.serverName,
+                    createdAt: node.data.createdAt,
+                    updatedAt: node.data.updatedAt,
+                    updateEvents: node.data.updateEvents,
+                  },
+                }),
+              )}
+              initialEdges={workflowEdges.map((edge): Edge => {
+                const mappedEdge: Edge = {
+                  id: edge.id,
+                  source: edge.source,
+                  target: edge.target,
+                };
+
+                if (edge.type !== undefined) {
+                  mappedEdge.type = edge.type;
+                }
+
+                if (edge.animated !== undefined) {
+                  mappedEdge.animated = edge.animated;
+                }
+
+                if (edge.markerEnd !== undefined) {
+                  // @ts-expect-error - exactOptionalPropertyTypes: markerEnd type compatibility
+                  mappedEdge.markerEnd = edge.markerEnd as Edge["markerEnd"];
+                }
+
+                return mappedEdge;
+              })}
+              onChange={(nodes: Node[], edges: Edge[]) => {
+                // Convert back to our local types
+                // @ts-expect-error - exactOptionalPropertyTypes: Node data type is unknown
+                const localNodes: LocalWorkflowNode[] = nodes.map((node) => {
+                  const nodeData = isWorkflowNodeData(node.data)
+                    ? node.data
+                    : ({} as WorkflowNodeData);
+                  return {
+                    id: node.id,
+                    type: node.type ?? "",
+                    position: node.position,
+                    data: {
+                      eventId: nodeData.eventId,
+                      label: nodeData.label,
+                      type: nodeData.type,
+                      eventTypeIcon: nodeData.eventTypeIcon,
+                      description: nodeData.description,
+                      tags: nodeData.tags,
+                      serverId: nodeData.serverId,
+                      serverName: nodeData.serverName,
+                      createdAt: nodeData.createdAt,
+                      updatedAt: nodeData.updatedAt,
+                      updateEvents: nodeData.updateEvents,
+                    },
+                  };
+                });
+                const localEdges: WorkflowEdge[] = edges.map((edge) => {
+                  const localEdge: WorkflowEdge = {
+                    id: edge.id,
+                    source: edge.source,
+                    target: edge.target,
+                  };
+
+                  if (edge.type !== undefined) {
+                    localEdge.type = edge.type;
+                  }
+
+                  if (edge.animated !== undefined) {
+                    localEdge.animated = edge.animated;
+                  }
+
+                  if (edge.markerEnd !== undefined) {
+                    // @ts-expect-error - exactOptionalPropertyTypes: markerEnd type compatibility
+                    localEdge.markerEnd =
+                      edge.markerEnd as WorkflowEdge["markerEnd"];
+                  }
+
+                  return localEdge;
+                });
+                handleCanvasChange(localNodes, localEdges);
+              }}
               onRefresh={handleCanvasRefresh}
               updateEvents={updateEvents}
               isLoading={loadingEvents}

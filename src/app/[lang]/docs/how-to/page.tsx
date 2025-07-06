@@ -42,7 +42,7 @@ function GuideCard({
   duration,
   iconClassName,
 }: {
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
   title: string;
   description: string;
   href: string;

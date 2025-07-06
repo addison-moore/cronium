@@ -32,7 +32,7 @@ export async function generateScriptCode(
 
   // Get AI model from settings
   const modelSetting = await storage.getSetting("aiModel");
-  const model = modelSetting?.value || "gpt-4o"; // default to gpt-4o if not set
+  const model = modelSetting?.value ?? "gpt-4o"; // default to gpt-4o if not set
 
   let systemPrompt = `You are an expert programmer that writes clean, efficient, and well-documented code. 
 Generate code based on the user's request.`;
@@ -82,8 +82,8 @@ Generate code based on the user's request.`;
 
     // Otherwise return the whole content (it might be code without markdown formatting)
     return content.trim();
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error generating code with OpenAI:", error);
-    throw new Error(`Failed to generate code: ${error.message}`);
+    throw new Error(`Failed to generate code: ${String(error)}`);
   }
 }

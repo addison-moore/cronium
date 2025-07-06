@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -68,7 +67,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
   const params = useParams<{ lang: string }>();
   const router = useRouter();
   const t = useTranslations("Workflows");
-  const { data: session } = useSession();
+  // const { data: session } = useSession(); // Removed - unused
   const lang = params.lang;
 
   const [filteredWorkflows, setFilteredWorkflows] = useState<WorkflowItem[]>(
@@ -99,10 +98,11 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
     refetch: refetchWorkflows,
   } = trpc.workflows.getAll.useQuery(
     {
-      limit: 1000, // Get all workflows for client-side filtering
+      limit: 100, // Maximum allowed limit for workflows.getAll
       offset: 0,
       search: searchTerm || undefined,
-      status: statusFilter !== "all" ? (statusFilter as any) : undefined,
+      status:
+        statusFilter !== "all" ? (statusFilter as EventStatus) : undefined,
       shared: undefined,
     },
     {
@@ -118,7 +118,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
         description: "Workflow deleted successfully",
         variant: "success",
       });
-      refetchWorkflows();
+      void refetchWorkflows();
     },
   });
 
@@ -126,10 +126,10 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
     onSuccess: (_, variables) => {
       toast({
         title: "Success",
-        description: `Workflow status updated to ${variables.status?.toLowerCase()} successfully.`,
+        description: `Workflow status updated to ${variables.status?.toLowerCase() ?? ""} successfully.`,
         variant: "success",
       });
-      refetchWorkflows();
+      void refetchWorkflows();
     },
   });
 
@@ -153,19 +153,20 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
       }
 
       setSelectedWorkflows(new Set());
-      refetchWorkflows();
+      void refetchWorkflows();
     },
   });
 
   // Extract workflows from tRPC response
-  const workflows: WorkflowItem[] = (workflowsData?.workflows || []).map(
-    (w: any) => ({
+  const workflows: WorkflowItem[] = (workflowsData?.workflows ?? []).map(
+    (w) => ({
       ...w,
       createdAt:
         w.createdAt instanceof Date ? w.createdAt.toISOString() : w.createdAt,
       updatedAt:
         w.updatedAt instanceof Date ? w.updatedAt.toISOString() : w.updatedAt,
       lastRunAt: null, // TODO: Get lastRunAt from workflow execution data
+      tags: Array.isArray(w.tags) ? (w.tags as string[]) : [],
     }),
   );
 
@@ -179,15 +180,15 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
       filtered = filtered.filter(
         (workflow) =>
           workflow.name.toLowerCase().includes(term) ||
-          workflow.description?.toLowerCase().includes(term) ||
-          workflow.tags?.some((tag: any) => tag.toLowerCase().includes(term)),
+          (workflow.description?.toLowerCase().includes(term) ?? false) ||
+          workflow.tags?.some((tag) => tag.toLowerCase().includes(term)),
       );
     }
 
     // Status filter
     if (statusFilter !== "all") {
       filtered = filtered.filter(
-        (workflow) => workflow.status === statusFilter,
+        (workflow) => workflow.status === (statusFilter as EventStatus),
       );
     }
 
@@ -215,7 +216,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
     const allTags = new Set<string>();
     workflows.forEach((workflow) => {
       if (workflow.tags) {
-        workflow.tags.forEach((tag: any) => allTags.add(tag));
+        workflow.tags.forEach((tag) => allTags.add(tag));
       }
     });
     return Array.from(allTags).sort();
@@ -233,7 +234,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
 
     try {
       await deleteWorkflowMutation.mutateAsync({ id: workflowId });
-    } catch (error) {
+    } catch {
       // Error handling is done in the mutation onError callback
     }
   };
@@ -247,12 +248,12 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
         id: workflowId,
         status: newStatus,
       });
-    } catch (error) {
+    } catch {
       // Error handling is done in the mutation onError callback
     }
   };
 
-  const handleExecute = async (workflowId: number) => {
+  const handleExecute = async (_workflowId: number) => {
     try {
       // Note: You might want to add an execute mutation to the workflows router
       // For now, we'll show a placeholder
@@ -283,7 +284,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
         workflowIds: Array.from(selectedWorkflows),
         operation: "delete",
       });
-    } catch (error) {
+    } catch {
       // Error handling is done in the mutation onError callback
     } finally {
       setBulkActionLoading(null);
@@ -299,7 +300,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
         workflowIds: Array.from(selectedWorkflows),
         operation: "activate",
       });
-    } catch (error) {
+    } catch {
       // Error handling is done in the mutation onError callback
     } finally {
       setBulkActionLoading(null);
@@ -315,7 +316,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
         workflowIds: Array.from(selectedWorkflows),
         operation: "pause",
       });
-    } catch (error) {
+    } catch {
       // Error handling is done in the mutation onError callback
     } finally {
       setBulkActionLoading(null);
@@ -331,7 +332,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
         workflowIds: Array.from(selectedWorkflows),
         operation: "archive",
       });
-    } catch (error) {
+    } catch {
       // Error handling is done in the mutation onError callback
     } finally {
       setBulkActionLoading(null);
@@ -438,7 +439,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
       header: t("Description"),
       cell: (workflow) => (
         <span className="text-muted-foreground text-sm">
-          {workflow.description || "-"}
+          {workflow.description ?? "-"}
         </span>
       ),
     },
@@ -510,28 +511,35 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
     {
       label: t("Execute"),
       icon: <Play className="h-4 w-4" />,
-      onClick: () => handleExecute(workflow.id),
+      onClick: () => {
+        void handleExecute(workflow.id);
+      },
     },
     ...(workflow.status === EventStatus.ARCHIVED
       ? [
           {
             label: t("Unarchive"),
             icon: <RefreshCw className="h-4 w-4" />,
-            onClick: () => handleStatusChange(workflow.id, EventStatus.ACTIVE),
+            onClick: () => {
+              void handleStatusChange(workflow.id, EventStatus.ACTIVE);
+            },
           } as StandardizedTableAction,
         ]
       : [
           {
             label: t("Archive"),
             icon: <Archive className="h-4 w-4" />,
-            onClick: () =>
-              handleStatusChange(workflow.id, EventStatus.ARCHIVED),
+            onClick: () => {
+              void handleStatusChange(workflow.id, EventStatus.ARCHIVED);
+            },
           } as StandardizedTableAction,
         ]),
     {
       label: t("Delete"),
       icon: <Trash2 className="h-4 w-4" />,
-      onClick: () => handleDelete(workflow.id),
+      onClick: () => {
+        void handleDelete(workflow.id);
+      },
       variant: "destructive" as const,
       separator: true,
     },

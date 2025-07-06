@@ -45,6 +45,7 @@ import { formatDate } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
 import { trpc } from "@/lib/trpc";
 import { TokenStatus } from "@/shared/schema";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 
 type ApiToken = {
   id: number;
@@ -83,7 +84,7 @@ export default function ApiTokensManager() {
     isLoading,
     error,
     refetch,
-  } = trpc.auth.getApiTokens.useQuery();
+  } = trpc.auth.getApiTokens.useQuery(undefined, QUERY_OPTIONS.dynamic);
 
   const createTokenMutation = trpc.auth.createApiToken.useMutation({
     onSuccess: (data) => {

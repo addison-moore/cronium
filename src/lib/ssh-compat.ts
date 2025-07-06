@@ -8,7 +8,7 @@
  * in development environments while gracefully handling the lack of actual SSH functionality.
  */
 
-import { type EventType } from "@/shared/schema";
+import { type EventType } from "@shared/schema";
 
 // Define interfaces to match the real SSH service
 interface ExecuteScriptResult {
@@ -42,10 +42,42 @@ interface ServerInfo {
   port: number;
 }
 
+// Define the interface for the native SSH service
+interface NativeSSHService {
+  connect(
+    host: string,
+    privateKey: string,
+    username: string,
+    port: number,
+  ): Promise<void>;
+  disconnect(): Promise<void>;
+  testConnection(
+    host: string,
+    privateKey: string,
+    username: string,
+    port: number,
+  ): Promise<{ success: boolean; message: string }>;
+  executeScript(
+    scriptType: EventType,
+    scriptContent: string,
+    envVars: Record<string, string>,
+    server?: {
+      address: string;
+      sshKey: string;
+      username: string;
+      port: number;
+    },
+    timeoutMs?: number,
+    inputData?: Record<string, unknown>,
+    eventData?: Record<string, unknown>,
+  ): Promise<ExecuteScriptResult>;
+  checkServerHealth(server: ServerInfo): Promise<CheckServerHealthResult>;
+}
+
 // Mock SSH Service class that gracefully handles the absence of real SSH functionality
 export class SSHCompatService {
   private isNativeAvailable = false;
-  private nativeSSH: any = null;
+  private nativeSSH: NativeSSHService | null = null;
 
   constructor() {
     this.tryLoadNative();
@@ -60,7 +92,7 @@ export class SSHCompatService {
         // We're not actually loading it here, just checking if it would be possible
         this.isNativeAvailable = false;
       }
-    } catch (error) {
+    } catch {
       console.warn(
         "Native SSH module could not be loaded, using compatibility mode.",
       );
@@ -80,7 +112,9 @@ export class SSHCompatService {
       );
       return;
     }
-    return this.nativeSSH?.connect(host, privateKey, username, port);
+    if (this.nativeSSH) {
+      return this.nativeSSH.connect(host, privateKey, username, port);
+    }
   }
 
   async disconnect(): Promise<void> {
@@ -90,7 +124,9 @@ export class SSHCompatService {
       );
       return;
     }
-    return this.nativeSSH?.disconnect();
+    if (this.nativeSSH) {
+      return this.nativeSSH.disconnect();
+    }
   }
 
   async testConnection(
@@ -108,7 +144,14 @@ export class SSHCompatService {
           "SSH functionality is not available in this environment. This is a compatibility mode with limited functionality.",
       };
     }
-    return this.nativeSSH?.testConnection(host, privateKey, username, port);
+    if (this.nativeSSH) {
+      return this.nativeSSH.testConnection(host, privateKey, username, port);
+    }
+    // This should never be reached, but TypeScript needs a return
+    return {
+      success: false,
+      message: "Native SSH module not available",
+    };
   }
 
   async executeScript(
@@ -122,8 +165,8 @@ export class SSHCompatService {
       port: number;
     },
     timeoutMs = 900000,
-    inputData: Record<string, any> = {},
-    eventData: Record<string, any> = {},
+    inputData: Record<string, unknown> = {},
+    eventData: Record<string, unknown> = {},
   ): Promise<ExecuteScriptResult> {
     if (!this.isNativeAvailable) {
       console.log("[SSH Compat] Execute script called in compatibility mode");
@@ -134,15 +177,22 @@ export class SSHCompatService {
         stderr: "",
       };
     }
-    return this.nativeSSH?.executeScript(
-      scriptType,
-      scriptContent,
-      envVars,
-      server,
-      timeoutMs,
-      inputData,
-      eventData,
-    );
+    if (this.nativeSSH) {
+      return this.nativeSSH.executeScript(
+        scriptType,
+        scriptContent,
+        envVars,
+        server,
+        timeoutMs,
+        inputData,
+        eventData,
+      );
+    }
+    // This should never be reached, but TypeScript needs a return
+    return {
+      stdout: "Native SSH module not available",
+      stderr: "",
+    };
   }
 
   async checkServerHealth(
@@ -171,7 +221,26 @@ export class SSHCompatService {
           "SSH functionality is not available in this environment. This is a compatibility mode with limited functionality.",
       };
     }
-    return this.nativeSSH?.checkServerHealth(server);
+    if (this.nativeSSH) {
+      return this.nativeSSH.checkServerHealth(server);
+    }
+    // This should never be reached, but TypeScript needs a return
+    return {
+      online: false,
+      systemInfo: {
+        platform: "N/A",
+        release: "N/A",
+        cpuCores: 0,
+        totalMemory: "0",
+        freeMemory: "0",
+        uptime: {
+          days: 0,
+          hours: 0,
+          minutes: 0,
+        },
+      },
+      error: "Native SSH module not available",
+    };
   }
 }
 

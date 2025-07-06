@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,8 +10,14 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Shield, Info } from "lucide-react";
-import { MonacoEditor } from "@/components/ui/monaco-editor";
+import {
+  MonacoEditor,
+  type EditorLanguage,
+} from "@/components/ui/monaco-editor";
 import { useAuth } from "@/hooks/useAuth";
+import { UserRole } from "@/shared/schema";
+import { trpc } from "@/lib/trpc";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 import {
   Tooltip,
   TooltipContent,
@@ -28,8 +34,16 @@ const templateSchema = z.object({
 
 interface TemplateFormProps {
   toolType: string;
-  template?: any;
-  onSubmit: (data: any) => Promise<void>;
+  template?: {
+    id?: number;
+    name: string;
+    content: string;
+    subject?: string;
+    isSystemTemplate?: boolean;
+  };
+  onSubmit: (
+    data: z.infer<typeof templateSchema> & { type: string },
+  ) => Promise<void>;
   onCancel: () => void;
   showSubjectField?: boolean;
   language?: string;
@@ -47,15 +61,16 @@ export function TemplateForm({
 }: TemplateFormProps) {
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editorSettings, setEditorSettings] = useState<any>({
-    fontSize: 14,
-    theme: "vs-dark",
-    wordWrap: true,
-    minimap: false,
-    lineNumbers: true,
-  });
 
-  const isAdmin = user?.role === "ADMIN";
+  // Use tRPC query for editor settings
+  const { data: editorSettings } = trpc.settings.getEditorSettings.useQuery(
+    undefined,
+    {
+      ...QUERY_OPTIONS.static,
+    },
+  );
+
+  const isAdmin = user?.role === UserRole.ADMIN;
   const isEditing = !!template;
   const isSystemTemplate = template?.isSystemTemplate ?? false;
 
@@ -69,24 +84,7 @@ export function TemplateForm({
     },
   });
 
-  // Fetch user editor settings
-  useEffect(() => {
-    const fetchEditorSettings = async () => {
-      try {
-        const response = await fetch("/api/settings/editor");
-        if (response.ok) {
-          const settings = await response.json();
-          setEditorSettings(settings);
-        }
-      } catch (error) {
-        console.error("Failed to fetch editor settings:", error);
-      }
-    };
-
-    fetchEditorSettings();
-  }, []);
-
-  const handleSubmit = async (data: any) => {
+  const handleSubmit = async (data: z.infer<typeof templateSchema>) => {
     try {
       setIsSubmitting(true);
       await onSubmit({
@@ -100,8 +98,13 @@ export function TemplateForm({
     }
   };
 
-  const getContentLanguage = () => {
-    if (language) return language;
+  const getContentLanguage = (): EditorLanguage => {
+    // Check if provided language is a valid EditorLanguage
+    if (language) {
+      // Since we've added 'html' and 'text' to EditorLanguage type,
+      // we can now safely use the language string
+      return language as EditorLanguage;
+    }
 
     switch (toolType.toUpperCase()) {
       case "SLACK":
@@ -250,8 +253,16 @@ export function TemplateForm({
             height="300px"
             language={getContentLanguage()}
             value={form.watch("content")}
-            onChange={(value) => form.setValue("content", value || "")}
-            editorSettings={editorSettings}
+            onChange={(value) => form.setValue("content", value ?? "")}
+            editorSettings={
+              editorSettings ?? {
+                fontSize: 14,
+                theme: "vs-dark",
+                wordWrap: true,
+                minimap: false,
+                lineNumbers: true,
+              }
+            }
           />
         </div>
         {form.formState.errors.content && (

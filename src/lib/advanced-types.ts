@@ -40,7 +40,7 @@ export type RequiredBy<T, K extends keyof T> = T & Required<Pick<T, K>>;
 export type DeepReadonly<T> = {
   readonly [P in keyof T]: T[P] extends (infer U)[]
     ? ReadonlyArray<DeepReadonly<U>>
-    : T[P] extends Record<string, any>
+    : T[P] extends Record<string, unknown>
       ? DeepReadonly<T[P]>
       : T[P];
 };
@@ -193,7 +193,7 @@ export type FormFieldState =
 /**
  * Form state for event fields
  */
-export type EventFormState<T extends Record<string, any>> = {
+export type EventFormState<T extends Record<string, unknown>> = {
   [K in keyof T]: FormFieldState;
 };
 
@@ -364,7 +364,7 @@ export function assertDefined<T>(
   message?: string,
 ): asserts value is T {
   if (value === null || value === undefined) {
-    throw new Error(message || "Value must be defined");
+    throw new Error(message ?? "Value must be defined");
   }
 }
 
@@ -375,7 +375,7 @@ export function assertValidEventType(
   value: unknown,
 ): asserts value is EventType {
   if (!isEnumValue(EventType, value)) {
-    throw new Error(`Invalid event type: ${value}`);
+    throw new Error(`Invalid event type: ${String(value)}`);
   }
 }
 
@@ -384,7 +384,7 @@ export function assertValidEventType(
  */
 export function assertValidUserRole(value: unknown): asserts value is UserRole {
   if (!isEnumValue(UserRole, value)) {
-    throw new Error(`Invalid user role: ${value}`);
+    throw new Error(`Invalid user role: ${String(value)}`);
   }
 }
 
@@ -484,7 +484,7 @@ export function assertQueryResult<T>(
   errorMessage?: string,
 ): asserts result is NonNullable<T[]> {
   if (!result || result.length === 0) {
-    throw new ResourceNotFoundError("Query result", errorMessage || "unknown");
+    throw new ResourceNotFoundError("Query result", errorMessage ?? "unknown");
   }
 }
 

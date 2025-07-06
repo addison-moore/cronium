@@ -7,6 +7,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useAuth } from "./useAuth";
+import type { Nullable } from "@/types";
 
 /**
  * Client-side encryption utilities (browser-compatible)
@@ -60,14 +61,10 @@ class ClientEncryption {
     combined.set(iv, salt.length);
     combined.set(new Uint8Array(encrypted), salt.length + iv.length);
 
-    // Convert to base64 without using spread operator to avoid TS2802 error
-    let binaryString = "";
-    for (let i = 0; i < combined.length; i++) {
-      const byte = combined[i];
-      if (byte !== undefined) {
-        binaryString += String.fromCharCode(byte);
-      }
-    }
+    // Convert to base64 using Array.from to avoid iteration issues
+    const binaryString = Array.from(combined)
+      .map((byte) => String.fromCharCode(byte))
+      .join("");
     return btoa(binaryString);
   }
 
@@ -117,7 +114,7 @@ class ClientEncryption {
 
 interface EncryptionState {
   isSupported: boolean;
-  userKey: string | null;
+  userKey: Nullable<string>;
   isInitialized: boolean;
 }
 
@@ -169,7 +166,7 @@ export function useClientEncryption() {
   // Initialize key when user is available
   useEffect(() => {
     if (state.isSupported && user?.id && !state.userKey) {
-      initializeUserKey();
+      void initializeUserKey();
     }
   }, [state.isSupported, user?.id, state.userKey, initializeUserKey]);
 
@@ -217,7 +214,7 @@ export function useClientEncryption() {
    * Encrypt multiple fields in an object
    */
   const encryptFields = useCallback(
-    async <T extends Record<string, any>>(
+    async <T extends Record<string, unknown>>(
       data: T,
       fieldsToEncrypt: (keyof T)[],
     ): Promise<T> => {
@@ -231,7 +228,7 @@ export function useClientEncryption() {
         const value = data[field];
         if (typeof value === "string" && value.trim()) {
           try {
-            // Fix TS2322 by using type assertion
+            // Type-safe assignment with proper typing
             result[field] = (await encryptData(value)) as T[keyof T];
           } catch (error) {
             console.error(`Failed to encrypt field ${String(field)}:`, error);
@@ -249,7 +246,7 @@ export function useClientEncryption() {
    * Decrypt multiple fields in an object
    */
   const decryptFields = useCallback(
-    async <T extends Record<string, any>>(
+    async <T extends Record<string, unknown>>(
       data: T,
       fieldsToDecrypt: (keyof T)[],
     ): Promise<T> => {
@@ -263,7 +260,7 @@ export function useClientEncryption() {
         const value = data[field];
         if (typeof value === "string" && value.trim()) {
           try {
-            // Fix TS2322 by using type assertion
+            // Type-safe assignment with proper typing
             result[field] = (await decryptData(value)) as T[keyof T];
           } catch (error) {
             console.error(`Failed to decrypt field ${String(field)}:`, error);
@@ -318,14 +315,31 @@ export const SENSITIVE_FIELDS = {
   envVars: ["value"] as const,
   apiTokens: ["token"] as const,
   users: ["password"] as const,
-} as const;
+} as const satisfies Record<string, ReadonlyArray<string>>;
 
-// Type definitions to help with the readonly arrays
-type SensitiveFieldsType = typeof SENSITIVE_FIELDS;
-type ServerFields = SensitiveFieldsType["servers"][number];
-type EnvVarFields = SensitiveFieldsType["envVars"][number];
-type ApiTokenFields = SensitiveFieldsType["apiTokens"][number];
-type UserFields = SensitiveFieldsType["users"][number];
+// Server data interface with proper typing
+interface ServerData {
+  sshKey?: string;
+  [key: string]: unknown;
+}
+
+// Environment variable data interface
+interface EnvVarData {
+  value?: string;
+  [key: string]: unknown;
+}
+
+// API token data interface
+interface ApiTokenData {
+  token?: string;
+  [key: string]: unknown;
+}
+
+// User data interface
+interface UserData {
+  password?: string;
+  [key: string]: unknown;
+}
 
 /**
  * Hook specifically for server configuration encryption
@@ -334,7 +348,7 @@ export function useServerEncryption() {
   const encryption = useClientEncryption();
 
   const encryptServerData = useCallback(
-    async (serverData: any) => {
+    async <T extends ServerData>(serverData: T): Promise<T> => {
       return encryption.encryptFields(serverData, [
         ...SENSITIVE_FIELDS.servers,
       ]);
@@ -343,7 +357,7 @@ export function useServerEncryption() {
   );
 
   const decryptServerData = useCallback(
-    async (serverData: any) => {
+    async <T extends ServerData>(serverData: T): Promise<T> => {
       return encryption.decryptFields(serverData, [
         ...SENSITIVE_FIELDS.servers,
       ]);
@@ -365,7 +379,7 @@ export function useEnvVarEncryption() {
   const encryption = useClientEncryption();
 
   const encryptEnvVar = useCallback(
-    async (envVarData: any) => {
+    async <T extends EnvVarData>(envVarData: T): Promise<T> => {
       return encryption.encryptFields(envVarData, [
         ...SENSITIVE_FIELDS.envVars,
       ]);
@@ -374,7 +388,7 @@ export function useEnvVarEncryption() {
   );
 
   const decryptEnvVar = useCallback(
-    async (envVarData: any) => {
+    async <T extends EnvVarData>(envVarData: T): Promise<T> => {
       return encryption.decryptFields(envVarData, [
         ...SENSITIVE_FIELDS.envVars,
       ]);
@@ -386,5 +400,63 @@ export function useEnvVarEncryption() {
     ...encryption,
     encryptEnvVar,
     decryptEnvVar,
+  };
+}
+
+/**
+ * Hook specifically for API token encryption
+ */
+export function useApiTokenEncryption() {
+  const encryption = useClientEncryption();
+
+  const encryptApiToken = useCallback(
+    async <T extends ApiTokenData>(apiTokenData: T): Promise<T> => {
+      return encryption.encryptFields(apiTokenData, [
+        ...SENSITIVE_FIELDS.apiTokens,
+      ]);
+    },
+    [encryption],
+  );
+
+  const decryptApiToken = useCallback(
+    async <T extends ApiTokenData>(apiTokenData: T): Promise<T> => {
+      return encryption.decryptFields(apiTokenData, [
+        ...SENSITIVE_FIELDS.apiTokens,
+      ]);
+    },
+    [encryption],
+  );
+
+  return {
+    ...encryption,
+    encryptApiToken,
+    decryptApiToken,
+  };
+}
+
+/**
+ * Hook specifically for user data encryption
+ */
+export function useUserDataEncryption() {
+  const encryption = useClientEncryption();
+
+  const encryptUserData = useCallback(
+    async <T extends UserData>(userData: T): Promise<T> => {
+      return encryption.encryptFields(userData, [...SENSITIVE_FIELDS.users]);
+    },
+    [encryption],
+  );
+
+  const decryptUserData = useCallback(
+    async <T extends UserData>(userData: T): Promise<T> => {
+      return encryption.decryptFields(userData, [...SENSITIVE_FIELDS.users]);
+    },
+    [encryption],
+  );
+
+  return {
+    ...encryption,
+    encryptUserData,
+    decryptUserData,
   };
 }

@@ -13,32 +13,43 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { EventType } from "@/shared/schema";
+import {
+  EventType,
+  EventStatus,
+  EventTriggerType,
+  RunLocation,
+  TimeUnit,
+  ConditionalActionType,
+} from "@/shared/schema";
+import { trpc } from "@/lib/trpc";
+import { type z } from "zod";
+import { createEventSchema } from "@/shared/schemas/events";
 
 interface JsonImportModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+// Type for the input data from JSON
 interface ImportEventData {
   name: string;
   description?: string;
   shared?: boolean;
-  type: string;
+  type: string; // Will be validated as EventType
   content?: string;
   httpMethod?: string | null;
   httpUrl?: string | null;
-  httpHeaders?: string | null;
+  httpHeaders?: unknown; // Can be string, array, or object
   httpBody?: string | null;
-  status?: string;
-  triggerType?: string;
+  status?: string; // Will be validated as EventStatus
+  triggerType?: string; // Will be validated as EventTriggerType
   scheduleNumber?: number | null;
-  scheduleUnit?: string | null;
+  scheduleUnit?: string | null; // Will be validated as TimeUnit
   customSchedule?: string;
-  runLocation?: string;
+  runLocation?: string; // Will be validated as RunLocation
   serverId?: number | null;
   timeoutValue?: number;
-  timeoutUnit?: string;
+  timeoutUnit?: string; // Will be validated as TimeUnit
   retries?: number;
   startTime?: string | null;
   maxExecutions?: number;
@@ -59,6 +70,9 @@ interface ImportEventData {
   }>;
 }
 
+// Type for the validated and transformed data
+type CreateEventInput = z.infer<typeof createEventSchema>;
+
 export function JsonImportModal({ isOpen, onClose }: JsonImportModalProps) {
   const [jsonInput, setJsonInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -66,6 +80,7 @@ export function JsonImportModal({ isOpen, onClose }: JsonImportModalProps) {
   const { user } = useAuth();
   const router = useRouter();
   const params = useParams();
+  const createEventMutation = trpc.events.create.useMutation();
 
   const handleSubmit = async () => {
     if (!jsonInput.trim()) {
@@ -90,10 +105,10 @@ export function JsonImportModal({ isOpen, onClose }: JsonImportModalProps) {
 
     try {
       // Parse JSON input
-      let eventData: ImportEventData;
+      let eventData: unknown;
       try {
         eventData = JSON.parse(jsonInput);
-      } catch (parseError) {
+      } catch {
         toast({
           title: "Invalid JSON",
           description: "Please check your JSON format and try again",
@@ -103,8 +118,22 @@ export function JsonImportModal({ isOpen, onClose }: JsonImportModalProps) {
         return;
       }
 
+      // Validate that eventData is an object
+      if (typeof eventData !== "object" || eventData === null) {
+        toast({
+          title: "Invalid Data",
+          description: "JSON must contain an object",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Type guard for the parsed data
+      const importData = eventData as ImportEventData;
+
       // Validate required fields
-      if (!eventData.name) {
+      if (!importData.name) {
         toast({
           title: "Missing Required Field",
           description: "Event name is required",
@@ -114,7 +143,7 @@ export function JsonImportModal({ isOpen, onClose }: JsonImportModalProps) {
         return;
       }
 
-      if (!eventData.type) {
+      if (!importData.type) {
         toast({
           title: "Missing Required Field",
           description: "Event type is required",
@@ -124,134 +153,162 @@ export function JsonImportModal({ isOpen, onClose }: JsonImportModalProps) {
         return;
       }
 
-      // Clean the data (remove id, userId, createdAt, updatedAt, and null values)
-      const cleanEventData: any = {
-        name: eventData.name,
-        type: eventData.type,
-        status: eventData.status || "DRAFT",
-        timeoutValue: eventData.timeoutValue || 30,
-        timeoutUnit: eventData.timeoutUnit || "SECONDS",
-        retries: eventData.retries || 0,
-        runLocation: eventData.runLocation || "LOCAL",
-        shared: eventData.shared || false,
-        tags: eventData.tags || [],
+      // Validate event type is valid enum value
+      if (!Object.values(EventType).includes(importData.type as EventType)) {
+        toast({
+          title: "Invalid Event Type",
+          description: `Event type must be one of: ${Object.values(EventType).join(", ")}`,
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Helper function to validate enum values
+      const validateEnum = <T extends Record<string, string>>(
+        value: string | undefined | null,
+        enumObj: T,
+        defaultValue: T[keyof T],
+      ): T[keyof T] => {
+        if (!value) return defaultValue;
+        return Object.values(enumObj).includes(value)
+          ? (value as T[keyof T])
+          : defaultValue;
       };
 
-      // Add optional fields only if they have valid values
-      if (eventData.description) {
-        cleanEventData.description = eventData.description;
-      }
+      // Parse HTTP headers if provided
+      const parseHttpHeaders = (
+        headers: unknown,
+      ): Array<{ key: string; value: string }> => {
+        if (!headers) return [];
 
-      if (eventData.content) {
-        cleanEventData.content = eventData.content;
-      }
-
-      if (eventData.triggerType) {
-        cleanEventData.triggerType = eventData.triggerType;
-      }
-
-      if (eventData.scheduleNumber) {
-        cleanEventData.scheduleNumber = eventData.scheduleNumber;
-      }
-
-      if (eventData.scheduleUnit) {
-        cleanEventData.scheduleUnit = eventData.scheduleUnit;
-      }
-
-      if (eventData.customSchedule) {
-        cleanEventData.customSchedule = eventData.customSchedule;
-      }
-
-      if (eventData.serverId) {
-        cleanEventData.serverId = eventData.serverId;
-      }
-
-      if (eventData.startTime) {
-        cleanEventData.startTime = eventData.startTime;
-      }
-
-      if (eventData.maxExecutions) {
-        cleanEventData.maxExecutions = eventData.maxExecutions;
-      }
-
-      if (eventData.resetCounterOnActive !== undefined) {
-        cleanEventData.resetCounterOnActive = eventData.resetCounterOnActive;
-      }
-
-      // Handle HTTP-specific fields only for HTTP_REQUEST type
-      if (eventData.type === EventType.HTTP_REQUEST) {
-        if (eventData.httpMethod) {
-          cleanEventData.httpMethod = eventData.httpMethod;
-        }
-        if (eventData.httpUrl) {
-          cleanEventData.httpUrl = eventData.httpUrl;
-        }
-        if (eventData.httpBody) {
-          cleanEventData.httpBody = eventData.httpBody;
-        }
-        if (eventData.httpHeaders) {
-          // Convert headers to the expected format
-          if (typeof eventData.httpHeaders === "string") {
-            try {
-              const parsedHeaders = JSON.parse(eventData.httpHeaders);
-              if (Array.isArray(parsedHeaders)) {
-                cleanEventData.httpHeaders = parsedHeaders;
-              }
-            } catch {
-              // If parsing fails, skip headers
+        if (typeof headers === "string") {
+          try {
+            const parsed: unknown = JSON.parse(headers);
+            if (Array.isArray(parsed)) {
+              return parsed.filter(
+                (h): h is { key: string; value: string } =>
+                  typeof h === "object" &&
+                  h !== null &&
+                  "key" in h &&
+                  "value" in h &&
+                  typeof (h as Record<string, unknown>).key === "string" &&
+                  typeof (h as Record<string, unknown>).value === "string",
+              );
             }
-          } else if (Array.isArray(eventData.httpHeaders)) {
-            cleanEventData.httpHeaders = eventData.httpHeaders;
+          } catch {
+            // Invalid JSON, return empty array
           }
+        } else if (Array.isArray(headers)) {
+          return headers.filter(
+            (h): h is { key: string; value: string } =>
+              typeof h === "object" &&
+              h !== null &&
+              "key" in h &&
+              "value" in h &&
+              typeof (h as Record<string, unknown>).key === "string" &&
+              typeof (h as Record<string, unknown>).value === "string",
+          );
         }
+        return [];
+      };
+
+      // Prepare the event data for creation
+      const eventType = importData.type as EventType;
+      const eventInput: CreateEventInput = {
+        name: importData.name,
+        type: eventType,
+        description: importData.description,
+        shared: importData.shared ?? false,
+        content: importData.content,
+        httpMethod: importData.httpMethod ?? undefined,
+        httpUrl: importData.httpUrl ?? undefined,
+        httpHeaders: parseHttpHeaders(importData.httpHeaders),
+        httpBody: importData.httpBody ?? undefined,
+        status: validateEnum(importData.status, EventStatus, EventStatus.DRAFT),
+        triggerType: validateEnum(
+          importData.triggerType,
+          EventTriggerType,
+          EventTriggerType.MANUAL,
+        ),
+        scheduleNumber: importData.scheduleNumber ?? undefined,
+        scheduleUnit: validateEnum(
+          importData.scheduleUnit,
+          TimeUnit,
+          TimeUnit.MINUTES,
+        ),
+        customSchedule: importData.customSchedule,
+        runLocation: validateEnum(
+          importData.runLocation,
+          RunLocation,
+          RunLocation.LOCAL,
+        ),
+        serverId: importData.serverId ?? undefined,
+        selectedServerIds: [],
+        timeoutValue: importData.timeoutValue ?? 30,
+        timeoutUnit: validateEnum(
+          importData.timeoutUnit,
+          TimeUnit,
+          TimeUnit.SECONDS,
+        ),
+        retries: importData.retries ?? 0,
+        startTime: importData.startTime ?? undefined,
+        maxExecutions: importData.maxExecutions ?? 0,
+        resetCounterOnActive: importData.resetCounterOnActive ?? false,
+        tags: importData.tags ?? [],
+        envVars: Array.isArray(importData.envVars)
+          ? importData.envVars.map((envVar) => ({
+              key: envVar.key,
+              value: envVar.value,
+            }))
+          : [],
+        onSuccessActions: Array.isArray(importData.successEvents)
+          ? importData.successEvents.map((e) => ({
+              type: "ON_SUCCESS",
+              action: ConditionalActionType.SCRIPT,
+              details: {
+                targetEventId: null,
+                message: e.value,
+              },
+            }))
+          : [],
+        onFailActions: Array.isArray(importData.failEvents)
+          ? importData.failEvents.map((e) => ({
+              type: "ON_FAILURE",
+              action: ConditionalActionType.SCRIPT,
+              details: {
+                targetEventId: null,
+                message: e.value,
+              },
+            }))
+          : [],
+      };
+
+      // Validate with schema
+      const validationResult = createEventSchema.safeParse(eventInput);
+      if (!validationResult.success) {
+        const errors = validationResult.error.flatten();
+        const firstError =
+          Object.values(errors.fieldErrors)[0]?.[0] ??
+          errors.formErrors[0] ??
+          "Invalid event data";
+        toast({
+          title: "Validation Error",
+          description: firstError,
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return;
       }
 
-      // Add environment variables if provided
-      if (eventData.envVars && eventData.envVars.length > 0) {
-        cleanEventData.envVars = eventData.envVars.map((envVar) => ({
-          key: envVar.key,
-          value: envVar.value,
-          isSecret: envVar.isSecret || false,
-        }));
-      }
-
-      // Add success events if provided
-      if (eventData.successEvents && eventData.successEvents.length > 0) {
-        cleanEventData.onSuccessEvents = eventData.successEvents.map(
-          (event) => ({
-            type: event.type,
-            value: event.value,
-          }),
-        );
-      }
-
-      // Add fail events if provided
-      if (eventData.failEvents && eventData.failEvents.length > 0) {
-        cleanEventData.onFailEvents = eventData.failEvents.map((event) => ({
-          type: event.type,
-          value: event.value,
-        }));
-      }
-
-      // Submit to API
-      const response = await fetch("/api/events", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(cleanEventData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to create event");
-      }
-
-      const newEvent = await response.json();
+      // Submit to API using tRPC
+      const newEvent = await createEventMutation.mutateAsync(
+        validationResult.data,
+      );
 
       toast({
         title: "Success",
-        description: `Event "${eventData.name}" created successfully`,
+        description: `Event "${importData.name}" created successfully`,
       });
 
       // Close modal and reset form
@@ -260,7 +317,7 @@ export function JsonImportModal({ isOpen, onClose }: JsonImportModalProps) {
 
       // Redirect to the newly created event's details page
       const lang = params.lang as string;
-      router.push(`/${lang}/dashboard/events/${newEvent.id}`);
+      router.push(`/${lang}/dashboard/events/${newEvent?.id ?? ""}`);
     } catch (error) {
       console.error("Error creating event from JSON:", error);
       toast({

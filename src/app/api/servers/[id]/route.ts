@@ -18,7 +18,7 @@ export async function GET(
     }
 
     const userId = session.user.id;
-    const { id } = await params;
+    const { id } = params;
     const serverId = parseInt(id, 10);
 
     if (isNaN(serverId)) {
@@ -70,8 +70,8 @@ export async function PUT(
     }
 
     const userId = session.user.id;
-    // Ensure params is awaited to fix Next.js warning about sync access to params
-    const paramsObj = await params;
+    // Access params directly (not a Promise in this context)
+    const paramsObj = params;
     const serverId = parseInt(paramsObj.id, 10);
 
     if (isNaN(serverId)) {
@@ -92,7 +92,7 @@ export async function PUT(
       );
     }
 
-    const body = await req.json();
+    const body: unknown = await req.json();
     const parsedBody = updateServerSchema.safeParse(body);
 
     if (!parsedBody.success) {
@@ -106,10 +106,10 @@ export async function PUT(
     if (parsedBody.data.sshKey) {
       try {
         const connectionResult = await sshService.testConnection(
-          parsedBody.data.address || existingServer.address,
+          parsedBody.data.address ?? existingServer.address,
           parsedBody.data.sshKey,
-          parsedBody.data.username || existingServer.username,
-          parsedBody.data.port || existingServer.port,
+          parsedBody.data.username ?? existingServer.username,
+          parsedBody.data.port ?? existingServer.port,
         );
 
         if (!connectionResult.success) {
@@ -185,8 +185,8 @@ export async function DELETE(
     }
 
     const userId = session.user.id;
-    // Ensure params is awaited to fix Next.js warning about sync access to params
-    const paramsObj = await params;
+    // Access params directly (not a Promise in this context)
+    const paramsObj = params;
     const serverId = parseInt(paramsObj.id, 10);
 
     if (isNaN(serverId)) {

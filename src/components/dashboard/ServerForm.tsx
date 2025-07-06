@@ -26,16 +26,30 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  serverFormSchema,
-  type UpdateServerFormValues,
-} from "@/lib/validations/server";
+import { type UpdateServerInput } from "@shared/schemas/servers";
+import { z } from "zod";
+
+// Create a form schema that matches the create schema but with optional sshKey for editing
+const serverFormSchema = z.object({
+  name: z.string().min(1, "Server name is required").max(100),
+  address: z.string().min(1, "Server address is required").max(255),
+  sshKey: z.string().optional(), // Optional for editing, required validation handled in component
+  username: z.string().min(1, "Username is required").max(50).default("root"),
+  port: z.number().int().min(1).max(65535).default(22),
+  description: z.string().max(500).optional(),
+  tags: z.array(z.string()).default([]),
+  shared: z.boolean().default(false),
+  maxConcurrentJobs: z.number().int().min(1).max(100).default(5),
+});
+
+// Create form type from the schema
+type ServerFormInput = z.infer<typeof serverFormSchema>;
 import { Spinner } from "../ui/spinner";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/components/ui/use-toast";
 
 interface ServerFormProps {
-  initialServer?: any;
+  initialServer?: Partial<UpdateServerInput>;
   isEditing: boolean;
   onSuccess: (serverId?: number) => void;
   lang?: string;
@@ -50,7 +64,7 @@ export default function ServerForm({
   const [sshKeyWarning, setSshKeyWarning] = useState<string | null>(null);
 
   // Default values for the form
-  const defaultValues: Partial<UpdateServerFormValues> = {
+  const defaultValues: Partial<ServerFormInput> = {
     name: "",
     address: "",
     sshKey: "",
@@ -60,16 +74,16 @@ export default function ServerForm({
   };
 
   // Initialize the form with the provided server data or defaults
-  const form = useForm<UpdateServerFormValues>({
+  const form = useForm<ServerFormInput>({
     resolver: zodResolver(serverFormSchema),
     defaultValues: initialServer
       ? {
           name: initialServer.name,
           address: initialServer.address,
           sshKey: "", // For security, don't populate the SSH key field when editing
-          username: initialServer.username || "root",
-          port: initialServer.port || 22,
-          shared: initialServer.shared || false,
+          username: initialServer.username ?? "root",
+          port: initialServer.port ?? 22,
+          shared: initialServer.shared ?? false,
         }
       : defaultValues,
   });
@@ -94,8 +108,6 @@ export default function ServerForm({
       onSuccess(data.id);
     },
   });
-
-  const testConnectionMutation = trpc.servers.testConnection.useMutation();
 
   const isSubmitting =
     createServerMutation.isPending || updateServerMutation.isPending;
@@ -128,8 +140,8 @@ export default function ServerForm({
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
       if (name === "sshKey" || name === undefined) {
-        const sshKeyValue = value.sshKey!;
-        if (sshKeyValue) {
+        const sshKeyValue = value.sshKey;
+        if (sshKeyValue && typeof sshKeyValue === "string") {
           const warning = validateSshKey(sshKeyValue);
           setSshKeyWarning(warning);
         } else {
@@ -138,11 +150,15 @@ export default function ServerForm({
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      if (subscription && typeof subscription.unsubscribe === "function") {
+        subscription.unsubscribe();
+      }
+    };
   }, [form]);
 
   // Form submission handler
-  const onSubmit = async (data: UpdateServerFormValues) => {
+  const onSubmit = async (data: ServerFormInput) => {
     // Build request payload
     const payload = {
       ...data,
@@ -155,6 +171,14 @@ export default function ServerForm({
 
     try {
       if (isEditing) {
+        if (!initialServer?.id) {
+          toast({
+            title: "Error",
+            description: "Server ID is required for updating",
+            variant: "destructive",
+          });
+          return;
+        }
         await updateServerMutation.mutateAsync({
           id: initialServer.id,
           ...payload,
@@ -174,7 +198,18 @@ export default function ServerForm({
         });
       }
     } catch (error) {
-      console.error("Error saving server:", error);
+      console.error(
+        "Error saving server:",
+        error instanceof Error ? error.message : "Unknown error",
+      );
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error
+            ? error.message
+            : "An error occurred while saving the server",
+        variant: "destructive",
+      });
     }
   };
 

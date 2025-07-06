@@ -3,7 +3,6 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { compare } from "bcrypt";
 import { storage } from "@/server/storage";
 import { UserStatus } from "@/shared/schema";
-import type { UserRole } from "@/shared/schema";
 
 // Helper function to get the locale from a URL path
 const getLocaleFromPath = (path: string | null): string => {
@@ -40,9 +39,7 @@ export const authOptions: NextAuthOptions = {
           let user = await storage.getUserByUsername(credentials.username);
 
           // If not found, try by email
-          if (!user) {
-            user = await storage.getUserByEmail(credentials.username);
-          }
+          user ??= await storage.getUserByEmail(credentials.username);
 
           if (!user) {
             return null;

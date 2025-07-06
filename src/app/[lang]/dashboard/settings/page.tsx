@@ -79,10 +79,8 @@ type UserSettingsFormValues = z.infer<typeof userSettingsSchema>;
 
 export default function SettingsPage() {
   const { user, isLoading: isLoadingAuth } = useAuth();
-  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [settings, setSettings] = useState<Record<string, any>>({});
 
   const params = useParams<{ lang: string }>();
   const t = useTranslations("Settings");
@@ -144,42 +142,25 @@ export default function SettingsPage() {
     }
   }, [user, userSettingsForm]);
 
-  useEffect(() => {
-    fetchSettings();
-  }, []);
-
-  const fetchSettings = async () => {
-    try {
-      setIsLoadingSettings(true);
-      const response = await fetch("/api/settings");
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch settings");
-      }
-
-      const data = await response.json();
-
-      // Store settings in state for reference
-      setSettings(data);
-    } catch (error) {
-      console.error("Error fetching settings:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load settings. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingSettings(false);
-    }
-  };
-
   const onSaveUserSettings = async (data: UserSettingsFormValues) => {
     // Filter out empty password fields unless they're being updated
-    const payload: any = {
-      firstName: data.firstName,
-      lastName: data.lastName,
+    const payload: {
+      firstName?: string | undefined;
+      lastName?: string | undefined;
+      email: string;
+      currentPassword?: string | undefined;
+      newPassword?: string | undefined;
+    } = {
       email: data.email,
     };
+
+    if (data.firstName) {
+      payload.firstName = data.firstName;
+    }
+
+    if (data.lastName) {
+      payload.lastName = data.lastName;
+    }
 
     if (data.newPassword) {
       payload.currentPassword = data.currentPassword;
@@ -189,41 +170,39 @@ export default function SettingsPage() {
     updateProfileMutation.mutate(payload);
   };
 
-  const handleDeleteAccount = async () => {
-    if (!user) return;
-
-    try {
-      setIsDeleting(true);
-      const response = await fetch(`/api/users/${user.id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to delete account");
-      }
-
+  // tRPC mutation for account deletion
+  const deleteAccountMutation = trpc.userAuth.deleteAccount.useMutation({
+    onSuccess: () => {
       toast({
         title: "Account Deleted",
         description: "Your account has been successfully deleted.",
         variant: "success",
       });
-
       // Redirect to logout
       window.location.href = "/api/auth/signout";
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error("Error deleting account:", error);
       toast({
         title: "Error",
-        description: "Failed to delete account. Please try again.",
+        description:
+          error.message ?? "Failed to delete account. Please try again.",
         variant: "destructive",
       });
-    } finally {
+    },
+    onSettled: () => {
       setIsDeleting(false);
       setIsDeleteDialogOpen(false);
-    }
+    },
+  });
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    setIsDeleting(true);
+    deleteAccountMutation.mutate();
   };
 
-  if (isLoadingAuth ?? isLoadingSettings) {
+  if (isLoadingAuth) {
     return (
       <div className="container mx-auto p-4">
         <div className="mb-6 flex items-center">

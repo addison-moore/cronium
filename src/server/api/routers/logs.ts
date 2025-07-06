@@ -11,7 +11,7 @@ import {
   logSearchSchema,
   workflowLogsSchema,
 } from "@shared/schemas/logs";
-import { storage } from "@/server/storage";
+import { storage, type LogFilters } from "@/server/storage";
 import { UserRole, LogStatus } from "@shared/schema";
 
 // Custom procedure that handles auth for tRPC fetch adapter
@@ -127,7 +127,7 @@ export const logsRouter = createTRPCRouter({
   getAll: logProcedure.input(logsQuerySchema).query(async ({ ctx, input }) => {
     try {
       // Build filter object for database query
-      const filters: any = {
+      const filters: LogFilters = {
         userId: ctx.userId,
         ownEventsOnly: input.ownEventsOnly,
         sharedOnly: input.sharedOnly,
@@ -149,7 +149,7 @@ export const logsRouter = createTRPCRouter({
             message: "Unauthorized access to event",
           });
         }
-        filters.eventId = input.eventId;
+        filters.eventId = String(input.eventId);
       }
 
       if (input.status) filters.status = input.status;
@@ -163,8 +163,8 @@ export const logsRouter = createTRPCRouter({
       }
 
       // Use page/pageSize if provided, otherwise use limit/offset
-      const limit = input.pageSize || input.limit;
-      const page = input.page || Math.floor(input.offset / limit) + 1;
+      const limit = input.pageSize ?? input.limit;
+      const page = input.page ?? Math.floor(input.offset / limit) + 1;
 
       const { logs, total } = await storage.getFilteredLogs(
         filters,
@@ -327,17 +327,27 @@ export const logsRouter = createTRPCRouter({
   search: logProcedure.input(logSearchSchema).query(async ({ ctx, input }) => {
     try {
       // Build search filters
-      const filters: any = {
+      const filters: LogFilters & {
+        search?: string;
+        searchFields?: string[];
+        caseSensitive?: boolean;
+        regex?: boolean;
+      } = {
         userId: ctx.userId,
-        search: input.query,
-        searchFields: input.searchFields,
-        caseSensitive: input.caseSensitive,
-        regex: input.regex,
       };
 
-      if (input.eventId) filters.eventId = input.eventId;
+      if (input.eventId) filters.eventId = String(input.eventId);
       if (input.workflowId) filters.workflowId = input.workflowId;
       if (input.status) filters.status = input.status;
+
+      // Note: search functionality is not yet implemented in storage
+      // These fields are included for future implementation
+      if (input.query) {
+        filters.search = input.query;
+        filters.searchFields = input.searchFields;
+        filters.caseSensitive = input.caseSensitive;
+        filters.regex = input.regex;
+      }
 
       // For now, use the existing filtered logs method with search
       const page = Math.floor(input.offset / input.limit) + 1;
@@ -432,9 +442,13 @@ export const logsRouter = createTRPCRouter({
   getStats: logProcedure.input(logStatsSchema).query(async ({ ctx, input }) => {
     try {
       // Build filters for user's logs
-      const filters: any = { userId: ctx.userId };
-      if (input.eventId) filters.eventId = input.eventId;
+      const filters: LogFilters & {
+        startDate?: string;
+        endDate?: string;
+      } = { userId: ctx.userId };
+      if (input.eventId) filters.eventId = String(input.eventId);
       if (input.workflowId) filters.workflowId = input.workflowId;
+      // Note: startDate/endDate filtering is not yet implemented in storage
       if (input.startDate) filters.startDate = input.startDate;
       if (input.endDate) filters.endDate = input.endDate;
 
@@ -460,7 +474,7 @@ export const logsRouter = createTRPCRouter({
         );
         if (completedLogs.length > 0) {
           const totalDuration = completedLogs.reduce(
-            (sum, log) => sum + (log.duration || 0),
+            (sum, log) => sum + (log.duration ?? 0),
             0,
           );
           stats.averageDuration = Math.round(
@@ -483,9 +497,13 @@ export const logsRouter = createTRPCRouter({
   // Get all logs (admin)
   getAllAdmin: adminLogProcedure
     .input(adminLogsQuerySchema)
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input }) => {
       try {
-        const filters: any = {};
+        const filters: LogFilters & {
+          level?: string;
+          startDate?: string;
+          endDate?: string;
+        } = {};
 
         // Admin can filter by specific user
         if (input.userId && !input.allUsers) {
@@ -493,14 +511,14 @@ export const logsRouter = createTRPCRouter({
         }
 
         // Add other filters
-        if (input.eventId) filters.eventId = input.eventId;
+        if (input.eventId) filters.eventId = String(input.eventId);
         if (input.status) filters.status = input.status;
         if (input.level) filters.level = input.level;
         if (input.date) filters.date = input.date;
         if (input.startDate) filters.startDate = input.startDate;
         if (input.endDate) filters.endDate = input.endDate;
 
-        const page = input.page || Math.floor(input.offset / input.limit) + 1;
+        const page = input.page ?? Math.floor(input.offset / input.limit) + 1;
         const { logs, total } = await storage.getAllLogs(input.limit, page);
 
         return {

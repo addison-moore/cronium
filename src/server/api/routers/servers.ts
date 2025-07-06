@@ -236,10 +236,10 @@ export const serversRouter = createTRPCRouter({
           const { sshService } = await import("@/lib/ssh");
 
           const connectionResult = await sshService.testConnection(
-            updateData.address || existingServer.address,
+            updateData.address ?? existingServer.address,
             updateData.sshKey,
-            updateData.username || existingServer.username,
-            updateData.port || existingServer.port,
+            updateData.username ?? existingServer.username,
+            updateData.port ?? existingServer.port,
           );
 
           if (!connectionResult.success) {
@@ -360,7 +360,7 @@ export const serversRouter = createTRPCRouter({
   // Test server connection (without saving)
   testConnection: serverProcedure
     .input(testServerConnectionSchema)
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ input }) => {
       try {
         const { sshService } = await import("@/lib/ssh");
 

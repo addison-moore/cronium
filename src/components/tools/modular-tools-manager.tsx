@@ -19,13 +19,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { type Tool } from "@/shared/schema";
+import { type Tool, type ToolType } from "@/shared/schema";
 import { ToolPluginRegistry } from "./plugins";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { MonacoEditor } from "@/components/ui/monaco-editor";
 import { trpc } from "@/lib/trpc";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 import { Badge } from "@/components/ui/badge";
 import {
   Form,
@@ -65,7 +65,7 @@ type TemplateFormData = {
   content: string;
 };
 
-// Generic template form component - refactored to use React Hook Form
+// Generic template form component - refactored to use React Hook Form and tRPC
 function TemplateForm({
   toolType,
   onSubmit,
@@ -75,13 +75,13 @@ function TemplateForm({
   onSubmit: (data: TemplateFormData) => void;
   onCancel: () => void;
 }) {
-  const [editorSettings, setEditorSettings] = useState({
-    fontSize: 14,
-    theme: "vs-dark",
-    wordWrap: true,
-    minimap: false,
-    lineNumbers: true,
-  });
+  // Use tRPC query for editor settings
+  const { data: editorSettings } = trpc.settings.getEditorSettings.useQuery(
+    undefined,
+    {
+      ...QUERY_OPTIONS.static,
+    },
+  );
 
   const form = useForm<TemplateFormData>({
     resolver: zodResolver(createTemplateSchema(toolType)),
@@ -91,23 +91,6 @@ function TemplateForm({
       content: "",
     },
   });
-
-  // Fetch user editor settings - keeping REST for now as this isn't part of Phase 3
-  useEffect(() => {
-    const fetchEditorSettings = async () => {
-      try {
-        const response = await fetch("/api/settings/editor");
-        if (response.ok) {
-          const settings = await response.json();
-          setEditorSettings(settings);
-        }
-      } catch (error) {
-        console.error("Failed to fetch editor settings:", error);
-      }
-    };
-
-    fetchEditorSettings();
-  }, []);
 
   const handleSubmit = (data: TemplateFormData) => {
     onSubmit(data);
@@ -160,7 +143,15 @@ function TemplateForm({
                   onChange={field.onChange}
                   language="html"
                   height="200px"
-                  editorSettings={editorSettings}
+                  editorSettings={
+                    editorSettings ?? {
+                      fontSize: 14,
+                      theme: "vs-dark",
+                      wordWrap: true,
+                      minimap: false,
+                      lineNumbers: true,
+                    }
+                  }
                   className="border-0"
                 />
               </FormControl>
@@ -212,9 +203,16 @@ export function ModularToolsManager() {
         title: "Success",
         description: "Tool created successfully",
       });
-      refetchTools();
+      void refetchTools();
       setShowAddForm(false);
       setEditingTool(null);
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message ?? "Failed to create tool",
+        variant: "destructive",
+      });
     },
   });
 
@@ -224,9 +222,16 @@ export function ModularToolsManager() {
         title: "Success",
         description: "Tool updated successfully",
       });
-      refetchTools();
+      void refetchTools();
       setShowAddForm(false);
       setEditingTool(null);
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message ?? "Failed to update tool",
+        variant: "destructive",
+      });
     },
   });
 
@@ -236,7 +241,14 @@ export function ModularToolsManager() {
         title: "Success",
         description: "Tool deleted successfully",
       });
-      refetchTools();
+      void refetchTools();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message ?? "Failed to delete tool",
+        variant: "destructive",
+      });
     },
   });
 
@@ -249,15 +261,22 @@ export function ModularToolsManager() {
         });
         setShowAddTemplateForm(false);
       },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: error.message ?? "Failed to create template",
+          variant: "destructive",
+        });
+      },
     },
   );
 
   // Extract tools array from the response structure
-  const tools = toolsData?.tools || [];
+  const tools = toolsData?.tools ?? [];
 
   const handleCredentialSubmit = async (data: {
     name: string;
-    credentials: Record<string, any>;
+    credentials: Record<string, unknown>;
   }) => {
     try {
       const plugin = ToolPluginRegistry.get(selectedTool!);
@@ -265,7 +284,7 @@ export function ModularToolsManager() {
 
       const payload = {
         name: data.name,
-        type: plugin.id.toUpperCase() as any,
+        type: plugin.id.toUpperCase() as ToolType,
         credentials: data.credentials,
       };
 
@@ -278,7 +297,7 @@ export function ModularToolsManager() {
         await createToolMutation.mutateAsync(payload);
       }
     } catch (error) {
-      // Error is already handled by the mutation's onError callback
+      // Error is handled by mutation callbacks
       console.error("Error saving tool:", error);
     }
   };
@@ -294,7 +313,7 @@ export function ModularToolsManager() {
     try {
       await deleteToolMutation.mutateAsync({ id });
     } catch (error) {
-      // Error is already handled by the mutation's onError callback
+      // Error is handled by mutation callbacks
       console.error("Error deleting tool:", error);
     }
     setDeleteConfirmId(null);
@@ -314,13 +333,13 @@ export function ModularToolsManager() {
     setActiveTab("templates");
   };
 
-  const handleTemplateSubmit = async (data: any) => {
+  const handleTemplateSubmit = async (data: TemplateFormData) => {
     try {
       const templateData = {
         name: data.name,
-        type: selectedTool?.toUpperCase() as any,
+        type: (selectedTool?.toUpperCase() ?? "") as ToolType,
         content: data.content,
-        subject: data.subject,
+        subject: data.subject ?? "",
         description: "",
         variables: [],
         isSystemTemplate: false,
@@ -329,7 +348,7 @@ export function ModularToolsManager() {
 
       await createTemplateMutation.mutateAsync(templateData);
     } catch (error) {
-      // Error is already handled by the mutation's onError callback
+      // Error is handled by mutation callbacks
       console.error("Error creating template:", error);
     }
   };
@@ -380,7 +399,7 @@ export function ModularToolsManager() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statsData?.totalTools || tools.length}
+              {statsData?.totalTools ?? tools.length}
             </div>
           </CardContent>
         </Card>
@@ -390,7 +409,7 @@ export function ModularToolsManager() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statsData?.activeTools || tools.filter((t) => t.isActive).length}
+              {statsData?.activeTools ?? tools.filter((t) => t.isActive).length}
             </div>
           </CardContent>
         </Card>
@@ -402,7 +421,7 @@ export function ModularToolsManager() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statsData?.inactiveTools ||
+              {statsData?.inactiveTools ??
                 tools.filter((t) => !t.isActive).length}
             </div>
           </CardContent>

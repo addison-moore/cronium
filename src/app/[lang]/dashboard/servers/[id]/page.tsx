@@ -70,7 +70,7 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
         description: `Health check completed at ${new Date(data.lastChecked).toLocaleString()}`,
         variant: data.online ? "default" : "destructive",
       });
-      refetchServer();
+      void refetchServer();
     },
   });
 
@@ -103,7 +103,7 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
   };
 
   const handleServerUpdate = () => {
-    refetchServer();
+    void refetchServer();
     // Switch back to overview tab after successful update
     changeTab("overview");
   };
@@ -130,10 +130,10 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
   };
 
   const formatMemory = (memoryString?: string) => {
-    if (!memoryString ?? memoryString === "Unknown") return "Unknown";
+    if (!memoryString || memoryString === "Unknown") return "Unknown";
 
     // Handle memory strings like "457Mi", "1Gi", etc.
-    const match = memoryString.match(/^(\d+(?:\.\d+)?)(.*)/);
+    const match = /^(\d+(?:\.\d+)?)(.*)/.exec(memoryString);
     if (!match) return memoryString;
 
     const [, value, unit] = match;

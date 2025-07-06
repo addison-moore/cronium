@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +16,7 @@ import { toast } from "@/components/ui/use-toast";
 import { EventType } from "@/shared/schema";
 import { trpc } from "@/lib/trpc";
 import { MonacoEditor } from "@/components/ui/monaco-editor";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 
 interface AIScriptAssistantProps {
   onApplyCode: (code: string) => void;
@@ -33,7 +34,7 @@ export default function AIScriptAssistant({
 
   // tRPC queries and mutations
   const { data: aiStatus, isLoading: checkingStatus } =
-    trpc.settings.getAIStatus.useQuery();
+    trpc.settings.getAIStatus.useQuery(undefined, QUERY_OPTIONS.static);
 
   const generateCodeMutation = trpc.ai.generateScript.useMutation({
     onSuccess: (data) => {
@@ -89,7 +90,17 @@ export default function AIScriptAssistant({
         currentCode: currentCode || "",
       });
     } catch (error) {
-      // Error handled by mutation onError
+      console.error("Error in generateCode function:", error);
+
+      // Display a user-friendly error message
+      toast({
+        title: "Error Generating Code",
+        description:
+          typeof error === "object" && error !== null && "message" in error
+            ? String(error.message)
+            : "An unexpected error occurred. Please try again later.",
+        variant: "destructive",
+      });
     }
   };
 

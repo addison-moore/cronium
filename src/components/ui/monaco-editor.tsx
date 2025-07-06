@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import Editor from "@monaco-editor/react";
-import * as monaco from "monaco-editor";
+import React, { useState, useEffect, type MouseEventHandler } from "react";
+import Editor, { type Monaco } from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Maximize2, Minimize2, X } from "lucide-react";
@@ -15,22 +14,37 @@ interface EditorSettings {
   lineNumbers: boolean;
 }
 
+export type EditorLanguage =
+  | "javascript"
+  | "typescript"
+  | "python"
+  | "bash"
+  | "json"
+  | "yaml"
+  | "sql"
+  | "dockerfile"
+  | "markdown"
+  | "html"
+  | "text";
+
+type EditorTheme = "vs-dark" | "vs-light" | "hc-black";
+
 interface MonacoEditorProps {
   defaultValue?: string;
   value?: string;
   onChange?: (value: string) => void;
-  language?: string;
+  language?: EditorLanguage;
   height?: string;
   readOnly?: boolean;
   className?: string;
-  editorSettings?: EditorSettings;
+  editorSettings?: Partial<EditorSettings>;
 }
 
 export function MonacoEditor({
   defaultValue = "",
   value,
   onChange,
-  language = "javascript",
+  language = "javascript" as EditorLanguage,
   height = "400px",
   readOnly = false,
   className = "",
@@ -44,7 +58,7 @@ export function MonacoEditor({
   }, []);
 
   // Handle expanded state
-  const toggleExpanded = () => {
+  const toggleExpanded: MouseEventHandler<HTMLButtonElement> = () => {
     setIsExpanded(!isExpanded);
   };
 
@@ -69,24 +83,26 @@ export function MonacoEditor({
     };
   }, [isExpanded]);
 
-  const handleEditorWillMount = (monaco: typeof import("monaco-editor")) => {
+  const handleEditorWillMount = (monacoInstance: Monaco) => {
     // Configure TypeScript/JavaScript compiler options for better linting
-    monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
-      target: monaco.languages.typescript.ScriptTarget.ES2020,
+    monacoInstance.languages.typescript.javascriptDefaults.setCompilerOptions({
+      target: monacoInstance.languages.typescript.ScriptTarget.ES2020,
       allowNonTsExtensions: true,
-      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-      module: monaco.languages.typescript.ModuleKind.CommonJS,
+      moduleResolution:
+        monacoInstance.languages.typescript.ModuleResolutionKind.NodeJs,
+      module: monacoInstance.languages.typescript.ModuleKind.CommonJS,
       noEmit: true,
       esModuleInterop: true,
       allowJs: true,
       allowSyntheticDefaultImports: true,
     });
 
-    monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-      target: monaco.languages.typescript.ScriptTarget.ES2020,
+    monacoInstance.languages.typescript.typescriptDefaults.setCompilerOptions({
+      target: monacoInstance.languages.typescript.ScriptTarget.ES2020,
       allowNonTsExtensions: true,
-      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-      module: monaco.languages.typescript.ModuleKind.CommonJS,
+      moduleResolution:
+        monacoInstance.languages.typescript.ModuleResolutionKind.NodeJs,
+      module: monacoInstance.languages.typescript.ModuleKind.CommonJS,
       noEmit: true,
       esModuleInterop: true,
       allowJs: true,
@@ -95,34 +111,38 @@ export function MonacoEditor({
     });
 
     // Configure diagnostics options
-    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
-      noSemanticValidation: false,
-      noSyntaxValidation: false,
-      noSuggestionDiagnostics: false,
-    });
+    monacoInstance.languages.typescript.javascriptDefaults.setDiagnosticsOptions(
+      {
+        noSemanticValidation: false,
+        noSyntaxValidation: false,
+        noSuggestionDiagnostics: false,
+      },
+    );
 
-    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-      noSemanticValidation: false,
-      noSyntaxValidation: false,
-      noSuggestionDiagnostics: false,
-    });
+    monacoInstance.languages.typescript.typescriptDefaults.setDiagnosticsOptions(
+      {
+        noSemanticValidation: false,
+        noSyntaxValidation: false,
+        noSuggestionDiagnostics: false,
+      },
+    );
 
     // Add common Node.js and browser globals for better intellisense
     const globalLibSource = [
-      "declare const console: any;",
-      "declare const process: any;",
-      "declare const Buffer: any;",
+      "declare const console: Console;",
+      "declare const process: NodeJS.Process;",
+      "declare const Buffer: BufferConstructor;",
       "declare const __dirname: string;",
       "declare const __filename: string;",
-      "declare const require: any;",
-      "declare const module: any;",
-      "declare const exports: any;",
-      "declare const global: any;",
-      "declare const setTimeout: any;",
-      "declare const setInterval: any;",
-      "declare const clearTimeout: any;",
-      "declare const clearInterval: any;",
-      "declare const fetch: any;",
+      "declare const require: NodeRequire;",
+      "declare const module: NodeModule;",
+      "declare const exports: NodeModule['exports'];",
+      "declare const global: typeof globalThis;",
+      "declare const setTimeout: typeof globalThis.setTimeout;",
+      "declare const setInterval: typeof globalThis.setInterval;",
+      "declare const clearTimeout: typeof globalThis.clearTimeout;",
+      "declare const clearInterval: typeof globalThis.clearInterval;",
+      "declare const fetch: typeof globalThis.fetch;",
     ].join("\n");
 
     // Add Cronium-specific runtime helper functions
@@ -131,67 +151,69 @@ export function MonacoEditor({
       " * Cronium Runtime Helper Functions",
       " * These functions are available in all script executions",
       " */",
-      "declare namespace cronium {",
+      "interface CroniumEventContext {",
+      "  name: string;",
+      "  type: string;",
+      "  id: number;",
+      "  executionId: string;",
+      "}",
+      "",
+      "interface CroniumAPI {",
       "  /**",
       "   * Get input data passed to this script from previous workflow nodes",
       "   * @returns The input data object or undefined if no input",
       "   */",
-      "  function input(): any;",
+      "  input(): unknown;",
       "",
       "  /**",
       "   * Set output data to be passed to subsequent workflow nodes",
       "   * @param data - The data to output",
       "   */",
-      "  function output(data: any): void;",
+      "  output(data: unknown): void;",
       "",
       "  /**",
       "   * Get the current event context information",
       "   * @returns Event metadata including name, type, and execution details",
       "   */",
-      "  function event(): {",
-      "    name: string;",
-      "    type: string;",
-      "    id: number;",
-      "    executionId: string;",
-      "  };",
+      "  event(): CroniumEventContext;",
       "",
       "  /**",
       "   * Set a condition flag for conditional event triggers",
       "   * @param condition - Boolean condition to set",
       "   */",
-      "  function setCondition(condition: boolean): void;",
+      "  setCondition(condition: boolean): void;",
       "",
       "  /**",
       "   * Get the current condition flag value",
       "   * @returns The current condition state",
       "   */",
-      "  function getCondition(): boolean;",
+      "  getCondition(): boolean;",
       "",
       "  /**",
       "   * Get a user variable by key",
       "   * @param key - The variable key",
       "   * @returns The variable value or undefined if not found",
       "   */",
-      "  function getVariable(key: string): string | undefined;",
+      "  getVariable(key: string): string | undefined;",
       "",
       "  /**",
       "   * Set a user variable that persists across script executions",
       "   * @param key - The variable key",
       "   * @param value - The variable value",
       "   */",
-      "  function setVariable(key: string, value: string): void;",
+      "  setVariable(key: string, value: string): void;",
       "}",
       "",
       "// Make cronium available globally",
-      "declare const cronium: typeof cronium;",
+      "declare const cronium: CroniumAPI;",
     ].join("\n");
 
-    monaco.languages.typescript.javascriptDefaults.addExtraLib(
+    monacoInstance.languages.typescript.javascriptDefaults.addExtraLib(
       globalLibSource,
       "ts:globals.d.ts",
     );
 
-    monaco.languages.typescript.javascriptDefaults.addExtraLib(
+    monacoInstance.languages.typescript.javascriptDefaults.addExtraLib(
       croniumLibSource,
       "ts:cronium.d.ts",
     );
@@ -209,20 +231,20 @@ export function MonacoEditor({
     );
   }
 
-  const defaultSettings = {
+  const defaultSettings: EditorSettings = {
     fontSize: 14,
-    theme: "vs-dark",
+    theme: "vs-dark" as EditorTheme,
     wordWrap: true,
     minimap: false,
     lineNumbers: true,
   };
 
-  const settings = editorSettings || defaultSettings;
+  const settings: EditorSettings = { ...defaultSettings, ...editorSettings };
 
   const EditorComponent = (
     <Editor
       defaultValue={defaultValue}
-      value={value || ""}
+      value={value ?? ""}
       height={isExpanded ? "100vh" : height}
       language={language}
       theme={settings.theme}
@@ -267,7 +289,11 @@ export function MonacoEditor({
         renderWhitespace: "selection",
         showFoldingControls: "mouseover",
       }}
-      onChange={(value) => onChange && onChange(value || "")}
+      onChange={(value) => {
+        if (onChange && value !== undefined) {
+          onChange(value);
+        }
+      }}
     />
   );
 

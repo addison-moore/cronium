@@ -40,7 +40,7 @@ export function useOptimisticUpdate<T>({
     async (
       itemId: string | number,
       updater: (item: T) => T,
-      apiCall: () => Promise<any>,
+      apiCall: () => Promise<T>,
       successMessage?: string,
       errorMessage?: string,
     ) => {
@@ -113,7 +113,7 @@ export function useOptimisticUpdate<T>({
   const deleteItem = useCallback(
     async (
       itemId: string | number,
-      apiCall: () => Promise<any>,
+      apiCall: () => Promise<T>,
       successMessage?: string,
       errorMessage?: string,
     ) => {
@@ -172,7 +172,7 @@ export function useOptimisticUpdate<T>({
   const addItem = useCallback(
     async (
       newItem: T,
-      apiCall: () => Promise<any>,
+      apiCall: () => Promise<T>,
       successMessage?: string,
       errorMessage?: string,
     ) => {

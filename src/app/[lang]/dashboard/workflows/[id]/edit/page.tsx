@@ -16,6 +16,7 @@ import WorkflowForm, {
 } from "@/components/workflows/WorkflowForm";
 import type { Node, Edge } from "@xyflow/react";
 import { Spinner } from "@/components/ui/spinner";
+import { trpc } from "@/lib/trpc";
 
 // Workflow form schema
 const workflowFormSchema = z.object({
@@ -34,26 +35,6 @@ const workflowFormSchema = z.object({
   overrideServerIds: z.array(z.number()).default([]),
 });
 
-interface WorkflowData {
-  workflow: {
-    id: number;
-    name: string;
-    description: string | null;
-    tags: string[] | null;
-    triggerType: WorkflowTriggerType;
-    runLocation: RunLocation;
-    status: EventStatus;
-    scheduleNumber: number | null;
-    scheduleUnit: string | null;
-    customSchedule: string | null;
-    shared: boolean;
-    overrideEventServers: boolean;
-    overrideServerIds: number[] | null;
-  };
-  nodes: Node[];
-  edges: Edge[];
-}
-
 export default function EditWorkflowPage() {
   const router = useRouter();
   const params = useParams<{ lang: string; id: string }>();
@@ -62,11 +43,11 @@ export default function EditWorkflowPage() {
   const workflowId = parseInt(params.id);
 
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingWorkflow, setLoadingWorkflow] = useState(true);
-  const [workflowData, setWorkflowData] = useState<WorkflowData | null>(null);
+  const [workflowNodes, setWorkflowNodes] = useState<Node[]>([]);
+  const [workflowEdges, setWorkflowEdges] = useState<Edge[]>([]);
 
   const form = useForm<WorkflowFormValues>({
-    resolver: zodResolver(workflowFormSchema) as any,
+    resolver: zodResolver(workflowFormSchema),
     defaultValues: {
       name: "",
       description: "",
@@ -84,6 +65,19 @@ export default function EditWorkflowPage() {
     },
   });
 
+  // Use tRPC query to fetch workflow data
+  const {
+    data: workflowData,
+    isLoading: loadingWorkflow,
+    error: workflowError,
+  } = trpc.workflows.getById.useQuery(
+    { id: workflowId },
+    {
+      enabled: !isNaN(workflowId),
+    },
+  );
+
+  // Handle invalid workflow ID
   useEffect(() => {
     if (isNaN(workflowId)) {
       toast({
@@ -92,79 +86,113 @@ export default function EditWorkflowPage() {
         variant: "destructive",
       });
       router.push(`/${lang}/dashboard/workflows`);
-      return;
     }
+  }, [workflowId, router, lang]);
 
-    // Fetch workflow data only
-    fetchWorkflowData();
-  }, [workflowId]);
+  // Handle workflow error
+  useEffect(() => {
+    if (workflowError) {
+      if (workflowError.data?.code === "NOT_FOUND") {
+        toast({
+          title: "Error",
+          description: "Workflow not found",
+          variant: "destructive",
+        });
+        router.push(`/${lang}/dashboard/workflows`);
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to load workflow data. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
+  }, [workflowError, router, lang]);
 
-  const fetchWorkflowData = async () => {
-    try {
-      setLoadingWorkflow(true);
-      const response = await fetch(`/api/workflows/${workflowId}`, {
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch workflow data");
+  // Convert workflow nodes and edges when data is loaded
+  useEffect(() => {
+    if (workflowData) {
+      // Define proper types for workflow data from tRPC
+      interface WorkflowNode {
+        id: number;
+        eventId: number;
+        position_x: number;
+        position_y: number;
+        event?: {
+          id: number;
+          name: string;
+          type: string;
+        };
       }
 
-      const data: WorkflowData = await response.json();
-      console.log("Fetched workflow data:", data);
-      setWorkflowData(data);
-    } catch (error) {
-      console.error("Error fetching workflow data:", error);
+      interface WorkflowConnection {
+        id: number;
+        sourceNodeId: number;
+        targetNodeId: number;
+        connectionType?: string;
+      }
+
+      // Convert workflow nodes to canvas format
+      const typedNodes = workflowData.nodes as WorkflowNode[] | undefined;
+      const nodes: Node[] = (typedNodes ?? []).map((node) => ({
+        id: `node-${String(node.id)}`,
+        type: "workflowNode",
+        position: { x: node.position_x, y: node.position_y },
+        data: {
+          eventId: node.eventId,
+          label: node.event?.name ?? "",
+          type: node.event?.type ?? "",
+          eventTypeIcon: node.event?.type ?? "",
+        },
+      }));
+      setWorkflowNodes(nodes);
+
+      // Convert workflow connections to canvas format
+      const typedConnections = workflowData.connections as
+        | WorkflowConnection[]
+        | undefined;
+      const edges: Edge[] = (typedConnections ?? []).map((conn) => ({
+        id: `edge-${String(conn.id)}`,
+        source: `node-${String(conn.sourceNodeId)}`,
+        target: `node-${String(conn.targetNodeId)}`,
+        type: "default",
+      }));
+      setWorkflowEdges(edges);
+    }
+  }, [workflowData]);
+
+  // Use tRPC mutation to update workflow
+  const updateWorkflowMutation = trpc.workflows.update.useMutation({
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Workflow updated successfully",
+        variant: "success",
+      });
+      router.push(`/${lang}/dashboard/workflows/${workflowId}`);
+    },
+    onError: (error) => {
+      console.error("Error updating workflow:", error);
       toast({
         title: "Error",
-        description: "Failed to load workflow data. Please try again.",
+        description: "Failed to update workflow. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setLoadingWorkflow(false);
-    }
-  };
+    },
+  });
 
   const onSubmit = async (
     values: WorkflowFormValues,
     nodes: Node[],
     edges: Edge[],
   ) => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-
-      // Send both the form data and the workflow configuration to update the workflow
-      const response = await fetch(`/api/workflows/${workflowId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({
-          ...values,
-          nodes: nodes,
-          edges: edges,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update workflow");
-      }
-
-      toast({
-        title: "Success",
-        description: "Workflow updated successfully",
-        variant: "success",
-      });
-
-      // Redirect back to workflow list or view
-      router.push(`/${lang}/dashboard/workflows/${workflowId}`);
-    } catch (error) {
-      console.error("Error updating workflow:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update workflow. Please try again.",
-        variant: "destructive",
+      await updateWorkflowMutation.mutateAsync({
+        id: workflowId,
+        ...values,
+        nodes,
+        edges,
       });
     } finally {
       setIsLoading(false);
@@ -173,28 +201,25 @@ export default function EditWorkflowPage() {
 
   // Update form when workflow data is loaded
   useEffect(() => {
-    if (workflowData?.workflow && !loadingWorkflow) {
-      console.log("Resetting form with workflow data:", workflowData);
-      const workflow = workflowData.workflow;
+    if (workflowData && !loadingWorkflow) {
       const formData = {
-        name: workflow.name,
-        description: workflow.description ?? "",
-        tags: workflow.tags ?? [],
-        triggerType: workflow.triggerType,
-        runLocation: workflow.runLocation,
-        status: workflow.status,
-        scheduleNumber: workflow.scheduleNumber,
-        scheduleUnit: workflow.scheduleUnit,
-        customSchedule: workflow.customSchedule,
-        useCronScheduling: !!workflow.customSchedule,
-        shared: workflow.shared,
-        overrideEventServers: workflow.overrideEventServers ?? false,
-        overrideServerIds: workflow.overrideServerIds ?? [],
+        name: workflowData.name,
+        description: workflowData.description ?? "",
+        tags: (workflowData.tags ?? []) as string[],
+        triggerType: workflowData.triggerType,
+        runLocation: workflowData.runLocation,
+        status: workflowData.status,
+        scheduleNumber: workflowData.scheduleNumber,
+        scheduleUnit: workflowData.scheduleUnit,
+        customSchedule: workflowData.customSchedule,
+        useCronScheduling: !!workflowData.customSchedule,
+        shared: workflowData.shared,
+        overrideEventServers: workflowData.overrideEventServers ?? false,
+        overrideServerIds: (workflowData.overrideServerIds ?? []) as number[],
       };
-      console.log("Form data to set:", formData);
       form.reset(formData);
     }
-  }, [workflowData, loadingWorkflow]);
+  }, [workflowData, loadingWorkflow, form]);
 
   if (loadingWorkflow) {
     return (
@@ -249,8 +274,8 @@ export default function EditWorkflowPage() {
           isLoading={isLoading}
           submitButtonText={t("SaveWorkflow")}
           showActionsAtTop={true}
-          initialNodes={workflowData?.nodes ?? []}
-          initialEdges={workflowData?.edges ?? []}
+          initialNodes={workflowNodes}
+          initialEdges={workflowEdges}
           workflowId={workflowId}
         />
       </div>

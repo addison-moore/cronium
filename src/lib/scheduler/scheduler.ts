@@ -17,6 +17,53 @@ import {
 } from "./event-handlers";
 import { handleExecutionCount } from "./execution-counter";
 
+// Type definitions
+interface EventWithRelations {
+  id: number;
+  name: string | null;
+  description: string | null;
+  type: string;
+  content: string | null;
+  status: EventStatus;
+  shared: boolean;
+  userId: string;
+  serverId: number | null;
+  scheduleNumber: number;
+  scheduleUnit: TimeUnit | null;
+  customSchedule: string | null;
+  startTime: Date | string | null;
+  nextRunAt: Date | null;
+  lastRunAt: Date | null;
+  envVars?: Array<{ key: string; value: string }>;
+  tags?: string[];
+}
+
+interface ConditionalEvent {
+  id: number;
+  type: string;
+  value?: string;
+  targetEventId?: number | null;
+  toolId?: number | null;
+  message?: string | null;
+  emailAddresses?: string | null;
+  emailSubject?: string | null;
+}
+
+interface ExecutionData {
+  executionTime?: string;
+  duration?: number;
+  output?: string;
+  error?: string;
+}
+
+interface ExecutionResult {
+  success: boolean;
+  output: string;
+  duration?: number;
+  scriptOutput?: unknown;
+  condition?: boolean;
+}
+
 export class ScriptScheduler {
   private jobs = new Map<number, NodeScheduleJob>();
   private isInitialized = false;
@@ -28,8 +75,6 @@ export class ScriptScheduler {
   private executingEvents = new Set<number>();
   // Track events that are currently being scheduled to prevent duplicate job creation
   private schedulingInProgress = new Set<number>();
-
-  constructor() {}
 
   async initialize() {
     // Check if already initialized or initialization is in progress
@@ -91,7 +136,9 @@ export class ScriptScheduler {
 
       // Schedule each active event with a fresh state
       for (const event of activeEvents) {
-        const fullEvent = await storage.getEventWithRelations(event.id);
+        const fullEvent = (await storage.getEventWithRelations(
+          event.id,
+        )) as EventWithRelations | null;
         if (fullEvent && fullEvent.status === EventStatus.ACTIVE) {
           await this.scheduleScript(fullEvent);
         }
@@ -112,7 +159,10 @@ export class ScriptScheduler {
         this.shutdown();
       });
     } catch (error) {
-      console.error("Failed to initialize event scheduler:", error);
+      console.error(
+        "Failed to initialize event scheduler:",
+        error instanceof Error ? error.message : String(error),
+      );
       throw error;
     } finally {
       this.initializationInProgress = false;
@@ -125,7 +175,7 @@ export class ScriptScheduler {
     process.exit(0);
   }
 
-  async scheduleScript(event: any) {
+  async scheduleScript(event: EventWithRelations) {
     console.log(
       `Attempting to schedule event ${String(event.id)}: ${event.name ?? ""}`,
     );
@@ -145,7 +195,7 @@ export class ScriptScheduler {
       this.jobs.delete(event.id);
     }
 
-    if (event.status !== "ACTIVE") {
+    if (event.status !== EventStatus.ACTIVE) {
       console.log(
         `Script ${String(event.id)} is not active, skipping scheduling`,
       );
@@ -155,27 +205,31 @@ export class ScriptScheduler {
     try {
       // Ensure we have the most up-to-date event data
       // This is important for when a event transitions from DRAFT to ACTIVE
-      const refreshedScript = await storage.getEventWithRelations(event.id);
+      const refreshedScript = (await storage.getEventWithRelations(
+        event.id,
+      )) as EventWithRelations | null;
       if (!refreshedScript) {
         console.error(
           `Script ${String(event.id)} not found during scheduling refresh`,
         );
         return;
       }
+      const typedRefreshedScript = refreshedScript;
 
       // Debug log to help diagnose issues
       console.log(
-        `Scheduling event ${String(refreshedScript.id)} (${refreshedScript.name ?? ""})`,
+        `Scheduling event ${String(typedRefreshedScript.id)} (${typedRefreshedScript.name ?? ""})`,
       );
       console.log(
-        `Script status: ${refreshedScript.status ?? ""}, Start time: ${refreshedScript.startTime ? new Date(refreshedScript.startTime).toISOString() : "Not set"}`,
+        `Script status: ${typedRefreshedScript.status ?? ""}, Start time: ${typedRefreshedScript.startTime ? new Date(typedRefreshedScript.startTime).toISOString() : "Not set"}`,
       );
 
       // Check if event has a start time in the future
-      const hasStartTime = refreshedScript.startTime != null;
-      const startDate = hasStartTime
-        ? new Date(refreshedScript.startTime)
-        : null;
+      const hasStartTime = typedRefreshedScript.startTime != null;
+      const startDate =
+        hasStartTime && typedRefreshedScript.startTime
+          ? new Date(typedRefreshedScript.startTime)
+          : null;
       const now = new Date();
       const startTimeInFuture = hasStartTime && startDate && startDate > now;
 
@@ -185,43 +239,54 @@ export class ScriptScheduler {
 
       if (startTimeInFuture) {
         console.log(
-          `Script ${String(refreshedScript.id)} has future start time: ${startDate?.toISOString() ?? ""}. Scheduling initial activation.`,
+          `Script ${String(typedRefreshedScript.id)} has future start time: ${startDate?.toISOString() ?? ""}. Scheduling initial activation.`,
         );
 
         // Schedule a one-time job at the start time
-        const initialJob = scheduleJob(startDate, async () => {
+        const initialJob = scheduleJob(startDate, () => {
           console.log(
-            `Start time reached for event ${String(refreshedScript.id)}. Executing and activating recurring schedule.`,
+            `Start time reached for event ${String(typedRefreshedScript.id)}. Executing and activating recurring schedule.`,
           );
 
           // Execute the event immediately when the start time is reached
-          await this.executeScript(refreshedScript);
-
-          // Then set up the recurring schedule
-          this.setupRecurringSchedule(refreshedScript);
+          void (async () => {
+            try {
+              await this.executeScript(typedRefreshedScript);
+              // Then set up the recurring schedule
+              this.setupRecurringSchedule(typedRefreshedScript);
+            } catch (error) {
+              console.error(
+                `Error executing event ${String(typedRefreshedScript.id)} at start time:`,
+                error instanceof Error ? error.message : String(error),
+              );
+            }
+          })();
         });
 
         // Store the initial job
-        this.jobs.set(refreshedScript.id, initialJob);
+        this.jobs.set(typedRefreshedScript.id, initialJob);
         console.log(
-          `Initial job scheduled for event ${String(refreshedScript.id)}: ${refreshedScript.name ?? ""} at ${startDate?.toISOString() ?? ""}`,
+          `Initial job scheduled for event ${String(typedRefreshedScript.id)}: ${typedRefreshedScript.name ?? ""} at ${startDate?.toISOString() ?? ""}`,
         );
       } else {
         // Set up the recurring schedule immediately
         console.log(
-          `Script ${String(refreshedScript.id)} has no future start time or start time has passed. Setting up recurring schedule immediately.`,
+          `Script ${String(typedRefreshedScript.id)} has no future start time or start time has passed. Setting up recurring schedule immediately.`,
         );
-        this.setupRecurringSchedule(refreshedScript);
+        this.setupRecurringSchedule(typedRefreshedScript);
       }
     } catch (error) {
-      console.error(`Error scheduling event ${String(event.id)}:`, error);
+      console.error(
+        `Error scheduling event ${String(event.id)}:`,
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 
   /**
    * Set up a recurring schedule for an event with race condition handling
    */
-  private setupRecurringSchedule(event: any) {
+  private setupRecurringSchedule(event: EventWithRelations) {
     // Create a unique ID for this setup process for better debugging
     const setupId = `setup-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     console.log(
@@ -352,156 +417,169 @@ export class ScriptScheduler {
 
       // Schedule the job with a dedicated execution handler
       // Create a unique job to prevent duplicate schedules
-      const job = scheduleJob(rule, async () => {
+      const job = scheduleJob(rule, () => {
         // Create a unique execution ID for this particular scheduled run
         const execId = `exec-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
         console.log(
           `[${execId}] Scheduled trigger for event ${String(eventId)}`,
         );
 
-        try {
-          // CRITICAL: Check if this event is already executing FIRST
-          // This prevents duplicate executions from multiple jobs
-          if (this.executingEvents.has(eventId)) {
-            console.log(
-              `[${execId}] Event ${String(eventId)} is already executing. Skipping this run.`,
-            );
-            return;
-          }
-
-          // Mark as executing immediately to prevent race conditions
-          this.executingEvents.add(eventId);
-
+        // Execute async logic in a promise
+        void (async () => {
           try {
-            // Get the most current event data each time
-            const currentScript = await storage.getEventWithRelations(eventId);
-
-            // Basic checks - is the event still active?
-            if (!currentScript) {
+            // CRITICAL: Check if this event is already executing FIRST
+            // This prevents duplicate executions from multiple jobs
+            if (this.executingEvents.has(eventId)) {
               console.log(
-                `[${execId}] Event ${String(eventId)} no longer exists. Removing schedule.`,
+                `[${execId}] Event ${String(eventId)} is already executing. Skipping this run.`,
               );
-              this.jobs.get(eventId)?.cancel();
-              this.jobs.delete(eventId);
               return;
             }
 
-            if (currentScript.status !== EventStatus.ACTIVE) {
-              console.log(
-                `[${execId}] Script ${String(eventId)} is no longer active. Cancelling schedule.`,
-              );
-              // Cancel this job since the script is no longer active
-              this.jobs.get(eventId)?.cancel();
-              this.jobs.delete(eventId);
-              return;
-            }
+            // Mark as executing immediately to prevent race conditions
+            this.executingEvents.add(eventId);
 
-            // Check if we're too close to the last execution
-            const now = new Date();
-            const lastExecution = this.lastExecutionTimes.get(eventId);
+            try {
+              // Get the most current event data each time
+              const currentScript = (await storage.getEventWithRelations(
+                eventId,
+              )) as EventWithRelations | null;
 
-            if (lastExecution) {
-              const timeSinceLastExecution =
-                now.getTime() - lastExecution.getTime();
-
-              // Calculate minimum interval between runs based on schedule type
-              let minimumInterval: number;
-
-              if (currentScript.scheduleUnit === TimeUnit.SECONDS) {
-                // For seconds, use 80% of the interval (allow some variance)
-                minimumInterval = Math.max(
-                  500,
-                  currentScript.scheduleNumber * 1000 * 0.8,
+              // Basic checks - is the event still active?
+              if (!currentScript) {
+                console.log(
+                  `[${execId}] Event ${String(eventId)} no longer exists. Removing schedule.`,
                 );
+                this.jobs.get(eventId)?.cancel();
+                this.jobs.delete(eventId);
+                return;
+              }
 
-                if (timeSinceLastExecution < minimumInterval) {
-                  console.log(
-                    `[${execId}] Too soon after last execution (${String(timeSinceLastExecution)}ms < ${String(minimumInterval)}ms). Skipping.`,
-                  );
-                  return;
-                }
-              } else if (currentScript.scheduleUnit === TimeUnit.MINUTES) {
-                // For minutes, use a fixed 2-second buffer for 1 minute, or 10% for others
-                minimumInterval =
-                  currentScript.scheduleNumber === 1
-                    ? 2000
-                    : Math.max(
-                        500,
-                        currentScript.scheduleNumber * 60 * 1000 * 0.1,
-                      );
+              if (currentScript.status !== EventStatus.ACTIVE) {
+                console.log(
+                  `[${execId}] Script ${String(eventId)} is no longer active. Cancelling schedule.`,
+                );
+                // Cancel this job since the script is no longer active
+                this.jobs.get(eventId)?.cancel();
+                this.jobs.delete(eventId);
+                return;
+              }
 
-                if (timeSinceLastExecution < minimumInterval) {
-                  console.log(
-                    `[${execId}] Too soon after last execution (${String(timeSinceLastExecution)}ms < ${String(minimumInterval)}ms). Skipping.`,
+              // Check if we're too close to the last execution
+              const now = new Date();
+              const lastExecution = this.lastExecutionTimes.get(eventId);
+
+              if (lastExecution) {
+                const timeSinceLastExecution =
+                  now.getTime() - lastExecution.getTime();
+
+                // Calculate minimum interval between runs based on schedule type
+                let minimumInterval: number;
+
+                if (currentScript.scheduleUnit === TimeUnit.SECONDS) {
+                  // For seconds, use 80% of the interval (allow some variance)
+                  minimumInterval = Math.max(
+                    500,
+                    currentScript.scheduleNumber * 1000 * 0.8,
                   );
-                  return;
-                }
-              } else if (currentScript.customSchedule) {
-                // For custom schedules, use a small fixed buffer
-                if (timeSinceLastExecution < 500) {
-                  console.log(
-                    `[${execId}] Too soon after last execution for custom schedule (${String(timeSinceLastExecution)}ms < 500ms). Skipping.`,
-                  );
-                  return;
-                }
-              } else {
-                // Default case - minimal buffer
-                if (timeSinceLastExecution < 500) {
-                  console.log(
-                    `[${execId}] Too soon after last execution (${String(timeSinceLastExecution)}ms < 500ms). Skipping.`,
-                  );
-                  return;
+
+                  if (timeSinceLastExecution < minimumInterval) {
+                    console.log(
+                      `[${execId}] Too soon after last execution (${String(timeSinceLastExecution)}ms < ${String(minimumInterval)}ms). Skipping.`,
+                    );
+                    return;
+                  }
+                } else if (currentScript.scheduleUnit === TimeUnit.MINUTES) {
+                  // For minutes, use a fixed 2-second buffer for 1 minute, or 10% for others
+                  minimumInterval =
+                    currentScript.scheduleNumber === 1
+                      ? 2000
+                      : Math.max(
+                          500,
+                          currentScript.scheduleNumber * 60 * 1000 * 0.1,
+                        );
+
+                  if (timeSinceLastExecution < minimumInterval) {
+                    console.log(
+                      `[${execId}] Too soon after last execution (${String(timeSinceLastExecution)}ms < ${String(minimumInterval)}ms). Skipping.`,
+                    );
+                    return;
+                  }
+                } else if (currentScript.customSchedule) {
+                  // For custom schedules, use a small fixed buffer
+                  if (timeSinceLastExecution < 500) {
+                    console.log(
+                      `[${execId}] Too soon after last execution for custom schedule (${String(timeSinceLastExecution)}ms < 500ms). Skipping.`,
+                    );
+                    return;
+                  }
+                } else {
+                  // Default case - minimal buffer
+                  if (timeSinceLastExecution < 500) {
+                    console.log(
+                      `[${execId}] Too soon after last execution (${String(timeSinceLastExecution)}ms < 500ms). Skipping.`,
+                    );
+                    return;
+                  }
                 }
               }
+
+              // We've passed all checks - this execution can proceed
+              // Record the timestamp before executing
+              this.lastExecutionTimes.set(eventId, now);
+              console.log(
+                `[${execId}] Starting execution for event ${String(eventId)} at ${now.toISOString()}`,
+              );
+
+              // Execute the event using our managed method
+              await this.executeScript(currentScript);
+            } catch (error) {
+              console.error(
+                `[${execId}] Error during execution:`,
+                error instanceof Error ? error.message : String(error),
+              );
+            } finally {
+              // Always clear the executing flag when done to prevent stuck jobs
+              this.executingEvents.delete(eventId);
+              console.log(
+                `[${execId}] Cleared executing state for event ${String(eventId)}`,
+              );
             }
 
-            // We've passed all checks - this execution can proceed
-            // Record the timestamp before executing
-            this.lastExecutionTimes.set(eventId, now);
-            console.log(
-              `[${execId}] Starting execution for event ${String(eventId)} at ${now.toISOString()}`,
-            );
-
-            // Execute the event using our managed method
-            await this.executeScript(currentScript);
-          } catch (error) {
-            console.error(`[${execId}] Error during execution:`, error);
-          } finally {
-            // Always clear the executing flag when done to prevent stuck jobs
-            this.executingEvents.delete(eventId);
-            console.log(
-              `[${execId}] Cleared executing state for event ${String(eventId)}`,
-            );
-          }
-
-          // Update next execution time
-          try {
-            // Use type casting to access the nextInvocation method
-            const nextRun = (job as any).nextInvocation?.();
-            if (nextRun) {
-              storage
-                .updateScript(eventId, { nextRunAt: nextRun })
-                .then(() => {
-                  console.log(
-                    `[${execId}] Next execution set to: ${nextRun.toISOString()}`,
+            // Update next execution time
+            try {
+              // Use type casting to access the nextInvocation method
+              const nextRun = (
+                job as unknown as { nextInvocation?: () => Date }
+              ).nextInvocation?.();
+              if (nextRun) {
+                storage
+                  .updateScript(eventId, { nextRunAt: nextRun })
+                  .then(() => {
+                    console.log(
+                      `[${execId}] Next execution set to: ${nextRun.toISOString()}`,
+                    );
+                  })
+                  .catch((err) =>
+                    console.error(
+                      `[${execId}] Failed to update next run time:`,
+                      err instanceof Error ? err.message : String(err),
+                    ),
                   );
-                })
-                .catch((err) =>
-                  console.error(
-                    `[${execId}] Failed to update next run time:`,
-                    err,
-                  ),
-                );
+              }
+            } catch (error) {
+              console.error(
+                `[${execId}] Error getting next invocation time:`,
+                error instanceof Error ? error.message : String(error),
+              );
             }
           } catch (error) {
             console.error(
-              `[${execId}] Error getting next invocation time:`,
-              error,
+              `[${execId}] Error during scheduled execution:`,
+              error instanceof Error ? error.message : String(error),
             );
           }
-        } catch (error) {
-          console.error(`[${execId}] Error during scheduled execution:`, error);
-        }
+        })();
       });
 
       // Final check before storing the job - this is critical to prevent duplicates
@@ -519,7 +597,9 @@ export class ScriptScheduler {
       // Try to set initial next run time
       try {
         // Use type cast to access the nextInvocation method
-        const nextRun = (job as any).nextInvocation?.();
+        const nextRun = (
+          job as unknown as { nextInvocation?: () => Date }
+        ).nextInvocation?.();
         if (nextRun) {
           storage
             .updateScript(event.id, { nextRunAt: nextRun })
@@ -531,19 +611,25 @@ export class ScriptScheduler {
             .catch((err) => {
               console.error(
                 `[${setupId}] Error setting initial next run time:`,
-                err,
+                err instanceof Error ? err.message : String(err),
               );
             });
         }
       } catch (err) {
-        console.error(`[${setupId}] Error setting initial next run time:`, err);
+        console.error(
+          `[${setupId}] Error setting initial next run time:`,
+          err instanceof Error ? err.message : String(err),
+        );
       }
 
       console.log(
         `[${setupId}] Successfully scheduled event ${String(event.id)}: ${event.name ?? ""}`,
       );
     } catch (error) {
-      console.error(`[${setupId}] Error setting up schedule:`, error);
+      console.error(
+        `[${setupId}] Error setting up schedule:`,
+        error instanceof Error ? error.message : String(error),
+      );
       throw error;
     } finally {
       // Always clean up the scheduling lock
@@ -552,7 +638,7 @@ export class ScriptScheduler {
   }
 
   // Execute a script by delegating to the appropriate execution module
-  async executeScript(event: any) {
+  async executeScript(event: EventWithRelations) {
     // Create a unique execution ID to help with debugging
     const executionId = `exec-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     console.log(
@@ -604,7 +690,7 @@ export class ScriptScheduler {
     } catch (error) {
       console.error(
         `[${executionId}] Error executing script ${String(event.id)}:`,
-        error,
+        error instanceof Error ? error.message : String(error),
       );
       throw error;
     } finally {
@@ -642,15 +728,10 @@ export class ScriptScheduler {
   }
 
   private async processEvent(
-    conditional_event: any,
-    event: any,
+    conditional_event: ConditionalEvent,
+    event: EventWithRelations,
     isSuccess: boolean,
-    executionData?: {
-      executionTime?: string;
-      duration?: number;
-      output?: string;
-      error?: string;
-    },
+    executionData?: ExecutionData,
   ) {
     return processEvent(conditional_event, event, isSuccess, executionData);
   }
@@ -659,17 +740,13 @@ export class ScriptScheduler {
   async executeEvent(
     eventId: number,
     workflowExecutionId?: number,
-    sequenceOrder?: number,
-    input: Record<string, any> = {},
+    _sequenceOrder?: number,
+    input: Record<string, unknown> = {},
     workflowId?: number,
-  ): Promise<{
-    success: boolean;
-    output: string;
-    duration?: number;
-    scriptOutput?: any;
-    condition?: boolean;
-  }> {
-    const event = await storage.getEventWithRelations(eventId);
+  ): Promise<ExecutionResult> {
+    const event = (await storage.getEventWithRelations(
+      eventId,
+    )) as EventWithRelations | null;
     if (!event) throw new Error(`Event with ID ${String(eventId)} not found`);
 
     console.log(
@@ -706,7 +783,9 @@ export class ScriptScheduler {
   async runScriptImmediately(
     eventId: number,
   ): Promise<{ success: boolean; output: string }> {
-    const event = await storage.getEventWithRelations(eventId);
+    const event = (await storage.getEventWithRelations(
+      eventId,
+    )) as EventWithRelations | null;
     if (!event) throw new Error(`Script with ID ${String(eventId)} not found`);
 
     console.log(`Running script ${String(eventId)} immediately`);
@@ -741,7 +820,9 @@ export class ScriptScheduler {
       }
 
       // Get the script details and check if it's still active
-      const event = await storage.getEventWithRelations(eventId);
+      const event = (await storage.getEventWithRelations(
+        eventId,
+      )) as EventWithRelations | null;
       if (!event) {
         console.log(`Event ${String(eventId)} not found. Skipping update.`);
         return;
@@ -758,7 +839,10 @@ export class ScriptScheduler {
         );
       }
     } catch (error) {
-      console.error(`Error updating event ${String(eventId)}:`, error);
+      console.error(
+        `Error updating event ${String(eventId)}:`,
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 
@@ -774,7 +858,10 @@ export class ScriptScheduler {
         this.jobs.delete(eventId);
       }
     } catch (error) {
-      console.error(`Error deleting event ${String(eventId)} schedule:`, error);
+      console.error(
+        `Error deleting event ${String(eventId)} schedule:`,
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 }

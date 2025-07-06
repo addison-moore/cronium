@@ -15,7 +15,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Edit, Trash2, Eye, EyeOff, Shield } from "lucide-react";
+import { Edit, Trash2, Eye, EyeOff } from "lucide-react";
 import { TemplateForm } from "../../template-form";
 import {
   type ToolPlugin,
@@ -29,19 +29,22 @@ const discordSchema = z.object({
   webhookUrl: z.string().url("Valid webhook URL is required"),
 });
 
+type DiscordFormData = z.infer<typeof discordSchema>;
+type DiscordCredentials = Omit<DiscordFormData, "name">;
+
 function DiscordCredentialForm({
   tool,
   onSubmit,
   onCancel,
 }: CredentialFormProps) {
-  const form = useForm({
+  const form = useForm<DiscordFormData>({
     resolver: zodResolver(discordSchema),
     defaultValues: tool
       ? {
           name: tool.name,
           ...(typeof tool.credentials === "string"
-            ? JSON.parse(tool.credentials)
-            : tool.credentials),
+            ? (JSON.parse(tool.credentials) as DiscordCredentials)
+            : (tool.credentials as DiscordCredentials)),
         }
       : {
           name: "",
@@ -49,7 +52,7 @@ function DiscordCredentialForm({
         },
   });
 
-  const handleSubmit = async (data: any) => {
+  const handleSubmit = async (data: DiscordFormData) => {
     const { name, ...credentials } = data;
     await onSubmit({ name, credentials });
     form.reset();
@@ -100,10 +103,10 @@ function DiscordCredentialDisplay({
   return (
     <div className="space-y-3">
       {tools.map((tool) => {
-        const credentials =
+        const credentials: DiscordCredentials =
           typeof tool.credentials === "string"
-            ? JSON.parse(tool.credentials)
-            : (tool.credentials as Record<string, any>);
+            ? (JSON.parse(tool.credentials) as DiscordCredentials)
+            : (tool.credentials as DiscordCredentials);
         const isUrlVisible = showUrls[tool.id];
 
         return (
@@ -155,61 +158,104 @@ function DiscordCredentialDisplay({
   );
 }
 
+interface Template {
+  id: number;
+  name: string;
+  type: string;
+  content: string;
+  isSystemTemplate: boolean;
+}
+
 function DiscordTemplateManager({ toolType }: TemplateManagerProps) {
-  const [templates, setTemplates] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  const [templates, setTemplates] = React.useState<Template[]>([]);
   const [showAddForm, setShowAddForm] = React.useState(false);
-  const [editingTemplate, setEditingTemplate] = React.useState<any>(null);
+  const [editingTemplate, setEditingTemplate] = React.useState<Template | null>(
+    null,
+  );
 
-  // Fetch templates
-  const fetchTemplates = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(`/api/tools/templates?type=${toolType}`);
-      if (response.ok) {
-        const data = await response.json();
-        setTemplates(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch templates:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // TODO: Replace with tRPC query when templates endpoint is available
+  // For now, we'll use local state with default templates
   React.useEffect(() => {
-    fetchTemplates();
+    // Default Discord templates
+    const defaultTemplates: Template[] = [
+      {
+        id: -1,
+        name: "Simple Message",
+        type: toolType,
+        content: JSON.stringify(
+          {
+            content: "{{message}}",
+          },
+          null,
+          2,
+        ),
+        isSystemTemplate: true,
+      },
+      {
+        id: -2,
+        name: "Embed Message",
+        type: toolType,
+        content: JSON.stringify(
+          {
+            embeds: [
+              {
+                title: "{{title}}",
+                description: "{{description}}",
+                color: 5814783,
+                fields: [
+                  {
+                    name: "Status",
+                    value: "{{status}}",
+                    inline: true,
+                  },
+                ],
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          },
+          null,
+          2,
+        ),
+        isSystemTemplate: true,
+      },
+    ];
+    setTemplates(defaultTemplates);
   }, [toolType]);
 
-  const handleSaveTemplate = async (data: any) => {
-    try {
-      const url = editingTemplate
-        ? `/api/tools/templates/${editingTemplate.id}`
-        : "/api/tools/templates";
-      const method = editingTemplate ? "PUT" : "POST";
+  interface TemplateFormData {
+    name: string;
+    content: string;
+    isSystemTemplate?: boolean;
+  }
 
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: data.name,
-          type: toolType,
-          content: data.content,
-          isSystemTemplate: data.isSystemTemplate || false,
-        }),
-      });
+  const handleSaveTemplate = async (data: TemplateFormData) => {
+    // TODO: Replace with tRPC mutation when available
+    const newTemplate: Template = {
+      id:
+        templates.length > 0 ? Math.max(...templates.map((t) => t.id)) + 1 : 1,
+      name: data.name,
+      type: toolType,
+      content: data.content,
+      isSystemTemplate: data.isSystemTemplate ?? false,
+    };
 
-      if (response.ok) {
-        await fetchTemplates();
-        setShowAddForm(false);
-        setEditingTemplate(null);
-      }
-    } catch (error) {
-      console.error("Failed to save template:", error);
+    if (editingTemplate) {
+      setTemplates(
+        templates.map((t) =>
+          t.id === editingTemplate.id
+            ? { ...t, ...newTemplate, id: editingTemplate.id }
+            : t,
+        ),
+      );
+    } else {
+      setTemplates([...templates, newTemplate]);
     }
+
+    setShowAddForm(false);
+    setEditingTemplate(null);
   };
 
-  const handleEditTemplate = (template: any) => {
+  const handleEditTemplate = (template: Template) => {
     setEditingTemplate(template);
     setShowAddForm(true);
   };
@@ -222,22 +268,9 @@ function DiscordTemplateManager({ toolType }: TemplateManagerProps) {
   const handleDeleteTemplate = async (templateId: number) => {
     if (templateId < 0) return; // Can't delete built-in templates
 
-    try {
-      const response = await fetch(`/api/tools/templates/${templateId}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        await fetchTemplates();
-      }
-    } catch (error) {
-      console.error("Failed to delete template:", error);
-    }
+    // TODO: Replace with tRPC mutation when available
+    setTemplates(templates.filter((t) => t.id !== templateId));
   };
-
-  if (loading) {
-    return <div className="py-8 text-center">Loading templates...</div>;
-  }
 
   return (
     <div className="space-y-4">
@@ -274,13 +307,7 @@ function DiscordTemplateManager({ toolType }: TemplateManagerProps) {
                       <div className="flex items-center gap-2">
                         <h4 className="font-medium">{template.name}</h4>
                         {template.isSystemTemplate && (
-                          <Badge
-                            variant="secondary"
-                            className="flex items-center gap-1 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-                          >
-                            <Shield size={12} />
-                            System
-                          </Badge>
+                          <Badge variant="outline">System</Badge>
                         )}
                       </div>
                     </AccordionTrigger>
@@ -349,14 +376,14 @@ export const DiscordPlugin: ToolPlugin = {
   CredentialDisplay: DiscordCredentialDisplay,
   TemplateManager: DiscordTemplateManager,
 
-  async validate(credentials: any) {
+  async validate(credentials: Record<string, unknown>) {
     const result = discordSchema.safeParse(credentials);
     if (result.success) {
       return { isValid: true };
     } else {
       return {
         isValid: false,
-        error: result.error.issues[0]?.message || "Validation failed",
+        error: result.error.issues[0]?.message ?? "Validation failed",
       };
     }
   },

@@ -49,7 +49,10 @@ async function authenticateUser(
       return { userId: session.user.id };
     }
   } catch (error) {
-    console.log("Session auth failed:", error);
+    console.log(
+      "Session auth failed:",
+      error instanceof Error ? error.message : String(error),
+    );
   }
 
   // Only use fallback for browser requests (no Authorization header)
@@ -60,14 +63,17 @@ async function authenticateUser(
       if (allUsers.length > 0) {
         // Use the first admin user for development browser sessions
         const adminUser =
-          allUsers.find((u) => u.role === UserRole.ADMIN) || allUsers[0];
+          allUsers.find((u) => u.role === UserRole.ADMIN) ?? allUsers[0];
         if (!adminUser) {
           throw new Error("No admin user found for development session");
         }
         return { userId: adminUser.id };
       }
     } catch (error) {
-      console.error("Fallback user lookup failed:", error);
+      console.error(
+        "Fallback user lookup failed:",
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 
@@ -78,7 +84,7 @@ async function authenticateUser(
 // GET a specific script
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const auth = await authenticateUser(request);
@@ -128,7 +134,10 @@ export async function GET(
 
     return NextResponse.json(script);
   } catch (error) {
-    console.error("Error fetching script:", error);
+    console.error(
+      "Error fetching script:",
+      error instanceof Error ? error.message : String(error),
+    );
     return new NextResponse(
       JSON.stringify({ error: "Internal server error" }),
       {
@@ -192,7 +201,45 @@ export async function PATCH(
       );
     }
 
-    const body = await request.json();
+    interface UpdateEventBody {
+      runLocation?: string;
+      serverId?: number | null;
+      httpRequest?: string;
+      httpMethod?: string;
+      httpUrl?: string;
+      httpHeaders?: string;
+      httpBody?: string;
+      scheduleUnit?: string;
+      status?: string;
+      resetCounterOnActive?: boolean;
+      envVars?: Array<{ key: string; value: string }>;
+      conditionalActions?: Array<{
+        type: string;
+        action: string;
+        details: {
+          emailAddresses?: string;
+          targetEventId?: number;
+          toolId?: number;
+          message?: string;
+          emailSubject?: string;
+        };
+      }>;
+      onSuccessActions?: Array<{
+        type: string;
+        value?: string;
+        targetScriptId?: string | number;
+      }>;
+      onFailActions?: Array<{
+        type: string;
+        value?: string;
+        targetScriptId?: string | number;
+      }>;
+      selectedServerIds?: number[];
+      startTime?: string | Date;
+      [key: string]: unknown;
+    }
+
+    const body = (await request.json()) as UpdateEventBody;
 
     // Handle date/time values
     if (body.startTime && typeof body.startTime === "string") {
@@ -208,15 +255,22 @@ export async function PATCH(
     // Handle HTTP request data if provided
     if (body.httpRequest && typeof body.httpRequest === "string") {
       try {
-        const httpRequestData = JSON.parse(body.httpRequest);
+        const httpRequestData = JSON.parse(body.httpRequest) as {
+          method?: string;
+          url?: string;
+          headers?: Record<string, string>;
+          body?: string;
+        };
         body.httpMethod = httpRequestData.method;
         body.httpUrl = httpRequestData.url;
-        body.httpHeaders = JSON.stringify(httpRequestData.headers);
+        body.httpHeaders = httpRequestData.headers
+          ? JSON.stringify(httpRequestData.headers)
+          : undefined;
         body.httpBody = httpRequestData.body;
       } catch (parseError) {
         console.error(
           `Error parsing HTTP request data for event ${eventId}:`,
-          parseError,
+          parseError instanceof Error ? parseError.message : String(parseError),
         );
       }
     }
@@ -260,7 +314,7 @@ export async function PATCH(
     }
 
     // Update the script
-    const updatedScript = await storage.updateScript(eventId, body);
+    await storage.updateScript(eventId, body);
 
     // If env vars are provided, handle them
     if (Array.isArray(body.envVars)) {
@@ -284,26 +338,40 @@ export async function PATCH(
 
       // Add new conditional actions
       for (const condAction of body.conditionalActions) {
-        const eventData: any = {
+        interface ConditionalActionData {
+          type: string;
+          value: string;
+          targetEventId: number | null;
+          toolId: number | null;
+          message: string | null;
+          emailAddresses: string | null;
+          emailSubject: string | null;
+          successEventId?: number;
+          failEventId?: number;
+          alwaysEventId?: number;
+          conditionEventId?: number;
+        }
+
+        const eventData: ConditionalActionData = {
           type: condAction.action,
-          value: condAction.details.emailAddresses || "",
-          targetEventId: condAction.details.targetEventId || null,
-          toolId: condAction.details.toolId || null,
-          message: condAction.details.message || null,
-          emailAddresses: condAction.details.emailAddresses || null,
-          emailSubject: condAction.details.emailSubject || null,
+          value: condAction.details.emailAddresses ?? "",
+          targetEventId: condAction.details.targetEventId ?? null,
+          toolId: condAction.details.toolId ?? null,
+          message: condAction.details.message ?? null,
+          emailAddresses: condAction.details.emailAddresses ?? null,
+          emailSubject: condAction.details.emailSubject ?? null,
         };
 
-        if (condAction.type === ConnectionType.ON_SUCCESS) {
+        if (condAction.type === String(ConnectionType.ON_SUCCESS)) {
           eventData.successEventId = eventId;
           await storage.createAction(eventData);
-        } else if (condAction.type === ConnectionType.ON_FAILURE) {
+        } else if (condAction.type === String(ConnectionType.ON_FAILURE)) {
           eventData.failEventId = eventId;
           await storage.createAction(eventData);
-        } else if (condAction.type === ConnectionType.ALWAYS) {
+        } else if (condAction.type === String(ConnectionType.ALWAYS)) {
           eventData.alwaysEventId = eventId;
           await storage.createAction(eventData);
-        } else if (condAction.type === ConnectionType.ON_CONDITION) {
+        } else if (condAction.type === String(ConnectionType.ON_CONDITION)) {
           eventData.conditionEventId = eventId;
           await storage.createAction(eventData);
         }
@@ -363,7 +431,7 @@ export async function PATCH(
 
     // Handle multiple server selection for remote events
     if (body.selectedServerIds !== undefined) {
-      await storage.setEventServers(eventId, body.selectedServerIds || []);
+      await storage.setEventServers(eventId, body.selectedServerIds ?? []);
     }
 
     // Get the full updated script with all relations
@@ -371,7 +439,10 @@ export async function PATCH(
 
     return NextResponse.json(fullScript);
   } catch (error) {
-    console.error("Error updating script:", error);
+    console.error(
+      "Error updating script:",
+      error instanceof Error ? error.message : String(error),
+    );
     return new NextResponse(
       JSON.stringify({ error: "Internal server error" }),
       {
@@ -445,17 +516,21 @@ export async function DELETE(
     await storage.deleteScript(eventId);
 
     return new NextResponse(null, { status: 204 });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error deleting script:", error);
     console.error("Error details:", {
-      message: error.message,
-      stack: error.stack,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
     });
     return new NextResponse(
       JSON.stringify({
         error: "Internal server error",
         details:
-          process.env.NODE_ENV === "development" ? error.message : undefined,
+          process.env.NODE_ENV === "development"
+            ? error instanceof Error
+              ? error.message
+              : String(error)
+            : undefined,
       }),
       {
         status: 500,

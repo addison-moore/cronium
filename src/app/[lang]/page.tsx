@@ -7,18 +7,47 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
+// Define a type for the translation messages
+interface TranslationMessages {
+  [key: string]:
+    | string
+    | TranslationMessages
+    | Array<string | TranslationMessages>;
+}
+
 export default async function Home({ params }: { params: { lang: string } }) {
   const { lang } = await Promise.resolve(params);
 
   // Get translations function for server component
-  const t = (await import(`@/messages/${lang}.json`)).default;
+  type MessageModule = { default: TranslationMessages };
+  const t = (await import(`@/messages/${lang}.json`)) as MessageModule;
+  const translations = t.default;
 
   // Helper function to safely access nested translations
-  const translate = (key: string) => {
+  const translate = (key: string): string => {
     try {
       // Split key by dots and traverse the object
-      return key.split(".").reduce((obj, part) => obj?.[part], t) || key;
-    } catch (e) {
+      const result = key
+        .split(".")
+        .reduce<
+          | TranslationMessages
+          | string
+          | Array<string | TranslationMessages>
+          | undefined
+        >((obj, part) => {
+          if (
+            obj &&
+            typeof obj === "object" &&
+            !Array.isArray(obj) &&
+            part in obj
+          ) {
+            return obj[part];
+          }
+          return undefined;
+        }, translations);
+
+      return typeof result === "string" ? result : key;
+    } catch {
       return key;
     }
   };

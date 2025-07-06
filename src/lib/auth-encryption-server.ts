@@ -57,7 +57,7 @@ export class AuthEncryptionServer {
 
       return decrypted.toString("utf8");
     } catch (error) {
-      throw new Error(`Failed to decrypt password: ${error}`);
+      throw new Error(`Failed to decrypt password: ${String(error)}`);
     }
   }
 

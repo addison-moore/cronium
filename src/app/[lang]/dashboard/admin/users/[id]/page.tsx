@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -43,21 +43,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-
-interface UserDetails {
-  id: string;
-  email: string;
-  username: string | null;
-  firstName: string | null;
-  lastName: string | null;
-  role: UserRole;
-  status: UserStatus;
-  createdAt: string;
-  updatedAt: string;
-  lastLogin: string | null;
-  inviteToken?: string | null;
-  inviteExpiry?: string | null;
-}
+import { trpc } from "@/lib/trpc";
 
 export default function UserDetailsPage() {
   const router = useRouter();
@@ -65,166 +51,131 @@ export default function UserDetailsPage() {
   const { toast } = useToast();
   const tCommon = useTranslations("Common");
 
-  const [user, setUser] = useState<UserDetails | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const userId = typeof params.id === "string" ? params.id : "";
 
-  useEffect(() => {
-    if (params.id) {
-      fetchUser(params.id as string);
-    }
-  }, [params.id]);
+  // Fetch user details using tRPC
+  const {
+    data: user,
+    isLoading,
+    refetch: refetchUser,
+    error: userError,
+  } = trpc.admin.getUser.useQuery(
+    { id: userId },
+    {
+      enabled: !!userId,
+    },
+  );
 
-  async function fetchUser(userId: string) {
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/admin/users/${userId}`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch user");
-      }
-      const userData = await response.json();
-      setUser(userData);
-    } catch (error) {
-      console.error("Error fetching user:", error);
+  // Handle query error
+  React.useEffect(() => {
+    if (userError) {
+      console.error("Error fetching user:", userError);
       toast({
         title: tCommon("Error"),
         description: "Failed to load user details. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
-  }
+  }, [userError, tCommon, toast]);
 
-  async function updateUserRole(newRole: UserRole) {
-    if (!user) return;
-
-    setIsUpdating(true);
-    try {
-      const response = await fetch(`/api/admin/users/${user.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ role: newRole }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update user role");
-      }
-
-      setUser({ ...user, role: newRole });
+  // tRPC mutations
+  const updateUserMutation = trpc.admin.updateUser.useMutation({
+    onSuccess: () => {
       toast({
         title: "Success",
-        description: "User role updated successfully",
+        description: "User updated successfully",
       });
-    } catch (error: any) {
+      void refetchUser();
+    },
+    onError: (error) => {
       toast({
         title: "Error",
-        description: error.message ?? "Failed to update user role",
+        description: error.message ?? "Failed to update user",
         variant: "destructive",
       });
-    } finally {
-      setIsUpdating(false);
-    }
-  }
+    },
+  });
 
-  async function updateUserStatus(newStatus: UserStatus) {
-    if (!user) return;
-
-    setIsUpdating(true);
-    try {
-      const response = await fetch(`/api/admin/users/${user.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status: newStatus }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update user status");
-      }
-
-      setUser({ ...user, status: newStatus });
+  const toggleUserStatusMutation = trpc.admin.toggleUserStatus.useMutation({
+    onSuccess: () => {
       toast({
         title: "Success",
         description: "User status updated successfully",
       });
-    } catch (error: any) {
+      void refetchUser();
+    },
+    onError: (error) => {
       toast({
         title: "Error",
         description: error.message ?? "Failed to update user status",
         variant: "destructive",
       });
-    } finally {
-      setIsUpdating(false);
-    }
-  }
+    },
+  });
 
-  async function resendInvitation() {
-    if (!user) return;
-
-    setIsUpdating(true);
-    try {
-      const response = await fetch(
-        `/api/admin/users/${user.id}/resend-invitation`,
-        {
-          method: "POST",
-        },
-      );
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.message ?? "Failed to resend invitation");
-      }
-
+  const resendInvitationMutation = trpc.admin.resendInvitation.useMutation({
+    onSuccess: () => {
       toast({
         title: "Success",
         description: "Invitation email sent successfully",
       });
-    } catch (error: any) {
+    },
+    onError: (error) => {
       toast({
         title: "Error",
         description: error.message ?? "Failed to resend invitation",
         variant: "destructive",
       });
-    } finally {
-      setIsUpdating(false);
-    }
-  }
+    },
+  });
 
-  async function deleteUser() {
-    if (!user) return;
-
-    setIsUpdating(true);
-    try {
-      const response = await fetch(`/api/admin/users/${user.id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to delete user");
-      }
-
+  const deleteUserMutation = trpc.admin.bulkUserOperation.useMutation({
+    onSuccess: () => {
       toast({
         title: "Success",
         description: "User deleted successfully",
       });
-
       router.push("/en/dashboard/admin?tab=users");
-    } catch (error: any) {
+    },
+    onError: (error) => {
       toast({
         title: "Error",
         description: error.message ?? "Failed to delete user",
         variant: "destructive",
       });
-    } finally {
-      setIsUpdating(false);
-      setIsDeleteDialogOpen(false);
-    }
+    },
+  });
+
+  function updateUserRole(newRole: UserRole): void {
+    if (!user) return;
+    updateUserMutation.mutate({ id: user.id, role: newRole });
   }
+
+  function updateUserStatus(newStatus: UserStatus): void {
+    if (!user) return;
+    toggleUserStatusMutation.mutate({ id: user.id, status: newStatus });
+  }
+
+  function resendInvitation(): void {
+    if (!user) return;
+    resendInvitationMutation.mutate({ id: user.id });
+  }
+
+  function deleteUser(): void {
+    if (!user) return;
+    deleteUserMutation.mutate({
+      userIds: [user.id],
+      operation: "delete",
+    });
+    setIsDeleteDialogOpen(false);
+  }
+
+  const isUpdating =
+    updateUserMutation.isPending ||
+    toggleUserStatusMutation.isPending ||
+    resendInvitationMutation.isPending ||
+    deleteUserMutation.isPending;
 
   if (isLoading) {
     return (
@@ -264,7 +215,9 @@ export default function UserDetailsPage() {
             <div className="flex items-center gap-3">
               <User className="h-6 w-6 text-gray-500" />
               <div>
-                <CardTitle className="text-xl">{user.email}</CardTitle>
+                <CardTitle className="text-xl">
+                  {user.email ?? "No email"}
+                </CardTitle>
                 <CardDescription>
                   {user.firstName || user.lastName
                     ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim()
@@ -289,7 +242,7 @@ export default function UserDetailsPage() {
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <Mail className="h-4 w-4" />
-                <span>Email: {user.email}</span>
+                <span>Email: {user.email ?? "No email"}</span>
               </div>
               {user.username && (
                 <div className="flex items-center gap-2 text-sm text-gray-600">

@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
-import { useAuth } from "./useAuth";
 import { UserRole } from "@/shared/schema";
+import { api } from "@/trpc/react";
+import { useAuth } from "./useAuth";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 
 interface Permissions {
   console: boolean;
@@ -14,64 +15,69 @@ interface Role {
   description: string;
   permissions: Permissions;
   isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export function usePermissions() {
   const { user } = useAuth();
-  const [permissions, setPermissions] = useState<Permissions>({
+
+  // Fetch roles using tRPC
+  const { data: roles, isLoading: loading } = api.admin.getRoles.useQuery(
+    undefined,
+    {
+      enabled: !!user && user.role !== UserRole.ADMIN,
+      ...QUERY_OPTIONS.stable,
+    },
+  );
+
+  // Determine permissions based on user role
+  let permissions: Permissions = {
     console: false,
     monitoring: false,
     localServerAccess: false,
-  });
-  const [userRole, setUserRole] = useState<Role | null>(null);
-  const [loading, setLoading] = useState(true);
+  };
+  let userRole: Role | null = null;
 
-  useEffect(() => {
-    async function fetchUserPermissions() {
-      try {
-        if (!user) {
-          setLoading(false);
-          return;
+  if (user) {
+    // Admin users have all permissions
+    if (user.role === UserRole.ADMIN) {
+      permissions = {
+        console: true,
+        monitoring: true,
+        localServerAccess: true,
+      };
+      // Create a synthetic admin role object
+      userRole = {
+        id: 1,
+        name: "Admin",
+        description: "Full system access",
+        permissions,
+        isDefault: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    } else if (roles) {
+      // Find the role that matches the user's role
+      const matchingRole = roles.find(
+        (role) => role.name.toLowerCase() === user.role.toLowerCase(),
+      );
+
+      if (matchingRole) {
+        userRole = matchingRole;
+        permissions = matchingRole.permissions;
+      } else {
+        // Fallback to default user role if no match found
+        const defaultRole = roles.find(
+          (role) => role.isDefault && role.name === "User",
+        );
+        if (defaultRole) {
+          userRole = defaultRole;
+          permissions = defaultRole.permissions;
         }
-
-        // Admin users have all permissions
-        if (user.role === UserRole.ADMIN) {
-          setPermissions({
-            console: true,
-            monitoring: true,
-            localServerAccess: true,
-          });
-          setLoading(false);
-          return;
-        }
-
-        // Fetch user's role and permissions
-        const response = await fetch("/api/admin/roles");
-        if (response.ok) {
-          const roles: Role[] = await response.json();
-
-          // For now, assign the default "users" role to all non-admin users
-          const defaultRole = roles.find((role) => role.isDefault);
-          if (defaultRole) {
-            setUserRole(defaultRole);
-            setPermissions(defaultRole.permissions);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching permissions:", error);
-        // Default to no permissions on error
-        setPermissions({
-          console: false,
-          monitoring: false,
-          localServerAccess: false,
-        });
-      } finally {
-        setLoading(false);
       }
     }
-
-    fetchUserPermissions();
-  }, [user]);
+  }
 
   const hasPermission = (feature: keyof Permissions): boolean => {
     // Admin users always have access to everything
@@ -86,6 +92,6 @@ export function usePermissions() {
     permissions,
     userRole,
     hasPermission,
-    loading,
+    loading: !user ? false : user.role === UserRole.ADMIN ? false : loading,
   };
 }

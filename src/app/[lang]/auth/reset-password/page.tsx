@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -21,6 +18,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { trpc } from "@/lib/trpc";
 
 const resetPasswordSchema = z
   .object({
@@ -52,10 +50,28 @@ export default function ResetPassword() {
     },
   });
 
-  const {
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = form;
+  // Verify token validity
+  const { data: tokenValid } = trpc.userAuth.verifyToken.useQuery(
+    { token },
+    {
+      enabled: !!token,
+      retry: false,
+    },
+  );
+
+  const resetPasswordMutation = trpc.userAuth.resetPassword.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        setIsSuccess(true);
+      }
+    },
+    onError: (error) => {
+      form.setError("root.general", {
+        type: "manual",
+        message: error.message ?? "An error occurred. Please try again.",
+      });
+    },
+  });
 
   useEffect(() => {
     const tokenParam = searchParams?.get("token");
@@ -66,35 +82,11 @@ export default function ResetPassword() {
     }
   }, [searchParams, router, locale]);
 
-  const onSubmit = async (data: FormData) => {
-    try {
-      const response = await fetch("/api/auth/reset-password", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          token,
-          password: data.password,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        setIsSuccess(true);
-      } else {
-        form.setError("root.general", {
-          type: "manual",
-          message: result.message ?? "An error occurred. Please try again.",
-        });
-      }
-    } catch {
-      form.setError("root.general", {
-        type: "manual",
-        message: "An error occurred. Please try again.",
-      });
-    }
+  const onSubmit = (data: FormData) => {
+    resetPasswordMutation.mutate({
+      token,
+      password: data.password,
+    });
   };
 
   if (isSuccess) {
@@ -129,7 +121,7 @@ export default function ResetPassword() {
     );
   }
 
-  if (!token) {
+  if (!token || (tokenValid && !tokenValid.valid)) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
         <div className="w-full max-w-md space-y-8 text-center">
@@ -143,7 +135,8 @@ export default function ResetPassword() {
               Invalid Reset Link
             </h2>
             <p className="mt-4 text-gray-600">
-              This password reset link is invalid or has expired.
+              {tokenValid?.message ??
+                "This password reset link is invalid or has expired."}
             </p>
           </div>
 
@@ -180,13 +173,13 @@ export default function ResetPassword() {
           </p>
         </div>
 
-        {errors.root?.general && (
+        {form.formState.errors.root?.general && (
           <div className="rounded-md bg-red-50 p-4">
             <div className="flex">
               <div className="ml-3">
                 <h3 className="text-sm font-medium text-red-800">Error</h3>
                 <div className="mt-2 text-sm text-red-700">
-                  <p>{errors.root.general.message}</p>
+                  <p>{form.formState.errors.root.general.message}</p>
                 </div>
               </div>
             </div>
@@ -194,7 +187,10 @@ export default function ResetPassword() {
         )}
 
         <Form {...form}>
-          <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-6">
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="mt-8 space-y-6"
+          >
             <div className="space-y-4">
               <FormField
                 control={form.control}
@@ -270,8 +266,14 @@ export default function ResetPassword() {
             </div>
 
             <div>
-              <Button type="submit" disabled={isSubmitting} className="w-full">
-                {isSubmitting ? "Resetting..." : "Reset Password"}
+              <Button
+                type="submit"
+                disabled={resetPasswordMutation.isPending}
+                className="w-full"
+              >
+                {resetPasswordMutation.isPending
+                  ? "Resetting..."
+                  : "Reset Password"}
               </Button>
             </div>
 

@@ -69,8 +69,8 @@ class EncryptionService {
       ]);
 
       return combined.toString("base64");
-    } catch (error: any) {
-      throw new Error(`Encryption failed: ${error.message}`);
+    } catch (error: unknown) {
+      throw new Error(`Encryption failed: ${String(error)}`);
     }
   }
 
@@ -117,8 +117,8 @@ class EncryptionService {
       const decrypted = decryptedBuffer.toString("utf8");
 
       return decrypted;
-    } catch (error: any) {
-      throw new Error(`Decryption failed: ${error.message}`);
+    } catch (error: unknown) {
+      throw new Error(`Decryption failed: ${String(error)}`);
     }
   }
 
@@ -171,7 +171,7 @@ export function shouldEncrypt(table: string, field: string): boolean {
 /**
  * Encrypt sensitive fields in data object
  */
-export function encryptSensitiveData<T extends Record<string, any>>(
+export function encryptSensitiveData<T extends Record<string, unknown>>(
   data: T,
   tableName: string,
 ): T {
@@ -183,7 +183,10 @@ export function encryptSensitiveData<T extends Record<string, any>>(
       typeof data[key] === "string" &&
       data[key]
     ) {
-      (result as any)[key] = encryptionService.encrypt(data[key]);
+      // Use proper type assertion for the result object
+      (result as Record<string, unknown>)[key] = encryptionService.encrypt(
+        data[key],
+      );
     }
   });
 
@@ -193,19 +196,17 @@ export function encryptSensitiveData<T extends Record<string, any>>(
 /**
  * Decrypt sensitive fields in data object
  */
-export function decryptSensitiveData<T extends Record<string, any>>(
+export function decryptSensitiveData<T extends Record<string, unknown>>(
   data: T,
   tableName: string,
 ): T {
   const result = { ...data };
 
   Object.keys(data).forEach((key) => {
-    if (
-      shouldEncrypt(tableName, key) &&
-      typeof data[key] === "string" &&
-      data[key]
-    ) {
-      (result as any)[key] = encryptionService.decrypt(data[key]);
+    const value = data[key as keyof T];
+    if (shouldEncrypt(tableName, key) && typeof value === "string" && value) {
+      (result as Record<string, unknown>)[key] =
+        encryptionService.decrypt(value);
     }
   });
 
@@ -343,7 +344,7 @@ export function shouldEncryptField(table: string, field: string): boolean {
 /**
  * Encrypt multiple fields in an object (alternative function name)
  */
-export function encryptFields<T extends Record<string, any>>(
+export function encryptFields<T extends Record<string, unknown>>(
   data: T,
   table: string,
 ): T {
@@ -353,7 +354,7 @@ export function encryptFields<T extends Record<string, any>>(
 /**
  * Decrypt multiple fields in an object (alternative function name)
  */
-export function decryptFields<T extends Record<string, any>>(
+export function decryptFields<T extends Record<string, unknown>>(
   data: T,
   table: string,
 ): T {

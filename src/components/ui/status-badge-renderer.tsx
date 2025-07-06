@@ -19,8 +19,16 @@ import {
   RefreshCw,
 } from "lucide-react";
 
+// Union type for all possible status values
+type StatusValue =
+  | EventStatus
+  | LogStatus
+  | WorkflowTriggerType
+  | ConditionalActionType
+  | string;
+
 interface StatusBadgeRendererProps {
-  status: string;
+  status: StatusValue;
   type?: "script" | "log" | "workflow" | "event";
   size?: "sm" | "md" | "lg";
   showIcon?: boolean;
@@ -65,6 +73,7 @@ export function StatusBadgeRenderer({
         break;
       default:
         statusType = "info";
+        displayLabel = typeof status === "string" ? status : "Unknown";
     }
   }
 
@@ -103,6 +112,7 @@ export function StatusBadgeRenderer({
         break;
       default:
         statusType = "pending";
+        displayLabel = typeof status === "string" ? status : "Unknown";
     }
   }
 
@@ -126,6 +136,7 @@ export function StatusBadgeRenderer({
         break;
       default:
         statusType = "info";
+        displayLabel = typeof status === "string" ? status : "Unknown";
     }
   }
 
@@ -134,13 +145,8 @@ export function StatusBadgeRenderer({
     switch (status) {
       case ConditionalActionType.SEND_MESSAGE:
         statusType = "info";
-        displayLabel = "Email";
+        displayLabel = "Message";
         icon = showIcon ? <Mail className="h-3 w-3" /> : null;
-        break;
-      case ConditionalActionType.SEND_MESSAGE:
-        statusType = "success";
-        displayLabel = "Webhook";
-        icon = showIcon ? <Globe className="h-3 w-3" /> : null;
         break;
       case ConditionalActionType.SCRIPT:
         statusType = "warning";
@@ -149,6 +155,7 @@ export function StatusBadgeRenderer({
         break;
       default:
         statusType = "info";
+        displayLabel = typeof status === "string" ? status : "Unknown";
     }
   }
 

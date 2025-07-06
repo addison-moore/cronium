@@ -6,7 +6,8 @@
  */
 
 import { EventType } from "@/shared/schema";
-import { SSHConnectionManager } from "./shared";
+import { SSHConnectionManager, type SSHConnection } from "./shared";
+import type { NodeSSH } from "node-ssh";
 
 export class ScriptExecutorSSHService {
   private connectionManager: SSHConnectionManager;
@@ -29,16 +30,16 @@ export class ScriptExecutorSSHService {
       port: number;
     },
     timeoutMs = 30000,
-    input?: any,
+    input?: unknown,
     eventData?: { id: number; name: string; userId: string },
     userVariables?: Record<string, string>,
   ): Promise<{
     stdout: string;
     stderr: string;
-    scriptOutput?: any;
+    scriptOutput?: unknown;
     condition?: boolean;
   }> {
-    let activeSSH: any = null;
+    let activeSSH: NodeSSH | null = null;
     let workingDir = "";
 
     try {
@@ -57,7 +58,7 @@ export class ScriptExecutorSSHService {
       const tempDirResult = await activeSSH.execCommand("mktemp -d");
       if (tempDirResult.stderr || !tempDirResult.stdout) {
         throw new Error(
-          `Failed to create temporary directory: ${tempDirResult.stderr}`,
+          `Failed to create temporary directory: ${tempDirResult.stderr ?? "No output"}`,
         );
       }
       workingDir = tempDirResult.stdout.trim();
@@ -155,7 +156,7 @@ class Cronium {
       if (fs.existsSync('variables.json')) {
         const variablesContent = fs.readFileSync('variables.json', 'utf8');
         const variables = JSON.parse(variablesContent);
-        return variables[key] || '';
+        return variables[key] ?? '';
       }
       return '';
     } catch (e) {
@@ -411,13 +412,13 @@ cronium_setVariable() {
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Try to read output.json if it exists
-      let scriptOutput = null;
+      let scriptOutput: unknown = null;
       try {
         const outputResult = await activeSSH.execCommand(
           `cat ${workingDir}/output.json`,
         );
         if (outputResult.stdout && !outputResult.stderr) {
-          scriptOutput = JSON.parse(outputResult.stdout);
+          scriptOutput = JSON.parse(outputResult.stdout) as unknown;
           console.log(`SSH: Found output.json with data:`, scriptOutput);
         }
       } catch (error) {
@@ -431,13 +432,15 @@ cronium_setVariable() {
           `cat ${workingDir}/condition.json`,
         );
         if (conditionResult.stdout && !conditionResult.stderr) {
-          const conditionData = JSON.parse(conditionResult.stdout);
+          const conditionData = JSON.parse(conditionResult.stdout) as {
+            condition?: boolean;
+          };
           condition = Boolean(conditionData.condition);
           console.log(
             `Found condition file from SSH execution, condition: ${condition}`,
           );
         }
-      } catch (error) {
+      } catch {
         // No condition.json or parsing error, continue without it
       }
 
@@ -448,7 +451,9 @@ cronium_setVariable() {
             `cat ${workingDir}/variables.json`,
           );
           if (variablesResult.stdout && !variablesResult.stderr) {
-            const updatedVariables = JSON.parse(variablesResult.stdout);
+            const updatedVariables = JSON.parse(
+              variablesResult.stdout,
+            ) as Record<string, unknown>;
 
             // Remove metadata fields that aren't user variables
             delete updatedVariables.__updated__;
@@ -471,7 +476,7 @@ cronium_setVariable() {
                 eventData.userId,
               );
               const currentDbVarMap = currentDbVariables.reduce(
-                (acc: Record<string, string>, variable: any) => {
+                (acc: Record<string, string>, variable) => {
                   acc[variable.key] = variable.value;
                   return acc;
                 },
@@ -514,7 +519,7 @@ cronium_setVariable() {
       const returnValue: {
         stdout: string;
         stderr: string;
-        scriptOutput?: any;
+        scriptOutput?: unknown;
         condition?: boolean;
       } = {
         stdout: result.stdout ?? "",

@@ -1,4 +1,9 @@
-import { type EventStatus, type EventType } from "@/shared/schema";
+import {
+  type EventStatus,
+  type EventType,
+  type ConditionalAction,
+  type ConditionalActionType,
+} from "@/shared/schema";
 
 export interface Log {
   id: number;
@@ -41,7 +46,7 @@ export interface Event {
   environmentVariables: { key: string; value: string }[];
   events: {
     type: string;
-    details: any;
+    details: Record<string, unknown>;
   }[];
   httpRequest?: {
     method: string;
@@ -49,22 +54,22 @@ export interface Event {
     headers: { key: string; value: string }[];
     body: string | null;
   } | null;
-  successEvents: any[];
-  failEvents: any[];
-  alwaysEvents: any[];
-  conditionEvents: any[];
+  successEvents: ConditionalAction[];
+  failEvents: ConditionalAction[];
+  alwaysEvents: ConditionalAction[];
+  conditionEvents: ConditionalAction[];
   servers?: {
     id: number;
     name: string;
     address: string;
     port: number;
   }[];
-  description?: string;
+  description?: string | null;
   active?: boolean;
   schedule?: string;
   conditionalActions?: Array<{
     type: string;
-    action: string;
+    action: ConditionalActionType;
     description?: string;
   }>;
 }

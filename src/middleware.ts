@@ -77,7 +77,8 @@ export async function middleware(request: NextRequest) {
 
   // Extract path components
   const pathParts = pathname.split("/");
-  const currentLocale = pathParts[1];
+  // Ensure currentLocale is always a string
+  const currentLocale = pathParts[1] ?? "en";
 
   // Get pathname without locale prefix for route checks
   const pathnameWithoutLocale = "/" + pathParts.slice(2).join("/");
