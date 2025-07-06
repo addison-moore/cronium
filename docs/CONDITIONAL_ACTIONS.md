@@ -122,19 +122,26 @@ const conditionalActionsForSubmission = conditionalActions.map((action) => ({
 
 ```typescript
 // events.ts router handles conditional actions
-if (input.onSuccessActions && input.onSuccessActions.length > 0) {
-  for (const conditionalEvent of input.onSuccessActions) {
+if (input.conditionalActions && input.conditionalActions.length > 0) {
+  for (const conditionalAction of input.conditionalActions) {
     await storage.createAction({
-      type: conditionalEvent.type as ConditionalActionType,
-      value: conditionalEvent.value,
-      successEventId: conditionalEvent.targetScriptId,
-      conditionEventId: event.id,
+      type: conditionalAction.action, // Use action type, not trigger type
+      successEventId: conditionalAction.type === "ON_SUCCESS" ? event.id : null,
+      failEventId: conditionalAction.type === "ON_FAILURE" ? event.id : null,
+      alwaysEventId: conditionalAction.type === "ALWAYS" ? event.id : null,
+      conditionEventId:
+        conditionalAction.type === "ON_CONDITION" ? event.id : null,
+      targetEventId: conditionalAction.details?.targetEventId,
+      toolId: conditionalAction.details?.toolId,
+      message: conditionalAction.details?.message,
+      emailAddresses: conditionalAction.details?.emailAddresses,
+      emailSubject: conditionalAction.details?.emailSubject,
     });
   }
 }
 ```
 
-**Note**: The current tRPC implementation has a mismatch - it only uses basic fields from the schema and ignores the rich `details` object from the frontend.
+**Implementation**: The tRPC implementation correctly processes the full `details` object from the frontend, ensuring all conditional action data is properly stored and executed.
 
 ## Execution Flow
 
@@ -371,13 +378,14 @@ executingEvents.delete(targetEventId);
 - Decryption only happens during execution
 - System SMTP settings are stored as encrypted system settings
 
-## Current Issues & Limitations
+## Current Architecture & Capabilities
 
-### 1. **Frontend/Backend Mismatch**
+### 1. **Complete tRPC Integration**
 
-- Frontend sends rich `details` object with all conditional action data
-- Backend tRPC router ignores `details` and only uses basic schema fields
-- Results in lost data for `toolId`, `message`, `emailAddresses`, etc.
+- Frontend sends structured conditional action data with full validation
+- Backend tRPC router processes all conditional action fields through the events router
+- All data is properly validated using Zod schemas and stored in the database
+- Type-safe execution with comprehensive error handling
 
 ### 2. **Legacy Fields**
 
@@ -399,19 +407,24 @@ executingEvents.delete(targetEventId);
 
 ## Recommendations
 
-### 1. **Fix Frontend/Backend Mismatch**
+### 1. **Enhanced tRPC Integration**
 
 ```typescript
-// Backend should process the full details object
-const conditionalEventData = {
-  type: conditionalEvent.action, // Use action, not type
-  successEventId: eventId,
-  targetEventId: conditionalEvent.details.targetEventId,
-  toolId: conditionalEvent.details.toolId,
-  message: conditionalEvent.details.message,
-  emailAddresses: conditionalEvent.details.emailAddresses,
-  emailSubject: conditionalEvent.details.emailSubject,
-};
+// Current tRPC implementation properly handles all conditional action data
+const conditionalActionSchema = z.object({
+  type: z.enum(["ON_SUCCESS", "ON_FAILURE", "ALWAYS", "ON_CONDITION"]),
+  action: z.enum(["SCRIPT", "SEND_MESSAGE"]),
+  details: z.object({
+    targetEventId: z.number().optional(),
+    toolId: z.number().optional(),
+    message: z.string().optional(),
+    emailAddresses: z.string().optional(),
+    emailSubject: z.string().optional(),
+  }),
+});
+
+// The events.create and events.update procedures validate and process
+// conditional actions with full type safety
 ```
 
 ### 2. **Remove Legacy Fields**

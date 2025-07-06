@@ -2,6 +2,7 @@
 
 ## [Changes]
 
+- [2025-07-06] [Documentation] Updated documentation to reflect completed tRPC migration - corrected CONDITIONAL_ACTIONS.md tRPC implementation examples, updated TYPE_SAFETY_GUIDELINES.md with current tRPC patterns instead of REST API examples, marked tRPC migration as 100% complete in CONTEXT.md, and aligned tool-action-events Phase 1 plan with existing tRPC infrastructure
 - [2025-07-06] [Bugfix] Fixed ESLint warnings in workflow pages - replaced && with optional chaining in data?.description?.trim() and data?.tags?.length checks, changed unsafe any type assertion to never type assertion for form prop in both edit and new workflow pages
 - [2025-07-06] [Bugfix] Fixed TypeScript errors in workflows/new/page.tsx and WorkflowCanvas.tsx - applied same exactOptionalPropertyTypes solution as edit page by creating WorkflowFormData interface with proper type conversions, fixed WorkflowCanvas edge data type issue by ensuring ConnectionType is properly specified in edge data normalization
 - [2025-07-06] [Bugfix] Fixed TypeScript errors in workflows/[id]/edit/page.tsx - resolved Zod schema type compatibility issues with exactOptionalPropertyTypes by creating separate WorkflowFormData interface, added proper type conversion functions between form data and WorkflowFormValues, fixed form resolver type issues

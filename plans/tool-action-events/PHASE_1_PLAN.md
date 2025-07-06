@@ -339,19 +339,19 @@ const formData = {
 
 #### Task 3.1: tRPC Router Extensions (2 days)
 
-**Goal**: Extend tRPC routers to support tool actions
+**Goal**: Extend existing tRPC routers to support tool actions
 
 **Files to Modify**:
 
-- `src/server/api/routers/events.ts`
-- `src/server/api/routers/tools.ts`
+- `src/server/api/routers/events.ts` (existing router with 9 operations)
+- `src/server/api/routers/tools.ts` (existing router with 11 operations)
 
 **Implementation**:
 
 1. **Events Router Extensions**:
 
 ```typescript
-// Add to event validation schemas
+// Add to existing event validation schemas in events.ts
 const toolActionConfigSchema = z.object({
   toolType: z.string(),
   actionId: z.string(),
@@ -360,25 +360,28 @@ const toolActionConfigSchema = z.object({
   outputMapping: z.record(z.string()).optional(),
 });
 
-// Update create/update event procedures
+// Update existing create/update event procedures
 const createEventSchema = z.object({
-  // ... existing fields
+  // ... existing fields already implemented
   toolActionConfig: z.string().optional(),
 });
 ```
 
-2. **New Tool Actions Router**:
+2. **Extend Tools Router**:
 
 ```typescript
-// Create new router: src/server/api/routers/toolActions.ts
-export const toolActionsRouter = createTRPCRouter({
-  getAvailableActions: publicProcedure
+// Add to existing tools.ts router (11 operations already implemented)
+export const toolsRouter = createTRPCRouter({
+  // ... existing 11 operations
+
+  // Add new tool action operations
+  getAvailableActions: protectedProcedure
     .input(z.object({ toolType: z.string().optional() }))
     .query(async ({ input }) => {
       // Return available actions for tool type
     }),
 
-  validateActionParams: publicProcedure
+  validateActionParams: protectedProcedure
     .input(
       z.object({
         actionId: z.string(),
@@ -389,7 +392,7 @@ export const toolActionsRouter = createTRPCRouter({
       // Validate parameters against action schema
     }),
 
-  executeAction: publicProcedure
+  executeAction: protectedProcedure
     .input(
       z.object({
         toolId: z.number(),
@@ -403,6 +406,8 @@ export const toolActionsRouter = createTRPCRouter({
     }),
 });
 ```
+
+**Note**: The existing tRPC infrastructure provides 16 routers with 150+ endpoints, including comprehensive tools and events routers that can be extended for tool actions.
 
 #### Task 3.2: Execution Engine Integration (3 days)
 
