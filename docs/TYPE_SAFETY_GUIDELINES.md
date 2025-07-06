@@ -129,32 +129,55 @@ interface EventWithStats extends Event {
 
 ## Common Patterns
 
-### 1. API Response Handling
+### 1. tRPC Query and Mutation Patterns
 
 ```typescript
-// ❌ Unsafe API responses
-async function fetchEvents(): Promise<any> {
-  const response = await fetch("/api/events");
-  return response.json();
-}
-
-// ✅ Type-safe API responses
-import type { EventsResponse } from "@/types/api";
-
-async function fetchEvents(): Promise<EventsResponse> {
-  const response = await fetch("/api/events");
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-  }
-  return response.json() as EventsResponse;
-}
-
-// ✅ Even better with tRPC (auto-typed)
-const { data: events, error } = trpc.events.getAll.useQuery({
+// ✅ Type-safe tRPC queries (current standard)
+const {
+  data: events,
+  error,
+  isLoading,
+} = trpc.events.getAll.useQuery({
   limit: 20,
   offset: 0,
 });
-// events is automatically typed as Event[]
+// events is automatically typed as Event[] with full IntelliSense
+
+// ✅ Type-safe tRPC mutations
+const createEventMutation = trpc.events.create.useMutation({
+  onSuccess: (newEvent) => {
+    // newEvent is fully typed
+    toast.success(`Event "${newEvent.name}" created successfully`);
+  },
+  onError: (error) => {
+    // error is typed as TRPCError
+    toast.error(error.message);
+  },
+});
+
+// ✅ Server-side tRPC procedures
+export const eventsRouter = createTRPCRouter({
+  getAll: protectedProcedure
+    .input(
+      z.object({
+        limit: z.number().min(1).max(100).default(20),
+        offset: z.number().min(0).default(0),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      // input and ctx are fully typed
+      return await ctx.db.events.findMany({
+        take: input.limit,
+        skip: input.offset,
+      });
+    }),
+});
+
+// ✅ Conditional queries with proper typing
+const { data: event } = trpc.events.getById.useQuery(
+  { id: eventId },
+  { enabled: !!eventId }, // Only run when eventId exists
+);
 ```
 
 ### 2. Form Handling
