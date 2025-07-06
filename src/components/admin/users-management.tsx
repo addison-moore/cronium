@@ -4,8 +4,6 @@ import React, { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import { UserRole, UserStatus } from "@/shared/schema";
 import {
   UserCog,
@@ -132,8 +130,6 @@ export function UsersManagement({
   const endIndex = startIndex + itemsPerPage;
   const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
 
-  const t = useTranslations("Admin");
-
   const inviteForm = useForm<InviteUserFormData>({
     resolver: zodResolver(inviteUserSchema),
     defaultValues: {
@@ -151,9 +147,9 @@ export function UsersManagement({
       setFilteredUsers(
         users.filter(
           (user) =>
-            user.email.toLowerCase().includes(lowerCaseQuery) ||
-            user.username?.toLowerCase().includes(lowerCaseQuery) ||
-            user.firstName?.toLowerCase().includes(lowerCaseQuery) ||
+            (user.email.toLowerCase().includes(lowerCaseQuery) ||
+              user.username?.toLowerCase().includes(lowerCaseQuery)) ??
+            user.firstName?.toLowerCase().includes(lowerCaseQuery) ??
             user.lastName?.toLowerCase().includes(lowerCaseQuery),
         ),
       );
@@ -178,10 +174,12 @@ export function UsersManagement({
       await onInviteUser(data);
       inviteForm.reset();
       setIsInviteDialogOpen(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to send invitation";
       toast({
         title: "Error",
-        description: error.message || "Failed to send invitation",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -194,10 +192,12 @@ export function UsersManagement({
       await onDeleteUser(userId);
       setIsDeleteDialogOpen(false);
       setSelectedUserId(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to delete user";
       toast({
         title: "Error",
-        description: error.message || "Failed to delete user",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -211,10 +211,12 @@ export function UsersManagement({
         description: "Invitation email sent successfully",
         variant: "default",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to resend invitation";
       toast({
         title: "Error",
-        description: error.message || "Failed to resend invitation",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -228,10 +230,12 @@ export function UsersManagement({
         description: "User approved successfully",
         variant: "default",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to approve user";
       toast({
         title: "Error",
-        description: error.message || "Failed to approve user",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -245,10 +249,12 @@ export function UsersManagement({
         description: "User registration denied",
         variant: "default",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to deny user";
       toast({
         title: "Error",
-        description: error.message || "Failed to deny user",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -423,7 +429,7 @@ export function UsersManagement({
                       >
                         {user.email}
                       </StandardizedTableLink>
-                      {(user.firstName || user.lastName) && (
+                      {(user.firstName ?? user.lastName) && (
                         <div className="text-sm text-gray-500">
                           {[user.firstName, user.lastName]
                             .filter(Boolean)

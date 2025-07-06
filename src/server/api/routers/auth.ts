@@ -44,8 +44,7 @@ export const authRouter = createTRPCRouter({
 
       // Remove the actual token from the response for security
       const sanitizedTokens = tokens.map((token) => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { token: _token, ...rest } = token;
+        const { token: _, ...rest } = token;
         return rest;
       });
 
@@ -107,7 +106,7 @@ export const authRouter = createTRPCRouter({
         const updatedToken = await storage.revokeApiToken(input.id);
 
         // Remove the actual token from the response for security
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
         const { token: _token, ...sanitizedToken } = updatedToken;
 
         return sanitizedToken;

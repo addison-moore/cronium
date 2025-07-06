@@ -163,7 +163,8 @@ interface Template {
   name: string;
   type: string;
   content: string;
-  isSystemTemplate: boolean;
+  subject?: string;
+  isSystemTemplate?: boolean;
 }
 
 function DiscordTemplateManager({ toolType }: TemplateManagerProps) {
@@ -225,7 +226,9 @@ function DiscordTemplateManager({ toolType }: TemplateManagerProps) {
   interface TemplateFormData {
     name: string;
     content: string;
-    isSystemTemplate?: boolean;
+    subject?: string | undefined;
+    isSystemTemplate?: boolean | undefined;
+    type: string;
   }
 
   const handleSaveTemplate = async (data: TemplateFormData) => {
@@ -234,7 +237,7 @@ function DiscordTemplateManager({ toolType }: TemplateManagerProps) {
       id:
         templates.length > 0 ? Math.max(...templates.map((t) => t.id)) + 1 : 1,
       name: data.name,
-      type: toolType,
+      type: data.type,
       content: data.content,
       isSystemTemplate: data.isSystemTemplate ?? false,
     };
@@ -282,7 +285,23 @@ function DiscordTemplateManager({ toolType }: TemplateManagerProps) {
       {showAddForm && (
         <TemplateForm
           toolType={toolType}
-          template={editingTemplate}
+          template={
+            editingTemplate
+              ? ({
+                  id: editingTemplate.id,
+                  name: editingTemplate.name,
+                  content: editingTemplate.content,
+                  ...(editingTemplate.isSystemTemplate !== undefined && {
+                    isSystemTemplate: editingTemplate.isSystemTemplate,
+                  }),
+                } as {
+                  id?: number;
+                  name: string;
+                  content: string;
+                  isSystemTemplate?: boolean;
+                })
+              : undefined
+          }
           onSubmit={handleSaveTemplate}
           onCancel={handleCancelEdit}
           language="json"
@@ -376,7 +395,9 @@ export const DiscordPlugin: ToolPlugin = {
   CredentialDisplay: DiscordCredentialDisplay,
   TemplateManager: DiscordTemplateManager,
 
-  async validate(credentials: Record<string, unknown>) {
+  async validate(
+    credentials: Record<string, unknown>,
+  ): Promise<{ isValid: boolean; error?: string }> {
     const result = discordSchema.safeParse(credentials);
     if (result.success) {
       return { isValid: true };

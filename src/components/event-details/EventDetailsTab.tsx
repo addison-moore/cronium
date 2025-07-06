@@ -70,12 +70,19 @@ export function EventDetailsTab({
               : typeof updatedEvent.lastRunAt === "string"
                 ? updatedEvent.lastRunAt
                 : updatedEvent.lastRunAt.toISOString(),
+          nextRunAt:
+            updatedEvent.nextRunAt === null
+              ? null
+              : typeof updatedEvent.nextRunAt === "string"
+                ? updatedEvent.nextRunAt
+                : updatedEvent.nextRunAt.toISOString(),
           environmentVariables:
             updatedEvent.envVars?.map((env) => ({
               key: env.key,
               value: env.value,
             })) || [],
           events: [], // Add empty events array if it doesn't exist in updatedEvent
+          tags: Array.isArray(updatedEvent.tags) ? updatedEvent.tags : [], // Ensure tags is a string array
         };
         onEventUpdate(transformedEvent);
       }
@@ -184,7 +191,7 @@ export function EventDetailsTab({
 
   const renderScriptDetails = () => {
     if (
-      !event ??
+      !event ||
       ![EventType.NODEJS, EventType.PYTHON, EventType.BASH].includes(event.type)
     )
       return null;
@@ -226,7 +233,7 @@ export function EventDetailsTab({
                     ? "python"
                     : event.type === EventType.BASH
                       ? "bash"
-                      : "plaintext"
+                      : "text"
               }
               value={editedContent}
               onChange={(value) => setEditedContent(value ?? "")}
@@ -269,7 +276,7 @@ export function EventDetailsTab({
                     ? "python"
                     : event.type === EventType.BASH
                       ? "bash"
-                      : "plaintext"
+                      : "text"
               }
               value={event.content ?? ""}
               readOnly={true}

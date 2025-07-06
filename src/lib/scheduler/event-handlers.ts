@@ -5,6 +5,7 @@ import {
   createTemplateContext,
 } from "@/lib/template-processor";
 import type { ConditionalAction } from "@/shared/schema";
+import { ConditionalActionType } from "@/shared/schema";
 
 interface ExecutionData {
   executionTime?: string;
@@ -215,7 +216,7 @@ export async function processEvent(
 
     // Check for tool message sending (SEND_MESSAGE)
     if (
-      conditional_event.type === "SEND_MESSAGE" &&
+      conditional_event.type === ConditionalActionType.SEND_MESSAGE &&
       conditional_event.message
     ) {
       console.log(
@@ -312,18 +313,31 @@ export async function processEvent(
           );
 
           // Create template context with cronium data
+          const eventData: Parameters<typeof createTemplateContext>[0] = {
+            id: event.id,
+            name: event.name,
+            status: isSuccess ? "success" : "failure",
+            executionTime:
+              executionData?.executionTime ?? new Date().toISOString(),
+            server:
+              typeof event.server === "string"
+                ? event.server
+                : (event.server?.name ?? "Local"),
+          };
+
+          // Only add optional properties if they have defined values
+          if (executionData?.duration !== undefined) {
+            eventData.duration = executionData.duration;
+          }
+          if (executionData?.output !== undefined) {
+            eventData.output = executionData.output;
+          }
+          if (executionData?.error !== undefined) {
+            eventData.error = executionData.error;
+          }
+
           const templateContext = createTemplateContext(
-            {
-              id: event.id,
-              name: event.name,
-              status: isSuccess ? "success" : "failure",
-              duration: executionData?.duration,
-              executionTime:
-                executionData?.executionTime ?? new Date().toISOString(),
-              server: event.server ?? "Local",
-              output: executionData?.output,
-              error: executionData?.error,
-            },
+            eventData,
             variablesMap,
             {},
             {},
@@ -352,12 +366,12 @@ export async function processEvent(
 
           // Prepare SMTP credentials in the format expected by sendEmail
           const smtpCredentials = {
-            host: String(credentials.host ?? ""),
+            host: String(credentials.host) ?? "",
             port: Number(credentials.port ?? 587),
-            user: String(credentials.user ?? ""),
-            password: String(credentials.password ?? ""),
-            fromEmail: String(credentials.fromEmail ?? ""),
-            fromName: String(credentials.fromName ?? ""),
+            user: String(credentials.user) ?? "",
+            password: String(credentials.password) ?? "",
+            fromEmail: String(credentials.fromEmail) ?? "",
+            fromName: String(credentials.fromName) ?? "",
           };
 
           // Send the email
@@ -392,18 +406,29 @@ export async function processEvent(
               : 0;
 
           // Create template context with cronium data
+          const eventData: Parameters<typeof createTemplateContext>[0] = {
+            id: event.id,
+            name: event.name,
+            status: isSuccess ? "success" : "failure",
+            duration: validDuration,
+            executionTime:
+              executionData?.executionTime ?? new Date().toISOString(),
+            server:
+              typeof event.server === "string"
+                ? event.server
+                : (event.server?.name ?? "Local"),
+          };
+
+          // Only add optional properties if they have defined values
+          if (executionData?.output !== undefined) {
+            eventData.output = executionData.output;
+          }
+          if (executionData?.error !== undefined) {
+            eventData.error = executionData.error;
+          }
+
           const templateContext = createTemplateContext(
-            {
-              id: event.id,
-              name: event.name,
-              status: isSuccess ? "success" : "failure",
-              duration: validDuration,
-              executionTime:
-                executionData?.executionTime ?? new Date().toISOString(),
-              server: event.server ?? "Local",
-              output: executionData?.output,
-              error: executionData?.error,
-            },
+            eventData,
             variablesMap,
             {},
             {},
@@ -450,7 +475,9 @@ export async function processEvent(
 
               // Send message directly to Slack webhook
               const slackResponse = await fetch(
-                String(credentials.webhookUrl ?? ""),
+                typeof credentials.webhookUrl === "string"
+                  ? credentials.webhookUrl
+                  : "",
                 {
                   method: "POST",
                   headers: {
@@ -500,7 +527,9 @@ export async function processEvent(
 
               // Send message directly to Discord webhook
               const discordResponse = await fetch(
-                String(credentials.webhookUrl ?? ""),
+                typeof credentials.webhookUrl === "string"
+                  ? credentials.webhookUrl
+                  : "",
                 {
                   method: "POST",
                   headers: {
@@ -540,7 +569,7 @@ export async function processEvent(
 
     // Check for target script execution
     if (
-      conditional_event.type === "SCRIPT" &&
+      conditional_event.type === ConditionalActionType.SCRIPT &&
       conditional_event.targetEventId
     ) {
       const targetScript = await storage.getEventWithRelations(

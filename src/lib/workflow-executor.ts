@@ -13,7 +13,6 @@ import {
   type InsertWorkflowExecution,
   type InsertWorkflowLog,
   type InsertWorkflowExecutionEvent,
-  type Script as Event,
 } from "@shared/schema";
 import { scheduleJob, RecurrenceRule } from "node-schedule";
 import type { Job } from "node-schedule";
@@ -26,28 +25,20 @@ interface NodeResult {
   condition?: boolean;
 }
 
-interface ExecutionResult {
-  success: boolean;
-  output?: string;
-  scriptOutput?: unknown;
-  condition?: boolean;
-  duration?: number;
-}
-
 export class WorkflowExecutor {
   private jobs = new Map<number, Job>();
   private isInitialized = false;
 
-  constructor() {}
+  constructor() {
+    // WorkflowExecutor initialization
+  }
 
   async initialize() {
     if (this.isInitialized) return;
 
     try {
       // Load active workflows from the database
-      const activeWorkflows = (await storage.getAllWorkflows(
-        "*",
-      )) as Workflow[];
+      const activeWorkflows = await storage.getAllWorkflows("*");
       const activeScheduledWorkflows = activeWorkflows.filter(
         (wf) =>
           wf.status === EventStatus.ACTIVE &&
@@ -99,9 +90,7 @@ export class WorkflowExecutor {
       }
 
       // Get workflow details
-      const workflow = (await storage.getWorkflow(workflowId)) as
-        | Workflow
-        | undefined;
+      const workflow = await storage.getWorkflow(workflowId);
       if (!workflow) {
         console.log(
           `Workflow with ID ${workflowId} not found, skipping scheduling`,
@@ -131,7 +120,7 @@ export class WorkflowExecutor {
         rule = new RecurrenceRule();
 
         const scheduleNum = workflow.scheduleNumber ?? 1; // Default to 1 if null
-        switch (workflow.scheduleUnit) {
+        switch (String(workflow.scheduleUnit)) {
           case "SECONDS":
             rule.second = new Array(Math.floor(60 / scheduleNum))
               .fill(null)
@@ -165,9 +154,9 @@ export class WorkflowExecutor {
       }
 
       // Schedule the job
-      const job = scheduleJob(rule, async () => {
+      const job = scheduleJob(rule, () => {
         console.log(`Executing scheduled workflow: ${workflow.name}`);
-        await this.executeWorkflow(workflowId);
+        void this.executeWorkflow(workflowId);
       });
 
       this.jobs.set(workflowId, job);
@@ -193,14 +182,12 @@ export class WorkflowExecutor {
 
     try {
       // Get workflow details
-      const workflow = (await storage.getWorkflow(workflowId)) as
-        | Workflow
-        | undefined;
+      const workflow = await storage.getWorkflow(workflowId);
       if (!workflow) {
         throw new Error(`Workflow with ID ${workflowId} not found`);
       }
 
-      const executionUserId = userId || workflow.userId;
+      const executionUserId = userId ?? workflow.userId;
 
       // Create workflow execution record
       const executionData: InsertWorkflowExecution = {
@@ -222,7 +209,7 @@ export class WorkflowExecutor {
       );
 
       // Return execution ID immediately and continue execution in background
-      this.executeWorkflowInBackground(
+      void this.executeWorkflowInBackground(
         workflow,
         workflowExecution,
         executionUserId,
@@ -270,12 +257,8 @@ export class WorkflowExecutor {
       const log = await storage.createWorkflowLog(logData);
 
       // Get all nodes and connections
-      const nodes = (await storage.getWorkflowNodes(
-        workflow.id,
-      )) as WorkflowNode[];
-      const connections = (await storage.getWorkflowConnections(
-        workflow.id,
-      )) as WorkflowConnection[];
+      const nodes = await storage.getWorkflowNodes(workflow.id);
+      const connections = await storage.getWorkflowConnections(workflow.id);
 
       if (nodes.length === 0) {
         const completedAt = new Date();
@@ -409,7 +392,7 @@ export class WorkflowExecutor {
       const aggregatedOutput = Array.from(nodeResults.entries())
         .map(([nodeId, result]) => {
           const node = nodeMap.get(nodeId);
-          return `Node ${node?.id} (Event ${node?.eventId}): ${result.success ? "SUCCESS" : "FAILURE"}\n${result.output}\n`;
+          return `Node ${node?.id ?? "unknown"} (Event ${node?.eventId ?? "unknown"}): ${result.success ? "SUCCESS" : "FAILURE"}\n${result.output}\n`;
         })
         .join("\n---\n");
 
@@ -538,7 +521,7 @@ export class WorkflowExecutor {
       }
 
       // Execute the node's event
-      const event = (await storage.getEvent(node.eventId)) as Event | undefined;
+      const event = await storage.getEvent(node.eventId);
       if (!event) {
         const errorMessage = `Event ${node.eventId} not found for node ${node.id}`;
         nodeResults.set(node.id, {
@@ -579,13 +562,13 @@ export class WorkflowExecutor {
       const executionStartTime = new Date();
 
       // Execute the event using scheduler with input data
-      const executionResult = (await scheduler.executeEvent(
+      const executionResult = await scheduler.executeEvent(
         event.id,
         workflowExecutionId,
         sequenceOrder,
         resolvedInputData,
         workflow.id,
-      )) as ExecutionResult;
+      );
 
       // Record execution end time and calculate duration
       const executionEndTime = new Date();
@@ -598,7 +581,7 @@ export class WorkflowExecutor {
         `Workflow ${workflow.id}: Node ${node.id} execution result:`,
         {
           success: executionResult.success,
-          output: executionResult.output || "",
+          output: executionResult.output ?? "",
           scriptOutput: executionResult.scriptOutput,
           condition: executionResult.condition,
         },
@@ -663,9 +646,9 @@ export class WorkflowExecutor {
           const shouldFollow =
             connection.connectionType === ConnectionType.ALWAYS ||
             (connection.connectionType === ConnectionType.ON_SUCCESS &&
-              nodeResult?.success) ||
+              (nodeResult?.success ?? false)) ||
             (connection.connectionType === ConnectionType.ON_FAILURE &&
-              !nodeResult?.success) ||
+              !(nodeResult?.success ?? true)) ||
             (connection.connectionType === ConnectionType.ON_CONDITION &&
               nodeResult?.condition === true);
 
@@ -780,9 +763,7 @@ export class WorkflowExecutor {
     }
 
     // Re-schedule the workflow if it's active and scheduled
-    const workflow = (await storage.getWorkflow(workflowId)) as
-      | Workflow
-      | undefined;
+    const workflow = await storage.getWorkflow(workflowId);
     if (
       workflow &&
       workflow.status === EventStatus.ACTIVE &&

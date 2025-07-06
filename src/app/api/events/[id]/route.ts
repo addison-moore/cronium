@@ -3,7 +3,14 @@ import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { RunLocation, ConnectionType, UserRole } from "@/shared/schema";
+import {
+  RunLocation,
+  ConnectionType,
+  UserRole,
+  EventStatus,
+  TimeUnit,
+  type ConditionalActionType,
+} from "@/shared/schema";
 import { authenticateApiRequest } from "@/lib/api-auth";
 
 // Helper function to authenticate user via session or API token
@@ -202,20 +209,20 @@ export async function PATCH(
     }
 
     interface UpdateEventBody {
-      runLocation?: string;
+      runLocation?: RunLocation;
       serverId?: number | null;
       httpRequest?: string;
       httpMethod?: string;
       httpUrl?: string;
       httpHeaders?: string;
       httpBody?: string;
-      scheduleUnit?: string;
-      status?: string;
+      scheduleUnit?: TimeUnit;
+      status?: EventStatus;
       resetCounterOnActive?: boolean;
       envVars?: Array<{ key: string; value: string }>;
       conditionalActions?: Array<{
         type: string;
-        action: string;
+        action: ConditionalActionType;
         details: {
           emailAddresses?: string;
           targetEventId?: number;
@@ -225,17 +232,17 @@ export async function PATCH(
         };
       }>;
       onSuccessActions?: Array<{
-        type: string;
+        type: ConditionalActionType;
         value?: string;
         targetScriptId?: string | number;
       }>;
       onFailActions?: Array<{
-        type: string;
+        type: ConditionalActionType;
         value?: string;
         targetScriptId?: string | number;
       }>;
       selectedServerIds?: number[];
-      startTime?: string | Date;
+      startTime?: Date | null;
       [key: string]: unknown;
     }
 
@@ -261,12 +268,18 @@ export async function PATCH(
           headers?: Record<string, string>;
           body?: string;
         };
-        body.httpMethod = httpRequestData.method;
-        body.httpUrl = httpRequestData.url;
-        body.httpHeaders = httpRequestData.headers
-          ? JSON.stringify(httpRequestData.headers)
-          : undefined;
-        body.httpBody = httpRequestData.body;
+        if (httpRequestData.method !== undefined) {
+          body.httpMethod = httpRequestData.method;
+        }
+        if (httpRequestData.url !== undefined) {
+          body.httpUrl = httpRequestData.url;
+        }
+        if (httpRequestData.headers !== undefined) {
+          body.httpHeaders = JSON.stringify(httpRequestData.headers);
+        }
+        if (httpRequestData.body !== undefined) {
+          body.httpBody = httpRequestData.body;
+        }
       } catch (parseError) {
         console.error(
           `Error parsing HTTP request data for event ${eventId}:`,
@@ -280,15 +293,15 @@ export async function PATCH(
       // Normalize the scheduleUnit value to uppercase enum format
       const normalizedUnit = String(body.scheduleUnit).toUpperCase();
       if (["SECONDS", "MINUTES", "HOURS", "DAYS"].includes(normalizedUnit)) {
-        body.scheduleUnit = normalizedUnit;
+        body.scheduleUnit = normalizedUnit as TimeUnit;
       } else if (normalizedUnit.includes("SECOND")) {
-        body.scheduleUnit = "SECONDS";
+        body.scheduleUnit = TimeUnit.SECONDS;
       } else if (normalizedUnit.includes("MINUTE")) {
-        body.scheduleUnit = "MINUTES";
+        body.scheduleUnit = TimeUnit.MINUTES;
       } else if (normalizedUnit.includes("HOUR")) {
-        body.scheduleUnit = "HOURS";
+        body.scheduleUnit = TimeUnit.HOURS;
       } else if (normalizedUnit.includes("DAY")) {
-        body.scheduleUnit = "DAYS";
+        body.scheduleUnit = TimeUnit.DAYS;
       }
     }
 
@@ -297,13 +310,13 @@ export async function PATCH(
       // Normalize the status value to uppercase enum format
       const normalizedStatus = String(body.status).toUpperCase();
       if (["ACTIVE", "PAUSED", "DRAFT"].includes(normalizedStatus)) {
-        body.status = normalizedStatus;
+        body.status = normalizedStatus as EventStatus;
       } else if (normalizedStatus.includes("ACTIVE")) {
-        body.status = "ACTIVE";
+        body.status = EventStatus.ACTIVE;
       } else if (normalizedStatus.includes("PAUSE")) {
-        body.status = "PAUSED";
+        body.status = EventStatus.PAUSED;
       } else if (normalizedStatus.includes("DRAFT")) {
-        body.status = "DRAFT";
+        body.status = EventStatus.DRAFT;
       }
     }
 
@@ -339,7 +352,7 @@ export async function PATCH(
       // Add new conditional actions
       for (const condAction of body.conditionalActions) {
         interface ConditionalActionData {
-          type: string;
+          type: ConditionalActionType;
           value: string;
           targetEventId: number | null;
           toolId: number | null;

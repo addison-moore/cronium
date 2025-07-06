@@ -56,7 +56,7 @@ export class TerminalSSHService {
       this.shellCache.set(connectionKey, userShell);
 
       return userShell;
-    } catch (error) {
+    } catch {
       // Fallback to bash if we can't detect the shell
       const fallbackShell = "/bin/bash";
       this.shellCache.set(connectionKey, fallbackShell);
@@ -153,7 +153,7 @@ export class TerminalSSHService {
         workingDirectory,
       );
 
-      if (result.stdout && result.stdout.trim()) {
+      if (result.stdout?.trim()) {
         // Process the PS1 variable to create a realistic prompt
         let prompt = result.stdout.trim();
 
@@ -186,7 +186,7 @@ export class TerminalSSHService {
 
         return prompt;
       }
-    } catch (error) {
+    } catch {
       console.log("Failed to get shell prompt, using fallback");
     }
 
@@ -203,7 +203,7 @@ export class TerminalSSHService {
       ? pwdResult.stdout.trim()
       : (workingDirectory ?? "~");
     const shortDir = currentDir.replace(new RegExp(`^/home/${username}`), "~");
-    return `${username}@${host.split(".")[0]}:${shortDir}${username === "root" ? "#" : "$"} `;
+    return `${username}@${host.split(".")[0] ?? host}:${shortDir}${username === "root" ? "#" : "$"} `;
   }
 
   /**

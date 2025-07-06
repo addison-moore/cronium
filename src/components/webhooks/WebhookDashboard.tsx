@@ -63,6 +63,28 @@ import { WebhookForm } from "./WebhookForm";
 import { WebhookSecurityForm } from "./WebhookSecurityForm";
 import { WebhookMonitor } from "./WebhookMonitor";
 
+// Define webhook interface based on the router's mock data structure
+interface Webhook {
+  id: number;
+  userId: string;
+  workflowId: number;
+  key: string;
+  url: string;
+  description?: string;
+  isActive: boolean;
+  allowedMethods: ("GET" | "POST" | "PUT" | "PATCH")[];
+  allowedIps?: string[];
+  rateLimitPerMinute: number;
+  requireAuth: boolean;
+  authToken?: string | null;
+  customHeaders?: Record<string, string>;
+  responseFormat: "json" | "text" | "xml";
+  triggerCount: number;
+  lastTriggered?: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 interface WebhookDashboardProps {
   workflowId?: number;
 }
@@ -71,7 +93,7 @@ export function WebhookDashboard({ workflowId }: WebhookDashboardProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [selectedWebhook, setSelectedWebhook] = useState<any>(null);
+  const [selectedWebhook, setSelectedWebhook] = useState<Webhook | null>(null);
   const [showSecurityDialog, setShowSecurityDialog] = useState(false);
   const [showMonitorDialog, setShowMonitorDialog] = useState(false);
   const [deleteConfirmKey, setDeleteConfirmKey] = useState<string | null>(null);
@@ -98,7 +120,7 @@ export function WebhookDashboard({ workflowId }: WebhookDashboardProps) {
         title: "Webhook Created",
         description: "Webhook has been created successfully",
       });
-      refetchWebhooks();
+      void refetchWebhooks();
       setShowCreateDialog(false);
     },
     onError: (error) => {
@@ -116,7 +138,7 @@ export function WebhookDashboard({ workflowId }: WebhookDashboardProps) {
         title: "Webhook Deleted",
         description: "Webhook has been deleted successfully",
       });
-      refetchWebhooks();
+      void refetchWebhooks();
       setDeleteConfirmKey(null);
     },
     onError: (error) => {
@@ -128,25 +150,8 @@ export function WebhookDashboard({ workflowId }: WebhookDashboardProps) {
     },
   });
 
-  const generateUrlMutation = trpc.webhooks.generateUrl.useMutation({
-    onSuccess: (result) => {
-      navigator.clipboard.writeText(result.url);
-      toast({
-        title: "URL Generated",
-        description: "Webhook URL has been copied to clipboard",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to generate webhook URL",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const webhooks = webhooksData?.webhooks || [];
-  const stats = statsData || {
+  const webhooks = (webhooksData?.webhooks ?? []) as Webhook[];
+  const stats = statsData ?? {
     totalExecutions: 0,
     successfulExecutions: 0,
     failedExecutions: 0,
@@ -159,19 +164,29 @@ export function WebhookDashboard({ workflowId }: WebhookDashboardProps) {
     return true;
   });
 
-  const copyWebhookUrl = (webhook: any) => {
-    const url = `${window.location.origin}/api/workflows/webhook/${webhook.key}`;
-    navigator.clipboard.writeText(url);
+  const copyWebhookUrl = (webhook: Webhook) => {
+    const url = `${window.location.origin}/api/workflows/webhook/${String(webhook.key)}`;
+    void navigator.clipboard.writeText(url);
     toast({
       title: "URL Copied",
       description: "Webhook URL has been copied to clipboard",
     });
   };
 
-  const handleCreateWebhook = async (data: any) => {
+  const handleCreateWebhook = async (data: {
+    workflowId: number;
+    key: string;
+    description?: string | undefined;
+    isActive: boolean;
+    allowedMethods: ("GET" | "POST" | "PUT" | "PATCH")[];
+    rateLimitPerMinute: number;
+    requireAuth: boolean;
+    authToken?: string | undefined;
+    responseFormat: "json" | "text" | "xml";
+  }) => {
     try {
       await createWebhookMutation.mutateAsync(data);
-    } catch (error) {
+    } catch {
       // Error handled by mutation
     }
   };
@@ -179,20 +194,12 @@ export function WebhookDashboard({ workflowId }: WebhookDashboardProps) {
   const handleDeleteWebhook = async (key: string) => {
     try {
       await deleteWebhookMutation.mutateAsync({ key });
-    } catch (error) {
+    } catch {
       // Error handled by mutation
     }
   };
 
-  const generateNewUrl = async (workflowId: number) => {
-    try {
-      await generateUrlMutation.mutateAsync({ workflowId });
-    } catch (error) {
-      // Error handled by mutation
-    }
-  };
-
-  const getStatusIcon = (webhook: any) => {
+  const getStatusIcon = (webhook: Webhook) => {
     if (!webhook.isActive) {
       return <XCircle className="h-4 w-4 text-gray-500" />;
     }
@@ -393,7 +400,7 @@ export function WebhookDashboard({ workflowId }: WebhookDashboardProps) {
                     </TableCell>
                     <TableCell>
                       <div className="max-w-xs truncate">
-                        {webhook.description || "No description"}
+                        {webhook.description ?? "No description"}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -412,7 +419,7 @@ export function WebhookDashboard({ workflowId }: WebhookDashboardProps) {
                     <TableCell>
                       <div className="text-center">
                         <div className="font-semibold">
-                          {webhook.triggerCount || 0}
+                          {webhook.triggerCount ?? 0}
                         </div>
                         <div className="text-muted-foreground text-xs">
                           total
@@ -461,7 +468,7 @@ export function WebhookDashboard({ workflowId }: WebhookDashboardProps) {
                           <DropdownMenuItem
                             onClick={() =>
                               window.open(
-                                `/api/workflows/webhook/${webhook.key}`,
+                                `/api/workflows/webhook/${String(webhook.key)}`,
                                 "_blank",
                               )
                             }
@@ -498,7 +505,7 @@ export function WebhookDashboard({ workflowId }: WebhookDashboardProps) {
               webhook={selectedWebhook}
               onSave={() => {
                 setShowSecurityDialog(false);
-                refetchWebhooks();
+                void refetchWebhooks();
               }}
               onCancel={() => setShowSecurityDialog(false)}
             />
@@ -539,7 +546,7 @@ export function WebhookDashboard({ workflowId }: WebhookDashboardProps) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() =>
-                deleteConfirmKey && handleDeleteWebhook(deleteConfirmKey)
+                deleteConfirmKey && void handleDeleteWebhook(deleteConfirmKey)
               }
             >
               Delete

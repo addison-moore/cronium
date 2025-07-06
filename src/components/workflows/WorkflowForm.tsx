@@ -127,7 +127,7 @@ export default function WorkflowForm({
   }, [eventsData]);
 
   const servers = useMemo(() => {
-    return serversData?.servers || [];
+    return serversData?.servers ?? [];
   }, [serversData]);
 
   // Update events function to refresh workflow nodes when events change
@@ -319,7 +319,7 @@ export default function WorkflowForm({
                       <FormLabel>Tags</FormLabel>
                       <FormControl>
                         <TagsInput
-                          value={field.value || []}
+                          value={field.value ?? []}
                           onChange={field.onChange}
                           placeholder="Add tags"
                         />

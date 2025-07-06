@@ -1,6 +1,6 @@
 // Plugin registry initialization
 import { ToolPluginRegistry } from "../types/tool-plugin";
-import { EmailPluginTrpc as EmailPlugin } from "./email/email-plugin";
+import { EmailPlugin } from "./email/email-plugin";
 import { SlackPluginTrpc as SlackPlugin } from "./slack/slack-plugin";
 import { DiscordPlugin } from "./discord/discord-plugin";
 

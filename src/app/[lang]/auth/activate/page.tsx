@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -63,22 +60,28 @@ export default function ActivatePage() {
   });
 
   // tRPC query for token verification
-  const { data: verifyData, isLoading: isVerifying } =
-    trpc.userAuth.verifyInviteToken.useQuery(
-      { token: token || "" },
-      {
-        enabled: !!token,
-        retry: false,
-        onError: (error) => {
-          setTokenVerified(false);
-          setErrorMessage(error.message);
-        },
-        onSuccess: (data) => {
-          setTokenVerified(true);
-          setUserEmail(data.email);
-        },
-      },
-    );
+  const {
+    data: verifyData,
+    error: verifyError,
+    isLoading: isVerifying,
+  } = trpc.userAuth.verifyInviteToken.useQuery(
+    { token: token ?? "" },
+    {
+      enabled: !!token,
+      retry: false,
+    },
+  );
+
+  // Handle verification results
+  useEffect(() => {
+    if (verifyError) {
+      setTokenVerified(false);
+      setErrorMessage(verifyError.message);
+    } else if (verifyData) {
+      setTokenVerified(true);
+      setUserEmail(verifyData.email ?? "");
+    }
+  }, [verifyData, verifyError]);
 
   // Update token verification state
   useEffect(() => {

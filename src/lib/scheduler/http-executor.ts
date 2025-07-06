@@ -58,7 +58,17 @@ export async function executeHttpRequest(
               body as Record<string, string>,
             ).toString();
           } else {
-            config.data = String(body);
+            if (typeof body === "object" && body !== null) {
+              config.data = JSON.stringify(body);
+            } else if (typeof body === "string") {
+              config.data = body;
+            } else if (typeof body === "number") {
+              config.data = body.toString();
+            } else if (typeof body === "boolean") {
+              config.data = body.toString();
+            } else {
+              config.data = "";
+            }
           }
         } else if (contentType?.includes("multipart/form-data")) {
           // Handle form data

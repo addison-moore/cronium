@@ -145,7 +145,7 @@ export default function WorkflowExecutionGraph({
           // Only update state if we're still working with the same execution ID
           if (executionId === lastExecutionId) {
             setExecutionEvents(events);
-            setCurrentExecution(execution);
+            setCurrentExecution(execution ?? null);
             hasAnyDataRef.current = true;
 
             // Update internal execution state based on actual status

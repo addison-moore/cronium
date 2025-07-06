@@ -30,7 +30,12 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { trpc } from "@/components/providers/TrpcProvider";
 import { cn } from "@/lib/utils";
-import { type Tool, ToolType } from "@/shared/schema";
+import { ToolType } from "@/shared/schema";
+import type { RouterOutputs } from "@/server/api/root";
+
+// Type for tool data as returned by the API
+type ToolWithDecryptedCredentials =
+  RouterOutputs["tools"]["getAll"]["tools"][0];
 
 interface IntegrationTestPanelProps {
   toolId?: number;
@@ -55,7 +60,8 @@ export function IntegrationTestPanel({
   toolId,
   onClose,
 }: IntegrationTestPanelProps) {
-  const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
+  const [selectedTool, setSelectedTool] =
+    useState<ToolWithDecryptedCredentials | null>(null);
   const [testResults, setTestResults] = useState<Record<string, TestResult>>(
     {},
   );
@@ -101,7 +107,10 @@ export function IntegrationTestPanel({
     }
   };
 
-  const runTest = async (testType: "connection" | "send", tool: Tool) => {
+  const runTest = async (
+    testType: "connection" | "send",
+    tool: ToolWithDecryptedCredentials,
+  ) => {
     if (!tool) return;
 
     const testKey = `${tool.id}-${testType}`;
@@ -484,16 +493,17 @@ export function IntegrationTestPanel({
                             </span>
                           </div>
                           <p className="text-sm">{result.message}</p>
-                          {result.details && (
-                            <details className="text-muted-foreground text-xs">
-                              <summary className="cursor-pointer">
-                                View Details
-                              </summary>
-                              <pre className="bg-muted mt-2 overflow-auto rounded p-2">
-                                {JSON.stringify(result.details, null, 2)}
-                              </pre>
-                            </details>
-                          )}
+                          {result.details !== undefined &&
+                            result.details !== null && (
+                              <details className="text-muted-foreground text-xs">
+                                <summary className="cursor-pointer">
+                                  View Details
+                                </summary>
+                                <pre className="bg-muted mt-2 overflow-auto rounded p-2">
+                                  {JSON.stringify(result.details, null, 2)}
+                                </pre>
+                              </details>
+                            )}
                         </div>
                       );
                     })

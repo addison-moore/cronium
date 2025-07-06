@@ -45,7 +45,13 @@ passport.use(
           }
 
           // Verify password
-          const isValidPassword = await compare(password, user.password ?? "");
+          if (!user.password) {
+            return done(null, false, {
+              message: "Invalid username/email or password",
+            });
+          }
+
+          const isValidPassword = await compare(password, user.password);
           if (!isValidPassword) {
             return done(null, false, {
               message: "Invalid username/email or password",
@@ -56,8 +62,7 @@ passport.use(
           await storage.updateUser(user.id, { lastLogin: new Date() });
 
           // Return user without password
-
-          const { password, ...userWithoutPassword } = user;
+          const { password: _, ...userWithoutPassword } = user;
           return done(null, userWithoutPassword);
         } catch (error) {
           console.error("Authentication error:", error);

@@ -9,7 +9,6 @@ import { useTranslations } from "next-intl";
 import { type Event } from "./types";
 import { EventTypeIcon } from "@/components/ui/event-type-icon";
 import WorkflowsCard from "./WorkflowsCard";
-import { RunLocation } from "@/shared/schema";
 
 interface EventOverviewTabProps {
   event: Event;
@@ -25,8 +24,8 @@ export function EventOverviewTab({
   onResetCounter,
   isResettingCounter,
   isEventLoaded = true,
-  _onRefresh,
-  _langParam,
+  onRefresh: _onRefresh,
+  langParam: _langParam,
 }: EventOverviewTabProps) {
   const t = useTranslations("Events");
 
@@ -264,9 +263,9 @@ export function EventOverviewTab({
                   {t("resetCounterOnActive")}:{" "}
                 </span>
                 <span className="font-medium">
-                  {(event.resetCounterOnActive === true ??
+                  {event.resetCounterOnActive === true ||
                   (typeof event.resetCounterOnActive === "string" &&
-                    event.resetCounterOnActive === "t")) ? (
+                    event.resetCounterOnActive === "t") ? (
                     <span className="text-green-500">{t("enabled")}</span>
                   ) : (
                     <span className="text-gray-500">{t("disabled")}</span>

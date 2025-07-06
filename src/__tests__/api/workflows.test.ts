@@ -11,6 +11,9 @@ jest.mock("@/server/storage", () => ({
   },
 }));
 
+// Type the mocked functions
+const mockedStorage = storage as jest.Mocked<typeof storage>;
+
 describe("workflows router", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -53,12 +56,12 @@ describe("workflows router", () => {
       ];
 
       // Mock storage methods
-      (storage.getWorkflow as jest.Mock).mockResolvedValue(mockWorkflow);
-      (storage.getWorkflowExecution as jest.Mock).mockResolvedValue(
-        mockExecution,
+      mockedStorage.getWorkflow.mockResolvedValue(mockWorkflow as any);
+      mockedStorage.getWorkflowExecution.mockResolvedValue(
+        mockExecution as any,
       );
-      (storage.getWorkflowExecutionEvents as jest.Mock).mockResolvedValue(
-        mockEvents,
+      mockedStorage.getWorkflowExecutionEvents.mockResolvedValue(
+        mockEvents as any,
       );
 
       // Mock context and input
@@ -132,7 +135,7 @@ describe("workflows router", () => {
         shared: false,
       };
 
-      (storage.getWorkflow as jest.Mock).mockResolvedValue(mockWorkflow);
+      mockedStorage.getWorkflow.mockResolvedValue(mockWorkflow as any);
 
       const ctx = { userId: "user-123" };
       const input = { workflowId: 1, executionId: 1 };
@@ -166,11 +169,11 @@ describe("workflows router", () => {
         status: "running",
       };
 
-      (storage.getWorkflow as jest.Mock).mockResolvedValue(mockWorkflow);
-      (storage.getWorkflowExecution as jest.Mock).mockResolvedValue(
-        mockExecution,
+      mockedStorage.getWorkflow.mockResolvedValue(mockWorkflow as any);
+      mockedStorage.getWorkflowExecution.mockResolvedValue(
+        mockExecution as any,
       );
-      (storage.getWorkflowExecutionEvents as jest.Mock).mockResolvedValue([]);
+      mockedStorage.getWorkflowExecutionEvents.mockResolvedValue([] as any);
 
       const ctx = { userId: "user-123" };
       const input = { workflowId: 1, executionId: 1 };
@@ -227,12 +230,12 @@ describe("workflows router", () => {
         { id: 5, status: "failed" },
       ];
 
-      (storage.getWorkflow as jest.Mock).mockResolvedValue(mockWorkflow);
-      (storage.getWorkflowExecution as jest.Mock).mockResolvedValue(
-        mockExecution,
+      mockedStorage.getWorkflow.mockResolvedValue(mockWorkflow as any);
+      mockedStorage.getWorkflowExecution.mockResolvedValue(
+        mockExecution as any,
       );
-      (storage.getWorkflowExecutionEvents as jest.Mock).mockResolvedValue(
-        mockEvents,
+      mockedStorage.getWorkflowExecutionEvents.mockResolvedValue(
+        mockEvents as any,
       );
 
       const ctx = { userId: "user-123" };

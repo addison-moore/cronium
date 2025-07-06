@@ -111,7 +111,8 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
     onError: (error) => {
       toast({
         title: t("Error"),
-        description: error.message ?? t("RunEventError"),
+        description:
+          error instanceof Error ? error.message : t("RunEventError"),
         variant: "destructive",
       });
     },
@@ -130,7 +131,9 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
       toast({
         title: "Error",
         description:
-          error.message ?? "Failed to duplicate event. Please try again.",
+          error instanceof Error
+            ? error.message
+            : "Failed to duplicate event. Please try again.",
         variant: "destructive",
       });
     },
@@ -143,7 +146,10 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
     onError: (error) => {
       toast({
         title: "Error",
-        description: error.message ?? "Failed to update event status",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to update event status",
         variant: "destructive",
       });
     },
@@ -160,7 +166,8 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
     onError: (error) => {
       toast({
         title: "Error",
-        description: error.message ?? "Failed to delete event",
+        description:
+          error instanceof Error ? error.message : "Failed to delete event",
         variant: "destructive",
       });
     },

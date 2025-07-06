@@ -37,7 +37,7 @@ interface EventFormState<T extends EventType = EventType> {
 // ===== FORM ACTIONS =====
 
 type EventFormAction<T extends EventType = EventType> =
-  | { type: "SET_FIELD"; field: keyof EventFormData<T>; value: any }
+  | { type: "SET_FIELD"; field: keyof EventFormData<T>; value: unknown }
   | { type: "SET_MULTIPLE_FIELDS"; fields: Partial<EventFormData<T>> }
   | { type: "SET_ERRORS"; errors: EventFormErrors }
   | {
@@ -81,7 +81,7 @@ function getDefaultEventFormData<T extends EventType>(
     triggerType: "MANUAL" as const,
     runLocation: "LOCAL" as const,
     serverId: null,
-    selectedServerIds: [] as any,
+    selectedServerIds: [] as number[],
     conditionalActions: [],
     // Type-specific defaults will be set based on eventType
     ...(eventType === EventType.HTTP_REQUEST
@@ -95,7 +95,7 @@ function getDefaultEventFormData<T extends EventType>(
           content: "",
         }),
     ...(eventType !== EventType.HTTP_REQUEST ? {} : {}),
-  } as EventFormData<T>;
+  } as unknown as EventFormData<T>;
 }
 
 function getDefaultTouched(): EventFormTouched {
@@ -128,7 +128,7 @@ function eventFormReducer<T extends EventType>(
         data: {
           ...state.data,
           [action.field]: action.value,
-        },
+        } as EventFormData<T>,
         isDirty: true,
       };
 
@@ -275,7 +275,7 @@ export function useEventForm<T extends EventType = EventType>(
   // Initialize form state
   const initialFormData = useMemo(() => {
     const defaultData = getDefaultEventFormData<T>(
-      initialData?.type || (EventType.PYTHON as T),
+      initialData?.type ?? (EventType.PYTHON as T),
     );
     return initialData ? { ...defaultData, ...initialData } : defaultData;
   }, [initialData]);
@@ -321,7 +321,7 @@ export function useEventForm<T extends EventType = EventType>(
         dispatch({
           type: "SET_FIELD_ERROR",
           field: field as keyof EventFormErrors,
-          error: error || undefined,
+          error: error ?? undefined,
         });
       }
     },
@@ -347,7 +347,7 @@ export function useEventForm<T extends EventType = EventType>(
         dispatch({
           type: "SET_FIELD_ERROR",
           field: field as keyof EventFormErrors,
-          error: error || undefined,
+          error: error ?? undefined,
         });
       }
     },

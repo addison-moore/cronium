@@ -21,44 +21,86 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/components/ui/use-toast";
-import { Clock, Globe, User, CheckCircle, ServerIcon } from "lucide-react";
+import { Clock, Globe, User, CheckCircle } from "lucide-react";
 import {
   type Workflow,
   WorkflowTriggerType,
   EventStatus,
   TimeUnit,
+  ConnectionType,
 } from "@/shared/schema";
 import { trpc } from "@/lib/trpc";
 
+interface WorkflowNode {
+  id: string;
+  type: string;
+  position: { x: number; y: number };
+  data: Record<string, unknown>;
+}
+
+interface WorkflowEdge {
+  id: string;
+  source: string;
+  target: string;
+  type?: string;
+  data?: Record<string, unknown>;
+}
+
 interface WorkflowDetailsFormProps {
   workflow: Workflow;
-  workflowNodes: any[];
-  workflowEdges: any[];
+  workflowNodes: WorkflowNode[];
+  workflowEdges: WorkflowEdge[];
   onUpdate: (workflow: Workflow) => void;
 }
 
 // Define the form schema with proper validation
-const workflowDetailsSchema = z.object({
-  name: z.string().min(1, "Name is required").max(100, "Name is too long"),
-  description: z.string().max(500, "Description is too long").optional(),
-  triggerType: z.nativeEnum(WorkflowTriggerType),
-  status: z.nativeEnum(EventStatus),
-  tags: z.array(z.string()),
-  customSchedule: z.string().optional(),
-  scheduleNumber: z.number().min(1).nullable(),
-  scheduleUnit: z.nativeEnum(TimeUnit).nullable(),
-  useCronScheduling: z.boolean(),
-  overrideEventServers: z.boolean(),
-  overrideServerIds: z.array(z.number()),
-  shared: z.boolean(),
-});
+const workflowDetailsSchema = z
+  .object({
+    name: z.string().min(1, "Name is required").max(100, "Name is too long"),
+    description: z.string().max(500, "Description is too long").optional(),
+    triggerType: z.nativeEnum(WorkflowTriggerType),
+    status: z.nativeEnum(EventStatus),
+    tags: z.array(z.string()),
+    customSchedule: z.string().optional(),
+    // Use z.any() for fields causing type issues, then refine them with superRefine
+    scheduleNumber: z.any(),
+    scheduleUnit: z.any(),
+    useCronScheduling: z.boolean(),
+    overrideEventServers: z.boolean(),
+    overrideServerIds: z.array(z.number()),
+    shared: z.boolean(),
+  })
+  .superRefine((data, ctx) => {
+    // Validate scheduleNumber if it's not null or undefined
+    if (data.scheduleNumber !== null && data.scheduleNumber !== undefined) {
+      const num = Number(data.scheduleNumber);
+      if (isNaN(num) || num < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Schedule number must be at least 1",
+          path: ["scheduleNumber"],
+        });
+      }
+    }
+
+    // Validate scheduleUnit if it's not null or undefined
+    if (data.scheduleUnit !== null && data.scheduleUnit !== undefined) {
+      const validUnits = Object.values(TimeUnit);
+      if (!validUnits.includes(data.scheduleUnit as TimeUnit)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Invalid time unit",
+          path: ["scheduleUnit"],
+        });
+      }
+    }
+  });
 
 type WorkflowDetailsFormData = z.infer<typeof workflowDetailsSchema>;
 
@@ -106,11 +148,32 @@ export default function WorkflowDetailsForm({
   // tRPC mutation for updating workflow
   const updateWorkflowMutation = trpc.workflows.update.useMutation({
     onSuccess: (updatedWorkflow) => {
-      onUpdate(updatedWorkflow);
-      toast({
-        title: "Success",
-        description: "Workflow updated successfully",
-      });
+      if (updatedWorkflow) {
+        // Pass only the base workflow properties to onUpdate
+        onUpdate({
+          id: updatedWorkflow.id,
+          name: updatedWorkflow.name,
+          description: updatedWorkflow.description,
+          triggerType: updatedWorkflow.triggerType,
+          status: updatedWorkflow.status,
+          tags: updatedWorkflow.tags,
+          customSchedule: updatedWorkflow.customSchedule,
+          scheduleNumber: updatedWorkflow.scheduleNumber,
+          scheduleUnit: updatedWorkflow.scheduleUnit,
+          overrideEventServers: updatedWorkflow.overrideEventServers,
+          overrideServerIds: updatedWorkflow.overrideServerIds,
+          shared: updatedWorkflow.shared,
+          createdAt: updatedWorkflow.createdAt,
+          updatedAt: updatedWorkflow.updatedAt,
+          userId: updatedWorkflow.userId,
+          webhookKey: updatedWorkflow.webhookKey,
+          runLocation: updatedWorkflow.runLocation,
+        } as Workflow);
+        toast({
+          title: "Success",
+          description: "Workflow updated successfully",
+        });
+      }
     },
     onError: (error) => {
       console.error("Error updating workflow:", error);
@@ -125,20 +188,20 @@ export default function WorkflowDetailsForm({
   // Initialize form data from workflow
   useEffect(() => {
     form.reset({
-      name: workflow.name || "",
-      description: workflow.description || "",
-      triggerType: workflow.triggerType || WorkflowTriggerType.MANUAL,
-      status: workflow.status || EventStatus.DRAFT,
+      name: workflow.name ?? "",
+      description: workflow.description ?? "",
+      triggerType: workflow.triggerType ?? WorkflowTriggerType.MANUAL,
+      status: workflow.status ?? EventStatus.DRAFT,
       tags: Array.isArray(workflow.tags) ? workflow.tags : [],
-      customSchedule: workflow.customSchedule || "",
-      scheduleNumber: workflow.scheduleNumber || null,
-      scheduleUnit: workflow.scheduleUnit || null,
+      customSchedule: workflow.customSchedule ?? "",
+      scheduleNumber: workflow.scheduleNumber ?? null,
+      scheduleUnit: workflow.scheduleUnit ?? null,
       useCronScheduling: !!workflow.customSchedule,
-      overrideEventServers: workflow.overrideEventServers || false,
+      overrideEventServers: workflow.overrideEventServers ?? false,
       overrideServerIds: Array.isArray(workflow.overrideServerIds)
         ? workflow.overrideServerIds
         : [],
-      shared: workflow.shared || false,
+      shared: workflow.shared ?? false,
     });
   }, [workflow, form]);
 
@@ -155,12 +218,42 @@ export default function WorkflowDetailsForm({
       const updateData = {
         id: workflow.id,
         ...data,
-        nodes: workflowNodes,
-        edges: workflowEdges,
+        nodes: workflowNodes.map((node) => ({
+          ...node,
+          type: "eventNode" as const,
+          data: {
+            eventId: node.data.eventId as number,
+            label: node.data.label as string,
+            type: node.data.type as string,
+            eventTypeIcon: node.data.eventTypeIcon as string,
+            description: node.data.description as string | undefined,
+            tags: (node.data.tags as string[]) || [],
+            serverId: node.data.serverId as number | undefined,
+            serverName: node.data.serverName as string | undefined,
+            createdAt: node.data.createdAt as string | undefined,
+            updatedAt: node.data.updatedAt as string | undefined,
+          },
+        })),
+        edges: workflowEdges.map((edge) => ({
+          ...edge,
+          type: "connectionEdge" as const,
+          animated: true,
+          data: {
+            // Always provide both type and connectionType
+            type:
+              (edge.data?.type as ConnectionType | undefined) ??
+              (edge.data?.connectionType as ConnectionType | undefined) ??
+              ConnectionType.ALWAYS,
+            connectionType:
+              (edge.data?.connectionType as ConnectionType | undefined) ??
+              (edge.data?.type as ConnectionType | undefined) ??
+              ConnectionType.ALWAYS,
+          },
+        })),
       };
 
       await updateWorkflowMutation.mutateAsync(updateData);
-    } catch (error) {
+    } catch {
       // Error handled by mutation onError
     }
   };
@@ -318,8 +411,12 @@ export default function WorkflowDetailsForm({
                           ...prev,
                           useCronScheduling: !!checked,
                           customSchedule: checked ? prev.customSchedule : "",
-                          scheduleNumber: checked ? null : prev.scheduleNumber,
-                          scheduleUnit: checked ? null : prev.scheduleUnit,
+                          scheduleNumber: checked
+                            ? null
+                            : (prev.scheduleNumber as number | null),
+                          scheduleUnit: checked
+                            ? null
+                            : (prev.scheduleUnit as TimeUnit | null),
                         }))
                       }
                     />
@@ -352,7 +449,7 @@ export default function WorkflowDetailsForm({
                           type="number"
                           min="1"
                           placeholder="1"
-                          value={formData.scheduleNumber || ""}
+                          value={String(formData.scheduleNumber ?? "")}
                           onChange={(e) =>
                             setFormData((prev) => ({
                               ...prev,
@@ -366,7 +463,7 @@ export default function WorkflowDetailsForm({
                       <div className="space-y-2">
                         <Label htmlFor="scheduleUnit">Unit</Label>
                         <Select
-                          value={formData.scheduleUnit || ""}
+                          value={String(formData.scheduleUnit ?? "")}
                           onValueChange={(value) =>
                             setFormData((prev) => ({
                               ...prev,

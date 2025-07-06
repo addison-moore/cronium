@@ -41,6 +41,7 @@ import {
   type EventType,
   WorkflowTriggerType,
   type ConnectionType,
+  LogStatus,
 } from "@/shared/schema";
 import type { Node, Edge } from "@xyflow/react";
 
@@ -120,8 +121,8 @@ export default function WorkflowDetailsPage({
     id: number;
     workflowId: number;
     status: string;
-    startedAt: string;
-    completedAt: string | null;
+    startedAt: Date | string;
+    completedAt: Date | string | null;
     totalDuration: number | null;
     totalEvents: number;
     successfulEvents: number;
@@ -556,10 +557,10 @@ export default function WorkflowDetailsPage({
           if (execution) {
             setCurrentExecution(execution);
             if (
-              execution.status === "completed" ||
-              execution.status === "failed" ||
-              execution.status === "SUCCESS" ||
-              execution.status === "FAILURE"
+              execution.status === LogStatus.SUCCESS ||
+              execution.status === LogStatus.FAILURE ||
+              execution.status === LogStatus.TIMEOUT ||
+              execution.status === LogStatus.PARTIAL
             ) {
               setIsExecuting(false);
               void fetchExecutionStats();

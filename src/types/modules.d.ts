@@ -6,7 +6,7 @@ declare module "archiver" {
   import type { Stream } from "stream";
 
   interface ArchiverOptions {
-    zlib?: any;
+    zlib?: Record<string, unknown>;
     store?: boolean;
   }
 
@@ -23,13 +23,13 @@ declare module "archiver" {
     ): Archiver;
     directory(dirpath: string, destpath?: string | false): Archiver;
     file(filename: string, data?: Partial<ArchiverEntry>): Archiver;
-    glob(pattern: string, options?: any): Archiver;
+    glob(pattern: string, options?: Record<string, unknown>): Archiver;
     finalize(): Promise<void>;
     on(event: "error", callback: (err: Error) => void): this;
     on(event: "warning", callback: (err: Error) => void): this;
     on(event: "end", callback: () => void): this;
     on(event: "close", callback: () => void): this;
-    on(event: string, callback: (...args: any[]) => void): this;
+    on(event: string, callback: (...args: unknown[]) => void): this;
     pipe<T extends NodeJS.WritableStream>(destination: T): T;
   }
 

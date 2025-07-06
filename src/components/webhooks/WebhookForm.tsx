@@ -19,26 +19,46 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Copy, RefreshCw, AlertCircle } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { trpc } from "@/components/providers/TrpcProvider";
+import { trpc } from "@/lib/trpc";
 
 const webhookFormSchema = z.object({
   workflowId: z.number().int().positive(),
-  key: z.string().optional(),
+  key: z.string().min(1, "Key is required"),
   description: z.string().optional(),
-  isActive: z.boolean().default(true),
-  allowedMethods: z
-    .array(z.enum(["GET", "POST", "PUT", "PATCH"]))
-    .default(["POST"]),
-  rateLimitPerMinute: z.number().int().min(1).max(1000).default(60),
-  requireAuth: z.boolean().default(false),
+  isActive: z.boolean(),
+  allowedMethods: z.array(z.enum(["GET", "POST", "PUT", "PATCH"])),
+  rateLimitPerMinute: z.number().int().min(1).max(1000),
+  requireAuth: z.boolean(),
   authToken: z.string().optional(),
-  responseFormat: z.enum(["json", "text", "xml"]).default("json"),
+  responseFormat: z.enum(["json", "text", "xml"]),
 });
 
 type WebhookFormData = z.infer<typeof webhookFormSchema>;
 
+// Define webhook interface based on the router's mock data structure
+interface Webhook {
+  id: number;
+  userId: string;
+  workflowId: number;
+  key: string;
+  url?: string;
+  description?: string | null;
+  isActive: boolean;
+  allowedMethods: ("GET" | "POST" | "PUT" | "PATCH")[];
+  allowedIps?: string[];
+  rateLimitPerMinute: number;
+  requireAuth: boolean;
+  authToken?: string | null;
+  customHeaders?: Record<string, string>;
+  responseFormat: "json" | "text" | "xml";
+  triggerCount?: number;
+  lastTriggered?: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 interface WebhookFormProps {
-  webhook?: any;
+  webhook?: Webhook;
   workflowId?: number;
   onSubmit: (data: WebhookFormData) => void;
   onCancel: () => void;
@@ -64,22 +84,22 @@ export function WebhookForm({
   onCancel,
 }: WebhookFormProps) {
   const { toast } = useToast();
-  const [generatedKey, setGeneratedKey] = React.useState<string>("");
+  const [, setGeneratedKey] = React.useState<string>("");
   const [previewUrl, setPreviewUrl] = React.useState<string>("");
 
   const form = useForm<WebhookFormData>({
-    resolver: zodResolver(webhookFormSchema) as any,
+    resolver: zodResolver(webhookFormSchema),
     defaultValues: webhook
       ? {
           workflowId: webhook.workflowId,
           key: webhook.key,
           description: webhook.description ?? "",
           isActive: webhook.isActive,
-          allowedMethods: webhook.allowedMethods ?? ["POST"],
-          rateLimitPerMinute: webhook.rateLimitPerMinute ?? 60,
-          requireAuth: webhook.requireAuth ?? false,
+          allowedMethods: webhook.allowedMethods,
+          rateLimitPerMinute: webhook.rateLimitPerMinute,
+          requireAuth: webhook.requireAuth,
           authToken: webhook.authToken ?? "",
-          responseFormat: webhook.responseFormat ?? "json",
+          responseFormat: webhook.responseFormat,
         }
       : {
           workflowId: workflowId ?? 0,
@@ -138,7 +158,7 @@ export function WebhookForm({
   };
 
   const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
+    void navigator.clipboard.writeText(text);
     toast({
       title: "Copied",
       description: `${label} copied to clipboard`,
@@ -147,9 +167,10 @@ export function WebhookForm({
 
   const toggleMethod = (method: string) => {
     const currentMethods = watchedMethods;
-    const updatedMethods = currentMethods.includes(method as any)
+    const typedMethod = method as "GET" | "POST" | "PUT" | "PATCH";
+    const updatedMethods = currentMethods.includes(typedMethod)
       ? currentMethods.filter((m) => m !== method)
-      : [...currentMethods, method as any];
+      : [...currentMethods, typedMethod];
 
     form.setValue("allowedMethods", updatedMethods);
   };
@@ -273,7 +294,9 @@ export function WebhookForm({
                   key={method.value}
                   type="button"
                   variant={
-                    watchedMethods.includes(method.value as any)
+                    watchedMethods.includes(
+                      method.value as "GET" | "POST" | "PUT" | "PATCH",
+                    )
                       ? "default"
                       : "outline"
                   }
@@ -294,7 +317,10 @@ export function WebhookForm({
             <Select
               value={form.watch("responseFormat")}
               onValueChange={(value) =>
-                form.setValue("responseFormat", value as any)
+                form.setValue(
+                  "responseFormat",
+                  value as "json" | "text" | "xml",
+                )
               }
             >
               <SelectTrigger>

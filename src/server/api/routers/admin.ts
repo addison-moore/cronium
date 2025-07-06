@@ -1007,7 +1007,7 @@ export const adminRouter = createTRPCRouter({
     }),
 
   // Get admin log by ID
-  getAdminLog: adminProcedure.input(logIdSchema).query(async ({ _input }) => {
+  getAdminLog: adminProcedure.input(logIdSchema).query(async () => {
     try {
       // TODO: Implement single admin log retrieval
       throw new TRPCError({

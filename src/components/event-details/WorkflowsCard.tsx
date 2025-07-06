@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React from "react";
 import {
   Card,
   CardContent,
@@ -18,10 +18,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
 import { formatDistanceToNow } from "date-fns";
 import { trpc } from "@/lib/trpc";
-import { useToast } from "@/components/ui/use-toast";
 
 interface WorkflowItem {
   id: number;
@@ -45,8 +43,6 @@ export default function WorkflowsCard({
   eventLoaded = true,
 }: WorkflowsCardProps) {
   const router = useRouter();
-  const t = useTranslations();
-  const { toast } = useToast();
 
   // tRPC query for fetching workflows that use this event
   const {
@@ -58,7 +54,7 @@ export default function WorkflowsCard({
     { id: eventId },
     {
       enabled: eventLoaded,
-      retry: (failureCount, error) => {
+      retry: (failureCount) => {
         // Retry up to 3 times on failure
         return failureCount < 3;
       },
@@ -66,7 +62,7 @@ export default function WorkflowsCard({
     },
   );
 
-  const workflows: WorkflowItem[] = (workflowsData || []).map((w) => ({
+  const workflows: WorkflowItem[] = (workflowsData ?? []).map((w) => ({
     ...w,
     createdAt:
       w.createdAt instanceof Date ? w.createdAt.toISOString() : w.createdAt,
@@ -79,7 +75,7 @@ export default function WorkflowsCard({
   };
 
   const handleRetry = () => {
-    refetch();
+    void refetch();
   };
 
   const getStatusColor = (status: string) => {

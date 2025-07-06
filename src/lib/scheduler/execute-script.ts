@@ -4,9 +4,7 @@ import {
   EventStatus,
   LogStatus,
   TimeUnit,
-  type Event,
   type Server,
-  type Log,
   type EnvVar,
   type UserVariable,
 } from "@/shared/schema";
@@ -22,11 +20,12 @@ interface ScriptExecutionResult {
   condition?: boolean;
 }
 
-interface ExecutionEvent extends EventWithRelations {
+export interface ExecutionEvent extends EventWithRelations {
   existingLogId?: number;
   isMultiServerExecution?: boolean;
   executionId?: string;
   cleanupRequired?: boolean;
+  maxFailures?: number;
 }
 
 /**
@@ -194,7 +193,9 @@ async function executeOnMultipleServers(
         }
 
         if (!result) {
-          throw lastError ?? new Error("Unknown execution failure");
+          throw lastError instanceof Error
+            ? lastError
+            : new Error("Unknown execution failure");
         }
 
         console.log(`Multi-server: Server ${server.name} execution result:`, {
@@ -207,9 +208,13 @@ async function executeOnMultipleServers(
           serverName: server.name,
           success: result.success,
           output: result.output,
-          scriptOutput: result.scriptOutput, // Include scriptOutput for workflow data flow
-          error: result.success ? undefined : result.output,
-          condition: result.condition,
+          ...(result.scriptOutput !== undefined && {
+            scriptOutput: result.scriptOutput,
+          }), // Include scriptOutput for workflow data flow
+          ...(!result.success && { error: result.output }),
+          ...(result.condition !== undefined && {
+            condition: result.condition,
+          }),
         };
       } catch (error) {
         console.error(
@@ -221,9 +226,7 @@ async function executeOnMultipleServers(
           serverName: server.name,
           success: false,
           output: "",
-          scriptOutput: undefined,
           error: error instanceof Error ? error.message : "Unknown error",
-          condition: false,
         };
       }
     },
@@ -471,10 +474,11 @@ async function executeSingleScript(
       try {
         if (typeof event.envVars === "string") {
           // Handle empty string case that causes JSON parse errors
-          if (event.envVars.trim() === "") {
+          const envVarsString = event.envVars as string;
+          if (envVarsString.trim() === "") {
             envVars = {};
           } else {
-            envVars = JSON.parse(event.envVars) as Record<string, string>;
+            envVars = JSON.parse(envVarsString) as Record<string, string>;
           }
         } else if (Array.isArray(event.envVars)) {
           // Convert array of {key, value} objects to Record<string, string>
@@ -500,7 +504,7 @@ async function executeSingleScript(
         const error = err as Error;
         console.error(
           `Failed to parse environment variables for script ${event.id}:`,
-          error,
+          error instanceof Error ? error.message : String(error),
         );
         // Continue with empty env vars rather than failing
         envVars = {};
@@ -510,9 +514,9 @@ async function executeSingleScript(
     // Calculate timeout in milliseconds from event settings
     let timeoutMs = 30000; // Default 30 seconds
     if (event.timeoutValue && event.timeoutUnit) {
-      if (event.timeoutUnit === "MINUTES") {
+      if (event.timeoutUnit === TimeUnit.MINUTES) {
         timeoutMs = event.timeoutValue * 60 * 1000;
-      } else if (event.timeoutUnit === "SECONDS") {
+      } else if (event.timeoutUnit === TimeUnit.SECONDS) {
         timeoutMs = event.timeoutValue * 1000;
       }
     }
@@ -648,7 +652,7 @@ async function executeSingleScript(
       const eventMetadata = {
         id: event.id,
         name: event.name,
-        description: event.description || "",
+        description: event.description ?? "",
         type: event.type,
         runLocation: event.runLocation,
         createdAt: event.createdAt,
@@ -709,14 +713,6 @@ async function executeSingleScript(
         }
       }
 
-      // Pass execution data to success events
-      const executionData = {
-        executionTime: startTime.toISOString(),
-        duration: executionDuration,
-        output: output,
-        error: undefined,
-      };
-
       // Handle success events
       await handleSuccessActions(event.id);
     } else {
@@ -752,7 +748,7 @@ async function executeSingleScript(
 
       if (event.maxFailures && event.failureCount + 1 >= event.maxFailures) {
         console.log(
-          `Script ${event.id}: ${event.name} reached maximum failure count (${event.maxFailures}). Disabling.`,
+          `Script ${event.id}: ${event.name} reached maximum failure count (${String(event.maxFailures)}). Disabling.`,
         );
         await storage.updateScript(event.id, {
           status: EventStatus.PAUSED,
@@ -761,7 +757,7 @@ async function executeSingleScript(
         // Add a log with the pause reason
         await storage.createLog({
           eventId: event.id,
-          output: `Automatically paused after reaching max failures (${event.maxFailures})`,
+          output: `Automatically paused after reaching max failures (${String(event.maxFailures)})`,
           status: LogStatus.RUNNING,
           startTime: new Date(),
           endTime: new Date(),
@@ -852,7 +848,7 @@ async function executeSingleScript(
 
     if (event.maxFailures && event.failureCount + 1 >= event.maxFailures) {
       console.log(
-        `Script ${event.id}: ${event.name} reached maximum failure count (${event.maxFailures}) due to exception. Disabling.`,
+        `Script ${event.id}: ${event.name} reached maximum failure count (${String(event.maxFailures)}) due to exception. Disabling.`,
       );
 
       // Pause the script
@@ -863,7 +859,7 @@ async function executeSingleScript(
       // Add a log with the pause reason
       await storage.createLog({
         eventId: event.id,
-        output: `Automatically paused after reaching max failures (${event.maxFailures})`,
+        output: `Automatically paused after reaching max failures (${String(event.maxFailures)})`,
         status: LogStatus.RUNNING,
         startTime: new Date(),
         endTime: new Date(),
@@ -883,7 +879,7 @@ async function executeSingleScript(
     // even if any part of the execution process fails
     executingEvents.delete(event.id);
     console.log(
-      `[exec-${startTime.getTime()}-${Math.floor(Math.random() * 10000)}] Cleared executing state for script ${event.id}, remaining: ${Array.from(executingEvents)}`,
+      `[exec-${startTime.getTime()}-${Math.floor(Math.random() * 10000)}] Cleared executing state for script ${event.id}, remaining: ${Array.from(executingEvents).join(", ")}`,
     );
   }
 }

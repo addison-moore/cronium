@@ -128,7 +128,6 @@ export const userAuthRouter = createTRPCRouter({
         });
 
         // Return user without password
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { password: _, ...userWithoutPassword } = user;
 
         return userWithoutPassword;
@@ -310,8 +309,7 @@ export const userAuthRouter = createTRPCRouter({
       }
 
       // Return user without password
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { password: _password, ...userWithoutPassword } = user;
+      const { password: _, ...userWithoutPassword } = user;
 
       return userWithoutPassword;
     } catch (error) {
@@ -382,8 +380,7 @@ export const userAuthRouter = createTRPCRouter({
         });
 
         // Return user without password
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { password: _password, ...userWithoutPassword } = updatedUser;
+        const { password: _, ...userWithoutPassword } = updatedUser;
 
         return userWithoutPassword;
       } catch (error) {
@@ -482,7 +479,6 @@ export const userAuthRouter = createTRPCRouter({
       await storage.updateUser(user.id, { lastLogin: new Date() });
 
       // Return success with user data (without password)
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { password: _, ...userWithoutPassword } = user;
 
       return {

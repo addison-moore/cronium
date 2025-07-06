@@ -6,7 +6,7 @@
  */
 
 import { EventType } from "@/shared/schema";
-import { SSHConnectionManager, type SSHConnection } from "./shared";
+import { SSHConnectionManager } from "./shared";
 import type { NodeSSH } from "node-ssh";
 
 export class ScriptExecutorSSHService {
@@ -29,7 +29,7 @@ export class ScriptExecutorSSHService {
       username: string;
       port: number;
     },
-    timeoutMs = 30000,
+    _timeoutMs = 30000,
     input?: unknown,
     eventData?: { id: number; name: string; userId: string },
     userVariables?: Record<string, string>,
@@ -404,7 +404,8 @@ cronium_setVariable() {
 
       const result = await activeSSH.execCommand(command, {
         execOptions: {
-          timeout: timeoutMs,
+          // timeout is not a valid property for execOptions
+          // timeouts should be handled at a different level
         },
       });
 

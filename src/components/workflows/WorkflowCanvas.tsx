@@ -297,7 +297,16 @@ export default function WorkflowCanvas({
   ]);
 
   useEffect(() => {
-    setEdges(initialEdges);
+    // Normalize edges to ensure all required properties are present
+    const normalizedEdges = initialEdges.map((edge) => ({
+      ...edge,
+      type: edge.type ?? "connectionEdge",
+      data: edge.data ?? { type: ConnectionType.ALWAYS },
+      animated: edge.animated ?? true,
+      sourceHandle: edge.sourceHandle ?? null,
+      targetHandle: edge.targetHandle ?? null,
+    })) as Edge[];
+    setEdges(normalizedEdges);
   }, [initialEdges, setEdges]);
 
   // Update last saved state when save is called
@@ -330,7 +339,16 @@ export default function WorkflowCanvas({
       const previousState = history[previousIndex];
 
       setNodes(previousState.nodes);
-      setEdges(previousState.edges);
+      // Normalize edges from history
+      const normalizedEdges = previousState.edges.map((edge) => ({
+        ...edge,
+        type: edge.type ?? "connectionEdge",
+        data: edge.data ?? { type: ConnectionType.ALWAYS },
+        animated: edge.animated ?? true,
+        sourceHandle: edge.sourceHandle ?? null,
+        targetHandle: edge.targetHandle ?? null,
+      })) as Edge[];
+      setEdges(normalizedEdges);
       setCurrentHistoryIndex(previousIndex);
 
       // Notify parent of changes
@@ -355,7 +373,16 @@ export default function WorkflowCanvas({
     }
 
     setNodes(lastSavedState.nodes);
-    setEdges(lastSavedState.edges);
+    // Normalize edges from saved state
+    const normalizedEdges = lastSavedState.edges.map((edge) => ({
+      ...edge,
+      type: edge.type ?? "connectionEdge",
+      data: edge.data ?? { type: ConnectionType.ALWAYS },
+      animated: edge.animated ?? true,
+      sourceHandle: edge.sourceHandle ?? null,
+      targetHandle: edge.targetHandle ?? null,
+    })) as Edge[];
+    setEdges(normalizedEdges);
 
     // Reset history to last saved state
     setHistory([lastSavedState]);
@@ -523,16 +550,47 @@ export default function WorkflowCanvas({
         return;
       }
 
-      // Create edge with appropriate type
+      // Create edge with appropriate type and ensure all required properties are defined
       const newEdge = {
         ...connection,
         id: `e-${connection.source}-${connection.target}`,
-        type: "connectionEdge",
+        type: "connectionEdge", // Ensure type is always defined as a string
         data: { type: ConnectionType.ALWAYS },
         animated: true,
+        source: connection.source,
+        target: connection.target,
+        sourceHandle: connection.sourceHandle ?? null,
+        targetHandle: connection.targetHandle ?? null,
       };
 
-      const updatedEdges = addEdge(newEdge, edges) as Edge[];
+      // Add the edge and ensure all edges have required properties
+      // Normalize existing edges to match addEdge's expected type
+      const normalizedExistingEdges = edges.map((edge) => ({
+        ...edge,
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        type: edge.type ?? "connectionEdge",
+        data: edge.data
+          ? {
+              ...edge.data,
+              type: (edge.data.type as ConnectionType) ?? ConnectionType.ALWAYS,
+            }
+          : { type: ConnectionType.ALWAYS },
+        animated: edge.animated ?? true,
+        sourceHandle: edge.sourceHandle ?? null,
+        targetHandle: edge.targetHandle ?? null,
+      }));
+
+      const edgesWithNewEdge = addEdge(newEdge, normalizedExistingEdges);
+      const updatedEdges = edgesWithNewEdge.map((edge) => ({
+        ...edge,
+        type: edge.type ?? "connectionEdge",
+        data: edge.data ?? { type: ConnectionType.ALWAYS },
+        animated: edge.animated ?? true,
+        sourceHandle: edge.sourceHandle ?? null,
+        targetHandle: edge.targetHandle ?? null,
+      })) as Edge[];
       setEdges(updatedEdges);
 
       // Track connection in history
@@ -987,12 +1045,20 @@ export default function WorkflowCanvas({
                                 eventId={event.id}
                                 eventName={event.name}
                                 eventType={event.type}
-                                eventDescription={event.description}
+                                eventDescription={event.description ?? ""}
                                 eventTags={event.tags ?? []}
-                                eventServerId={event.serverId}
-                                eventServerName={event.serverName}
-                                createdAt={event.createdAt}
-                                updatedAt={event.updatedAt}
+                                {...(event.serverId != null && {
+                                  eventServerId: event.serverId,
+                                })}
+                                {...(event.serverName != null && {
+                                  eventServerName: event.serverName,
+                                })}
+                                {...(event.createdAt != null && {
+                                  createdAt: event.createdAt,
+                                })}
+                                {...(event.updatedAt != null && {
+                                  updatedAt: event.updatedAt,
+                                })}
                                 onEventUpdated={() => {
                                   // Use the same updateEvents function as canvas nodes for consistent refresh
                                   if (updateEvents) {

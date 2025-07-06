@@ -294,11 +294,11 @@ export async function POST(request: NextRequest) {
       status: data.status,
       scheduleNumber: data.scheduleNumber ?? 1,
       scheduleUnit: data.scheduleUnit,
-      customSchedule: data.customSchedule,
+      ...(data.customSchedule ? { customSchedule: data.customSchedule } : {}),
       // Handle the start time field - ensure it's a valid Date or null
       startTime: data.startTime ? new Date(data.startTime) : null,
       runLocation: data.runLocation,
-      serverId: data.serverId,
+      ...(data.serverId !== undefined ? { serverId: data.serverId } : {}),
       timeoutValue: data.timeoutValue,
       timeoutUnit: data.timeoutUnit,
       retries: data.retries,
@@ -329,8 +329,9 @@ export async function POST(request: NextRequest) {
         } catch (parseError) {
           console.error("Error parsing HTTP request data:", parseError);
           // Fall back to the old format
-          scriptData.httpMethod = data.httpMethod;
-          scriptData.httpUrl = data.httpUrl;
+          if (data.httpMethod !== undefined)
+            scriptData.httpMethod = data.httpMethod;
+          if (data.httpUrl !== undefined) scriptData.httpUrl = data.httpUrl;
           scriptData.httpBody = data.httpBody ?? "";
 
           // Add HTTP headers if provided
@@ -342,8 +343,9 @@ export async function POST(request: NextRequest) {
         }
       } else {
         // Use the old format
-        scriptData.httpMethod = data.httpMethod;
-        scriptData.httpUrl = data.httpUrl;
+        if (data.httpMethod !== undefined)
+          scriptData.httpMethod = data.httpMethod;
+        if (data.httpUrl !== undefined) scriptData.httpUrl = data.httpUrl;
         scriptData.httpBody = data.httpBody ?? "";
 
         // Add HTTP headers if provided

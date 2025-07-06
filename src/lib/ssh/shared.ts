@@ -95,14 +95,14 @@ export class SSHConnectionManager {
           connection.lastUsed = Date.now();
           console.log(`Reusing existing connection to ${connectionKey}`);
           return connection;
-        } catch (error) {
+        } catch {
           console.log(
             `Existing connection to ${connectionKey} failed test, removing...`,
           );
           // Connection is dead, remove it
           try {
             connection.ssh.dispose();
-          } catch (disposeError) {
+          } catch {
             // Ignore disposal errors
           }
           this.connectionPool.delete(connectionKey);
@@ -204,7 +204,7 @@ export class SSHConnectionManager {
       );
       try {
         ssh.dispose();
-      } catch (disposeError) {
+      } catch {
         // Ignore disposal errors
       }
       throw error;

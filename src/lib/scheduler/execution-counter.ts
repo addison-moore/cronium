@@ -1,5 +1,5 @@
 import { storage } from "@/server/storage";
-import { EventStatus } from "@/shared/schema";
+import { EventStatus, LogStatus } from "@/shared/schema";
 import { scheduler } from "@/lib/scheduler";
 
 /**
@@ -35,15 +35,11 @@ export async function handleExecutionCount(eventId: number) {
 
         // IMPORTANT: Cancel the job in the scheduler to prevent further executions
         try {
-          // Cancel any currently scheduled job for this event
-          const schedulerInstance = scheduler as any;
-          if (schedulerInstance.jobs?.has(eventId)) {
-            console.log(
-              `Cancelling job for event ${eventId} after reaching max executions`,
-            );
-            schedulerInstance.jobs.get(eventId)?.cancel();
-            schedulerInstance.jobs.delete(eventId);
-          }
+          // Cancel any currently scheduled job for this event using the public API
+          console.log(
+            `Cancelling job for event ${eventId} after reaching max executions`,
+          );
+          await scheduler.deleteScript(eventId);
         } catch (err) {
           console.error(
             `Error cancelling scheduled job for event ${eventId} after max executions:`,
@@ -56,7 +52,7 @@ export async function handleExecutionCount(eventId: number) {
         await storage.createLog({
           eventId: eventId,
           output: `Automatically paused after reaching max executions (${event.maxExecutions})`,
-          status: "PAUSED" as any, // Using string value directly until schema is updated
+          status: LogStatus.PAUSED,
           startTime: new Date(),
           endTime: new Date(),
           successful: false, // Not a successful execution

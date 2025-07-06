@@ -45,12 +45,12 @@ export class TemplateProcessor {
 
         for (const key of keys) {
           if (current == null || typeof current !== "object") {
-            return fallback;
+            return fallback as string;
           }
           current = (current as Record<string, unknown>)[key];
         }
 
-        return current ?? fallback;
+        return (current ?? fallback) as string;
       },
     );
 
@@ -200,11 +200,13 @@ export class TemplateProcessor {
         name: event.name,
         status: (event.status ??
           "unknown") as TemplateContext["event"]["status"],
-        duration: event.duration,
-        executionTime: event.executionTime,
-        server: event.server,
-        output: event.output,
-        error: event.error,
+        ...(event.duration !== undefined && { duration: event.duration }),
+        ...(event.executionTime !== undefined && {
+          executionTime: event.executionTime,
+        }),
+        ...(event.server !== undefined && { server: event.server }),
+        ...(event.output !== undefined && { output: event.output }),
+        ...(event.error !== undefined && { error: event.error }),
       },
       variables,
       input,

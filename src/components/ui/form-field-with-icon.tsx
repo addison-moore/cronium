@@ -40,7 +40,14 @@ export function FormFieldWithIcon({
         <FormItem>
           <FormLabel>{label}</FormLabel>
           <FormControl>
-            <IconInput icon={icon} {...field} {...inputProps} />
+            <IconInput
+              icon={icon}
+              {...field}
+              value={
+                field.value as string | number | readonly string[] | undefined
+              }
+              {...inputProps}
+            />
           </FormControl>
           {description && <FormDescription>{description}</FormDescription>}
           <FormMessage />

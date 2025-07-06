@@ -47,16 +47,6 @@ import { trpc } from "@/lib/trpc";
 import { TokenStatus } from "@/shared/schema";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 
-type ApiToken = {
-  id: number;
-  name: string;
-  status: "ACTIVE" | "REVOKED";
-  createdAt: string;
-  lastUsed?: string | null;
-  expiresAt?: string | null;
-  displayToken?: string; // Only present when a token is first created
-};
-
 const createTokenSchema = z.object({
   name: z
     .string()
@@ -88,7 +78,7 @@ export default function ApiTokensManager() {
 
   const createTokenMutation = trpc.auth.createApiToken.useMutation({
     onSuccess: (data) => {
-      refetch();
+      void refetch();
       setNewToken(data.displayToken);
       form.reset();
       setShowNewTokenDialog(true);
@@ -108,7 +98,7 @@ export default function ApiTokensManager() {
 
   const revokeTokenMutation = trpc.auth.revokeApiToken.useMutation({
     onSuccess: () => {
-      refetch();
+      void refetch();
       toast({
         title: "Token revoked",
         description:
@@ -126,7 +116,7 @@ export default function ApiTokensManager() {
 
   const deleteTokenMutation = trpc.auth.deleteApiToken.useMutation({
     onSuccess: () => {
-      refetch();
+      void refetch();
       toast({
         title: "Token deleted",
         description: "The API token has been permanently deleted.",
@@ -146,7 +136,7 @@ export default function ApiTokensManager() {
   };
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+    void navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     toast({
@@ -346,7 +336,7 @@ export default function ApiTokensManager() {
 
             <div className="flex items-center space-x-2">
               <Input
-                value={newToken || ""}
+                value={newToken ?? ""}
                 readOnly
                 className="font-mono text-sm"
               />

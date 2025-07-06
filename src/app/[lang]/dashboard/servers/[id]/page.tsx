@@ -113,51 +113,6 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
     return new Date(dateString).toLocaleString();
   };
 
-  const formatUptime = (uptime?: number) => {
-    if (uptime === undefined) return "Unknown";
-
-    const days = Math.floor(uptime / (24 * 60 * 60));
-    const hours = Math.floor((uptime % (24 * 60 * 60)) / (60 * 60));
-    const minutes = Math.floor((uptime % (60 * 60)) / 60);
-
-    if (days > 0) {
-      return `${days}d ${hours}h ${minutes}m`;
-    } else if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    } else {
-      return `${minutes}m`;
-    }
-  };
-
-  const formatMemory = (memoryString?: string) => {
-    if (!memoryString || memoryString === "Unknown") return "Unknown";
-
-    // Handle memory strings like "457Mi", "1Gi", etc.
-    const match = /^(\d+(?:\.\d+)?)(.*)/.exec(memoryString);
-    if (!match) return memoryString;
-
-    const [, value, unit] = match;
-    if (!value) return memoryString;
-    const numValue = parseFloat(value);
-
-    switch (unit) {
-      case "Gi":
-        return `${(numValue * 1.07374).toFixed(2)} GB`;
-      case "Mi":
-        return `${(numValue * 1.04858).toFixed(0)} MB`;
-      case "Ki":
-        return `${(numValue * 0.001024).toFixed(2)} MB`;
-      case "G":
-        return `${numValue.toFixed(2)} GB`;
-      case "M":
-        return `${numValue.toFixed(0)} MB`;
-      case "K":
-        return `${(numValue / 1000).toFixed(2)} MB`;
-      default:
-        return memoryString;
-    }
-  };
-
   if (isLoading) {
     return (
       <div className="container mx-auto p-4">

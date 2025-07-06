@@ -229,7 +229,7 @@ export async function executeLocalScript(
           // Include the raw output content in stderr if parsing fails
           result.stderr =
             (result.stderr || "") +
-            `\nWarning: Failed to parse output.json: ${parseError}`;
+            `\nWarning: Failed to parse output.json: ${parseError instanceof Error ? parseError.message : String(parseError)}`;
         }
       }
 
@@ -249,14 +249,14 @@ export async function executeLocalScript(
             );
           }
           console.log(
-            `Found condition file for script execution, condition: ${condition}`,
+            `Found condition file for script execution, condition: ${String(condition)}`,
           );
         } catch (parseError) {
           console.error("Failed to parse condition.json:", parseError);
           // Include the condition parse error in stderr if parsing fails
           result.stderr =
             (result.stderr || "") +
-            `\nWarning: Failed to parse condition.json: ${parseError}`;
+            `\nWarning: Failed to parse condition.json: ${parseError instanceof Error ? parseError.message : String(parseError)}`;
         }
       }
 
@@ -342,7 +342,7 @@ export async function executeLocalScript(
           );
           result.stderr =
             (result.stderr || "") +
-            `\nWarning: Failed to persist variable changes: ${parseError}`;
+            `\nWarning: Failed to persist variable changes: ${parseError instanceof Error ? parseError.message : String(parseError)}`;
         }
       }
 

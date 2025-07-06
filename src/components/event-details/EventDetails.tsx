@@ -20,8 +20,6 @@ import {
   EventDeleteDialog,
 } from "./index";
 import { EventStatus, type Log } from "@/shared/schema";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import type { EventWithRelations } from "@/server/storage";
 import type { Event } from "./types";
 import { Spinner } from "../ui/spinner";
 
@@ -151,12 +149,27 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
 
   // Extract logs data from tRPC response
   useEffect(() => {
-    if (logsData) {
-      setLogs(logsData.logs ?? []);
-      setTotalLogs(logsData.logs?.length ?? 0);
-      setTotalLogPages(
-        Math.ceil((logsData.logs?.length ?? 0) / logsItemsPerPage),
-      );
+    try {
+      // Type guard to ensure logsData exists and has the expected structure
+      if (logsData && typeof logsData === "object" && logsData !== null) {
+        // Use type assertion to tell TypeScript this is a valid logs object
+        const typedLogsData = logsData as { logs?: Log[] };
+        const logsList = typedLogsData.logs ?? [];
+        setLogs(logsList);
+        setTotalLogs(logsList.length);
+        setTotalLogPages(Math.ceil(logsList.length / logsItemsPerPage));
+      } else {
+        // Handle case when logs are not available
+        setLogs([]);
+        setTotalLogs(0);
+        setTotalLogPages(1);
+      }
+    } catch (error) {
+      // Handle any unexpected errors
+      console.error("Error processing logs data:", error);
+      setLogs([]);
+      setTotalLogs(0);
+      setTotalLogPages(1);
     }
   }, [logsData, logsItemsPerPage]);
 
