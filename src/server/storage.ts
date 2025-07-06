@@ -73,6 +73,56 @@ import {
   encryptionService,
 } from "../lib/encryption-service";
 
+// Type definitions for complex return types
+export interface EventWithRelations extends Script {
+  envVars: EnvVar[];
+  server?: Server;
+  servers: Server[];
+  successEvents: ConditionalAction[];
+  failEvents: ConditionalAction[];
+  alwaysEvents: ConditionalAction[];
+  conditionEvents: ConditionalAction[];
+}
+
+export interface WorkflowNodeWithEvent extends WorkflowNode {
+  event?: EventWithRelations | undefined;
+}
+
+export interface WorkflowWithRelations extends Workflow {
+  nodes: WorkflowNodeWithEvent[];
+  connections: WorkflowConnection[];
+}
+
+export interface DashboardStats {
+  counts: {
+    scripts: number;
+    servers: number;
+    workflows: number;
+  };
+  executions: {
+    total: number;
+    success: number;
+    failure: number;
+    recent: Log[];
+  };
+}
+
+export interface LogFilters {
+  eventId?: string;
+  status?: LogStatus;
+  date?: string;
+  workflowId?: number | null;
+  userId?: string;
+  ownEventsOnly?: boolean;
+  sharedOnly?: boolean;
+}
+
+export interface WorkflowExecutionEventWithDetails
+  extends WorkflowExecutionEvent {
+  eventName: string | null;
+  eventType: string | null;
+}
+
 export interface IStorage {
   // User methods
   getUser(id: string): Promise<User | undefined>;
@@ -90,7 +140,7 @@ export interface IStorage {
 
   // Script methods
   getEvent(id: number): Promise<Script | undefined>;
-  getEventWithRelations(id: number): Promise<any>;
+  getEventWithRelations(id: number): Promise<EventWithRelations | undefined>;
   getAllEvents(userId: string): Promise<Script[]>;
   getEventsByServerId(serverId: number, userId: string): Promise<Script[]>;
   canViewEvent(eventId: number, userId: string): Promise<boolean>;
@@ -137,7 +187,7 @@ export interface IStorage {
     options?: { limit?: number; offset?: number },
   ): Promise<{ logs: Log[]; total: number }>;
   getFilteredLogs(
-    filters: any,
+    filters: LogFilters,
     limit?: number,
     page?: number,
   ): Promise<{ logs: Log[]; total: number }>;
@@ -185,11 +235,11 @@ export interface IStorage {
   revokeApiToken(id: number): Promise<ApiToken>;
 
   // Dashboard stats
-  getDashboardStats(userId: string): Promise<any>;
+  getDashboardStats(userId: string): Promise<DashboardStats>;
 
   // Workflow methods
   getWorkflow(id: number): Promise<Workflow | undefined>;
-  getWorkflowWithRelations(id: number): Promise<any>;
+  getWorkflowWithRelations(id: number): Promise<WorkflowWithRelations | null>;
   getAllWorkflows(userId: string): Promise<Workflow[]>;
   getWorkflowsUsingEvent(eventId: number, userId: string): Promise<Workflow[]>;
   createWorkflow(insertWorkflow: InsertWorkflow): Promise<Workflow>;
@@ -255,7 +305,7 @@ export interface IStorage {
   ): Promise<WorkflowExecutionEvent>;
   getWorkflowExecutionEvents(
     executionId: number,
-  ): Promise<WorkflowExecutionEvent[]>;
+  ): Promise<WorkflowExecutionEventWithDetails[]>;
   updateWorkflowExecutionEvent(
     id: number,
     updateData: Partial<InsertWorkflowExecutionEvent>,
@@ -457,47 +507,68 @@ class DatabaseStorage implements IStorage {
     return !!script;
   }
 
-  async getEventWithRelations(id: number): Promise<any> {
-    // Get script
-    const script = await this.getEvent(id);
-    if (!script) return undefined;
+  async getEventWithRelations(
+    id: number,
+  ): Promise<EventWithRelations | undefined> {
+    try {
+      // Get script
+      const script = await this.getEvent(id);
+      if (!script) return undefined;
 
-    // Get environment variables
-    const scriptEnvVars = await this.getEnvVars(id);
+      // Get environment variables
+      const scriptEnvVars = await this.getEnvVars(id);
 
-    // Get server if needed (legacy single server support)
-    let scriptServer;
-    if (script.serverId) {
-      scriptServer = await this.getServer(script.serverId);
-    }
-
-    // Get multiple servers through junction table
-    const eventServerList = await this.getEventServers(id);
-    const servers = [];
-    for (const eventServer of eventServerList) {
-      const server = await this.getServer(eventServer.serverId);
-      if (server) {
-        servers.push(server);
+      // Get server if needed (legacy single server support)
+      let scriptServer;
+      if (script.serverId) {
+        try {
+          scriptServer = await this.getServer(script.serverId);
+        } catch (error) {
+          console.error(`Error fetching server ${script.serverId}:`, error);
+          // Continue without the server rather than failing completely
+          scriptServer = undefined;
+        }
       }
+
+      // Get multiple servers through junction table
+      const eventServerList = await this.getEventServers(id);
+      const servers = [];
+      for (const eventServer of eventServerList) {
+        try {
+          const server = await this.getServer(eventServer.serverId);
+          if (server) {
+            servers.push(server);
+          }
+        } catch (error) {
+          console.error(
+            `Error fetching server ${eventServer.serverId}:`,
+            error,
+          );
+          // Continue without this server rather than failing completely
+        }
+      }
+
+      // Get success, failure, always, and condition events
+      const successEvents = await this.getSuccessActions(id);
+      const failEvents = await this.getFailActions(id);
+      const alwaysEvents = await this.getAlwaysActions(id);
+      const conditionEvents = await this.getConditionActions(id);
+
+      // Combine all data
+      return {
+        ...script,
+        envVars: scriptEnvVars,
+        server: scriptServer, // Keep for backward compatibility
+        servers, // New multi-server support
+        successEvents,
+        failEvents,
+        alwaysEvents,
+        conditionEvents,
+      } as EventWithRelations;
+    } catch (error) {
+      console.error(`Error in getEventWithRelations for event ${id}:`, error);
+      throw error;
     }
-
-    // Get success, failure, always, and condition events
-    const successEvents = await this.getSuccessActions(id);
-    const failEvents = await this.getFailActions(id);
-    const alwaysEvents = await this.getAlwaysActions(id);
-    const conditionEvents = await this.getConditionActions(id);
-
-    // Combine all data
-    return {
-      ...script,
-      envVars: scriptEnvVars,
-      server: scriptServer, // Keep for backward compatibility
-      servers, // New multi-server support
-      successEvents,
-      failEvents,
-      alwaysEvents,
-      conditionEvents,
-    };
   }
 
   async getAllEvents(userId: string): Promise<Script[]> {
@@ -654,7 +725,15 @@ class DatabaseStorage implements IStorage {
       .where(eq(envVars.eventId, eventId));
 
     // Decrypt sensitive environment variable values
-    return vars.map((envVar) => decryptSensitiveData(envVar, "envVars"));
+    return vars.map((envVar) => {
+      try {
+        return decryptSensitiveData(envVar, "envVars");
+      } catch (error) {
+        console.error(`Error decrypting env var for event ${eventId}:`, error);
+        // Return env var without decryption rather than failing
+        return envVar;
+      }
+    });
   }
 
   async createEnvVar(insertEnvVar: InsertEnvVar): Promise<EnvVar> {
@@ -859,7 +938,7 @@ class DatabaseStorage implements IStorage {
     const offset = (page - 1) * limit;
 
     const [countResult] = await db.select({ count: count() }).from(logs);
-    const total = Number(countResult?.count) || 0;
+    const total = Number(countResult?.count) ?? 0;
 
     const logResults = await db
       .select()
@@ -872,7 +951,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async getFilteredLogs(
-    filters: any,
+    filters: LogFilters,
     limit = 20,
     page = 1,
   ): Promise<{ logs: Log[]; total: number }> {
@@ -965,7 +1044,7 @@ class DatabaseStorage implements IStorage {
     }
 
     const [countResult] = await countQuery;
-    const total = Number(countResult?.count) || 0;
+    const total = Number(countResult?.count) ?? 0;
 
     // Apply conditions to main query with workflow and events joins
     let query;
@@ -1073,7 +1152,7 @@ class DatabaseStorage implements IStorage {
       .from(logs)
       .where(eq(logs.eventId, eventId));
 
-    const total = Number(countResult?.count) || 0;
+    const total = Number(countResult?.count) ?? 0;
 
     const logResults = await db
       .select()
@@ -1116,7 +1195,13 @@ class DatabaseStorage implements IStorage {
   async getServer(id: number): Promise<Server | undefined> {
     const [server] = await db.select().from(servers).where(eq(servers.id, id));
     if (server) {
-      return decryptSensitiveData<Server>(server, "servers");
+      try {
+        return decryptSensitiveData<Server>(server, "servers");
+      } catch (error) {
+        console.error(`Error decrypting server ${id} data:`, error);
+        // Return server without decryption rather than failing
+        return server;
+      }
     }
     return server;
   }
@@ -1275,7 +1360,7 @@ class DatabaseStorage implements IStorage {
   }
 
   // Dashboard stats
-  async getDashboardStats(userId: string): Promise<any> {
+  async getDashboardStats(userId: string): Promise<DashboardStats> {
     // Get counts for various entities
     const [scriptCount] = await db
       .select({ count: count() })
@@ -1312,9 +1397,9 @@ class DatabaseStorage implements IStorage {
 
     return {
       counts: {
-        scripts: Number(scriptCount?.count) || 0,
-        servers: Number(serverCount?.count) || 0,
-        workflows: Number(workflowCount?.count) || 0,
+        scripts: Number(scriptCount?.count) ?? 0,
+        servers: Number(serverCount?.count) ?? 0,
+        workflows: Number(workflowCount?.count) ?? 0,
       },
       executions: {
         total: recentLogs.length,
@@ -1386,7 +1471,9 @@ class DatabaseStorage implements IStorage {
     return workflow;
   }
 
-  async getWorkflowWithRelations(id: number): Promise<any> {
+  async getWorkflowWithRelations(
+    id: number,
+  ): Promise<WorkflowWithRelations | null> {
     const workflow = await this.getWorkflow(id);
     if (!workflow) return null;
 
@@ -1395,12 +1482,12 @@ class DatabaseStorage implements IStorage {
 
     // Get the events for each node
     const nodesWithEvents = await Promise.all(
-      nodes.map(async (node) => {
+      nodes.map(async (node): Promise<WorkflowNodeWithEvent> => {
         if (node.eventId) {
           const event = await this.getEventWithRelations(node.eventId);
           return { ...node, event };
         }
-        return node;
+        return { ...node, event: undefined };
       }),
     );
 
@@ -1585,7 +1672,7 @@ class DatabaseStorage implements IStorage {
       .from(workflowLogs)
       .where(eq(workflowLogs.workflowId, workflowId));
 
-    const total = Number(countResult?.count) || 0;
+    const total = Number(countResult?.count) ?? 0;
 
     const logResults = await db
       .select()
@@ -1712,7 +1799,7 @@ class DatabaseStorage implements IStorage {
 
   async getWorkflowExecutionEvents(
     executionId: number,
-  ): Promise<WorkflowExecutionEvent[]> {
+  ): Promise<WorkflowExecutionEventWithDetails[]> {
     const eventsData = await db
       .select({
         id: workflowExecutionEvents.id,
@@ -1735,7 +1822,7 @@ class DatabaseStorage implements IStorage {
       .where(eq(workflowExecutionEvents.workflowExecutionId, executionId))
       .orderBy(workflowExecutionEvents.sequenceOrder);
 
-    return eventsData as any[];
+    return eventsData as WorkflowExecutionEventWithDetails[];
   }
 
   async updateWorkflowExecutionEvent(
@@ -1838,7 +1925,11 @@ class DatabaseStorage implements IStorage {
           }
         }
       } catch (error) {
-        // Skip tokens that can't be decrypted
+        // Log the error but continue processing other tokens
+        console.error(
+          `Failed to decrypt API token (ID: ${apiToken.id}):`,
+          error instanceof Error ? error.message : "Unknown error",
+        );
         continue;
       }
     }
@@ -1955,7 +2046,7 @@ class DatabaseStorage implements IStorage {
       .from(logs)
       .where(eq(logs.eventId, eventId));
 
-    const total = Number(countResult?.count) || 0;
+    const total = Number(countResult?.count) ?? 0;
 
     const logResults = await db
       .select()

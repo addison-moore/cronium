@@ -1,26 +1,15 @@
 import React from "react";
 import DocsLayout from "@/components/docs/docs-layout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import {
-  Code2,
   Database,
   ArrowRight,
   Zap,
-  Copy,
   Settings,
   FlaskConical,
 } from "lucide-react";
 import ApiCodeExamples, {
   CodeBlock,
-  SimpleCodeBlock,
 } from "@/components/docs/api-code-examples";
 
 const tableOfContents = [

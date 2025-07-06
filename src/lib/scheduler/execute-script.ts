@@ -3,8 +3,14 @@ import {
   RunLocation,
   EventStatus,
   LogStatus,
+  TimeUnit,
+  type Event,
+  type Server,
+  type Log,
+  type EnvVar,
+  type UserVariable,
 } from "@/shared/schema";
-import { storage } from "@/server/storage";
+import { storage, type EventWithRelations } from "@/server/storage";
 import { executeHttpRequest } from "./http-executor";
 import { executeLocalScript } from "./local-executor";
 import { scriptExecutorSSHService } from "@/lib/ssh/script-executor";
@@ -12,15 +18,22 @@ import { scriptExecutorSSHService } from "@/lib/ssh/script-executor";
 interface ScriptExecutionResult {
   success: boolean;
   output: string;
-  scriptOutput?: any;
+  scriptOutput?: unknown;
   condition?: boolean;
+}
+
+interface ExecutionEvent extends EventWithRelations {
+  existingLogId?: number;
+  isMultiServerExecution?: boolean;
+  executionId?: string;
+  cleanupRequired?: boolean;
 }
 
 /**
  * Execute a script on multiple servers if configured
  */
 export async function executeScript(
-  event: any,
+  event: ExecutionEvent,
   executingEvents: Set<number>,
   handleSuccessActions: (eventId: number) => Promise<void>,
   handleFailureActions: (eventId: number) => Promise<void>,
@@ -30,7 +43,7 @@ export async function executeScript(
     condition: boolean,
   ) => Promise<void>,
   handleExecutionCount: (eventId: number) => Promise<void>,
-  input: Record<string, any> = {},
+  input: Record<string, unknown> = {},
   workflowId?: number,
 ): Promise<ScriptExecutionResult> {
   // Check if this event has multiple servers configured
@@ -70,7 +83,7 @@ export async function executeScript(
  * Execute a script on multiple servers
  */
 async function executeOnMultipleServers(
-  event: any,
+  event: ExecutionEvent,
   executingEvents: Set<number>,
   handleSuccessActions: (eventId: number) => Promise<void>,
   handleFailureActions: (eventId: number) => Promise<void>,
@@ -80,7 +93,7 @@ async function executeOnMultipleServers(
     conditionValue: boolean,
   ) => Promise<void>,
   handleExecutionCount: (eventId: number) => Promise<void>,
-  input: Record<string, any> = {},
+  input: Record<string, unknown> = {},
   workflowId?: number,
 ): Promise<ScriptExecutionResult> {
   const execId = Date.now();
@@ -94,14 +107,14 @@ async function executeOnMultipleServers(
     serverName: string;
     success: boolean;
     output: string;
-    scriptOutput?: any;
+    scriptOutput?: unknown;
     error?: string;
     condition?: boolean;
   }> = [];
 
   // Execute on each server with staggered timing and enhanced error handling
   const serverPromises = event.servers.map(
-    async (server: any, index: number) => {
+    async (server: Server, index: number) => {
       try {
         // Add progressive staggered delay to prevent connection conflicts
         const delayMs = 750 + index * 250; // 750ms, 1000ms, 1250ms, etc.
@@ -327,7 +340,7 @@ async function executeOnMultipleServers(
   );
 
   // Get the scriptOutput from the last successful execution for workflow data flow
-  let scriptOutput: any = undefined;
+  let scriptOutput: unknown = undefined;
   for (const result of results) {
     if (result.success && result.scriptOutput !== undefined) {
       scriptOutput = result.scriptOutput;
@@ -351,7 +364,7 @@ async function executeOnMultipleServers(
  * Execute a script on a single server (legacy mode)
  */
 async function executeSingleScript(
-  event: any,
+  event: ExecutionEvent,
   executingEvents: Set<number>,
   handleSuccessActions: (eventId: number) => Promise<void>,
   handleFailureActions: (eventId: number) => Promise<void>,
@@ -361,7 +374,7 @@ async function executeSingleScript(
     condition: boolean,
   ) => Promise<void>,
   handleExecutionCount: (eventId: number) => Promise<void>,
-  input: Record<string, any> = {},
+  input: Record<string, unknown> = {},
   workflowId?: number,
 ): Promise<ScriptExecutionResult> {
   // Add unique execution ID to help track this specific execution
@@ -439,7 +452,14 @@ async function executeSingleScript(
       }
     }
 
-    let result: { stdout: string; stderr: string; output?: any } = {
+    let result: {
+      stdout: string;
+      stderr: string;
+      output?: unknown;
+      scriptOutput?: unknown;
+      condition?: boolean;
+      isTimeout?: boolean;
+    } = {
       stdout: "",
       stderr: "",
     };
@@ -454,12 +474,12 @@ async function executeSingleScript(
           if (event.envVars.trim() === "") {
             envVars = {};
           } else {
-            envVars = JSON.parse(event.envVars);
+            envVars = JSON.parse(event.envVars) as Record<string, string>;
           }
         } else if (Array.isArray(event.envVars)) {
           // Convert array of {key, value} objects to Record<string, string>
           envVars = event.envVars.reduce(
-            (acc: Record<string, string>, envVar: any) => {
+            (acc: Record<string, string>, envVar: EnvVar) => {
               if (envVar.key && envVar.value) {
                 acc[envVar.key] = envVar.value;
               }
@@ -469,7 +489,7 @@ async function executeSingleScript(
           );
         } else if (typeof event.envVars === "object") {
           // If it's already an object, use it directly
-          envVars = event.envVars;
+          envVars = event.envVars as Record<string, string>;
         }
 
         console.log(
@@ -530,7 +550,7 @@ async function executeSingleScript(
               const { storage } = await import("@/server/storage");
               const variables = await storage.getUserVariables(event.userId);
               userVariables = variables.reduce(
-                (acc: Record<string, string>, variable: any) => {
+                (acc: Record<string, string>, variable: UserVariable) => {
                   acc[variable.key] = variable.value;
                   return acc;
                 },
@@ -548,7 +568,7 @@ async function executeSingleScript(
           const eventMetadata = {
             id: event.id,
             name: event.name,
-            description: event.description || "",
+            description: event.description ?? "",
             type: event.type,
             runLocation: event.runLocation,
             createdAt: event.createdAt,
@@ -594,7 +614,12 @@ async function executeSingleScript(
     } else if (event.type === EventType.HTTP_REQUEST) {
       // Execute HTTP request
       try {
-        const httpSettings = JSON.parse(event.content ?? "{}");
+        const httpSettings = JSON.parse(event.content ?? "{}") as {
+          method: string;
+          url: string;
+          headers?: Array<{ key: string; value: string }>;
+          body?: string;
+        };
         const httpResult = await executeHttpRequest(
           httpSettings.method,
           httpSettings.url,
@@ -652,7 +677,7 @@ async function executeSingleScript(
     }
 
     // Process execution results
-    const isTimeout = (result as any).isTimeout === true;
+    const isTimeout = result.isTimeout === true;
     const success = !result.stderr || result.stderr.length === 0;
     const output = result.stdout || "No output";
     const endTime = new Date();
@@ -763,7 +788,7 @@ async function executeSingleScript(
         "condition" in result &&
         typeof result.condition !== "undefined"
       ) {
-        conditionValue = Boolean((result as any).condition);
+        conditionValue = Boolean(result.condition);
         console.log(
           `Found condition from script execution for event ${event.id}, condition: ${conditionValue}`,
         );
@@ -784,8 +809,8 @@ async function executeSingleScript(
       output: success ? output : result.stderr,
     };
 
-    if ((result as any).scriptOutput !== undefined) {
-      returnValue.scriptOutput = (result as any).scriptOutput;
+    if (result.scriptOutput !== undefined) {
+      returnValue.scriptOutput = result.scriptOutput;
     }
 
     if (conditionValue !== undefined) {

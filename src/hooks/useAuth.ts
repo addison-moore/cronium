@@ -1,8 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { UserRole } from "@/shared/schema";
 import { useSession } from "next-auth/react";
+import { api } from "@/trpc/react";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 
 type User = {
   id: string;
@@ -14,44 +15,45 @@ type User = {
 };
 
 /**
- * Custom hook for accessing the authenticated user
+ * Custom hook for accessing the authenticated user using tRPC
  * This uses next-auth session and adds additional
- * functionality to fetch the full user profile
+ * functionality to fetch the full user profile via tRPC
  */
 export function useAuth() {
   // Get session from next-auth
   const { data: session, status: sessionStatus } = useSession();
 
-  // Fetch the full user data from our API
+  // Fetch the full user data using tRPC
   const {
-    data: user,
+    data: userData,
     isLoading: isUserLoading,
     error,
-  } = useQuery<User>({
-    queryKey: ["/api/auth/user"],
-    queryFn: async () => {
-      const res = await fetch("/api/auth/user");
-      if (!res.ok) {
-        // Don't throw error, just return null for unauthenticated
-        if (res.status === 401) {
-          return null;
-        }
-        throw new Error("Failed to fetch user data");
-      }
-      return res.json();
-    },
+  } = api.userAuth.getCurrentUser.useQuery(undefined, {
     enabled: !!session?.user?.id,
     retry: false,
+    ...QUERY_OPTIONS.static,
   });
+
+  // Transform userData to match the expected User type
+  const user: User | null = userData
+    ? {
+        id: userData.id,
+        email: userData.email,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        profileImageUrl: userData.profileImageUrl,
+        role: userData.role,
+      }
+    : null;
 
   return {
     user,
-    isLoading: sessionStatus === "loading" ?? isUserLoading,
+    isLoading: sessionStatus === "loading" || isUserLoading,
     isAuthenticated: !!session?.user,
     role: user?.role ?? session?.user?.role,
     isAdmin:
-      user?.role === UserRole.ADMIN ?? session?.user?.role === UserRole.ADMIN,
-    error,
+      user?.role === UserRole.ADMIN || session?.user?.role === UserRole.ADMIN,
+    error: error ? (error as unknown as Error) : undefined,
     session,
   };
 }

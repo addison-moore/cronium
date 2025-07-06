@@ -1,22 +1,8 @@
 import React from "react";
 import DocsLayout from "@/components/docs/docs-layout";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  CheckCircle,
-  ArrowRight,
-  Terminal,
-  Server,
-  Clock,
-  Play,
-  AlertCircle,
-} from "lucide-react";
+import { CheckCircle, Terminal, Server, Play, AlertCircle } from "lucide-react";
 
 const tableOfContents = [
   { title: "Before You Begin", href: "#before-you-begin", level: 2 },
@@ -29,13 +15,7 @@ const tableOfContents = [
   { title: "Troubleshooting", href: "#troubleshooting", level: 2 },
 ];
 
-function CodeBlock({
-  children,
-  language = "bash",
-}: {
-  children: string;
-  language?: string;
-}) {
+function CodeBlock({ children }: { children: string }) {
   return (
     <pre className="overflow-x-auto rounded-lg bg-gray-900 p-4 text-sm text-gray-100">
       <code>{children}</code>

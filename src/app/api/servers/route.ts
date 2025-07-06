@@ -6,7 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { sshService } from "@/lib/ssh";
 import { z } from "zod";
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     const userId = session.user.id;
-    const body = await req.json();
+    const body: unknown = await req.json();
 
     const parsedBody = createServerSchema.safeParse(body);
 

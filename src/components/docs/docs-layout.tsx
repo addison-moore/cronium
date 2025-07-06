@@ -80,6 +80,8 @@ function NavSection({
   lang: string;
   level?: number;
 }) {
+  // Ensure lang is a non-empty string
+  const safeLang = lang || "en";
   const [isOpen, setIsOpen] = useState(true);
   const pathname = usePathname();
 
@@ -103,7 +105,7 @@ function NavSection({
               <NavSection
                 key={index}
                 item={subItem}
-                lang={lang}
+                lang={safeLang}
                 level={level + 1}
               />
             ))}
@@ -113,11 +115,11 @@ function NavSection({
     );
   }
 
-  const isActive = pathname === `/${lang}${item.href}`;
+  const isActive = pathname === `/${safeLang}${item.href ?? ""}`;
 
   return (
     <Link
-      href={`/${lang}${item.href}`}
+      href={`/${safeLang}${item.href ?? ""}`}
       className={cn(
         "block rounded-md px-3 py-2 text-sm transition-colors",
         isActive

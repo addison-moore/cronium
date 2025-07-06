@@ -35,6 +35,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { trpc } from "@/components/providers/TrpcProvider";
 import { cn } from "@/lib/utils";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 
 interface WebhookMonitorProps {
   webhookKey: string;
@@ -52,39 +53,48 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
     data: monitoringData,
     isLoading: isLoadingMonitoring,
     refetch: refetchMonitoring,
-  } = trpc.webhooks.getMonitoring.useQuery({
-    key: webhookKey,
-    includeRealtime: true,
-    metricsWindow: timeRange as any,
-    alertThresholds: {
-      errorRate: 10,
-      rateLimitHits: 100,
-      avgResponseTime: 5000,
+  } = trpc.webhooks.getMonitoring.useQuery(
+    {
+      key: webhookKey,
+      includeRealtime: true,
+      metricsWindow: timeRange as any,
+      alertThresholds: {
+        errorRate: 10,
+        rateLimitHits: 100,
+        avgResponseTime: 5000,
+      },
     },
-  });
+    QUERY_OPTIONS.realtime,
+  );
 
   const {
     data: executionHistory,
     isLoading: isLoadingHistory,
     refetch: refetchHistory,
-  } = trpc.webhooks.getExecutionHistory.useQuery({
-    key: webhookKey,
-    limit: 50,
-    status: statusFilter === "all" ? undefined : (statusFilter as any),
-    sortBy: "timestamp",
-    sortOrder: "desc",
-  });
+  } = trpc.webhooks.getExecutionHistory.useQuery(
+    {
+      key: webhookKey,
+      limit: 50,
+      status: statusFilter === "all" ? undefined : (statusFilter as any),
+      sortBy: "timestamp",
+      sortOrder: "desc",
+    },
+    QUERY_OPTIONS.dynamic,
+  );
 
   const { data: statsData, isLoading: isLoadingStats } =
-    trpc.webhooks.getStats.useQuery({
-      key: webhookKey,
-      period: "day",
-      groupBy: "status",
-    });
+    trpc.webhooks.getStats.useQuery(
+      {
+        key: webhookKey,
+        period: "day",
+        groupBy: "status",
+      },
+      QUERY_OPTIONS.dynamic,
+    );
 
   const refreshAll = () => {
-    refetchMonitoring();
-    refetchHistory();
+    void refetchMonitoring();
+    void refetchHistory();
     toast({
       title: "Refreshed",
       description: "Monitoring data has been refreshed",

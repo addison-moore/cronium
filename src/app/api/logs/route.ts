@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { storage } from "@/server/storage";
+import { storage, type LogFilters } from "@/server/storage";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { z } from "zod";
+import { LogStatus } from "@/shared/schema";
 
 export async function GET(req: NextRequest) {
   try {
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
     const pageSize = parseInt(searchParams.get("pageSize") ?? "20");
 
     // Build filter object for database query
-    const filters: any = {};
+    const filters: LogFilters = {};
 
     // Add eventId filter if provided
     if (eventId) {
@@ -45,12 +46,12 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      filters.eventId = parseInt(eventId);
+      filters.eventId = eventId;
     }
 
     // Add status filter if provided
-    if (status) {
-      filters.status = status;
+    if (status && Object.values(LogStatus).includes(status as LogStatus)) {
+      filters.status = status as LogStatus;
     }
 
     // Add date filter if provided
@@ -105,7 +106,7 @@ export async function GET(req: NextRequest) {
 
 const createLogSchema = z.object({
   eventId: z.number(),
-  status: z.string(),
+  status: z.nativeEnum(LogStatus),
   output: z.string().optional(),
   startTime: z.string().optional(),
   endTime: z.string().optional(),
@@ -120,7 +121,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json();
+    const body: unknown = await req.json();
 
     const parsedBody = createLogSchema.safeParse(body);
 
@@ -145,11 +146,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Make sure the status is a valid LogStatus value
+    // Create the log with validated data
     const log = await storage.createLog({
       ...parsedBody.data,
-      // Convert string status to LogStatus enum
-      status: parsedBody.data.status as any, // Cast to any to avoid type issues
       startTime: parsedBody.data.startTime
         ? new Date(parsedBody.data.startTime)
         : new Date(),

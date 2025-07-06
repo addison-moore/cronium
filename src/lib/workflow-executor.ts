@@ -1,14 +1,38 @@
-import { storage } from "@/server/storage";
-import { scheduler } from "@/lib/scheduler";
+import { storage } from "@server/storage";
+import { scheduler } from "@lib/scheduler";
 import {
   ConnectionType,
   LogStatus,
   EventStatus,
   WorkflowTriggerType,
   WorkflowLogLevel,
-} from "@/shared/schema";
+  type Workflow,
+  type WorkflowNode,
+  type WorkflowConnection,
+  type WorkflowExecution,
+  type InsertWorkflowExecution,
+  type InsertWorkflowLog,
+  type InsertWorkflowExecutionEvent,
+  type Script as Event,
+} from "@shared/schema";
 import { scheduleJob, RecurrenceRule } from "node-schedule";
 import type { Job } from "node-schedule";
+
+// Type definitions
+interface NodeResult {
+  success: boolean;
+  output: string;
+  scriptOutput?: unknown;
+  condition?: boolean;
+}
+
+interface ExecutionResult {
+  success: boolean;
+  output?: string;
+  scriptOutput?: unknown;
+  condition?: boolean;
+  duration?: number;
+}
 
 export class WorkflowExecutor {
   private jobs = new Map<number, Job>();
@@ -21,7 +45,9 @@ export class WorkflowExecutor {
 
     try {
       // Load active workflows from the database
-      const activeWorkflows = await storage.getAllWorkflows("*");
+      const activeWorkflows = (await storage.getAllWorkflows(
+        "*",
+      )) as Workflow[];
       const activeScheduledWorkflows = activeWorkflows.filter(
         (wf) =>
           wf.status === EventStatus.ACTIVE &&
@@ -47,7 +73,10 @@ export class WorkflowExecutor {
         this.shutdown();
       });
     } catch (error) {
-      console.error("Failed to initialize workflow executor:", error);
+      console.error(
+        "Failed to initialize workflow executor:",
+        error instanceof Error ? error.message : String(error),
+      );
       throw error;
     }
   }
@@ -70,7 +99,9 @@ export class WorkflowExecutor {
       }
 
       // Get workflow details
-      const workflow = await storage.getWorkflow(workflowId);
+      const workflow = (await storage.getWorkflow(workflowId)) as
+        | Workflow
+        | undefined;
       if (!workflow) {
         console.log(
           `Workflow with ID ${workflowId} not found, skipping scheduling`,
@@ -99,7 +130,7 @@ export class WorkflowExecutor {
         // Create a recurrence rule based on the schedule number and unit
         rule = new RecurrenceRule();
 
-        const scheduleNum = workflow.scheduleNumber || 1; // Default to 1 if null
+        const scheduleNum = workflow.scheduleNumber ?? 1; // Default to 1 if null
         switch (workflow.scheduleUnit) {
           case "SECONDS":
             rule.second = new Array(Math.floor(60 / scheduleNum))
@@ -142,7 +173,10 @@ export class WorkflowExecutor {
       this.jobs.set(workflowId, job);
       console.log(`Scheduled workflow ${workflowId}: ${workflow.name}`);
     } catch (error) {
-      console.error(`Error scheduling workflow ${workflowId}:`, error);
+      console.error(
+        `Error scheduling workflow ${workflowId}:`,
+        error instanceof Error ? error.message : String(error),
+      );
       throw error;
     }
   }
@@ -150,16 +184,18 @@ export class WorkflowExecutor {
   async executeWorkflow(
     workflowId: number,
     userId?: string,
-    inputData: Record<string, any> = {},
+    inputData: Record<string, unknown> = {},
   ) {
     console.log(`Executing workflow ${workflowId} with input:`, inputData);
 
     const startTime = new Date();
-    let workflowExecution: any = null;
+    let workflowExecution: WorkflowExecution | null = null;
 
     try {
       // Get workflow details
-      const workflow = await storage.getWorkflow(workflowId);
+      const workflow = (await storage.getWorkflow(workflowId)) as
+        | Workflow
+        | undefined;
       if (!workflow) {
         throw new Error(`Workflow with ID ${workflowId} not found`);
       }
@@ -167,7 +203,7 @@ export class WorkflowExecutor {
       const executionUserId = userId || workflow.userId;
 
       // Create workflow execution record
-      workflowExecution = await storage.createWorkflowExecution({
+      const executionData: InsertWorkflowExecution = {
         workflowId: workflow.id,
         userId: executionUserId,
         status: LogStatus.RUNNING,
@@ -178,7 +214,8 @@ export class WorkflowExecutor {
           triggeredAt: startTime.toISOString(),
           inputData: inputData,
         },
-      });
+      };
+      workflowExecution = await storage.createWorkflowExecution(executionData);
 
       console.log(
         `Created workflow execution with ID: ${workflowExecution.id}`,
@@ -212,15 +249,15 @@ export class WorkflowExecutor {
   }
 
   private async executeWorkflowInBackground(
-    workflow: any,
-    workflowExecution: any,
+    workflow: Workflow,
+    workflowExecution: WorkflowExecution,
     executionUserId: string,
     startTime: Date,
-    inputData: Record<string, any> = {},
+    inputData: Record<string, unknown> = {},
   ) {
     try {
       // Create a log entry for this execution
-      const log = await storage.createWorkflowLog({
+      const logData: InsertWorkflowLog = {
         workflowId: workflow.id,
         userId: executionUserId,
         status: LogStatus.RUNNING,
@@ -229,11 +266,16 @@ export class WorkflowExecutor {
         startTime: new Date(),
         output: "Workflow execution started...",
         timestamp: new Date(),
-      });
+      };
+      const log = await storage.createWorkflowLog(logData);
 
       // Get all nodes and connections
-      const nodes = await storage.getWorkflowNodes(workflow.id);
-      const connections = await storage.getWorkflowConnections(workflow.id);
+      const nodes = (await storage.getWorkflowNodes(
+        workflow.id,
+      )) as WorkflowNode[];
+      const connections = (await storage.getWorkflowConnections(
+        workflow.id,
+      )) as WorkflowConnection[];
 
       if (nodes.length === 0) {
         const completedAt = new Date();
@@ -262,14 +304,20 @@ export class WorkflowExecutor {
 
       // Identify starting nodes (nodes with no incoming connections)
       const nodeMap = new Map(nodes.map((node) => [node.id, node]));
-      const incomingConnections = new Map();
 
       // Build a map of incoming connections for each node
+      const incomingConnections = new Map<number, WorkflowConnection[]>();
+
       for (const connection of connections) {
         if (!incomingConnections.has(connection.targetNodeId)) {
           incomingConnections.set(connection.targetNodeId, []);
         }
-        incomingConnections.get(connection.targetNodeId).push(connection);
+        const targetConnections = incomingConnections.get(
+          connection.targetNodeId,
+        );
+        if (targetConnections) {
+          targetConnections.push(connection);
+        }
       }
 
       // Find starting nodes (no incoming connections)
@@ -303,24 +351,18 @@ export class WorkflowExecutor {
       }
 
       // Log info about starting nodes
-      await storage.createWorkflowLog({
+      const infoLogData: InsertWorkflowLog = {
         workflowId: workflow.id,
         userId: workflow.userId,
         level: WorkflowLogLevel.INFO,
         message: `Found ${startingNodes.length} starting nodes in workflow`,
         timestamp: new Date(),
-      });
+        status: LogStatus.SUCCESS,
+      };
+      await storage.createWorkflowLog(infoLogData);
 
       // Create a map to track node results with script output data
-      const nodeResults = new Map<
-        number,
-        {
-          success: boolean;
-          output: string;
-          scriptOutput?: any;
-          condition?: boolean;
-        }
-      >();
+      const nodeResults = new Map<number, NodeResult>();
 
       // Execute the workflow by starting with the starting nodes
       let sequenceOrder = 1;
@@ -365,9 +407,9 @@ export class WorkflowExecutor {
 
       // Aggregate node outputs for the log
       const aggregatedOutput = Array.from(nodeResults.entries())
-        .map(([nodeId, { success, output }]) => {
+        .map(([nodeId, result]) => {
           const node = nodeMap.get(nodeId);
-          return `Node ${node?.id} (Event ${node?.eventId}): ${success ? "SUCCESS" : "FAILURE"}\n${output}\n`;
+          return `Node ${node?.id} (Event ${node?.eventId}): ${result.success ? "SUCCESS" : "FAILURE"}\n${result.output}\n`;
         })
         .join("\n---\n");
 
@@ -385,7 +427,7 @@ export class WorkflowExecutor {
       });
 
       // Create a final log entry
-      await storage.createWorkflowLog({
+      const finalLogData: InsertWorkflowLog = {
         workflowId: workflow.id,
         userId: workflow.userId,
         level: allNodesSucceeded
@@ -393,7 +435,9 @@ export class WorkflowExecutor {
           : WorkflowLogLevel.ERROR,
         message: `Completed workflow execution: ${workflow.name} (${allNodesSucceeded ? "Success" : "Failure"})`,
         timestamp: new Date(),
-      });
+        status: allNodesSucceeded ? LogStatus.SUCCESS : LogStatus.FAILURE,
+      };
+      await storage.createWorkflowLog(finalLogData);
 
       console.log(
         `Workflow ${workflow.id} execution completed successfully in background`,
@@ -423,7 +467,7 @@ export class WorkflowExecutor {
       }
 
       // Create error log
-      await storage.createWorkflowLog({
+      const errorLogData: InsertWorkflowLog = {
         workflowId: workflow.id,
         userId: executionUserId,
         level: WorkflowLogLevel.ERROR,
@@ -432,27 +476,20 @@ export class WorkflowExecutor {
         status: LogStatus.FAILURE,
         output: errorMessage,
         error: errorMessage,
-      });
+      };
+      await storage.createWorkflowLog(errorLogData);
     }
   }
 
   private async executeNode(
-    node: any,
-    nodeMap: Map<number, any>,
-    connections: any[],
-    nodeResults: Map<
-      number,
-      {
-        success: boolean;
-        output: string;
-        scriptOutput?: any;
-        condition?: boolean;
-      }
-    >,
-    workflow: any,
+    node: WorkflowNode,
+    nodeMap: Map<number, WorkflowNode>,
+    connections: WorkflowConnection[],
+    nodeResults: Map<number, NodeResult>,
+    workflow: Workflow,
     workflowExecutionId?: number,
     sequenceOrder?: number,
-    initialInputData: Record<string, any> = {},
+    initialInputData: Record<string, unknown> = {},
   ): Promise<void> {
     // Check if this node has already been executed
     if (nodeResults.has(node.id)) {
@@ -487,19 +524,21 @@ export class WorkflowExecutor {
 
         if (!prerequisiteCompleted) {
           // Log that this node is waiting for prerequisites
-          await storage.createWorkflowLog({
+          const waitingLogData: InsertWorkflowLog = {
             workflowId: workflow.id,
             userId: workflow.userId,
             level: WorkflowLogLevel.INFO,
             message: `Node ${node.id} waiting for prerequisite nodes to complete`,
             timestamp: new Date(),
-          });
+            status: LogStatus.PENDING,
+          };
+          await storage.createWorkflowLog(waitingLogData);
           return;
         }
       }
 
       // Execute the node's event
-      const event = await storage.getEvent(node.eventId);
+      const event = (await storage.getEvent(node.eventId)) as Event | undefined;
       if (!event) {
         const errorMessage = `Event ${node.eventId} not found for node ${node.id}`;
         nodeResults.set(node.id, {
@@ -508,13 +547,15 @@ export class WorkflowExecutor {
           condition: false,
         });
 
-        await storage.createWorkflowLog({
+        const errorNodeLogData: InsertWorkflowLog = {
           workflowId: workflow.id,
           userId: workflow.userId,
           level: WorkflowLogLevel.ERROR,
           message: errorMessage,
           timestamp: new Date(),
-        });
+          status: LogStatus.FAILURE,
+        };
+        await storage.createWorkflowLog(errorNodeLogData);
         return;
       }
 
@@ -538,18 +579,18 @@ export class WorkflowExecutor {
       const executionStartTime = new Date();
 
       // Execute the event using scheduler with input data
-      const executionResult = await scheduler.executeEvent(
+      const executionResult = (await scheduler.executeEvent(
         event.id,
         workflowExecutionId,
         sequenceOrder,
         resolvedInputData,
         workflow.id,
-      );
+      )) as ExecutionResult;
 
       // Record execution end time and calculate duration
       const executionEndTime = new Date();
       const executionDuration =
-        executionResult.duration ||
+        executionResult.duration ??
         executionEndTime.getTime() - executionStartTime.getTime();
 
       // Store the result with script output data
@@ -565,7 +606,7 @@ export class WorkflowExecutor {
 
       nodeResults.set(node.id, {
         success: executionResult.success,
-        output: executionResult.output || "",
+        output: executionResult.output ?? "",
         ...(executionResult.scriptOutput !== undefined && {
           scriptOutput: executionResult.scriptOutput,
         }),
@@ -576,7 +617,7 @@ export class WorkflowExecutor {
 
       // Create a workflow execution event record
       if (workflowExecutionId) {
-        await storage.createWorkflowExecutionEvent({
+        const executionEventData: InsertWorkflowExecutionEvent = {
           workflowExecutionId,
           eventId: event.id,
           nodeId: node.id,
@@ -587,16 +628,17 @@ export class WorkflowExecutor {
           startedAt: executionStartTime,
           completedAt: executionEndTime,
           duration: executionDuration, // Now properly calculated in milliseconds
-          output: executionResult.output || "",
+          output: executionResult.output ?? "",
           errorMessage: executionResult.success
             ? null
-            : executionResult.output || "Unknown error",
+            : (executionResult.output ?? "Unknown error"),
           connectionType: ConnectionType.ALWAYS,
-        });
+        };
+        await storage.createWorkflowExecutionEvent(executionEventData);
       }
 
       // Log the node execution result
-      await storage.createWorkflowLog({
+      const nodeLogData: InsertWorkflowLog = {
         workflowId: workflow.id,
         userId: workflow.userId,
         level: executionResult.success
@@ -604,7 +646,9 @@ export class WorkflowExecutor {
           : WorkflowLogLevel.ERROR,
         message: `Node ${node.id} (Event ${event.name}): ${executionResult.success ? "SUCCESS" : "FAILURE"}`,
         timestamp: new Date(),
-      });
+        status: executionResult.success ? LogStatus.SUCCESS : LogStatus.FAILURE,
+      };
+      await storage.createWorkflowLog(nodeLogData);
 
       // Execute connected nodes
       const outgoingConnections = connections.filter(
@@ -653,13 +697,15 @@ export class WorkflowExecutor {
       });
 
       // Log the error
-      await storage.createWorkflowLog({
+      const nodeErrorLogData: InsertWorkflowLog = {
         workflowId: workflow.id,
         userId: workflow.userId,
         level: WorkflowLogLevel.ERROR,
         message: `Node ${node.id} execution failed: ${errorMessage}`,
         timestamp: new Date(),
-      });
+        status: LogStatus.FAILURE,
+      };
+      await storage.createWorkflowLog(nodeErrorLogData);
     }
   }
 
@@ -667,19 +713,11 @@ export class WorkflowExecutor {
    * Resolve input parameters for a node from its dependency nodes
    */
   private resolveInputParams(
-    node: any,
-    incomingConnections: any[],
-    nodeResults: Map<
-      number,
-      {
-        success: boolean;
-        output: string;
-        scriptOutput?: any;
-        condition?: boolean;
-      }
-    >,
-    initialInputData: Record<string, any> = {},
-  ): Record<string, any> {
+    _node: WorkflowNode,
+    incomingConnections: WorkflowConnection[],
+    nodeResults: Map<number, NodeResult>,
+    initialInputData: Record<string, unknown> = {},
+  ): Record<string, unknown> {
     // If this is the first node (no incoming connections), use initial workflow input
     if (incomingConnections.length === 0) {
       return { ...initialInputData };
@@ -687,7 +725,7 @@ export class WorkflowExecutor {
 
     // For nodes with incoming connections, use the output from the most recent successful predecessor
     // This ensures cronium.output() from one event becomes cronium.input() for the next
-    let latestOutput: any = {};
+    let latestOutput: unknown = {};
     let hasValidOutput = false;
 
     for (const connection of incomingConnections) {
@@ -726,7 +764,7 @@ export class WorkflowExecutor {
 
     // Return the latest output directly - this becomes the input for cronium.input()
     return typeof latestOutput === "object" && latestOutput !== null
-      ? latestOutput
+      ? (latestOutput as Record<string, unknown>)
       : {};
   }
 
@@ -742,7 +780,9 @@ export class WorkflowExecutor {
     }
 
     // Re-schedule the workflow if it's active and scheduled
-    const workflow = await storage.getWorkflow(workflowId);
+    const workflow = (await storage.getWorkflow(workflowId)) as
+      | Workflow
+      | undefined;
     if (
       workflow &&
       workflow.status === EventStatus.ACTIVE &&

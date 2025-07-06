@@ -7,9 +7,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Code2, Database, ArrowRight, Zap, Copy } from "lucide-react";
+import { Code2, Zap } from "lucide-react";
 import ApiCodeExamples, {
   CodeBlock,
   SimpleCodeBlock,

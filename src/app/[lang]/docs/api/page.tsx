@@ -25,7 +25,6 @@ import {
   serversApiExamples,
   variablesApiExamples,
   responseExamples,
-  errorHandlingExamples,
 } from "./examples";
 
 const tableOfContents = [
@@ -59,7 +58,6 @@ const tableOfContents = [
 
 function SimpleCodeBlock({
   children,
-  language = "bash",
 }: {
   children: string;
   language?: string;

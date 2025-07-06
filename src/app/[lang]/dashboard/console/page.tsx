@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
+import { useParams } from "next/navigation";
 import Terminal from "@/components/terminal/Terminal";
 import {
   Select,
@@ -13,6 +14,8 @@ import {
 import { Server, ServerOff, Plus } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
 import Link from "next/link";
+import { trpc } from "@/lib/trpc";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 
 interface ServerData {
   id: number;
@@ -20,22 +23,30 @@ interface ServerData {
   address: string;
   username: string;
   port: number;
-  online?: boolean;
+  online?: boolean | null;
 }
 
 export default function ConsolePage() {
   const t = useTranslations("Console");
+  const params = useParams<{ lang: string }>();
+  const lang = params.lang;
   const { permissions, loading: permissionsLoading } = usePermissions();
-  const [servers, setServers] = useState<ServerData[]>([]);
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [autoConnected, setAutoConnected] = useState(false);
 
-  useEffect(() => {
-    if (!permissionsLoading) {
-      fetchServers();
-    }
-  }, [permissionsLoading]);
+  // Use tRPC query to fetch servers
+  const { data: serversData, isLoading } = trpc.servers.getAll.useQuery(
+    {
+      limit: 1000,
+      offset: 0,
+      search: "",
+      online: undefined,
+      shared: undefined,
+    },
+    QUERY_OPTIONS.dynamic,
+  );
+
+  const servers = serversData?.servers ?? [];
 
   // Auto-select server based on permissions
   useEffect(() => {
@@ -71,20 +82,6 @@ export default function ConsolePage() {
     }
     // If no servers available, selectedServerId remains null
     setAutoConnected(true);
-  };
-
-  const fetchServers = async (): Promise<void> => {
-    try {
-      const response = await fetch("/api/servers");
-      if (response.ok) {
-        const data: ServerData[] = await response.json();
-        setServers(data);
-      }
-    } catch (error) {
-      console.error("Error fetching servers:", error);
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const selectedServer: ServerData | null | undefined =
@@ -205,7 +202,7 @@ export default function ConsolePage() {
               </p>
             </div>
             <Link
-              href="/dashboard/servers/new"
+              href={`/${lang}/dashboard/servers/new`}
               className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-md px-4 py-2 font-medium transition-colors"
             >
               <Plus className="h-4 w-4" />

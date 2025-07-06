@@ -15,11 +15,11 @@ export default function Hero({ lang = "en" }: { lang?: string }) {
     t = (key: string) => {
       try {
         return intlT(key);
-      } catch (e) {
+      } catch {
         return key;
       }
     };
-  } catch (e) {
+  } catch {
     // Fallback to our custom useLanguage if next-intl context is not available
     const { t: langT } = useLanguage();
     t = langT;
@@ -186,7 +186,7 @@ export default function Hero({ lang = "en" }: { lang?: string }) {
 const features = [
   {
     name: "Flexible Scheduling",
-    icon: (props: any) => (
+    icon: (props: React.SVGProps<SVGSVGElement>) => (
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"
@@ -212,7 +212,7 @@ const features = [
   },
   {
     name: "Multiple Language Support",
-    icon: (props: any) => (
+    icon: (props: React.SVGProps<SVGSVGElement>) => (
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"
@@ -238,7 +238,7 @@ const features = [
   },
   {
     name: "Remote Execution",
-    icon: (props: any) => (
+    icon: (props: React.SVGProps<SVGSVGElement>) => (
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"
@@ -266,7 +266,7 @@ const features = [
   },
   {
     name: "Comprehensive Monitoring",
-    icon: (props: any) => (
+    icon: (props: React.SVGProps<SVGSVGElement>) => (
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"

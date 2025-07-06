@@ -2,23 +2,31 @@ import type { ReactNode } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages } from "@/lib/get-messages";
 
+// Define type for documentation messages
+interface DocumentationMessages {
+  Documentation?: {
+    Title?: string;
+    Description?: string;
+  };
+  [key: string]: DocumentationMessages | string | undefined;
+}
+
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ lang: string }>;
+  params: { lang: string };
 }) {
   try {
-    const { lang } = await params;
-    const messages = await getMessages(lang || "en");
+    const lang = params.lang;
+    const messages = (await getMessages(lang || "en")) as DocumentationMessages;
 
     return {
-      title: messages?.Documentation?.Title || "Cronium Documentation",
+      title: messages?.Documentation?.Title ?? "Cronium Documentation",
       description:
-        messages?.Documentation?.Description ||
+        messages?.Documentation?.Description ??
         "Learn how to use Cronium to automate your events and workflows",
     };
-  } catch (error) {
-    console.error("Error generating metadata:", error);
+  } catch {
     return {
       title: "Cronium Documentation",
       description:
@@ -32,11 +40,11 @@ export default async function DocsLayout({
   params,
 }: {
   children: ReactNode;
-  params: Promise<{ lang: string }>;
+  params: { lang: string };
 }) {
   try {
-    const { lang } = await params;
-    const messages = await getMessages(lang || "en");
+    const lang = params.lang;
+    const messages = (await getMessages(lang || "en")) as DocumentationMessages;
 
     return (
       <NextIntlClientProvider locale={lang || "en"} messages={messages}>

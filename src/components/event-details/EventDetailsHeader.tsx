@@ -17,8 +17,6 @@ interface EventDetailsHeaderProps {
   onRun: () => Promise<void>;
   onStatusChange: (newStatus: EventStatus) => Promise<void>;
   isRunning: boolean;
-  onResetCounter: () => Promise<void>;
-  isResettingCounter: boolean;
 }
 
 export function EventDetailsHeader({
@@ -28,8 +26,6 @@ export function EventDetailsHeader({
   onRun,
   onStatusChange,
   isRunning,
-  onResetCounter,
-  isResettingCounter,
 }: EventDetailsHeaderProps) {
   const t = useTranslations("Events");
 

@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../trpc";
 import {
   adminQuerySchema,
@@ -15,9 +16,9 @@ import {
   adminLogsSchema,
   logIdSchema,
   systemStatsSchema,
-} from "@shared/schemas/admin";
+} from "@/shared/schemas/admin";
 import { storage } from "@/server/storage";
-import { UserRole, UserStatus } from "@shared/schema";
+import { UserRole, UserStatus } from "@/shared/schema";
 
 // Define Log interface for proper typing
 interface Log {
@@ -31,16 +32,20 @@ interface Log {
 
 // Admin-only procedure middleware
 const adminProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  let session = null;
-  let userId = null;
-  let userRole = null;
+  let session: { user: { id: string; role: UserRole } } | null = null;
+  let userId: string | null = null;
+  let userRole: UserRole | null = null;
 
   try {
     // If session exists in context, use it
-    if (ctx.session?.user?.id) {
-      session = ctx.session;
-      userId = ctx.session.user.id;
-      userRole = ctx.session.user.role;
+    if (
+      ctx.session?.user &&
+      "id" in ctx.session.user &&
+      "role" in ctx.session.user
+    ) {
+      session = ctx.session as { user: { id: string; role: UserRole } };
+      userId = session.user.id;
+      userRole = session.user.role;
     } else {
       // For development, get first admin user
       if (process.env.NODE_ENV === "development") {
@@ -74,9 +79,9 @@ const adminProcedure = publicProcedure.use(async ({ ctx, next }) => {
     return next({
       ctx: {
         ...ctx,
-        session,
-        userId,
-        userRole,
+        session: session as typeof ctx.session,
+        userId: userId,
+        userRole: userRole as UserRole,
       },
     });
   } catch (error) {
@@ -92,59 +97,57 @@ const adminProcedure = publicProcedure.use(async ({ ctx, next }) => {
 export const adminRouter = createTRPCRouter({
   // User Management
   // Get all users
-  getUsers: adminProcedure
-    .input(adminQuerySchema)
-    .query(async ({ ctx, input }) => {
-      try {
-        const users = await storage.getAllUsers();
+  getUsers: adminProcedure.input(adminQuerySchema).query(async ({ input }) => {
+    try {
+      const users = await storage.getAllUsers();
 
-        // Apply filters
-        let filteredUsers = users;
+      // Apply filters
+      let filteredUsers = users;
 
-        if (input.search) {
-          const searchLower = input.search.toLowerCase();
-          filteredUsers = filteredUsers.filter(
-            (user) =>
-              (user.email?.toLowerCase() ?? "").includes(searchLower) ||
-              (user.firstName?.toLowerCase() ?? "").includes(searchLower) ||
-              (user.lastName?.toLowerCase() ?? "").includes(searchLower),
-          );
-        }
-
-        if (input.role) {
-          filteredUsers = filteredUsers.filter(
-            (user) => user.role === input.role,
-          );
-        }
-
-        if (input.status) {
-          filteredUsers = filteredUsers.filter(
-            (user) => user.status === input.status,
-          );
-        }
-
-        // Apply pagination
-        const paginatedUsers = filteredUsers.slice(
-          input.offset,
-          input.offset + input.limit,
+      if (input.search) {
+        const searchLower = input.search.toLowerCase();
+        filteredUsers = filteredUsers.filter(
+          (user) =>
+            (user.email?.toLowerCase() ?? "").includes(searchLower) ||
+            (user.firstName?.toLowerCase() ?? "").includes(searchLower) ||
+            (user.lastName?.toLowerCase() ?? "").includes(searchLower),
         );
-
-        return {
-          users: paginatedUsers,
-          total: filteredUsers.length,
-          hasMore: input.offset + input.limit < filteredUsers.length,
-        };
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to fetch users",
-          cause: error instanceof Error ? error : new Error(String(error)),
-        });
       }
-    }),
+
+      if (input.role) {
+        filteredUsers = filteredUsers.filter(
+          (user) => user.role === input.role,
+        );
+      }
+
+      if (input.status) {
+        filteredUsers = filteredUsers.filter(
+          (user) => user.status === input.status,
+        );
+      }
+
+      // Apply pagination
+      const paginatedUsers = filteredUsers.slice(
+        input.offset,
+        input.offset + input.limit,
+      );
+
+      return {
+        users: paginatedUsers,
+        total: filteredUsers.length,
+        hasMore: input.offset + input.limit < filteredUsers.length,
+      };
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to fetch users",
+        cause: error instanceof Error ? error : new Error(String(error)),
+      });
+    }
+  }),
 
   // Get single user by ID
-  getUser: adminProcedure.input(userIdSchema).query(async ({ ctx, input }) => {
+  getUser: adminProcedure.input(userIdSchema).query(async ({ input }) => {
     try {
       const user = await storage.getUser(input.id);
       if (!user) {
@@ -164,7 +167,7 @@ export const adminRouter = createTRPCRouter({
   // Invite new user
   inviteUser: adminProcedure
     .input(inviteUserSchema)
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ input }) => {
       try {
         // Check if user with this email already exists
         const existingUser = await storage.getUserByEmail(input.email);
@@ -215,7 +218,7 @@ export const adminRouter = createTRPCRouter({
   // Update user
   updateUser: adminProcedure
     .input(updateUserSchema)
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ input }) => {
       try {
         const { id, ...updateData } = input;
 
@@ -325,7 +328,9 @@ export const adminRouter = createTRPCRouter({
               case "resend_invite":
                 if (user.status === UserStatus.INVITED) {
                   // TODO: Resend invitation email
-                  console.log(`Resending invitation to ${user.email}`);
+                  console.log(
+                    `Resending invitation to ${user.email ?? "unknown email"}`,
+                  );
                 } else {
                   results.push({
                     id: userId,
@@ -350,6 +355,194 @@ export const adminRouter = createTRPCRouter({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to perform bulk operation",
+          cause: error instanceof Error ? error : new Error(String(error)),
+        });
+      }
+    }),
+
+  // Approve user (for pending users)
+  approveUser: adminProcedure
+    .input(userIdSchema)
+    .mutation(async ({ input }) => {
+      try {
+        const user = await storage.getUser(input.id);
+
+        if (!user) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+        }
+
+        // Check if the user is in pending status
+        if (user.status !== UserStatus.PENDING) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Can only approve users with PENDING status",
+          });
+        }
+
+        // Update user status to ACTIVE
+        const updatedUser = await storage.updateUser(input.id, {
+          status: UserStatus.ACTIVE,
+          updatedAt: new Date(),
+        });
+
+        return {
+          success: true,
+          user: updatedUser,
+          message: "User approved successfully",
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to approve user",
+          cause: error instanceof Error ? error : new Error(String(error)),
+        });
+      }
+    }),
+
+  // Deny user (for pending users)
+  denyUser: adminProcedure.input(userIdSchema).mutation(async ({ input }) => {
+    try {
+      const user = await storage.getUser(input.id);
+
+      if (!user) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      }
+
+      // Check if the user is in pending status
+      if (user.status !== UserStatus.PENDING) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Can only deny users with PENDING status",
+        });
+      }
+
+      // Update user status to DISABLED (or delete if preferred)
+      const updatedUser = await storage.updateUser(input.id, {
+        status: UserStatus.DISABLED,
+        updatedAt: new Date(),
+      });
+
+      return {
+        success: true,
+        user: updatedUser,
+        message: "User denied successfully",
+      };
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to deny user",
+        cause: error instanceof Error ? error : new Error(String(error)),
+      });
+    }
+  }),
+
+  // Enable user
+  enableUser: adminProcedure.input(userIdSchema).mutation(async ({ input }) => {
+    try {
+      const user = await storage.getUser(input.id);
+
+      if (!user) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      }
+
+      // Update user status to ACTIVE
+      const updatedUser = await storage.updateUser(input.id, {
+        status: UserStatus.ACTIVE,
+        updatedAt: new Date(),
+      });
+
+      return {
+        success: true,
+        user: updatedUser,
+        message: "User enabled successfully",
+      };
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to enable user",
+        cause: error instanceof Error ? error : new Error(String(error)),
+      });
+    }
+  }),
+
+  // Disable user
+  disableUser: adminProcedure
+    .input(userIdSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        // Prevent admin from disabling themselves
+        if (input.id === ctx.userId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "You cannot disable your own account",
+          });
+        }
+
+        const user = await storage.getUser(input.id);
+
+        if (!user) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+        }
+
+        // Update user status to DISABLED
+        const updatedUser = await storage.updateUser(input.id, {
+          status: UserStatus.DISABLED,
+          updatedAt: new Date(),
+        });
+
+        return {
+          success: true,
+          user: updatedUser,
+          message: "User disabled successfully",
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to disable user",
+          cause: error instanceof Error ? error : new Error(String(error)),
+        });
+      }
+    }),
+
+  // Promote user to admin
+  promoteUser: adminProcedure
+    .input(userIdSchema)
+    .mutation(async ({ input }) => {
+      try {
+        const user = await storage.getUser(input.id);
+
+        if (!user) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+        }
+
+        // Check if the user is already an admin
+        if (user.role === UserRole.ADMIN) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "User is already an admin",
+          });
+        }
+
+        // Update the user's role to admin
+        const updatedUser = await storage.updateUser(input.id, {
+          role: UserRole.ADMIN,
+          updatedAt: new Date(),
+        });
+
+        return {
+          success: true,
+          user: updatedUser,
+          message: "User promoted to admin successfully",
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to promote user",
           cause: error instanceof Error ? error : new Error(String(error)),
         });
       }
@@ -495,7 +688,7 @@ export const adminRouter = createTRPCRouter({
 
   // System Management
   // Get system settings
-  getSystemSettings: adminProcedure.query(async ({ ctx }) => {
+  getSystemSettings: adminProcedure.query(async () => {
     try {
       // Get all settings from database
       const settings = await storage.getAllSettings();
@@ -506,12 +699,12 @@ export const adminRouter = createTRPCRouter({
           // Try to parse the value as JSON, if it fails just use the string
           try {
             acc[setting.key] = JSON.parse(setting.value);
-          } catch (e) {
+          } catch {
             acc[setting.key] = setting.value;
           }
           return acc;
         },
-        {} as Record<string, any>,
+        {} as Record<string, unknown>,
       );
 
       // Return settings with default values for any missing keys
@@ -558,7 +751,7 @@ export const adminRouter = createTRPCRouter({
   // Update system settings
   updateSystemSettings: adminProcedure
     .input(systemSettingsSchema)
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ input }) => {
       try {
         // Update each setting in the database
         for (const [key, value] of Object.entries(input)) {
@@ -583,7 +776,7 @@ export const adminRouter = createTRPCRouter({
   // Get system statistics
   getSystemStats: adminProcedure
     .input(systemStatsSchema)
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input }) => {
       try {
         const allUsers = await storage.getAllUsers();
 
@@ -614,29 +807,27 @@ export const adminRouter = createTRPCRouter({
 
   // Log Management
   // Get system logs
-  getLogs: adminProcedure
-    .input(adminLogsSchema)
-    .query(async ({ ctx, input }) => {
-      try {
-        // TODO: Implement log retrieval from storage
-        const logs: Log[] = [];
+  getLogs: adminProcedure.input(adminLogsSchema).query(async () => {
+    try {
+      // TODO: Implement log retrieval from storage
+      const logs: Log[] = [];
 
-        return {
-          logs,
-          total: logs.length,
-          hasMore: false,
-        };
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to fetch logs",
-          cause: error instanceof Error ? error : new Error(String(error)),
-        });
-      }
-    }),
+      return {
+        logs,
+        total: logs.length,
+        hasMore: false,
+      };
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to fetch logs",
+        cause: error instanceof Error ? error : new Error(String(error)),
+      });
+    }
+  }),
 
   // Get single log entry
-  getLog: adminProcedure.input(logIdSchema).query(async ({ ctx, input }) => {
+  getLog: adminProcedure.input(logIdSchema).query(async () => {
     try {
       // TODO: Implement single log retrieval
       throw new TRPCError({
@@ -652,4 +843,271 @@ export const adminRouter = createTRPCRouter({
       });
     }
   }),
+
+  // Role Management
+  // Get all roles
+  getRoles: adminProcedure.query(async () => {
+    try {
+      // Define default roles with permissions
+      const defaultRoles = [
+        {
+          id: 1,
+          name: "Admin",
+          description: "Full system access",
+          permissions: {
+            console: true,
+            monitoring: true,
+            localServerAccess: true,
+          },
+          isDefault: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 2,
+          name: "User",
+          description: "Standard user access",
+          permissions: {
+            console: true,
+            monitoring: true,
+            localServerAccess: false,
+          },
+          isDefault: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 3,
+          name: "Viewer",
+          description: "Read-only access",
+          permissions: {
+            console: false,
+            monitoring: true,
+            localServerAccess: false,
+          },
+          isDefault: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ];
+
+      // TODO: In the future, fetch custom roles from storage
+      return defaultRoles;
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to fetch roles",
+        cause: error instanceof Error ? error : new Error(String(error)),
+      });
+    }
+  }),
+
+  // Update role permissions
+  updateRolePermissions: adminProcedure
+    .input(
+      z.object({
+        roleId: z.number(),
+        permissions: z.object({
+          console: z.boolean(),
+          monitoring: z.boolean(),
+          localServerAccess: z.boolean(),
+        }),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      try {
+        // TODO: Implement role permission updates in storage
+        // For now, return success
+        return {
+          success: true,
+          roleId: input.roleId,
+          permissions: input.permissions,
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update role permissions",
+          cause: error instanceof Error ? error : new Error(String(error)),
+        });
+      }
+    }),
+
+  // Resend invitation
+  resendInvitation: adminProcedure
+    .input(userIdSchema)
+    .mutation(async ({ input }) => {
+      try {
+        const user = await storage.getUser(input.id);
+        if (!user) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+        }
+
+        if (user.status !== UserStatus.INVITED) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "User is not in invited status",
+          });
+        }
+
+        // Generate new invite token and expiry
+        const { nanoid } = await import("nanoid");
+        const inviteToken = nanoid(32);
+        const inviteExpiry = new Date();
+        inviteExpiry.setHours(inviteExpiry.getHours() + 48);
+
+        await storage.updateUser(user.id, {
+          inviteToken,
+          inviteExpiry,
+          updatedAt: new Date(),
+        });
+
+        // TODO: Send invitation email
+        console.log(
+          `Resending invitation to ${user.email ?? "unknown email"} with token ${inviteToken}`,
+        );
+
+        return { success: true, email: user.email };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to resend invitation",
+          cause: error instanceof Error ? error : new Error(String(error)),
+        });
+      }
+    }),
+
+  // Admin Logs Management
+  getAdminLogs: adminProcedure
+    .input(adminLogsSchema)
+    .query(async ({ input }) => {
+      try {
+        // For now, use the existing getLogs operation
+        // TODO: Implement proper admin log retrieval from storage
+        const logs: Log[] = [];
+
+        // Apply pagination
+        const paginatedLogs = logs.slice(
+          input.offset,
+          input.offset + input.limit,
+        );
+
+        return {
+          logs: paginatedLogs,
+          total: logs.length,
+          hasMore: input.offset + input.limit < logs.length,
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch admin logs",
+          cause: error instanceof Error ? error : new Error(String(error)),
+        });
+      }
+    }),
+
+  // Get admin log by ID
+  getAdminLog: adminProcedure.input(logIdSchema).query(async ({ _input }) => {
+    try {
+      // TODO: Implement single admin log retrieval
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Admin log not found",
+      });
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to fetch admin log",
+        cause: error instanceof Error ? error : new Error(String(error)),
+      });
+    }
+  }),
+
+  // Enhanced Roles Management
+  getAdminRoles: adminProcedure.query(async () => {
+    try {
+      // Use the existing getRoles implementation but with admin prefix for clarity
+      const defaultRoles = [
+        {
+          id: 1,
+          name: "Admin",
+          description: "Full system access",
+          permissions: {
+            console: true,
+            monitoring: true,
+            localServerAccess: true,
+          },
+          isDefault: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 2,
+          name: "User",
+          description: "Standard user access",
+          permissions: {
+            console: true,
+            monitoring: true,
+            localServerAccess: false,
+          },
+          isDefault: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 3,
+          name: "Viewer",
+          description: "Read-only access",
+          permissions: {
+            console: false,
+            monitoring: true,
+            localServerAccess: false,
+          },
+          isDefault: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ];
+
+      // TODO: In the future, fetch custom roles from storage
+      return defaultRoles;
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to fetch admin roles",
+        cause: error instanceof Error ? error : new Error(String(error)),
+      });
+    }
+  }),
+
+  // Update admin role permissions
+  updateAdminRolePermissions: adminProcedure
+    .input(
+      z.object({
+        roleId: z.number(),
+        permissions: z.object({
+          console: z.boolean(),
+          monitoring: z.boolean(),
+          localServerAccess: z.boolean(),
+        }),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      try {
+        // TODO: Implement role permission updates in storage
+        // For now, return success
+        return {
+          success: true,
+          roleId: input.roleId,
+          permissions: input.permissions,
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update admin role permissions",
+          cause: error instanceof Error ? error : new Error(String(error)),
+        });
+      }
+    }),
 });

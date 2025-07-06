@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { Modal } from "@/components/ui/modal";
 import { toast } from "@/components/ui/use-toast";
 import { Spinner } from "@/components/ui/spinner";
 import EventForm from "@/components/event-form/EventForm";
+import { trpc } from "@/lib/trpc";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 
 interface EventEditModalProps {
   isOpen: boolean;
@@ -19,68 +21,40 @@ export function EventEditModal({
   eventId,
   onEventUpdated,
 }: EventEditModalProps) {
-  const [isLoading, setIsLoading] = useState(true);
-  const [eventData, setEventData] = useState<any>(null);
-  const [servers, setServers] = useState<any[]>([]);
+  // tRPC queries for event data and servers
+  const {
+    data: eventData,
+    isLoading: isLoadingEvent,
+    error: eventError,
+  } = trpc.events.getById.useQuery(
+    { id: eventId },
+    {
+      enabled: isOpen && !!eventId,
+      ...QUERY_OPTIONS.dynamic,
+    },
+  );
 
-  // Fetch event data and servers when modal opens
-  useEffect(() => {
-    if (isOpen && eventId) {
-      fetchEventData();
-      fetchServers();
-    }
-  }, [isOpen, eventId]);
+  const { isLoading: isLoadingServers } = trpc.servers.getAll.useQuery(
+    { limit: 100 },
+    {
+      enabled: isOpen,
+      ...QUERY_OPTIONS.static,
+    },
+  );
 
-  const fetchEventData = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch(`/api/events/${eventId}`, {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+  const isLoading = isLoadingEvent || isLoadingServers;
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch event data");
-      }
-
-      const data = await response.json();
-      setEventData(data);
-    } catch (error) {
-      console.error("Error fetching event data:", error);
+  // Handle error from event query
+  React.useEffect(() => {
+    if (eventError) {
       toast({
         title: "Error",
-        description: "Failed to load event data. Please try again.",
+        description:
+          eventError.message ?? "Failed to load event data. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
-  };
-
-  const fetchServers = async () => {
-    try {
-      const response = await fetch("/api/servers", {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch servers");
-      }
-
-      const data = await response.json();
-      setServers(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error("Error fetching servers:", error);
-      setServers([]);
-    }
-  };
+  }, [eventError]);
 
   const handleEventUpdate = () => {
     // Close modal and notify parent component
@@ -91,8 +65,6 @@ export function EventEditModal({
   };
 
   const handleClose = () => {
-    setEventData(null);
-    setIsLoading(true);
     onClose();
   };
 
@@ -125,7 +97,9 @@ export function EventEditModal({
         </div>
       ) : (
         <div className="py-8 text-center">
-          <p className="text-muted-foreground">Failed to load event data</p>
+          <p className="text-muted-foreground">
+            {eventError ? "Failed to load event data" : "Event not found"}
+          </p>
         </div>
       )}
     </Modal>

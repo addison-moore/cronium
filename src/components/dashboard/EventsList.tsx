@@ -1,7 +1,3 @@
-/* eslint-disable @typescript-eslint/no-floating-promises */
-/* eslint-disable @typescript-eslint/no-base-to-string */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
 "use client";
 
 import { useState } from "react";
@@ -30,6 +26,7 @@ import type {
   EventListState,
 } from "@/components/event-list";
 import { trpc } from "@/lib/trpc";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 
 export default function EventsList() {
   // Filter state
@@ -68,7 +65,7 @@ export default function EventsList() {
     {
       limit: 1000, // Get all events for client-side filtering
       offset: 0,
-      search: filters.searchTerm || undefined,
+      search: filters.searchTerm ? filters.searchTerm : undefined,
       status:
         filters.statusFilter !== "all"
           ? (filters.statusFilter as EventStatus)
@@ -78,19 +75,17 @@ export default function EventsList() {
           ? (filters.typeFilter as EventType)
           : undefined,
     },
-    {
-      staleTime: 30000, // 30 seconds
-    },
+    QUERY_OPTIONS.dynamic,
   );
 
   const { data: serversData } = trpc.servers.getAll.useQuery(
     { limit: 100, offset: 0 },
-    { staleTime: 60000 }, // 1 minute
+    QUERY_OPTIONS.static,
   );
 
   const { data: workflowsData } = trpc.workflows.getAll.useQuery(
     { limit: 100, offset: 0 },
-    { staleTime: 60000 }, // 1 minute
+    QUERY_OPTIONS.static,
   );
 
   // Extract and transform data from tRPC responses
@@ -109,30 +104,29 @@ export default function EventsList() {
       content: rawEvent.content,
       scheduleNumber: rawEvent.scheduleNumber,
       scheduleUnit: rawEvent.scheduleUnit,
-      customSchedule:
-        rawEvent.customSchedule === null ? null : rawEvent.customSchedule,
+      customSchedule: rawEvent.customSchedule ?? null,
       userId: rawEvent.userId,
       // Convert Date objects to strings
       createdAt:
         rawEvent.createdAt instanceof Date
           ? rawEvent.createdAt.toISOString()
-          : String(rawEvent.createdAt),
+          : String(rawEvent.createdAt ?? ""),
       updatedAt:
         rawEvent.updatedAt instanceof Date
           ? rawEvent.updatedAt.toISOString()
-          : String(rawEvent.updatedAt),
+          : String(rawEvent.updatedAt ?? ""),
       lastRunAt:
         rawEvent.lastRunAt instanceof Date
           ? rawEvent.lastRunAt.toISOString()
           : rawEvent.lastRunAt === null
             ? null
-            : String(rawEvent.lastRunAt),
+            : String(rawEvent.lastRunAt ?? ""),
       nextRunAt:
         rawEvent.nextRunAt instanceof Date
           ? rawEvent.nextRunAt.toISOString()
           : rawEvent.nextRunAt === null
             ? null
-            : String(rawEvent.nextRunAt),
+            : String(rawEvent.nextRunAt ?? ""),
     };
 
     // Add optional fields if they exist in the raw data
@@ -140,7 +134,14 @@ export default function EventsList() {
       event.successCount = rawEvent.successCount;
     if (typeof rawEvent.failureCount === "number")
       event.failureCount = rawEvent.failureCount;
-    if (Array.isArray(rawEvent.tags)) event.tags = rawEvent.tags.map(String);
+    if (Array.isArray(rawEvent.tags))
+      event.tags = rawEvent.tags.map((tag) => {
+        if (tag === null || tag === undefined) return "";
+        if (typeof tag === "string") return tag;
+        if (typeof tag === "number" || typeof tag === "boolean")
+          return String(tag);
+        return "";
+      });
     if (typeof rawEvent.shared === "boolean") event.shared = rawEvent.shared;
 
     // HTTP specific fields
@@ -153,8 +154,20 @@ export default function EventsList() {
     if (Array.isArray(rawEvent.httpHeaders)) {
       event.httpHeaders = rawEvent.httpHeaders.map(
         (header: { key?: unknown; value?: unknown }) => ({
-          key: String(header.key ?? ""),
-          value: String(header.value ?? ""),
+          key:
+            typeof header.key === "string"
+              ? header.key
+              : typeof header.key === "number" ||
+                  typeof header.key === "boolean"
+                ? String(header.key)
+                : "",
+          value:
+            typeof header.value === "string"
+              ? header.value
+              : typeof header.value === "number" ||
+                  typeof header.value === "boolean"
+                ? String(header.value)
+                : "",
         }),
       );
     }
@@ -174,12 +187,27 @@ export default function EventsList() {
 
     // Optional fields that might not exist in all events - handle safely with type checking
     if ("gistId" in rawEvent && rawEvent.gistId !== undefined) {
-      event.gistId = rawEvent.gistId === null ? null : String(rawEvent.gistId);
+      event.gistId =
+        rawEvent.gistId === null || rawEvent.gistId === undefined
+          ? null
+          : typeof rawEvent.gistId === "string"
+            ? rawEvent.gistId
+            : typeof rawEvent.gistId === "number" ||
+                typeof rawEvent.gistId === "boolean"
+              ? String(rawEvent.gistId)
+              : "";
     }
 
     if ("gistFileName" in rawEvent && rawEvent.gistFileName !== undefined) {
       event.gistFileName =
-        rawEvent.gistFileName === null ? null : String(rawEvent.gistFileName);
+        rawEvent.gistFileName === null || rawEvent.gistFileName === undefined
+          ? null
+          : typeof rawEvent.gistFileName === "string"
+            ? rawEvent.gistFileName
+            : typeof rawEvent.gistFileName === "number" ||
+                typeof rawEvent.gistFileName === "boolean"
+              ? String(rawEvent.gistFileName)
+              : "";
     }
 
     if ("workflowId" in rawEvent && rawEvent.workflowId !== undefined) {
@@ -201,7 +229,13 @@ export default function EventsList() {
         name: workflow.name,
       };
       if (workflow.description !== null) {
-        workflowData.description = String(workflow.description);
+        workflowData.description =
+          typeof workflow.description === "string"
+            ? workflow.description
+            : typeof workflow.description === "number" ||
+                typeof workflow.description === "boolean"
+              ? String(workflow.description)
+              : "";
       }
       return workflowData;
     },
@@ -218,7 +252,7 @@ export default function EventsList() {
         description: "Event has been successfully deleted.",
         variant: "success",
       });
-      refetchEvents();
+      void refetchEvents();
     },
   });
 
@@ -229,7 +263,7 @@ export default function EventsList() {
         description: "Event execution initiated successfully.",
         variant: "success",
       });
-      refetchEvents();
+      void refetchEvents();
     },
   });
 
@@ -240,19 +274,19 @@ export default function EventsList() {
         description: "Event duplicated successfully",
         variant: "success",
       });
-      refetchEvents();
+      void refetchEvents();
     },
   });
 
   const updateEventMutation = trpc.events.update.useMutation({
     onSuccess: (_, variables) => {
-      const statusText = variables.status?.toLowerCase() || "updated";
+      const statusText = variables.status?.toLowerCase() ?? "updated";
       toast({
         title: "Success",
         description: `Event status updated to ${statusText} successfully.`,
         variant: "success",
       });
-      refetchEvents();
+      void refetchEvents();
     },
   });
 
@@ -263,7 +297,7 @@ export default function EventsList() {
         description: "Event activated successfully.",
         variant: "success",
       });
-      refetchEvents();
+      void refetchEvents();
     },
   });
 
@@ -274,7 +308,7 @@ export default function EventsList() {
         description: "Event paused successfully.",
         variant: "success",
       });
-      refetchEvents();
+      void refetchEvents();
     },
   });
 
@@ -325,7 +359,7 @@ export default function EventsList() {
     const matchesType =
       filters.typeFilter === "all" || !filters.typeFilter
         ? true
-        : event.type === filters.typeFilter;
+        : event.type === (filters.typeFilter as EventType);
     const matchesStatus =
       filters.statusFilter === "all" || !filters.statusFilter
         ? event.status !== EventStatus.ARCHIVED // Exclude archived events when "all" is selected
@@ -337,7 +371,8 @@ export default function EventsList() {
           ? event.runLocation === "local" ||
             (!event.serverId &&
               (!event.eventServers || event.eventServers.length === 0))
-          : event.eventServers?.includes(parseInt(filters.serverFilter)) ||
+          : (event.eventServers?.includes(parseInt(filters.serverFilter)) ??
+              false) ||
             event.serverId === parseInt(filters.serverFilter);
     const matchesTag =
       filters.tagFilter === "all" || !filters.tagFilter
@@ -433,7 +468,7 @@ export default function EventsList() {
       await deleteEventMutation.mutateAsync({ id: deleteEventId });
       setIsDeleteDialogOpen(false);
       setDeleteEventId(null);
-    } catch (error) {
+    } catch {
       // Error handling is done in the mutation onError callback
     }
   };
@@ -444,8 +479,8 @@ export default function EventsList() {
       // Set loading state for this specific event
       updateState({ isRunning: { ...state.isRunning, [id]: true } });
 
-      void executeEventMutation.mutateAsync({ id, manual: true });
-    } catch (error) {
+      await executeEventMutation.mutateAsync({ id, manual: true });
+    } catch {
       // Error handling is done in the mutation onError callback
     } finally {
       // Clear loading state for this specific event
@@ -521,7 +556,7 @@ export default function EventsList() {
       } = Object.fromEntries(
         Object.entries({
           name: `${eventData.name} (copy)`,
-          description: eventData.description || undefined,
+          description: eventData.description ?? undefined,
           shared: Boolean(eventData.shared),
           tags: Array.isArray(eventData.tags) ? eventData.tags.map(String) : [],
           type: eventData.type,
@@ -534,8 +569,19 @@ export default function EventsList() {
           httpHeaders: Array.isArray(eventData.httpHeaders)
             ? eventData.httpHeaders.map(
                 (h: { key?: unknown; value?: unknown }) => ({
-                  key: String(h.key ?? ""),
-                  value: String(h.value ?? ""),
+                  key:
+                    typeof h.key === "string"
+                      ? h.key
+                      : typeof h.key === "number" || typeof h.key === "boolean"
+                        ? String(h.key)
+                        : "",
+                  value:
+                    typeof h.value === "string"
+                      ? h.value
+                      : typeof h.value === "number" ||
+                          typeof h.value === "boolean"
+                        ? String(h.value)
+                        : "",
                 }),
               )
             : [],
@@ -600,8 +646,20 @@ export default function EventsList() {
                 (eventData as unknown as Record<string, unknown>)
                   .envVars as Array<{ key?: unknown; value?: unknown }>
               ).map((env) => ({
-                key: String(env.key ?? ""),
-                value: String(env.value ?? ""),
+                key:
+                  typeof env.key === "string"
+                    ? env.key
+                    : typeof env.key === "number" ||
+                        typeof env.key === "boolean"
+                      ? String(env.key)
+                      : "",
+                value:
+                  typeof env.value === "string"
+                    ? env.value
+                    : typeof env.value === "number" ||
+                        typeof env.value === "boolean"
+                      ? String(env.value)
+                      : "",
               }))
             : Array.isArray(
                   (eventData as unknown as Record<string, unknown>)
@@ -614,8 +672,20 @@ export default function EventsList() {
                     value?: unknown;
                   }>
                 ).map((env) => ({
-                  key: String(env.key ?? ""),
-                  value: String(env.value ?? ""),
+                  key:
+                    typeof env.key === "string"
+                      ? env.key
+                      : typeof env.key === "number" ||
+                          typeof env.key === "boolean"
+                        ? String(env.key)
+                        : "",
+                  value:
+                    typeof env.value === "string"
+                      ? env.value
+                      : typeof env.value === "number" ||
+                          typeof env.value === "boolean"
+                        ? String(env.value)
+                        : "",
                 }))
               : [],
 
@@ -637,9 +707,32 @@ export default function EventsList() {
                         ? e.targetScriptId
                         : null,
                   toolId: typeof e.toolId === "number" ? e.toolId : null,
-                  message: String(e.message ?? e.value ?? ""),
-                  emailAddresses: String(e.emailAddresses ?? ""),
-                  emailSubject: String(e.emailSubject ?? ""),
+                  message:
+                    typeof e.message === "string"
+                      ? e.message
+                      : typeof e.value === "string"
+                        ? e.value
+                        : typeof e.message === "number" ||
+                            typeof e.message === "boolean"
+                          ? String(e.message)
+                          : typeof e.value === "number" ||
+                              typeof e.value === "boolean"
+                            ? String(e.value)
+                            : "",
+                  emailAddresses:
+                    typeof e.emailAddresses === "string"
+                      ? e.emailAddresses
+                      : typeof e.emailAddresses === "number" ||
+                          typeof e.emailAddresses === "boolean"
+                        ? String(e.emailAddresses)
+                        : "",
+                  emailSubject:
+                    typeof e.emailSubject === "string"
+                      ? e.emailSubject
+                      : typeof e.emailSubject === "number" ||
+                          typeof e.emailSubject === "boolean"
+                        ? String(e.emailSubject)
+                        : "",
                 },
               }))
             : [],
@@ -661,17 +754,40 @@ export default function EventsList() {
                         ? e.targetScriptId
                         : null,
                   toolId: typeof e.toolId === "number" ? e.toolId : null,
-                  message: String(e.message ?? e.value ?? ""),
-                  emailAddresses: String(e.emailAddresses ?? ""),
-                  emailSubject: String(e.emailSubject ?? ""),
+                  message:
+                    typeof e.message === "string"
+                      ? e.message
+                      : typeof e.value === "string"
+                        ? e.value
+                        : typeof e.message === "number" ||
+                            typeof e.message === "boolean"
+                          ? String(e.message)
+                          : typeof e.value === "number" ||
+                              typeof e.value === "boolean"
+                            ? String(e.value)
+                            : "",
+                  emailAddresses:
+                    typeof e.emailAddresses === "string"
+                      ? e.emailAddresses
+                      : typeof e.emailAddresses === "number" ||
+                          typeof e.emailAddresses === "boolean"
+                        ? String(e.emailAddresses)
+                        : "",
+                  emailSubject:
+                    typeof e.emailSubject === "string"
+                      ? e.emailSubject
+                      : typeof e.emailSubject === "number" ||
+                          typeof e.emailSubject === "boolean"
+                        ? String(e.emailSubject)
+                        : "",
                 },
               }))
             : [],
         }).filter(([_, value]) => value !== undefined),
       ) as typeof duplicateData;
 
-      void createEventMutation.mutateAsync(duplicateData);
-    } catch (error) {
+      await createEventMutation.mutateAsync(duplicateData);
+    } catch {
       // Error handling is done in the mutation onError callback
     }
   };
@@ -680,14 +796,14 @@ export default function EventsList() {
   const handleStatusChange = async (id: number, newStatus: EventStatus) => {
     try {
       if (newStatus === EventStatus.ACTIVE) {
-        void activateEventMutation.mutateAsync({ id, resetCounter: false });
+        await activateEventMutation.mutateAsync({ id, resetCounter: false });
       } else if (newStatus === EventStatus.PAUSED) {
-        void deactivateEventMutation.mutateAsync({ id });
+        await deactivateEventMutation.mutateAsync({ id });
       } else {
         // For draft/archived status, use update
-        void updateEventMutation.mutateAsync({ id, status: newStatus });
+        await updateEventMutation.mutateAsync({ id, status: newStatus });
       }
-    } catch (error) {
+    } catch {
       // Error handling is done in the mutation onError callbacks
     }
   };
@@ -704,9 +820,9 @@ export default function EventsList() {
       // Process deletions sequentially to avoid overwhelming the server
       for (const eventId of Array.from(state.selectedEvents)) {
         try {
-          void deleteEventMutation.mutateAsync({ id: eventId });
+          await deleteEventMutation.mutateAsync({ id: eventId });
           successCount++;
-        } catch (error) {
+        } catch {
           failureCount++;
         }
       }
@@ -733,7 +849,7 @@ export default function EventsList() {
       }
 
       updateState({ selectedEvents: new Set() });
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "An unexpected error occurred during bulk deletion.",
@@ -776,7 +892,7 @@ export default function EventsList() {
       }
 
       updateState({ selectedEvents: new Set() });
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to activate some events. Please try again.",
@@ -816,7 +932,7 @@ export default function EventsList() {
       }
 
       updateState({ selectedEvents: new Set() });
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to pause some events. Please try again.",
@@ -859,7 +975,7 @@ export default function EventsList() {
       });
 
       updateState({ selectedEvents: new Set() });
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to download events. Please try again.",
@@ -902,7 +1018,7 @@ export default function EventsList() {
       }
 
       updateState({ selectedEvents: new Set() });
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to archive some events. Please try again.",

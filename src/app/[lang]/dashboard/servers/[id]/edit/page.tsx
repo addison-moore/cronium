@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, AlertCircle } from "lucide-react";
@@ -8,59 +8,75 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import ServerForm from "@/components/dashboard/ServerForm";
 import { Spinner } from "@/components/ui/spinner";
+import { trpc } from "@/lib/trpc";
+import { useToast } from "@/components/ui/use-toast";
 
-export default function EditServerPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const [server, setServer] = useState<any | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [serverId, setServerId] = useState<number | null>(null);
+interface EditServerPageProps {
+  params: Promise<{ id: string; lang: string }>;
+}
 
+export default function EditServerPage({ params }: EditServerPageProps) {
+  const resolvedParams = use(params);
+  const serverId = parseInt(resolvedParams.id);
+  const lang = resolvedParams.lang;
   const router = useRouter();
+  const { toast } = useToast();
 
-  useEffect(() => {
-    const initializeParams = async () => {
-      const resolvedParams = await params;
-      const id = parseInt(resolvedParams.id);
-      setServerId(id);
-    };
-    initializeParams();
-  }, [params]);
+  // Use tRPC query to fetch server data
+  const {
+    data: server,
+    isLoading,
+    error: serverError,
+  } = trpc.servers.getById.useQuery(
+    { id: serverId },
+    {
+      enabled: !isNaN(serverId),
+    },
+  );
 
+  // Handle invalid server ID
   useEffect(() => {
-    if (serverId !== null) {
-      fetchServer();
+    if (isNaN(serverId)) {
+      toast({
+        title: "Error",
+        description: "Invalid server ID",
+        variant: "destructive",
+      });
+      router.push(`/${lang}/dashboard/servers`);
     }
-  }, [serverId]);
+  }, [serverId, router, lang, toast]);
 
-  const fetchServer = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch(`/api/servers/${String(serverId)}`);
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          setError("Server not found");
-          return;
-        }
-        throw new Error("Failed to fetch server details");
+  // Handle server error
+  useEffect(() => {
+    if (serverError) {
+      if (serverError.data?.code === "NOT_FOUND") {
+        toast({
+          title: "Error",
+          description: "Server not found",
+          variant: "destructive",
+        });
+        router.push(`/${lang}/dashboard/servers`);
+      } else if (serverError.data?.code === "FORBIDDEN") {
+        toast({
+          title: "Error",
+          description: "Access denied",
+          variant: "destructive",
+        });
+        router.push(`/${lang}/dashboard/servers`);
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to load server data. Please try again.",
+          variant: "destructive",
+        });
       }
-
-      const data = await response.json();
-      setServer(data);
-    } catch (error) {
-      console.error("Error fetching server:", error);
-      setError("Failed to load server. Please try again.");
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, [serverError, router, lang, toast]);
 
   const handleSuccess = (updatedServerId?: number) => {
-    router.push(`/dashboard/servers/${String(updatedServerId ?? serverId)}`);
+    router.push(
+      `/${lang}/dashboard/servers/${String(updatedServerId ?? serverId)}`,
+    );
   };
 
   if (isLoading) {
@@ -70,9 +86,9 @@ export default function EditServerPage({
           <Button variant="ghost" size="sm" className="mr-2" asChild>
             <Link
               href={
-                serverId
-                  ? `/dashboard/servers/${serverId}`
-                  : "/dashboard/servers"
+                !isNaN(serverId)
+                  ? `/${lang}/dashboard/servers/${serverId}`
+                  : `/${lang}/dashboard/servers`
               }
             >
               <ArrowLeft className="mr-1 h-4 w-4" />
@@ -89,12 +105,12 @@ export default function EditServerPage({
     );
   }
 
-  if (error ?? !server) {
+  if (serverError ?? !server) {
     return (
       <div className="container mx-auto p-4">
         <div className="mb-6 flex items-center">
           <Button variant="ghost" size="sm" className="mr-2" asChild>
-            <Link href="/dashboard/servers">
+            <Link href={`/${lang}/dashboard/servers`}>
               <ArrowLeft className="mr-1 h-4 w-4" />
               Back to Servers
             </Link>
@@ -108,11 +124,13 @@ export default function EditServerPage({
               <AlertCircle className="mb-4 h-16 w-16 text-red-500" />
               <h2 className="mb-2 text-xl font-semibold">Server Not Found</h2>
               <p className="mb-4 text-center text-gray-500">
-                {error ??
+                {serverError?.message ??
                   "The server you're trying to edit doesn't exist or has been deleted."}
               </p>
               <Button asChild>
-                <Link href="/dashboard/servers">View All Servers</Link>
+                <Link href={`/${lang}/dashboard/servers`}>
+                  View All Servers
+                </Link>
               </Button>
             </div>
           </CardContent>
@@ -127,7 +145,9 @@ export default function EditServerPage({
         <Button variant="ghost" size="sm" className="mr-2" asChild>
           <Link
             href={
-              serverId ? `/dashboard/servers/${serverId}` : "/dashboard/servers"
+              !isNaN(serverId)
+                ? `/${lang}/dashboard/servers/${serverId}`
+                : `/${lang}/dashboard/servers`
             }
           >
             <ArrowLeft className="mr-1 h-4 w-4" />

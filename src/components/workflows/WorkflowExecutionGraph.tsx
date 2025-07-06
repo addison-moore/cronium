@@ -16,7 +16,6 @@ import {
 import { LogStatus } from "@/shared/schema";
 import type { EventType } from "@/shared/schema";
 import { EventDetailsPopover } from "@/components/ui/event-details-popover";
-import { useToast } from "@/components/ui/use-toast";
 
 interface WorkflowNode {
   id: string;
@@ -63,8 +62,17 @@ interface WorkflowExecutionGraphProps {
   connections: WorkflowConnection[];
   executionId?: number;
   isExecuting?: boolean;
-  onExecutionUpdate?: (execution: any) => void;
+  onExecutionUpdate?: (execution: WorkflowExecution) => void;
   updateEvents?: () => void;
+}
+
+interface WorkflowExecution {
+  id: number;
+  workflowId: number;
+  status: LogStatus | "completed" | "failed" | "running";
+  startedAt: string;
+  completedAt: string | null;
+  totalDuration: number | null;
 }
 
 interface NodeWithStatus extends WorkflowNode {
@@ -84,17 +92,16 @@ export default function WorkflowExecutionGraph({
   onExecutionUpdate,
   updateEvents,
 }: WorkflowExecutionGraphProps) {
-  const { toast } = useToast();
   const [executionEvents, setExecutionEvents] = useState<
     WorkflowExecutionEvent[]
   >([]);
   const [nodesWithStatus, setNodesWithStatus] = useState<NodeWithStatus[]>([]);
-  const [hasInitialData, setHasInitialData] = useState(false);
   const [lastExecutionId, setLastExecutionId] = useState<number | undefined>(
     undefined,
   );
   const [isHorizontalLayout, setIsHorizontalLayout] = useState(true);
-  const [currentExecution, setCurrentExecution] = useState<any>(null);
+  const [currentExecution, setCurrentExecution] =
+    useState<WorkflowExecution | null>(null);
   const [actuallyExecuting, setActuallyExecuting] = useState(false);
   const [stateTransitionTimeout, setStateTransitionTimeout] =
     useState<NodeJS.Timeout | null>(null);
@@ -112,31 +119,33 @@ export default function WorkflowExecutionGraph({
   }, []);
 
   // Use REST API for execution details since tRPC endpoint doesn't exist yet
-  const [isLoadingExecution, setIsLoadingExecution] = useState(false);
 
   // Declare fetchExecutionEvents function for fetching execution details via REST API
   const fetchExecutionEvents = useCallback(
-    async (isPolling = false) => {
+    async (_isPolling = false) => {
       if (!executionId) {
         return;
       }
 
       try {
-        setIsLoadingExecution(true);
         const response = await fetch(
           `/api/workflows/${workflowId}/executions/${executionId}`,
         );
 
         if (response.ok) {
-          const data = await response.json();
-          const events = data.data?.events || [];
+          const data = (await response.json()) as {
+            data?: {
+              events?: WorkflowExecutionEvent[];
+              execution?: WorkflowExecution;
+            };
+          };
+          const events = data.data?.events ?? [];
           const execution = data.data?.execution;
 
           // Only update state if we're still working with the same execution ID
           if (executionId === lastExecutionId) {
             setExecutionEvents(events);
             setCurrentExecution(execution);
-            setHasInitialData(true);
             hasAnyDataRef.current = true;
 
             // Update internal execution state based on actual status
@@ -156,10 +165,9 @@ export default function WorkflowExecutionGraph({
             }
           }
         }
-      } catch (error) {
+      } catch {
         // Silently handle fetch errors to prevent state corruption
       } finally {
-        setIsLoadingExecution(false);
       }
     },
     [workflowId, executionId, lastExecutionId, onExecutionUpdate],
@@ -168,7 +176,7 @@ export default function WorkflowExecutionGraph({
   // Function to manually refetch execution details
   const refetchExecutionDetails = useCallback(() => {
     if (!executionId) return;
-    fetchExecutionEvents(false);
+    void fetchExecutionEvents(false);
   }, [executionId, fetchExecutionEvents]);
 
   // Initial fetch of execution data when executionId changes
@@ -179,7 +187,7 @@ export default function WorkflowExecutionGraph({
       executionId === lastExecutionId &&
       !hasAnyDataRef.current
     ) {
-      fetchExecutionEvents(false);
+      void fetchExecutionEvents(false);
     }
   }, [executionId, lastExecutionId, fetchExecutionEvents]);
 
@@ -200,7 +208,7 @@ export default function WorkflowExecutionGraph({
         status = executionEvent.status;
         isCurrentlyExecuting = status === LogStatus.RUNNING;
         hasError = status === LogStatus.FAILURE;
-        duration = executionEvent.duration || null;
+        duration = executionEvent.duration ?? null;
       }
 
       return {
@@ -234,15 +242,14 @@ export default function WorkflowExecutionGraph({
         const timeout = setTimeout(() => {
           setExecutionEvents([]);
           setCurrentExecution(null);
-          setHasInitialData(false);
           hasAnyDataRef.current = false;
 
           // Trigger tRPC refetch or REST fetch
           if (executionId) {
             if (refetchExecutionDetails) {
-              refetchExecutionDetails();
+              void refetchExecutionDetails();
             } else {
-              fetchExecutionEvents(false);
+              void fetchExecutionEvents(false);
             }
           }
         }, 100); // Brief delay to prevent rapid state changes
@@ -285,7 +292,7 @@ export default function WorkflowExecutionGraph({
   useEffect(() => {
     if (!isExecuting || !executionId) return;
 
-    const interval = setInterval(() => fetchExecutionEvents(true), 2000);
+    const interval = setInterval(() => void fetchExecutionEvents(true), 2000);
     return () => clearInterval(interval);
   }, [isExecuting, executionId, fetchExecutionEvents]);
 
@@ -334,8 +341,17 @@ export default function WorkflowExecutionGraph({
     }
   };
 
+  // Define type for layout nodes
+  interface LayoutNode extends NodeWithStatus {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    level: number;
+  }
+
   // Draw connection lines between nodes
-  const renderConnections = (layoutNodes: any[]) => {
+  const renderConnections = (layoutNodes: LayoutNode[]) => {
     return connections.map((conn) => {
       const sourceNode = layoutNodes.find((n) => n.id === conn.source);
       const targetNode = layoutNodes.find((n) => n.id === conn.target);
@@ -437,7 +453,7 @@ export default function WorkflowExecutionGraph({
       levelNodes.get(level)!.push(nodeId);
 
       // Add children to queue
-      const children = connectionMap.get(nodeId) || [];
+      const children = connectionMap.get(nodeId) ?? [];
       children.forEach((childId) => {
         if (!visited.has(childId)) {
           visited.add(childId);
@@ -474,7 +490,7 @@ export default function WorkflowExecutionGraph({
     });
 
     return nodesWithStatus.map((node) => {
-      const pos = positioned.get(node.id) || { x: 0, y: 0, level: 0 };
+      const pos = positioned.get(node.id) ?? { x: 0, y: 0, level: 0 };
       return {
         ...node,
         x: pos.x,

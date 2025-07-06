@@ -10,7 +10,12 @@ interface ThemeProviderProps {
   attribute?: Attribute | Attribute[];
   defaultTheme?: string;
   enableSystem?: boolean;
-  [key: string]: any;
+  enableColorScheme?: boolean;
+  disableTransitionOnChange?: boolean;
+  storageKey?: string;
+  themes?: string[];
+  forcedTheme?: string;
+  value?: Record<string, string>;
 }
 
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {

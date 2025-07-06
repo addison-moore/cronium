@@ -82,7 +82,7 @@ export function useLanguage() {
     t = (key: string): string => {
       try {
         return translate(key);
-      } catch (error) {
+      } catch {
         return key; // Fallback to key if translation not found
       }
     };

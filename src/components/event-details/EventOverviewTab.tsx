@@ -16,7 +16,7 @@ interface EventOverviewTabProps {
   onResetCounter: () => void;
   isResettingCounter: boolean;
   isEventLoaded?: boolean;
-  onRefresh?: () => Promise<any>;
+  onRefresh?: () => Promise<void>;
   langParam?: string;
 }
 
@@ -25,8 +25,8 @@ export function EventOverviewTab({
   onResetCounter,
   isResettingCounter,
   isEventLoaded = true,
-  onRefresh,
-  langParam,
+  _onRefresh,
+  _langParam,
 }: EventOverviewTabProps) {
   const t = useTranslations("Events");
 
@@ -154,7 +154,7 @@ export function EventOverviewTab({
                 <span className="text-muted-foreground">
                   {t("executionLocation")}:{" "}
                 </span>
-                {event.runLocation === RunLocation.REMOTE &&
+                {event.runLocation === "REMOTE" &&
                 event.servers &&
                 event.servers.length > 0 ? (
                   <div className="mt-1 space-y-1">

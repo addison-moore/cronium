@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 import {
   getDefaultScriptContent,
   getDefaultHttpRequest,
@@ -24,7 +25,9 @@ import {
 import { MonacoEditor } from "@/components/ui/monaco-editor";
 import { TagsInput } from "@/components/ui/tags-input";
 import AIScriptAssistant from "@/components/dashboard/AIScriptAssistant";
-import ConditionalActionsSection from "./ConditionalActionsSection";
+import ConditionalActionsSection, {
+  type EventData as ConditionalActionsEventData,
+} from "./ConditionalActionsSection";
 import EditorSettingsModal, {
   type EditorSettings,
 } from "./EditorSettingsModal";
@@ -36,11 +39,39 @@ import {
   RunLocation,
   TimeUnit,
   EventTriggerType,
+  ConditionalActionType,
+  type Event,
+  type ConditionalAction,
 } from "@/shared/schema";
 
+interface EnvVar {
+  key: string;
+  value: string;
+}
+
+interface HttpRequestData {
+  method: string;
+  url: string;
+  headers: Array<{ key: string; value: string }>;
+  body: string;
+}
+
+interface ConditionalActionFormData {
+  type: string;
+  action: string;
+  emailAddresses?: string;
+  emailSubject?: string;
+  targetEventId?: number | null;
+  toolId?: number | null;
+  message?: string;
+}
+
+// Type extension for Event with conditional actions
+type EventWithConditionalActions = Partial<Event> & ConditionalActionsEventData;
+
 interface EventFormProps {
-  initialScript?: any;
-  initialData?: any;
+  initialScript?: EventWithConditionalActions;
+  initialData?: EventWithConditionalActions;
   isEditing?: boolean;
   eventId?: number;
   onSuccess?: (eventId?: number) => void;
@@ -54,7 +85,7 @@ export default function EventForm({
   onSuccess,
 }: EventFormProps) {
   // Use initialData if provided, otherwise use initialScript
-  const eventData = initialData || initialScript;
+  const eventData = initialData ?? initialScript;
   const { toast } = useToast();
   const t = useTranslations("Events");
 
@@ -73,25 +104,29 @@ export default function EventForm({
     useState(false);
 
   // Form fields state
-  const [name, setName] = useState(eventData?.name || "");
-  const [description, setDescription] = useState(eventData?.description || "");
+  const [name, setName] = useState(eventData?.name ?? "");
+  const [description, setDescription] = useState(eventData?.description ?? "");
   const [shared, setShared] = useState(eventData?.shared === true);
-  const [type, setType] = useState(eventData?.type || EventType.PYTHON);
-  const [content, setContent] = useState(
-    eventData?.content || getDefaultScriptContent(EventType.PYTHON),
+  const [type, setType] = useState<EventType>(
+    eventData?.type ?? EventType.PYTHON,
   );
-  const [status, setStatus] = useState(eventData?.status || EventStatus.DRAFT);
-  const [triggerType, setTriggerType] = useState(
-    eventData?.triggerType || EventTriggerType.MANUAL,
+  const [content, setContent] = useState(
+    eventData?.content ?? getDefaultScriptContent(EventType.PYTHON),
+  );
+  const [status, setStatus] = useState<EventStatus>(
+    eventData?.status ?? EventStatus.DRAFT,
+  );
+  const [triggerType, setTriggerType] = useState<EventTriggerType>(
+    eventData?.triggerType ?? EventTriggerType.MANUAL,
   );
   const [scheduleNumber, setScheduleNumber] = useState(
-    eventData?.scheduleNumber || 5,
+    eventData?.scheduleNumber ?? 5,
   );
   const [scheduleDisplayValue, setScheduleDisplayValue] = useState(
-    (eventData?.scheduleNumber || 5).toString(),
+    (eventData?.scheduleNumber ?? 5).toString(),
   );
-  const [scheduleUnit, setScheduleUnit] = useState(
-    eventData?.scheduleUnit || TimeUnit.MINUTES,
+  const [scheduleUnit, setScheduleUnit] = useState<TimeUnit>(
+    eventData?.scheduleUnit ?? TimeUnit.MINUTES,
   );
   const [startTime, setStartTime] = useState(
     eventData?.startTime
@@ -102,42 +137,40 @@ export default function EventForm({
     eventData?.customSchedule ? true : false,
   );
   const [customSchedule, setCustomSchedule] = useState(
-    eventData?.customSchedule || "",
+    eventData?.customSchedule ?? "",
   );
   const [timeoutValue, setTimeoutValue] = useState(
-    eventData?.timeoutValue || 30,
+    eventData?.timeoutValue ?? 30,
   );
   const [timeoutDisplayValue, setTimeoutDisplayValue] = useState(
-    (eventData?.timeoutValue || 30).toString(),
+    (eventData?.timeoutValue ?? 30).toString(),
   );
-  const [timeoutUnit, setTimeoutUnit] = useState(
-    eventData?.timeoutUnit || TimeUnit.SECONDS,
+  const [timeoutUnit, setTimeoutUnit] = useState<TimeUnit>(
+    eventData?.timeoutUnit ?? TimeUnit.SECONDS,
   );
-  const [runLocation, setRunLocation] = useState(
-    eventData?.runLocation || RunLocation.LOCAL,
+  const [runLocation, setRunLocation] = useState<RunLocation>(
+    eventData?.runLocation ?? RunLocation.LOCAL,
   );
-  const [serverId] = useState(eventData?.serverId || null);
-  const [selectedServerIds, setSelectedServerIds] = useState<number[]>(
-    eventData?.servers?.map((server: any) => server.id) || [],
-  );
-  const [retries, setRetries] = useState(eventData?.retries || 0);
+  const [serverId] = useState(eventData?.serverId ?? null);
+  const [selectedServerIds, setSelectedServerIds] = useState<number[]>([]);
+  const [retries, setRetries] = useState(eventData?.retries ?? 0);
   const [retriesDisplayValue, setRetriesDisplayValue] = useState(
-    (eventData?.retries || 0).toString(),
+    (eventData?.retries ?? 0).toString(),
   );
   const [maxExecutions, setMaxExecutions] = useState(
-    eventData?.maxExecutions || 0,
+    eventData?.maxExecutions ?? 0,
   );
   const [maxExecutionsDisplayValue, setMaxExecutionsDisplayValue] = useState(
-    (eventData?.maxExecutions || 0).toString(),
+    (eventData?.maxExecutions ?? 0).toString(),
   );
   const [resetCounterOnActive, setResetCounterOnActive] = useState(
     eventData?.resetCounterOnActive === true,
   );
-  const [envVars, setEnvVars] = useState<Array<{ key: string; value: string }>>(
-    eventData?.envVars || [],
-  );
-  const [tags, setTags] = useState<string[]>(eventData?.tags || []);
-  const [conditionalActions, setConditionalActions] = useState<any[]>([]);
+  const [envVars, setEnvVars] = useState<EnvVar[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [conditionalActions, setConditionalActions] = useState<
+    ConditionalActionFormData[]
+  >([]);
   const [passwordVisibility, setPasswordVisibility] = useState<
     Record<number, boolean>
   >({});
@@ -145,16 +178,16 @@ export default function EventForm({
   // Fetch available servers using tRPC
   const { data: serversData } = trpc.servers.getAll.useQuery(
     { limit: 100, offset: 0 },
-    { staleTime: 60000 },
+    QUERY_OPTIONS.dynamic,
   );
-  const servers = serversData?.servers || [];
+  const servers = serversData?.servers ?? [];
 
   // Fetch available events for conditional events using tRPC
   const { data: eventsData } = trpc.events.getAll.useQuery(
     { limit: 1000, offset: 0 },
-    { staleTime: 30000 },
+    QUERY_OPTIONS.dynamic,
   );
-  const availableEvents = eventsData?.events || [];
+  const availableEvents = eventsData?.events ?? [];
 
   // tRPC mutations
   const createEventMutation = trpc.events.create.useMutation();
@@ -165,10 +198,21 @@ export default function EventForm({
   const isRemote = runLocation === RunLocation.REMOTE;
 
   // HTTP request data state (only used for HTTP_REQUEST type)
-  const [httpRequest, setHttpRequest] = useState(
-    eventData?.httpRequest
-      ? JSON.parse(eventData.httpRequest)
-      : getDefaultHttpRequest(),
+  const [httpRequest, setHttpRequest] = useState<HttpRequestData>(
+    (() => {
+      if (eventData && "httpMethod" in eventData && eventData.httpMethod) {
+        // Parse from individual fields if available
+        return {
+          method: eventData.httpMethod ?? "GET",
+          url: eventData.httpUrl ?? "",
+          headers: Array.isArray(eventData.httpHeaders)
+            ? (eventData.httpHeaders as Array<{ key: string; value: string }>)
+            : [],
+          body: eventData.httpBody ?? "",
+        };
+      }
+      return getDefaultHttpRequest() as HttpRequestData;
+    })(),
   );
 
   // Toggle password visibility for environment variables
@@ -178,6 +222,127 @@ export default function EventForm({
       [index]: !prev[index],
     }));
   };
+
+  // Initialize form data from eventData
+  useEffect(() => {
+    if (eventData) {
+      // Handle servers initialization
+      if ("servers" in eventData && Array.isArray(eventData.servers)) {
+        const serverIds = (eventData.servers as Array<{ id: number }>)
+          .map((server) => server.id)
+          .filter((id): id is number => typeof id === "number");
+        setSelectedServerIds(serverIds);
+      }
+
+      // Handle envVars initialization
+      if ("envVars" in eventData && Array.isArray(eventData.envVars)) {
+        setEnvVars(eventData.envVars as EnvVar[]);
+      }
+
+      // Handle tags initialization
+      if (eventData.tags) {
+        if (typeof eventData.tags === "string") {
+          try {
+            const parsed = JSON.parse(eventData.tags) as unknown;
+            if (Array.isArray(parsed)) {
+              setTags(
+                parsed.filter((tag): tag is string => typeof tag === "string"),
+              );
+            }
+          } catch {
+            // If parsing fails, treat as empty array
+            setTags([]);
+          }
+        } else if (Array.isArray(eventData.tags)) {
+          setTags(
+            eventData.tags.filter(
+              (tag): tag is string => typeof tag === "string",
+            ),
+          );
+        }
+      }
+
+      // Handle conditional actions initialization
+      const allConditionalActions: ConditionalActionFormData[] = [];
+
+      // Process successEvents
+      if (
+        "successEvents" in eventData &&
+        Array.isArray(eventData.successEvents)
+      ) {
+        const successActions = (
+          eventData.successEvents as ConditionalAction[]
+        ).map((action) => ({
+          type: "ON_SUCCESS" as const,
+          action: action.type,
+          targetEventId: action.targetEventId,
+          toolId: action.toolId,
+          message: action.message ?? "",
+          emailAddresses: action.emailAddresses ?? "",
+          emailSubject: action.emailSubject ?? "",
+        }));
+        allConditionalActions.push(...successActions);
+      }
+
+      // Process failEvents
+      if ("failEvents" in eventData && Array.isArray(eventData.failEvents)) {
+        const failActions = (eventData.failEvents as ConditionalAction[]).map(
+          (action) => ({
+            type: "ON_FAILURE" as const,
+            action: action.type,
+            targetEventId: action.targetEventId,
+            toolId: action.toolId,
+            message: action.message ?? "",
+            emailAddresses: action.emailAddresses ?? "",
+            emailSubject: action.emailSubject ?? "",
+          }),
+        );
+        allConditionalActions.push(...failActions);
+      }
+
+      // Process alwaysEvents
+      if (
+        "alwaysEvents" in eventData &&
+        Array.isArray(eventData.alwaysEvents)
+      ) {
+        const alwaysActions = (
+          eventData.alwaysEvents as ConditionalAction[]
+        ).map((action) => ({
+          type: "ALWAYS" as const,
+          action: action.type,
+          targetEventId: action.targetEventId,
+          toolId: action.toolId,
+          message: action.message ?? "",
+          emailAddresses: action.emailAddresses ?? "",
+          emailSubject: action.emailSubject ?? "",
+        }));
+        allConditionalActions.push(...alwaysActions);
+      }
+
+      // Process conditionEvents
+      if (
+        "conditionEvents" in eventData &&
+        Array.isArray(eventData.conditionEvents)
+      ) {
+        const conditionActions = (
+          eventData.conditionEvents as ConditionalAction[]
+        ).map((action) => ({
+          type: "ON_CONDITION" as const,
+          action: action.type,
+          targetEventId: action.targetEventId,
+          toolId: action.toolId,
+          message: action.message ?? "",
+          emailAddresses: action.emailAddresses ?? "",
+          emailSubject: action.emailSubject ?? "",
+        }));
+        allConditionalActions.push(...conditionActions);
+      }
+
+      if (allConditionalActions.length > 0) {
+        setConditionalActions(allConditionalActions);
+      }
+    }
+  }, [eventData]);
 
   // Update script content when type changes
   useEffect(() => {
@@ -199,11 +364,11 @@ export default function EventForm({
           type: action.type,
           action: action.action,
           details: {
-            emailAddresses: action.emailAddresses || "",
-            emailSubject: action.emailSubject || "",
-            targetEventId: action.targetEventId || null,
-            toolId: action.toolId || null,
-            message: action.message || "",
+            emailAddresses: action.emailAddresses ?? "",
+            emailSubject: action.emailSubject ?? "",
+            targetEventId: action.targetEventId ?? null,
+            toolId: action.toolId ?? null,
+            message: action.message ?? "",
           },
         }),
       );
@@ -236,14 +401,17 @@ export default function EventForm({
         timeoutValue: Number(timeoutValue),
         timeoutUnit,
         runLocation,
-        serverId: isRemote ? Number(serverId) || null : null, // Keep for backward compatibility
+        serverId: isRemote ? (serverId ? Number(serverId) : null) : null, // Keep for backward compatibility
         selectedServerIds: isRemote ? selectedServerIds : [], // New multi-server support
         retries: Number(retries),
         maxExecutions: Number(maxExecutions),
         resetCounterOnActive: resetCounterOnActive === true,
         // Include HTTP request data if needed
         ...(isHttpRequest && {
-          httpRequest: JSON.stringify(httpRequest),
+          httpMethod: httpRequest.method,
+          httpUrl: httpRequest.url,
+          httpHeaders: httpRequest.headers,
+          httpBody: httpRequest.body,
         }),
         // Include environment variables
         envVars,
@@ -253,13 +421,20 @@ export default function EventForm({
         conditionalActions: conditionalActionsForSubmission,
       };
 
-      const result =
-        isEditing && (eventData?.id || eventId)
-          ? await updateEventMutation.mutateAsync({
-              id: eventData?.id || eventId!,
-              ...formData,
-            })
-          : await createEventMutation.mutateAsync(formData);
+      let resultId: number | undefined;
+
+      if (isEditing && (eventData?.id || eventId)) {
+        const result = (await updateEventMutation.mutateAsync({
+          id: Number(eventData?.id ?? eventId),
+          ...formData,
+        })) as { id: number };
+        resultId = result.id;
+      } else {
+        const result = (await createEventMutation.mutateAsync(formData)) as {
+          id: number;
+        };
+        resultId = result.id;
+      }
 
       // Show success message
       toast({
@@ -270,7 +445,7 @@ export default function EventForm({
 
       // Handle success callback or redirect
       if (onSuccess) {
-        onSuccess(result.id || eventData?.id || eventId);
+        onSuccess(resultId ?? eventData?.id ?? eventId);
       }
     } catch (error) {
       console.error("Error submitting form:", error);
@@ -320,7 +495,7 @@ export default function EventForm({
   // Load user editor settings using tRPC
   const { data: editorSettingsData } = trpc.settings.getEditorSettings.useQuery(
     undefined,
-    { staleTime: 300000 }, // 5 minutes
+    QUERY_OPTIONS.static,
   );
 
   // Update editor settings when data is available
@@ -336,7 +511,7 @@ export default function EventForm({
       // Check for Ctrl+S (Windows/Linux) or Cmd+S (macOS)
       if ((event.ctrlKey || event.metaKey) && event.key === "s") {
         event.preventDefault(); // Prevent browser's default save action
-        submitForm(); // Trigger form submission
+        void submitForm(); // Trigger form submission
       }
     };
 
@@ -404,7 +579,7 @@ export default function EventForm({
               <Label htmlFor="status">{t("Status.Label")}</Label>
               <Select
                 value={status}
-                onValueChange={(value) => setStatus(value)}
+                onValueChange={(value) => setStatus(value as EventStatus)}
               >
                 <SelectTrigger id="status">
                   <SelectValue placeholder={t("Status.Placeholder")} />
@@ -426,7 +601,10 @@ export default function EventForm({
             {/* Script Type Field */}
             <div className="space-y-2">
               <Label htmlFor="type">{t("Fields.Type")}</Label>
-              <Select value={type} onValueChange={(value) => setType(value)}>
+              <Select
+                value={type}
+                onValueChange={(value) => setType(value as EventType)}
+              >
                 <SelectTrigger id="type">
                   <SelectValue placeholder={t("Placeholders.SelectType")} />
                 </SelectTrigger>
@@ -452,7 +630,9 @@ export default function EventForm({
               <Label htmlFor="triggerType">Trigger Method</Label>
               <Select
                 value={triggerType}
-                onValueChange={(value) => setTriggerType(value)}
+                onValueChange={(value) =>
+                  setTriggerType(value as EventTriggerType)
+                }
               >
                 <SelectTrigger id="triggerType">
                   <SelectValue placeholder="Select trigger method" />
@@ -582,14 +762,19 @@ export default function EventForm({
             <div className="space-y-2">
               <Label>{t("httpHeaders")}</Label>
               <div className="space-y-2">
-                {httpRequest.headers.map((header: any, index: number) => (
+                {httpRequest.headers.map((header, index) => (
                   <div key={index} className="flex space-x-2">
                     <Input
                       value={header.key}
                       onChange={(e) => {
                         const updatedHeaders = [...httpRequest.headers];
+                        // Make sure we have a valid header at this index
+                        const currentHeader = updatedHeaders[index] ?? {
+                          key: "",
+                          value: "",
+                        };
                         updatedHeaders[index] = {
-                          ...updatedHeaders[index],
+                          ...currentHeader,
                           key: e.target.value,
                         };
                         setHttpRequest({
@@ -604,8 +789,13 @@ export default function EventForm({
                       value={header.value}
                       onChange={(e) => {
                         const updatedHeaders = [...httpRequest.headers];
+                        // Make sure we have a valid header at this index
+                        const currentHeader = updatedHeaders[index] ?? {
+                          key: "",
+                          value: "",
+                        };
                         updatedHeaders[index] = {
-                          ...updatedHeaders[index],
+                          ...currentHeader,
                           value: e.target.value,
                         };
                         setHttpRequest({
@@ -622,7 +812,7 @@ export default function EventForm({
                       size="icon"
                       onClick={() => {
                         const updatedHeaders = httpRequest.headers.filter(
-                          (_: any, i: number) => i !== index,
+                          (_, i) => i !== index,
                         );
                         setHttpRequest({
                           ...httpRequest,
@@ -868,7 +1058,9 @@ export default function EventForm({
                   </Label>
                   <Select
                     value={scheduleUnit}
-                    onValueChange={(value) => setScheduleUnit(value)}
+                    onValueChange={(value) =>
+                      setScheduleUnit(value as TimeUnit)
+                    }
                   >
                     <SelectTrigger id="scheduleUnit">
                       <SelectValue placeholder={t("Fields.IntervalUnit")} />
@@ -926,7 +1118,7 @@ export default function EventForm({
             </Label>
             <Select
               value={runLocation}
-              onValueChange={(value) => setRunLocation(value)}
+              onValueChange={(value) => setRunLocation(value as RunLocation)}
             >
               <SelectTrigger id="runLocation">
                 <SelectValue placeholder={t("Placeholders.SelectLocation")} />
@@ -953,7 +1145,7 @@ export default function EventForm({
                       "No servers available. Please add a server first."}
                   </p>
                 ) : (
-                  servers.map((server: any) => (
+                  servers.map((server) => (
                     <div
                       key={server.id}
                       className="flex items-center space-x-2"
@@ -1026,7 +1218,7 @@ export default function EventForm({
               <Label htmlFor="timeoutUnit">{t("Fields.TimeoutUnit")}</Label>
               <Select
                 value={timeoutUnit}
-                onValueChange={(value) => setTimeoutUnit(value)}
+                onValueChange={(value) => setTimeoutUnit(value as TimeUnit)}
               >
                 <SelectTrigger id="timeoutUnit">
                   <SelectValue placeholder={t("Fields.TimeoutUnit")} />
@@ -1124,10 +1316,27 @@ export default function EventForm({
 
       {/* Conditional Actions Section */}
       <ConditionalActionsSection
-        eventData={eventData}
-        availableEvents={availableEvents || []}
+        {...(eventData && {
+          eventData: {
+            ...(eventData.successEvents !== undefined && {
+              successEvents: eventData.successEvents,
+            }),
+            ...(eventData.failEvents !== undefined && {
+              failEvents: eventData.failEvents,
+            }),
+            ...(eventData.alwaysEvents !== undefined && {
+              alwaysEvents: eventData.alwaysEvents,
+            }),
+            ...(eventData.conditionEvents !== undefined && {
+              conditionEvents: eventData.conditionEvents,
+            }),
+          },
+        })}
+        availableEvents={availableEvents}
         {...(eventId !== undefined ? { eventId } : {})}
-        onConditionalActionsChange={setConditionalActions}
+        onConditionalActionsChange={(actions) =>
+          setConditionalActions(actions as ConditionalActionFormData[])
+        }
       />
 
       {/* Form Actions */}

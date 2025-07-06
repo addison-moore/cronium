@@ -5,6 +5,24 @@ import { io } from "socket.io-client";
 import type { Socket } from "socket.io-client";
 import { useAuth } from "@/hooks/useAuth";
 
+// Define interfaces for XTerm types
+interface Terminal {
+  dispose(): void;
+  open(parent: HTMLElement): void;
+  write(data: string): void;
+  loadAddon(addon: unknown): void;
+  onData(callback: (data: string) => void): void;
+  cols: number;
+  rows: number;
+  unicode: {
+    activeVersion: string;
+  };
+}
+
+interface FitAddon {
+  fit(): void;
+}
+
 interface TerminalProps {
   serverId?: number | null;
   serverName?: string;
@@ -19,8 +37,8 @@ export default function Terminal({
   serverName = "Local Server",
 }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
-  const termRef = useRef<any>(null);
-  const fitAddonRef = useRef<any>(null);
+  const termRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
   const { user, isLoading: isUserLoading } = useAuth();
 
   const [loading, setLoading] = useState(false);
@@ -84,8 +102,8 @@ export default function Terminal({
         term.loadAddon(unicode11Addon);
         term.loadAddon(webLinksAddon);
 
-        termRef.current = term;
-        fitAddonRef.current = fitAddon;
+        termRef.current = term as Terminal;
+        fitAddonRef.current = fitAddon as FitAddon;
 
         // Open terminal
         term.open(terminalRef.current!);
@@ -111,7 +129,7 @@ export default function Terminal({
           );
           socket.emit("create-terminal", {
             userId: user.id,
-            serverId: serverId || undefined,
+            serverId: serverId ?? undefined,
             cols: term.cols,
             rows: term.rows,
           });
@@ -200,17 +218,21 @@ export default function Terminal({
         };
       } catch (error) {
         console.error("Terminal initialization failed:", error);
-        return () => {}; // Return empty cleanup function on error
+        return () => {
+          // Empty cleanup function on error
+        };
       }
     };
 
-    initTerminal().then((cleanupFn) => {
+    void initTerminal().then((cleanupFn) => {
       // Store cleanup function to call on unmount
       return cleanupFn;
     });
 
     // Return empty cleanup for now
-    return () => {};
+    return () => {
+      // Cleanup will be handled by initTerminal promise
+    };
   }, [serverId, serverName, isClient, user, isUserLoading]);
 
   if (!isClient || isUserLoading) {

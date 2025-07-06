@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useCallback } from "react";
 import { trpc } from "@/lib/trpc";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 
 interface DashboardStats {
   totalScripts: number;
@@ -52,9 +53,7 @@ export default function DashboardStats() {
     {
       days: 30,
     },
-    {
-      refetchInterval: 10000, // Auto-refresh every 10 seconds
-    },
+    QUERY_OPTIONS.realtime,
   );
 
   // Note: Recent activity is included in the main dashboard stats response

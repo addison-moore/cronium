@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../trpc";
 import type { InsertWorkflow } from "../../../shared/schema";
 import {
@@ -12,7 +13,7 @@ import {
   bulkWorkflowOperationSchema,
   workflowDownloadSchema,
 } from "@shared/schemas/workflows";
-import { storage } from "@/server/storage";
+import { storage, type WorkflowWithRelations } from "@/server/storage";
 import { EventStatus, LogStatus, UserRole } from "@shared/schema";
 
 // Custom procedure that handles auth for tRPC fetch adapter
@@ -352,7 +353,7 @@ export const workflowsRouter = createTRPCRouter({
           status: LogStatus.RUNNING,
           triggerType: input.manual ? "MANUAL" : "API",
           startedAt: new Date(),
-          executionData: input.payload || {},
+          executionData: input.payload ?? {},
         });
 
         // TODO: Integrate with workflow executor
@@ -473,6 +474,43 @@ export const workflowsRouter = createTRPCRouter({
       }
     }),
 
+  // Archive workflow
+  archive: workflowProcedure
+    .input(workflowIdSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        // Check if user owns the workflow
+        const workflow = await storage.getWorkflow(input.id);
+        if (!workflow) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Workflow not found",
+          });
+        }
+        if (workflow.userId !== ctx.userId) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Not authorized to archive this workflow",
+          });
+        }
+
+        // Archive the workflow
+        await storage.updateWorkflow(input.id, {
+          status: EventStatus.ARCHIVED,
+          updatedAt: new Date(),
+        });
+
+        return { success: true, message: "Workflow archived successfully" };
+      } catch (error: unknown) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to archive workflow",
+          cause: error,
+        });
+      }
+    }),
+
   // Bulk operations on workflows
   bulkOperation: workflowProcedure
     .input(bulkWorkflowOperationSchema)
@@ -540,6 +578,76 @@ export const workflowsRouter = createTRPCRouter({
       }
     }),
 
+  // Get workflow execution details
+  getExecution: workflowProcedure
+    .input(
+      z.object({
+        workflowId: z.number(),
+        executionId: z.number(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        // Check if user has access to this workflow
+        const workflow = await storage.getWorkflow(input.workflowId);
+        if (!workflow) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Workflow not found",
+          });
+        }
+
+        // Check access permissions
+        if (workflow.userId !== ctx.userId && !workflow.shared) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+        }
+
+        // Get execution details
+        const execution = await storage.getWorkflowExecution(input.executionId);
+        if (!execution || execution.workflowId !== input.workflowId) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Execution not found",
+          });
+        }
+
+        // Get execution events
+        const events = await storage.getWorkflowExecutionEvents(
+          input.executionId,
+        );
+
+        // Calculate execution statistics
+        const totalEvents = events.length;
+        const successfulEvents = events.filter(
+          (event) =>
+            event.status === LogStatus.SUCCESS ||
+            event.status === EventStatus.COMPLETED,
+        ).length;
+        const failedEvents = events.filter(
+          (event) =>
+            event.status === LogStatus.FAILURE ||
+            event.status === LogStatus.ERROR ||
+            event.status === EventStatus.FAILED,
+        ).length;
+
+        // Return detailed execution with statistics
+        return {
+          ...execution,
+          totalEvents,
+          successfulEvents,
+          failedEvents,
+          events,
+        };
+      } catch (error: unknown) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch execution details",
+          cause: error,
+        });
+      }
+    }),
+
   // Download workflows
   download: workflowProcedure
     .input(workflowDownloadSchema)
@@ -565,6 +673,12 @@ export const workflowsRouter = createTRPCRouter({
             const workflow = await storage.getWorkflowWithRelations(
               allowedWorkflowIds[0]!,
             );
+            if (!workflow) {
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message: "Workflow not found",
+              });
+            }
             return {
               format: "json",
               filename: `${workflow.name}.json`,
@@ -578,10 +692,20 @@ export const workflowsRouter = createTRPCRouter({
               storage.getWorkflowWithRelations(id),
             ),
           );
+          // Filter out any null workflows
+          const validWorkflows = workflows.filter(
+            (workflow): workflow is WorkflowWithRelations => workflow !== null,
+          );
+          if (validWorkflows.length === 0) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "No workflows found",
+            });
+          }
           return {
             format: "json",
             filename: "workflows.json",
-            data: JSON.stringify(workflows, null, 2),
+            data: JSON.stringify(validWorkflows, null, 2),
           };
         } else {
           // ZIP download

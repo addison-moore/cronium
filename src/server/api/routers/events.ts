@@ -1,5 +1,12 @@
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import {
+  createTRPCRouter,
+  publicProcedure,
+  withTiming,
+  withRateLimit,
+  withCache,
+  withTransaction,
+} from "../trpc";
 import { EventStatus, LogStatus, UserRole, RunLocation } from "@/shared/schema";
 import type { ConditionalActionType } from "@/shared/schema";
 import {
@@ -11,21 +18,38 @@ import {
   eventLogsSchema,
   eventActivationSchema,
   eventDownloadSchema,
-} from "@shared/schemas/events";
+} from "@/shared/schemas/events";
 import { storage } from "@/server/storage";
 import { scheduler } from "@/lib/scheduler";
+
+// Type for authenticated event context
+interface EventContext {
+  userId: string;
+}
+
+// Type guard for checking if user id exists in session
+function hasUserId(
+  session: { user?: { id?: string | null } } | null,
+): session is { user: { id: string } } {
+  return (
+    session?.user?.id !== null &&
+    session?.user?.id !== undefined &&
+    typeof session.user.id === "string" &&
+    session.user.id.length > 0
+  );
+}
 
 // Custom procedure that handles auth for tRPC fetch adapter
 const eventProcedure = publicProcedure.use(async ({ ctx, next }) => {
   // Try to get session from headers/cookies
-  let session = null;
-  let userId = null;
+  let session: { user: { id: string } } | null = null;
+  let userId: string | null = null;
 
   try {
     // If session exists in context, use it
-    if (ctx.session?.user?.id) {
-      session = ctx.session;
-      userId = ctx.session.user.id;
+    if (hasUserId(ctx.session as { user?: { id?: string | null } } | null)) {
+      session = ctx.session as unknown as { user: { id: string } };
+      userId = session.user.id;
     } else {
       // For development, get first admin user
       if (process.env.NODE_ENV === "development") {
@@ -51,7 +75,7 @@ const eventProcedure = publicProcedure.use(async ({ ctx, next }) => {
     return next({
       ctx: {
         ...ctx,
-        session,
+        session: session as typeof ctx.session,
         userId,
       },
     });
@@ -67,10 +91,13 @@ const eventProcedure = publicProcedure.use(async ({ ctx, next }) => {
 export const eventsRouter = createTRPCRouter({
   // Get all events for user
   getAll: eventProcedure
+    .use(withTiming)
+    .use(withCache(30000)) // Cache for 30 seconds
     .input(eventQuerySchema)
     .query(async ({ ctx, input }) => {
+      const eventCtx = ctx as EventContext;
       try {
-        const events = await storage.getAllEvents(ctx.userId);
+        const events = await storage.getAllEvents(eventCtx.userId);
 
         // Apply filters
         let filteredEvents = events;
@@ -124,9 +151,10 @@ export const eventsRouter = createTRPCRouter({
 
   // Get single event by ID
   getById: eventProcedure.input(eventIdSchema).query(async ({ ctx, input }) => {
+    const eventCtx = ctx as EventContext;
     try {
       // Check permissions
-      const canView = await storage.canViewEvent(input.id, ctx.userId);
+      const canView = await storage.canViewEvent(input.id, eventCtx.userId);
       if (!canView) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
       }
@@ -139,6 +167,9 @@ export const eventsRouter = createTRPCRouter({
       return event;
     } catch (error) {
       if (error instanceof TRPCError) throw error;
+
+      console.error("Error in events.getById:", error);
+
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to fetch event",
@@ -149,13 +180,17 @@ export const eventsRouter = createTRPCRouter({
 
   // Create new event
   create: eventProcedure
+    .use(withTiming)
+    .use(withRateLimit(50, 60000)) // 50 creates per minute
+    .use(withTransaction)
     .input(createEventSchema)
     .mutation(async ({ ctx, input }) => {
+      const eventCtx = ctx as EventContext;
       try {
         // Add user ID to event data
         const eventData = {
           ...input,
-          userId: ctx.userId,
+          userId: eventCtx.userId,
           startTime: input.startTime ? new Date(input.startTime) : null,
         };
 
@@ -224,11 +259,15 @@ export const eventsRouter = createTRPCRouter({
 
   // Update existing event
   update: eventProcedure
+    .use(withTiming)
+    .use(withRateLimit(100, 60000)) // 100 updates per minute
+    .use(withTransaction)
     .input(updateEventSchema)
     .mutation(async ({ ctx, input }) => {
+      const eventCtx = ctx as EventContext;
       try {
         // Check permissions
-        const canEdit = await storage.canEditEvent(input.id, ctx.userId);
+        const canEdit = await storage.canEditEvent(input.id, eventCtx.userId);
         if (!canEdit) {
           throw new TRPCError({
             code: "FORBIDDEN",
@@ -338,9 +377,10 @@ export const eventsRouter = createTRPCRouter({
   delete: eventProcedure
     .input(eventIdSchema)
     .mutation(async ({ ctx, input }) => {
+      const eventCtx = ctx as EventContext;
       try {
         // Check permissions
-        const canEdit = await storage.canEditEvent(input.id, ctx.userId);
+        const canEdit = await storage.canEditEvent(input.id, eventCtx.userId);
         if (!canEdit) {
           throw new TRPCError({
             code: "FORBIDDEN",
@@ -364,9 +404,10 @@ export const eventsRouter = createTRPCRouter({
   activate: eventProcedure
     .input(eventActivationSchema)
     .mutation(async ({ ctx, input }) => {
+      const eventCtx = ctx as EventContext;
       try {
         // Check permissions
-        const canEdit = await storage.canEditEvent(input.id, ctx.userId);
+        const canEdit = await storage.canEditEvent(input.id, eventCtx.userId);
         if (!canEdit) {
           throw new TRPCError({
             code: "FORBIDDEN",
@@ -403,9 +444,10 @@ export const eventsRouter = createTRPCRouter({
   deactivate: eventProcedure
     .input(eventIdSchema)
     .mutation(async ({ ctx, input }) => {
+      const eventCtx = ctx as EventContext;
       try {
         // Check permissions
-        const canEdit = await storage.canEditEvent(input.id, ctx.userId);
+        const canEdit = await storage.canEditEvent(input.id, eventCtx.userId);
         if (!canEdit) {
           throw new TRPCError({
             code: "FORBIDDEN",
@@ -432,11 +474,14 @@ export const eventsRouter = createTRPCRouter({
 
   // Execute event
   execute: eventProcedure
+    .use(withTiming)
+    .use(withRateLimit(50, 60000)) // 50 executions per minute
     .input(executeEventSchema)
     .mutation(async ({ ctx, input }) => {
+      const eventCtx = ctx as EventContext;
       try {
         // Check permissions
-        const canView = await storage.canViewEvent(input.id, ctx.userId);
+        const canView = await storage.canViewEvent(input.id, eventCtx.userId);
         if (!canView) {
           throw new TRPCError({
             code: "NOT_FOUND",
@@ -459,7 +504,7 @@ export const eventsRouter = createTRPCRouter({
           startTime: new Date(),
           eventName: event.name,
           scriptType: event.type,
-          userId: ctx.userId,
+          userId: eventCtx.userId,
         });
 
         // Add existing logId to event object to prevent duplicate log creation
@@ -469,7 +514,7 @@ export const eventsRouter = createTRPCRouter({
         };
 
         // Execute the event asynchronously
-        scheduler.executeScript(eventWithLogId);
+        void scheduler.executeScript(eventWithLogId);
 
         return { success: true, logId: log.id };
       } catch (error) {
@@ -486,9 +531,10 @@ export const eventsRouter = createTRPCRouter({
   getLogs: eventProcedure
     .input(eventLogsSchema)
     .query(async ({ ctx, input }) => {
+      const eventCtx = ctx as EventContext;
       try {
         // Check permissions
-        const canView = await storage.canViewEvent(input.id, ctx.userId);
+        const canView = await storage.canViewEvent(input.id, eventCtx.userId);
         if (!canView) {
           throw new TRPCError({
             code: "NOT_FOUND",
@@ -524,9 +570,10 @@ export const eventsRouter = createTRPCRouter({
   resetCounter: eventProcedure
     .input(eventIdSchema)
     .mutation(async ({ ctx, input }) => {
+      const eventCtx = ctx as EventContext;
       try {
         // Check permissions
-        const canEdit = await storage.canEditEvent(input.id, ctx.userId);
+        const canEdit = await storage.canEditEvent(input.id, eventCtx.userId);
         if (!canEdit) {
           throw new TRPCError({
             code: "FORBIDDEN",
@@ -550,9 +597,10 @@ export const eventsRouter = createTRPCRouter({
   getWorkflows: eventProcedure
     .input(eventIdSchema)
     .query(async ({ ctx, input }) => {
+      const eventCtx = ctx as EventContext;
       try {
         // Check permissions
-        const canView = await storage.canViewEvent(input.id, ctx.userId);
+        const canView = await storage.canViewEvent(input.id, eventCtx.userId);
         if (!canView) {
           throw new TRPCError({
             code: "NOT_FOUND",
@@ -562,7 +610,7 @@ export const eventsRouter = createTRPCRouter({
 
         const workflows = await storage.getWorkflowsUsingEvent(
           input.id,
-          ctx.userId,
+          eventCtx.userId,
         );
         return workflows;
       } catch (error) {
@@ -579,10 +627,11 @@ export const eventsRouter = createTRPCRouter({
   download: eventProcedure
     .input(eventDownloadSchema)
     .mutation(async ({ ctx, input }) => {
+      const eventCtx = ctx as EventContext;
       try {
         // Check permissions for all events
-        const userEvents = await storage.getAllEvents(ctx.userId);
-        const userEventIds = userEvents.map((e: any) => e.id);
+        const userEvents = await storage.getAllEvents(eventCtx.userId);
+        const userEventIds = userEvents.map((e) => e.id);
         const allowedEventIds = input.eventIds.filter((id) =>
           userEventIds.includes(id),
         );

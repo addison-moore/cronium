@@ -7,6 +7,14 @@ import { Toaster } from "@/components/ui/toaster";
 import "../styles/global.css";
 import { NextIntlProvider } from "@/components/providers/next-intl-provider";
 
+// Define a type for the translation messages
+interface TranslationMessages {
+  [key: string]:
+    | string
+    | TranslationMessages
+    | Array<string | TranslationMessages>;
+}
+
 export async function generateStaticParams() {
   return supportedLocales.map((lang) => ({ lang }));
 }
@@ -27,13 +35,21 @@ export default async function LocaleLayout({
   }
 
   // Load messages for the current locale
-  let messages;
+  let messages: TranslationMessages;
   try {
-    messages = (await import(`../../messages/${lang}.json`)).default;
+    // Explicitly type the dynamic import result
+    type MessageModule = { default: TranslationMessages };
+    const importedModule = (await import(
+      `../../messages/${lang}.json`
+    )) as MessageModule;
+    messages = importedModule.default;
   } catch (error) {
     console.error(`Failed to load messages for locale ${lang}`, error);
     // Fallback to English if translation file is missing
-    messages = (await import(`../../messages/en.json`)).default;
+    const fallbackModule = (await import(`../../messages/en.json`)) as {
+      default: TranslationMessages;
+    };
+    messages = fallbackModule.default;
   }
 
   return (

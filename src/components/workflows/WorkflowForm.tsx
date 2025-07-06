@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Calendar, Globe, Hand, GitFork } from "lucide-react";
-import { useTranslations } from "next-intl";
 import { toast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import {

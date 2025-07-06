@@ -22,6 +22,7 @@ import {
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
+import { trpc } from "@/lib/trpc";
 
 // Define the form schema
 const accountActivationSchema = z
@@ -61,44 +62,46 @@ export default function ActivatePage() {
     },
   });
 
-  // Verify token on page load
+  // tRPC query for token verification
+  const { data: verifyData, isLoading: isVerifying } =
+    trpc.userAuth.verifyInviteToken.useQuery(
+      { token: token || "" },
+      {
+        enabled: !!token,
+        retry: false,
+        onError: (error) => {
+          setTokenVerified(false);
+          setErrorMessage(error.message);
+        },
+        onSuccess: (data) => {
+          setTokenVerified(true);
+          setUserEmail(data.email);
+        },
+      },
+    );
+
+  // Update token verification state
   useEffect(() => {
     if (!token) {
       setTokenVerified(false);
       setErrorMessage("No activation token provided");
-      return;
     }
-
-    async function verifyToken() {
-      try {
-        if (!token) return;
-        console.log("Verifying token:", token);
-        const response = await fetch(
-          `/api/auth/verify-token?token=${encodeURIComponent(token)}`,
-        );
-
-        const data = await response.json();
-        console.log("Token verification response:", data);
-
-        if (!response.ok) {
-          setTokenVerified(false);
-          setErrorMessage(
-            data.message ?? "Invalid or expired invitation token",
-          );
-          return;
-        }
-
-        setTokenVerified(true);
-        setUserEmail(data.email ?? "");
-      } catch (error) {
-        console.error("Error verifying token:", error);
-        setTokenVerified(false);
-        setErrorMessage("An error occurred while verifying your token");
-      }
-    }
-
-    void verifyToken();
   }, [token]);
+
+  // tRPC mutation for account activation
+  const activateMutation = trpc.userAuth.activateAccount.useMutation({
+    onSuccess: () => {
+      setActivationStatus("success");
+      // Redirect to signin page after a short delay
+      setTimeout(() => {
+        router.push("/auth/signin");
+      }, 3000);
+    },
+    onError: (error) => {
+      setActivationStatus("error");
+      setErrorMessage(error.message);
+    },
+  });
 
   const onSubmit = async (data: AccountActivationFormData) => {
     if (!token) return;
@@ -107,41 +110,17 @@ export default function ActivatePage() {
     setActivationStatus("loading");
 
     try {
-      const response = await fetch("/api/auth/activate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          token,
-          password: data.password,
-        }),
+      await activateMutation.mutateAsync({
+        token,
+        password: data.password,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message ?? "Failed to activate account");
-      }
-
-      setActivationStatus("success");
-
-      // Redirect to signin page after a short delay
-      setTimeout(() => {
-        router.push("/auth/signin");
-      }, 3000);
-    } catch (error: any) {
-      console.error("Error activating account:", error);
-      setActivationStatus("error");
-      setErrorMessage(
-        error.message ?? "Failed to activate your account. Please try again.",
-      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
   // Handle token verification loading state
-  if (tokenVerified === null) {
+  if (isVerifying || tokenVerified === null) {
     return (
       <div className="container flex min-h-screen items-center justify-center py-10">
         <Card className="w-full max-w-md">

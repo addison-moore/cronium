@@ -7,7 +7,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   CheckCircle,
   ArrowRight,
@@ -78,10 +77,10 @@ function StepCard({
 
 function CodeBlock({
   children,
-  language = "bash",
+  _language = "bash",
 }: {
   children: string;
-  language?: string;
+  _language?: string;
 }) {
   return (
     <pre className="overflow-x-auto rounded-lg bg-gray-900 p-4 text-sm text-gray-100">

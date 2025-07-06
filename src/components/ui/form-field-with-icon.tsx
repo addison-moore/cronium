@@ -14,7 +14,7 @@ import { type InputProps } from "@/components/ui/input";
 import { type Control } from "react-hook-form";
 
 interface FormFieldWithIconProps extends Omit<InputProps, "name"> {
-  control: Control<any>;
+  control: Control<Record<string, unknown>>;
   name: string;
   label: string;
   icon: ReactNode;

@@ -156,7 +156,7 @@ async function authenticateUser(
       if (allUsers.length > 0) {
         // Use the first admin user for development browser sessions
         const adminUser =
-          allUsers.find((u) => u.role === UserRole.ADMIN) || allUsers[0];
+          allUsers.find((u) => u.role === UserRole.ADMIN) ?? allUsers[0];
         if (!adminUser) {
           throw new Error("No admin user found for development session");
         }
@@ -204,6 +204,23 @@ export async function GET(request: NextRequest) {
   }
 }
 
+interface ConditionalActionData {
+  type: ConnectionType;
+  action: string;
+  details: {
+    emailAddresses?: string;
+    targetEventId?: number | null;
+    toolId?: number | null;
+    message?: string | null;
+    emailSubject?: string | null;
+  };
+}
+
+interface RequestBody {
+  httpRequest?: string;
+  conditionalActions?: ConditionalActionData[];
+}
+
 // POST to create a new script
 export async function POST(request: NextRequest) {
   try {
@@ -216,7 +233,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const body = await request.json();
+    const body = (await request.json()) as RequestBody &
+      z.infer<typeof createEventSchema>;
 
     // Validate input
     const validationResult = createEventSchema.safeParse(body);
@@ -248,12 +266,33 @@ export async function POST(request: NextRequest) {
     const data = validationResult.data;
 
     // Create the script
-    const scriptData: any = {
+    interface ScriptData {
+      userId: string;
+      name: string;
+      type: EventType;
+      status: EventStatus;
+      scheduleNumber: number;
+      scheduleUnit: TimeUnit;
+      customSchedule?: string;
+      startTime: Date | null;
+      runLocation: RunLocation;
+      serverId?: number | null;
+      timeoutValue: number;
+      timeoutUnit: TimeUnit;
+      retries: number;
+      content?: string;
+      httpMethod?: string | null;
+      httpUrl?: string | null;
+      httpBody?: string | null;
+      httpHeaders?: string | null;
+    }
+
+    const scriptData: ScriptData = {
       userId: auth.userId,
       name: data.name,
       type: data.type,
       status: data.status,
-      scheduleNumber: data.scheduleNumber || 1,
+      scheduleNumber: data.scheduleNumber ?? 1,
       scheduleUnit: data.scheduleUnit,
       customSchedule: data.customSchedule,
       // Handle the start time field - ensure it's a valid Date or null
@@ -275,19 +314,24 @@ export async function POST(request: NextRequest) {
       // Check if we have the new format httpRequest field
       if (body.httpRequest && typeof body.httpRequest === "string") {
         try {
-          const httpRequestData = JSON.parse(body.httpRequest);
+          const httpRequestData = JSON.parse(body.httpRequest) as {
+            method: string;
+            url: string;
+            body?: string;
+            headers?: Array<{ key: string; value: string }>;
+          };
           scriptData.httpMethod = httpRequestData.method;
           scriptData.httpUrl = httpRequestData.url;
-          scriptData.httpBody = httpRequestData.body || "";
+          scriptData.httpBody = httpRequestData.body ?? "";
           scriptData.httpHeaders = JSON.stringify(
-            httpRequestData.headers || [],
+            httpRequestData.headers ?? [],
           );
         } catch (parseError) {
           console.error("Error parsing HTTP request data:", parseError);
           // Fall back to the old format
           scriptData.httpMethod = data.httpMethod;
           scriptData.httpUrl = data.httpUrl;
-          scriptData.httpBody = data.httpBody || "";
+          scriptData.httpBody = data.httpBody ?? "";
 
           // Add HTTP headers if provided
           if (data.httpHeaders && data.httpHeaders.length > 0) {
@@ -300,7 +344,7 @@ export async function POST(request: NextRequest) {
         // Use the old format
         scriptData.httpMethod = data.httpMethod;
         scriptData.httpUrl = data.httpUrl;
-        scriptData.httpBody = data.httpBody || "";
+        scriptData.httpBody = data.httpBody ?? "";
 
         // Add HTTP headers if provided
         if (data.httpHeaders && data.httpHeaders.length > 0) {
@@ -314,7 +358,7 @@ export async function POST(request: NextRequest) {
       // to satisfy database constraints
       scriptData.content = "";
     } else {
-      scriptData.content = data.content || "";
+      scriptData.content = data.content ?? "";
 
       // For non-HTTP requests, ensure HTTP fields are null/empty
       scriptData.httpMethod = null;
@@ -323,7 +367,9 @@ export async function POST(request: NextRequest) {
       scriptData.httpHeaders = null;
     }
 
-    const script = await storage.createScript(scriptData);
+    const script = await storage.createScript(
+      scriptData as Parameters<typeof storage.createScript>[0],
+    );
 
     // Add environment variables if provided
     if (data.envVars && data.envVars.length > 0) {
@@ -339,28 +385,40 @@ export async function POST(request: NextRequest) {
     // Handle conditional actions
     if (body.conditionalActions && body.conditionalActions.length > 0) {
       for (const condAction of body.conditionalActions) {
-        const eventData: any = {
+        const eventData = {
           type: condAction.action,
-          value: condAction.details.emailAddresses || "",
-          targetEventId: condAction.details.targetEventId || null,
-          toolId: condAction.details.toolId || null,
-          message: condAction.details.message || null,
-          emailAddresses: condAction.details.emailAddresses || null,
-          emailSubject: condAction.details.emailSubject || null,
+          value: condAction.details.emailAddresses ?? "",
+          targetEventId: condAction.details.targetEventId ?? null,
+          toolId: condAction.details.toolId ?? null,
+          message: condAction.details.message ?? null,
+          emailAddresses: condAction.details.emailAddresses ?? null,
+          emailSubject: condAction.details.emailSubject ?? null,
+          successEventId: null as number | null,
+          failEventId: null as number | null,
+          alwaysEventId: null as number | null,
+          conditionEventId: null as number | null,
         };
 
         if (condAction.type === ConnectionType.ON_SUCCESS) {
           eventData.successEventId = script.id;
-          await storage.createAction(eventData);
+          await storage.createAction(
+            eventData as Parameters<typeof storage.createAction>[0],
+          );
         } else if (condAction.type === ConnectionType.ON_FAILURE) {
           eventData.failEventId = script.id;
-          await storage.createAction(eventData);
+          await storage.createAction(
+            eventData as Parameters<typeof storage.createAction>[0],
+          );
         } else if (condAction.type === ConnectionType.ALWAYS) {
           eventData.alwaysEventId = script.id;
-          await storage.createAction(eventData);
+          await storage.createAction(
+            eventData as Parameters<typeof storage.createAction>[0],
+          );
         } else if (condAction.type === ConnectionType.ON_CONDITION) {
           eventData.conditionEventId = script.id;
-          await storage.createAction(eventData);
+          await storage.createAction(
+            eventData as Parameters<typeof storage.createAction>[0],
+          );
         }
       }
     }
@@ -369,11 +427,11 @@ export async function POST(request: NextRequest) {
     if (data.onSuccessActions && data.onSuccessActions.length > 0) {
       for (const action of data.onSuccessActions) {
         await storage.createAction({
-          type: action.type as any,
+          type: action.type,
           value: action.value,
           successEventId: script.id,
           targetEventId: action.targetScriptId,
-        });
+        } as Parameters<typeof storage.createAction>[0]);
       }
     }
 
@@ -381,11 +439,11 @@ export async function POST(request: NextRequest) {
     if (data.onFailActions && data.onFailActions.length > 0) {
       for (const action of data.onFailActions) {
         await storage.createAction({
-          type: action.type as any,
+          type: action.type,
           value: action.value,
           failEventId: script.id,
           targetEventId: action.targetScriptId,
-        });
+        } as Parameters<typeof storage.createAction>[0]);
       }
     }
 

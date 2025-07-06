@@ -51,8 +51,33 @@ export function EventDetailsTab({
   const updateEventMutation = trpc.events.update.useMutation({
     onSuccess: (updatedEvent) => {
       // Update the event content locally
-      if (onEventUpdate) {
-        onEventUpdate(updatedEvent);
+      if (onEventUpdate && updatedEvent) {
+        // Transform EventWithRelations to Event by adding missing properties
+        const transformedEvent = {
+          ...updatedEvent,
+          // Ensure dates are converted to strings to match the Event interface
+          createdAt:
+            typeof updatedEvent.createdAt === "string"
+              ? updatedEvent.createdAt
+              : updatedEvent.createdAt.toISOString(),
+          updatedAt:
+            typeof updatedEvent.updatedAt === "string"
+              ? updatedEvent.updatedAt
+              : updatedEvent.updatedAt.toISOString(),
+          lastRunAt:
+            updatedEvent.lastRunAt === null
+              ? null
+              : typeof updatedEvent.lastRunAt === "string"
+                ? updatedEvent.lastRunAt
+                : updatedEvent.lastRunAt.toISOString(),
+          environmentVariables:
+            updatedEvent.envVars?.map((env) => ({
+              key: env.key,
+              value: env.value,
+            })) || [],
+          events: [], // Add empty events array if it doesn't exist in updatedEvent
+        };
+        onEventUpdate(transformedEvent);
       }
       setIsEditing(false);
       toast({
@@ -76,7 +101,7 @@ export function EventDetailsTab({
         id: event.id,
         content: editedContent,
       });
-    } catch (error) {
+    } catch {
       // Error handled by mutation onError
     }
   };

@@ -51,8 +51,6 @@ export default async function GettingStartedPage({
 }: {
   params: { lang: string };
 }) {
-  const { lang } = params;
-
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar lang={params.lang} />

@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-
 "use client";
 
 import { signIn } from "next-auth/react";
@@ -10,6 +7,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLanguage } from "@/components/providers/language-provider";
+import { trpc } from "@/lib/trpc";
 import {
   Form,
   FormControl,
@@ -69,26 +67,21 @@ export default function SignIn() {
 
   const errorFromParams = getErrorFromParams();
 
+  // tRPC login mutation
+  const loginMutation = trpc.userAuth.login.useMutation();
+
   const onSubmit = async (data: FormData) => {
     try {
-      // Use the simplified authentication endpoint
-      const response = await fetch("/api/auth/passport/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          username: data.username,
-          password: data.password,
-        }),
+      // Use tRPC authentication endpoint
+      const result = await loginMutation.mutateAsync({
+        username: data.username,
+        password: data.password,
       });
-
-      const result = await response.json();
 
       if (!result.success) {
         setError("root.serverError", {
           type: "manual",
-          message: result.message ?? t("Auth.InvalidCredentials"),
+          message: t("Auth.InvalidCredentials"),
         });
         return;
       }
@@ -126,7 +119,8 @@ export default function SignIn() {
       console.error("Sign in error:", error);
       setError("root.serverError", {
         type: "manual",
-        message: t("Auth.UnexpectedError"),
+        message:
+          error instanceof Error ? error.message : t("Auth.UnexpectedError"),
       });
     }
   };

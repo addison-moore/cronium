@@ -1,6 +1,4 @@
 "use client";
-
-import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { Tabs, TabsContent, TabsList, Tab } from "@/components/ui/tabs";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
@@ -16,21 +14,8 @@ import {
   RolesManagement,
 } from "@/components/admin";
 import { trpc } from "@/lib/trpc";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 import { toast } from "@/components/ui/use-toast";
-
-interface Role {
-  id: number;
-  name: string;
-  description: string;
-  permissions: {
-    console: boolean;
-    monitoring: boolean;
-    localServerAccess: boolean;
-  };
-  isDefault: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
 
 interface SystemSettings {
   smtpHost?: string;
@@ -67,18 +52,21 @@ const smtpSettingsSchema = z.object({
   smtpFromName: z.string().min(1, "From name is required"),
   smtpEnabled: z.boolean().optional(),
 });
+type SmtpSettingsData = z.infer<typeof smtpSettingsSchema>;
 
 const registrationSettingsSchema = z.object({
   allowRegistration: z.boolean().optional(),
   requireAdminApproval: z.boolean().optional(),
   inviteOnly: z.boolean().optional(),
 });
+type RegistrationSettingsData = z.infer<typeof registrationSettingsSchema>;
 
 const aiSettingsSchema = z.object({
   aiEnabled: z.boolean().optional(),
   aiModel: z.string().min(1, "AI model selection is required"),
   openaiApiKey: z.string().min(1, "OpenAI API key is required"),
 });
+type AiSettingsData = z.infer<typeof aiSettingsSchema>;
 
 export default function AdminPage() {
   const t = useTranslations("Admin");
@@ -91,16 +79,19 @@ export default function AdminPage() {
 
   // tRPC queries and mutations
   const { data: systemSettings, refetch: refetchSettings } =
-    trpc.admin.getSystemSettings.useQuery();
+    trpc.admin.getSystemSettings.useQuery(undefined, QUERY_OPTIONS.static);
 
   const {
     data: usersData,
     isLoading: isUsersLoading,
     refetch: refetchUsers,
-  } = trpc.admin.getUsers.useQuery({
-    limit: 100,
-    offset: 0,
-  });
+  } = trpc.admin.getUsers.useQuery(
+    {
+      limit: 100,
+      offset: 0,
+    },
+    QUERY_OPTIONS.dynamic,
+  );
 
   const updateSystemSettingsMutation =
     trpc.admin.updateSystemSettings.useMutation({
@@ -109,7 +100,7 @@ export default function AdminPage() {
           title: "Settings saved",
           description: "System settings have been updated successfully.",
         });
-        refetchSettings();
+        void refetchSettings();
       },
     });
 
@@ -117,9 +108,9 @@ export default function AdminPage() {
     onSuccess: (data) => {
       toast({
         title: "Success",
-        description: `Invitation sent to ${data.email ?? ""}`,
+        description: `Invitation sent to ${String(data.email ?? "user")}`,
       });
-      refetchUsers();
+      void refetchUsers();
     },
   });
 
@@ -129,7 +120,7 @@ export default function AdminPage() {
         title: "Success",
         description: "User updated successfully",
       });
-      refetchUsers();
+      void refetchUsers();
     },
   });
 
@@ -139,7 +130,7 @@ export default function AdminPage() {
         title: "Success",
         description: "User status updated successfully",
       });
-      refetchUsers();
+      void refetchUsers();
     },
   });
 
@@ -160,42 +151,81 @@ export default function AdminPage() {
           variant: "destructive",
         });
       }
-      refetchUsers();
+      void refetchUsers();
+    },
+  });
+
+  const resendInvitationMutation = trpc.admin.resendInvitation.useMutation({
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: `Invitation sent to ${data.email ?? "user"}`,
+      });
+      void refetchUsers();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message ?? "Failed to resend invitation",
+        variant: "destructive",
+      });
     },
   });
 
   const users = usersData?.users ?? [];
-  const settings: SystemSettings = (systemSettings ?? {}) as SystemSettings;
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [isRolesLoading, setIsRolesLoading] = useState(true);
+  const settings: SystemSettings = systemSettings ?? {
+    smtpHost: undefined,
+    smtpPort: undefined,
+    smtpUser: undefined,
+    smtpPassword: undefined,
+    smtpFromEmail: undefined,
+    smtpFromName: undefined,
+    smtpEnabled: undefined,
+    allowRegistration: undefined,
+    requireAdminApproval: undefined,
+    aiEnabled: undefined,
+    aiModel: undefined,
+    openaiApiKey: undefined,
+    inviteOnly: undefined,
+    maxUsers: undefined,
+    maxEventsPerUser: undefined,
+    maxWorkflowsPerUser: undefined,
+    maxServersPerUser: undefined,
+    enableRegistration: undefined,
+    enableGuestAccess: undefined,
+    defaultUserRole: undefined,
+    sessionTimeout: undefined,
+    logRetentionDays: undefined,
+  };
 
-  // Fetch roles (not implemented in tRPC yet, using REST fallback)
-  useEffect(() => {
-    fetchRoles();
-  }, []);
+  // Fetch roles using tRPC
+  const {
+    data: roles,
+    isLoading: isRolesLoading,
+    refetch: refetchRoles,
+  } = trpc.admin.getRoles.useQuery(undefined, QUERY_OPTIONS.stable);
 
-  async function fetchRoles() {
-    setIsRolesLoading(true);
-    try {
-      const response = await fetch("/api/admin/roles");
-      if (!response.ok) {
-        throw new Error("Failed to fetch roles");
-      }
-      const data = await response.json();
-      setRoles(data);
-    } catch (error) {
-      console.error("Error fetching roles:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load roles. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsRolesLoading(false);
-    }
-  }
+  const updateRolePermissionsMutation =
+    trpc.admin.updateRolePermissions.useMutation({
+      onSuccess: () => {
+        toast({
+          title: "Success",
+          description: "Role permissions updated successfully",
+        });
+        void refetchRoles();
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: error.message ?? "Failed to update role permissions",
+          variant: "destructive",
+        });
+      },
+    });
 
-  async function saveSmtpSettings(data: z.infer<typeof smtpSettingsSchema>) {
+  async function saveSmtpSettings(data: SmtpSettingsData): Promise<void> {
+    // Validate the data using the schema
+    const validatedData = smtpSettingsSchema.parse(data);
     updateSystemSettingsMutation.mutate({
       maxUsers: settings.maxUsers,
       maxEventsPerUser: settings.maxEventsPerUser,
@@ -207,31 +237,38 @@ export default function AdminPage() {
       sessionTimeout: settings.sessionTimeout,
       logRetentionDays: settings.logRetentionDays,
       // Add SMTP settings (these would need to be added to the schema)
-      ...data,
+      ...validatedData,
     });
   }
 
   async function saveRegistrationSettings(
-    data: z.infer<typeof registrationSettingsSchema>,
-  ) {
+    data: RegistrationSettingsData,
+  ): Promise<void> {
+    // Validate the data using the schema
+    const validatedData = registrationSettingsSchema.parse(data);
     updateSystemSettingsMutation.mutate({
       ...settings,
-      ...data,
+      ...validatedData,
     });
   }
 
-  async function saveAiSettings(data: z.infer<typeof aiSettingsSchema>) {
+  async function saveAiSettings(data: AiSettingsData): Promise<void> {
+    // Validate the data using the schema
+    const validatedData = aiSettingsSchema.parse(data);
     updateSystemSettingsMutation.mutate({
       ...settings,
-      ...data,
+      ...validatedData,
     });
   }
 
-  async function handleInviteUser(data: { email: string; role: UserRole }) {
+  async function handleInviteUser(data: {
+    email: string;
+    role: UserRole;
+  }): Promise<void> {
     inviteUserMutation.mutate(data);
   }
 
-  async function handleDeleteUser(userId: string) {
+  async function handleDeleteUser(userId: string): Promise<void> {
     // Using bulk operation for delete
     bulkUserOperationMutation.mutate({
       userIds: [userId],
@@ -239,26 +276,29 @@ export default function AdminPage() {
     });
   }
 
-  async function handleUpdateUserStatus(userId: string, status: UserStatus) {
+  async function handleUpdateUserStatus(
+    userId: string,
+    status: UserStatus,
+  ): Promise<void> {
     toggleUserStatusMutation.mutate({ id: userId, status });
   }
 
-  async function handleUpdateUserRole(userId: string, role: UserRole) {
+  async function handleUpdateUserRole(
+    userId: string,
+    role: UserRole,
+  ): Promise<void> {
     updateUserMutation.mutate({ id: userId, role });
   }
 
-  async function handleResendInvitation(userId: string) {
-    bulkUserOperationMutation.mutate({
-      userIds: [userId],
-      operation: "resend_invite",
-    });
+  async function handleResendInvitation(userId: string): Promise<void> {
+    resendInvitationMutation.mutate({ id: userId });
   }
 
-  async function handleApproveUser(userId: string) {
+  async function handleApproveUser(userId: string): Promise<void> {
     toggleUserStatusMutation.mutate({ id: userId, status: UserStatus.ACTIVE });
   }
 
-  async function handleDenyUser(userId: string) {
+  async function handleDenyUser(userId: string): Promise<void> {
     bulkUserOperationMutation.mutate({
       userIds: [userId],
       operation: "delete",
@@ -272,29 +312,8 @@ export default function AdminPage() {
       monitoring: boolean;
       localServerAccess: boolean;
     },
-  ) {
-    try {
-      const response = await fetch("/api/admin/roles", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ roleId, permissions }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update role permissions");
-      }
-
-      // Update the local roles state instead of refetching
-      setRoles((prevRoles) =>
-        prevRoles.map((role) =>
-          role.id === roleId ? { ...role, permissions } : role,
-        ),
-      );
-    } catch (error: any) {
-      throw error; // Re-throw to let the component handle it
-    }
+  ): Promise<void> {
+    updateRolePermissionsMutation.mutate({ roleId, permissions });
   }
 
   return (
@@ -336,7 +355,13 @@ export default function AdminPage() {
 
         <TabsContent value="users">
           <UsersManagement
-            users={users as any}
+            users={users.map((user) => ({
+              ...user,
+              email: user.email ?? "",
+              createdAt: user.createdAt.toISOString(),
+              updatedAt: user.updatedAt.toISOString(),
+              lastLogin: user.lastLogin?.toISOString() ?? null,
+            }))}
             isLoading={isUsersLoading}
             onRefresh={async () => {
               await refetchUsers();
@@ -353,9 +378,11 @@ export default function AdminPage() {
 
         <TabsContent value="roles">
           <RolesManagement
-            roles={roles}
+            roles={roles ?? []}
             isLoading={isRolesLoading}
-            onRefresh={fetchRoles}
+            onRefresh={async () => {
+              await refetchRoles();
+            }}
             onUpdateRole={handleUpdateRole}
           />
         </TabsContent>

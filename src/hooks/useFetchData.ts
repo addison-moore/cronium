@@ -6,8 +6,8 @@ interface UseFetchDataOptions<T> {
   initialData?: T | null;
   errorMessage?: string;
   onSuccess?: (data: T) => void;
-  transform?: (data: any) => T;
-  dependencies?: any[];
+  transform?: (data: unknown) => T;
+  dependencies?: unknown[];
   autoFetch?: boolean;
 }
 
@@ -48,7 +48,7 @@ export function useFetchData<T>({
 
         // Handle empty responses
         if (!text) {
-          const emptyData = transform([]);
+          const emptyData = transform([] as T);
           setData(emptyData);
           setLastUpdated(new Date());
           return emptyData;
@@ -57,7 +57,7 @@ export function useFetchData<T>({
         // Try to parse the JSON with error handling
         let rawData;
         try {
-          rawData = JSON.parse(text);
+          rawData = JSON.parse(text) as T;
         } catch (parseError) {
           console.error("Error parsing JSON response:", parseError);
           throw new Error("Invalid JSON response");
@@ -102,9 +102,8 @@ export function useFetchData<T>({
   // Fetch data when component mounts or dependencies change
   useEffect(() => {
     if (autoFetch) {
-      fetchData(false); // Don't show toast on initial load
+      void fetchData(false); // Don't show toast on initial load
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, autoFetch, ...(dependencies || [])]);
 
   // Function to manually refresh data

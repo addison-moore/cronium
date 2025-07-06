@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { createTRPCRouter, protectedProcedure, adminProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { scheduler } from "@/lib/scheduler";
@@ -12,7 +11,7 @@ export const systemRouter = createTRPCRouter({
       return {
         status: "ok",
         timestamp: new Date().toISOString(),
-        user: ctx.session.user.email,
+        user: ctx.session.user.email ?? "Unknown",
       };
     } catch (error) {
       throw new TRPCError({
@@ -24,7 +23,7 @@ export const systemRouter = createTRPCRouter({
   }),
 
   // Initialize system services (admin only)
-  startServices: adminProcedure.mutation(async ({ ctx }) => {
+  startServices: adminProcedure.mutation(async () => {
     try {
       // Initialize system templates first
       await initializeSystemTemplates();
@@ -48,12 +47,13 @@ export const systemRouter = createTRPCRouter({
   // Get system status information
   getSystemInfo: protectedProcedure.query(async ({ ctx }) => {
     try {
-      const isAdmin = ctx.session.user.role === UserRole.ADMIN;
+      const userRole = ctx.session.user.role;
+      const isAdmin = userRole === UserRole.ADMIN;
 
       // Basic system info available to all users
       const systemInfo = {
         timestamp: new Date().toISOString(),
-        userRole: ctx.session.user.role,
+        userRole,
         isHealthy: true,
       };
 

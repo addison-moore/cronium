@@ -47,7 +47,7 @@ function FeatureCard({
   features,
   badge,
 }: {
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
   title: string;
   description: string;
   features: string[];
@@ -89,7 +89,7 @@ function FeatureCard({
 function CodeExample({
   title,
   code,
-  language = "bash",
+  language,
 }: {
   title: string;
   code: string;
@@ -98,7 +98,10 @@ function CodeExample({
   return (
     <div className="mb-6">
       <h4 className="mb-3 font-semibold">{title}</h4>
-      <pre className="overflow-x-auto rounded-lg bg-gray-900 p-4 text-sm text-gray-100">
+      <pre
+        className="overflow-x-auto rounded-lg bg-gray-900 p-4 text-sm text-gray-100"
+        data-language={language}
+      >
         <code>{code}</code>
       </pre>
     </div>

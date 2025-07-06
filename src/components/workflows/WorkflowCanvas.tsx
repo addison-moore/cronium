@@ -80,7 +80,7 @@ const validateWorkflowStructure = (
 
   // Find nodes with multiple inputs
   const mergeViolations = Array.from(targetNodes.entries()).filter(
-    ([target, sources]) => sources.length > 1,
+    ([_target, sources]) => sources.length > 1,
   );
   if (mergeViolations.length > 0) {
     return {
@@ -137,6 +137,7 @@ const validateWorkflowStructure = (
 import EventNode from "./nodes/EventNode";
 import ConnectionEdge from "./edges/ConnectionEdge";
 import { Spinner } from "../ui/spinner";
+import type { EventType } from "@/shared/schema";
 
 // Event type icon mapping - now using consistent icons
 
@@ -144,8 +145,20 @@ import { Spinner } from "../ui/spinner";
 const eventNodeType: NodeTypes = { eventNode: EventNode };
 const connectionEdgeType: EdgeTypes = { connectionEdge: ConnectionEdge };
 
+interface AvailableEvent {
+  id: number;
+  name: string;
+  type: EventType;
+  description?: string;
+  tags?: string[];
+  serverId?: number;
+  serverName?: string;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+}
+
 interface WorkflowCanvasProps {
-  availableEvents?: any[];
+  availableEvents?: AvailableEvent[];
   initialNodes?: Node[];
   initialEdges?: Edge[];
   onChange?: (nodes: Node[], edges: Edge[]) => void;
@@ -169,7 +182,7 @@ export default function WorkflowCanvas({
   initialNodes = [],
   initialEdges = [],
   onChange,
-  onRefresh,
+  onRefresh: _onRefresh,
   updateEvents,
   readOnly = false,
   isLoading = false,
@@ -180,7 +193,7 @@ export default function WorkflowCanvas({
   const t = useTranslations("Workflows");
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [edges, setEdges] = useEdgesState(initialEdges);
   const [reactFlowInstance, setReactFlowInstance] =
     useState<ReactFlowInstance | null>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
@@ -191,10 +204,12 @@ export default function WorkflowCanvas({
   const filteredEvents = availableEvents.filter(
     (event) =>
       event.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.tags?.some((tag: string) =>
+      (event.description?.toLowerCase().includes(searchQuery.toLowerCase()) ??
+        false) ||
+      (event.tags?.some((tag: string) =>
         tag.toLowerCase().includes(searchQuery.toLowerCase()),
-      ),
+      ) ??
+        false),
   );
 
   // Track if we're in initial loading phase
@@ -208,17 +223,14 @@ export default function WorkflowCanvas({
   );
   const [historyInitialized, setHistoryInitialized] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStartState, setDragStartState] = useState<HistoryState | null>(
-    null,
-  );
   const maxHistorySize = 50; // Limit history to prevent memory issues
 
   // Create history state
   const createHistoryState = useCallback(
     (nodes: Node[], edges: Edge[]): HistoryState => {
       return {
-        nodes: JSON.parse(JSON.stringify(nodes)), // Deep copy
-        edges: JSON.parse(JSON.stringify(edges)), // Deep copy
+        nodes: JSON.parse(JSON.stringify(nodes)) as Node[], // Deep copy
+        edges: JSON.parse(JSON.stringify(edges)) as Edge[], // Deep copy
         timestamp: Date.now(),
       };
     },
@@ -401,12 +413,10 @@ export default function WorkflowCanvas({
       if (dragStart && !isDragging) {
         // Start of drag - capture initial state
         setIsDragging(true);
-        setDragStartState(createHistoryState(nodes, edges));
       } else if (dragEnd && isDragging) {
         // End of drag - add to history only now
         setIsDragging(false);
         addToHistory(updatedNodes, edges);
-        setDragStartState(null);
       } else {
         // Handle non-drag changes (add, remove, etc.)
         const hasMeaningfulChange = changes.some(
@@ -522,7 +532,7 @@ export default function WorkflowCanvas({
         animated: true,
       };
 
-      const updatedEdges = addEdge(newEdge as any, edges);
+      const updatedEdges = addEdge(newEdge, edges) as Edge[];
       setEdges(updatedEdges);
 
       // Track connection in history
@@ -978,7 +988,7 @@ export default function WorkflowCanvas({
                                 eventName={event.name}
                                 eventType={event.type}
                                 eventDescription={event.description}
-                                eventTags={event.tags || []}
+                                eventTags={event.tags ?? []}
                                 eventServerId={event.serverId}
                                 eventServerName={event.serverName}
                                 createdAt={event.createdAt}

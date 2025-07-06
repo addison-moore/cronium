@@ -11,21 +11,16 @@ import type {
   RunLocation,
   TimeUnit,
   EventTriggerType,
-  ConditionalActionType,
 } from "@/shared/schema";
 
 import type {
-  EventConfig,
   ConditionalAction,
   ScheduleConfig,
-  EventFormState,
-  FormFieldState,
   EventId,
   ServerId,
   ToolId,
   EventTypeConfig,
   PartialBy,
-  RequiredBy,
 } from "@/lib/advanced-types";
 
 // ===== EDITOR CONFIGURATION =====
@@ -147,7 +142,7 @@ export interface EventFormTouched {
 
 // ===== VALIDATION SCHEMAS =====
 
-export interface ValidationRule<T = any> {
+export interface ValidationRule<T = unknown> {
   required?: boolean;
   minLength?: number;
   maxLength?: number;
@@ -157,14 +152,14 @@ export interface ValidationRule<T = any> {
   custom?: (value: T) => string | null;
 }
 
-export type ValidationSchema<T extends Record<string, any>> = {
+export type ValidationSchema<T extends Record<string, unknown>> = {
   [K in keyof T]?: ValidationRule<T[K]>;
 };
 
 // ===== FORM ACTIONS =====
 
 export type EventFormAction =
-  | { type: "SET_FIELD"; field: string; value: any }
+  | { type: "SET_FIELD"; field: string; value: unknown }
   | { type: "SET_ERRORS"; errors: EventFormErrors }
   | { type: "SET_TOUCHED"; field: string; touched: boolean }
   | { type: "SET_SUBMITTING"; submitting: boolean }

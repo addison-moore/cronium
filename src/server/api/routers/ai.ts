@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  withTiming,
+  withRateLimit,
+} from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { storage } from "@/server/storage";
 import { generateScriptCode } from "@/lib/ai";
@@ -14,6 +19,8 @@ const generateScriptSchema = z.object({
 export const aiRouter = createTRPCRouter({
   // Generate script code using AI
   generateScript: protectedProcedure
+    .use(withTiming)
+    .use(withRateLimit(10, 60000)) // 10 AI generations per minute per user
     .input(generateScriptSchema)
     .mutation(async ({ ctx, input }) => {
       try {

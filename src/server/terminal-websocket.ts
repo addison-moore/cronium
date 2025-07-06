@@ -1,16 +1,43 @@
-import { type Server } from "socket.io";
-import { spawn } from "node-pty";
+import { type Server, type Socket } from "socket.io";
+import { spawn, type IPty } from "node-pty";
 import { storage } from "./storage";
 import { decryptSensitiveData } from "@/lib/encryption-service";
 import { sshService } from "@/lib/ssh";
+import type { ClientChannel } from "ssh2";
+
+// Define union type for process types
+type ProcessType = IPty | ClientChannel;
 
 interface TerminalSession {
-  ptyProcess: any;
+  ptyProcess: ProcessType;
   userId: string;
   serverId?: number;
   createdAt: number;
   lastActivity: number;
   socketId: string; // Track the socket ID associated with the session
+}
+
+// WebSocket event data interfaces
+interface CreateTerminalData {
+  userId: string;
+  serverId?: number;
+  cols: number;
+  rows: number;
+}
+
+interface TerminalInputData {
+  sessionId: string;
+  input: string;
+}
+
+interface TerminalResizeData {
+  sessionId: string;
+  cols: number;
+  rows: number;
+}
+
+interface DestroyTerminalData {
+  sessionId: string;
 }
 
 export class TerminalWebSocketHandler {
@@ -36,10 +63,10 @@ export class TerminalWebSocketHandler {
         `Server: Terminal WebSocket client connected: ${socket.id ?? ""}`,
       );
 
-      socket.on("create-terminal", async (data) => {
+      socket.on("create-terminal", async (data: CreateTerminalData) => {
         const { userId, serverId, cols, rows } = data;
         console.log(
-          `Server: Received 'create-terminal' from ${socket.id ?? ""}. userId: ${userId ?? ""}, serverId: ${serverId ?? ""}, cols: ${String(cols)}, rows: ${String(rows)}`,
+          `Server: Received 'create-terminal' from ${socket.id ?? ""}. userId: ${userId}, serverId: ${serverId ?? ""}, cols: ${cols}, rows: ${rows}`,
         );
 
         if (!userId) {
@@ -70,7 +97,7 @@ export class TerminalWebSocketHandler {
         }
       });
 
-      socket.on("terminal-input", (data) => {
+      socket.on("terminal-input", (data: TerminalInputData) => {
         const { sessionId, input } = data;
         // console.log(`Server: Received 'terminal-input' for sessionId: ${sessionId}, input length: ${input.length}`);
         const session = this.activeSessions.get(sessionId);
@@ -78,40 +105,40 @@ export class TerminalWebSocketHandler {
         if (session) {
           session.lastActivity = Date.now(); // Update last activity on input
           // Check if it's a node-pty process or node-ssh shell stream
-          if (session.ptyProcess.write) {
+          if ("write" in session.ptyProcess) {
             session.ptyProcess.write(input);
           }
         } else {
           console.warn(
-            `Server: 'terminal-input' received for unknown sessionId: ${sessionId ?? ""}`,
+            `Server: 'terminal-input' received for unknown sessionId: ${sessionId}`,
           );
         }
       });
 
-      socket.on("terminal-resize", (data) => {
+      socket.on("terminal-resize", (data: TerminalResizeData) => {
         const { sessionId, cols, rows } = data;
         console.log(
-          `Server: Received 'terminal-resize' for sessionId: ${sessionId ?? ""}, cols: ${String(cols)}, rows: ${String(rows)}`,
+          `Server: Received 'terminal-resize' for sessionId: ${sessionId}, cols: ${cols}, rows: ${rows}`,
         );
         const session = this.activeSessions.get(sessionId);
 
         if (session) {
           session.lastActivity = Date.now(); // Update last activity on resize
           // Check if it's a node-pty process or node-ssh shell stream
-          if (session.ptyProcess.resize) {
+          if ("resize" in session.ptyProcess) {
             session.ptyProcess.resize(cols, rows);
           }
         } else {
           console.warn(
-            `Server: 'terminal-resize' received for unknown sessionId: ${sessionId ?? ""}`,
+            `Server: 'terminal-resize' received for unknown sessionId: ${sessionId}`,
           );
         }
       });
 
-      socket.on("destroy-terminal", (data) => {
+      socket.on("destroy-terminal", (data: DestroyTerminalData) => {
         const { sessionId } = data;
         console.log(
-          `Server: Received 'destroy-terminal' for sessionId: ${sessionId ?? ""}`,
+          `Server: Received 'destroy-terminal' for sessionId: ${sessionId}`,
         );
         this.destroyTerminalSession(sessionId);
       });
@@ -126,14 +153,14 @@ export class TerminalWebSocketHandler {
   }
 
   private async createTerminalSession(
-    socket: any,
+    socket: Socket,
     userId: string,
     serverId?: number,
     cols = 80,
     rows = 30,
   ): Promise<string> {
-    const sessionId = `${userId ?? ""}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    let ptyProcess: any; // This will now be either node-pty or node-ssh shell stream
+    const sessionId = `${userId}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+    let ptyProcess: ProcessType; // This will now be either node-pty or node-ssh shell stream
     let isRemote = false;
 
     if (serverId) {
@@ -144,7 +171,7 @@ export class TerminalWebSocketHandler {
 
       if (!server) {
         console.error(
-          `Server: Server not found for userId: ${userId ?? ""}, serverId: ${String(serverId)}`,
+          `Server: Server not found for userId: ${userId}, serverId: ${serverId}`,
         );
         throw new Error("Server not found");
       }
@@ -162,11 +189,11 @@ export class TerminalWebSocketHandler {
         );
         ptyProcess = shell; // Assign the node-ssh shell stream
         console.log(
-          `Server: Created remote SSH shell session ${sessionId ?? ""} for ${decryptedServer.username ?? ""}@${decryptedServer.address ?? ""}:${String(decryptedServer.port)}`,
+          `Server: Created remote SSH shell session ${sessionId} for ${decryptedServer.username ?? ""}@${decryptedServer.address ?? ""}:${decryptedServer.port}`,
         );
       } catch (error) {
         console.error(
-          `Server: SSH connection failed for sessionId ${sessionId ?? ""}:`,
+          `Server: SSH connection failed for sessionId ${sessionId}:`,
           error,
         );
         throw new Error(
@@ -175,13 +202,13 @@ export class TerminalWebSocketHandler {
       }
     } else {
       // Local terminal connection - use user's default shell with login
-      const shell = process.env.SHELL || "/bin/bash";
+      const shell = process.env.SHELL ?? "/bin/bash";
 
       ptyProcess = spawn(shell, [], {
         name: "xterm",
         cols,
         rows,
-        cwd: process.env.HOME || process.cwd(),
+        cwd: process.env.HOME ?? process.cwd(),
         env: {
           ...process.env,
           TERM: "xterm",
@@ -189,7 +216,7 @@ export class TerminalWebSocketHandler {
       });
 
       console.log(
-        `Server: Created local PTY session ${sessionId ?? ""} with shell: ${shell ?? ""}`,
+        `Server: Created local PTY session ${sessionId} with shell: ${shell}`,
       );
     }
 
@@ -200,42 +227,41 @@ export class TerminalWebSocketHandler {
       ...(serverId !== undefined && { serverId }),
       createdAt: Date.now(),
       lastActivity: Date.now(),
-      socketId: socket.id,
+      socketId: socket.id ?? "unknown",
     };
 
     this.activeSessions.set(sessionId, session);
 
     // Handle PTY/Shell output
     if (isRemote) {
-      // For node-ssh shell stream
-      ptyProcess.on("data", (data: Buffer) => {
+      // For node-ssh shell stream (ClientChannel)
+      const shellProcess = ptyProcess as ClientChannel;
+      shellProcess.on("data", (data: Buffer) => {
         // console.log(`Server: Remote shell output for sessionId ${sessionId}, data length: ${data.length}`);
         socket.emit("terminal-output", { sessionId, data: data.toString() });
       });
-      ptyProcess.on("close", (code: number, signal: string) => {
+      shellProcess.on("close", (code: number, signal: string) => {
         console.log(
-          `Server: Remote shell session ${sessionId ?? ""} closed with code ${String(code)}, signal ${signal ?? ""}`,
+          `Server: Remote shell session ${sessionId} closed with code ${code}, signal ${signal ?? ""}`,
         );
         socket.emit("terminal-exit", { sessionId, exitCode: code });
         this.activeSessions.delete(sessionId);
       });
-      ptyProcess.on("error", (err: Error) => {
-        console.error(
-          `Server: Remote shell session ${sessionId ?? ""} error:`,
-          err,
-        );
+      shellProcess.on("error", (err: Error) => {
+        console.error(`Server: Remote shell session ${sessionId} error:`, err);
         socket.emit("terminal-error", { sessionId, error: err.message });
         this.activeSessions.delete(sessionId);
       });
     } else {
-      // For node-pty process
-      ptyProcess.onData((data: string) => {
+      // For node-pty process (IPty)
+      const ptyLocalProcess = ptyProcess as IPty;
+      ptyLocalProcess.onData((data: string) => {
         // console.log(`Server: PTY output for sessionId ${sessionId}, data length: ${data.length}`);
         socket.emit("terminal-output", { sessionId, data });
       });
-      ptyProcess.onExit((event: { exitCode: number; signal?: number }) => {
+      ptyLocalProcess.onExit((event: { exitCode: number; signal?: number }) => {
         console.log(
-          `Server: PTY session ${sessionId ?? ""} exited with code ${String(event.exitCode)}`,
+          `Server: PTY session ${sessionId} exited with code ${event.exitCode}`,
         );
         socket.emit("terminal-exit", { sessionId, exitCode: event.exitCode });
         this.activeSessions.delete(sessionId);
@@ -250,29 +276,25 @@ export class TerminalWebSocketHandler {
     if (session) {
       try {
         // Check if it's a node-pty process or node-ssh shell stream
-        if (session.ptyProcess.kill) {
+        if ("kill" in session.ptyProcess) {
           session.ptyProcess.kill();
-          console.log(
-            `Server: Killed PTY process for sessionId: ${sessionId ?? ""}`,
-          );
-        } else if (session.ptyProcess.end) {
+          console.log(`Server: Killed PTY process for sessionId: ${sessionId}`);
+        } else if ("end" in session.ptyProcess) {
           // For node-ssh ClientChannel
           session.ptyProcess.end();
-          console.log(
-            `Server: Ended SSH shell for sessionId: ${sessionId ?? ""}`,
-          );
+          console.log(`Server: Ended SSH shell for sessionId: ${sessionId}`);
         }
       } catch (error) {
         console.error(
-          `Server: Failed to terminate PTY/shell process for sessionId ${sessionId ?? ""}:`,
+          `Server: Failed to terminate PTY/shell process for sessionId ${sessionId}:`,
           error,
         );
       }
       this.activeSessions.delete(sessionId);
-      console.log(`Server: Destroyed PTY/shell session: ${sessionId ?? ""}`);
+      console.log(`Server: Destroyed PTY/shell session: ${sessionId}`);
     } else {
       console.warn(
-        `Server: Attempted to destroy unknown sessionId: ${sessionId ?? ""}`,
+        `Server: Attempted to destroy unknown sessionId: ${sessionId}`,
       );
     }
   }
@@ -283,7 +305,7 @@ export class TerminalWebSocketHandler {
       ([sessionId, session]) => {
         if (session.socketId === socketId) {
           console.log(
-            `Server: Cleaning up session ${sessionId ?? ""} for disconnected socket ${socketId ?? ""}`,
+            `Server: Cleaning up session ${sessionId} for disconnected socket ${socketId ?? ""}`,
           );
           this.destroyTerminalSession(sessionId);
         }
@@ -308,7 +330,7 @@ export class TerminalWebSocketHandler {
     });
 
     sessionsToCleanup.forEach((sessionId) => {
-      console.log(`Server: Cleaning up old PTY session: ${sessionId ?? ""}`);
+      console.log(`Server: Cleaning up old PTY session: ${sessionId}`);
       this.destroyTerminalSession(sessionId);
     });
   }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { WorkflowTriggerType, EventStatus } from "../schema";
+import { EventStatus } from "../schema";
 
 // Webhook execution schema (for triggering workflows)
 export const executeWebhookSchema = z.object({

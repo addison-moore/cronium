@@ -27,10 +27,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ConditionalActionType } from "@/shared/schema";
+import { ConditionalActionType, ToolType } from "@/shared/schema";
 import { ToolPluginRegistry } from "@/components/tools/plugins";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/use-toast";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 
 interface EditorSettings {
   fontSize: number;
@@ -52,7 +53,7 @@ interface ConditionalAction {
   message?: string | undefined;
 }
 
-interface EventData {
+export interface EventData {
   successEvents?: Array<{
     id: number;
     type: ConditionalActionType;
@@ -151,44 +152,34 @@ export default function ConditionalActionsSection({
       limit: 1000,
       offset: 0,
     },
-    {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      refetchOnWindowFocus: false,
-    },
+    QUERY_OPTIONS.static,
   );
 
   const { data: templatesData } = trpc.integrations.templates.getAll.useQuery(
     {
-      type: selectedToolType as any,
+      type: selectedToolType as ToolType,
     },
     {
       enabled: !!selectedToolType,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      refetchOnWindowFocus: false,
+      ...QUERY_OPTIONS.static,
     },
   );
 
   const { data: systemSettings } = trpc.admin.getSystemSettings.useQuery(
     undefined,
-    {
-      staleTime: 10 * 60 * 1000, // 10 minutes
-      refetchOnWindowFocus: false,
-    },
+    QUERY_OPTIONS.static,
   );
 
   const { data: editorSettingsData } = trpc.settings.getEditorSettings.useQuery(
     undefined,
-    {
-      staleTime: 10 * 60 * 1000, // 10 minutes
-      refetchOnWindowFocus: false,
-    },
+    QUERY_OPTIONS.static,
   );
 
   const createToolMutation = trpc.tools.create.useMutation({
     onSuccess: (newTool) => {
       setNewToolId(newTool.id);
       setShowCredentialModal(false);
-      refetchTools();
+      void refetchTools();
       toast({
         title: "Success",
         description: "Tool credential created successfully",
@@ -207,23 +198,25 @@ export default function ConditionalActionsSection({
   const allTools = useMemo(() => {
     return (
       toolsData?.tools?.filter(
-        (tool: any) =>
-          tool.type === "EMAIL" ||
-          tool.type === "SLACK" ||
-          tool.type === "DISCORD",
-      ) || []
+        (tool) =>
+          tool.type === ToolType.EMAIL ||
+          tool.type === ToolType.SLACK ||
+          tool.type === ToolType.DISCORD,
+      ) ?? []
     );
   }, [toolsData?.tools]);
 
   const templates = useMemo(() => {
-    return templatesData?.templates || [];
+    return templatesData?.templates ?? [];
   }, [templatesData?.templates]);
 
   const credentialsForSelectedTool = useMemo(() => {
     if (!selectedToolType || allTools.length === 0) {
       return [];
     }
-    return allTools.filter((tool) => tool.type === selectedToolType);
+    return allTools.filter(
+      (tool) => tool.type === (selectedToolType as ToolType),
+    );
   }, [selectedToolType, allTools]);
 
   // All available message types regardless of whether credentials exist
@@ -244,14 +237,14 @@ export default function ConditionalActionsSection({
 
   // Handle credential creation with stable callback
   const handleCredentialSubmit = useCallback(
-    async (data: { name: string; credentials: Record<string, any> }) => {
+    async (data: { name: string; credentials: Record<string, unknown> }) => {
       try {
         await createToolMutation.mutateAsync({
           name: data.name,
-          type: selectedToolType as any,
+          type: selectedToolType as ToolType,
           credentials: data.credentials,
         });
-      } catch (error) {
+      } catch {
         // Error handled by mutation onError
       }
     },
@@ -269,7 +262,7 @@ export default function ConditionalActionsSection({
       const template = templates.find((t) => t.id.toString() === templateId);
       if (template) {
         setSelectedTemplate(templateId);
-        setNewMessage(template.content || "");
+        setNewMessage(template.content ?? "");
 
         // For email templates, also populate subject if available
         if (selectedToolType === "EMAIL" && template.subject) {
@@ -292,8 +285,8 @@ export default function ConditionalActionsSection({
   useEffect(() => {
     if (editorSettingsData) {
       setEditorSettings({
-        fontSize: editorSettingsData.fontSize || 14,
-        theme: editorSettingsData.theme || "vs-dark",
+        fontSize: editorSettingsData.fontSize ?? 14,
+        theme: editorSettingsData.theme ?? "vs-dark",
         wordWrap: editorSettingsData.wordWrap !== false,
         minimap: editorSettingsData.minimap !== true,
         lineNumbers: editorSettingsData.lineNumbers !== false,
@@ -318,63 +311,63 @@ export default function ConditionalActionsSection({
 
     // Add success events
     if (eventData.successEvents) {
-      eventData.successEvents.forEach((event: any) => {
+      eventData.successEvents.forEach((event) => {
         events.push({
           id: event.id,
           type: "ON_SUCCESS",
           action: event.type,
-          emailAddresses: event.value || "",
-          emailSubject: event.emailSubject || "",
+          emailAddresses: event.value ?? "",
+          emailSubject: event.emailSubject ?? "",
           targetEventId: event.targetEventId ?? undefined,
           toolId: event.toolId ?? undefined,
-          message: event.message || "",
+          message: event.message ?? "",
         });
       });
     }
 
     // Add failure events
     if (eventData.failEvents) {
-      eventData.failEvents.forEach((event: any) => {
+      eventData.failEvents.forEach((event) => {
         events.push({
           id: event.id,
           type: "ON_FAILURE",
           action: event.type,
-          emailAddresses: event.value || "",
-          emailSubject: event.emailSubject || "",
+          emailAddresses: event.value ?? "",
+          emailSubject: event.emailSubject ?? "",
           targetEventId: event.targetEventId ?? undefined,
           toolId: event.toolId ?? undefined,
-          message: event.message || "",
+          message: event.message ?? "",
         });
       });
     }
 
     // Add always events
     if (eventData.alwaysEvents) {
-      eventData.alwaysEvents.forEach((event: any) => {
+      eventData.alwaysEvents.forEach((event) => {
         events.push({
           id: event.id,
           type: "ALWAYS",
           action: event.type,
-          emailAddresses: event.value || "",
+          emailAddresses: event.value ?? "",
           targetEventId: event.targetEventId ?? undefined,
           toolId: event.toolId ?? undefined,
-          message: event.message || "",
+          message: event.message ?? "",
         });
       });
     }
 
     // Add condition events
     if (eventData.conditionEvents) {
-      eventData.conditionEvents.forEach((event: any) => {
+      eventData.conditionEvents.forEach((event) => {
         events.push({
           id: event.id,
           type: "ON_CONDITION",
           action: event.type,
-          emailAddresses: event.value || "",
-          emailSubject: event.emailSubject || "",
+          emailAddresses: event.value ?? "",
+          emailSubject: event.emailSubject ?? "",
           targetEventId: event.targetEventId ?? undefined,
           toolId: event.toolId ?? undefined,
-          message: event.message || "",
+          message: event.message ?? "",
         });
       });
     }
@@ -416,8 +409,8 @@ export default function ConditionalActionsSection({
       toolId:
         typeof newToolId === "string"
           ? parseInt(newToolId)
-          : newToolId || undefined,
-      toolType: selectedToolType || undefined,
+          : (newToolId ?? undefined),
+      toolType: selectedToolType ?? undefined,
       message: newMessage,
     };
 
@@ -476,12 +469,12 @@ export default function ConditionalActionsSection({
 
       setNewEventType(action.type);
       setNewEventAction(action.action);
-      setNewEmailAddresses(action.emailAddresses || "");
-      setNewEmailSubject(action.emailSubject || "");
-      setNewTargetEventId(action.targetEventId || null);
-      setNewToolId(action.toolId || null);
-      setNewMessage(action.message || "");
-      setSelectedToolType(action.toolType || null);
+      setNewEmailAddresses(action.emailAddresses ?? "");
+      setNewEmailSubject(action.emailSubject ?? "");
+      setNewTargetEventId(action.targetEventId ?? null);
+      setNewToolId(action.toolId ?? null);
+      setNewMessage(action.message ?? "");
+      setSelectedToolType(action.toolType ?? null);
       setIsEditing(true);
       setEditingIndex(index);
     },
@@ -522,7 +515,7 @@ export default function ConditionalActionsSection({
 
   const getToolName = useCallback(
     (toolId: number) => {
-      const tool = allTools.find((t: any) => t.id === toolId);
+      const tool = allTools.find((t) => t.id === toolId);
       return tool ? tool.name : `Tool ${toolId}`;
     },
     [allTools],
@@ -697,7 +690,7 @@ export default function ConditionalActionsSection({
                 <div className="space-y-2">
                   <Label htmlFor="toolTypeSelection">Message Type</Label>
                   <Select
-                    value={selectedToolType || ""}
+                    value={selectedToolType ?? ""}
                     onValueChange={(value) => {
                       setSelectedToolType(value || null);
                       setNewToolId(null); // Reset credential selection when message type changes
@@ -732,31 +725,24 @@ export default function ConditionalActionsSection({
                       ) {
                         return "system";
                       }
-                      return newToolId?.toString() || "";
+                      return newToolId?.toString() ?? "";
                     })()}
                     onValueChange={(value) => {
-                      try {
-                        if (value === "add_new") {
-                          setShowCredentialModal(true);
-                        } else if (value === "system") {
-                          setNewToolId(null); // Use null to indicate system SMTP
-                        } else {
-                          if (!value) {
-                            setNewToolId(null);
-                            return;
-                          }
-                          const parsedId = parseInt(value, 10);
-                          if (isNaN(parsedId)) {
-                            console.error(`Invalid tool ID: ${value}`);
-                            return;
-                          }
-                          setNewToolId(parsedId);
+                      if (value === "add_new") {
+                        setShowCredentialModal(true);
+                      } else if (value === "system") {
+                        setNewToolId(null); // Use null to indicate system SMTP
+                      } else {
+                        if (!value) {
+                          setNewToolId(null);
+                          return;
                         }
-                      } catch (error) {
-                        console.error(
-                          "Error handling credential selection:",
-                          error,
-                        );
+                        const parsedId = parseInt(value, 10);
+                        if (isNaN(parsedId)) {
+                          console.error(`Invalid tool ID: ${value}`);
+                          return;
+                        }
+                        setNewToolId(parsedId);
                       }
                     }}
                   >
@@ -788,7 +774,7 @@ export default function ConditionalActionsSection({
                       )}
 
                       {/* User credentials */}
-                      {credentialsForSelectedTool.map((tool: any) => (
+                      {credentialsForSelectedTool.map((tool) => (
                         <SelectItem key={tool.id} value={tool.id.toString()}>
                           <div className="flex items-center gap-2">
                             {getToolTypeIcon(tool.type)}
@@ -841,7 +827,7 @@ export default function ConditionalActionsSection({
                           value={template.id.toString()}
                         >
                           <div className="flex items-center gap-2">
-                            {getToolTypeIcon(selectedToolType || "")}
+                            {getToolTypeIcon(selectedToolType ?? "")}
                             {template.name}
                           </div>
                         </SelectItem>
@@ -930,7 +916,7 @@ export default function ConditionalActionsSection({
             <div className="space-y-2">
               <Label htmlFor="targetEvent">Target Event</Label>
               <Select
-                value={newTargetEventId?.toString() || ""}
+                value={newTargetEventId?.toString() ?? ""}
                 onValueChange={(value) =>
                   setNewTargetEventId(value ? parseInt(value) : null)
                 }

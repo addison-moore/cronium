@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import type { RouterOutputs } from "@/server/api/root";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 
 // Types for monitoring data
 interface MonitoringData {
@@ -47,16 +48,20 @@ interface MonitoringData {
     successRate: number;
     failureRate: number;
   };
-  servers?: {
-    total: number;
-    online: number;
-    offline: number;
-  } | undefined;
-  activity?: {
-    last24Hours: number;
-    lastWeek: number;
-    lastMonth: number;
-  } | undefined;
+  servers?:
+    | {
+        total: number;
+        online: number;
+        offline: number;
+      }
+    | undefined;
+  activity?:
+    | {
+        last24Hours: number;
+        lastWeek: number;
+        lastMonth: number;
+      }
+    | undefined;
   recentActivity: Array<{
     id: number;
     eventId: number;
@@ -65,34 +70,36 @@ interface MonitoringData {
     duration: number;
     startTime: string;
   }>;
-  system?: {
-    uptime: number;
-    memory: {
-      total: number;
-      used: number;
-      free: number;
-      rss: number;
-      external: number;
-      arrayBuffers: number;
-    };
-    cpu: {
-      currentLoad: number;
-      systemLoad: number;
-      userLoad: number;
-      temperature: number;
-      manufacturer: string;
-      brand: string;
-      speed: number;
-      cores: number;
-    };
-    os: {
-      platform: string;
-      distro: string;
-      release: string;
-      arch: string;
-      hostname: string;
-    };
-  } | undefined;
+  system?:
+    | {
+        uptime: number;
+        memory: {
+          total: number;
+          used: number;
+          free: number;
+          rss: number;
+          external: number;
+          arrayBuffers: number;
+        };
+        cpu: {
+          currentLoad: number;
+          systemLoad: number;
+          userLoad: number;
+          temperature: number;
+          manufacturer: string;
+          brand: string;
+          speed: number;
+          cores: number;
+        };
+        os: {
+          platform: string;
+          distro: string;
+          release: string;
+          arch: string;
+          hostname: string;
+        };
+      }
+    | undefined;
 }
 
 export default function MonitoringPage() {
@@ -113,9 +120,7 @@ export default function MonitoringPage() {
       includeRecentActivity: true,
       includeSettings: false,
     },
-    {
-      refetchInterval: 10000, // Auto-refresh every 10 seconds
-    },
+    QUERY_OPTIONS.realtime,
   );
 
   // Type the monitoring data from tRPC
@@ -131,7 +136,7 @@ export default function MonitoringPage() {
       total: events.total ?? 0,
       active: events.active ?? 0,
       paused: 0, // Not provided by API
-      draft: 0,  // Not provided by API
+      draft: 0, // Not provided by API
     };
   }
 
@@ -163,11 +168,12 @@ export default function MonitoringPage() {
           id: activity.id,
           eventId: activity.eventId,
           eventName: activity.eventName ?? "Unknown",
-          status: activity.status as LogStatus,
+          status: activity.status,
           duration: activity.duration ?? 0,
-          startTime: typeof activity.startTime === 'string' 
-            ? activity.startTime 
-            : activity.startTime.toISOString(),
+          startTime:
+            typeof activity.startTime === "string"
+              ? activity.startTime
+              : activity.startTime.toISOString(),
         })),
         system: monitoringData.system
           ? {
@@ -254,7 +260,7 @@ export default function MonitoringPage() {
           <Button
             variant="outline"
             onClick={() => {
-              if (typeof refetch === 'function') refetch();
+              if (typeof refetch === "function") void refetch();
             }}
             disabled={isLoading}
             className="bg-background"

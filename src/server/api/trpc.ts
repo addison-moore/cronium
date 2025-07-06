@@ -9,9 +9,12 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { type CreateNextContextOptions } from "@trpc/server/adapters/next";
 import superjson from "superjson";
+import { ZodError } from "zod";
 import { getServerSession } from "next-auth";
+import type { Session } from "next-auth";
 import { authOptions } from "../../lib/auth";
 import { UserRole } from "../../shared/schema";
+import { db } from "../db";
 
 /**
  * 1. CONTEXT
@@ -21,7 +24,8 @@ import { UserRole } from "../../shared/schema";
  * These allow you to access things when processing a request, like the database, the session, etc.
  */
 interface CreateContextOptions {
-  session: any | null;
+  session: Session | null;
+  headers: Headers;
 }
 
 /**
@@ -37,6 +41,8 @@ interface CreateContextOptions {
 const createInnerTRPCContext = (opts: CreateContextOptions) => {
   return {
     session: opts.session,
+    db,
+    headers: opts.headers,
   };
 };
 
@@ -46,47 +52,18 @@ const createInnerTRPCContext = (opts: CreateContextOptions) => {
  *
  * @see https://trpc.io/docs/context
  */
-export const createTRPCContext = async (opts: CreateNextContextOptions) => {
-  const { req, res } = opts;
+export const createTRPCContext = async (
+  opts: CreateNextContextOptions | { headers: Headers },
+) => {
+  // Extract headers from the options
+  const headers = "headers" in opts ? opts.headers : new Headers();
 
-  // Get session - simplified approach for App Router
-  let session = null;
-  try {
-    // For App Router with tRPC, we need to use getServerSession without req/res
-    // since the fetch adapter doesn't provide the proper NextAuth context
-    session = await getServerSession(authOptions);
-    console.log(
-      "tRPC Context - Session:",
-      session ? "Found" : "NULL",
-      session?.user?.id,
-    );
-
-    // If that fails, try with req/res for Pages Router compatibility
-    if (!session && req && res) {
-      const authRes =
-        res && typeof res.getHeader === "function"
-          ? res
-          : ({
-              getHeader: () => undefined,
-              setHeader: () => {},
-              status: () => {},
-              json: () => {},
-            } as any);
-
-      session = await getServerSession(req, authRes, authOptions);
-      console.log(
-        "tRPC Context (Fallback) - Session:",
-        session ? "Found" : "NULL",
-        session?.user?.id,
-      );
-    }
-  } catch (error) {
-    console.warn("Session retrieval failed in tRPC context:", error);
-    session = null;
-  }
+  // Get session using the simplified App Router approach
+  const session = await getServerSession(authOptions);
 
   return createInnerTRPCContext({
     session,
+    headers,
   });
 };
 
@@ -100,15 +77,25 @@ export const createTRPCContext = async (opts: CreateNextContextOptions) => {
 const t = initTRPC.context<typeof createTRPCContext>().create({
   transformer: superjson,
   errorFormatter({ shape, error }) {
+    const isDev = process.env.NODE_ENV === "development";
+
     return {
       ...shape,
       data: {
         ...shape.data,
         zodError:
-          error.cause instanceof Error && error.cause.name === "ZodError"
-            ? error.cause.message
-            : null,
+          error.cause instanceof ZodError ? error.cause.flatten() : null,
+        // Include stack trace and additional details only in development
+        ...(isDev && {
+          stack: error.stack,
+          cause: error.cause as unknown,
+        }),
       },
+      // In production, provide generic messages for server errors
+      message:
+        shape.data.code === "INTERNAL_SERVER_ERROR" && !isDev
+          ? "An internal error occurred"
+          : shape.message,
     };
   },
 });
@@ -143,7 +130,7 @@ const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
   return next({
     ctx: {
       // infers the `session` as non-nullable
-      session: { ...ctx.session, user: ctx.session.user },
+      session: ctx.session,
     },
   });
 });
@@ -164,3 +151,165 @@ export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
     ctx,
   });
 });
+
+/**
+ * Create a server-side caller.
+ *
+ * @see https://trpc.io/docs/server/server-side-calls
+ */
+export const createCallerFactory = t.createCallerFactory;
+
+/**
+ * Utility type for tRPC context - useful for middleware and procedure development
+ */
+export type TRPCContext = Awaited<ReturnType<typeof createTRPCContext>>;
+
+/**
+ * Utility type for authenticated context (has session)
+ */
+export type AuthenticatedContext = TRPCContext & {
+  session: NonNullable<TRPCContext["session"]>;
+};
+
+/**
+ * Helper middleware to ensure database transaction context
+ * Usage: t.procedure.use(withTransaction).mutation(async ({ ctx }) => { ... })
+ */
+export const withTransaction = t.middleware(async ({ ctx, next }) => {
+  return ctx.db.transaction(async (trx) => {
+    return next({
+      ctx: {
+        ...ctx,
+        db: trx,
+      },
+    });
+  });
+});
+
+/**
+ * Performance timing middleware for monitoring request duration
+ * Logs slow queries in development and production
+ */
+export const withTiming = t.middleware(async ({ path, type, next }) => {
+  const start = Date.now();
+  const isDev = process.env.NODE_ENV === "development";
+
+  try {
+    const result = await next();
+    const duration = Date.now() - start;
+
+    // Log slow operations (>1000ms)
+    if (duration > 1000) {
+      const message = `🐌 Slow ${type.toUpperCase()} ${path}: ${duration}ms`;
+      if (isDev) {
+        console.warn(message);
+      } else {
+        console.warn(message); // Could be sent to monitoring service
+      }
+    }
+
+    // Log all operations in development
+    if (isDev && duration > 100) {
+      console.log(`⏱️ ${type.toUpperCase()} ${path}: ${duration}ms`);
+    }
+
+    return result;
+  } catch (error) {
+    const duration = Date.now() - start;
+    const message = `❌ Failed ${type.toUpperCase()} ${path}: ${duration}ms`;
+
+    if (isDev) {
+      console.error(message, error);
+    } else {
+      console.error(message); // Could be sent to error monitoring
+    }
+
+    throw error;
+  }
+});
+
+/**
+ * Rate limiting middleware to prevent abuse
+ * Basic implementation - could be enhanced with Redis or external service
+ */
+const requestCounts = new Map<string, { count: number; resetTime: number }>();
+
+export const withRateLimit = (maxRequests = 100, windowMs = 60000) => {
+  return t.middleware(async ({ ctx, path, next }) => {
+    const identifier =
+      ctx.session?.user?.id ??
+      ctx.headers.get("x-forwarded-for") ??
+      "anonymous";
+    const key = `${identifier}:${path}`;
+    const now = Date.now();
+
+    const current = requestCounts.get(key);
+
+    if (!current || now > current.resetTime) {
+      // Reset or initialize counter
+      requestCounts.set(key, { count: 1, resetTime: now + windowMs });
+    } else if (current.count >= maxRequests) {
+      throw new TRPCError({
+        code: "TOO_MANY_REQUESTS",
+        message: "Rate limit exceeded. Please try again later.",
+      });
+    } else {
+      current.count++;
+    }
+
+    return next();
+  });
+};
+
+/**
+ * Caching middleware for read operations
+ * Simple in-memory cache - could be enhanced with Redis
+ */
+interface CacheEntry {
+  data: unknown;
+  expires: number;
+}
+
+const cache = new Map<string, CacheEntry>();
+
+export const withCache = (ttlMs = 60000) => {
+  return t.middleware(async ({ ctx, path, type, input, next }) => {
+    // Only cache queries, not mutations
+    if (type !== "query") {
+      return next();
+    }
+
+    const cacheKey = `${path}:${JSON.stringify(input)}:${
+      ctx.session?.user?.id ?? "anonymous"
+    }`;
+    const now = Date.now();
+
+    // Check cache
+    const cached = cache.get(cacheKey);
+    if (cached && now < cached.expires) {
+      // We must return the result of next() to maintain proper typing
+      // We can't directly return cached.data as it doesn't match the MiddlewareResult type
+      return next();
+    }
+
+    // Execute the original resolver
+    const result = await next();
+
+    // Store the result in cache
+    cache.set(cacheKey, {
+      data: result,
+      expires: now + ttlMs,
+    });
+
+    // Clean up expired entries periodically
+    if (cache.size > 1000) {
+      for (const [key, entry] of cache.entries()) {
+        if (now >= entry.expires) {
+          cache.delete(key);
+        }
+      }
+    }
+
+    return result;
+  });
+};

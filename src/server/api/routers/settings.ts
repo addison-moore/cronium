@@ -6,6 +6,36 @@ import { db } from "@/server/db";
 import { userSettings } from "@/shared/schema";
 import { eq } from "drizzle-orm";
 
+// Define editor settings type for type safety
+type EditorSettings = {
+  fontSize: number;
+  theme: "vs-dark" | "vs-light" | "hc-black" | "hc-light";
+  wordWrap: boolean;
+  minimap: boolean;
+  lineNumbers: boolean;
+};
+
+// Type guard for editor settings validation
+function isValidEditorSettings(obj: unknown): obj is EditorSettings {
+  return (
+    typeof obj === "object" &&
+    obj !== null &&
+    "fontSize" in obj &&
+    "theme" in obj &&
+    "wordWrap" in obj &&
+    "minimap" in obj &&
+    "lineNumbers" in obj &&
+    typeof (obj as { fontSize: unknown }).fontSize === "number" &&
+    typeof (obj as { theme: unknown }).theme === "string" &&
+    ["vs-dark", "vs-light", "hc-black", "hc-light"].includes(
+      (obj as { theme: string }).theme,
+    ) &&
+    typeof (obj as { wordWrap: unknown }).wordWrap === "boolean" &&
+    typeof (obj as { minimap: unknown }).minimap === "boolean" &&
+    typeof (obj as { lineNumbers: unknown }).lineNumbers === "boolean"
+  );
+}
+
 // Schemas
 const editorSettingsSchema = z.object({
   fontSize: z.number().min(10).max(24),
@@ -15,9 +45,9 @@ const editorSettingsSchema = z.object({
   lineNumbers: z.boolean(),
 });
 
-const DEFAULT_EDITOR_SETTINGS = {
+const DEFAULT_EDITOR_SETTINGS: EditorSettings = {
   fontSize: 14,
-  theme: "vs-dark" as const,
+  theme: "vs-dark",
   wordWrap: true,
   minimap: false,
   lineNumbers: true,
@@ -27,7 +57,16 @@ export const settingsRouter = createTRPCRouter({
   // Get user editor settings
   getEditorSettings: protectedProcedure.query(async ({ ctx }) => {
     try {
-      const user = await storage.getUserByEmail(ctx.session.user.email);
+      // Type-safe access to user email
+      const userEmail = ctx.session?.user?.email;
+      if (!userEmail) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User email not found in session",
+        });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
       if (!user) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -43,11 +82,16 @@ export const settingsRouter = createTRPCRouter({
         .limit(1);
 
       const userSetting = settings[0];
-      let editorSettings = DEFAULT_EDITOR_SETTINGS;
+      let editorSettings: EditorSettings = DEFAULT_EDITOR_SETTINGS;
 
       if (userSetting?.editorSettings) {
         try {
-          editorSettings = JSON.parse(userSetting.editorSettings);
+          const parsed: unknown = JSON.parse(userSetting.editorSettings);
+          if (isValidEditorSettings(parsed)) {
+            editorSettings = parsed;
+          } else {
+            console.warn("Invalid editor settings format, using defaults");
+          }
         } catch (error) {
           console.error("Failed to parse editor settings:", error);
         }
@@ -71,7 +115,16 @@ export const settingsRouter = createTRPCRouter({
     .input(editorSettingsSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const user = await storage.getUserByEmail(ctx.session.user.email);
+        // Type-safe access to user email
+        const userEmail = ctx.session?.user?.email;
+        if (!userEmail) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "User email not found in session",
+          });
+        }
+
+        const user = await storage.getUserByEmail(userEmail);
         if (!user) {
           throw new TRPCError({
             code: "NOT_FOUND",
@@ -121,7 +174,7 @@ export const settingsRouter = createTRPCRouter({
     }),
 
   // Get AI status
-  getAIStatus: protectedProcedure.query(async ({ ctx }) => {
+  getAIStatus: protectedProcedure.query(async () => {
     try {
       // Get AI settings from the database
       const aiEnabledSetting = await storage.getSetting("aiEnabled");

@@ -1,6 +1,11 @@
-import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import {
+  createTRPCRouter,
+  publicProcedure,
+  withTiming,
+  withRateLimit,
+  withCache,
+} from "../trpc";
 import {
   monitoringQuerySchema,
   systemMetricsSchema,
@@ -9,22 +14,46 @@ import {
   healthCheckSchema,
   executionAnalyticsSchema,
   errorTrackingSchema,
-} from "@shared/schemas/monitoring";
+} from "@/shared/schemas/monitoring";
 import { storage } from "@/server/storage";
-import { UserRole, UserStatus, LogStatus } from "@shared/schema";
+import { UserRole, UserStatus, LogStatus } from "@/shared/schema";
+
+// Context type definitions for type safety (currently unused but available for future type enforcement)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+interface AdminMonitoringContext {
+  session: { user: { id: string; role: string } };
+  userId: string;
+  userRole: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+interface UserMonitoringContext {
+  session: { user: { id: string; role?: string } };
+  userId: string;
+}
 
 // Admin-only procedure
 const adminMonitoringProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  let session = null;
-  let userId = null;
-  let userRole = null;
+  let session: { user: { id: string; role?: string } } | null = null;
+  let userId: string | null = null;
+  let userRole: string | null = null;
 
   try {
     // If session exists in context, use it
-    if (ctx.session?.user?.id) {
-      session = ctx.session;
-      userId = ctx.session.user.id;
-      userRole = ctx.session.user.role;
+    if (
+      ctx.session &&
+      typeof ctx.session === "object" &&
+      "user" in ctx.session &&
+      ctx.session.user &&
+      typeof ctx.session.user === "object" &&
+      "id" in ctx.session.user
+    ) {
+      const typedSession = ctx.session as unknown as {
+        user: { id: string; role?: string };
+      };
+      session = typedSession;
+      userId = typedSession.user.id;
+      userRole = typedSession.user.role ?? null;
     } else {
       // For development, get first admin user
       if (process.env.NODE_ENV === "development") {
@@ -59,8 +88,8 @@ const adminMonitoringProcedure = publicProcedure.use(async ({ ctx, next }) => {
       ctx: {
         ...ctx,
         session,
-        userId,
-        userRole,
+        userId: userId,
+        userRole: userRole as string,
       },
     });
   } catch (error) {
@@ -75,14 +104,24 @@ const adminMonitoringProcedure = publicProcedure.use(async ({ ctx, next }) => {
 
 // User-level monitoring procedure (for own stats)
 const userMonitoringProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  let session = null;
-  let userId = null;
+  let session: { user: { id: string; role?: string } } | null = null;
+  let userId: string | null = null;
 
   try {
     // If session exists in context, use it
-    if (ctx.session?.user?.id) {
-      session = ctx.session;
-      userId = ctx.session.user.id;
+    if (
+      ctx.session &&
+      typeof ctx.session === "object" &&
+      "user" in ctx.session &&
+      ctx.session.user &&
+      typeof ctx.session.user === "object" &&
+      "id" in ctx.session.user
+    ) {
+      const typedSession = ctx.session as unknown as {
+        user: { id: string; role?: string };
+      };
+      session = typedSession;
+      userId = typedSession.user.id;
     } else {
       // For development, get first admin user
       if (process.env.NODE_ENV === "development") {
@@ -109,7 +148,7 @@ const userMonitoringProcedure = publicProcedure.use(async ({ ctx, next }) => {
       ctx: {
         ...ctx,
         session,
-        userId,
+        userId: userId,
       },
     });
   } catch (error) {
@@ -135,7 +174,7 @@ async function getSystemInformation() {
         free: memory.heapTotal - memory.heapUsed,
         rss: memory.rss,
         external: memory.external,
-        arrayBuffers: memory.arrayBuffers || 0,
+        arrayBuffers: memory.arrayBuffers ?? 0,
       },
       cpu: {
         currentLoad: Math.random() * 100, // Mock data
@@ -161,7 +200,7 @@ async function getSystemInformation() {
         free: memory.heapTotal - memory.heapUsed,
         rss: memory.rss,
         external: memory.external,
-        arrayBuffers: memory.arrayBuffers || 0,
+        arrayBuffers: memory.arrayBuffers ?? 0,
       },
       cpu: { currentLoad: 0, systemLoad: 0, userLoad: 0 },
       os: {
@@ -176,8 +215,11 @@ async function getSystemInformation() {
 export const monitoringRouter = createTRPCRouter({
   // Get comprehensive monitoring data (admin only)
   getSystemMonitoring: adminMonitoringProcedure
+    .use(withTiming)
+    .use(withRateLimit(200, 60000)) // 200 requests per minute
+    .use(withCache(10000)) // Cache for 10 seconds
     .input(monitoringQuerySchema)
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input, ctx }) => {
       try {
         // Calculate time periods
         const now = new Date();
@@ -190,7 +232,7 @@ export const monitoringRouter = createTRPCRouter({
         // Get basic statistics
         const allUsers = await storage.getAllUsers();
         const stats = await storage.getDashboardStats(ctx.userId); // Using user's dashboard stats as base
-        
+
         // Type assertion for dashboard stats to ensure type safety
         const dashboardStats = stats as {
           totalEvents?: number;
@@ -278,7 +320,7 @@ export const monitoringRouter = createTRPCRouter({
           (acc, setting) => {
             try {
               acc[setting.key] = JSON.parse(setting.value) as unknown;
-            } catch (e) {
+            } catch {
               acc[setting.key] = setting.value;
             }
             return acc;
@@ -317,7 +359,7 @@ export const monitoringRouter = createTRPCRouter({
   // Get system metrics (admin only)
   getSystemMetrics: adminMonitoringProcedure
     .input(systemMetricsSchema)
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input, ctx: _ctx }) => {
       try {
         const systemInfo = await getSystemInformation();
 
@@ -357,9 +399,9 @@ export const monitoringRouter = createTRPCRouter({
   // Get dashboard statistics (user-specific or admin)
   getDashboardStats: userMonitoringProcedure
     .input(dashboardStatsSchema)
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input, ctx }) => {
       try {
-        const targetUserId = input.userId || ctx.userId;
+        const targetUserId = input.userId ?? ctx.userId;
 
         // Check if user can access stats for the target user
         if (input.userId && input.userId !== ctx.userId) {
@@ -374,9 +416,9 @@ export const monitoringRouter = createTRPCRouter({
         }
 
         const stats = await storage.getDashboardStats(targetUserId);
-        
+
         // Type assertion for dashboard stats
-        const typedStats = stats as {
+        const typedStats = stats as unknown as {
           totalEvents?: number;
           activeEvents?: number;
           totalServers?: number;
@@ -415,9 +457,9 @@ export const monitoringRouter = createTRPCRouter({
   // Get activity feed
   getActivityFeed: userMonitoringProcedure
     .input(activityFeedSchema)
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input, ctx }) => {
       try {
-        const targetUserId = input.userId || ctx.userId;
+        const targetUserId = input.userId ?? ctx.userId;
 
         // Check permissions for viewing other user's activity
         if (input.userId && input.userId !== ctx.userId) {
@@ -431,7 +473,7 @@ export const monitoringRouter = createTRPCRouter({
         }
 
         // Get recent logs as activity feed
-        const filters: any = { userId: targetUserId };
+        const filters: Record<string, unknown> = { userId: targetUserId };
         if (input.since) {
           filters.startDate = input.since;
         }
@@ -445,10 +487,10 @@ export const monitoringRouter = createTRPCRouter({
         const activities = logs.map((log) => ({
           id: log.id,
           type: "execution",
-          title: `${log.eventName} ${log.status.toLowerCase()}`,
+          title: `${log.eventName ?? "Unknown"} ${log.status.toLowerCase()}`,
           description:
             log.status === LogStatus.SUCCESS
-              ? `Event executed successfully in ${log.duration}ms`
+              ? `Event executed successfully in ${String(log.duration ?? 0)}ms`
               : log.status === LogStatus.FAILURE
                 ? "Event execution failed"
                 : "Event is running",
@@ -485,12 +527,20 @@ export const monitoringRouter = createTRPCRouter({
   // Get system health check (admin only)
   getHealthCheck: adminMonitoringProcedure
     .input(healthCheckSchema)
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input, ctx: _ctx }) => {
       try {
         const health = {
           overall: "healthy" as "healthy" | "unhealthy" | "degraded",
           timestamp: new Date().toISOString(),
-          checks: [] as any[],
+          checks: [] as Array<{
+            name: string;
+            status: string;
+            responseTime?: number;
+            message: string;
+            error?: string;
+            value?: number;
+            threshold?: number;
+          }>,
         };
 
         // Database check
@@ -580,9 +630,9 @@ export const monitoringRouter = createTRPCRouter({
   // Get execution analytics
   getExecutionAnalytics: userMonitoringProcedure
     .input(executionAnalyticsSchema)
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input, ctx }) => {
       try {
-        const targetUserId = input.userId || ctx.userId;
+        const targetUserId = input.userId ?? ctx.userId;
 
         // Check permissions
         if (input.userId && input.userId !== ctx.userId) {
@@ -596,7 +646,7 @@ export const monitoringRouter = createTRPCRouter({
         }
 
         // Get logs for analytics
-        const filters: any = { userId: targetUserId };
+        const filters: Record<string, unknown> = { userId: targetUserId };
         if (input.eventId) filters.eventId = input.eventId;
         if (input.serverId) filters.serverId = input.serverId;
 
@@ -606,7 +656,14 @@ export const monitoringRouter = createTRPCRouter({
         const analytics = {
           period: input.period,
           groupBy: input.groupBy,
-          data: [] as any[],
+          data: [] as Array<{
+            label: string;
+            value: number;
+            percentage?: number;
+            success?: number;
+            failure?: number;
+            successRate?: number;
+          }>,
           summary: {
             totalExecutions: logs.length,
             successRate: 0,
@@ -637,7 +694,7 @@ export const monitoringRouter = createTRPCRouter({
         );
         if (logsWithDuration.length > 0) {
           const totalDuration = logsWithDuration.reduce(
-            (sum, log) => sum + (log.duration || 0),
+            (sum, log) => sum + (log.duration ?? 0),
             0,
           );
           analytics.summary.averageDuration = Math.round(
@@ -669,24 +726,36 @@ export const monitoringRouter = createTRPCRouter({
           case "event":
             const eventGroups = logs.reduce(
               (acc, log) => {
-                const key = log.eventName || "Unknown";
-                if (!acc[key]) acc[key] = { count: 0, success: 0, failure: 0 };
+                const key = log.eventName ?? "Unknown";
+                acc[key] ??= { count: 0, success: 0, failure: 0 };
                 acc[key].count++;
                 if (log.status === LogStatus.SUCCESS) acc[key].success++;
                 if (log.status === LogStatus.FAILURE) acc[key].failure++;
                 return acc;
               },
-              {} as Record<string, any>,
+              {} as Record<
+                string,
+                { count: number; success: number; failure: number }
+              >,
             );
 
             analytics.data = Object.entries(eventGroups).map(
-              ([name, stats]) => ({
-                label: name,
-                value: stats.count,
-                success: stats.success,
-                failure: stats.failure,
-                successRate: Math.round((stats.success / stats.count) * 100),
-              }),
+              ([name, stats]) => {
+                const typedStats = stats as {
+                  count: number;
+                  success: number;
+                  failure: number;
+                };
+                return {
+                  label: name,
+                  value: typedStats.count,
+                  success: typedStats.success,
+                  failure: typedStats.failure,
+                  successRate: Math.round(
+                    (typedStats.success / typedStats.count) * 100,
+                  ),
+                };
+              },
             );
             break;
           default:
@@ -707,7 +776,7 @@ export const monitoringRouter = createTRPCRouter({
   // Get error tracking data (admin only)
   getErrorTracking: adminMonitoringProcedure
     .input(errorTrackingSchema)
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input, ctx: _ctx }) => {
       try {
         // Get failed logs as error data
         const { logs } = await storage.getAllLogs(
@@ -720,7 +789,7 @@ export const monitoringRouter = createTRPCRouter({
 
         const errors = errorLogs.map((log) => ({
           id: log.id,
-          message: log.output || "Execution failed",
+          message: log.output ?? "Execution failed",
           component: "execution",
           severity: "error",
           timestamp: log.startTime,
@@ -729,7 +798,7 @@ export const monitoringRouter = createTRPCRouter({
           userId: log.userId,
           metadata: {
             duration: log.duration,
-            errorOutput: log.error || log.output,
+            errorOutput: log.error ?? log.output,
           },
         }));
 
@@ -747,24 +816,56 @@ export const monitoringRouter = createTRPCRouter({
                   key = error.component;
                   break;
                 case "user":
-                  key = error.userId || "Unknown";
+                  key = error.userId ?? "Unknown";
                   break;
                 default:
                   key = new Date(error.timestamp).toDateString();
               }
 
-              if (!acc[key]) acc[key] = [];
-              acc[key]!.push(error);
+              acc[key] ??= [];
+              acc[key]?.push(error);
               return acc;
             },
-            {} as Record<string, any[]>,
+            {} as Record<
+              string,
+              Array<{
+                id: number;
+                message: string;
+                component: string;
+                severity: string;
+                timestamp: Date;
+                eventId: number;
+                eventName: string | null;
+                userId: string | null;
+                metadata: {
+                  duration: number | null;
+                  errorOutput: string | null;
+                };
+              }>
+            >,
           );
 
-          groupedData = Object.entries(groups).map(([key, items]) => ({
-            group: key,
-            count: items.length,
-            errors: items,
-          }));
+          groupedData = Object.entries(groups).map(([key, items]) => {
+            const typedItems = items as Array<{
+              id: number;
+              message: string;
+              component: string;
+              severity: string;
+              timestamp: Date;
+              eventId: number;
+              eventName: string | null;
+              userId: string | null;
+              metadata: {
+                duration: number | null;
+                errorOutput: string | null;
+              };
+            }>;
+            return {
+              group: key,
+              count: typedItems.length,
+              errors: typedItems,
+            };
+          });
         }
 
         return {

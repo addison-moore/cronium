@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 interface UseHashTabNavigationOptions {
   defaultTab: string;
@@ -18,7 +18,6 @@ export function useHashTabNavigation({
   validTabs,
   onTabChange,
 }: UseHashTabNavigationOptions) {
-  const router = useRouter();
   const pathname = usePathname();
   const [activeTab, setActiveTab] = useState(defaultTab);
 

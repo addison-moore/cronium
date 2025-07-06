@@ -1,11 +1,49 @@
-import { EventType } from "@/shared/schema";
+import { EventType, type UserVariable } from "@shared/schema";
 import { promisify } from "util";
 import { exec } from "child_process";
-import fs from "fs";
-import path from "path";
-import os from "os";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
 
 const execPromise = promisify(exec);
+
+// Type definitions for script execution
+interface ScriptExecutionResult {
+  stdout: string;
+  stderr: string;
+  output?: unknown;
+  condition?: boolean;
+  isTimeout?: boolean;
+}
+
+interface ScriptExecutionData {
+  eventId?: number;
+  userId?: string;
+  name?: string;
+  description?: string;
+  [key: string]: unknown;
+}
+
+interface ExecError extends Error {
+  killed?: boolean;
+  signal?: string;
+  code?: number;
+}
+
+// Type guard for condition data
+function isConditionData(data: unknown): data is { condition: unknown } {
+  return typeof data === "object" && data !== null && "condition" in data;
+}
+
+// Type guard for updatedVariables
+function isValidVariablesObject(data: unknown): data is Record<string, string> {
+  if (typeof data !== "object" || data === null) {
+    return false;
+  }
+  return Object.entries(data).every(
+    ([key, value]) => typeof key === "string" && typeof value === "string",
+  );
+}
 
 /**
  * Execute a script locally based on its type with input/output support
@@ -20,15 +58,9 @@ export async function executeLocalScript(
   scriptContent: string,
   envVars: Record<string, string> = {},
   timeoutMs = 30000,
-  input: Record<string, any> = {},
-  eventData: Record<string, any> = {},
-): Promise<{
-  stdout: string;
-  stderr: string;
-  output?: any;
-  condition?: boolean;
-  isTimeout?: boolean;
-}> {
+  input: Record<string, unknown> = {},
+  eventData: ScriptExecutionData = {},
+): Promise<ScriptExecutionResult> {
   try {
     // Create a temporary directory for this script execution
     const tmpDir = os.tmpdir();
@@ -52,10 +84,10 @@ export async function executeLocalScript(
     let userVariables: Record<string, string> = {};
     if (eventData.userId) {
       try {
-        const { storage } = await import("@/server/storage");
+        const { storage } = await import("@server/storage");
         const variables = await storage.getUserVariables(eventData.userId);
         userVariables = variables.reduce(
-          (acc: Record<string, string>, variable: any) => {
+          (acc: Record<string, string>, variable: UserVariable) => {
             acc[variable.key] = variable.value;
             return acc;
           },
@@ -73,7 +105,11 @@ export async function executeLocalScript(
     fs.writeFileSync(variablesFilePath, JSON.stringify(userVariables, null, 2));
 
     // Copy runtime helpers to the script directory
-    const runtimeHelpersDir = path.join(process.cwd(), "runtime-helpers");
+    const runtimeHelpersDir = path.join(
+      process.cwd(),
+      "src",
+      "runtime-helpers",
+    );
 
     // Set up the script file based on its type
     switch (eventType) {
@@ -182,7 +218,7 @@ export async function executeLocalScript(
 
       // Check for output.json file after execution
       const outputFilePath = path.join(scriptDir, "output.json");
-      let output: any = undefined;
+      let output: unknown = undefined;
 
       if (fs.existsSync(outputFilePath)) {
         try {
@@ -204,8 +240,14 @@ export async function executeLocalScript(
       if (fs.existsSync(conditionFilePath)) {
         try {
           const conditionContent = fs.readFileSync(conditionFilePath, "utf8");
-          const conditionData = JSON.parse(conditionContent);
-          condition = Boolean(conditionData.condition);
+          const conditionData: unknown = JSON.parse(conditionContent);
+          if (isConditionData(conditionData)) {
+            condition = Boolean(conditionData.condition);
+          } else {
+            console.error(
+              "Invalid condition.json format: missing 'condition' field",
+            );
+          }
           console.log(
             `Found condition file for script execution, condition: ${condition}`,
           );
@@ -226,59 +268,73 @@ export async function executeLocalScript(
             updatedVariablesPath,
             "utf8",
           );
-          const updatedVariables = JSON.parse(updatedVariablesContent);
+          const parsedVariables: unknown = JSON.parse(updatedVariablesContent);
 
-          // Remove metadata fields that aren't user variables
-          delete updatedVariables.__updated__;
+          let updatedVariables: Record<string, string> | null = null;
 
-          // Compare with original variables to find changes
-          const hasChanges =
-            JSON.stringify(userVariables) !== JSON.stringify(updatedVariables);
-
-          if (hasChanges) {
-            console.log(
-              `Variables changed during script execution, persisting to database for user ${eventData.userId}`,
+          if (!isValidVariablesObject(parsedVariables)) {
+            console.error(
+              "Invalid variables.json format: expected object with string values",
             );
-
-            // Import storage and persist updated variables
-            const { storage } = await import("@/server/storage");
-
-            // Get current variables from database to compare
-            const currentDbVariables = await storage.getUserVariables(
-              eventData.userId,
-            );
-            const currentDbVarMap = currentDbVariables.reduce(
-              (acc: Record<string, string>, variable: any) => {
-                acc[variable.key] = variable.value;
-                return acc;
-              },
-              {} as Record<string, string>,
-            );
-
-            // Update or create variables that have changed
-            for (const [key, value] of Object.entries(updatedVariables)) {
-              if (currentDbVarMap[key] !== value) {
-                await storage.setUserVariable(
-                  eventData.userId,
-                  key,
-                  String(value),
-                );
-                console.log(
-                  `Updated variable ${key} for user ${eventData.userId}`,
-                );
-              }
+            result.stderr =
+              (result.stderr || "") +
+              `\nWarning: Invalid variables.json format: expected object with string values`;
+          } else {
+            updatedVariables = { ...parsedVariables };
+            // Remove metadata fields that aren't user variables
+            if ("__updated__" in updatedVariables) {
+              delete updatedVariables.__updated__;
             }
 
-            // Delete variables that were removed (exist in DB but not in updated file)
-            for (const [key] of Object.entries(currentDbVarMap)) {
-              if (!(key in updatedVariables)) {
-                await storage.deleteUserVariableByKey(eventData.userId, key);
-                console.log(
-                  `Deleted variable ${key} for user ${eventData.userId}`,
-                );
+            // Compare with original variables to find changes
+            const hasChanges =
+              JSON.stringify(userVariables) !==
+              JSON.stringify(updatedVariables);
+
+            if (hasChanges && updatedVariables) {
+              console.log(
+                `Variables changed during script execution, persisting to database for user ${eventData.userId}`,
+              );
+
+              // Import storage and persist updated variables
+              const { storage } = await import("@server/storage");
+
+              // Get current variables from database to compare
+              const currentDbVariables = await storage.getUserVariables(
+                eventData.userId,
+              );
+              const currentDbVarMap = currentDbVariables.reduce(
+                (acc: Record<string, string>, variable: UserVariable) => {
+                  acc[variable.key] = variable.value;
+                  return acc;
+                },
+                {} as Record<string, string>,
+              );
+
+              // Update or create variables that have changed
+              for (const [key, value] of Object.entries(updatedVariables)) {
+                if (
+                  typeof value === "string" &&
+                  currentDbVarMap[key] !== value
+                ) {
+                  await storage.setUserVariable(eventData.userId, key, value);
+                  console.log(
+                    `Updated variable ${key} for user ${eventData.userId}`,
+                  );
+                }
+              }
+
+              // Delete variables that were removed (exist in DB but not in updated file)
+              for (const [key] of Object.entries(currentDbVarMap)) {
+                if (!(key in updatedVariables)) {
+                  await storage.deleteUserVariableByKey(eventData.userId, key);
+                  console.log(
+                    `Deleted variable ${key} for user ${eventData.userId}`,
+                  );
+                }
               }
             }
-          }
+          } // Close the else block
         } catch (parseError) {
           console.error(
             "Failed to parse or persist updated variables.json:",
@@ -290,13 +346,7 @@ export async function executeLocalScript(
         }
       }
 
-      const returnValue: {
-        stdout: string;
-        stderr: string;
-        output?: any;
-        condition?: boolean;
-        isTimeout?: boolean;
-      } = {
+      const returnValue: ScriptExecutionResult = {
         stdout: result.stdout,
         stderr: result.stderr,
       };
@@ -325,19 +375,13 @@ export async function executeLocalScript(
       }
     }
   } catch (err) {
-    const error = err as any;
+    const error = err as ExecError;
     console.error("Error executing local script:", error);
 
     // Check if this is a timeout error
     const isTimeout = error.killed === true && error.signal === "SIGTERM";
 
-    const errorReturn: {
-      stdout: string;
-      stderr: string;
-      output?: any;
-      condition?: boolean;
-      isTimeout?: boolean;
-    } = {
+    const errorReturn: ScriptExecutionResult = {
       stdout: "",
       stderr: error.message || "Unknown error executing local script",
     };

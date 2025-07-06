@@ -12,8 +12,8 @@ export interface ToolPlugin {
   category: string;
 
   // Plugin configuration
-  schema: z.ZodSchema<any>;
-  defaultValues: Record<string, any>;
+  schema: z.ZodSchema<unknown>;
+  defaultValues: Record<string, unknown>;
 
   // Plugin components
   CredentialForm: React.ComponentType<CredentialFormProps>;
@@ -22,14 +22,14 @@ export interface ToolPlugin {
 
   // Plugin actions
   validate?: (
-    credentials: Record<string, any>,
+    credentials: Record<string, unknown>,
   ) => Promise<{ isValid: boolean; error?: string }>;
   test?: (
-    credentials: Record<string, any>,
+    credentials: Record<string, unknown>,
   ) => Promise<{ success: boolean; message: string }>;
   send?: (
-    credentials: Record<string, any>,
-    data: any,
+    credentials: Record<string, unknown>,
+    data: unknown,
   ) => Promise<{ success: boolean; message?: string }>;
 }
 
@@ -38,7 +38,7 @@ export interface CredentialFormProps {
   tool?: Tool | null;
   onSubmit: (data: {
     name: string;
-    credentials: Record<string, any>;
+    credentials: Record<string, unknown>;
   }) => Promise<void>;
   onCancel: () => void;
 }

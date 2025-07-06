@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-
 "use client";
 
 import { useForm } from "react-hook-form";
@@ -20,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { trpc } from "@/lib/trpc";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -39,38 +37,23 @@ export default function ForgotPassword() {
     },
   });
 
-  const {
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = form;
-
-  const onSubmit = async (data: FormData) => {
-    try {
-      const response = await fetch("/api/auth/forgot-password", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        setSubmittedEmail(data.email);
+  const forgotPasswordMutation = trpc.userAuth.forgotPassword.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        setSubmittedEmail(form.getValues("email"));
         setIsSubmitted(true);
-      } else {
-        form.setError("root.general", {
-          type: "manual",
-          message: result.message ?? "An error occurred. Please try again.",
-        });
       }
-    } catch {
+    },
+    onError: (error) => {
       form.setError("root.general", {
         type: "manual",
-        message: "An error occurred. Please try again.",
+        message: error.message ?? "An error occurred. Please try again.",
       });
-    }
+    },
+  });
+
+  const onSubmit = (data: FormData) => {
+    forgotPasswordMutation.mutate(data);
   };
 
   if (isSubmitted) {
@@ -130,13 +113,13 @@ export default function ForgotPassword() {
           </p>
         </div>
 
-        {errors.root?.general && (
+        {form.formState.errors.root?.general && (
           <div className="rounded-md bg-red-50 p-4">
             <div className="flex">
               <div className="ml-3">
                 <h3 className="text-sm font-medium text-red-800">Error</h3>
                 <div className="mt-2 text-sm text-red-700">
-                  <p>{errors.root.general.message}</p>
+                  <p>{form.formState.errors.root.general.message}</p>
                 </div>
               </div>
             </div>
@@ -144,7 +127,10 @@ export default function ForgotPassword() {
         )}
 
         <Form {...form}>
-          <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-6">
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="mt-8 space-y-6"
+          >
             <FormField
               control={form.control}
               name="email"
@@ -169,8 +155,14 @@ export default function ForgotPassword() {
             />
 
             <div>
-              <Button type="submit" disabled={isSubmitting} className="w-full">
-                {isSubmitting ? "Sending..." : "Send reset link"}
+              <Button
+                type="submit"
+                disabled={forgotPasswordMutation.isPending}
+                className="w-full"
+              >
+                {forgotPasswordMutation.isPending
+                  ? "Sending..."
+                  : "Send reset link"}
               </Button>
             </div>
 
