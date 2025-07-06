@@ -1,7 +1,5 @@
 import { describe, it, expect, beforeEach, jest } from "@jest/globals";
-import { createTRPCMsw } from "msw-trpc";
 import { TRPCError } from "@trpc/server";
-import type { AppRouter } from "@/server/api/root";
 import { storage } from "@/server/storage";
 
 // Mock the storage module
@@ -11,6 +9,9 @@ jest.mock("@/server/storage", () => ({
     deleteUser: jest.fn(),
   },
 }));
+
+// Type the mocked functions
+const mockedStorage = storage as jest.Mocked<typeof storage>;
 
 describe("userAuth router", () => {
   beforeEach(() => {
@@ -27,8 +28,8 @@ describe("userAuth router", () => {
       };
 
       // Mock storage methods
-      (storage.getUserByEmail as jest.Mock).mockResolvedValue(mockUser);
-      (storage.deleteUser as jest.Mock).mockResolvedValue(true);
+      mockedStorage.getUserByEmail.mockResolvedValue(mockUser as any);
+      mockedStorage.deleteUser.mockResolvedValue(undefined);
 
       // Mock session context
       const ctx = {
@@ -63,14 +64,16 @@ describe("userAuth router", () => {
       })();
 
       expect(result).toEqual({ success: true });
-      expect(storage.getUserByEmail).toHaveBeenCalledWith("test@example.com");
-      expect(storage.deleteUser).toHaveBeenCalledWith("user-123");
+      expect(mockedStorage.getUserByEmail).toHaveBeenCalledWith(
+        "test@example.com",
+      );
+      expect(mockedStorage.deleteUser).toHaveBeenCalledWith("user-123");
     });
 
     it("should throw UNAUTHORIZED error when user email not in session", async () => {
       const ctx = {
         session: {
-          user: {},
+          user: {} as { email?: string },
         },
       };
 
@@ -85,7 +88,7 @@ describe("userAuth router", () => {
     });
 
     it("should throw NOT_FOUND error when user does not exist", async () => {
-      (storage.getUserByEmail as jest.Mock).mockResolvedValue(null);
+      mockedStorage.getUserByEmail.mockResolvedValue(undefined);
 
       const ctx = {
         session: {
@@ -96,7 +99,9 @@ describe("userAuth router", () => {
       };
 
       await expect(async () => {
-        const user = await storage.getUserByEmail(ctx.session.user.email!);
+        const user = await mockedStorage.getUserByEmail(
+          ctx.session.user.email!,
+        );
         if (!user) {
           throw new TRPCError({
             code: "NOT_FOUND",

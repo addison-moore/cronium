@@ -1,6 +1,11 @@
 "use client";
 
-import { useState, cloneElement, isValidElement } from "react";
+import React, {
+  useState,
+  cloneElement,
+  isValidElement,
+  type ReactElement,
+} from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,6 +15,25 @@ import {
 import { EventStatus } from "@/shared/schema";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { getStatusConfig, sizeClasses, iconSizeClasses } from "./status-badge";
+
+// Helper function to safely get className from React element
+function getElementClassName(element: ReactElement): string {
+  const props = element.props as { className?: string };
+  return props?.className ?? "";
+}
+
+// Helper function to safely clone element with className
+function cloneElementWithClassName(
+  element: ReactElement,
+  additionalClassName: string,
+): ReactElement {
+  const existingClassName = getElementClassName(element);
+  const combinedClassName =
+    `${additionalClassName} ${existingClassName}`.trim();
+  return cloneElement(element, {
+    className: combinedClassName,
+  } as React.JSX.IntrinsicAttributes);
+}
 
 interface ClickableStatusBadgeProps {
   currentStatus: EventStatus;
@@ -54,7 +78,7 @@ export function ClickableStatusBadge({
   if (disabled || isUpdating) {
     return (
       <div
-        className={`inline-flex items-center rounded-full border font-medium ${currentConfig.border} ${sizeClasses[size]} ${currentConfig.bgColor} ${currentConfig.textColor} ${isUpdating ? "opacity-60" : ""} ${className}`}
+        className={`inline-flex items-center rounded-full border font-medium ${currentConfig.border ?? ""} ${sizeClasses[size]} ${currentConfig.bgColor} ${currentConfig.textColor} ${isUpdating ? "opacity-60" : ""} ${className}`}
       >
         {isUpdating ? (
           <>
@@ -68,9 +92,10 @@ export function ClickableStatusBadge({
             {currentConfig.icon && (
               <span className="mr-0.5 flex-shrink-0">
                 {isValidElement(currentConfig.icon)
-                  ? cloneElement(currentConfig.icon as any, {
-                      className: `${iconSizeClasses[size]} ${(currentConfig.icon as any).props?.className ?? ""}`,
-                    })
+                  ? cloneElementWithClassName(
+                      currentConfig.icon as ReactElement,
+                      iconSizeClasses[size],
+                    )
                   : currentConfig.icon}
               </span>
             )}
@@ -85,14 +110,15 @@ export function ClickableStatusBadge({
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <div
-          className={`inline-flex cursor-pointer items-center rounded-full border font-medium transition-opacity hover:opacity-80 ${currentConfig.border} ${sizeClasses[size]} ${currentConfig.bgColor} ${currentConfig.textColor} ${className}`}
+          className={`inline-flex cursor-pointer items-center rounded-full border font-medium transition-opacity hover:opacity-80 ${currentConfig.border ?? ""} ${sizeClasses[size]} ${currentConfig.bgColor} ${currentConfig.textColor} ${className}`}
         >
           {currentConfig.icon && (
             <span className="mr-0.5 flex-shrink-0">
               {isValidElement(currentConfig.icon)
-                ? cloneElement(currentConfig.icon as any, {
-                    className: `${iconSizeClasses[size]} ${(currentConfig.icon as any).props?.className ?? ""}`,
-                  })
+                ? cloneElementWithClassName(
+                    currentConfig.icon as ReactElement,
+                    iconSizeClasses[size],
+                  )
                 : currentConfig.icon}
             </span>
           )}
@@ -111,14 +137,15 @@ export function ClickableStatusBadge({
               disabled={status === currentStatus}
             >
               <div
-                className={`pointer-events-none inline-flex items-center rounded-full border font-medium ${config.border} ${sizeClasses[size]} ${config.bgColor} ${config.textColor}`}
+                className={`pointer-events-none inline-flex items-center rounded-full border font-medium ${config.border ?? ""} ${sizeClasses[size]} ${config.bgColor} ${config.textColor}`}
               >
                 {config.icon && (
                   <span className="mr-0.5 flex-shrink-0">
                     {isValidElement(config.icon)
-                      ? cloneElement(config.icon as any, {
-                          className: `${iconSizeClasses[size]} ${(config.icon as any).props?.className ?? ""}`,
-                        })
+                      ? cloneElementWithClassName(
+                          config.icon as ReactElement,
+                          iconSizeClasses[size],
+                        )
                       : config.icon}
                   </span>
                 )}

@@ -50,7 +50,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const { eventId } = await req.json();
+    const body = (await req.json()) as { eventId?: unknown };
+    const { eventId } = body;
 
     if (!eventId) {
       return NextResponse.json(
@@ -59,7 +60,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await scheduler.runScriptImmediately(eventId);
+    const result = await scheduler.runScriptImmediately(Number(eventId));
 
     return NextResponse.json({
       success: true,

@@ -76,6 +76,7 @@ module.exports = [
         "warn",
         {
           argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
         },
       ],
 

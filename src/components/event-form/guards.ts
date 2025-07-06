@@ -488,7 +488,6 @@ export function hasFormErrors(errors: EventFormErrors): boolean {
  * Get first error message from form errors
  */
 export function getFirstFormError(errors: EventFormErrors): string | null {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   for (const [_field, error] of Object.entries(errors)) {
     if (typeof error === "string" && error.length > 0) {
       return error;

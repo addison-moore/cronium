@@ -55,7 +55,7 @@ export default function EditorSettingsModal({
 
   // tRPC mutation for saving editor settings
   const saveSettingsMutation = trpc.settings.updateEditorSettings.useMutation({
-    onSuccess: (updatedSettings) => {
+    onSuccess: () => {
       onSettingsChange(settings);
       toast({
         title: "Settings saved",
@@ -86,7 +86,7 @@ export default function EditorSettingsModal({
         minimap: settings.minimap,
         lineNumbers: settings.lineNumbers,
       });
-    } catch (error) {
+    } catch {
       // Error handled by mutation onError
     }
   };

@@ -92,7 +92,7 @@ export const scriptSchema = z
         try {
           new URL(data.httpUrl);
           return true;
-        } catch (e) {
+        } catch {
           return false;
         }
       }

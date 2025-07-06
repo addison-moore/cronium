@@ -7,13 +7,21 @@ export default getRequestConfig(async ({ locale }) => {
   try {
     return {
       locale: validLocale,
-      messages: (await import(`../messages/${validLocale}.json`)).default,
+      messages: (
+        (await import(`../messages/${validLocale}.json`)) as {
+          default: Record<string, unknown>;
+        }
+      ).default,
     };
-  } catch (error) {
+  } catch {
     // Fallback to English if the locale file doesn't exist
     return {
       locale: "en",
-      messages: (await import(`../messages/en.json`)).default,
+      messages: (
+        (await import(`../messages/en.json`)) as {
+          default: Record<string, unknown>;
+        }
+      ).default,
     };
   }
 });

@@ -32,133 +32,7 @@ interface UserMonitoringContext {
   userId: string;
 }
 
-// Admin-only procedure
-const adminMonitoringProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  let session: { user: { id: string; role?: string } } | null = null;
-  let userId: string | null = null;
-  let userRole: string | null = null;
-
-  try {
-    // If session exists in context, use it
-    if (
-      ctx.session &&
-      typeof ctx.session === "object" &&
-      "user" in ctx.session &&
-      ctx.session.user &&
-      typeof ctx.session.user === "object" &&
-      "id" in ctx.session.user
-    ) {
-      const typedSession = ctx.session as unknown as {
-        user: { id: string; role?: string };
-      };
-      session = typedSession;
-      userId = typedSession.user.id;
-      userRole = typedSession.user.role ?? null;
-    } else {
-      // For development, get first admin user
-      if (process.env.NODE_ENV === "development") {
-        const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter(
-          (user) => user.role === UserRole.ADMIN,
-        );
-        const firstAdmin = adminUsers[0];
-        if (firstAdmin) {
-          userId = firstAdmin.id;
-          userRole = firstAdmin.role;
-          session = { user: { id: firstAdmin.id, role: firstAdmin.role } };
-        }
-      }
-    }
-
-    if (!userId) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "Authentication required",
-      });
-    }
-
-    if (userRole !== UserRole.ADMIN) {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Admin access required",
-      });
-    }
-
-    return next({
-      ctx: {
-        ...ctx,
-        session,
-        userId: userId,
-        userRole: userRole as string,
-      },
-    });
-  } catch (error) {
-    console.error("Auth error in adminMonitoringProcedure:", error);
-    if (error instanceof TRPCError) throw error;
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Authentication failed",
-    });
-  }
-});
-
-// User-level monitoring procedure (for own stats)
-const userMonitoringProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  let session: { user: { id: string; role?: string } } | null = null;
-  let userId: string | null = null;
-
-  try {
-    // If session exists in context, use it
-    if (
-      ctx.session &&
-      typeof ctx.session === "object" &&
-      "user" in ctx.session &&
-      ctx.session.user &&
-      typeof ctx.session.user === "object" &&
-      "id" in ctx.session.user
-    ) {
-      const typedSession = ctx.session as unknown as {
-        user: { id: string; role?: string };
-      };
-      session = typedSession;
-      userId = typedSession.user.id;
-    } else {
-      // For development, get first admin user
-      if (process.env.NODE_ENV === "development") {
-        const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter(
-          (user) => user.role === UserRole.ADMIN,
-        );
-        const firstAdmin = adminUsers[0];
-        if (firstAdmin) {
-          userId = firstAdmin.id;
-          session = { user: { id: firstAdmin.id } };
-        }
-      }
-    }
-
-    if (!userId) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "Authentication required",
-      });
-    }
-
-    return next({
-      ctx: {
-        ...ctx,
-        session,
-        userId: userId,
-      },
-    });
-  } catch (error) {
-    console.error("Auth error in userMonitoringProcedure:", error);
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Authentication failed",
-    });
-  }
-});
+// User procedures will be defined after base procedures
 
 // Helper function to get system information
 async function getSystemInformation() {
@@ -212,12 +86,147 @@ async function getSystemInformation() {
   }
 }
 
+// Create base procedure with common middleware
+const baseMonitoringProcedure = publicProcedure
+  .use(withTiming)
+  .use(withRateLimit(200, 60000)) // 200 requests per minute
+  .use(withCache(10000)); // Cache for 10 seconds
+
+// Admin procedure built on top of base procedure
+const adminProcedureWithMiddleware = baseMonitoringProcedure.use(
+  async ({ ctx, next }) => {
+    let session: { user: { id: string; role?: string } } | null = null;
+    let userId: string | null = null;
+    let userRole: string | null = null;
+
+    try {
+      // If session exists in context, use it
+      if (
+        ctx.session &&
+        typeof ctx.session === "object" &&
+        "user" in ctx.session &&
+        ctx.session.user &&
+        typeof ctx.session.user === "object" &&
+        "id" in ctx.session.user
+      ) {
+        const typedSession = ctx.session as unknown as {
+          user: { id: string; role?: string };
+        };
+        session = typedSession;
+        userId = typedSession.user.id;
+        userRole = typedSession.user.role ?? null;
+      } else {
+        // For development, get first admin user
+        if (process.env.NODE_ENV === "development") {
+          const allUsers = await storage.getAllUsers();
+          const adminUsers = allUsers.filter(
+            (user) => user.role === UserRole.ADMIN,
+          );
+          const firstAdmin = adminUsers[0];
+          if (firstAdmin) {
+            userId = firstAdmin.id;
+            userRole = firstAdmin.role;
+            session = { user: { id: firstAdmin.id, role: firstAdmin.role } };
+          }
+        }
+      }
+
+      if (!userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Authentication required",
+        });
+      }
+
+      if (userRole !== UserRole.ADMIN) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Admin access required",
+        });
+      }
+
+      return next({
+        ctx: {
+          ...ctx,
+          session,
+          userId: userId,
+          userRole: userRole as string,
+        },
+      });
+    } catch (error) {
+      console.error("Auth error in adminMonitoringProcedure:", error);
+      if (error instanceof TRPCError) throw error;
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "Authentication failed",
+      });
+    }
+  },
+);
+
+// User-level monitoring procedure (for own stats)
+const userProcedureWithMiddleware = publicProcedure.use(
+  async ({ ctx, next }) => {
+    let session: { user: { id: string; role?: string } } | null = null;
+    let userId: string | null = null;
+
+    try {
+      // If session exists in context, use it
+      if (
+        ctx.session &&
+        typeof ctx.session === "object" &&
+        "user" in ctx.session &&
+        ctx.session.user &&
+        typeof ctx.session.user === "object" &&
+        "id" in ctx.session.user
+      ) {
+        const typedSession = ctx.session as unknown as {
+          user: { id: string; role?: string };
+        };
+        session = typedSession;
+        userId = typedSession.user.id;
+      } else {
+        // For development, get first admin user
+        if (process.env.NODE_ENV === "development") {
+          const allUsers = await storage.getAllUsers();
+          const adminUsers = allUsers.filter(
+            (user) => user.role === UserRole.ADMIN,
+          );
+          const firstAdmin = adminUsers[0];
+          if (firstAdmin) {
+            userId = firstAdmin.id;
+            session = { user: { id: firstAdmin.id } };
+          }
+        }
+      }
+
+      if (!userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Authentication required",
+        });
+      }
+
+      return next({
+        ctx: {
+          ...ctx,
+          session,
+          userId: userId,
+        },
+      });
+    } catch (error) {
+      console.error("Auth error in userMonitoringProcedure:", error);
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "Authentication failed",
+      });
+    }
+  },
+);
+
 export const monitoringRouter = createTRPCRouter({
   // Get comprehensive monitoring data (admin only)
-  getSystemMonitoring: adminMonitoringProcedure
-    .use(withTiming)
-    .use(withRateLimit(200, 60000)) // 200 requests per minute
-    .use(withCache(10000)) // Cache for 10 seconds
+  getSystemMonitoring: adminProcedureWithMiddleware
     .input(monitoringQuerySchema)
     .query(async ({ input, ctx }) => {
       try {
@@ -357,7 +366,7 @@ export const monitoringRouter = createTRPCRouter({
     }),
 
   // Get system metrics (admin only)
-  getSystemMetrics: adminMonitoringProcedure
+  getSystemMetrics: adminProcedureWithMiddleware
     .input(systemMetricsSchema)
     .query(async ({ input, ctx: _ctx }) => {
       try {
@@ -397,7 +406,7 @@ export const monitoringRouter = createTRPCRouter({
     }),
 
   // Get dashboard statistics (user-specific or admin)
-  getDashboardStats: userMonitoringProcedure
+  getDashboardStats: userProcedureWithMiddleware
     .input(dashboardStatsSchema)
     .query(async ({ input, ctx }) => {
       try {
@@ -455,7 +464,7 @@ export const monitoringRouter = createTRPCRouter({
     }),
 
   // Get activity feed
-  getActivityFeed: userMonitoringProcedure
+  getActivityFeed: userProcedureWithMiddleware
     .input(activityFeedSchema)
     .query(async ({ input, ctx }) => {
       try {
@@ -525,7 +534,7 @@ export const monitoringRouter = createTRPCRouter({
     }),
 
   // Get system health check (admin only)
-  getHealthCheck: adminMonitoringProcedure
+  getHealthCheck: adminProcedureWithMiddleware
     .input(healthCheckSchema)
     .query(async ({ input, ctx: _ctx }) => {
       try {
@@ -628,7 +637,7 @@ export const monitoringRouter = createTRPCRouter({
     }),
 
   // Get execution analytics
-  getExecutionAnalytics: userMonitoringProcedure
+  getExecutionAnalytics: userProcedureWithMiddleware
     .input(executionAnalyticsSchema)
     .query(async ({ input, ctx }) => {
       try {
@@ -774,7 +783,7 @@ export const monitoringRouter = createTRPCRouter({
     }),
 
   // Get error tracking data (admin only)
-  getErrorTracking: adminMonitoringProcedure
+  getErrorTracking: adminProcedureWithMiddleware
     .input(errorTrackingSchema)
     .query(async ({ input, ctx: _ctx }) => {
       try {

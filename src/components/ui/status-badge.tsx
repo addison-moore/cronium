@@ -287,14 +287,17 @@ export function StatusBadge({
 
   return (
     <div
-      className={`inline-flex items-center rounded-full border font-medium ${config.border} ${sizeClasses[size]} ${config.bgColor} ${config.textColor} ${className}`}
+      className={`inline-flex items-center rounded-full border font-medium ${config.border ?? ""} ${sizeClasses[size]} ${config.bgColor} ${config.textColor} ${className ?? ""}`}
     >
       {config.icon ? (
         <span className="mr-0.5 flex-shrink-0">
           {isValidElement(config.icon)
-            ? cloneElement(config.icon as any, {
-                className: `${iconSizeClasses[size]} ${(config.icon as any).props?.className || ""}`,
-              })
+            ? cloneElement(
+                config.icon as React.ReactElement<{ className?: string }>,
+                {
+                  className: `${iconSizeClasses[size]} ${(config.icon as React.ReactElement<{ className?: string }>).props?.className ?? ""}`,
+                },
+              )
             : config.icon}
         </span>
       ) : showIndicator ? (

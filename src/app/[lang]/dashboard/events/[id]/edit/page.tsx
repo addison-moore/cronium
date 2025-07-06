@@ -64,6 +64,63 @@ export default function EditEventPage() {
     );
   }
 
+  // Transform the event data to match EventWithConditionalActions format
+  const transformedEvent = {
+    ...event,
+    successEvents: event.successEvents.map((action) => ({
+      id: action.id,
+      type: action.type,
+      ...(action.value !== null && { value: action.value }),
+      ...(action.emailSubject !== null && {
+        emailSubject: action.emailSubject,
+      }),
+      ...(action.targetEventId !== null && {
+        targetEventId: action.targetEventId,
+      }),
+      ...(action.toolId !== null && { toolId: action.toolId }),
+      ...(action.message !== null && { message: action.message }),
+    })),
+    failEvents: event.failEvents.map((action) => ({
+      id: action.id,
+      type: action.type,
+      ...(action.value !== null && { value: action.value }),
+      ...(action.emailSubject !== null && {
+        emailSubject: action.emailSubject,
+      }),
+      ...(action.targetEventId !== null && {
+        targetEventId: action.targetEventId,
+      }),
+      ...(action.toolId !== null && { toolId: action.toolId }),
+      ...(action.message !== null && { message: action.message }),
+    })),
+    alwaysEvents: event.alwaysEvents.map((action) => ({
+      id: action.id,
+      type: action.type,
+      ...(action.value !== null && { value: action.value }),
+      ...(action.emailSubject !== null && {
+        emailSubject: action.emailSubject,
+      }),
+      ...(action.targetEventId !== null && {
+        targetEventId: action.targetEventId,
+      }),
+      ...(action.toolId !== null && { toolId: action.toolId }),
+      ...(action.message !== null && { message: action.message }),
+    })),
+    conditionEvents: event.conditionEvents.map((action) => ({
+      id: action.id,
+      type: action.type,
+      ...(action.value !== null && { value: action.value }),
+      ...(action.emailSubject !== null && {
+        emailSubject: action.emailSubject,
+      }),
+      ...(action.targetEventId !== null && {
+        targetEventId: action.targetEventId,
+      }),
+      ...(action.toolId !== null && { toolId: action.toolId }),
+      ...(action.message !== null && { message: action.message }),
+    })),
+  };
+
   return (
     <div className="container py-6">
       <PageHeader
@@ -78,7 +135,7 @@ export default function EditEventPage() {
       <div className="mt-6">
         <EventForm
           eventId={eventId}
-          initialData={event}
+          initialData={transformedEvent}
           isEditing={true}
           onSuccess={handleSuccess}
         />

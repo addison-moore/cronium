@@ -37,6 +37,55 @@ import { trpc } from "@/components/providers/TrpcProvider";
 import { cn } from "@/lib/utils";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 
+// Type definitions for webhook monitoring data
+type WebhookStatus =
+  | "success"
+  | "failure"
+  | "timeout"
+  | "rate_limited"
+  | "unauthorized"
+  | undefined;
+
+interface WebhookAlert {
+  type: string;
+  threshold: number;
+  currentValue: number;
+  triggered: boolean;
+}
+
+interface WebhookActivity {
+  timestamp: string;
+  status: WebhookStatus;
+  responseTime: number;
+  sourceIp: string;
+}
+
+interface WebhookMetrics {
+  totalRequests: number;
+  successRate: number;
+  errorRate: number;
+  averageResponseTime: number;
+  rateLimitHits: number;
+  uniqueIps: number;
+}
+
+interface WebhookMonitoringData {
+  webhookKey: string | undefined;
+  metricsWindow: string;
+  realtime: boolean;
+  metrics: WebhookMetrics;
+  alerts: WebhookAlert[];
+  recentActivity: WebhookActivity[];
+}
+
+interface WebhookStats {
+  totalExecutions: number;
+  successfulExecutions: number;
+  failedExecutions: number;
+  byStatus: Record<string, number>;
+  byMethod: Record<string, number>;
+}
+
 interface WebhookMonitorProps {
   webhookKey: string;
   onClose?: () => void;
@@ -57,7 +106,7 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
     {
       key: webhookKey,
       includeRealtime: true,
-      metricsWindow: timeRange as any,
+      metricsWindow: timeRange as "1h" | "6h" | "24h" | "7d" | "30d",
       alertThresholds: {
         errorRate: 10,
         rateLimitHits: 100,
@@ -75,7 +124,8 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
     {
       key: webhookKey,
       limit: 50,
-      status: statusFilter === "all" ? undefined : (statusFilter as any),
+      status:
+        statusFilter === "all" ? undefined : (statusFilter as WebhookStatus),
       sortBy: "timestamp",
       sortOrder: "desc",
     },
@@ -111,7 +161,7 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
     return `${(ms / 60000).toFixed(1)}m`;
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status: string | undefined) => {
     switch (status) {
       case "success":
         return <CheckCircle className="h-4 w-4 text-green-500" />;
@@ -121,6 +171,10 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
         return <Clock className="h-4 w-4 text-yellow-500" />;
       case "rate_limited":
         return <AlertTriangle className="h-4 w-4 text-orange-500" />;
+      case "unauthorized":
+        return <AlertTriangle className="h-4 w-4 text-red-500" />;
+      case undefined:
+        return <AlertTriangle className="h-4 w-4 text-gray-500" />;
       default:
         return <AlertTriangle className="h-4 w-4 text-gray-500" />;
     }
@@ -190,7 +244,10 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
     );
   }
 
-  const monitoring = monitoringData ?? {
+  const monitoring: WebhookMonitoringData = monitoringData ?? {
+    webhookKey: webhookKey || "",
+    metricsWindow: timeRange,
+    realtime: true,
     metrics: {
       totalRequests: 0,
       successRate: 0,
@@ -199,11 +256,11 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
       rateLimitHits: 0,
       uniqueIps: 0,
     },
-    alerts: [],
-    recentActivity: [],
+    alerts: [] as WebhookAlert[],
+    recentActivity: [] as WebhookActivity[],
   };
 
-  const stats = statsData ?? {
+  const stats: WebhookStats = statsData ?? {
     totalExecutions: 0,
     successfulExecutions: 0,
     failedExecutions: 0,
@@ -344,7 +401,7 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {monitoring.alerts.map((alert: any, index: number) => (
+              {monitoring.alerts.map((alert: WebhookAlert, index: number) => (
                 <div
                   key={index}
                   className={cn(
@@ -357,11 +414,11 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium capitalize">
-                        {alert.type.replace("_", " ")}
+                        {alert.type.replace(/_/g, " ")}
                       </p>
                       <p className="text-muted-foreground text-sm">
-                        Current: {alert.currentValue} | Threshold:{" "}
-                        {alert.threshold}
+                        Current: {String(alert.currentValue)} | Threshold:{" "}
+                        {String(alert.threshold)}
                       </p>
                     </div>
                     <Badge
@@ -435,16 +492,18 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {executions.map((execution: any) => (
+                    {executions.map((execution) => (
                       <TableRow key={execution.id}>
                         <TableCell>
                           <div className="flex items-center space-x-2">
-                            {getStatusIcon(execution.status)}
+                            {getStatusIcon(execution.status ?? "unknown")}
                             <Badge
                               variant="outline"
-                              className={getStatusColor(execution.status)}
+                              className={getStatusColor(
+                                execution.status ?? "unknown",
+                              )}
                             >
-                              {execution.status}
+                              {execution.status ?? "unknown"}
                             </Badge>
                           </div>
                         </TableCell>
@@ -467,13 +526,14 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
                         <TableCell>
                           <Badge
                             variant={
+                              execution.responseCode &&
                               execution.responseCode >= 200 &&
                               execution.responseCode < 300
                                 ? "default"
                                 : "destructive"
                             }
                           >
-                            {execution.responseCode || "N/A"}
+                            {execution.responseCode ?? "N/A"}
                           </Badge>
                         </TableCell>
                         <TableCell>
@@ -509,7 +569,7 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
                 <div className="space-y-4">
                   {(() => {
                     const execution = executions.find(
-                      (e: any) => e.id === showPayload,
+                      (e) => e.id === showPayload,
                     );
                     if (!execution) return null;
 
@@ -544,7 +604,7 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
             <CardContent>
               <div className="space-y-3">
                 {monitoring.recentActivity.map(
-                  (activity: any, index: number) => (
+                  (activity: WebhookActivity, index: number) => (
                     <div
                       key={index}
                       className="flex items-center justify-between rounded border p-3"

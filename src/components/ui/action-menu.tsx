@@ -58,7 +58,7 @@ export function ActionMenu({
             <DropdownMenuItem
               key={`item-${index}`}
               onClick={item.onClick}
-              disabled={item.disabled === undefined ? false : item.disabled}
+              disabled={item.disabled ?? false}
               className={`${item.variant === "destructive" || "destructive" in item ? "text-red-600 focus:text-red-600" : ""} ${item.disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
             >
               {item.icon && <span className="mr-2">{item.icon}</span>}

@@ -57,37 +57,37 @@ export interface EventData {
   successEvents?: Array<{
     id: number;
     type: ConditionalActionType;
-    value?: string;
-    emailSubject?: string;
-    targetEventId?: number;
-    toolId?: number;
-    message?: string;
+    value?: string | undefined;
+    emailSubject?: string | undefined;
+    targetEventId?: number | undefined;
+    toolId?: number | undefined;
+    message?: string | undefined;
   }>;
   failEvents?: Array<{
     id: number;
     type: ConditionalActionType;
-    value?: string;
-    emailSubject?: string;
-    targetEventId?: number;
-    toolId?: number;
-    message?: string;
+    value?: string | undefined;
+    emailSubject?: string | undefined;
+    targetEventId?: number | undefined;
+    toolId?: number | undefined;
+    message?: string | undefined;
   }>;
   alwaysEvents?: Array<{
     id: number;
     type: ConditionalActionType;
-    value?: string;
-    targetEventId?: number;
-    toolId?: number;
-    message?: string;
+    value?: string | undefined;
+    targetEventId?: number | undefined;
+    toolId?: number | undefined;
+    message?: string | undefined;
   }>;
   conditionEvents?: Array<{
     id: number;
     type: ConditionalActionType;
-    value?: string;
-    emailSubject?: string;
-    targetEventId?: number;
-    toolId?: number;
-    message?: string;
+    value?: string | undefined;
+    emailSubject?: string | undefined;
+    targetEventId?: number | undefined;
+    toolId?: number | undefined;
+    message?: string | undefined;
   }>;
 }
 
@@ -528,7 +528,7 @@ export default function ConditionalActionsSection({
         const IconComponent = plugin.icon;
         return <IconComponent className="h-4 w-4" />;
       }
-    } catch (error) {
+    } catch {
       console.warn(`Plugin not found for message type: ${toolType}`);
     }
 

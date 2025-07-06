@@ -67,7 +67,7 @@ function EventNode({ data, selected }: NodeProps) {
   const eventType = type || EventType.BASH;
 
   // Get styling based on script type
-  const style = eventTypeStyles[eventType] || {
+  const style = eventTypeStyles[eventType] ?? {
     bg: "bg-gray-100 dark:bg-gray-800",
     text: "text-gray-700 dark:text-gray-400",
   };

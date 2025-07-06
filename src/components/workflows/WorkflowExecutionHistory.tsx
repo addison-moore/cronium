@@ -53,13 +53,6 @@ interface ExecutionWithEvents {
   events: WorkflowExecutionEvent[];
 }
 
-interface WorkflowExecutionWithWorkflow extends WorkflowExecution {
-  workflow?: {
-    id: number;
-    name: string;
-  };
-}
-
 export default function WorkflowExecutionHistory({
   workflowId,
   refreshTrigger,
@@ -76,7 +69,7 @@ export default function WorkflowExecutionHistory({
   // Filter state
   const [searchTerm, setSearchTerm] = useState("");
   const [tagFilter, setTagFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<string | LogStatus>("all");
   const [sortBy, setSortBy] = useState<"name" | "startedAt" | "completedAt">(
     "startedAt",
   );
@@ -100,7 +93,7 @@ export default function WorkflowExecutionHistory({
       refetchInterval: (query) => {
         // Poll every 8 seconds if there are running executions
         const hasRunning = query.state.data?.executions?.executions?.some(
-          (exec: any) => exec.status === LogStatus.RUNNING,
+          (exec: WorkflowExecution) => exec.status === LogStatus.RUNNING,
         );
         return hasRunning ? 8000 : false;
       },
@@ -109,7 +102,6 @@ export default function WorkflowExecutionHistory({
 
   // Extract executions from tRPC response
   const executions = executionsData?.executions?.executions ?? [];
-  const totalExecutions = executionsData?.executions?.total ?? 0;
 
   // Handle manual refresh
   const handleManualRefresh = async () => {
@@ -122,7 +114,7 @@ export default function WorkflowExecutionHistory({
         title: "Refreshed",
         description: "Execution history updated successfully",
       });
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to refresh execution history",
@@ -134,13 +126,18 @@ export default function WorkflowExecutionHistory({
     }
   };
 
-  // Fetch execution details
+  // Get tRPC utils for imperative calls
+  const utils = trpc.useUtils();
+
+  // Fetch execution details using tRPC
   const fetchExecutionDetails = async (executionId: number) => {
     try {
       setIsLoadingDetails(true);
 
       // Find the execution to get workflow ID
-      const execution = executions.find((exec: any) => exec.id === executionId);
+      const execution = executions.find(
+        (exec: WorkflowExecution) => exec.id === executionId,
+      );
       const targetWorkflowId = workflowId ?? execution?.workflowId;
 
       if (!targetWorkflowId) {
@@ -149,18 +146,17 @@ export default function WorkflowExecutionHistory({
         );
       }
 
-      // Use REST for now since we need the specific execution details endpoint
-      // TODO: Add getExecutionDetails to tRPC workflows router
-      const response = await fetch(
-        `/api/workflows/${targetWorkflowId}/executions/${executionId}`,
-      );
+      // Use tRPC getExecution endpoint with utils
+      const executionDetails = await utils.workflows.getExecution.fetch({
+        workflowId: targetWorkflowId,
+        executionId: executionId,
+      });
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch execution details");
-      }
-
-      const data = await response.json();
-      setSelectedExecution(data.data);
+      // Transform the data to match the expected format
+      setSelectedExecution({
+        execution: executionDetails,
+        events: executionDetails.events,
+      });
     } catch (error) {
       console.error("Error fetching execution details:", error);
       toast({
@@ -176,7 +172,7 @@ export default function WorkflowExecutionHistory({
   // Handle refresh trigger changes
   useEffect(() => {
     if (refreshTrigger && refreshTrigger > 0) {
-      refetch();
+      void refetch();
     }
   }, [refreshTrigger, refetch]);
 
@@ -194,20 +190,23 @@ export default function WorkflowExecutionHistory({
   ];
 
   // Apply filters to executions
-  const filteredExecutions = executions.filter((execution: any) => {
-    const matchesSearch =
-      `Workflow ${execution.workflowId}`
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()) ?? true;
+  const filteredExecutions = executions.filter(
+    (execution: WorkflowExecution) => {
+      const matchesSearch =
+        `Workflow ${String(execution.workflowId)}`
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()) ?? true;
 
-    const matchesStatus =
-      statusFilter === "all" || execution.status === statusFilter;
+      const matchesStatus =
+        statusFilter === "all" ||
+        String(execution.status) === String(statusFilter);
 
-    // Tags filtering disabled until workflows have tags in schema
-    const matchesTag = tagFilter === "all";
+      // Tags filtering disabled until workflows have tags in schema
+      const matchesTag = tagFilter === "all";
 
-    return matchesSearch && matchesStatus && matchesTag;
-  });
+      return matchesSearch && matchesStatus && matchesTag;
+    },
+  );
 
   // Apply sorting to filtered executions
   const sortedExecutions = [...filteredExecutions].sort((a, b) => {
@@ -526,11 +525,11 @@ export default function WorkflowExecutionHistory({
                     {!workflowId && (
                       <TableCell>
                         <Link
-                          href={`/${params.lang}/dashboard/workflows/${execution.workflowId}`}
+                          href={`/${String(params.lang)}/dashboard/workflows/${String(execution.workflowId)}`}
                           className="hover:underline"
                         >
                           <div className="font-medium">
-                            {`Workflow ${execution.workflowId}`}
+                            {`Workflow ${String(execution.workflowId)}`}
                           </div>
                         </Link>
                       </TableCell>
@@ -615,62 +614,64 @@ export default function WorkflowExecutionHistory({
                                     Event Execution Timeline
                                   </label>
                                   <div className="mt-2 space-y-2">
-                                    {selectedExecution.events.map(
-                                      (event, index) => (
-                                        <div
-                                          key={event.id}
-                                          className="border-border rounded border p-3"
-                                        >
-                                          <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                              <Link
-                                                href={`/${params.lang}/dashboard/events/${event.eventId}`}
-                                                className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
-                                              >
-                                                {(event as any).eventName ??
-                                                  `Event ${event.eventId}`}
-                                              </Link>
-                                              {getStatusBadge(event.status)}
-                                            </div>
-                                            <div className="text-muted-foreground text-sm">
-                                              {event.duration
-                                                ? formatDuration(event.duration)
-                                                : "N/A"}
-                                            </div>
+                                    {selectedExecution.events.map((event) => (
+                                      <div
+                                        key={event.id}
+                                        className="border-border rounded border p-3"
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-2">
+                                            <Link
+                                              href={`/${String(params.lang)}/dashboard/events/${String(event.eventId)}`}
+                                              className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                                            >
+                                              {(
+                                                event as WorkflowExecutionEvent & {
+                                                  eventName?: string;
+                                                }
+                                              ).eventName ??
+                                                `Event ${String(event.eventId)}`}
+                                            </Link>
+                                            {getStatusBadge(event.status)}
                                           </div>
-                                          {event.connectionType && (
-                                            <div className="mt-1">
-                                              <Badge
-                                                variant="outline"
-                                                className="text-xs"
-                                              >
-                                                {event.connectionType}
-                                              </Badge>
-                                            </div>
-                                          )}
-                                          {event.output && (
-                                            <div className="mt-2">
-                                              <label className="text-xs font-medium">
-                                                Output:
-                                              </label>
-                                              <pre className="bg-muted mt-1 overflow-x-auto rounded p-2 text-xs">
-                                                {event.output}
-                                              </pre>
-                                            </div>
-                                          )}
-                                          {event.errorMessage && (
-                                            <div className="mt-2">
-                                              <label className="text-xs font-medium text-red-600">
-                                                Error:
-                                              </label>
-                                              <pre className="mt-1 overflow-x-auto rounded bg-red-50 p-2 text-xs dark:bg-red-900/20">
-                                                {event.errorMessage}
-                                              </pre>
-                                            </div>
-                                          )}
+                                          <div className="text-muted-foreground text-sm">
+                                            {event.duration
+                                              ? formatDuration(event.duration)
+                                              : "N/A"}
+                                          </div>
                                         </div>
-                                      ),
-                                    )}
+                                        {event.connectionType && (
+                                          <div className="mt-1">
+                                            <Badge
+                                              variant="outline"
+                                              className="text-xs"
+                                            >
+                                              {event.connectionType}
+                                            </Badge>
+                                          </div>
+                                        )}
+                                        {event.output && (
+                                          <div className="mt-2">
+                                            <label className="text-xs font-medium">
+                                              Output:
+                                            </label>
+                                            <pre className="bg-muted mt-1 overflow-x-auto rounded p-2 text-xs">
+                                              {event.output}
+                                            </pre>
+                                          </div>
+                                        )}
+                                        {event.errorMessage && (
+                                          <div className="mt-2">
+                                            <label className="text-xs font-medium text-red-600">
+                                              Error:
+                                            </label>
+                                            <pre className="mt-1 overflow-x-auto rounded bg-red-50 p-2 text-xs dark:bg-red-900/20">
+                                              {event.errorMessage}
+                                            </pre>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
                                   </div>
                                 </div>
                               </div>

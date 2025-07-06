@@ -6,6 +6,12 @@ import EventForm from "@/components/event-form/EventForm";
 import { type Event } from "./types";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/use-toast";
+import {
+  TimeUnit,
+  RunLocation,
+  type ConditionalAction,
+  type ConditionalActionType,
+} from "@/shared/schema";
 
 interface EventEditTabProps {
   event: Event;
@@ -91,13 +97,70 @@ export function EventEditTab({
     }
   };
 
-  // Convert string dates to Date objects to satisfy TypeScript requirements
+  // Convert string dates to Date objects and ensure valid enums
+  const scheduleUnitValue = event.scheduleUnit?.toUpperCase();
+  const validScheduleUnit = Object.values(TimeUnit).includes(
+    scheduleUnitValue as TimeUnit,
+  )
+    ? (scheduleUnitValue as TimeUnit)
+    : TimeUnit.MINUTES;
+
+  const runLocationValue = event.runLocation?.toUpperCase();
+  const validRunLocation = Object.values(RunLocation).includes(
+    runLocationValue as RunLocation,
+  )
+    ? (runLocationValue as RunLocation)
+    : RunLocation.LOCAL;
+
+  // Convert timeoutUnit to proper enum
+  const timeoutUnitValue = event.timeoutUnit?.toUpperCase();
+  const validTimeoutUnit = Object.values(TimeUnit).includes(
+    timeoutUnitValue as TimeUnit,
+  )
+    ? (timeoutUnitValue as TimeUnit)
+    : TimeUnit.SECONDS;
+
+  // Helper function to convert null values to undefined for conditional actions
+  const transformConditionalAction = (
+    action: ConditionalAction,
+  ): {
+    id: number;
+    type: ConditionalActionType;
+    value?: string | undefined;
+    emailSubject?: string | undefined;
+    targetEventId?: number | undefined;
+    toolId?: number | undefined;
+    message?: string | undefined;
+  } => {
+    return {
+      id: action.id,
+      type: action.type,
+      value: action.value ?? undefined,
+      emailSubject: action.emailSubject ?? undefined,
+      targetEventId: action.targetEventId ?? undefined,
+      toolId: action.toolId ?? undefined,
+      message: action.message ?? undefined,
+    };
+  };
+
   const eventWithDateObjects = {
     ...event,
     createdAt: event.createdAt ? new Date(event.createdAt) : new Date(),
     updatedAt: event.updatedAt ? new Date(event.updatedAt) : new Date(),
     lastRunAt: event.lastRunAt ? new Date(event.lastRunAt) : null,
     nextRunAt: event.nextRunAt ? new Date(event.nextRunAt) : null,
+    scheduleUnit: validScheduleUnit,
+    runLocation: validRunLocation,
+    timeoutUnit: validTimeoutUnit,
+    resetCounterOnActive:
+      typeof event.resetCounterOnActive === "string"
+        ? event.resetCounterOnActive === "true"
+        : event.resetCounterOnActive,
+    // Transform conditional actions to convert null to undefined
+    successEvents: event.successEvents?.map(transformConditionalAction),
+    failEvents: event.failEvents?.map(transformConditionalAction),
+    alwaysEvents: event.alwaysEvents?.map(transformConditionalAction),
+    conditionEvents: event.conditionEvents?.map(transformConditionalAction),
   };
 
   return (

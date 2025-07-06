@@ -104,7 +104,7 @@ export function EventsTable({
       // Single server from eventServers array
       const serverId = event.eventServers[0];
       const server = servers.find((s) => s.id === serverId);
-      return server ? server.name : `Server ${serverId}`;
+      return server ? server.name : `Server ${String(serverId)}`;
     }
 
     // Check legacy single serverId field

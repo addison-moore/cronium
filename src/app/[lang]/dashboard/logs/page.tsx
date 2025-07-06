@@ -10,19 +10,12 @@ import WorkflowExecutionHistory from "@/components/workflows/WorkflowExecutionHi
 import { Code, GitFork } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { trpcClient } from "@/lib/trpc";
-import { LogStatus, type Event, type Workflow } from "@/shared/schema";
+import {
+  LogStatus,
+  type Event as DbEvent,
+  type Workflow,
+} from "@/shared/schema";
 import type { LogsResponse } from "@/types/api";
-
-// Simple types for component data
-interface SimpleEvent {
-  id: number;
-  name: string;
-}
-
-interface SimpleWorkflow {
-  id: number;
-  name: string;
-}
 
 export default function LogsPage() {
   const t = useTranslations("Logs");
@@ -88,7 +81,7 @@ export default function LogsPage() {
     }
   };
 
-  const getEvents = async (): Promise<Event[]> => {
+  const getEvents = async (): Promise<DbEvent[]> => {
     try {
       const data = await trpcClient.events.getAll.query({
         limit: 100,

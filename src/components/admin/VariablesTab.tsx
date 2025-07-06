@@ -74,7 +74,7 @@ export function VariablesTab() {
       setDialogOpen(false);
       setEditingVariable(null);
       setFormData({ key: "", value: "", description: "" });
-      refetchVariables();
+      void refetchVariables();
     },
   });
 
@@ -87,7 +87,7 @@ export function VariablesTab() {
       setDialogOpen(false);
       setEditingVariable(null);
       setFormData({ key: "", value: "", description: "" });
-      refetchVariables();
+      void refetchVariables();
     },
   });
 
@@ -97,11 +97,11 @@ export function VariablesTab() {
         title: "Success",
         description: "Variable deleted successfully",
       });
-      refetchVariables();
+      void refetchVariables();
     },
   });
 
-  const variables = variablesData?.variables || [];
+  const variables = variablesData?.variables ?? [];
 
   const handleSaveVariable = async () => {
     if (!formData.key.trim() || !formData.value.trim()) {
@@ -128,7 +128,7 @@ export function VariablesTab() {
     setFormData({
       key: variable.key,
       value: variable.value,
-      description: variable.description || "",
+      description: variable.description ?? "",
     });
     setDialogOpen(true);
   };
@@ -271,7 +271,7 @@ export function VariablesTab() {
                     {variable.value}
                   </TableCell>
                   <TableCell className="max-w-[300px] truncate">
-                    {variable.description || "-"}
+                    {variable.description ?? "-"}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {new Date(variable.updatedAt).toLocaleDateString()}

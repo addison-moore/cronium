@@ -10,7 +10,6 @@ import {
   Shield,
   Clock,
   Database,
-  Settings,
 } from "lucide-react";
 import DocsLayout from "@/components/docs/docs-layout";
 
@@ -23,7 +22,7 @@ function DocSection({
 }: {
   title: string;
   description: string;
-  icon: any;
+  icon: React.ComponentType<{ className?: string; size?: number | string }>;
   link: string;
 }) {
   return (

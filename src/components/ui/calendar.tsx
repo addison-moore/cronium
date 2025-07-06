@@ -37,9 +37,9 @@ function Calendar({
               }
 
               // If the calendar is in single mode, select today's date
-              const calendarProps = props as any; // Use any to avoid TS errors
-              if (calendarProps.onSelect) {
-                calendarProps.onSelect(today);
+              if ("onSelect" in props && typeof props.onSelect === "function") {
+                // @ts-expect-error - onSelect type mismatch with react-day-picker
+                props.onSelect(today, today, {}, new MouseEvent("click"));
               }
             }}
           >

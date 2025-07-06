@@ -10,30 +10,54 @@ import { toast } from "@/components/ui/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { EventStatus, WorkflowTriggerType, RunLocation } from "@/shared/schema";
+import {
+  EventStatus,
+  WorkflowTriggerType,
+  RunLocation,
+  type TimeUnit,
+  ConnectionType,
+} from "@/shared/schema";
 import WorkflowForm, {
   type WorkflowFormValues,
 } from "@/components/workflows/WorkflowForm";
 import type { Node, Edge } from "@xyflow/react";
 import { Spinner } from "@/components/ui/spinner";
 import { trpc } from "@/lib/trpc";
+import type { WorkflowNode, WorkflowEdge } from "@/shared/schemas/workflows";
+
+// Define a more explicit type for the form that handles exact optional properties
+interface WorkflowFormData {
+  name: string;
+  description: string;
+  tags: string[];
+  triggerType: WorkflowTriggerType;
+  runLocation: RunLocation;
+  status: EventStatus;
+  scheduleNumber: number | null;
+  scheduleUnit: string | null;
+  customSchedule: string | null;
+  useCronScheduling: boolean;
+  shared: boolean;
+  overrideEventServers: boolean;
+  overrideServerIds: number[];
+}
 
 // Workflow form schema
 const workflowFormSchema = z.object({
   name: z.string().min(1, { message: "Workflow name is required" }),
-  description: z.string().optional(),
-  tags: z.array(z.string()).optional().default([]),
+  description: z.string(),
+  tags: z.array(z.string()),
   triggerType: z.nativeEnum(WorkflowTriggerType),
   runLocation: z.nativeEnum(RunLocation),
   status: z.nativeEnum(EventStatus),
-  scheduleNumber: z.number().optional().nullable(),
-  scheduleUnit: z.string().optional().nullable(),
-  customSchedule: z.string().optional().nullable(),
-  useCronScheduling: z.boolean().default(false),
-  shared: z.boolean().default(false),
-  overrideEventServers: z.boolean().default(false),
-  overrideServerIds: z.array(z.number()).default([]),
-});
+  scheduleNumber: z.number().nullable(),
+  scheduleUnit: z.string().nullable(),
+  customSchedule: z.string().nullable(),
+  useCronScheduling: z.boolean(),
+  shared: z.boolean(),
+  overrideEventServers: z.boolean(),
+  overrideServerIds: z.array(z.number()),
+}) satisfies z.ZodType<WorkflowFormData>;
 
 export default function EditWorkflowPage() {
   const router = useRouter();
@@ -46,7 +70,7 @@ export default function EditWorkflowPage() {
   const [workflowNodes, setWorkflowNodes] = useState<Node[]>([]);
   const [workflowEdges, setWorkflowEdges] = useState<Edge[]>([]);
 
-  const form = useForm<WorkflowFormValues>({
+  const form = useForm<WorkflowFormData>({
     resolver: zodResolver(workflowFormSchema),
     defaultValues: {
       name: "",
@@ -181,18 +205,93 @@ export default function EditWorkflowPage() {
     },
   });
 
+  // Convert WorkflowFormData to WorkflowFormValues
+  const convertToWorkflowFormValues = (
+    data: WorkflowFormData,
+  ): WorkflowFormValues => {
+    const result: WorkflowFormValues = {
+      name: data.name,
+      triggerType: data.triggerType,
+      runLocation: data.runLocation,
+      status: data.status,
+      useCronScheduling: data.useCronScheduling,
+      shared: data.shared,
+      overrideEventServers: data.overrideEventServers,
+      overrideServerIds: data.overrideServerIds,
+    };
+
+    // Only add optional properties if they have meaningful values
+    if (data.description?.trim()) {
+      result.description = data.description;
+    }
+    if (data.tags?.length > 0) {
+      result.tags = data.tags;
+    }
+    if (data.scheduleNumber !== null) {
+      result.scheduleNumber = data.scheduleNumber;
+    }
+    if (data.scheduleUnit !== null) {
+      result.scheduleUnit = data.scheduleUnit;
+    }
+    if (data.customSchedule !== null) {
+      result.customSchedule = data.customSchedule;
+    }
+
+    return result;
+  };
+
   const onSubmit = async (
-    values: WorkflowFormValues,
+    values: WorkflowFormData,
     nodes: Node[],
     edges: Edge[],
   ) => {
     setIsLoading(true);
     try {
+      const workflowValues = convertToWorkflowFormValues(values);
+      // Transform nodes to match expected type
+      const transformedNodes: WorkflowNode[] = nodes.map((node) => ({
+        id: node.id,
+        type: "eventNode" as const,
+        position: node.position,
+        data: {
+          eventId: node.data.eventId as number,
+          label: node.data.label as string,
+          type: node.data.type as string,
+          eventTypeIcon: node.data.eventTypeIcon as string,
+          description: node.data.description as string | undefined,
+          tags: (node.data.tags as string[]) || [],
+          serverId: node.data.serverId as number | undefined,
+          serverName: node.data.serverName as string | undefined,
+          createdAt: node.data.createdAt as string | undefined,
+          updatedAt: node.data.updatedAt as string | undefined,
+        },
+      }));
+
+      // Transform edges to match expected type
+      const transformedEdges: WorkflowEdge[] = edges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        type: "connectionEdge" as const,
+        animated: edge.animated ?? true,
+        data: {
+          type: (edge.data?.type as ConnectionType) ?? ConnectionType.ALWAYS,
+          connectionType:
+            (edge.data?.connectionType as ConnectionType) ??
+            (edge.data?.type as ConnectionType) ??
+            ConnectionType.ALWAYS,
+        },
+      }));
+
       await updateWorkflowMutation.mutateAsync({
         id: workflowId,
-        ...values,
-        nodes,
-        edges,
+        ...workflowValues,
+        scheduleUnit: workflowValues.scheduleUnit as
+          | TimeUnit
+          | null
+          | undefined,
+        nodes: transformedNodes,
+        edges: transformedEdges,
       });
     } finally {
       setIsLoading(false);
@@ -269,8 +368,30 @@ export default function EditWorkflowPage() {
         </div>
 
         <WorkflowForm
-          form={form}
-          onSubmit={onSubmit}
+          form={form as never}
+          onSubmit={async (
+            values: WorkflowFormValues,
+            nodes: Node[],
+            edges: Edge[],
+          ) => {
+            // Convert WorkflowFormValues back to WorkflowFormData format for our handler
+            const formData: WorkflowFormData = {
+              name: values.name,
+              description: values.description ?? "",
+              tags: values.tags ?? [],
+              triggerType: values.triggerType,
+              runLocation: values.runLocation,
+              status: values.status,
+              scheduleNumber: values.scheduleNumber ?? null,
+              scheduleUnit: values.scheduleUnit ?? null,
+              customSchedule: values.customSchedule ?? null,
+              useCronScheduling: values.useCronScheduling,
+              shared: values.shared,
+              overrideEventServers: values.overrideEventServers,
+              overrideServerIds: values.overrideServerIds,
+            };
+            return onSubmit(formData, nodes, edges);
+          }}
           isLoading={isLoading}
           submitButtonText={t("SaveWorkflow")}
           showActionsAtTop={true}

@@ -10,9 +10,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { key: string } },
 ) {
-  // Safely unwrap params in Next.js 15
-  const unwrappedParams = await params;
-  const webhookKey = unwrappedParams.key;
+  // Get params - they are already unwrapped in Next.js 15
+  const webhookKey = params.key;
 
   try {
     // Find the workflow associated with this webhook key
@@ -47,8 +46,9 @@ export async function POST(
       );
     }
 
-    // Get the webhook payload
-    const payload = await request.json().catch(() => ({}));
+    // Get the webhook payload (note: payload is received but not used in current implementation)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const payload: unknown = await request.json().catch(() => ({}));
 
     console.log(
       `Webhook triggered for workflow ${workflow.id} with key ${webhookKey}`,

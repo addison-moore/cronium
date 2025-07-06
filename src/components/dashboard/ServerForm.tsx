@@ -29,17 +29,17 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { type UpdateServerInput } from "@shared/schemas/servers";
 import { z } from "zod";
 
-// Create a form schema that matches the create schema but with optional sshKey for editing
+// Create a form schema that matches the update schema structure
 const serverFormSchema = z.object({
   name: z.string().min(1, "Server name is required").max(100),
   address: z.string().min(1, "Server address is required").max(255),
   sshKey: z.string().optional(), // Optional for editing, required validation handled in component
-  username: z.string().min(1, "Username is required").max(50).default("root"),
-  port: z.number().int().min(1).max(65535).default(22),
+  username: z.string().min(1, "Username is required").max(50),
+  port: z.number().int().min(1).max(65535),
   description: z.string().max(500).optional(),
-  tags: z.array(z.string()).default([]),
-  shared: z.boolean().default(false),
-  maxConcurrentJobs: z.number().int().min(1).max(100).default(5),
+  tags: z.array(z.string()),
+  shared: z.boolean(),
+  maxConcurrentJobs: z.number().int().min(1).max(100),
 });
 
 // Create form type from the schema
@@ -64,13 +64,16 @@ export default function ServerForm({
   const [sshKeyWarning, setSshKeyWarning] = useState<string | null>(null);
 
   // Default values for the form
-  const defaultValues: Partial<ServerFormInput> = {
+  const defaultValues: ServerFormInput = {
     name: "",
     address: "",
     sshKey: "",
     username: "root",
     port: 22,
+    description: "",
+    tags: [],
     shared: false,
+    maxConcurrentJobs: 5,
   };
 
   // Initialize the form with the provided server data or defaults
@@ -78,12 +81,15 @@ export default function ServerForm({
     resolver: zodResolver(serverFormSchema),
     defaultValues: initialServer
       ? {
-          name: initialServer.name,
-          address: initialServer.address,
+          name: initialServer.name ?? "",
+          address: initialServer.address ?? "",
           sshKey: "", // For security, don't populate the SSH key field when editing
           username: initialServer.username ?? "root",
-          port: initialServer.port ?? 22,
+          port: initialServer.port ? Number(initialServer.port) : 22,
+          description: initialServer.description ?? "",
+          tags: initialServer.tags ?? [],
           shared: initialServer.shared ?? false,
+          maxConcurrentJobs: initialServer.maxConcurrentJobs ?? 5,
         }
       : defaultValues,
   });

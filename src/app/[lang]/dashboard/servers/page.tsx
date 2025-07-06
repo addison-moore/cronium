@@ -274,7 +274,7 @@ export default function ServersPage() {
     {
       label: isCheckingStatus === server.id ? t("Checking") : t("CheckStatus"),
       icon: <CheckCircle className="h-4 w-4" />,
-      onClick: () => checkServerStatus(server.id),
+      onClick: () => void checkServerStatus(server.id),
       disabled: isCheckingStatus === server.id || checkHealthMutation.isPending,
     },
     {
@@ -293,7 +293,7 @@ export default function ServersPage() {
     {
       label: deleteServerMutation.isPending ? "Deleting..." : "Delete Server",
       icon: <Trash2 className="h-4 w-4" />,
-      onClick: () => deleteServer(server.id),
+      onClick: () => void deleteServer(server.id),
       disabled: deleteServerMutation.isPending,
       variant: "destructive",
       separator: true,

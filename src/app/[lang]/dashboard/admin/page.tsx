@@ -173,30 +173,7 @@ export default function AdminPage() {
   });
 
   const users = usersData?.users ?? [];
-  const settings: SystemSettings = systemSettings ?? {
-    smtpHost: undefined,
-    smtpPort: undefined,
-    smtpUser: undefined,
-    smtpPassword: undefined,
-    smtpFromEmail: undefined,
-    smtpFromName: undefined,
-    smtpEnabled: undefined,
-    allowRegistration: undefined,
-    requireAdminApproval: undefined,
-    aiEnabled: undefined,
-    aiModel: undefined,
-    openaiApiKey: undefined,
-    inviteOnly: undefined,
-    maxUsers: undefined,
-    maxEventsPerUser: undefined,
-    maxWorkflowsPerUser: undefined,
-    maxServersPerUser: undefined,
-    enableRegistration: undefined,
-    enableGuestAccess: undefined,
-    defaultUserRole: undefined,
-    sessionTimeout: undefined,
-    logRetentionDays: undefined,
-  };
+  const settings = (systemSettings as SystemSettings) ?? ({} as SystemSettings);
 
   // Fetch roles using tRPC
   const {

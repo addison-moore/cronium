@@ -1,13 +1,13 @@
-import { EventStatus, TimeUnit } from "@/shared/schema";
+import { EventStatus, TimeUnit, type ConditionalAction } from "@/shared/schema";
 import { scheduleJob, RecurrenceRule, gracefulShutdown } from "node-schedule";
 import type { Job as NodeScheduleJob } from "node-schedule";
 import { db } from "@/server/db";
 import { sql } from "drizzle-orm";
-import { storage } from "@/server/storage";
+import { storage, type EventWithRelations } from "@/server/storage";
 import { events } from "@/shared/schema";
 
 // Import modules
-import { executeScript } from "./execute-script";
+import { executeScript, type ExecutionEvent } from "./execute-script";
 import {
   handleSuccessActions,
   handleFailureActions,
@@ -18,36 +18,8 @@ import {
 import { handleExecutionCount } from "./execution-counter";
 
 // Type definitions
-interface EventWithRelations {
-  id: number;
-  name: string | null;
-  description: string | null;
-  type: string;
-  content: string | null;
-  status: EventStatus;
-  shared: boolean;
-  userId: string;
-  serverId: number | null;
-  scheduleNumber: number;
-  scheduleUnit: TimeUnit | null;
-  customSchedule: string | null;
-  startTime: Date | string | null;
-  nextRunAt: Date | null;
-  lastRunAt: Date | null;
-  envVars?: Array<{ key: string; value: string }>;
-  tags?: string[];
-}
 
-interface ConditionalEvent {
-  id: number;
-  type: string;
-  value?: string;
-  targetEventId?: number | null;
-  toolId?: number | null;
-  message?: string | null;
-  emailAddresses?: string | null;
-  emailSubject?: string | null;
-}
+// ConditionalEvent interface removed - using ConditionalAction from schema instead
 
 interface ExecutionData {
   executionTime?: string;
@@ -234,7 +206,7 @@ export class ScriptScheduler {
       const startTimeInFuture = hasStartTime && startDate && startDate > now;
 
       console.log(
-        `Current time: ${now.toISOString()}, Start time in future: ${startTimeInFuture}`,
+        `Current time: ${now.toISOString()}, Start time in future: ${String(startTimeInFuture)}`,
       );
 
       if (startTimeInFuture) {
@@ -402,13 +374,15 @@ export class ScriptScheduler {
             );
             break;
           }
-          default:
+          default: {
+            const exhaustiveCheck: never = event.scheduleUnit;
             console.error(
-              `[${setupId}] Unsupported schedule unit: ${event.scheduleUnit ?? ""}`,
+              `[${setupId}] Unsupported schedule unit: ${String(exhaustiveCheck)}`,
             );
             throw new Error(
-              `Unsupported schedule unit: ${event.scheduleUnit ?? ""}`,
+              `Unsupported schedule unit: ${String(exhaustiveCheck)}`,
             );
+          }
         }
       }
 
@@ -672,7 +646,7 @@ export class ScriptScheduler {
       // Execute the script through the modular function
       // IMPORTANT: Pass this.executingEvents directly to ensure proper tracking
       const result = await executeScript(
-        event,
+        event as ExecutionEvent,
         this.executingEvents, // Pass the actual Set we're tracking
         this.handleSuccessActions.bind(this),
         this.handleFailureActions.bind(this),
@@ -728,7 +702,7 @@ export class ScriptScheduler {
   }
 
   private async processEvent(
-    conditional_event: ConditionalEvent,
+    conditional_event: ConditionalAction,
     event: EventWithRelations,
     isSuccess: boolean,
     executionData?: ExecutionData,
@@ -760,7 +734,7 @@ export class ScriptScheduler {
 
     // Execute directly with the imported function, passing input data and workflowId
     const result = await executeScript(
-      event,
+      event as ExecutionEvent,
       new Set<number>(), // Empty set to avoid double checking
       this.handleSuccessActions.bind(this),
       this.handleFailureActions.bind(this),
@@ -795,7 +769,7 @@ export class ScriptScheduler {
 
     // Execute directly with the imported function
     return executeScript(
-      event,
+      event as ExecutionEvent,
       new Set<number>(), // Empty set to avoid double checking
       this.handleSuccessActions.bind(this),
       this.handleFailureActions.bind(this),

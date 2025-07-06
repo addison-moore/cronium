@@ -39,7 +39,6 @@ import {
   RunLocation,
   TimeUnit,
   EventTriggerType,
-  ConditionalActionType,
   type Event,
   type ConditionalAction,
 } from "@/shared/schema";
@@ -705,7 +704,7 @@ export default function EventForm({
                   type === EventType.PYTHON
                     ? "python"
                     : type === EventType.BASH
-                      ? "shell"
+                      ? "bash"
                       : "javascript"
                 }
                 height="400px"

@@ -34,13 +34,15 @@ const templateSchema = z.object({
 
 interface TemplateFormProps {
   toolType: string;
-  template?: {
-    id?: number;
-    name: string;
-    content: string;
-    subject?: string;
-    isSystemTemplate?: boolean;
-  };
+  template?:
+    | {
+        id?: number;
+        name: string;
+        content: string;
+        subject?: string;
+        isSystemTemplate?: boolean;
+      }
+    | undefined;
   onSubmit: (
     data: z.infer<typeof templateSchema> & { type: string },
   ) => Promise<void>;

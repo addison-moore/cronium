@@ -29,7 +29,7 @@ declare module "next-auth/jwt" {
 
 declare module "next-auth/core/types" {
   interface Session {
-    user: User & {
+    user: {
       id: string;
       email?: string | null;
       username?: string | null;

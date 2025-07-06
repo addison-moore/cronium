@@ -388,7 +388,21 @@ function SlackTemplateManagerTrpc({
           </h4>
           <TemplateForm
             toolType="SLACK"
-            template={editingTemplate}
+            template={
+              editingTemplate
+                ? ({
+                    id: editingTemplate.id,
+                    name: editingTemplate.name,
+                    content: editingTemplate.content,
+                    isSystemTemplate: editingTemplate.isSystemTemplate,
+                  } as {
+                    id?: number;
+                    name: string;
+                    content: string;
+                    isSystemTemplate?: boolean;
+                  })
+                : undefined
+            }
             onSubmit={handleSaveTemplate}
             onCancel={handleCancelEdit}
             showSubjectField={false}
@@ -529,11 +543,13 @@ export const SlackPluginTrpc: ToolPlugin = {
     }
   },
 
-  async send(credentials: Record<string, unknown>, data: SendData) {
+  async send(credentials: Record<string, unknown>, data: unknown) {
+    // Type assertion to ensure data has the expected structure
+    const typedData = data as SendData;
     // Extract trpcClient from credentials if available
     const trpcClient = credentials.trpcClient;
     try {
-      const { message, channel, username, iconEmoji } = data;
+      const { message, channel, username, iconEmoji } = typedData;
 
       if (!message) {
         return {

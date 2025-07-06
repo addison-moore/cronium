@@ -1,11 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import {
-  createTRPCRouter,
-  publicProcedure,
-  withTiming,
-  withRateLimit,
-  withCache,
-} from "../trpc";
+import { createTRPCRouter, publicProcedure } from "../trpc";
 import {
   webhookQuerySchema,
   createWebhookSchema,
@@ -576,8 +570,6 @@ export const webhooksRouter = createTRPCRouter({
 
   // Get webhook execution history
   getExecutionHistory: webhookProcedure
-    .use(withTiming)
-    .use(withCache(30000)) // Cache for 30 seconds
     .input(webhookExecutionHistorySchema)
     .query(async ({ input }) => {
       try {
@@ -626,8 +618,8 @@ export const webhooksRouter = createTRPCRouter({
               bValue = b.responseTime;
               break;
             case "status":
-              aValue = a.status;
-              bValue = b.status;
+              aValue = a.status ?? "";
+              bValue = b.status ?? "";
               break;
             default:
               aValue = a.timestamp;
@@ -663,8 +655,6 @@ export const webhooksRouter = createTRPCRouter({
 
   // Get webhook statistics
   getStats: webhookProcedure
-    .use(withTiming)
-    .use(withCache(60000)) // Cache for 1 minute
     .input(webhookStatsSchema)
     .query(async ({ input }) => {
       try {
@@ -851,9 +841,6 @@ export const webhooksRouter = createTRPCRouter({
 
   // Get webhook monitoring data
   getMonitoring: webhookProcedure
-    .use(withTiming)
-    .use(withRateLimit(100, 60000)) // 100 requests per minute
-    .use(withCache(10000)) // Cache for 10 seconds
     .input(webhookMonitoringSchema)
     .query(async ({ input }) => {
       try {

@@ -56,18 +56,18 @@ export function StatusBadgeRenderer({
 
   // Handle script status badges
   if (type === "script") {
-    switch (status) {
-      case EventStatus.ACTIVE:
+    switch (String(status)) {
+      case String(EventStatus.ACTIVE):
         statusType = "success";
         displayLabel = "Active";
         icon = showIcon ? <Check className="h-3 w-3" /> : null;
         break;
-      case EventStatus.PAUSED:
+      case String(EventStatus.PAUSED):
         statusType = "warning";
         displayLabel = "Paused";
         icon = showIcon ? <Clock className="h-3 w-3" /> : null;
         break;
-      case EventStatus.DRAFT:
+      case String(EventStatus.DRAFT):
         statusType = "pending";
         displayLabel = "Draft";
         break;
@@ -79,33 +79,33 @@ export function StatusBadgeRenderer({
 
   // Handle log status badges
   if (type === "log") {
-    switch (status) {
-      case LogStatus.SUCCESS:
+    switch (String(status)) {
+      case String(LogStatus.SUCCESS):
         statusType = "success";
         displayLabel = "Success";
         icon = showIcon ? <Check className="h-3 w-3" /> : null;
         break;
-      case LogStatus.FAILURE:
+      case String(LogStatus.FAILURE):
         statusType = "failure";
         displayLabel = "Failed";
         icon = showIcon ? <AlertTriangle className="h-3 w-3" /> : null;
         break;
-      case LogStatus.RUNNING:
+      case String(LogStatus.RUNNING):
         statusType = "running";
         displayLabel = "Running";
         icon = showIcon ? <RefreshCw className="h-3 w-3 animate-spin" /> : null;
         break;
-      case LogStatus.PAUSED:
+      case String(LogStatus.PAUSED):
         statusType = "warning";
         displayLabel = "Paused";
         icon = showIcon ? <Clock className="h-3 w-3" /> : null;
         break;
-      case LogStatus.TIMEOUT:
+      case String(LogStatus.TIMEOUT):
         statusType = "warning";
         displayLabel = "Timeout";
         icon = showIcon ? <Clock className="h-3 w-3" /> : null;
         break;
-      case LogStatus.PARTIAL:
+      case String(LogStatus.PARTIAL):
         statusType = "warning";
         displayLabel = "Partial";
         icon = showIcon ? <AlertTriangle className="h-3 w-3" /> : null;
@@ -118,18 +118,18 @@ export function StatusBadgeRenderer({
 
   // Handle workflow trigger type badges
   if (type === "workflow") {
-    switch (status) {
-      case WorkflowTriggerType.SCHEDULE:
+    switch (String(status)) {
+      case String(WorkflowTriggerType.SCHEDULE):
         statusType = "info";
         displayLabel = "Schedule";
         icon = showIcon ? <Calendar className="h-3 w-3" /> : null;
         break;
-      case WorkflowTriggerType.WEBHOOK:
+      case String(WorkflowTriggerType.WEBHOOK):
         statusType = "success";
         displayLabel = "Webhook";
         icon = showIcon ? <Globe className="h-3 w-3" /> : null;
         break;
-      case WorkflowTriggerType.MANUAL:
+      case String(WorkflowTriggerType.MANUAL):
         statusType = "warning";
         displayLabel = "Manual";
         icon = showIcon ? <Hand className="h-3 w-3" /> : null;
@@ -142,13 +142,13 @@ export function StatusBadgeRenderer({
 
   // Handle event type badges
   if (type === "event") {
-    switch (status) {
-      case ConditionalActionType.SEND_MESSAGE:
+    switch (String(status)) {
+      case String(ConditionalActionType.SEND_MESSAGE):
         statusType = "info";
         displayLabel = "Message";
         icon = showIcon ? <Mail className="h-3 w-3" /> : null;
         break;
-      case ConditionalActionType.SCRIPT:
+      case String(ConditionalActionType.SCRIPT):
         statusType = "warning";
         displayLabel = "Script";
         icon = showIcon ? <Code className="h-3 w-3" /> : null;

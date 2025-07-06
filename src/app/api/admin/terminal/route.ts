@@ -33,7 +33,7 @@ const executeCommand = (
       }
       // Handle home directory
       else if (newDir === "~" || newDir.startsWith("~/")) {
-        const homeDir = process.env.HOME || process.env.USERPROFILE || "/";
+        const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? "/";
         targetDir =
           newDir === "~" ? homeDir : path.join(homeDir, newDir.substring(2));
       }
@@ -64,7 +64,7 @@ const executeCommand = (
 
     // For other commands, execute in the current directory
     // Use user's default shell for local execution
-    const userShell = process.env.SHELL || "/bin/bash";
+    const userShell = process.env.SHELL ?? "/bin/bash";
     exec(
       command,
       {
@@ -185,7 +185,7 @@ const getAutocompleteSuggestions = async (
             console.error("Error using compgen:", error);
             throw error; // Use the fallback below
           }
-        } catch (error) {
+        } catch {
           // Fallback when compgen is not available: use common commands list
           console.info(
             "Compgen not available or error occurred, using common commands list",
@@ -274,8 +274,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const userId = session.user.id || "default";
 
     // Get command and current path from request body
-    const { command, currentPath, autocompleteRequest, serverId } =
-      await req.json();
+    const body: unknown = await req.json();
+    const { command, currentPath, autocompleteRequest, serverId } = body as {
+      command?: string;
+      currentPath?: string;
+      autocompleteRequest?: string;
+      serverId?: number;
+    };
 
     // Handle remote server execution
     if (serverId) {
@@ -291,7 +296,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         }
 
         const sessionKey = `${String(userId)}-${String(serverId)}`;
-        const remoteCwd = remoteUserSessions.get(sessionKey) || "~";
+        const remoteCwd = remoteUserSessions.get(sessionKey) ?? "~";
 
         // Handle autocomplete request for remote server
         if (autocompleteRequest) {
@@ -345,11 +350,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             decryptedServer.sshKey,
             server.username,
             server.port,
-            command,
+            String(command),
             remoteCwd,
           );
           // For cd commands, get the actual working directory after execution
-          if (command.trim().startsWith("cd ")) {
+          if (String(command).trim().startsWith("cd ")) {
             try {
               const pwdResult = await terminalSSHService.executeCommand(
                 server.address,
@@ -360,7 +365,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                 remoteCwd,
               );
               if (pwdResult.stdout && !pwdResult.stderr) {
-                newRemoteCwd = pwdResult.stdout.trim();
+                newRemoteCwd = String(pwdResult.stdout).trim();
               }
             } catch (pwdError) {
               console.error(
@@ -409,13 +414,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     // Handle local server execution (existing logic)
-    const cwd = userSessions.get(userId) || currentPath || DEFAULT_DIR;
+    const cwd = userSessions.get(userId) ?? currentPath ?? DEFAULT_DIR;
 
     // Handle autocomplete request
     if (autocompleteRequest) {
       const suggestions = await getAutocompleteSuggestions(
-        autocompleteRequest,
-        cwd,
+        String(autocompleteRequest),
+        String(cwd),
       );
       return NextResponse.json({
         suggestions,
@@ -431,7 +436,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     // Execute the command and get results
-    const { stdout, stderr, cwd: newCwd } = await executeCommand(command, cwd);
+    const {
+      stdout,
+      stderr,
+      cwd: newCwd,
+    } = await executeCommand(String(command), String(cwd));
 
     // Update the current directory in the session
     userSessions.set(userId, newCwd);
@@ -442,10 +451,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     try {
       // Use whoami to get the current user
-      username = execSync("whoami").toString().trim();
+      username = String(execSync("whoami")).trim();
 
       // Use hostname to get the current machine name
-      hostname = execSync("hostname").toString().trim();
+      hostname = String(execSync("hostname")).trim();
     } catch (error) {
       // Fallback values if commands fail
       username = "user";

@@ -94,7 +94,7 @@ export const exampleComponentPatterns = {
 // Example: Optimistic update pattern
 export const optimisticUpdateExample = {
   // Before mutation
-  onMutate: async (newData: Partial<EventOutput>) => {
+  onMutate: async (_newData: Partial<EventOutput>) => {
     // Cancel outgoing refetches
     // await utils.events.getById.cancel({ id: newData.id });
     // Snapshot previous value
@@ -106,7 +106,11 @@ export const optimisticUpdateExample = {
   },
 
   // On error, rollback
-  onError: (err: unknown, newData: Partial<EventOutput>, context: any) => {
+  onError: (
+    _err: unknown,
+    _newData: Partial<EventOutput>,
+    _context: unknown,
+  ) => {
     // utils.events.getById.setData({ id: newData.id }, context?.previousEvent);
   },
 

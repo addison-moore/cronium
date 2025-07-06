@@ -424,9 +424,14 @@ export const eventsRouter = createTRPCRouter({
         }
 
         // Schedule the event
-        const event = await storage.getEvent(input.id);
+        const event = await storage.getEventWithRelations(input.id);
         if (event) {
-          await scheduler.scheduleScript(event);
+          // Apply type assertion to ensure tags is properly typed as string[]
+          const eventWithTypedTags = {
+            ...event,
+            tags: event.tags as string[],
+          };
+          await scheduler.scheduleScript(eventWithTypedTags);
         }
 
         return { success: true };
@@ -489,7 +494,7 @@ export const eventsRouter = createTRPCRouter({
           });
         }
 
-        const event = await storage.getEvent(input.id);
+        const event = await storage.getEventWithRelations(input.id);
         if (!event) {
           throw new TRPCError({
             code: "NOT_FOUND",
@@ -511,6 +516,7 @@ export const eventsRouter = createTRPCRouter({
         const eventWithLogId = {
           ...event,
           existingLogId: log.id,
+          tags: event.tags as string[], // Type assertion since jsonb is typed as unknown
         };
 
         // Execute the event asynchronously
@@ -654,6 +660,12 @@ export const eventsRouter = createTRPCRouter({
               });
             }
             const event = await storage.getEventWithRelations(eventId);
+            if (!event) {
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message: "Event not found",
+              });
+            }
             return {
               format: "json",
               filename: `${event.name}.json`,

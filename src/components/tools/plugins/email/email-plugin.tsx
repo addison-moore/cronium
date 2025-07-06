@@ -333,10 +333,10 @@ function EmailTemplateManager({ toolType }: TemplateManagerProps) {
   interface TemplateFormData {
     name: string;
     content: string;
-    subject?: string;
-    description?: string;
-    variables?: string[];
-    tags?: string[];
+    subject?: string | undefined;
+    description?: string | undefined;
+    variables?: string[] | undefined;
+    tags?: string[] | undefined;
     type: string;
   }
 
@@ -414,7 +414,23 @@ function EmailTemplateManager({ toolType }: TemplateManagerProps) {
           </h4>
           <TemplateForm
             toolType="EMAIL"
-            template={editingTemplate}
+            template={
+              editingTemplate
+                ? ({
+                    id: editingTemplate.id,
+                    name: editingTemplate.name,
+                    content: editingTemplate.content,
+                    subject: editingTemplate.subject ?? undefined,
+                    isSystemTemplate: editingTemplate.isSystemTemplate,
+                  } as {
+                    id?: number;
+                    name: string;
+                    content: string;
+                    subject?: string;
+                    isSystemTemplate?: boolean;
+                  })
+                : undefined
+            }
             onSubmit={handleSaveTemplate}
             onCancel={handleCancelEdit}
             showSubjectField={true}

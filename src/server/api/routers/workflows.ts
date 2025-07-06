@@ -516,7 +516,11 @@ export const workflowsRouter = createTRPCRouter({
     .input(bulkWorkflowOperationSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const results = [];
+        type BulkOperationResult =
+          | { id: number; success: true }
+          | { id: number; success: false; error: string };
+
+        const results: BulkOperationResult[] = [];
 
         for (const workflowId of input.workflowIds) {
           try {
@@ -619,15 +623,12 @@ export const workflowsRouter = createTRPCRouter({
         // Calculate execution statistics
         const totalEvents = events.length;
         const successfulEvents = events.filter(
-          (event) =>
-            event.status === LogStatus.SUCCESS ||
-            event.status === EventStatus.COMPLETED,
+          (event) => event.status === LogStatus.SUCCESS,
         ).length;
         const failedEvents = events.filter(
           (event) =>
             event.status === LogStatus.FAILURE ||
-            event.status === LogStatus.ERROR ||
-            event.status === EventStatus.FAILED,
+            event.status === LogStatus.TIMEOUT,
         ).length;
 
         // Return detailed execution with statistics

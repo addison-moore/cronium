@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { z } from "zod";
 import {
@@ -82,7 +81,6 @@ export default function SettingsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const params = useParams<{ lang: string }>();
   const t = useTranslations("Settings");
 
   // tRPC mutations
