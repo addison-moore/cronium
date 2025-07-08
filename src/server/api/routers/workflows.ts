@@ -13,7 +13,11 @@ import {
   bulkWorkflowOperationSchema,
   workflowDownloadSchema,
 } from "@shared/schemas/workflows";
-import { storage, type WorkflowWithRelations } from "@/server/storage";
+import {
+  storage,
+  type WorkflowWithRelations,
+  type WorkflowExecution,
+} from "@/server/storage";
 import { EventStatus, LogStatus, UserRole } from "@shared/schema";
 
 // Custom procedure that handles auth for tRPC fetch adapter
@@ -401,10 +405,7 @@ export const workflowsRouter = createTRPCRouter({
             hasMore: executions.executions.length === input.limit,
           };
         } else {
-          // Since getWorkflowExecutions doesn't support filtering by userId directly,
-          // we'll need to get all workflows for the user first, then get executions for each
-          // This is a temporary solution - a better approach would be to add a proper method
-          // to the storage interface for getting executions by userId
+          // Get all workflows for the user first
           const userWorkflows = await storage.getAllWorkflows(ctx.userId);
 
           if (userWorkflows.length === 0) {
@@ -414,17 +415,37 @@ export const workflowsRouter = createTRPCRouter({
             };
           }
 
-          // For now, just use the first workflow's ID to get executions
-          // A complete solution would aggregate executions from all workflows
-          const executions = await storage.getWorkflowExecutions(
-            userWorkflows[0]!.id,
-            input.limit,
-            Math.floor(input.offset / input.limit) + 1,
+          // Aggregate executions from all user workflows
+          const allExecutions: WorkflowExecution[] = [];
+          let totalCount = 0;
+
+          // Get executions for each workflow
+          for (const workflow of userWorkflows) {
+            const workflowExecutions = await storage.getWorkflowExecutions(
+              workflow.id,
+              100, // Get more than needed so we can sort and paginate properly
+              1,
+            );
+            allExecutions.push(...workflowExecutions.executions);
+            totalCount += workflowExecutions.total;
+          }
+
+          // Sort all executions by createdAt descending (most recent first)
+          allExecutions.sort((a, b) => {
+            const dateA = new Date(a.createdAt).getTime();
+            const dateB = new Date(b.createdAt).getTime();
+            return dateB - dateA;
+          });
+
+          // Apply pagination
+          const paginatedExecutions = allExecutions.slice(
+            input.offset,
+            input.offset + input.limit,
           );
 
           return {
-            executions,
-            hasMore: executions.executions.length === input.limit,
+            executions: { executions: paginatedExecutions, total: totalCount },
+            hasMore: allExecutions.length > input.offset + input.limit,
           };
         }
       } catch (error: unknown) {

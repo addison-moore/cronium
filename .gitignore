@@ -12,4 +12,7 @@ _duplicates/
 pyproject.toml
 uv.lock
 attached_assets/
-.claude/
+# Claude Code configuration
+.claude/settings.local.json
+.claude/*.log
+.claude/lint-fix-plan.json

@@ -38,6 +38,7 @@ import ServerEventsList from "@/components/dashboard/ServerEventsList";
 import ServerForm from "@/components/dashboard/ServerForm";
 import { ServerDetailsHeader } from "@/components/server-details/ServerDetailsHeader";
 import { trpc } from "@/lib/trpc";
+import { QUERY_OPTIONS } from "@/trpc/shared";
 
 interface ServerDetailsPageProps {
   params: Promise<{ id: string; lang: string }>;
@@ -46,6 +47,9 @@ interface ServerDetailsPageProps {
 export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
   const resolvedParams = use(params);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [systemInfo, setSystemInfo] = useState<any>(null);
+  const [hasCheckedHealth, setHasCheckedHealth] = useState(false);
+  const [isManualCheck, setIsManualCheck] = useState(false);
 
   const router = useRouter();
   const serverId = parseInt(resolvedParams.id);
@@ -57,20 +61,33 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
   });
 
   // tRPC queries and mutations
+  const utils = trpc.useUtils();
   const {
     data: server,
     isLoading,
     refetch: refetchServer,
-  } = trpc.servers.getById.useQuery({ id: serverId }, {});
+  } = trpc.servers.getById.useQuery({ id: serverId }, QUERY_OPTIONS.static);
 
   const checkHealthMutation = trpc.servers.checkHealth.useMutation({
     onSuccess: (data) => {
-      toast({
-        title: data.online ? "Server Online" : "Server Offline",
-        description: `Health check completed at ${new Date(data.lastChecked).toLocaleString()}`,
-        variant: data.online ? "default" : "destructive",
-      });
-      void refetchServer();
+      // Only show toast for manual health checks
+      if (isManualCheck) {
+        toast({
+          title: data.online ? "Server Online" : "Server Offline",
+          description: `Health check completed at ${new Date(data.lastChecked).toLocaleString()}`,
+          variant: data.online ? "default" : "destructive",
+        });
+      }
+      // Store system info from health check
+      if (data.systemInfo) {
+        setSystemInfo(data.systemInfo);
+      }
+      // Only invalidate query for manual checks to avoid infinite loops
+      if (isManualCheck) {
+        void utils.servers.getById.invalidate({ id: serverId });
+      }
+      // Reset manual check flag
+      setIsManualCheck(false);
     },
   });
 
@@ -87,14 +104,17 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
     },
   });
 
-  // Auto-check server status when component mounts if server data exists
+  // Auto-check server status when component mounts
   useEffect(() => {
-    if (server) {
+    if (server && !hasCheckedHealth) {
+      // Always perform health check on page load to get fresh system info
       checkHealthMutation.mutate({ id: serverId });
+      setHasCheckedHealth(true);
     }
-  }, [server]);
+  }, [server, hasCheckedHealth, serverId]);
 
   const checkServerStatus = async () => {
+    setIsManualCheck(true);
     checkHealthMutation.mutate({ id: serverId });
   };
 
@@ -216,7 +236,59 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
           </CardFooter>
         </Card>
 
-        {/* System information temporarily disabled - needs to be fetched from health check data */}
+        {/* System Information Card */}
+        {systemInfo && (
+          <Card>
+            <CardHeader>
+              <CardTitle>System Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {systemInfo.platform && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Platform</p>
+                  <p className="font-medium">{systemInfo.platform}</p>
+                </div>
+              )}
+              {systemInfo.release && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Release</p>
+                  <p className="font-medium">{systemInfo.release}</p>
+                </div>
+              )}
+              {systemInfo.cpuCores && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500">CPU Cores</p>
+                  <p className="font-medium">{systemInfo.cpuCores}</p>
+                </div>
+              )}
+              {systemInfo.totalMemory && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    Total Memory
+                  </p>
+                  <p className="font-medium">{systemInfo.totalMemory}</p>
+                </div>
+              )}
+              {systemInfo.freeMemory && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    Free Memory
+                  </p>
+                  <p className="font-medium">{systemInfo.freeMemory}</p>
+                </div>
+              )}
+              {systemInfo.uptime && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Uptime</p>
+                  <p className="font-medium">
+                    {systemInfo.uptime.days}d {systemInfo.uptime.hours}h{" "}
+                    {systemInfo.uptime.minutes}m
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <Card>

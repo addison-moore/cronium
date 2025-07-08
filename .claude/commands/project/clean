@@ -1,0 +1,29 @@
+Clean project build artifacts and logs
+
+!echo "🧹 Cleaning project artifacts..."
+!echo ""
+
+# Clean Next.js build
+!echo "📦 Cleaning Next.js build..."
+!rm -rf .next
+!echo "✅ .next directory removed"
+
+# Clean logs
+!echo ""
+!echo "📋 Cleaning logs..."
+!rm -f lint.log
+!rm -rf .claude/*.log
+!echo "✅ Log files removed"
+
+# Clean node_modules (optional)
+!echo ""
+!echo "💡 To also clean node_modules, run: rm -rf node_modules && pnpm install"
+
+# Clean TypeScript build info
+!if [ -f tsconfig.tsbuildinfo ]; then
+    rm -f tsconfig.tsbuildinfo
+    echo "✅ TypeScript build info removed"
+fi
+
+!echo ""
+!echo "✨ Project cleaned!"

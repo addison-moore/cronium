@@ -32,6 +32,8 @@ import { ToolPluginRegistry } from "@/components/tools/plugins";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/use-toast";
 import { QUERY_OPTIONS } from "@/trpc/shared";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 interface EditorSettings {
   fontSize: number;
@@ -112,6 +114,8 @@ export default function ConditionalActionsSection({
   onConditionalActionsChange,
 }: ConditionalActionsSectionProps) {
   const { toast } = useToast();
+  const pathname = usePathname();
+  const locale = pathname.split("/")[1] ?? "";
 
   const [conditionalActions, setConditionalActions] = useState<
     ConditionalAction[]
@@ -155,15 +159,26 @@ export default function ConditionalActionsSection({
     QUERY_OPTIONS.static,
   );
 
-  const { data: templatesData } = trpc.integrations.templates.getAll.useQuery(
-    {
-      type: selectedToolType as ToolType,
-    },
-    {
-      enabled: !!selectedToolType,
-      ...QUERY_OPTIONS.static,
-    },
-  );
+  // Get the conditional action ID for the selected tool type
+  const conditionalActionId = useMemo(() => {
+    if (!selectedToolType) return null;
+    const action = ToolPluginRegistry.getConditionalActionForTool(
+      selectedToolType.toLowerCase(),
+    );
+    return action?.id || null;
+  }, [selectedToolType]);
+
+  const { data: templatesData } =
+    trpc.toolActionTemplates.getByToolAction.useQuery(
+      {
+        toolType: selectedToolType || "",
+        actionId: conditionalActionId || "",
+      },
+      {
+        enabled: !!selectedToolType && !!conditionalActionId,
+        ...QUERY_OPTIONS.static,
+      },
+    );
 
   const { data: systemSettings } = trpc.admin.getSystemSettings.useQuery(
     undefined,
@@ -196,19 +211,33 @@ export default function ConditionalActionsSection({
 
   // Memoized computed values to prevent unnecessary re-calculations
   const allTools = useMemo(() => {
+    // Get all tools that have conditional actions
+    const conditionalActions = ToolPluginRegistry.getConditionalActions();
+    const toolTypesWithConditionalActions = new Set(
+      conditionalActions.map((ca) => ca.tool.id.toUpperCase()),
+    );
+
     return (
-      toolsData?.tools?.filter(
-        (tool) =>
-          tool.type === ToolType.EMAIL ||
-          tool.type === ToolType.SLACK ||
-          tool.type === ToolType.DISCORD,
+      toolsData?.tools?.filter((tool) =>
+        toolTypesWithConditionalActions.has(tool.type),
       ) ?? []
     );
   }, [toolsData?.tools]);
 
   const templates = useMemo(() => {
-    return templatesData?.templates ?? [];
-  }, [templatesData?.templates]);
+    return templatesData ?? [];
+  }, [templatesData]);
+
+  // Separate user and system templates
+  const { userTemplates, systemTemplates } = useMemo(() => {
+    const userTemplates = templates.filter(
+      (template) => !template.isSystemTemplate,
+    );
+    const systemTemplates = templates.filter(
+      (template) => template.isSystemTemplate,
+    );
+    return { userTemplates, systemTemplates };
+  }, [templates]);
 
   const credentialsForSelectedTool = useMemo(() => {
     if (!selectedToolType || allTools.length === 0) {
@@ -219,8 +248,13 @@ export default function ConditionalActionsSection({
     );
   }, [selectedToolType, allTools]);
 
-  // All available message types regardless of whether credentials exist
-  const availableToolTypes = useMemo(() => ["EMAIL", "SLACK", "DISCORD"], []);
+  // All available message types based on tools with conditional actions
+  const availableToolTypes = useMemo(() => {
+    const conditionalActions = ToolPluginRegistry.getConditionalActions();
+    return [
+      ...new Set(conditionalActions.map((ca) => ca.tool.id.toUpperCase())),
+    ];
+  }, []);
 
   // Stable callback for parent communication using useRef pattern
   const onConditionalActionsChangeRef = useRef(onConditionalActionsChange);
@@ -259,18 +293,41 @@ export default function ConditionalActionsSection({
         return;
       }
 
-      const template = templates.find((t) => t.id.toString() === templateId);
-      if (template) {
+      // Find template in both user and system templates
+      const allTemplates = [...userTemplates, ...systemTemplates];
+      const template = allTemplates.find((t) => t.id.toString() === templateId);
+      if (template && template.parameters) {
         setSelectedTemplate(templateId);
-        setNewMessage(template.content ?? "");
 
-        // For email templates, also populate subject if available
-        if (selectedToolType === "EMAIL" && template.subject) {
-          setNewEmailSubject(template.subject);
+        // Extract content based on the action's parameter structure
+        const params = template.parameters as Record<string, any>;
+
+        // Get the action to know which field contains the message
+        const action = ToolPluginRegistry.getActionById(template.actionId);
+        if (action) {
+          // For Discord and Slack, use 'content' or 'text' field
+          if (template.toolType === "DISCORD") {
+            setNewMessage(params.content ?? "");
+          } else if (template.toolType === "SLACK") {
+            setNewMessage(params.text ?? params.content ?? "");
+          } else if (template.toolType === "EMAIL") {
+            setNewMessage(params.body ?? "");
+            setNewEmailSubject(params.subject ?? "");
+            setNewEmailAddresses(params.to ?? "");
+          } else {
+            // For other tools, try common field names
+            setNewMessage(
+              params.message ??
+                params.content ??
+                params.text ??
+                params.body ??
+                "",
+            );
+          }
         }
       }
     },
-    [templates, selectedToolType],
+    [userTemplates, systemTemplates],
   );
 
   // Update system SMTP settings when data loads
@@ -805,40 +862,82 @@ export default function ConditionalActionsSection({
               </div>
 
               {/* Templates Dropdown */}
-              {selectedToolType && templates.length > 0 && (
-                <div className="space-y-2">
-                  <Label htmlFor="templateSelection">Template</Label>
-                  <Select
-                    value={selectedTemplate}
-                    onValueChange={handleTemplateSelect}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a template (optional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">
-                        <span className="text-muted-foreground">
-                          No template
-                        </span>
-                      </SelectItem>
-                      {templates.map((template) => (
-                        <SelectItem
-                          key={template.id}
-                          value={template.id.toString()}
-                        >
-                          <div className="flex items-center gap-2">
-                            {getToolTypeIcon(selectedToolType ?? "")}
-                            {template.name}
-                          </div>
+              {selectedToolType &&
+                (userTemplates.length > 0 || systemTemplates.length > 0) && (
+                  <div className="space-y-2">
+                    <Label htmlFor="templateSelection">Template</Label>
+                    <Select
+                      value={selectedTemplate}
+                      onValueChange={handleTemplateSelect}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a template (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">
+                          <span className="text-muted-foreground">
+                            No template
+                          </span>
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-muted-foreground text-xs">
-                    Select a saved template to populate the message content
-                  </p>
-                </div>
-              )}
+
+                        {/* User Templates First */}
+                        {userTemplates.length > 0 && (
+                          <>
+                            {userTemplates.map((template) => (
+                              <SelectItem
+                                key={template.id}
+                                value={template.id.toString()}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {getToolTypeIcon(selectedToolType ?? "")}
+                                  {template.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
+
+                        {/* Separator between user and system templates */}
+                        {userTemplates.length > 0 &&
+                          systemTemplates.length > 0 && (
+                            <div className="border-border my-1 border-t" />
+                          )}
+
+                        {/* System Templates */}
+                        {systemTemplates.length > 0 && (
+                          <>
+                            {systemTemplates.map((template) => (
+                              <SelectItem
+                                key={template.id}
+                                value={template.id.toString()}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {getToolTypeIcon(selectedToolType ?? "")}
+                                  {template.name}
+                                  <Badge
+                                    variant="outline"
+                                    className="ml-auto text-xs"
+                                  >
+                                    System
+                                  </Badge>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-muted-foreground text-xs">
+                      Select a saved template to populate the message content.{" "}
+                      <Link
+                        href={`/${locale}/dashboard/tools/templates`}
+                        className="text-primary hover:underline"
+                      >
+                        Manage templates
+                      </Link>
+                    </p>
+                  </div>
+                )}
 
               {/* Email-specific fields */}
               {selectedToolType === "EMAIL" && (
@@ -881,7 +980,7 @@ export default function ConditionalActionsSection({
                       if (
                         selectedTemplate &&
                         value !==
-                          templates.find(
+                          [...userTemplates, ...systemTemplates].find(
                             (t) => t.id.toString() === selectedTemplate,
                           )?.content
                       ) {

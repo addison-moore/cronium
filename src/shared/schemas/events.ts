@@ -72,6 +72,9 @@ export const createEventSchema = z
     httpHeaders: z.array(httpHeaderSchema).default([]),
     httpBody: z.string().optional(),
 
+    // Tool Action specific fields
+    toolActionConfig: z.string().optional(),
+
     // Status and scheduling
     status: z.nativeEnum(EventStatus).default(EventStatus.DRAFT),
     triggerType: z
@@ -122,8 +125,11 @@ export const createEventSchema = z
   )
   .refine(
     (data) => {
-      // Validate script content for non-HTTP events
-      if (data.type !== EventType.HTTP_REQUEST) {
+      // Validate script content for script events (not HTTP or Tool Actions)
+      if (
+        data.type !== EventType.HTTP_REQUEST &&
+        data.type !== EventType.TOOL_ACTION
+      ) {
         return data.content && data.content.trim().length > 0;
       }
       return true;
@@ -131,6 +137,19 @@ export const createEventSchema = z
     {
       message: "Script content is required for script events",
       path: ["content"],
+    },
+  )
+  .refine(
+    (data) => {
+      // Validate tool action configuration for tool action events
+      if (data.type === EventType.TOOL_ACTION) {
+        return data.toolActionConfig && data.toolActionConfig.trim().length > 0;
+      }
+      return true;
+    },
+    {
+      message: "Tool action configuration is required for tool action events",
+      path: ["toolActionConfig"],
     },
   )
   .refine(
@@ -176,6 +195,7 @@ export const updateEventSchema = z.object({
   httpUrl: z.string().url().optional(),
   httpHeaders: z.array(httpHeaderSchema).optional(),
   httpBody: z.string().optional(),
+  toolActionConfig: z.string().optional(),
   status: z.nativeEnum(EventStatus).optional(),
   triggerType: z.nativeEnum(EventTriggerType).optional(),
   scheduleNumber: z.number().min(1).optional(),

@@ -12,7 +12,7 @@ import {
   GitFork,
   Server,
 } from "lucide-react";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 
@@ -42,6 +42,10 @@ interface DashboardStats {
 export default function DashboardStats() {
   const t = useTranslations();
   const locale = useLocale();
+
+  // Pagination state for Recent Activity
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // tRPC queries
   const {
@@ -84,9 +88,32 @@ export default function DashboardStats() {
       })) ?? [],
   };
 
+  // Use the total activity count from the API if available
+  const totalActivityCount =
+    (dashboardData?.totalActivityCount as number | undefined) ??
+    stats.recentActivity.length;
+
   const refreshData = useCallback(async () => {
     await refetchDashboard();
   }, [refetchDashboard]);
+
+  // Calculate pagination values
+  const totalItems = totalActivityCount;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedActivity = stats.recentActivity.slice(startIndex, endIndex);
+
+  // Handle page change
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+  };
+
+  // Handle page size change
+  const handlePageSizeChange = (newSize: number) => {
+    setItemsPerPage(newSize);
+    setCurrentPage(1); // Reset to first page when changing page size
+  };
 
   // Stat cards for displaying statistics
   const statsCards = [
@@ -192,7 +219,7 @@ export default function DashboardStats() {
           t("Dashboard.RecentActivity.Description") ??
           "Recent event and workflow executions"
         }
-        data={stats.recentActivity.map((activity) => ({
+        data={paginatedActivity.map((activity) => ({
           id: activity.id,
           eventId: activity.eventId,
           eventName: activity.eventName,
@@ -208,6 +235,13 @@ export default function DashboardStats() {
         emptyStateMessage={
           t("Dashboard.RecentActivity.EmptyState") ?? "No recent activity"
         }
+        showPagination={true}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={handlePageChange}
+        itemsPerPage={itemsPerPage}
+        totalItems={totalItems}
+        onPageSizeChange={handlePageSizeChange}
       />
       {error && (
         <p className="text-red-500">

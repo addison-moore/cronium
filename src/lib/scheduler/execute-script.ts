@@ -12,6 +12,7 @@ import { storage, type EventWithRelations } from "@/server/storage";
 import { executeHttpRequest } from "./http-executor";
 import { executeLocalScript } from "./local-executor";
 import { scriptExecutorSSHService } from "@/lib/ssh/script-executor";
+import { executeToolAction } from "./tool-action-executor";
 
 interface ScriptExecutionResult {
   success: boolean;
@@ -638,6 +639,32 @@ async function executeSingleScript(
         const error = err as Error;
         console.error(
           `Error executing HTTP request for script ${event.id}:`,
+          error,
+        );
+        throw error;
+      }
+    } else if (event.type === EventType.TOOL_ACTION) {
+      // Execute tool action
+      try {
+        console.log(
+          `Executing tool action ${event.id}: ${event.name} with timeout: ${timeoutMs}ms`,
+        );
+
+        const toolActionResult = await executeToolAction(event, input);
+        result = {
+          stdout: toolActionResult.stdout,
+          stderr: toolActionResult.stderr,
+        };
+
+        if (toolActionResult.exitCode !== 0) {
+          throw new Error(
+            `Tool action failed with exit code ${toolActionResult.exitCode}: ${toolActionResult.stderr}`,
+          );
+        }
+      } catch (err) {
+        const error = err as Error;
+        console.error(
+          `Error executing tool action for script ${event.id}:`,
           error,
         );
         throw error;

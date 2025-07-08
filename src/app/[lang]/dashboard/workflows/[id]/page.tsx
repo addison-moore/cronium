@@ -256,7 +256,7 @@ export default function WorkflowDetailsPage({
 
   // Fetch execution statistics
   const { data: executionsData } = trpc.workflows.getExecutions.useQuery(
-    { id: workflowId, limit: 1000, offset: 0 },
+    { id: workflowId, limit: 100, offset: 0 },
     {
       enabled: !isNaN(workflowId),
     },
@@ -326,7 +326,7 @@ export default function WorkflowDetailsPage({
 
   // Use tRPC query for events
   const { data: eventsData, isLoading: isLoadingEvents } =
-    trpc.events.getAll.useQuery({ limit: 1000, offset: 0 });
+    trpc.events.getAll.useQuery({ limit: 100, offset: 0 });
 
   // Handle events data
   useEffect(() => {

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
-import EventForm from "@/components/event-form/EventForm";
+import ImprovedEventForm from "@/components/event-form/ImprovedEventForm";
 import { type Event } from "./types";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/use-toast";
@@ -165,7 +165,7 @@ export function EventEditTab({
 
   return (
     <div className="space-y-4">
-      <EventForm
+      <ImprovedEventForm
         initialData={eventWithDateObjects}
         isEditing={true}
         eventId={event.id}

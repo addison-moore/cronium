@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   GitFork,
   LayoutPanelTop,
+  Zap,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
@@ -99,6 +100,11 @@ export default function DashboardLayout({
       name: t("Dashboard.Servers"),
       href: `/${locale}/dashboard/servers`,
       icon: <Server className="h-5 w-5" />,
+    },
+    {
+      name: "Tools",
+      href: `/${locale}/dashboard/tools`,
+      icon: <Zap className="h-5 w-5" />,
     },
     {
       name: t("Dashboard.Settings"),

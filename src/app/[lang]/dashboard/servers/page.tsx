@@ -74,7 +74,7 @@ export default function ServersPage() {
     refetch: refetchServers,
   } = trpc.servers.getAll.useQuery(
     {
-      limit: 1000, // Get all servers for client-side filtering
+      limit: 100, // Get all servers for client-side filtering
       offset: 0,
       search: filters.searchTerm ?? undefined,
       online:

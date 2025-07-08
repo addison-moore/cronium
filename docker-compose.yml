@@ -1,0 +1,76 @@
+version: "3.8"
+
+services:
+  # Main Cronium application
+  cronium:
+    build: .
+    container_name: cronium-app
+    ports:
+      - "5001:5001" # Next.js app
+      - "3001:3001" # WebSocket server
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:5001}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      # Local execution container configuration
+      LOCAL_EXEC_CONTAINER: cronium-executor
+      LOCAL_EXEC_NETWORK: cronium-network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro # Docker access for container management
+      - cronium-data:/data
+    networks:
+      - cronium-network
+    depends_on:
+      - executor
+    restart: unless-stopped
+
+  # Local execution container
+  executor:
+    build:
+      context: ./docker/executor
+      dockerfile: Dockerfile
+    container_name: cronium-executor
+    hostname: local-executor
+    environment:
+      EXECUTOR_MODE: container
+      EXECUTOR_ID: local-001
+    volumes:
+      - executor-tmp:/tmp
+      - executor-workspace:/workspace
+    networks:
+      - cronium-network
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE # File operations
+      - CHOWN # Change file ownership
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:./docker/executor/seccomp-profile.json
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M,mode=1777
+      - /var/tmp:size=50M,mode=1777
+    restart: unless-stopped
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+volumes:
+  cronium-data:
+  executor-tmp:
+  executor-workspace:
+
+networks:
+  cronium-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
