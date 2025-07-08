@@ -2,6 +2,95 @@ import { type LucideIcon } from "lucide-react";
 import { type z } from "zod";
 import { type Tool } from "@/shared/schema";
 
+// Tool Action Types
+export type ActionType = "create" | "update" | "search" | "delete";
+export type DevelopmentMode = "visual" | "code";
+
+// Tool Action Interface
+export interface ToolAction {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  actionType: ActionType;
+
+  // Development mode support
+  developmentMode: DevelopmentMode;
+
+  // Schemas for validation
+  inputSchema: z.ZodSchema<any>;
+  outputSchema: z.ZodSchema<any>;
+
+  // Execution
+  execute: (
+    credentials: any,
+    params: any,
+    context: ExecutionContext,
+  ) => Promise<any>;
+
+  // Testing support
+  testData?: () => any;
+  validate?: (params: any) => { isValid: boolean; errors?: string[] };
+
+  // UI configuration
+  formConfig?: VisualFormConfig;
+  helpText?: string;
+  examples?: ActionExample[];
+
+  // Flag to indicate if this action can be used as a conditional action
+  isConditionalAction?: boolean;
+}
+
+// Execution Context
+export interface ExecutionContext {
+  variables: VariableManager;
+  logger: Logger;
+  onProgress?: (progress: { step: string; percentage: number }) => void;
+  onPartialResult?: (result: any) => void;
+  isTest?: boolean;
+  mockData?: any;
+}
+
+// Supporting Interfaces
+export interface VisualFormConfig {
+  fields: FormFieldConfig[];
+}
+
+export interface FormFieldConfig {
+  name: string;
+  type:
+    | "text"
+    | "number"
+    | "select"
+    | "textarea"
+    | "boolean"
+    | "array"
+    | "object";
+  label: string;
+  placeholder?: string;
+  required?: boolean;
+  options?: { value: string; label: string }[];
+}
+
+export interface ActionExample {
+  name: string;
+  description: string;
+  input: Record<string, any>;
+  output: Record<string, any>;
+}
+
+export interface VariableManager {
+  get: (key: string) => any;
+  set: (key: string, value: any) => void;
+}
+
+export interface Logger {
+  info: (message: string) => void;
+  warn: (message: string) => void;
+  error: (message: string) => void;
+  debug: (message: string) => void;
+}
+
 // Base interface for all tool plugins
 export interface ToolPlugin {
   // Plugin metadata
@@ -20,7 +109,12 @@ export interface ToolPlugin {
   CredentialDisplay: React.ComponentType<CredentialDisplayProps>;
   TemplateManager?: React.ComponentType<TemplateManagerProps>;
 
-  // Plugin actions
+  // Tool Actions (new)
+  actions: ToolAction[];
+  getActionById: (id: string) => ToolAction | undefined;
+  getActionsByType: (type: ActionType) => ToolAction[];
+
+  // Plugin actions (legacy - maintained for compatibility)
   validate?: (
     credentials: Record<string, unknown>,
   ) => Promise<{ isValid: boolean; error?: string }>;
@@ -86,6 +180,68 @@ export class ToolPluginRegistry {
       Array.from(this.plugins.values()).map((plugin) => plugin.category),
     );
     return Array.from(categories).sort();
+  }
+
+  // New action-related methods
+  static getAllActions(): ToolAction[] {
+    return Array.from(this.plugins.values()).flatMap(
+      (plugin) => plugin.actions || [],
+    );
+  }
+
+  static getActionsByCategory(category: string): ToolAction[] {
+    return this.getAllActions().filter(
+      (action) => action.category === category,
+    );
+  }
+
+  static getActionsByType(actionType: ActionType): ToolAction[] {
+    return this.getAllActions().filter(
+      (action) => action.actionType === actionType,
+    );
+  }
+
+  static getActionById(actionId: string): ToolAction | undefined {
+    for (const plugin of this.plugins.values()) {
+      const action = plugin.getActionById?.(actionId);
+      if (action) return action;
+    }
+    return undefined;
+  }
+
+  // Get all actions that can be used as conditional actions
+  static getConditionalActions(): Array<{
+    tool: ToolPlugin;
+    action: ToolAction;
+  }> {
+    const conditionalActions: Array<{ tool: ToolPlugin; action: ToolAction }> =
+      [];
+
+    this.plugins.forEach((plugin) => {
+      plugin.actions.forEach((action) => {
+        if (action.isConditionalAction) {
+          conditionalActions.push({ tool: plugin, action });
+        }
+      });
+    });
+
+    return conditionalActions;
+  }
+
+  // Get conditional action for a specific tool type
+  static getConditionalActionForTool(toolType: string): ToolAction | undefined {
+    const plugin = this.plugins.get(toolType.toLowerCase());
+    if (!plugin) return undefined;
+
+    return plugin.actions.find((action) => action.isConditionalAction);
+  }
+
+  // Check if a tool has any conditional actions
+  static hasConditionalActions(toolType: string): boolean {
+    const plugin = this.plugins.get(toolType.toLowerCase());
+    if (!plugin) return false;
+
+    return plugin.actions.some((action) => action.isConditionalAction);
   }
 
   static unregister(id: string) {

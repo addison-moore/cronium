@@ -7,7 +7,7 @@ import { z } from "zod";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings, ChevronRight } from "lucide-react";
+import { Settings, ChevronRight, Plus, Zap, Search } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
@@ -35,6 +35,9 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { ToolHealthBadge } from "./ToolHealthIndicator";
+import { ToolErrorDiagnostics } from "./ToolErrorDiagnostics";
+import Link from "next/link";
 
 // Create dynamic schema based on tool type
 const createTemplateSchema = (toolType: string) => {
@@ -177,11 +180,12 @@ export function ModularToolsManager() {
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
   const [editingTool, setEditingTool] = useState<Tool | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<"credentials" | "templates">(
-    "credentials",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "credentials" | "templates" | "actions"
+  >("credentials");
   const [showAddForm, setShowAddForm] = useState(false);
   const [showAddTemplateForm, setShowAddTemplateForm] = useState(false);
+  const [toolSearchQuery, setToolSearchQuery] = useState("");
   const { toast } = useToast();
 
   // tRPC queries and mutations
@@ -190,12 +194,6 @@ export function ModularToolsManager() {
     isLoading,
     refetch: refetchTools,
   } = trpc.tools.getAll.useQuery({ limit: 100 });
-
-  // Get tool stats
-  const { data: statsData } = trpc.tools.getStats.useQuery({
-    period: "month",
-    groupBy: "type",
-  });
 
   const createToolMutation = trpc.tools.create.useMutation({
     onSuccess: () => {
@@ -358,25 +356,34 @@ export function ModularToolsManager() {
       .filter((tool) => tool.type.toLowerCase() === pluginId.toLowerCase())
       .map((tool) => ({
         ...tool,
-        // Convert credentials object to string for CredentialDisplay component
-        credentials:
-          typeof tool.credentials === "string"
-            ? tool.credentials
-            : JSON.stringify(tool.credentials),
+        // Keep credentials as-is, don't stringify if already an object
+        credentials: tool.credentials,
       }));
   };
 
   const allPlugins = ToolPluginRegistry.getAll();
+
+  // Filter plugins based on search query
+  const filteredPlugins = allPlugins.filter((plugin) => {
+    if (!toolSearchQuery) return true;
+    const searchLower = toolSearchQuery.toLowerCase();
+    return (
+      plugin.name.toLowerCase().includes(searchLower) ||
+      plugin.description.toLowerCase().includes(searchLower) ||
+      plugin.category?.toLowerCase().includes(searchLower)
+    );
+  });
+
   const selectedPluginInstance = selectedTool
     ? ToolPluginRegistry.get(selectedTool)
     : null;
 
   // Auto-select first tool if none selected
   useEffect(() => {
-    if (!selectedTool && allPlugins.length > 0 && allPlugins[0]) {
-      setSelectedTool(allPlugins[0].id);
+    if (!selectedTool && filteredPlugins.length > 0 && filteredPlugins[0]) {
+      setSelectedTool(filteredPlugins[0].id);
     }
-  }, [selectedTool, allPlugins]);
+  }, [selectedTool, filteredPlugins]);
 
   if (isLoading) {
     return (
@@ -391,59 +398,37 @@ export function ModularToolsManager() {
 
   return (
     <div className="space-y-4">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Tools</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {statsData?.totalTools ?? tools.length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Active Tools</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {statsData?.activeTools ?? tools.filter((t) => t.isActive).length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Inactive Tools
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {statsData?.inactiveTools ??
-                tools.filter((t) => !t.isActive).length}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="flex min-h-[calc(100vh-240px)] flex-col gap-3 lg:flex-row">
+      <div className="flex min-h-[calc(100vh-200px)] flex-col gap-3 lg:flex-row">
         {/* Integration List - Top on small screens, Right Side on large screens */}
         <div className="order-1 w-full flex-shrink-0 overflow-hidden lg:order-2 lg:w-80">
-          <Card className="h-60 lg:h-full lg:min-h-[calc(100vh-240px)]">
+          <Card className="h-60 lg:h-full lg:min-h-[calc(100vh-200px)]">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Settings size={20} />
                 Available Tools
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-0">
-              <div className="h-48 space-y-1 overflow-y-auto lg:h-[calc(100vh-320px)]">
-                {allPlugins.map((plugin) => {
+            <CardContent className="space-y-3">
+              {/* Search bar */}
+              <div className="relative">
+                <Input
+                  placeholder="Search tools..."
+                  value={toolSearchQuery}
+                  onChange={(e) => setToolSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                  <Search className="text-muted-foreground h-4 w-4" />
+                </div>
+              </div>
+              {/* Tools list */}
+              <div className="h-40 space-y-1 overflow-y-auto lg:h-[calc(100vh-380px)]">
+                {filteredPlugins.map((plugin) => {
                   const Icon = plugin.icon;
                   const pluginTools = getFilteredTools(plugin.id);
                   const isSelected = selectedTool === plugin.id;
+
+                  const actionCount = plugin.actions?.length || 0;
 
                   return (
                     <div
@@ -461,10 +446,16 @@ export function ModularToolsManager() {
                         <div className="truncate font-medium">
                           {plugin.name}
                         </div>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-2">
                           <div className="text-muted-foreground text-xs">
-                            {pluginTools.length} configured
+                            {pluginTools.length} credential
+                            {pluginTools.length !== 1 ? "s" : ""}
                           </div>
+                          {actionCount > 0 && (
+                            <Badge variant="secondary" className="text-xs">
+                              {actionCount} action{actionCount !== 1 ? "s" : ""}
+                            </Badge>
+                          )}
                           {pluginTools.some((t) => t.isActive) && (
                             <Badge
                               variant="outline"
@@ -484,6 +475,14 @@ export function ModularToolsManager() {
                     </div>
                   );
                 })}
+                {filteredPlugins.length === 0 && toolSearchQuery && (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <Search className="text-muted-foreground mb-2 h-8 w-8" />
+                    <p className="text-muted-foreground text-sm">
+                      No tools found matching "{toolSearchQuery}"
+                    </p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -492,7 +491,7 @@ export function ModularToolsManager() {
         {/* Integration Details Panel - Bottom on small screens, Left Side on large screens */}
         <div className="order-2 min-h-0 flex-1 lg:order-1">
           {selectedPluginInstance ? (
-            <Card className="flex h-full flex-col lg:min-h-[calc(100vh-240px)]">
+            <Card className="flex h-full flex-col lg:min-h-[calc(100vh-200px)]">
               <CardHeader className="flex-shrink-0 pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -515,13 +514,16 @@ export function ModularToolsManager() {
                 <Tabs
                   value={activeTab}
                   onValueChange={(value) =>
-                    setActiveTab(value as "credentials" | "templates")
+                    setActiveTab(
+                      value as "credentials" | "templates" | "actions",
+                    )
                   }
                   className="flex h-full flex-col"
                 >
-                  <TabsList className="grid w-full flex-shrink-0 grid-cols-2">
+                  <TabsList className="grid w-full flex-shrink-0 grid-cols-3">
                     <TabsTrigger value="credentials">Credentials</TabsTrigger>
                     <TabsTrigger value="templates">Templates</TabsTrigger>
+                    <TabsTrigger value="actions">Actions</TabsTrigger>
                   </TabsList>
 
                   <TabsContent
@@ -574,9 +576,20 @@ export function ModularToolsManager() {
                             <h3 className="text-lg font-medium">
                               {selectedPluginInstance.name} Credentials
                             </h3>
-                            <Button onClick={handleAddTool}>
-                              Add New Credential
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              {selectedPluginInstance.actions &&
+                                selectedPluginInstance.actions.length > 0 && (
+                                  <Link href="/dashboard/events/new?type=TOOL_ACTION">
+                                    <Button variant="outline" size="sm">
+                                      <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                      Create Event
+                                    </Button>
+                                  </Link>
+                                )}
+                              <Button onClick={handleAddTool}>
+                                Add New Credential
+                              </Button>
+                            </div>
                           </div>
                           <div>
                             {getFilteredTools(selectedPluginInstance.id)
@@ -594,6 +607,18 @@ export function ModularToolsManager() {
                               </div>
                             )}
                           </div>
+                          {getFilteredTools(selectedPluginInstance.id).length >
+                            0 && (
+                            <div className="mt-4">
+                              <ToolErrorDiagnostics
+                                toolId={
+                                  getFilteredTools(selectedPluginInstance.id)[0]
+                                    ?.id
+                                }
+                                compact
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -632,6 +657,88 @@ export function ModularToolsManager() {
                       ) : (
                         <div className="text-muted-foreground py-8 text-center">
                           Templates not available for this tool type
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent
+                    value="actions"
+                    className="mt-4 flex-1 overflow-hidden"
+                  >
+                    <div className="h-full space-y-4 overflow-y-auto p-1">
+                      {selectedPluginInstance.actions &&
+                      selectedPluginInstance.actions.length > 0 ? (
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-medium">
+                              Available Actions
+                            </h3>
+                            <Badge variant="secondary" className="text-xs">
+                              {selectedPluginInstance.actions.length} action
+                              {selectedPluginInstance.actions.length !== 1
+                                ? "s"
+                                : ""}
+                            </Badge>
+                          </div>
+
+                          <div className="grid gap-3">
+                            {selectedPluginInstance.actions.map((action) => (
+                              <div
+                                key={action.id}
+                                className="border-border hover:bg-muted/50 rounded-lg border p-4 transition-colors"
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="font-medium">
+                                        {action.name}
+                                      </h4>
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs"
+                                      >
+                                        {action.actionType}
+                                      </Badge>
+                                    </div>
+                                    <p className="text-muted-foreground mt-1 text-sm">
+                                      {action.description}
+                                    </p>
+                                    {action.category && (
+                                      <div className="mt-2">
+                                        <Badge
+                                          variant="secondary"
+                                          className="text-xs"
+                                        >
+                                          {action.category}
+                                        </Badge>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Link
+                                      href={`/dashboard/events/new?type=TOOL_ACTION&toolType=${selectedPluginInstance.id}&actionId=${action.id}`}
+                                    >
+                                      <Button size="sm" variant="outline">
+                                        <Plus className="mr-1 h-3 w-3" />
+                                        Use
+                                      </Button>
+                                    </Link>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                          <Zap className="text-muted-foreground mb-4 h-12 w-12" />
+                          <h3 className="text-lg font-medium">
+                            No Actions Available
+                          </h3>
+                          <p className="text-muted-foreground text-sm">
+                            This tool doesn't have any available actions
+                          </p>
                         </div>
                       )}
                     </div>

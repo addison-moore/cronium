@@ -143,64 +143,8 @@ export const bulkSendSchema = z.object({
   stopOnError: z.boolean().default(false),
 });
 
-// Template schemas
-export const templateQuerySchema = z.object({
-  type: z.enum(["EMAIL", "SLACK", "DISCORD", "WEBHOOK", "HTTP"]),
-  includeSystem: z.boolean().default(true),
-  includeUser: z.boolean().default(true),
-  search: z.string().optional(),
-  limit: z.number().min(1).max(100).default(20),
-  offset: z.number().min(0).default(0),
-});
-
-export const createTemplateSchema = z.object({
-  name: z
-    .string()
-    .min(1, "Template name is required")
-    .max(100, "Name must be less than 100 characters"),
-  type: z.enum(["EMAIL", "SLACK", "DISCORD", "WEBHOOK", "HTTP"]),
-  content: z.string().min(1, "Template content is required"),
-  subject: z.string().optional(), // For email templates
-  description: z
-    .string()
-    .max(500, "Description must be less than 500 characters")
-    .optional(),
-  variables: z
-    .array(
-      z.object({
-        name: z.string().min(1),
-        description: z.string().optional(),
-        required: z.boolean().default(false),
-        defaultValue: z.string().optional(),
-      }),
-    )
-    .default([]),
-  isSystemTemplate: z.boolean().default(false),
-  tags: z.array(z.string()).default([]),
-});
-
-export const updateTemplateSchema = z.object({
-  id: z.number().int().positive("Template ID must be a positive integer"),
-  name: z.string().min(1).max(100).optional(),
-  content: z.string().min(1).optional(),
-  subject: z.string().optional(),
-  description: z.string().max(500).optional(),
-  variables: z
-    .array(
-      z.object({
-        name: z.string().min(1),
-        description: z.string().optional(),
-        required: z.boolean().default(false),
-        defaultValue: z.string().optional(),
-      }),
-    )
-    .optional(),
-  tags: z.array(z.string()).optional(),
-});
-
-export const templateIdSchema = z.object({
-  id: z.number().int().positive("Template ID must be a positive integer"),
-});
+// OLD TEMPLATE SCHEMAS - REMOVED
+// These have been replaced by the tool action templates system
 
 // Message history and tracking schemas
 export const messageHistorySchema = z.object({

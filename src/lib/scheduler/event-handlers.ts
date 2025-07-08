@@ -1,26 +1,20 @@
 import { storage, type EventWithRelations } from "@/server/storage";
-import { sendEmail } from "@/lib/email";
 import {
   templateProcessor,
   createTemplateContext,
 } from "@/lib/template-processor";
 import type { ConditionalAction } from "@/shared/schema";
-import { ConditionalActionType } from "@/shared/schema";
+import { ConditionalActionType, EventType } from "@/shared/schema";
+import {
+  executeToolAction,
+  type ToolActionConfig,
+} from "./tool-action-executor";
 
 interface ExecutionData {
   executionTime?: string;
   duration?: number;
   output?: string;
   error?: string;
-}
-
-interface SmtpCredentials {
-  host: string;
-  port: number;
-  user: string;
-  password: string;
-  fromEmail: string;
-  fromName: string;
 }
 
 type ProcessEventCallback = (
@@ -231,331 +225,157 @@ export async function processEvent(
       });
 
       try {
-        let credentials: SmtpCredentials | Record<string, unknown>;
-        let toolType: string;
-
-        if (conditional_event.toolId === null) {
-          // Use system SMTP settings
-          const { getSmtpSettings } = await import("@/lib/email");
-          const systemSmtp = await getSmtpSettings();
-
-          if (!systemSmtp.enabled) {
-            console.error("System SMTP is not enabled for SEND_MESSAGE event");
-            return;
-          }
-
-          credentials = {
-            host: systemSmtp.host,
-            port: systemSmtp.port,
-            user: systemSmtp.user,
-            password: systemSmtp.password,
-            fromEmail: systemSmtp.fromEmail,
-            fromName: systemSmtp.fromName,
-          };
-          toolType = "EMAIL";
-        } else {
-          // Get the tool credentials using direct database query
-          const { db } = await import("@/server/db");
-          const { toolCredentials } = await import("@/shared/schema");
-          const { eq } = await import("drizzle-orm");
-          const { encryptionService } = await import(
-            "@/lib/encryption-service"
-          );
-
-          const toolResults = await db
-            .select()
-            .from(toolCredentials)
-            .where(eq(toolCredentials.id, conditional_event.toolId));
-
-          const tool = toolResults[0];
-          if (!tool) {
-            console.error(
-              `Tool ${String(conditional_event.toolId)} not found for SEND_MESSAGE event`,
-            );
-            return;
-          }
-
-          // Decrypt credentials
-          credentials = JSON.parse(
-            encryptionService.decrypt(tool.credentials),
-          ) as Record<string, unknown>;
-          toolType = tool.type;
+        // First check if we have a tool ID
+        if (!conditional_event.toolId) {
+          console.error("No tool ID specified for SEND_MESSAGE event");
+          return;
         }
 
-        // Handle email sending directly without plugin system
-        if (toolType === "EMAIL") {
-          const recipients = conditional_event.emailAddresses ?? "";
+        // Get the tool from database to determine its type
+        const { db } = await import("@/server/db");
+        const { toolCredentials } = await import("@/shared/schema");
+        const { eq } = await import("drizzle-orm");
+
+        const toolResults = await db
+          .select()
+          .from(toolCredentials)
+          .where(eq(toolCredentials.id, conditional_event.toolId));
+
+        const tool = toolResults[0];
+        if (!tool) {
+          console.error(
+            `Tool ${String(conditional_event.toolId)} not found for SEND_MESSAGE event`,
+          );
+          return;
+        }
+
+        // Import the tool plugin registry to find the appropriate action
+        const { ToolPluginRegistry } = await import(
+          "@/components/tools/types/tool-plugin"
+        );
+
+        // Get the conditional action for this tool type
+        const conditionalAction =
+          ToolPluginRegistry.getConditionalActionForTool(
+            tool.type.toLowerCase(),
+          );
+
+        if (!conditionalAction) {
+          console.error(
+            `Tool type ${tool.type} does not support conditional actions`,
+          );
+          return;
+        }
+
+        // Get user variables for template context
+        const userVariables = await storage.getUserVariables(event.userId);
+        const variablesMap = userVariables.reduce(
+          (acc, v) => {
+            acc[v.key] = v.value;
+            return acc;
+          },
+          {} as Record<string, unknown>,
+        );
+
+        // Create template context with cronium data
+        const eventData: Parameters<typeof createTemplateContext>[0] = {
+          id: event.id,
+          name: event.name,
+          status: isSuccess ? "success" : "failure",
+          executionTime:
+            executionData?.executionTime ?? new Date().toISOString(),
+          server:
+            typeof event.server === "string"
+              ? event.server
+              : (event.server?.name ?? "Local"),
+        };
+
+        // Only add optional properties if they have defined values
+        if (executionData?.duration !== undefined) {
+          eventData.duration = executionData.duration;
+        }
+        if (executionData?.output !== undefined) {
+          eventData.output = executionData.output;
+        }
+        if (executionData?.error !== undefined) {
+          eventData.error = executionData.error;
+        }
+
+        const templateContext = createTemplateContext(
+          eventData,
+          variablesMap,
+          {},
+          {},
+        );
+
+        // Process the message with template processor
+        const processedMessage = templateProcessor.processTemplate(
+          conditional_event.message,
+          templateContext,
+        );
+
+        // Prepare parameters based on tool type
+        let actionParameters: Record<string, any> = {};
+
+        if (tool.type === "EMAIL") {
           const subject =
             conditional_event.emailSubject ??
             `Event ${isSuccess ? "Success" : "Failure"}: ${event.name ?? ""}`;
-          const message = conditional_event.message ?? "";
 
-          if (!recipients) {
-            console.error(
-              "No recipients specified for email SEND_MESSAGE event",
-            );
-            return;
-          }
-
-          console.log(
-            `Sending email directly via SMTP to: ${recipients ?? ""}`,
-          );
-          console.log(`Subject: ${subject ?? ""}`);
-
-          // Get user variables for template context
-          const userVariables = await storage.getUserVariables(event.userId);
-          const variablesMap = userVariables.reduce(
-            (acc, v) => {
-              acc[v.key] = v.value;
-              return acc;
-            },
-            {} as Record<string, unknown>,
-          );
-
-          // Create template context with cronium data
-          const eventData: Parameters<typeof createTemplateContext>[0] = {
-            id: event.id,
-            name: event.name,
-            status: isSuccess ? "success" : "failure",
-            executionTime:
-              executionData?.executionTime ?? new Date().toISOString(),
-            server:
-              typeof event.server === "string"
-                ? event.server
-                : (event.server?.name ?? "Local"),
-          };
-
-          // Only add optional properties if they have defined values
-          if (executionData?.duration !== undefined) {
-            eventData.duration = executionData.duration;
-          }
-          if (executionData?.output !== undefined) {
-            eventData.output = executionData.output;
-          }
-          if (executionData?.error !== undefined) {
-            eventData.error = executionData.error;
-          }
-
-          const templateContext = createTemplateContext(
-            eventData,
-            variablesMap,
-            {},
-            {},
-          );
-
-          // Process the message content and subject with Handlebars templating
           const processedSubject = templateProcessor.processTemplate(
             subject,
             templateContext,
           );
-          const processedMessage = templateProcessor.processHtmlTemplate(
-            message,
-            templateContext,
-          );
 
-          // Use processed content directly as HTML
-          const htmlContent = processedMessage;
-
-          // Prepare email message
-          const emailMessage = {
-            to: recipients,
+          actionParameters = {
+            recipients: conditional_event.emailAddresses ?? "",
             subject: processedSubject,
-            text: processedMessage.replace(/<[^>]*>/g, ""), // Strip HTML for plain text
-            html: htmlContent,
+            message: processedMessage,
+            isHtml: true,
           };
-
-          // Prepare SMTP credentials in the format expected by sendEmail
-          const smtpCredentials = {
-            host: String(credentials.host) ?? "",
-            port: Number(credentials.port ?? 587),
-            user: String(credentials.user) ?? "",
-            password: String(credentials.password) ?? "",
-            fromEmail: String(credentials.fromEmail) ?? "",
-            fromName: String(credentials.fromName) ?? "",
+        } else if (tool.type === "SLACK" || tool.type === "DISCORD") {
+          // For Slack and Discord, just pass the message
+          actionParameters = {
+            message: processedMessage,
           };
-
-          // Send the email
-          const emailSent = await sendEmail(emailMessage, smtpCredentials);
-
-          if (emailSent) {
-            console.log(
-              `SEND_MESSAGE email sent successfully to ${recipients ?? ""}`,
-            );
-          } else {
-            console.error(
-              `Failed to send SEND_MESSAGE email to ${recipients ?? ""}`,
-            );
-          }
-        } else if (toolType === "SLACK" || toolType === "DISCORD") {
-          // Get user variables for template context
-          const userVariables = await storage.getUserVariables(event.userId);
-          const variablesMap = userVariables.reduce(
-            (acc, v) => {
-              acc[v.key] = v.value;
-              return acc;
-            },
-            {} as Record<string, unknown>,
-          );
-
-          // Ensure duration is a valid number for template processing
-          const validDuration =
-            executionData?.duration &&
-            typeof executionData.duration === "number" &&
-            !isNaN(executionData.duration)
-              ? executionData.duration
-              : 0;
-
-          // Create template context with cronium data
-          const eventData: Parameters<typeof createTemplateContext>[0] = {
-            id: event.id,
-            name: event.name,
-            status: isSuccess ? "success" : "failure",
-            duration: validDuration,
-            executionTime:
-              executionData?.executionTime ?? new Date().toISOString(),
-            server:
-              typeof event.server === "string"
-                ? event.server
-                : (event.server?.name ?? "Local"),
+        } else {
+          // For other tool types, use a generic message parameter
+          actionParameters = {
+            message: processedMessage,
           };
+        }
 
-          // Only add optional properties if they have defined values
-          if (executionData?.output !== undefined) {
-            eventData.output = executionData.output;
-          }
-          if (executionData?.error !== undefined) {
-            eventData.error = executionData.error;
-          }
+        console.log(
+          `Executing conditional action ${conditionalAction.id} for ${tool.type}`,
+        );
 
-          const templateContext = createTemplateContext(
-            eventData,
-            variablesMap,
-            {},
-            {},
-          );
+        // Create a temporary event object for the tool action executor
+        const toolActionEvent = {
+          id: event.id,
+          userId: event.userId,
+          name: `${event.name} - Conditional Action`,
+          eventType: EventType.TOOL_ACTION,
+          toolActionConfig: JSON.stringify({
+            toolType: tool.type,
+            actionId: conditionalAction.id,
+            toolId: conditional_event.toolId,
+            parameters: actionParameters,
+          } as ToolActionConfig),
+        } as any;
 
-          // Process message with template processor
-          const processedMessage = templateProcessor.processJsonTemplate(
-            conditional_event.message,
-            templateContext,
-          );
+        // Execute the tool action
+        const result = await executeToolAction(
+          toolActionEvent,
+          actionParameters,
+        );
 
+        if (result.exitCode === 0) {
           console.log(
-            `Sending ${toolType ?? ""} message with processed template`,
+            `SEND_MESSAGE action executed successfully via ${tool.type}`,
           );
-          console.log(
-            `Message content: ${processedMessage.substring(0, 100)}...`,
-          );
-
-          // Send message using direct webhook calls (bypass API authentication)
-          if (toolType === "SLACK") {
-            try {
-              if (!credentials.webhookUrl) {
-                console.error("Webhook URL not found in Slack credentials");
-                return;
-              }
-
-              // Prepare payload for webhook
-              let payload: { text: string } | Record<string, unknown>;
-
-              // Check if message is JSON (for Slack blocks/attachments)
-              if (processedMessage.trim().startsWith("{")) {
-                try {
-                  payload = JSON.parse(processedMessage) as Record<
-                    string,
-                    unknown
-                  >;
-                } catch {
-                  // If JSON parsing fails, treat as plain text
-                  payload = { text: processedMessage };
-                }
-              } else {
-                payload = { text: processedMessage };
-              }
-
-              // Send message directly to Slack webhook
-              const slackResponse = await fetch(
-                typeof credentials.webhookUrl === "string"
-                  ? credentials.webhookUrl
-                  : "",
-                {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify(payload),
-                },
-              );
-
-              if (slackResponse.ok) {
-                console.log(
-                  `SEND_MESSAGE Slack message sent successfully via webhook`,
-                );
-              } else {
-                const errorText = await slackResponse.text();
-                console.error(
-                  `Failed to send Slack message: ${errorText ?? ""}`,
-                );
-              }
-            } catch (error) {
-              console.error(`Error sending Slack message:`, error);
-            }
-          } else if (toolType === "DISCORD") {
-            try {
-              if (!credentials.webhookUrl) {
-                console.error("Webhook URL not found in Discord credentials");
-                return;
-              }
-
-              // Prepare payload for Discord webhook
-              let payload: { content: string } | Record<string, unknown>;
-
-              // Check if message is JSON (for Discord embeds/components)
-              if (processedMessage.trim().startsWith("{")) {
-                try {
-                  payload = JSON.parse(processedMessage) as Record<
-                    string,
-                    unknown
-                  >;
-                } catch {
-                  // If JSON parsing fails, treat as plain text
-                  payload = { content: processedMessage };
-                }
-              } else {
-                payload = { content: processedMessage };
-              }
-
-              // Send message directly to Discord webhook
-              const discordResponse = await fetch(
-                typeof credentials.webhookUrl === "string"
-                  ? credentials.webhookUrl
-                  : "",
-                {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify(payload),
-                },
-              );
-
-              if (discordResponse.ok) {
-                console.log(
-                  `SEND_MESSAGE Discord message sent successfully via webhook`,
-                );
-              } else {
-                const errorText = await discordResponse.text();
-                console.error(
-                  `Failed to send Discord message: ${errorText ?? ""}`,
-                );
-              }
-            } catch (error) {
-              console.error(`Error sending Discord message:`, error);
-            }
-          }
         } else {
           console.error(
-            `Unsupported tool type for SEND_MESSAGE: ${toolType ?? ""}`,
+            `Failed to execute SEND_MESSAGE action: ${result.stderr}`,
           );
         }
       } catch (err) {

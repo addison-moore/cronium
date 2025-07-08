@@ -1,0 +1,35 @@
+Process a specific batch from the lint fix plan
+
+# Get batch number from arguments
+BATCH_NUM="${ARGUMENTS:-1}"
+
+!echo "📦 Processing batch $BATCH_NUM from lint fix plan"
+!echo ""
+
+# Check if plan exists
+!if [ ! -f .claude/lint-fix-plan.json ]; then
+    echo "❌ No lint fix plan found. Run: /lint-fix-parallel"
+    exit 1
+fi
+
+# Extract batch information
+!echo "📋 Batch $BATCH_NUM tasks:"
+!python3 -c "
+import json
+with open('.claude/lint-fix-plan.json') as f:
+    plan = json.load(f)
+    batch_idx = int('$BATCH_NUM') - 1
+    if batch_idx < len(plan['batches']):
+        batch = plan['batches'][batch_idx]
+        print(f'Files in batch: {batch[\"files_count\"]}')
+        print(f'Total issues: {batch[\"total_issues\"]}')
+        print()
+        for task in batch['tasks']:
+            print(f'- {task[\"file\"]} ({task[\"total_issues\"]} issues)')
+    else:
+        print(f'❌ Batch {batch_idx + 1} not found. Total batches: {len(plan[\"batches\"])}')
+"
+
+!echo ""
+!echo "💡 To process this batch, use the Task tool with the instructions from the plan"
+!echo "Each file should be processed by a separate subagent for parallel execution"

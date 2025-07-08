@@ -1,0 +1,88 @@
+{
+  "description": "Claude Code configuration for Cronium project",
+  "permissions": {
+    "disabled": [],
+    "allowed": [
+      "Bash",
+      "Read",
+      "Write",
+      "Edit",
+      "MultiEdit",
+      "Grep",
+      "Glob",
+      "LS",
+      "Task",
+      "WebFetch",
+      "WebSearch",
+      "TodoRead",
+      "TodoWrite",
+      "NotebookRead",
+      "NotebookEdit",
+      "exit_plan_mode"
+    ]
+  },
+  "env": {
+    "NODE_ENV": "development",
+    "CLAUDE_PROJECT": "cronium"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '🔧 Modifying file: $TOOL_PARAM_file_path' >> .claude/activity.log",
+            "description": "Log file modifications"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [[ \"$TOOL_PARAM_command\" =~ ^rm|^mv|^cp ]]; then echo '⚠️  File operation detected: $TOOL_PARAM_command' >> .claude/activity.log; fi",
+            "description": "Log file operations"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [[ \"$TOOL_PARAM_file_path\" =~ \\.(ts|tsx|js|jsx)$ ]]; then echo '📋 TypeScript file modified, consider running lint check' >> .claude/suggestions.log; fi",
+            "description": "Suggest linting after TS/JS modifications"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f .claude/suggestions.log ]; then echo '\\n💡 Suggestions:'; cat .claude/suggestions.log | sort -u; rm .claude/suggestions.log; fi",
+            "description": "Show accumulated suggestions"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '✅ Subagent completed at $(date)' >> .claude/subagent.log",
+            "description": "Log subagent completion"
+          }
+        ]
+      }
+    ]
+  },
+  "includeCoAuthoredBy": true,
+  "cleanupPeriodDays": 7
+}

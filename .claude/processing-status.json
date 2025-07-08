@@ -1,0 +1,12 @@
+{
+  "initialized_at": "2025-07-07T14:22:06.379150",
+  "total_files": 82,
+  "completed": 0,
+  "failed": 0,
+  "in_progress": 0,
+  "remaining": 82,
+  "completed_files": [],
+  "failed_files": [],
+  "active_agents": 0,
+  "max_concurrent": 5
+}

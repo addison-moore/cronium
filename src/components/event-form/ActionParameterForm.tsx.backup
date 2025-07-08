@@ -1,0 +1,999 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { z } from "zod";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+import {
+  Plus,
+  Minus,
+  AlertTriangle,
+  Info,
+  Calendar as CalendarIcon,
+  Upload,
+  Link,
+  Code,
+  AtSign,
+  Hash,
+  Type,
+  ToggleLeft,
+  List,
+  Braces,
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  RefreshCw,
+  Sparkles,
+} from "lucide-react";
+import { type ToolAction } from "@/components/tools/types/tool-plugin";
+
+interface ActionParameterFormProps {
+  action: ToolAction;
+  value: Record<string, unknown>;
+  onChange: (params: Record<string, unknown>) => void;
+  onSubmit?: () => void;
+  isTest?: boolean;
+  disabled?: boolean;
+}
+
+// Enhanced field metadata for better UX
+interface FieldMetadata {
+  description?: string;
+  examples?: string[];
+  placeholder?: string;
+  helpText?: string;
+  validation?: {
+    pattern?: RegExp;
+    message?: string;
+  };
+  defaultValue?: unknown;
+  autoComplete?: string[];
+  sensitive?: boolean;
+}
+
+// Common field patterns for auto-detection
+const FIELD_PATTERNS = {
+  email: /email|mail|recipient|sender|to|from|cc|bcc/i,
+  url: /url|link|webhook|endpoint|callback/i,
+  password: /password|secret|token|key|credential/i,
+  date: /date|time|deadline|schedule|when/i,
+  json: /json|data|payload|body|config/i,
+  multiline: /description|message|content|text|body|notes/i,
+  number: /count|amount|quantity|limit|size|port|timeout/i,
+  boolean: /enable|disable|active|show|hide|is|has|should|can/i,
+};
+
+export default function ActionParameterForm({
+  action,
+  value,
+  onChange,
+  onSubmit,
+  isTest = false,
+  disabled = false,
+}: ActionParameterFormProps) {
+  const [validationErrors, setValidationErrors] = useState<
+    Record<string, string>
+  >({});
+  const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
+  const [collapsedSections, setCollapsedSections] = useState<
+    Record<string, boolean>
+  >({});
+  const [fieldMetadata, setFieldMetadata] = useState<
+    Record<string, FieldMetadata>
+  >({});
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
+
+  // Auto-detect field metadata based on name and schema
+  useEffect(() => {
+    const metadata: Record<string, FieldMetadata> = {};
+    const fields = getSchemaFields(action.inputSchema);
+
+    Object.entries(fields).forEach(([fieldName, fieldSchema]) => {
+      const meta: FieldMetadata = {};
+
+      // Auto-detect field type based on name
+      if (FIELD_PATTERNS.email.test(fieldName)) {
+        meta.placeholder = "email@domain.com";
+        meta.validation = {
+          pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+          message: "Please enter a valid email address",
+        };
+      } else if (FIELD_PATTERNS.url.test(fieldName)) {
+        meta.placeholder = "https://domain.com";
+        meta.validation = {
+          pattern: /^https?:\/\/.+/,
+          message: "Please enter a valid URL",
+        };
+      } else if (FIELD_PATTERNS.password.test(fieldName)) {
+        meta.sensitive = true;
+        meta.placeholder = "••••••";
+      } else if (FIELD_PATTERNS.date.test(fieldName)) {
+        meta.placeholder = "Pick date";
+      } else if (FIELD_PATTERNS.json.test(fieldName)) {
+        meta.placeholder = '{"key": "value"}';
+        meta.helpText = "Enter valid JSON data";
+      }
+
+      // Extract description from schema if available
+      if (fieldSchema._def.description) {
+        meta.description = fieldSchema._def.description;
+      }
+
+      // Set smart defaults
+      if (fieldSchema instanceof z.ZodBoolean) {
+        meta.defaultValue = false;
+      } else if (fieldSchema instanceof z.ZodArray) {
+        meta.defaultValue = [];
+      } else if (fieldSchema instanceof z.ZodObject) {
+        meta.defaultValue = {};
+      }
+
+      metadata[fieldName] = meta;
+    });
+
+    setFieldMetadata(metadata);
+  }, [action.inputSchema]);
+
+  // Validate parameters against schema
+  useEffect(() => {
+    try {
+      action.inputSchema.parse(value);
+      setValidationErrors({});
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const errors: Record<string, string> = {};
+        error.errors.forEach((err) => {
+          const path = err.path.join(".");
+          errors[path] = err.message;
+        });
+        setValidationErrors(errors);
+      }
+    }
+  }, [value, action.inputSchema]);
+
+  // Handle field value changes
+  const handleFieldChange = (fieldName: string, fieldValue: unknown) => {
+    setHasUserInteracted(true);
+    const updatedValue = { ...value, [fieldName]: fieldValue };
+    onChange(updatedValue);
+  };
+
+  // Handle array field changes
+  const handleArrayChange = (
+    fieldName: string,
+    index: number,
+    itemValue: unknown,
+  ) => {
+    const currentArray = (value[fieldName] as unknown[]) ?? [];
+    const updatedArray = [...currentArray];
+    updatedArray[index] = itemValue;
+    handleFieldChange(fieldName, updatedArray);
+  };
+
+  // Add array item
+  const addArrayItem = (fieldName: string, defaultValue: unknown = "") => {
+    const currentArray = (value[fieldName] as unknown[]) ?? [];
+    handleFieldChange(fieldName, [...currentArray, defaultValue]);
+  };
+
+  // Remove array item
+  const removeArrayItem = (fieldName: string, index: number) => {
+    const currentArray = (value[fieldName] as unknown[]) ?? [];
+    const updatedArray = currentArray.filter(
+      (_: unknown, i: number) => i !== index,
+    );
+    handleFieldChange(fieldName, updatedArray);
+  };
+
+  // Toggle secret visibility
+  const toggleSecretVisibility = (fieldName: string) => {
+    setShowSecrets((prev) => ({
+      ...prev,
+      [fieldName]: !prev[fieldName],
+    }));
+  };
+
+  // Toggle section collapse
+  const toggleSection = (sectionName: string) => {
+    setCollapsedSections((prev) => ({
+      ...prev,
+      [sectionName]: !prev[sectionName],
+    }));
+  };
+
+  // Generate smart default value
+  const generateSmartDefault = (
+    fieldName: string,
+    fieldSchema: z.ZodTypeAny,
+  ) => {
+    const meta = fieldMetadata[fieldName];
+    if (meta?.defaultValue !== undefined) {
+      return meta.defaultValue;
+    }
+
+    if (fieldSchema instanceof z.ZodString) {
+      if (FIELD_PATTERNS.email.test(fieldName)) return "example@email.com";
+      if (FIELD_PATTERNS.url.test(fieldName)) return "https://example.com";
+      return "";
+    }
+    if (fieldSchema instanceof z.ZodNumber) return 0;
+    if (fieldSchema instanceof z.ZodBoolean) return false;
+    if (fieldSchema instanceof z.ZodArray) return [];
+    if (fieldSchema instanceof z.ZodObject) return {};
+    return null;
+  };
+
+  // Render field based on schema type
+  const renderField = (
+    fieldName: string,
+    fieldSchema: z.ZodTypeAny,
+  ): React.ReactNode => {
+    const fieldValue = value[fieldName];
+    const hasError = hasUserInteracted && validationErrors[fieldName];
+    const isRequired = !fieldSchema.isOptional();
+    const meta = fieldMetadata[fieldName];
+    const isDateField = FIELD_PATTERNS.date.test(fieldName);
+    const isJsonField = FIELD_PATTERNS.json.test(fieldName);
+
+    // Handle different Zod types
+    if (fieldSchema instanceof z.ZodString) {
+      const stringSchema = fieldSchema;
+      const isEmail =
+        stringSchema._def.checks?.some((check) => check.kind === "email") ||
+        FIELD_PATTERNS.email.test(fieldName);
+      const isUrl = FIELD_PATTERNS.url.test(fieldName);
+      const isMultiline =
+        stringSchema._def.checks?.some(
+          (check) => check.kind === "min" && check.value > 100,
+        ) || FIELD_PATTERNS.multiline.test(fieldName);
+      const isSensitive =
+        meta?.sensitive || FIELD_PATTERNS.password.test(fieldName);
+
+      // Date picker for date fields
+      if (isDateField) {
+        return (
+          <div key={fieldName} className="space-y-2">
+            <Label htmlFor={fieldName} className="flex items-center gap-2">
+              <CalendarIcon className="text-muted-foreground h-4 w-4" />
+              {fieldName}
+              {isRequired && (
+                <Badge variant="destructive" className="text-xs">
+                  Required
+                </Badge>
+              )}
+              {meta?.description && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="text-muted-foreground h-3 w-3 cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-xs">{meta.description}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !fieldValue && "text-muted-foreground",
+                    hasError && "border-red-500",
+                  )}
+                  disabled={disabled}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {fieldValue
+                    ? format(new Date(fieldValue as string), "PPP")
+                    : (meta?.placeholder ?? "Pick a date")}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={
+                    fieldValue ? new Date(fieldValue as string) : undefined
+                  }
+                  onSelect={(date) =>
+                    handleFieldChange(fieldName, date?.toISOString())
+                  }
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            {hasError && (
+              <p className="flex items-center gap-1 text-sm text-red-500">
+                <AlertTriangle className="h-3 w-3" />
+                {hasError}
+              </p>
+            )}
+          </div>
+        );
+      }
+
+      // JSON editor for JSON fields
+      if (isJsonField) {
+        return (
+          <div key={fieldName} className="space-y-2">
+            <Label htmlFor={fieldName} className="flex items-center gap-2">
+              <Braces className="text-muted-foreground h-4 w-4" />
+              {fieldName}
+              {isRequired && (
+                <Badge variant="destructive" className="text-xs">
+                  Required
+                </Badge>
+              )}
+              <Badge variant="outline" className="text-xs">
+                JSON
+              </Badge>
+              {meta?.description && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="text-muted-foreground h-3 w-3 cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-xs">{meta.description}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </Label>
+            <div className="relative">
+              <Textarea
+                id={fieldName}
+                value={(fieldValue as string) ?? ""}
+                onChange={(e) => handleFieldChange(fieldName, e.target.value)}
+                placeholder={meta?.placeholder ?? `JSON data`}
+                className={cn(
+                  "min-h-[120px] font-mono text-sm",
+                  hasError && "border-red-500",
+                )}
+                disabled={disabled}
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute top-2 right-2"
+                onClick={() => {
+                  try {
+                    const parsed = JSON.parse((fieldValue as string) || "{}");
+                    handleFieldChange(
+                      fieldName,
+                      JSON.stringify(parsed, null, 2),
+                    );
+                  } catch {
+                    // Invalid JSON, ignore
+                  }
+                }}
+                disabled={disabled}
+              >
+                <Code className="h-3 w-3" />
+                Format
+              </Button>
+            </div>
+            {meta?.helpText && (
+              <p className="text-muted-foreground text-sm">{meta.helpText}</p>
+            )}
+            {hasError && (
+              <p className="flex items-center gap-1 text-sm text-red-500">
+                <AlertTriangle className="h-3 w-3" />
+                {hasError}
+              </p>
+            )}
+          </div>
+        );
+      }
+
+      return (
+        <div key={fieldName} className="space-y-2">
+          <Label htmlFor={fieldName} className="flex items-center gap-2">
+            {isEmail && <AtSign className="text-muted-foreground h-4 w-4" />}
+            {isUrl && <Link className="text-muted-foreground h-4 w-4" />}
+            {!isEmail && !isUrl && (
+              <Type className="text-muted-foreground h-4 w-4" />
+            )}
+            {fieldName}
+            {isRequired && (
+              <Badge variant="destructive" className="text-xs">
+                Required
+              </Badge>
+            )}
+            {isEmail && (
+              <Badge variant="outline" className="text-xs">
+                Email
+              </Badge>
+            )}
+            {isUrl && (
+              <Badge variant="outline" className="text-xs">
+                URL
+              </Badge>
+            )}
+            {meta?.description && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="text-muted-foreground h-3 w-3 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-xs">{meta.description}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </Label>
+          {isMultiline ? (
+            <Textarea
+              id={fieldName}
+              value={(fieldValue as string) ?? ""}
+              onChange={(e) => handleFieldChange(fieldName, e.target.value)}
+              placeholder={meta?.placeholder || `Value`}
+              className={cn(hasError && "border-red-500")}
+              disabled={disabled}
+            />
+          ) : (
+            <div className="relative">
+              <Input
+                id={fieldName}
+                type={
+                  isSensitive && !showSecrets[fieldName]
+                    ? "password"
+                    : isEmail
+                      ? "email"
+                      : isUrl
+                        ? "url"
+                        : "text"
+                }
+                value={(fieldValue as string) ?? ""}
+                onChange={(e) => handleFieldChange(fieldName, e.target.value)}
+                placeholder={meta?.placeholder ?? `Value`}
+                className={cn(
+                  hasError && "border-red-500",
+                  isSensitive && "pr-10",
+                )}
+                disabled={disabled}
+              />
+              {isSensitive && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute top-0 right-0 h-full px-3"
+                  onClick={() => toggleSecretVisibility(fieldName)}
+                  type="button"
+                  disabled={disabled}
+                >
+                  {showSecrets[fieldName] ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
+            </div>
+          )}
+          {meta?.helpText && (
+            <p className="text-muted-foreground text-sm">{meta.helpText}</p>
+          )}
+          {hasError && (
+            <p className="flex items-center gap-1 text-sm text-red-500">
+              <AlertTriangle className="h-3 w-3" />
+              {hasError}
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    if (fieldSchema instanceof z.ZodNumber) {
+      return (
+        <div key={fieldName} className="space-y-2">
+          <Label htmlFor={fieldName} className="flex items-center gap-2">
+            <Hash className="text-muted-foreground h-4 w-4" />
+            {fieldName}
+            {isRequired && (
+              <Badge variant="destructive" className="text-xs">
+                Required
+              </Badge>
+            )}
+            <Badge variant="outline" className="text-xs">
+              Number
+            </Badge>
+            {meta?.description && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="text-muted-foreground h-3 w-3 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-xs">{meta.description}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </Label>
+          <Input
+            id={fieldName}
+            type="number"
+            value={(fieldValue as number) ?? ""}
+            onChange={(e) =>
+              handleFieldChange(fieldName, parseFloat(e.target.value) || 0)
+            }
+            placeholder={meta?.placeholder ?? `Value`}
+            className={cn(hasError && "border-red-500")}
+            disabled={disabled}
+          />
+          {meta?.helpText && (
+            <p className="text-muted-foreground text-sm">{meta.helpText}</p>
+          )}
+          {hasError && (
+            <p className="flex items-center gap-1 text-sm text-red-500">
+              <AlertTriangle className="h-3 w-3" />
+              {hasError}
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    if (fieldSchema instanceof z.ZodBoolean) {
+      return (
+        <div
+          key={fieldName}
+          className="border-border flex items-center justify-between rounded-lg border p-4"
+        >
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              <ToggleLeft className="text-muted-foreground h-4 w-4" />
+              <Label htmlFor={fieldName}>{fieldName}</Label>
+              {isRequired && (
+                <Badge variant="destructive" className="text-xs">
+                  Required
+                </Badge>
+              )}
+            </div>
+            {meta?.description && (
+              <p className="text-muted-foreground text-sm">
+                {meta.description}
+              </p>
+            )}
+          </div>
+          <Switch
+            id={fieldName}
+            checked={(fieldValue as boolean) ?? false}
+            onCheckedChange={(checked) => handleFieldChange(fieldName, checked)}
+            disabled={disabled}
+          />
+        </div>
+      );
+    }
+
+    if (fieldSchema instanceof z.ZodEnum) {
+      const enumValues = fieldSchema._def.values as string[];
+      return (
+        <div key={fieldName} className="space-y-2">
+          <Label htmlFor={fieldName} className="flex items-center gap-2">
+            <List className="text-muted-foreground h-4 w-4" />
+            {fieldName}
+            {isRequired && (
+              <Badge variant="destructive" className="text-xs">
+                Required
+              </Badge>
+            )}
+            <Badge variant="outline" className="text-xs">
+              Select
+            </Badge>
+            {meta?.description && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="text-muted-foreground h-3 w-3 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-xs">{meta.description}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </Label>
+          <Select
+            value={(fieldValue as string) ?? ""}
+            onValueChange={(val) => handleFieldChange(fieldName, val)}
+            disabled={disabled}
+          >
+            <SelectTrigger className={cn(hasError && "border-red-500")}>
+              <SelectValue placeholder={meta?.placeholder ?? `Select...`} />
+            </SelectTrigger>
+            <SelectContent>
+              {enumValues.map((enumValue: string) => (
+                <SelectItem key={enumValue} value={enumValue}>
+                  {enumValue}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {meta?.helpText && (
+            <p className="text-muted-foreground text-sm">{meta.helpText}</p>
+          )}
+          {hasError && (
+            <p className="flex items-center gap-1 text-sm text-red-500">
+              <AlertTriangle className="h-3 w-3" />
+              {hasError}
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    if (fieldSchema instanceof z.ZodArray) {
+      const arrayItems = (fieldValue as unknown[]) ?? [];
+      const isCollapsed = collapsedSections[fieldName];
+
+      return (
+        <div key={fieldName} className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-2">
+              <List className="text-muted-foreground h-4 w-4" />
+              {fieldName}
+              {isRequired && (
+                <Badge variant="destructive" className="text-xs">
+                  Required
+                </Badge>
+              )}
+              <Badge variant="outline" className="text-xs">
+                Array ({arrayItems.length})
+              </Badge>
+              {meta?.description && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="text-muted-foreground h-3 w-3 cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-xs">{meta.description}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </Label>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => toggleSection(fieldName)}
+              type="button"
+            >
+              {isCollapsed ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+
+          {!isCollapsed && (
+            <div className="space-y-2 pl-6">
+              {arrayItems.map((item: unknown, index: number) => (
+                <div key={index} className="flex items-center gap-2">
+                  <span className="text-muted-foreground w-8 text-sm">
+                    {index + 1}.
+                  </span>
+                  <Input
+                    value={(item as string) ?? ""}
+                    onChange={(e) =>
+                      handleArrayChange(fieldName, index, e.target.value)
+                    }
+                    placeholder={`Item ${index + 1}`}
+                    className="flex-1"
+                    disabled={disabled}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => removeArrayItem(fieldName, index)}
+                    className="shrink-0"
+                    disabled={disabled}
+                  >
+                    <Minus className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => addArrayItem(fieldName)}
+                className="flex items-center gap-2"
+                disabled={disabled}
+              >
+                <Plus className="h-3 w-3" />
+                Add {fieldName} item
+              </Button>
+            </div>
+          )}
+          {meta?.helpText && (
+            <p className="text-muted-foreground text-sm">{meta.helpText}</p>
+          )}
+          {hasError && (
+            <p className="flex items-center gap-1 text-sm text-red-500">
+              <AlertTriangle className="h-3 w-3" />
+              {hasError}
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    // Fallback for unknown types
+    return (
+      <div key={fieldName} className="space-y-2">
+        <Label htmlFor={fieldName} className="flex items-center gap-2">
+          <Braces className="text-muted-foreground h-4 w-4" />
+          {fieldName}
+          {isRequired && (
+            <Badge variant="destructive" className="text-xs">
+              Required
+            </Badge>
+          )}
+          <Badge variant="outline" className="text-xs">
+            Object
+          </Badge>
+          {meta?.description && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="text-muted-foreground h-3 w-3 cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="max-w-xs">{meta.description}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </Label>
+        <div className="relative">
+          <Textarea
+            id={fieldName}
+            value={
+              typeof fieldValue === "object"
+                ? JSON.stringify(fieldValue, null, 2)
+                : ((fieldValue as string) ?? "")
+            }
+            onChange={(e) => {
+              try {
+                const parsed = JSON.parse(e.target.value) as unknown;
+                handleFieldChange(fieldName, parsed);
+              } catch {
+                handleFieldChange(fieldName, e.target.value);
+              }
+            }}
+            placeholder={meta?.placeholder || `JSON object`}
+            className={cn(
+              "min-h-[80px] font-mono text-sm",
+              hasError && "border-red-500",
+            )}
+            disabled={disabled}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="absolute top-2 right-2"
+            onClick={() => {
+              try {
+                const parsed = JSON.parse(
+                  typeof fieldValue === "object"
+                    ? JSON.stringify(fieldValue)
+                    : (fieldValue as string) || "{}",
+                );
+                handleFieldChange(fieldName, JSON.stringify(parsed, null, 2));
+              } catch {
+                // Invalid JSON, ignore
+              }
+            }}
+            disabled={disabled}
+          >
+            <Code className="h-3 w-3" />
+            Format
+          </Button>
+        </div>
+        {meta?.helpText && (
+          <p className="text-muted-foreground text-sm">{meta.helpText}</p>
+        )}
+        {hasError && (
+          <p className="flex items-center gap-1 text-sm text-red-500">
+            <AlertTriangle className="h-3 w-3" />
+            {hasError}
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  // Extract fields from schema
+  const getSchemaFields = (
+    schema: z.ZodTypeAny,
+  ): Record<string, z.ZodTypeAny> => {
+    if (schema instanceof z.ZodObject) {
+      return schema.shape as Record<string, z.ZodTypeAny>;
+    }
+    return {};
+  };
+
+  const schemaFields = getSchemaFields(action.inputSchema);
+  const hasValidationErrors = hasUserInteracted && Object.keys(validationErrors).length > 0;
+
+  // Group fields by category (optional/required)
+  const requiredFields = Object.entries(schemaFields).filter(
+    ([_, schema]) => !schema.isOptional(),
+  );
+  const optionalFields = Object.entries(schemaFields).filter(([_, schema]) =>
+    schema.isOptional(),
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Test Mode Notice */}
+      {isTest && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Test mode: Actions will be executed safely without making real
+            changes.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Action Examples */}
+      {action.examples && action.examples.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Sparkles className="h-4 w-4" />
+              Examples
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {action.examples.map((example, index) => (
+              <div
+                key={index}
+                className="hover:bg-muted/50 border-border space-y-2 rounded-lg border p-3 transition-colors"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <div className="font-medium">{example.name}</div>
+                    <div className="text-muted-foreground text-sm">
+                      {example.description}
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => onChange(example.input)}
+                    disabled={disabled}
+                  >
+                    Use Example
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Parameters Form */}
+      <div className="space-y-6">
+        {/* Required Fields */}
+        {requiredFields.length > 0 && (
+          <div className="space-y-4">
+            <h4 className="text-muted-foreground text-sm font-medium">
+              Required Fields
+            </h4>
+            <div className="space-y-4">
+              {requiredFields.map(([fieldName, fieldSchema]) =>
+                renderField(fieldName, fieldSchema),
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Optional Fields */}
+        {optionalFields.length > 0 && (
+          <Accordion type="single" collapsible>
+            <AccordionItem value="optional-fields">
+              <AccordionTrigger className="text-muted-foreground text-sm font-medium">
+                Optional Fields ({optionalFields.length})
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-4">
+                  {optionalFields.map(([fieldName, fieldSchema]) =>
+                    renderField(fieldName, fieldSchema),
+                  )}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        )}
+      </div>
+
+      {/* Smart Defaults Button */}
+      {Object.keys(schemaFields).length > 0 && (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const smartDefaults: Record<string, unknown> = {};
+              Object.entries(schemaFields).forEach(
+                ([fieldName, fieldSchema]) => {
+                  if (!value[fieldName]) {
+                    smartDefaults[fieldName] = generateSmartDefault(
+                      fieldName,
+                      fieldSchema,
+                    );
+                  }
+                },
+              );
+              onChange({ ...value, ...smartDefaults });
+            }}
+            disabled={disabled}
+          >
+            <RefreshCw className="mr-2 h-3 w-3" />
+            Fill Smart Defaults
+          </Button>
+        </div>
+      )}
+
+      {/* Validation Status */}
+      {hasValidationErrors && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Please fix the validation errors above before proceeding.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* No Parameters */}
+      {Object.keys(schemaFields).length === 0 && (
+        <div className="text-muted-foreground py-8 text-center">
+          This action doesn&apos;t require any parameters.
+        </div>
+      )}
+    </div>
+  );
+}

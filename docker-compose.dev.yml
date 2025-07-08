@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  # Development overrides for main app
+  cronium:
+    build:
+      context: .
+      target: builder # Use builder stage for development
+    volumes:
+      - .:/app # Mount source code for hot reload
+      - /app/node_modules # Exclude node_modules
+      - /app/.next # Exclude build output
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: 1
+    command: ["pnpm", "dev"]
+
+  # Development overrides for executor
+  executor:
+    environment:
+      NODE_ENV: development
+      DEBUG: "true"
+    volumes:
+      - ./src/runtime-helpers:/opt/cronium/runtime-helpers:ro
+      - ./test-scripts:/workspace/test-scripts:ro # Mount test scripts

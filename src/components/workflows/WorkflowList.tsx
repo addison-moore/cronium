@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -91,6 +91,11 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
     null,
   );
 
+  // Track which workflows are being executed
+  const [executingWorkflows, setExecutingWorkflows] = useState<Set<number>>(
+    new Set(),
+  );
+
   // tRPC queries
   const {
     data: workflowsData,
@@ -157,17 +162,36 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
     },
   });
 
-  // Extract workflows from tRPC response
-  const workflows: WorkflowItem[] = (workflowsData?.workflows ?? []).map(
-    (w) => ({
-      ...w,
-      createdAt:
-        w.createdAt instanceof Date ? w.createdAt.toISOString() : w.createdAt,
-      updatedAt:
-        w.updatedAt instanceof Date ? w.updatedAt.toISOString() : w.updatedAt,
-      lastRunAt: null, // TODO: Get lastRunAt from workflow execution data
-      tags: Array.isArray(w.tags) ? (w.tags as string[]) : [],
-    }),
+  const executeWorkflowMutation = trpc.workflows.execute.useMutation({
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Workflow execution started successfully",
+        variant: "success",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to execute workflow",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Extract workflows from tRPC response - memoized to prevent infinite renders
+  const workflows: WorkflowItem[] = useMemo(
+    () =>
+      (workflowsData?.workflows ?? []).map((w) => ({
+        ...w,
+        createdAt:
+          w.createdAt instanceof Date ? w.createdAt.toISOString() : w.createdAt,
+        updatedAt:
+          w.updatedAt instanceof Date ? w.updatedAt.toISOString() : w.updatedAt,
+        lastRunAt: null, // TODO: Get lastRunAt from workflow execution data
+        tags: Array.isArray(w.tags) ? (w.tags as string[]) : [],
+      })),
+    [workflowsData?.workflows],
   );
 
   useEffect(() => {
@@ -199,7 +223,13 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
       );
     }
 
-    setFilteredWorkflows(filtered);
+    // Only update state if the filtered results actually changed
+    setFilteredWorkflows((prev) => {
+      const isEqual =
+        prev.length === filtered.length &&
+        prev.every((item, index) => item.id === filtered[index]?.id);
+      return isEqual ? prev : filtered;
+    });
     // Reset to first page when filters change
     setCurrentPage(1);
   }, [searchTerm, statusFilter, tagFilter, workflows]);
@@ -209,10 +239,10 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
     if (onRefresh && workflowsData) {
       onRefresh();
     }
-  }, [workflowsData, onRefresh]);
+  }, [workflowsData]); // Remove onRefresh from dependencies to prevent infinite loop
 
-  // Get unique tags from all workflows
-  const getAvailableTags = () => {
+  // Get unique tags from all workflows - memoized to prevent re-renders
+  const availableTags = useMemo(() => {
     const allTags = new Set<string>();
     workflows.forEach((workflow) => {
       if (workflow.tags) {
@@ -220,14 +250,23 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
       }
     });
     return Array.from(allTags).sort();
-  };
+  }, [workflows]);
 
   // Clear all filters
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setSearchTerm("");
     setStatusFilter("all");
     setTagFilter("all");
-  };
+  }, []);
+
+  // Filter change handlers
+  const handleStatusFilterChange = useCallback((value: string) => {
+    setStatusFilter(value);
+  }, []);
+
+  const handleTagFilterChange = useCallback((value: string) => {
+    setTagFilter(value);
+  }, []);
 
   const handleDelete = async (workflowId: number) => {
     if (!confirm(t("DeleteConfirmation"))) return;
@@ -253,21 +292,20 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
     }
   };
 
-  const handleExecute = async (_workflowId: number) => {
+  const handleExecute = async (workflowId: number) => {
+    setExecutingWorkflows((prev) => new Set(prev).add(workflowId));
     try {
-      // Note: You might want to add an execute mutation to the workflows router
-      // For now, we'll show a placeholder
-      toast({
-        title: "Info",
-        description: "Workflow execution feature coming soon with tRPC",
-        variant: "default",
+      await executeWorkflowMutation.mutateAsync({
+        id: workflowId,
+        manual: true,
       });
-    } catch (error) {
-      console.error("Error executing workflow:", error);
-      toast({
-        title: "Error",
-        description: "Failed to execute workflow. Please try again.",
-        variant: "destructive",
+    } catch {
+      // Error handling is done in the mutation onError callback
+    } finally {
+      setExecutingWorkflows((prev) => {
+        const next = new Set(prev);
+        next.delete(workflowId);
+        return next;
       });
     }
   };
@@ -340,23 +378,26 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
   };
 
   // Selection handlers
-  const handleSelectAll = () => {
+  const handleSelectAll = useCallback(() => {
     if (selectedWorkflows.size === filteredWorkflows.length) {
       setSelectedWorkflows(new Set());
     } else {
       setSelectedWorkflows(new Set(filteredWorkflows.map((w) => w.id)));
     }
-  };
+  }, [selectedWorkflows.size, filteredWorkflows]);
 
-  const handleSelectWorkflow = (workflowId: number, checked: boolean) => {
-    const newSelected = new Set(selectedWorkflows);
-    if (checked) {
-      newSelected.add(workflowId);
-    } else {
-      newSelected.delete(workflowId);
-    }
-    setSelectedWorkflows(newSelected);
-  };
+  const handleSelectWorkflow = useCallback(
+    (workflowId: number, checked: boolean) => {
+      const newSelected = new Set(selectedWorkflows);
+      if (checked) {
+        newSelected.add(workflowId);
+      } else {
+        newSelected.delete(workflowId);
+      }
+      setSelectedWorkflows(newSelected);
+    },
+    [selectedWorkflows],
+  );
 
   // Pagination
   const totalItems = filteredWorkflows.length;
@@ -365,16 +406,23 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
   const endIndex = startIndex + itemsPerPage;
   const paginatedWorkflows = filteredWorkflows.slice(startIndex, endIndex);
 
-  const handlePageChange = (page: number) => {
+  const handlePageChange = useCallback((page: number) => {
     setCurrentPage(page);
     setSelectedWorkflows(new Set()); // Clear selection when changing pages
-  };
+  }, []);
 
-  const handlePageSizeChange = (newSize: number) => {
+  const handlePageSizeChange = useCallback((newSize: number) => {
     setItemsPerPage(newSize);
     setCurrentPage(1);
     setSelectedWorkflows(new Set());
-  };
+  }, []);
+
+  const handlePageSizeSelectChange = useCallback(
+    (value: string) => {
+      handlePageSizeChange(parseInt(value));
+    },
+    [handlePageSizeChange],
+  );
 
   // Get trigger type icon
   const getTriggerIcon = (triggerType: WorkflowTriggerType) => {
@@ -435,17 +483,8 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
       ),
     },
     {
-      key: "description",
-      header: t("Description"),
-      cell: (workflow) => (
-        <span className="text-muted-foreground text-sm">
-          {workflow.description ?? "-"}
-        </span>
-      ),
-    },
-    {
       key: "status",
-      header: t("Status"),
+      header: t("Status.Label"),
       cell: (workflow) => (
         <ClickableStatusBadge
           currentStatus={workflow.status}
@@ -482,14 +521,20 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
         <Button
           variant="outline"
           size="sm"
-          className="h-8 w-8 p-0"
+          className="h-8 w-8 cursor-pointer rounded-full border-green-500 p-0 transition-colors hover:bg-green-50 hover:text-green-600 dark:border-green-600 dark:hover:bg-green-900/30 dark:hover:text-green-500"
           onClick={() => handleExecute(workflow.id)}
+          disabled={executingWorkflows.has(workflow.id)}
           title={t("Execute")}
         >
-          <Play className="h-4 w-4" />
+          {executingWorkflows.has(workflow.id) ? (
+            <RefreshCw className="h-4 w-4 animate-spin text-green-500" />
+          ) : (
+            <Play className="h-4 w-4 text-green-500" />
+          )}
+          <span className="sr-only">{t("Execute")}</span>
         </Button>
       ),
-      className: "w-16",
+      className: "w-[60px]",
     },
   ];
 
@@ -586,7 +631,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
         </div>
 
         {/* Status Filter */}
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder={t("AllStatuses")} />
           </SelectTrigger>
@@ -608,13 +653,13 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
         </Select>
 
         {/* Tag Filter */}
-        <Select value={tagFilter} onValueChange={setTagFilter}>
+        <Select value={tagFilter} onValueChange={handleTagFilterChange}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder={t("AllTags")} />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("AllTags")}</SelectItem>
-            {getAvailableTags().map((tag) => (
+            {availableTags.map((tag) => (
               <SelectItem key={tag} value={tag}>
                 {tag}
               </SelectItem>
@@ -719,7 +764,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
             </span>
             <Select
               value={itemsPerPage.toString()}
-              onValueChange={(value) => handlePageSizeChange(parseInt(value))}
+              onValueChange={handlePageSizeSelectChange}
             >
               <SelectTrigger className="w-20">
                 <SelectValue />

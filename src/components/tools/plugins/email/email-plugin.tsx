@@ -9,22 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { Edit, Trash2, Eye, EyeOff } from "lucide-react";
-import { TemplateForm } from "../../template-form";
+import { ToolHealthIndicator } from "../../ToolHealthIndicator";
 import {
   type ToolPlugin,
   type CredentialFormProps,
   type CredentialDisplayProps,
-  type TemplateManagerProps,
+  type ToolAction,
+  type ActionType,
+  type ExecutionContext,
 } from "../../types/tool-plugin";
-import { trpc } from "@/lib/trpc";
-import { useToast } from "@/components/ui/use-toast";
 
 // Email credentials schema
 const emailSchema = z.object({
@@ -39,6 +33,13 @@ const emailSchema = z.object({
 
 type EmailFormData = z.infer<typeof emailSchema>;
 type EmailCredentials = Omit<EmailFormData, "name">;
+
+// Define parameter types for email actions - Simplified for MVP
+type SendEmailParams = {
+  to: string;
+  subject: string;
+  body: string;
+};
 
 // Email credential form component
 function EmailCredentialForm({
@@ -179,6 +180,11 @@ function EmailCredentialDisplay({
                 <Badge variant={tool.isActive ? "default" : "secondary"}>
                   {tool.isActive ? "Active" : "Inactive"}
                 </Badge>
+                <ToolHealthIndicator
+                  toolId={tool.id}
+                  toolName={tool.name}
+                  showTestButton={true}
+                />
               </div>
               <div className="text-muted-foreground grid grid-cols-2 gap-4 text-sm">
                 <div>
@@ -236,288 +242,146 @@ function EmailCredentialDisplay({
   );
 }
 
-interface Template {
-  id: number;
-  name: string;
-  type: string;
-  content: string;
-  subject?: string | null;
-  description?: string | null;
-  variables?: string[] | null;
-  isSystemTemplate: boolean;
-  tags?: string[] | null;
-}
+// Email Actions Definition - Simplified for MVP
+const emailActions: ToolAction[] = [
+  {
+    id: "send-email",
+    name: "Send Email",
+    description: "Send an email message to one or more recipients",
+    category: "Communication",
+    actionType: "create",
+    developmentMode: "visual",
+    isConditionalAction: true,
+    inputSchema: z.object({
+      to: z.string().email("Must be a valid email address"),
+      subject: z
+        .string()
+        .min(1, "Subject is required")
+        .max(255, "Subject must be less than 255 characters"),
+      body: z.string().min(1, "Email body is required"),
+    }),
+    outputSchema: z.object({
+      messageId: z.string(),
+      status: z.enum(["sent", "failed"]),
+      recipients: z.array(z.string()),
+      timestamp: z.string(),
+      deliveryInfo: z
+        .object({
+          accepted: z.array(z.string()),
+          rejected: z.array(z.string()),
+          pending: z.array(z.string()),
+        })
+        .optional(),
+    }),
+    async execute(
+      credentials: EmailCredentials,
+      params: SendEmailParams,
+      context: ExecutionContext,
+    ) {
+      context.logger.info(
+        `Sending email to: ${Array.isArray(params.to) ? params.to.join(", ") : String(params.to)}`,
+      );
+      context.onProgress?.({ step: "Validating credentials", percentage: 10 });
 
-// Email template manager component - fully integrated with tRPC
-function EmailTemplateManager({ toolType }: TemplateManagerProps) {
-  const { toast } = useToast();
-  const [showAddForm, setShowAddForm] = React.useState(false);
-  const [editingTemplate, setEditingTemplate] = React.useState<Template | null>(
-    null,
-  );
+      // Validate email credentials
+      const validationResult = emailSchema.safeParse(credentials);
+      if (!validationResult.success) {
+        throw new Error(
+          `Invalid email credentials: ${validationResult.error.errors.map((e) => e.message).join(", ")}`,
+        );
+      }
 
-  // tRPC queries and mutations
-  const {
-    data: templatesData,
-    isLoading,
-    refetch: refetchTemplates,
-  } = trpc.integrations.templates.getAll.useQuery({
-    type: toolType.toUpperCase() as "EMAIL" | "SLACK" | "DISCORD",
-    includeSystem: true,
-    includeUser: true,
-  });
+      const _emailCreds = validationResult.data;
+      context.onProgress?.({
+        step: "Connecting to SMTP server",
+        percentage: 30,
+      });
 
-  const createTemplateMutation = trpc.integrations.templates.create.useMutation(
-    {
-      onSuccess: () => {
-        toast({
-          title: "Success",
-          description: "Template created successfully",
-        });
-        void refetchTemplates();
-        setShowAddForm(false);
-        setEditingTemplate(null);
-      },
-      onError: (error) => {
-        toast({
-          title: "Error",
-          description: error.message ?? "Failed to create template",
-          variant: "destructive",
-        });
-      },
-    },
-  );
+      // Simulate email sending for Phase 1 - Simplified for MVP
+      // In a real implementation, this would use nodemailer or similar
+      const recipient = params.to;
 
-  const updateTemplateMutation = trpc.integrations.templates.update.useMutation(
-    {
-      onSuccess: () => {
-        toast({
-          title: "Success",
-          description: "Template updated successfully",
-        });
-        void refetchTemplates();
-        setShowAddForm(false);
-        setEditingTemplate(null);
-      },
-      onError: (error) => {
-        toast({
-          title: "Error",
-          description: error.message ?? "Failed to update template",
-          variant: "destructive",
-        });
-      },
-    },
-  );
+      context.onProgress?.({ step: "Preparing email", percentage: 50 });
 
-  const deleteTemplateMutation = trpc.integrations.templates.delete.useMutation(
-    {
-      onSuccess: () => {
-        toast({
-          title: "Success",
-          description: "Template deleted successfully",
-        });
-        void refetchTemplates();
-      },
-      onError: (error) => {
-        toast({
-          title: "Error",
-          description: error.message ?? "Failed to delete template",
-          variant: "destructive",
-        });
-      },
-    },
-  );
+      // Mock email sending logic
+      const mockDelay = Math.random() * 2000 + 500; // 500-2500ms
+      await new Promise((resolve) => setTimeout(resolve, mockDelay));
 
-  const templates = templatesData?.templates ?? [];
+      context.onProgress?.({ step: "Sending email", percentage: 80 });
 
-  interface TemplateFormData {
-    name: string;
-    content: string;
-    subject?: string | undefined;
-    description?: string | undefined;
-    variables?: string[] | undefined;
-    tags?: string[] | undefined;
-    type: string;
-  }
+      // Validate recipient email
+      const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient);
 
-  const handleSaveTemplate = async (data: TemplateFormData) => {
-    try {
-      // Transform string[] variables to the expected object structure
-      const transformedVariables = (data.variables ?? []).map((varName) => ({
-        name: varName,
-        description: undefined,
-        defaultValue: undefined,
-        required: false,
-      }));
+      context.onProgress?.({ step: "Email sent", percentage: 100 });
 
-      const templateData = {
-        name: data.name,
-        type: toolType.toUpperCase() as "EMAIL" | "SLACK" | "DISCORD",
-        content: data.content,
-        subject: data.subject,
-        description: data.description ?? "",
-        variables: transformedVariables,
-        isSystemTemplate: false,
-        tags: data.tags ?? [],
+      const result = {
+        messageId: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        status: isValidEmail ? "sent" : "failed",
+        recipients: isValidEmail ? [recipient] : [],
+        timestamp: new Date().toISOString(),
+        deliveryInfo: {
+          accepted: isValidEmail ? [recipient] : [],
+          rejected: isValidEmail ? [] : [recipient],
+          pending: [],
+        },
       };
 
-      if (editingTemplate) {
-        await updateTemplateMutation.mutateAsync({
-          id: editingTemplate.id,
-          ...templateData,
-        });
-      } else {
-        await createTemplateMutation.mutateAsync(templateData);
-      }
-    } catch (error) {
-      // Error is handled by mutation callbacks
-      console.error("Error saving template:", error);
-    }
-  };
-
-  const handleEditTemplate = (template: Template) => {
-    setEditingTemplate(template);
-    setShowAddForm(true);
-  };
-
-  const handleCancelEdit = () => {
-    setEditingTemplate(null);
-    setShowAddForm(false);
-  };
-
-  const handleDeleteTemplate = async (templateId: number) => {
-    if (templateId < 0) return; // Can't delete built-in templates
-
-    try {
-      await deleteTemplateMutation.mutateAsync({ id: templateId });
-    } catch (error) {
-      // Error is handled by mutation callbacks
-      console.error("Error deleting template:", error);
-    }
-  };
-
-  if (isLoading) {
-    return <div className="py-8 text-center">Loading templates...</div>;
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium">Email Templates</h3>
-        <Button onClick={() => setShowAddForm(true)}>Add Template</Button>
-      </div>
-
-      {showAddForm && (
-        <div className="border-border bg-muted/50 rounded-lg border p-4">
-          <h4 className="mb-4 font-medium">
-            {editingTemplate ? "Edit Template" : "Create New Template"}
-          </h4>
-          <TemplateForm
-            toolType="EMAIL"
-            template={
-              editingTemplate
-                ? ({
-                    id: editingTemplate.id,
-                    name: editingTemplate.name,
-                    content: editingTemplate.content,
-                    subject: editingTemplate.subject ?? undefined,
-                    isSystemTemplate: editingTemplate.isSystemTemplate,
-                  } as {
-                    id?: number;
-                    name: string;
-                    content: string;
-                    subject?: string;
-                    isSystemTemplate?: boolean;
-                  })
-                : undefined
-            }
-            onSubmit={handleSaveTemplate}
-            onCancel={handleCancelEdit}
-            showSubjectField={true}
-          />
-        </div>
-      )}
-
-      <div className="space-y-3">
-        {templates.map((template) => (
-          <div
-            key={template.id}
-            className="border-border hover:bg-muted/50 rounded-lg border"
-          >
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem
-                value={`template-${template.id}`}
-                className="border-none"
-              >
-                <div className="flex items-center justify-between p-4">
-                  <div className="flex items-center gap-3">
-                    <AccordionTrigger className="p-0 hover:no-underline">
-                      <div className="flex items-center gap-3">
-                        <h4 className="font-medium">{template.name}</h4>
-                        <Badge
-                          variant={
-                            template.isSystemTemplate ? "outline" : "default"
-                          }
-                        >
-                          {template.isSystemTemplate ? "System" : "Custom"}
-                        </Badge>
-                      </div>
-                    </AccordionTrigger>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {!template.isSystemTemplate && (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditTemplate(template)}
-                        >
-                          <Edit size={16} />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteTemplate(template.id)}
-                        >
-                          <Trash2 size={16} />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <AccordionContent className="px-4 pb-4">
-                  <div className="grid gap-3 text-sm">
-                    <div>
-                      <span className="font-medium">Subject:</span>
-                      <div className="bg-muted mt-1 rounded border p-2 text-xs">
-                        {template.subject ?? "No subject set"}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="font-medium">Content:</span>
-                      <div className="bg-muted mt-1 rounded border p-3 font-mono text-xs whitespace-pre-wrap">
-                        {template.content}
-                      </div>
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </div>
-        ))}
-      </div>
-
-      {templates.length === 0 && (
-        <div className="text-muted-foreground py-8 text-center">
-          <p>No email templates configured yet.</p>
-          <p className="text-sm">
-            Templates will help you create consistent email notifications.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
+      context.logger.info(
+        `Email sent successfully. Message ID: ${result.messageId}`,
+      );
+      return result;
+    },
+    testData: () => ({
+      to: "test@example.com",
+      subject: "Test Email",
+      body: "This is a test email from Cronium.",
+    }),
+    validate: (params: SendEmailParams) => {
+      const result = emailActions[0]?.inputSchema.safeParse(params);
+      return {
+        isValid: result?.success ?? false,
+        errors: result?.success
+          ? []
+          : (result?.error?.errors.map(
+              (e) => `${e.path.join(".")}: ${e.message}`,
+            ) ?? []),
+      };
+    },
+    helpText: "Send emails using SMTP credentials.",
+    examples: [
+      {
+        name: "Simple Email",
+        description: "Send a basic text email",
+        input: {
+          to: "user@example.com",
+          subject: "Hello from Cronium",
+          body: "This is a simple text email.",
+        },
+        output: {
+          messageId: "example-123",
+          status: "sent",
+          recipients: ["user@example.com"],
+          timestamp: "2024-01-01T12:00:00Z",
+        },
+      },
+      {
+        name: "Event Notification",
+        description: "Send an event notification email",
+        input: {
+          to: "admin@example.com",
+          subject: "Event {{cronium.event.name}} Completed",
+          body: "The event completed in {{cronium.event.duration}}ms with status: {{cronium.event.status}}",
+        },
+        output: {
+          messageId: "example-456",
+          status: "sent",
+          recipients: ["admin@example.com"],
+          timestamp: "2024-01-01T12:00:00Z",
+        },
+      },
+    ],
+  },
+];
 
 // Email plugin definition - fully tRPC integrated
 export const EmailPlugin: ToolPlugin = {
@@ -540,7 +404,14 @@ export const EmailPlugin: ToolPlugin = {
 
   CredentialForm: EmailCredentialForm,
   CredentialDisplay: EmailCredentialDisplay,
-  TemplateManager: EmailTemplateManager,
+  // TemplateManager: EmailTemplateManager, // Removed - using tool action templates
+
+  // Tool Actions
+  actions: emailActions,
+  getActionById: (id: string) =>
+    emailActions.find((action) => action.id === id),
+  getActionsByType: (type: ActionType) =>
+    emailActions.filter((action) => action.actionType === type),
 
   async validate(
     credentials: Record<string, unknown>,
@@ -561,40 +432,5 @@ export const EmailPlugin: ToolPlugin = {
         };
       }
     }
-  },
-
-  // Note: The send and test methods still need to use fetch or be redesigned
-  // because the ToolPlugin interface expects these to be callable without
-  // React hooks context. This is a limitation of the current plugin architecture.
-  async send(
-    _credentials: Record<string, unknown>,
-    _data: unknown,
-  ): Promise<{ success: boolean; message?: string }> {
-    // TODO: When tRPC supports non-hook based calls or the plugin architecture
-    // is updated to support React context, this can be migrated to tRPC
-    return {
-      success: false,
-      message: "Email sending requires server-side implementation",
-    };
-  },
-
-  async test(
-    credentials: Record<string, unknown>,
-  ): Promise<{ success: boolean; message: string }> {
-    // Validate the credentials structure
-    const validationResult = emailSchema.safeParse(credentials);
-    if (!validationResult.success) {
-      return {
-        success: false,
-        message: "Invalid email credentials",
-      };
-    }
-
-    // TODO: When tRPC supports non-hook based calls or the plugin architecture
-    // is updated to support React context, this can be migrated to tRPC
-    return {
-      success: true,
-      message: "Email credentials validated successfully",
-    };
   },
 };

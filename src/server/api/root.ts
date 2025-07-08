@@ -15,6 +15,10 @@ import { aiRouter } from "./routers/ai";
 import { dashboardRouter } from "./routers/dashboard";
 import { systemRouter } from "./routers/system";
 import { userAuthRouter } from "./routers/userAuth";
+import { webhookSystemRouter } from "./routers/webhook-system";
+import { quotaManagementRouter } from "./routers/quota-management";
+import { toolActionLogsRouter } from "./routers/toolActionLogs";
+import { toolActionTemplatesRouter } from "./routers/toolActionTemplates";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 
 /**
@@ -39,6 +43,10 @@ export const appRouter = createTRPCRouter({
   dashboard: dashboardRouter,
   system: systemRouter,
   userAuth: userAuthRouter,
+  webhookSystem: webhookSystemRouter,
+  quotaManagement: quotaManagementRouter,
+  toolActionLogs: toolActionLogsRouter,
+  toolActionTemplates: toolActionTemplatesRouter,
 });
 
 // export type definition of API

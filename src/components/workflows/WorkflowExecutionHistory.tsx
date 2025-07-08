@@ -84,7 +84,7 @@ export default function WorkflowExecutionHistory({
   } = trpc.workflows.getExecutions.useQuery(
     {
       id: workflowId,
-      limit: 1000, // Get all executions for client-side filtering
+      limit: 100, // Maximum allowed limit by API
       offset: 0,
     },
     {

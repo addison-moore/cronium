@@ -12,7 +12,6 @@ import {
   Trash2,
   Palette,
   Key,
-  Plug,
   Variable,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -36,7 +35,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import ApiTokensManager from "@/components/dashboard/ApiTokensManager";
-import { ModularToolsManager } from "@/components/tools/modular-tools-manager";
 import { UserVariablesManager } from "@/components/dashboard/UserVariablesManager";
 
 // User settings schema
@@ -110,13 +108,7 @@ export default function SettingsPage() {
   // Hash-based tab navigation
   const { activeTab, changeTab } = useHashTabNavigation({
     defaultTab: "profile",
-    validTabs: [
-      "profile",
-      "appearance",
-      "api-tokens",
-      "integrations",
-      "variables",
-    ],
+    validTabs: ["profile", "appearance", "api-tokens", "variables"],
   });
 
   // User settings form
@@ -228,7 +220,6 @@ export default function SettingsPage() {
             <Tab value="appearance" icon={Palette} label={t("Appearance")} />
 
             <Tab value="api-tokens" icon={Key} label={t("APITokens.Title")} />
-            <Tab value="integrations" icon={Plug} label="Tools" />
             <Tab value="variables" icon={Variable} label="Variables" />
           </TabsList>
         </div>
@@ -358,10 +349,6 @@ export default function SettingsPage() {
 
         <TabsContent value="api-tokens">
           <ApiTokensManager />
-        </TabsContent>
-
-        <TabsContent value="integrations">
-          <ModularToolsManager />
         </TabsContent>
 
         <TabsContent value="variables">

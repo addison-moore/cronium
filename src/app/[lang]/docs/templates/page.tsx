@@ -21,8 +21,11 @@ import {
 } from "lucide-react";
 import { SimpleCodeBlock } from "@/components/docs/api-code-examples";
 
+// DEPRECATED PAGE - This documents the old template system
+// TODO: Update this page to document the new Tool Action Templates system
+
 const tableOfContents = [
-  { title: "Overview", href: "#overview", level: 2 },
+  { title: "DEPRECATED - Overview", href: "#overview", level: 2 },
   { title: "Handlebars Syntax", href: "#handlebars-syntax", level: 2 },
   { title: "Context Variables", href: "#context-variables", level: 2 },
   { title: "Template Helpers", href: "#template-helpers", level: 2 },

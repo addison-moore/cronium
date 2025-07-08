@@ -9,22 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { Edit, Trash2, Eye, EyeOff, TestTube } from "lucide-react";
-import { TemplateForm } from "../../template-form";
 import {
   type ToolPlugin,
   type CredentialFormProps,
   type CredentialDisplayProps,
-  type TemplateManagerProps,
 } from "../../types/tool-plugin";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/use-toast";
+import { slackActions } from "./actions";
+import { ToolHealthBadge } from "@/components/tools/ToolHealthIndicator";
 
 const slackSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -181,6 +175,7 @@ function SlackCredentialDisplayTrpc({
                 <Badge variant={tool.isActive ? "default" : "secondary"}>
                   {tool.isActive ? "Active" : "Inactive"}
                 </Badge>
+                <ToolHealthBadge toolId={tool.id} toolName={tool.name} />
               </div>
               <div className="text-muted-foreground grid grid-cols-1 gap-4 text-sm">
                 <div className="flex items-center gap-2">
@@ -243,268 +238,6 @@ function SlackCredentialDisplayTrpc({
   );
 }
 
-interface Template {
-  id: number;
-  name: string;
-  type: string;
-  content: string;
-  subject?: string | null;
-  description?: string | null;
-  variables?: Array<{ name: string; required: boolean }> | null;
-  isSystemTemplate: boolean;
-  tags?: string[] | null;
-}
-
-// Slack template manager component
-function SlackTemplateManagerTrpc({
-  toolType: _toolType,
-}: TemplateManagerProps) {
-  const { toast } = useToast();
-  const [showAddForm, setShowAddForm] = React.useState(false);
-  const [editingTemplate, setEditingTemplate] = React.useState<Template | null>(
-    null,
-  );
-
-  const {
-    data: templatesData,
-    isLoading,
-    refetch: refetchTemplates,
-  } = trpc.integrations.templates.getAll.useQuery({
-    type: "SLACK",
-    includeSystem: true,
-    includeUser: true,
-  });
-
-  const createTemplateMutation = trpc.integrations.templates.create.useMutation(
-    {
-      onSuccess: () => {
-        toast({
-          title: "Success",
-          description: "Slack template created successfully",
-        });
-        void refetchTemplates();
-        setShowAddForm(false);
-        setEditingTemplate(null);
-      },
-    },
-  );
-
-  const updateTemplateMutation = trpc.integrations.templates.update.useMutation(
-    {
-      onSuccess: () => {
-        toast({
-          title: "Success",
-          description: "Slack template updated successfully",
-        });
-        void refetchTemplates();
-        setShowAddForm(false);
-        setEditingTemplate(null);
-      },
-    },
-  );
-
-  const deleteTemplateMutation = trpc.integrations.templates.delete.useMutation(
-    {
-      onSuccess: () => {
-        toast({
-          title: "Success",
-          description: "Slack template deleted successfully",
-        });
-        void refetchTemplates();
-      },
-    },
-  );
-
-  const templates = (templatesData?.templates ?? []) as Template[];
-
-  interface TemplateFormData {
-    name: string;
-    content: string;
-    description?: string;
-    variables?: Array<{ name: string; required: boolean }>;
-    tags?: string[];
-  }
-
-  const handleSaveTemplate = async (data: TemplateFormData) => {
-    try {
-      const templateData = {
-        name: data.name,
-        type: "SLACK" as "EMAIL" | "SLACK" | "DISCORD",
-        content: data.content,
-        description: data.description ?? "",
-        variables: data.variables ?? [],
-        isSystemTemplate: false,
-        tags: data.tags ?? [],
-      };
-
-      if (editingTemplate) {
-        await updateTemplateMutation.mutateAsync({
-          id: editingTemplate.id,
-          ...templateData,
-        });
-      } else {
-        await createTemplateMutation.mutateAsync(templateData);
-      }
-    } catch (error) {
-      console.error("Error saving template:", error);
-    }
-  };
-
-  const handleEditTemplate = (template: Template) => {
-    setEditingTemplate(template);
-    setShowAddForm(true);
-  };
-
-  const handleCancelEdit = () => {
-    setEditingTemplate(null);
-    setShowAddForm(false);
-  };
-
-  const handleDeleteTemplate = async (templateId: number) => {
-    if (templateId < 0) return; // Can't delete built-in templates
-
-    try {
-      await deleteTemplateMutation.mutateAsync({ id: templateId });
-    } catch (error) {
-      console.error("Error deleting template:", error);
-    }
-  };
-
-  if (isLoading) {
-    return <div className="py-8 text-center">Loading templates...</div>;
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium">Slack Templates</h3>
-        <Button onClick={() => setShowAddForm(true)}>Add Template</Button>
-      </div>
-
-      {showAddForm && (
-        <div className="border-border bg-muted/50 rounded-lg border p-4">
-          <h4 className="mb-4 font-medium">
-            {editingTemplate ? "Edit Template" : "Create New Template"}
-          </h4>
-          <TemplateForm
-            toolType="SLACK"
-            template={
-              editingTemplate
-                ? ({
-                    id: editingTemplate.id,
-                    name: editingTemplate.name,
-                    content: editingTemplate.content,
-                    isSystemTemplate: editingTemplate.isSystemTemplate,
-                  } as {
-                    id?: number;
-                    name: string;
-                    content: string;
-                    isSystemTemplate?: boolean;
-                  })
-                : undefined
-            }
-            onSubmit={handleSaveTemplate}
-            onCancel={handleCancelEdit}
-            showSubjectField={false}
-          />
-        </div>
-      )}
-
-      <div className="space-y-3">
-        {templates.map((template) => (
-          <div
-            key={template.id}
-            className="border-border hover:bg-muted/50 rounded-lg border"
-          >
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem
-                value={`template-${template.id}`}
-                className="border-none"
-              >
-                <div className="flex items-center justify-between p-4">
-                  <div className="flex items-center gap-3">
-                    <AccordionTrigger className="p-0 hover:no-underline">
-                      <div className="flex items-center gap-3">
-                        <h4 className="font-medium">{template.name}</h4>
-                        <Badge
-                          variant={
-                            template.isSystemTemplate ? "outline" : "default"
-                          }
-                        >
-                          {template.isSystemTemplate ? "System" : "Custom"}
-                        </Badge>
-                      </div>
-                    </AccordionTrigger>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {!template.isSystemTemplate && (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditTemplate(template)}
-                        >
-                          <Edit size={16} />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteTemplate(template.id)}
-                        >
-                          <Trash2 size={16} />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <AccordionContent className="px-4 pb-4">
-                  <div className="grid gap-3 text-sm">
-                    <div>
-                      <span className="font-medium">Message Content:</span>
-                      <div className="bg-muted mt-1 rounded border p-3 font-mono text-xs whitespace-pre-wrap">
-                        {template.content}
-                      </div>
-                    </div>
-                    {template.variables && template.variables.length > 0 && (
-                      <div>
-                        <span className="font-medium">Variables:</span>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {template.variables?.map((variable, index) => (
-                            <Badge
-                              key={index}
-                              variant="outline"
-                              className="text-xs"
-                            >
-                              {variable.name}
-                              {variable.required && (
-                                <span className="text-red-500">*</span>
-                              )}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </div>
-        ))}
-      </div>
-
-      {templates.length === 0 && (
-        <div className="text-muted-foreground py-8 text-center">
-          <p>No Slack templates configured yet.</p>
-          <p className="text-sm">
-            Templates help you create consistent Slack notifications with
-            placeholders for dynamic content.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // Interface for Slack message data
 interface SendData {
   message: string;
@@ -529,7 +262,13 @@ export const SlackPluginTrpc: ToolPlugin = {
 
   CredentialForm: SlackCredentialForm,
   CredentialDisplay: SlackCredentialDisplayTrpc,
-  TemplateManager: SlackTemplateManagerTrpc,
+  // TemplateManager: SlackTemplateManagerTrpc, // Removed - using tool action templates
+
+  // Add actions support
+  actions: Object.values(slackActions),
+  getActionById: (id: string) => slackActions[id],
+  getActionsByType: (type: string) =>
+    Object.values(slackActions).filter((action) => action.actionType === type),
 
   async validate(credentials: Record<string, unknown>) {
     const result = slackSchema.safeParse(credentials);

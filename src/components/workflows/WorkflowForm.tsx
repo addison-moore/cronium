@@ -110,7 +110,7 @@ export default function WorkflowForm({
 
   const { data: serversData, error: serversError } =
     trpc.servers.getAll.useQuery({
-      limit: 1000,
+      limit: 100,
       offset: 0,
       search: "",
       online: undefined,

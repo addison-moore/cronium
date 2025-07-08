@@ -1,0 +1,4 @@
+Spawn initial batch of subagents for continuous processing
+
+!echo "🚀 Spawning initial batch of subagents for continuous processing..."
+!python3 scripts/claude-continuous-processor.py --spawn-all

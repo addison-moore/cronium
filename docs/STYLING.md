@@ -67,6 +67,29 @@ Component-specific styles are defined in `src/app/styles/components.css`. We use
 
 For example, we have a `.btn` class that defines the base styles for all buttons. We then have modifier classes, such as `.btn-primary` and `.btn-secondary`, that apply color and other variations.
 
+### Border Styling Convention
+
+**Important:** All components requiring border styling should use the standard border classes to ensure correct theming and consistency across the application:
+
+- **Standard Border**: Use `border border-border` for all components that need borders
+- **Conditional Borders**: When adding borders conditionally, combine with the standard pattern: `border border-border`
+- **Error States**: For error states, use `border border-red-500` to override the default border color
+
+Examples:
+
+```tsx
+// Standard border
+<div className="border border-border p-4">
+
+// Conditional border with error state
+<div className={cn("border border-border", hasError && "border-red-500")}>
+
+// Toggle/switch container
+<div className="border border-border rounded-lg p-4">
+```
+
+The `border-border` class ensures that borders use the correct color from our theming system, automatically adapting to light and dark modes.
+
 ## Utility Classes
 
 We have a set of custom utility classes defined in `src/app/styles/utilities.css`. These classes provide additional functionality that is not included in Tailwind's default set.

@@ -1,0 +1,30 @@
+Get fix instructions for a specific file
+
+# Get file path from arguments
+FILE_PATH="${ARGUMENTS}"
+
+!if [ -z "$FILE_PATH" ]; then
+    echo "❌ Please provide a file path"
+    echo "Usage: /lint-fix-file <filepath>"
+    exit 1
+fi
+
+!echo "🔍 Getting fix instructions for: $FILE_PATH"
+!echo ""
+
+# Check if file has linting errors
+!if [ -f lint.log ]; then
+    if grep -q "^\./$FILE_PATH" lint.log; then
+        echo "📋 Linting issues found:"
+        echo ""
+        # Extract errors for this file
+        awk "/^\.\/$FILE_PATH\$/{flag=1; next} /^\.\//{flag=0} flag" lint.log | head -20
+        echo ""
+        echo "💡 Fix instructions:"
+        python3 scripts/lint-fix-orchestrator.py --lint-log lint.log --summary 2>/dev/null | grep -A50 "$FILE_PATH" | head -20 || echo "Run orchestrator to get detailed instructions"
+    else
+        echo "✅ No linting errors found for this file"
+    fi
+else
+    echo "❌ No lint.log found. Run: pnpm lint > lint.log 2>&1"
+fi

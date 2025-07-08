@@ -1,10 +1,16 @@
 # CLAUDE.md
 
-IMPORTANT: After making changes to the codebase, log the changes to the Changelog.md file in the root directory in the format of:
+IMPORTANT: After making changes to the codebase, log the changes to the changelog folder:
 
-## [Changes]
+1. Check if a changelog file exists for today's date in the `changelog/` folder (e.g., `changelog/2025-07-07.md`)
+2. If no file exists for today, create one with the filename `YYYY-MM-DD.md`
+3. Add your changes to the appropriate file in the format:
 
-- [Change Date] [Change Type] [Change Description]
+```
+- [YYYY-MM-DD] [Change Type] [Change Description]
+```
+
+Change types include: Feature, Bug Fix, Refactor, Documentation, Testing, etc.
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 

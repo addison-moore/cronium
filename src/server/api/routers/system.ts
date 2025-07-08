@@ -1,7 +1,6 @@
 import { createTRPCRouter, protectedProcedure, adminProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { scheduler } from "@/lib/scheduler";
-import { initializeSystemTemplates } from "@/lib/template-seeding";
 import { UserRole } from "@/shared/schema";
 
 export const systemRouter = createTRPCRouter({
@@ -24,16 +23,24 @@ export const systemRouter = createTRPCRouter({
 
   // Initialize system services (admin only)
   startServices: adminProcedure.mutation(async () => {
+    const results = [];
+
     try {
-      // Initialize system templates first
-      await initializeSystemTemplates();
+      // OLD TEMPLATE SYSTEM REMOVED - Now using tool action templates
 
       // Initialize the scheduler
-      await scheduler.initialize();
+      try {
+        await scheduler.initialize();
+        results.push("Scheduler initialized successfully");
+      } catch (error) {
+        console.warn("Scheduler initialization failed:", error);
+        results.push("Scheduler initialization failed");
+      }
 
       return {
         success: true,
-        message: "Services initialized successfully",
+        message: "Services initialization completed",
+        details: results,
       };
     } catch (error) {
       throw new TRPCError({

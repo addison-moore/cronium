@@ -65,7 +65,7 @@ export function UserVariablesManager() {
     error,
   } = trpc.variables.getAll.useQuery(
     {
-      limit: 1000,
+      limit: 100,
       offset: 0,
       search: "",
       sortBy: "key",

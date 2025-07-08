@@ -22,6 +22,7 @@ export enum EventType {
   PYTHON = "PYTHON",
   BASH = "BASH",
   HTTP_REQUEST = "HTTP_REQUEST",
+  TOOL_ACTION = "TOOL_ACTION",
 }
 
 export enum EventStatus {
@@ -148,6 +149,8 @@ export const events = pgTable("events", {
   httpUrl: varchar("http_url", { length: 1000 }),
   httpHeaders: jsonb("http_headers"),
   httpBody: text("http_body"),
+  // Tool Action specific fields
+  toolActionConfig: jsonb("tool_action_config"),
   // Common fields
   status: varchar("status", { length: 50 })
     .$type<EventStatus>()
@@ -358,6 +361,8 @@ export const toolCredentials = pgTable("tool_credentials", {
   type: varchar("type", { length: 50 }).$type<ToolType>().notNull(),
   credentials: text("credentials").notNull(), // Encrypted JSON
   isActive: boolean("is_active").default(true).notNull(),
+  encrypted: boolean("encrypted").default(false).notNull(),
+  encryptionMetadata: jsonb("encryption_metadata"),
   createdAt: timestamp("created_at")
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),
@@ -366,15 +371,92 @@ export const toolCredentials = pgTable("tool_credentials", {
     .notNull(),
 });
 
-export const templates = pgTable("templates", {
+// OAuth tokens table
+export const oauthTokens = pgTable(
+  "oauth_tokens",
+  {
+    id: serial("id").primaryKey(),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    toolId: integer("tool_id")
+      .notNull()
+      .references(() => toolCredentials.id, { onDelete: "cascade" }),
+    providerId: varchar("provider_id", { length: 50 }).notNull(),
+    accessToken: text("access_token").notNull(),
+    refreshToken: text("refresh_token"),
+    expiresAt: timestamp("expires_at"),
+    tokenType: varchar("token_type", { length: 50 })
+      .notNull()
+      .default("Bearer"),
+    scope: text("scope"),
+    createdAt: timestamp("created_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: timestamp("updated_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (table) => ({
+    uniqueUserToolProvider: unique("unique_user_tool_provider").on(
+      table.userId,
+      table.toolId,
+      table.providerId,
+    ),
+  }),
+);
+
+// OAuth state table for CSRF protection
+export const oauthStates = pgTable("oauth_states", {
+  id: serial("id").primaryKey(),
+  state: varchar("state", { length: 255 }).notNull().unique(),
+  userId: varchar("user_id", { length: 255 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  toolId: integer("tool_id")
+    .notNull()
+    .references(() => toolCredentials.id, { onDelete: "cascade" }),
+  providerId: varchar("provider_id", { length: 50 }).notNull(),
+  redirectUri: text("redirect_uri").notNull(),
+  codeVerifier: text("code_verifier"),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
+});
+
+// OLD TEMPLATE SYSTEM - DEPRECATED
+// Keeping for reference during migration
+// TODO: Remove after all references are updated
+// export const templates = pgTable("templates", {
+//   id: serial("id").primaryKey(),
+//   userId: varchar("user_id", { length: 255 }).references(() => users.id, {
+//     onDelete: "cascade",
+//   }),
+//   name: varchar("name", { length: 255 }).notNull(),
+//   type: varchar("type", { length: 50 }).$type<ToolType>().notNull(),
+//   content: text("content").notNull(),
+//   subject: varchar("subject", { length: 500 }), // For email templates
+//   isSystemTemplate: boolean("is_system_template").default(false).notNull(),
+//   createdAt: timestamp("created_at")
+//     .default(sql`CURRENT_TIMESTAMP`)
+//     .notNull(),
+//   updatedAt: timestamp("updated_at")
+//     .default(sql`CURRENT_TIMESTAMP`)
+//     .notNull(),
+// });
+
+// Tool action templates table for saving reusable tool action configurations
+export const toolActionTemplates = pgTable("tool_action_templates", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id", { length: 255 }).references(() => users.id, {
     onDelete: "cascade",
   }),
   name: varchar("name", { length: 255 }).notNull(),
-  type: varchar("type", { length: 50 }).$type<ToolType>().notNull(),
-  content: text("content").notNull(),
-  subject: varchar("subject", { length: 500 }), // For email templates
+  description: text("description"),
+  toolType: varchar("tool_type", { length: 50 }).notNull(), // DISCORD, SLACK, EMAIL, etc.
+  actionId: varchar("action_id", { length: 100 }).notNull(), // send-message, send-email, etc.
+  parameters: jsonb("parameters").notNull(), // Stored action parameters
   isSystemTemplate: boolean("is_system_template").default(false).notNull(),
   createdAt: timestamp("created_at")
     .default(sql`CURRENT_TIMESTAMP`)
@@ -417,6 +499,74 @@ export const userSettings = pgTable("user_settings", {
     .notNull(),
 });
 
+// Tool audit logs table
+export const toolAuditLogs = pgTable("tool_audit_logs", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id", { length: 255 }).notNull(),
+  toolId: integer("tool_id").references(() => toolCredentials.id, {
+    onDelete: "set null",
+  }),
+  action: varchar("action", { length: 50 }).notNull(), // 'create', 'read', 'update', 'delete', 'execute', 'auth_failure'
+  actionDetails: jsonb("action_details"),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  success: boolean("success").default(true).notNull(),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
+});
+
+// Tool rate limits table
+export const toolRateLimits = pgTable(
+  "tool_rate_limits",
+  {
+    id: serial("id").primaryKey(),
+    userId: varchar("user_id", { length: 255 }).notNull(),
+    toolType: varchar("tool_type", { length: 50 }).notNull(),
+    windowStart: timestamp("window_start").notNull(),
+    requestCount: integer("request_count").default(0).notNull(),
+    lastRequest: timestamp("last_request"),
+    createdAt: timestamp("created_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: timestamp("updated_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (table) => ({
+    uniqueUserToolWindow: unique("unique_user_tool_window").on(
+      table.userId,
+      table.toolType,
+      table.windowStart,
+    ),
+  }),
+);
+
+// User tool quotas table
+export const userToolQuotas = pgTable(
+  "user_tool_quotas",
+  {
+    id: serial("id").primaryKey(),
+    userId: varchar("user_id", { length: 255 }).notNull(),
+    toolType: varchar("tool_type", { length: 50 }),
+    dailyLimit: integer("daily_limit"),
+    hourlyLimit: integer("hourly_limit"),
+    burstLimit: integer("burst_limit"),
+    tier: varchar("tier", { length: 20 }).default("free").notNull(), // 'free', 'pro', 'enterprise'
+    customLimits: jsonb("custom_limits"),
+    createdAt: timestamp("created_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: timestamp("updated_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (table) => ({
+    uniqueUserTool: unique("unique_user_tool").on(table.userId, table.toolType),
+  }),
+);
+
 // Relationships
 export const usersRelations = relations(users, ({ one, many }) => ({
   events: many(events),
@@ -424,7 +574,6 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   apiTokens: many(apiTokens),
   workflows: many(workflows),
   toolCredentials: many(toolCredentials),
-  templates: many(templates),
   userVariables: many(userVariables),
   userSettings: one(userSettings),
   role: one(roles, {
@@ -688,6 +837,22 @@ export const workflowExecutionEvents = pgTable("workflow_execution_events", {
     .notNull(),
 });
 
+export const toolActionLogs = pgTable("tool_action_logs", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").references(() => events.id),
+  toolType: varchar("tool_type", { length: 50 }).notNull(),
+  actionType: varchar("action_type", { length: 50 }).notNull(),
+  actionId: varchar("action_id", { length: 100 }).notNull(),
+  parameters: jsonb("parameters"),
+  result: jsonb("result"),
+  status: varchar("status", { length: 20 }).notNull(),
+  executionTime: integer("execution_time"), // milliseconds
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
+});
+
 export const workflowsRelations = relations(workflows, ({ one, many }) => ({
   user: one(users, {
     fields: [workflows.userId],
@@ -798,12 +963,23 @@ export const toolCredentialsRelations = relations(
   }),
 );
 
-export const templatesRelations = relations(templates, ({ one }) => ({
-  user: one(users, {
-    fields: [templates.userId],
-    references: [users.id],
+// OLD TEMPLATE SYSTEM - DEPRECATED
+// export const templatesRelations = relations(templates, ({ one }) => ({
+//   user: one(users, {
+//     fields: [templates.userId],
+//     references: [users.id],
+//   }),
+// }));
+
+export const toolActionTemplatesRelations = relations(
+  toolActionTemplates,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [toolActionTemplates.userId],
+      references: [users.id],
+    }),
   }),
-}));
+);
 
 export const userVariablesRelations = relations(userVariables, ({ one }) => ({
   user: one(users, {
@@ -850,8 +1026,9 @@ export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;
 export type Tool = typeof toolCredentials.$inferSelect;
 export type InsertTool = typeof toolCredentials.$inferInsert;
 
-export type Template = typeof templates.$inferSelect;
-export type InsertTemplate = typeof templates.$inferInsert;
+// OLD TEMPLATE TYPES - REMOVED
+// export type Template = typeof templates.$inferSelect;
+// export type InsertTemplate = typeof templates.$inferInsert;
 
 export type UserVariable = typeof userVariables.$inferSelect;
 export type InsertUserVariable = typeof userVariables.$inferInsert;
@@ -881,6 +1058,209 @@ export type InsertWorkflowExecutionEvent =
 
 export type EventServer = typeof eventServers.$inferSelect;
 export type InsertEventServer = typeof eventServers.$inferInsert;
+
+export type ToolActionLog = typeof toolActionLogs.$inferSelect;
+export type InsertToolActionLog = typeof toolActionLogs.$inferInsert;
+
+// Webhook tables
+export const webhooks = pgTable("webhooks", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id", { length: 255 })
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  url: text("url").notNull(),
+  key: varchar("key", { length: 255 }).notNull().unique(),
+  secret: text("secret").notNull(),
+  events: jsonb("events").notNull().default("[]"), // Array of event names
+  headers: jsonb("headers").default("{}"), // Custom headers
+  active: boolean("active").default(true).notNull(),
+  verifyTimestamp: boolean("verify_timestamp").default(true),
+  ipWhitelist: jsonb("ip_whitelist"), // Array of allowed IPs
+  rateLimit: jsonb("rate_limit"), // { requests: number, window: number }
+  retryConfig: jsonb("retry_config"), // { maxRetries: number, retryDelay: number, backoffMultiplier: number }
+  transformations: jsonb("transformations"), // Data transformation rules
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const webhookEvents = pgTable("webhook_events", {
+  id: serial("id").primaryKey(),
+  event: varchar("event", { length: 255 }).notNull(),
+  payload: jsonb("payload").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const webhookDeliveries = pgTable("webhook_deliveries", {
+  id: serial("id").primaryKey(),
+  webhookId: integer("webhook_id")
+    .references(() => webhooks.id, { onDelete: "cascade" })
+    .notNull(),
+  webhookEventId: integer("webhook_event_id")
+    .references(() => webhookEvents.id, { onDelete: "cascade" })
+    .notNull(),
+  deliveryId: varchar("delivery_id", { length: 255 }).notNull(),
+  status: varchar("status", { length: 50 }).notNull(), // success, failed
+  statusCode: integer("status_code"),
+  response: text("response"),
+  error: text("error"),
+  headers: jsonb("headers"),
+  duration: integer("duration"), // milliseconds
+  attemptedAt: timestamp("attempted_at").notNull(),
+});
+
+export const webhookLogs = pgTable("webhook_logs", {
+  id: serial("id").primaryKey(),
+  webhookId: integer("webhook_id")
+    .references(() => webhooks.id, { onDelete: "cascade" })
+    .notNull(),
+  success: boolean("success").notNull(),
+  error: text("error"),
+  eventId: integer("event_id"),
+  duration: integer("duration"), // milliseconds
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Webhook relationships
+export const webhooksRelations = relations(webhooks, ({ one, many }) => ({
+  user: one(users, {
+    fields: [webhooks.userId],
+    references: [users.id],
+  }),
+  deliveries: many(webhookDeliveries),
+  logs: many(webhookLogs),
+}));
+
+export const webhookEventsRelations = relations(webhookEvents, ({ many }) => ({
+  deliveries: many(webhookDeliveries),
+}));
+
+export const webhookDeliveriesRelations = relations(
+  webhookDeliveries,
+  ({ one }) => ({
+    webhook: one(webhooks, {
+      fields: [webhookDeliveries.webhookId],
+      references: [webhooks.id],
+    }),
+    event: one(webhookEvents, {
+      fields: [webhookDeliveries.webhookEventId],
+      references: [webhookEvents.id],
+    }),
+  }),
+);
+
+export const webhookLogsRelations = relations(webhookLogs, ({ one }) => ({
+  webhook: one(webhooks, {
+    fields: [webhookLogs.webhookId],
+    references: [webhooks.id],
+  }),
+}));
+
+// Export types
+export type Webhook = typeof webhooks.$inferSelect;
+export type InsertWebhook = typeof webhooks.$inferInsert;
+
+export type WebhookEvent = typeof webhookEvents.$inferSelect;
+export type InsertWebhookEvent = typeof webhookEvents.$inferInsert;
+
+export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
+export type InsertWebhookDelivery = typeof webhookDeliveries.$inferInsert;
+
+export type WebhookLog = typeof webhookLogs.$inferSelect;
+export type InsertWebhookLog = typeof webhookLogs.$inferInsert;
+
+// Rate limiting and quota tables
+export const rateLimitBuckets = pgTable("rate_limit_buckets", {
+  id: serial("id").primaryKey(),
+  key: varchar("key", { length: 255 }).notNull(),
+  type: varchar("type", { length: 50 }).notNull(),
+  identifier: varchar("identifier", { length: 255 }).notNull(),
+  subIdentifier: varchar("sub_identifier", { length: 255 }),
+  count: integer("count").notNull().default(0),
+  limit: integer("limit").notNull(),
+  windowMs: integer("window_ms").notNull(),
+  resetAt: timestamp("reset_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const userQuotas = pgTable("user_quotas", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id", { length: 255 })
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull()
+    .unique(),
+  quotaConfig: jsonb("quota_config").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const quotaUsage = pgTable("quota_usage", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id", { length: 255 })
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  resource: varchar("resource", { length: 100 }).notNull(),
+  amount: integer("amount").notNull().default(1),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const toolUsageMetrics = pgTable("tool_usage_metrics", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id", { length: 255 })
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  toolId: varchar("tool_id", { length: 100 }).notNull(),
+  actionId: varchar("action_id", { length: 100 }),
+  executionTime: integer("execution_time"), // milliseconds
+  success: boolean("success").notNull(),
+  errorType: varchar("error_type", { length: 100 }),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Rate limiting relationships
+export const rateLimitBucketsRelations = relations(
+  rateLimitBuckets,
+  () => ({}),
+);
+
+export const userQuotasRelations = relations(userQuotas, ({ one }) => ({
+  user: one(users, {
+    fields: [userQuotas.userId],
+    references: [users.id],
+  }),
+}));
+
+export const quotaUsageRelations = relations(quotaUsage, ({ one }) => ({
+  user: one(users, {
+    fields: [quotaUsage.userId],
+    references: [users.id],
+  }),
+}));
+
+export const toolUsageMetricsRelations = relations(
+  toolUsageMetrics,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [toolUsageMetrics.userId],
+      references: [users.id],
+    }),
+  }),
+);
+
+// Export types
+export type RateLimitBucket = typeof rateLimitBuckets.$inferSelect;
+export type InsertRateLimitBucket = typeof rateLimitBuckets.$inferInsert;
+
+export type UserQuota = typeof userQuotas.$inferSelect;
+export type InsertUserQuota = typeof userQuotas.$inferInsert;
+
+export type QuotaUsage = typeof quotaUsage.$inferSelect;
+export type InsertQuotaUsage = typeof quotaUsage.$inferInsert;
+
+export type ToolUsageMetric = typeof toolUsageMetrics.$inferSelect;
+export type InsertToolUsageMetric = typeof toolUsageMetrics.$inferInsert;
 
 // Remap for backwards compatibility during transition
 // We can remove these after all code is updated

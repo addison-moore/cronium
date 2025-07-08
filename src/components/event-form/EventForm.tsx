@@ -28,10 +28,12 @@ import AIScriptAssistant from "@/components/dashboard/AIScriptAssistant";
 import ConditionalActionsSection, {
   type EventData as ConditionalActionsEventData,
 } from "./ConditionalActionsSection";
+import ToolActionSection, { type ToolActionConfig } from "./ToolActionSection";
 import EditorSettingsModal, {
   type EditorSettings,
 } from "./EditorSettingsModal";
 import { Eye, EyeOff, Trash2, Settings } from "lucide-react";
+import { isToolActionsUIEnabled } from "@/lib/featureFlags";
 
 import {
   EventType,
@@ -173,6 +175,12 @@ export default function EventForm({
   const [passwordVisibility, setPasswordVisibility] = useState<
     Record<number, boolean>
   >({});
+  const [toolActionConfig, setToolActionConfig] =
+    useState<ToolActionConfig | null>(
+      eventData?.toolActionConfig
+        ? (JSON.parse(eventData.toolActionConfig as string) as ToolActionConfig)
+        : null,
+    );
 
   // Fetch available servers using tRPC
   const { data: serversData } = trpc.servers.getAll.useQuery(
@@ -180,6 +188,13 @@ export default function EventForm({
     QUERY_OPTIONS.dynamic,
   );
   const servers = serversData?.servers ?? [];
+
+  // Fetch available tools for tool actions using tRPC
+  const { data: toolsData } = trpc.tools.getAll.useQuery(
+    {},
+    QUERY_OPTIONS.dynamic,
+  );
+  const availableTools = toolsData?.tools ?? [];
 
   // Fetch available events for conditional events using tRPC
   const { data: eventsData } = trpc.events.getAll.useQuery(
@@ -194,6 +209,7 @@ export default function EventForm({
 
   // Derived state
   const isHttpRequest = type === EventType.HTTP_REQUEST;
+  const isToolAction = type === EventType.TOOL_ACTION;
   const isRemote = runLocation === RunLocation.REMOTE;
 
   // HTTP request data state (only used for HTTP_REQUEST type)
@@ -378,7 +394,7 @@ export default function EventForm({
         description,
         shared,
         type,
-        content: isHttpRequest ? "" : content, // Clear content for HTTP requests
+        content: isHttpRequest || isToolAction ? "" : content, // Clear content for HTTP requests and tool actions
         status,
         triggerType,
         scheduleNumber:
@@ -411,6 +427,12 @@ export default function EventForm({
           httpUrl: httpRequest.url,
           httpHeaders: httpRequest.headers,
           httpBody: httpRequest.body,
+        }),
+        // Include tool action config if needed
+        ...(isToolAction && {
+          toolActionConfig: toolActionConfig
+            ? JSON.stringify(toolActionConfig)
+            : null,
         }),
         // Include environment variables
         envVars,
@@ -620,6 +642,11 @@ export default function EventForm({
                   <SelectItem value={EventType.HTTP_REQUEST}>
                     {t("Fields.TypeHTTPRequest")}
                   </SelectItem>
+                  {isToolActionsUIEnabled() && (
+                    <SelectItem value={EventType.TOOL_ACTION}>
+                      Tool Action
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -860,6 +887,15 @@ export default function EventForm({
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Tool Action Section */}
+      {isToolAction && isToolActionsUIEnabled() && (
+        <ToolActionSection
+          value={toolActionConfig}
+          onChange={setToolActionConfig}
+          availableTools={availableTools}
+        />
       )}
 
       {/* Environment Variables Section */}

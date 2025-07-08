@@ -15,11 +15,12 @@ import {
   EventStatus,
   LogStatus,
 } from "@/shared/schema";
-import { eq, desc, gte, and } from "drizzle-orm";
+import { eq, desc, gte, and, sql } from "drizzle-orm";
 
 // Schemas
 const dashboardStatsSchema = z.object({
   days: z.number().min(1).max(365).default(30),
+  activityLimit: z.number().min(1).max(100).default(50),
 });
 
 export const dashboardRouter = createTRPCRouter({
@@ -32,6 +33,7 @@ export const dashboardRouter = createTRPCRouter({
       try {
         const userId = ctx.session.user.id;
         const days = input.days ?? 30;
+        const activityLimit = input.activityLimit ?? 50;
 
         // Get script counts
         const allScripts = await storage.getAllEvents(userId);
@@ -51,6 +53,12 @@ export const dashboardRouter = createTRPCRouter({
         const daysAgo = new Date();
         daysAgo.setDate(daysAgo.getDate() - days);
 
+        // Get total count of logs for the user
+        const [{ count: totalActivityCount }] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(logs)
+          .where(eq(logs.userId, userId));
+
         // Get recent logs with workflow information
         const recentLogs = await db
           .select({
@@ -67,7 +75,7 @@ export const dashboardRouter = createTRPCRouter({
           .leftJoin(workflows, eq(logs.workflowId, workflows.id))
           .where(eq(logs.userId, userId))
           .orderBy(desc(logs.startTime))
-          .limit(10);
+          .limit(activityLimit);
 
         // Get execution counts of actual executions (SUCCESS and FAILURE only, not PAUSED)
         const recentLogsQuery = await db
@@ -142,6 +150,7 @@ export const dashboardRouter = createTRPCRouter({
           workflowsCount: userWorkflows.length,
           serversCount: userServers.length,
           recentActivity,
+          totalActivityCount,
         };
       } catch (error) {
         throw new TRPCError({
