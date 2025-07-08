@@ -19,6 +19,7 @@ import {
   type ActionType,
   type ExecutionContext,
 } from "../../types/tool-plugin";
+import { zodToParameters } from "../../utils/zod-to-parameters";
 
 // Email credentials schema
 const emailSchema = z.object({
@@ -243,6 +244,15 @@ function EmailCredentialDisplay({
 }
 
 // Email Actions Definition - Simplified for MVP
+const sendEmailSchema = z.object({
+  to: z.string().email("Must be a valid email address"),
+  subject: z
+    .string()
+    .min(1, "Subject is required")
+    .max(255, "Subject must be less than 255 characters"),
+  body: z.string().min(1, "Email body is required"),
+});
+
 const emailActions: ToolAction[] = [
   {
     id: "send-email",
@@ -252,14 +262,8 @@ const emailActions: ToolAction[] = [
     actionType: "create",
     developmentMode: "visual",
     isConditionalAction: true,
-    inputSchema: z.object({
-      to: z.string().email("Must be a valid email address"),
-      subject: z
-        .string()
-        .min(1, "Subject is required")
-        .max(255, "Subject must be less than 255 characters"),
-      body: z.string().min(1, "Email body is required"),
-    }),
+    inputSchema: sendEmailSchema,
+    parameters: zodToParameters(sendEmailSchema),
     outputSchema: z.object({
       messageId: z.string(),
       status: z.enum(["sent", "failed"]),

@@ -6,6 +6,8 @@ import {
   EventStatus,
   EventTriggerType,
   ToolType,
+  RunLocation,
+  TimeUnit,
 } from "@/shared/schema";
 import { db } from "@/server/db";
 import { toolCredentials } from "@/shared/schema";
@@ -51,31 +53,35 @@ export async function GET(request: NextRequest) {
       name: "Test Tool Action Event",
       description: "Testing tool action execution",
       type: EventType.TOOL_ACTION,
-      schedule: "{}",
+      content: null,
       status: EventStatus.ACTIVE,
       triggerType: EventTriggerType.MANUAL,
-      runLocation: "LOCAL" as any,
+      runLocation: RunLocation.LOCAL,
       serverId: null,
       timeoutValue: 30,
-      timeoutUnit: "SECONDS" as any,
+      timeoutUnit: TimeUnit.SECONDS,
       retries: 0,
       maxExecutions: 1,
       executionCount: 0,
-      envVars: "[]",
-      conditionalEvents: "[]",
       tags: [],
       createdAt: new Date(),
       updatedAt: new Date(),
-      code: "",
       httpMethod: null,
       httpUrl: null,
       httpHeaders: null,
       httpBody: null,
-      pythonVersion: null,
-      selectedServerIds: [],
+      shared: false,
+      scheduleNumber: 1,
+      scheduleUnit: TimeUnit.MINUTES,
+      customSchedule: null,
+      startTime: null,
       resetCounterOnActive: false,
+      lastRunAt: null,
+      nextRunAt: null,
+      successCount: 0,
+      failureCount: 0,
       toolActionConfig: null,
-    } as Event;
+    };
 
     // Configure based on tool type
     let toolActionConfig: any = {

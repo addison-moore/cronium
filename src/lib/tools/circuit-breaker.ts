@@ -229,16 +229,25 @@ export class CircuitBreaker<T> {
     const recentRequests = this.getRecentRequests();
     const errorRate = this.calculateErrorRate(recentRequests);
 
-    return {
+    const metrics: CircuitBreakerMetrics = {
       state: this.state,
       failures: this.failures,
       successes: this.successes,
       totalRequests: recentRequests.length,
-      lastFailureTime: this.lastFailureTime,
-      lastSuccessTime: this.lastSuccessTime,
       errorRate,
-      nextAttemptTime: this.nextAttemptTime,
     };
+
+    if (this.lastFailureTime) {
+      metrics.lastFailureTime = this.lastFailureTime;
+    }
+    if (this.lastSuccessTime) {
+      metrics.lastSuccessTime = this.lastSuccessTime;
+    }
+    if (this.nextAttemptTime) {
+      metrics.nextAttemptTime = this.nextAttemptTime;
+    }
+
+    return metrics;
   }
 
   /**
@@ -248,7 +257,7 @@ export class CircuitBreaker<T> {
     this.state = "CLOSED";
     this.failures = 0;
     this.successes = 0;
-    this.nextAttemptTime = undefined;
+    delete this.nextAttemptTime;
     console.log(`Circuit breaker ${this.name} has been reset`);
   }
 
@@ -266,7 +275,7 @@ export class CircuitBreaker<T> {
     this.state = "CLOSED";
     this.failures = 0;
     this.successes = 0;
-    this.nextAttemptTime = undefined;
+    delete this.nextAttemptTime;
   }
 }
 

@@ -117,6 +117,15 @@ export class RateLimiter {
     toolType: string,
   ): Promise<RateLimitResult> {
     const config = defaultRateLimits[toolType] || defaultRateLimits.default;
+    if (!config) {
+      // Fallback if no default config exists
+      return {
+        allowed: true,
+        limit: 100,
+        remaining: 100,
+        resetAt: new Date(Date.now() + 3600000), // 1 hour
+      };
+    }
     const windowStart = new Date(Date.now() - config.windowSize);
 
     try {
@@ -235,7 +244,7 @@ export class RateLimiter {
       const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
       // Count requests in each window
-      const [hourlyCount] = await db
+      const hourlyCountResult = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(toolRateLimits)
         .where(
@@ -246,7 +255,7 @@ export class RateLimiter {
           ),
         );
 
-      const [dailyCount] = await db
+      const dailyCountResult = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(toolRateLimits)
         .where(
@@ -257,8 +266,8 @@ export class RateLimiter {
           ),
         );
 
-      const hourlyUsed = hourlyCount.count || 0;
-      const dailyUsed = dailyCount.count || 0;
+      const hourlyUsed = hourlyCountResult[0]?.count ?? 0;
+      const dailyUsed = dailyCountResult[0]?.count ?? 0;
 
       return {
         allowed:
@@ -279,8 +288,8 @@ export class RateLimiter {
       // Fail open
       return {
         allowed: true,
-        daily: { used: 0, limit: defaultQuotas.free.daily || 0 },
-        hourly: { used: 0, limit: defaultQuotas.free.hourly || 0 },
+        daily: { used: 0, limit: defaultQuotas.free?.daily || 0 },
+        hourly: { used: 0, limit: defaultQuotas.free?.hourly || 0 },
         tier: "free",
       };
     }
@@ -330,7 +339,8 @@ export class RateLimiter {
       .delete(toolRateLimits)
       .where(sql`${toolRateLimits.windowStart} < ${cutoffDate}`);
 
-    return result.count;
+    // Drizzle returns an array with result info
+    return (result as any).rowCount ?? 0;
   }
 
   /**
@@ -363,12 +373,16 @@ export class RateLimiter {
 
     records.forEach((record) => {
       // By tool
-      byTool[record.toolType] =
-        (byTool[record.toolType] || 0) + record.requestCount;
+      if (record.toolType) {
+        byTool[record.toolType] =
+          (byTool[record.toolType] || 0) + record.requestCount;
+      }
 
       // By day
       const day = record.windowStart.toISOString().split("T")[0];
-      byDay[day] = (byDay[day] || 0) + record.requestCount;
+      if (day) {
+        byDay[day] = (byDay[day] || 0) + record.requestCount;
+      }
 
       total += record.requestCount;
     });

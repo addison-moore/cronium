@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for the send-message action parameters - Simplified for MVP
 export const sendMessageSchema = z.object({
@@ -24,6 +25,7 @@ export const sendMessageAction: ToolAction = {
   developmentMode: "visual",
   isConditionalAction: true,
   inputSchema: sendMessageSchema,
+  parameters: zodToParameters(sendMessageSchema),
   outputSchema: z.object({
     ok: z.boolean(),
     ts: z.string().optional().describe("Message timestamp"),

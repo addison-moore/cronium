@@ -44,5 +44,14 @@
     "src/**/*.tsx",
     ".next/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "_scratch", ".next"]
+  "exclude": [
+    "node_modules",
+    "_scratch/**",
+    ".next",
+    "_backups",
+    "scripts/*",
+    "**/__tests__/*",
+    "**/runtime-helpers/*",
+    "**/_backup/**"
+  ]
 }

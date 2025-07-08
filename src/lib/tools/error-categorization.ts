@@ -211,15 +211,20 @@ export class ErrorCategorizer {
     }
 
     // Default categorization
-    return {
+    const result: CategorizedError = {
       category: "unknown",
       severity: "medium",
       retryable: false,
       userMessage: "An unexpected error occurred",
       technicalMessage: error.message,
       suggestedAction: "Try again or contact support if the issue persists",
-      metadata: context,
     };
+    
+    if (context) {
+      result.metadata = context;
+    }
+    
+    return result;
   }
 
   /**
@@ -249,19 +254,25 @@ export class ErrorCategorizer {
     match: (typeof errorPatterns)[0],
     context?: Record<string, any>,
   ): CategorizedError {
-    return {
+    const result: CategorizedError = {
       category: match.category,
       severity: match.severity,
       retryable: match.retryable,
       userMessage: match.userMessage,
       technicalMessage: error.message,
-      suggestedAction: match.suggestedAction,
-      metadata: {
-        ...context,
-        stack: error.stack,
-        name: error.name,
-      },
     };
+
+    if (match.suggestedAction) {
+      result.suggestedAction = match.suggestedAction;
+    }
+
+    result.metadata = {
+      ...context,
+      stack: error.stack,
+      name: error.name,
+    };
+
+    return result;
   }
 
   /**

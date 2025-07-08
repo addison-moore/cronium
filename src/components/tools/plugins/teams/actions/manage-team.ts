@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for manage-team action parameters
 export const manageTeamSchema = z.object({
@@ -61,6 +62,7 @@ export const manageTeamAction: ToolAction = {
   actionType: "update",
   developmentMode: "visual",
   inputSchema: manageTeamSchema,
+  parameters: zodToParameters(manageTeamSchema),
   outputSchema: z.object({
     success: z.boolean(),
     teamId: z.string().optional(),

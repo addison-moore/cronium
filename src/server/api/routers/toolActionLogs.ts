@@ -17,13 +17,7 @@ export const toolActionLogsRouter = createTRPCRouter({
     )
     .query(async ({ input }) => {
       try {
-        let query = db
-          .select()
-          .from(toolActionLogs)
-          .orderBy(desc(toolActionLogs.createdAt))
-          .limit(input.limit);
-
-        // Apply filters if provided
+        // Build conditions array first
         const conditions = [];
         if (input.toolType) {
           conditions.push(eq(toolActionLogs.toolType, input.toolType));
@@ -32,13 +26,19 @@ export const toolActionLogsRouter = createTRPCRouter({
           conditions.push(eq(toolActionLogs.status, input.status));
         }
 
-        if (conditions.length > 0) {
-          query = query.where(
-            conditions.length === 1 ? conditions[0] : and(...conditions),
-          );
-        }
-
-        const logs = await query;
+        // Build query with or without where clause
+        const logs = await (conditions.length > 0
+          ? db
+              .select()
+              .from(toolActionLogs)
+              .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+              .orderBy(desc(toolActionLogs.createdAt))
+              .limit(input.limit)
+          : db
+              .select()
+              .from(toolActionLogs)
+              .orderBy(desc(toolActionLogs.createdAt))
+              .limit(input.limit));
 
         return { logs };
       } catch (error) {

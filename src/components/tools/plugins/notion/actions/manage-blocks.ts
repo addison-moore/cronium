@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for manage-blocks action parameters
 export const manageBlocksSchema = z.object({
@@ -86,6 +87,7 @@ export const manageBlocksAction: ToolAction = {
   actionType: "update",
   developmentMode: "visual",
   inputSchema: manageBlocksSchema,
+  parameters: zodToParameters(manageBlocksSchema),
   outputSchema: z.object({
     success: z.boolean(),
     blocks: z.array(z.any()).optional(),

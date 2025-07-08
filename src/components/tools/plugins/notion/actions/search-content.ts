@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for search-content action parameters
 export const searchContentSchema = z.object({
@@ -44,6 +45,7 @@ export const searchContentAction: ToolAction = {
   actionType: "search",
   developmentMode: "visual",
   inputSchema: searchContentSchema,
+  parameters: zodToParameters(searchContentSchema),
   outputSchema: z.object({
     success: z.boolean(),
     results: z

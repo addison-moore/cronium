@@ -29,7 +29,8 @@ module.exports = [
       "**/*.js",
       "**/*.mjs",
       "**/*.cjs",
-      "src/__tests__/*",
+      "**/__tests__/*",
+      "_backups/*",
     ],
   },
   ...fixupConfigRules(

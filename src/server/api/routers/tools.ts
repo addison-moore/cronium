@@ -19,11 +19,11 @@ import {
   httpCredentialsSchema,
 } from "@shared/schemas/tools";
 import { storage } from "@/server/storage";
-import { UserRole, toolCredentials } from "@/shared/schema";
+import { UserRole, toolCredentials, EventType } from "@/shared/schema";
 import { ToolType } from "@shared/schema";
 import { db } from "@/server/db";
 import { eq, and, or, ilike, desc } from "drizzle-orm";
-import { credentialEncryption } from "@/lib/security/credential-encryption";
+import { credentialEncryption, type EncryptedData } from "@/lib/security/credential-encryption";
 import { auditLog } from "@/lib/security/audit-logger";
 
 // Custom procedure that handles auth for tRPC fetch adapter
@@ -71,8 +71,17 @@ const toolProcedure = publicProcedure.use(async ({ ctx, next }) => {
   }
 });
 
+// Type for tool with parsed credentials
+type ToolWithParsedCredentials = Omit<typeof toolCredentials.$inferSelect, 'credentials'> & {
+  credentials: Record<string, any>;
+  encrypted: boolean;
+  encryptionMetadata: any;
+  description?: string;
+  tags: string[];
+};
+
 // Helper function to get user tools from database
-async function getUserTools(userId: string) {
+async function getUserTools(userId: string): Promise<ToolWithParsedCredentials[]> {
   try {
     const tools = await db
       .select()
@@ -81,20 +90,21 @@ async function getUserTools(userId: string) {
       .orderBy(desc(toolCredentials.createdAt));
 
     // Parse and decrypt credentials for each tool
-    return tools.map((tool) => {
-      let credentials = tool.credentials;
+    return tools.map((tool): ToolWithParsedCredentials => {
+      let credentials: Record<string, any>;
+      const rawCredentials = tool.credentials;
 
       // Handle credentials based on type
-      if (typeof credentials === "string") {
+      if (typeof rawCredentials === "string") {
         // First, check if it's a JSON string (unencrypted)
         try {
-          credentials = JSON.parse(credentials);
+          credentials = JSON.parse(rawCredentials);
         } catch (parseError) {
           // Not valid JSON, might be encrypted
           if (tool.encrypted && credentialEncryption.isAvailable()) {
             try {
               // Try to decrypt
-              const decrypted = credentialEncryption.decrypt(credentials);
+              const decrypted = credentialEncryption.decrypt(rawCredentials as unknown as EncryptedData);
               // Try to parse the decrypted value
               try {
                 credentials = JSON.parse(decrypted);
@@ -123,6 +133,9 @@ async function getUserTools(userId: string) {
             credentials = {};
           }
         }
+      } else {
+        // Already an object
+        credentials = rawCredentials as Record<string, any>;
       }
 
       return {
@@ -131,6 +144,8 @@ async function getUserTools(userId: string) {
         // Add default values for new columns if they don't exist
         encrypted: (tool as any).encrypted ?? false,
         encryptionMetadata: (tool as any).encryptionMetadata ?? null,
+        description: (tool as any).description ?? undefined,
+        tags: (tool as any).tags ?? [],
       };
     });
   } catch (error) {
@@ -183,7 +198,7 @@ function validateCredentialsForType(
 async function checkToolActionUsage(toolId: number): Promise<{
   eventCount: number;
   workflowCount: number;
-  lastUsed?: Date;
+  lastUsed?: Date | undefined;
   recentExecutions: number;
 }> {
   try {
@@ -197,7 +212,7 @@ async function checkToolActionUsage(toolId: number): Promise<{
       .from(events)
       .where(
         and(
-          eq(events.type, "TOOL_ACTION"),
+          eq(events.type, EventType.TOOL_ACTION),
           sql`${events.toolActionConfig}->>'toolId' = ${toolId.toString()}`,
         ),
       );
@@ -522,10 +537,18 @@ export const toolsRouter = createTRPCRouter({
           console.log("Database doesn't support encryption columns yet");
         }
 
-        const [newTool] = await db
+        const result = await db
           .insert(toolCredentials)
           .values(values)
           .returning();
+        
+        const newTool = result[0];
+        if (!newTool) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to create tool - no result returned",
+          });
+        }
 
         // Audit log
         await auditLog.credentialCreated(
@@ -534,8 +557,9 @@ export const toolsRouter = createTRPCRouter({
             toolId: newTool.id,
             ipAddress:
               ctx.headers?.get?.("x-forwarded-for") ||
-              ctx.headers?.get?.("x-real-ip"),
-            userAgent: ctx.headers?.get?.("user-agent"),
+              ctx.headers?.get?.("x-real-ip") ||
+              "unknown",
+            userAgent: ctx.headers?.get?.("user-agent") || "unknown",
           },
           input.type,
         );
@@ -629,7 +653,7 @@ export const toolsRouter = createTRPCRouter({
           }
         }
 
-        const [updatedTool] = await db
+        const updateResult = await db
           .update(toolCredentials)
           .set(updateValues)
           .where(
@@ -639,6 +663,14 @@ export const toolsRouter = createTRPCRouter({
             ),
           )
           .returning();
+          
+        const updatedTool = updateResult[0];
+        if (!updatedTool) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to update tool - no result returned",
+          });
+        }
 
         // Audit log
         const changes: Record<string, any> = {};
@@ -654,20 +686,25 @@ export const toolsRouter = createTRPCRouter({
             toolId: id,
             ipAddress:
               ctx.headers?.get?.("x-forwarded-for") ||
-              ctx.headers?.get?.("x-real-ip"),
-            userAgent: ctx.headers?.get?.("user-agent"),
+              ctx.headers?.get?.("x-real-ip") ||
+              "unknown",
+            userAgent: ctx.headers?.get?.("user-agent") || "unknown",
           },
           changes,
         );
 
         // Return the updated tool with decrypted credentials
-        let credentials = updatedTool.credentials;
-        if (typeof credentials === "string") {
-          credentials = JSON.parse(credentials);
+        let credentials: Record<string, any>;
+        const rawCredentials = updatedTool.credentials;
+        if (typeof rawCredentials === "string") {
+          credentials = JSON.parse(rawCredentials);
+        } else {
+          credentials = rawCredentials as Record<string, any>;
         }
         if (updatedTool.encrypted && credentialEncryption.isAvailable()) {
           try {
-            credentials = credentialEncryption.decrypt(credentials);
+            const decryptedData = credentialEncryption.decrypt(credentials as unknown as EncryptedData);
+            credentials = typeof decryptedData === 'string' ? JSON.parse(decryptedData) : decryptedData;
           } catch (error) {
             console.error(
               `Failed to decrypt credentials for tool ${updatedTool.id}:`,
@@ -718,8 +755,9 @@ export const toolsRouter = createTRPCRouter({
           toolId: input.id,
           ipAddress:
             ctx.headers?.get?.("x-forwarded-for") ||
-            ctx.headers?.get?.("x-real-ip"),
-          userAgent: ctx.headers?.get?.("user-agent"),
+            ctx.headers?.get?.("x-real-ip") ||
+            "unknown",
+          userAgent: ctx.headers?.get?.("user-agent") || "unknown",
         },
         tool.type,
       );
@@ -1024,9 +1062,6 @@ export const toolsRouter = createTRPCRouter({
         const startDate = new Date();
 
         switch (input.period) {
-          case "hour":
-            startDate.setHours(now.getHours() - 1);
-            break;
           case "day":
             startDate.setDate(now.getDate() - 1);
             break;
@@ -1035,6 +1070,9 @@ export const toolsRouter = createTRPCRouter({
             break;
           case "month":
             startDate.setMonth(now.getMonth() - 1);
+            break;
+          case "year":
+            startDate.setFullYear(now.getFullYear() - 1);
             break;
         }
 
@@ -1429,7 +1467,9 @@ export const toolsRouter = createTRPCRouter({
               clientSecret,
               redirectUri,
               scope: "offline_access User.Read",
-              tenantId: process.env.OAUTH_MICROSOFT_TENANT_ID,
+              ...(process.env.OAUTH_MICROSOFT_TENANT_ID && {
+                tenantId: process.env.OAUTH_MICROSOFT_TENANT_ID,
+              }),
             });
             break;
 
@@ -1515,7 +1555,9 @@ export const toolsRouter = createTRPCRouter({
               clientSecret,
               redirectUri,
               scope: "offline_access User.Read",
-              tenantId: process.env.OAUTH_MICROSOFT_TENANT_ID,
+              ...(process.env.OAUTH_MICROSOFT_TENANT_ID && {
+                tenantId: process.env.OAUTH_MICROSOFT_TENANT_ID,
+              }),
             });
             break;
 

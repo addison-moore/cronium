@@ -126,7 +126,7 @@ pnpm clear-logs       # Clear all application logs
 
 ## Database Schema
 
-Located in `src/shared/schema.ts` using Drizzle ORM. Run `pnpm db:studio` to explore the database structure.
+Located in `src/shared/schema.ts` using Drizzle ORM.
 
 ## Security Considerations
 
@@ -134,3 +134,7 @@ Located in `src/shared/schema.ts` using Drizzle ORM. Run `pnpm db:studio` to exp
 - Role-based access control throughout the application
 - Encryption for sensitive data (API tokens, passwords)
 - SSH key management for remote server access
+
+## Package Management
+
+- Use pnpm for package management

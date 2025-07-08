@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for Discord create channel action parameters
 export const createChannelSchema = z.object({
@@ -69,6 +70,7 @@ export const createChannelAction: ToolAction = {
   actionType: "create",
   developmentMode: "visual",
   inputSchema: createChannelSchema,
+  parameters: zodToParameters(createChannelSchema),
   outputSchema: z.object({
     success: z.boolean(),
     channel_id: z.string().optional(),

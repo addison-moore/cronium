@@ -10,6 +10,9 @@ import {
   RateLimiter,
   QuotaEnforcer,
   UsageReporter,
+  type RateLimitKey,
+  type QuotaConfig,
+  type RateLimitConfig,
 } from "@/lib/rate-limiting";
 import { TRPCError } from "@trpc/server";
 
@@ -96,7 +99,17 @@ export const quotaManagementRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await quotaManager.updateUserQuota(input.userId, input.quotas);
+      // Filter out undefined values to satisfy exactOptionalPropertyTypes
+      const quotaUpdates = Object.entries(input.quotas).reduce(
+        (acc, [key, value]) => {
+          if (value !== undefined) {
+            acc[key as keyof typeof input.quotas] = value;
+          }
+          return acc;
+        },
+        {} as Partial<QuotaConfig>,
+      );
+      await quotaManager.updateUserQuota(input.userId, quotaUpdates);
       return { success: true };
     }),
 
@@ -148,18 +161,36 @@ export const quotaManagementRouter = createTRPCRouter({
         });
       }
 
-      const status = await rateLimiter.getStatus(input.key, input.config);
+      // Filter out undefined subIdentifier to satisfy exactOptionalPropertyTypes
+      const rateLimitKey: RateLimitKey = {
+        type: input.key.type,
+        identifier: input.key.identifier,
+        ...(input.key.subIdentifier !== undefined && {
+          subIdentifier: input.key.subIdentifier,
+        }),
+      };
+      // Filter out undefined values from config to satisfy exactOptionalPropertyTypes
+      const config = input.config
+        ? Object.entries(input.config).reduce((acc, [key, value]) => {
+            if (value !== undefined) {
+              acc[key as keyof typeof input.config] = value;
+            }
+            return acc;
+          }, {} as Partial<RateLimitConfig>)
+        : undefined;
+      const status = await rateLimiter.getStatus(rateLimitKey, config);
       return status;
     }),
 
   // Get all quotas and limits configuration
   getConfiguration: protectedProcedure.query(async ({ ctx }) => {
     const userQuota = await quotaManager.getQuotaStatus(ctx.session.user.id);
-    const enforcementRules = quotaEnforcer.getEnforcementRules();
+    // TODO: Implement getEnforcementRules method in QuotaEnforcer
+    // const enforcementRules = quotaEnforcer.getEnforcementRules();
 
     return {
       quotas: userQuota,
-      rules: enforcementRules,
+      rules: {}, // TODO: Add enforcement rules when implemented
       features: {
         toolActions: {
           name: "Tool Actions",

@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for create-meeting action parameters
 export const createMeetingSchema = z.object({
@@ -69,6 +70,7 @@ export const createMeetingAction: ToolAction = {
   actionType: "create",
   developmentMode: "visual",
   inputSchema: createMeetingSchema,
+  parameters: zodToParameters(createMeetingSchema),
   outputSchema: z.object({
     success: z.boolean(),
     meetingId: z.string().optional(),

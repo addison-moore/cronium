@@ -1,106 +1,3 @@
-src/__tests__/components/tool-actions/ActionParameterForm.test.tsx(311,24): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/__tests__/components/tool-actions/ActionParameterForm.test.tsx(522,39): error TS2379: Argument of type '{ examples: undefined; }' is not assignable to parameter of type 'Partial<ToolAction>' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
-  Types of property 'examples' are incompatible.
-    Type 'undefined' is not assignable to type 'ActionExample[]'.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(87,5): error TS2322: Type '"SLACK"' is not assignable to type 'ToolType'.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(88,5): error TS2322: Type '{ webhook: string; }' is not assignable to type 'string'.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(99,5): error TS2322: Type '"EMAIL"' is not assignable to type 'ToolType'.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(100,5): error TS2322: Type '{ smtp: string; }' is not assignable to type 'string'.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(110,7): error TS7022: 'mockSlackPlugin' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(125,26): error TS7024: Function implicitly has return type 'any' because it does not have a return type annotation and is referenced directly or indirectly in one of its return expressions.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(126,42): error TS7006: Parameter 'a' implicitly has an 'any' type.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(130,7): error TS7022: 'mockEmailPlugin' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(140,26): error TS7024: Function implicitly has return type 'any' because it does not have a return type annotation and is referenced directly or indirectly in one of its return expressions.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(141,42): error TS7006: Parameter 'a' implicitly has an 'any' type.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(304,24): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(327,24): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(358,24): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(385,24): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(409,24): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(446,24): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(497,24): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(540,24): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(602,9): error TS2322: Type '"EMPTY"' is not assignable to type 'ToolType'.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(603,9): error TS2322: Type '{}' is not assignable to type 'string'.
-src/__tests__/components/tool-actions/ToolActionSection.test.tsx(636,24): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/__tests__/components/tools/ExecutionLogsViewer.test.tsx(189,29): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/__tests__/components/tools/ExecutionLogsViewer.test.tsx(235,29): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/__tests__/components/tools/slack/slack-actions.test.ts(10,1): error TS2322: Type 'Mock<UnknownFunction>' is not assignable to type '{ (input: URL | RequestInfo, init?: RequestInit | undefined): Promise<Response>; (input: string | URL | Request, init?: RequestInit | undefined): Promise<...>; }'.
-  Type 'unknown' is not assignable to type 'Promise<Response>'.
-src/__tests__/components/tools/slack/slack-actions.test.ts(61,57): error TS2345: Argument of type '{ ok: boolean; text: () => Promise<string>; }' is not assignable to parameter of type 'never'.
-src/__tests__/components/tools/slack/slack-actions.test.ts(102,57): error TS2345: Argument of type '{ ok: boolean; text: () => Promise<string>; }' is not assignable to parameter of type 'never'.
-src/__tests__/components/tools/slack/slack-actions.test.ts(124,57): error TS2345: Argument of type '{ ok: boolean; text: () => Promise<string>; }' is not assignable to parameter of type 'never'.
-src/__tests__/components/tools/slack/slack-actions.test.ts(151,31): error TS18048: 'callArgs' is possibly 'undefined'.
-src/__tests__/components/tools/slack/slack-actions.test.ts(151,31): error TS2571: Object is of type 'unknown'.
-src/__tests__/components/tools/slack/slack-actions.test.ts(160,57): error TS2345: Argument of type '{ ok: boolean; status: number; text: () => Promise<string>; }' is not assignable to parameter of type 'never'.
-src/__tests__/components/tools/slack/slack-actions.test.ts(221,57): error TS2345: Argument of type '{ ok: boolean; text: () => Promise<string>; }' is not assignable to parameter of type 'never'.
-src/__tests__/components/tools/slack/slack-actions.test.ts(260,57): error TS2345: Argument of type '{ ok: boolean; text: () => Promise<string>; }' is not assignable to parameter of type 'never'.
-src/__tests__/components/tools/slack/slack-actions.test.ts(276,31): error TS18048: 'callArgs' is possibly 'undefined'.
-src/__tests__/components/tools/slack/slack-actions.test.ts(276,31): error TS2571: Object is of type 'unknown'.
-src/__tests__/components/tools/slack/slack-actions.test.ts(287,57): error TS2345: Argument of type '{ ok: boolean; text: () => Promise<string>; }' is not assignable to parameter of type 'never'.
-src/__tests__/components/tools/slack/slack-actions.test.ts(303,31): error TS18048: 'callArgs' is possibly 'undefined'.
-src/__tests__/components/tools/slack/slack-actions.test.ts(303,31): error TS2571: Object is of type 'unknown'.
-src/__tests__/server/toolActionExecutor.test.ts(49,5): error TS2322: Type 'Mock<UnknownFunction>' is not assignable to type '(credentials: any, params: any, context: ExecutionContext) => Promise<any>'.
-  Type 'unknown' is not assignable to type 'Promise<any>'.
-src/__tests__/server/toolActionExecutor.test.ts(60,9): error TS2740: Type '{ id: number; userId: string; name: string; type: EventType.TOOL_ACTION; status: EventStatus.ACTIVE; triggerType: EventTriggerType.MANUAL; runLocation: RunLocation.LOCAL; toolActionConfig: string; createdAt: Date; updatedAt: Date; }' is missing the following properties from type '{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }': shared, description, content, httpMethod, and 19 more.
-src/__tests__/server/toolActionExecutor.test.ts(90,15): error TS2339: Property 'isToolActionsExecutionEnabled' does not exist on type 'unknown'.
-src/__tests__/server/toolActionExecutor.test.ts(149,59): error TS2345: Argument of type '{ result: string; processedCount: number; }' is not assignable to parameter of type 'never'.
-src/__tests__/server/toolActionExecutor.test.ts(168,59): error TS2345: Argument of type '{ result: string; }' is not assignable to parameter of type 'never'.
-src/__tests__/server/toolActionExecutor.test.ts(222,59): error TS2345: Argument of type '{ result: string; }' is not assignable to parameter of type 'never'.
-src/__tests__/server/toolActionExecutor.test.ts(236,11): error TS18046: 'context' is of type 'unknown'.
-src/__tests__/server/toolActionExecutor.test.ts(237,11): error TS18046: 'context' is of type 'unknown'.
-src/__tests__/server/toolActionExecutor.test.ts(238,11): error TS18046: 'context' is of type 'unknown'.
-src/__tests__/server/toolActionExecutor.test.ts(239,11): error TS18046: 'context' is of type 'unknown'.
-src/__tests__/server/toolActionExecutor.test.ts(241,11): error TS18046: 'context' is of type 'unknown'.
-src/__tests__/server/toolActionExecutor.test.ts(242,11): error TS18046: 'context' is of type 'unknown'.
-src/__tests__/server/toolActionExecutor.test.ts(244,11): error TS18046: 'context' is of type 'unknown'.
-src/__tests__/server/toolActionExecutor.test.ts(245,11): error TS18046: 'context' is of type 'unknown'.
-src/__tests__/server/toolActionExecutor.test.ts(252,41): error TS2554: Expected 1 arguments, but got 0.
-src/__tests__/server/toolActionExecutor.test.ts(253,43): error TS2554: Expected 1 arguments, but got 0.
-src/__tests__/server/toolActionExecutor.test.ts(254,45): error TS2554: Expected 1 arguments, but got 0.
-src/__tests__/server/toolActionExecutor.test.ts(255,45): error TS2554: Expected 1 arguments, but got 0.
-src/__tests__/server/toolActionExecutor.test.ts(297,9): error TS2345: Argument of type 'Error' is not assignable to parameter of type 'never'.
-src/__tests__/server/toolActionExecutor.test.ts(309,59): error TS2345: Argument of type '"String error"' is not assignable to parameter of type 'never'.
-src/__tests__/server/toolActionExecutor.test.ts(318,54): error TS2554: Expected 1 arguments, but got 0.
-src/__tests__/server/toolActionExecutor.test.ts(325,59): error TS2345: Argument of type '{ result: string; }' is not assignable to parameter of type 'never'.
-src/__tests__/server/toolActionExecutor.test.ts(348,59): error TS2345: Argument of type '{ result: string; processedCount: number; metadata: { key: string; }; }' is not assignable to parameter of type 'never'.
-src/__tests__/server/toolActionExecutor.test.ts(368,59): error TS2345: Argument of type '{ result: string; data: number[]; }' is not assignable to parameter of type 'never'.
-src/__tests__/server/toolActionExecutor.test.ts(387,59): error TS2345: Argument of type '{ result: string; }' is not assignable to parameter of type 'never'.
-src/__tests__/server/toolActionExecutor.test.ts(418,53): error TS2554: Expected 1 arguments, but got 0.
-src/__tests__/server/toolActionExecutor.test.ts(419,59): error TS2345: Argument of type '{ result: string; }' is not assignable to parameter of type 'never'.
-src/__tests__/server/toolActionExecutor.test.ts(438,53): error TS2554: Expected 1 arguments, but got 0.
-src/__tests__/server/toolActionExecutor.test.ts(440,9): error TS2345: Argument of type 'Error' is not assignable to parameter of type 'never'.
-src/__tests__/server/toolActionExecutor.test.ts(480,59): error TS2345: Argument of type '{ result: string; }' is not assignable to parameter of type 'never'.
-src/__tests__/server/toolActionExecutor.test.ts(500,15): error TS18046: 'context' is of type 'unknown'.
-src/__tests__/server/toolActionExecutor.test.ts(504,15): error TS18046: 'context' is of type 'unknown'.
-src/__tests__/server/toolActionExecutor.test.ts(508,15): error TS18046: 'context' is of type 'unknown'.
-src/app/api/oauth/authorize/route.ts(3,10): error TS2459: Module '"@/app/api/auth/[...nextauth]/route"' declares 'authOptions' locally, but it is not exported.
-src/app/api/oauth/authorize/route.ts(39,30): error TS2532: Object is possibly 'undefined'.
-src/app/api/oauth/authorize/route.ts(75,47): error TS2379: Argument of type '{ clientId: string; clientSecret: string; redirectUri: string; scope: string; tenantId: string | undefined; }' is not assignable to parameter of type 'Omit<{ id: string; name: string; scope: string; redirectUri: string; authorizationUrl: string; tokenUrl: string; clientId: string; clientSecret: string; options?: Record<string, unknown> | undefined; revokeUrl?: string | undefined; userInfoUrl?: string | undefined; }, "id" | ... 2 more ... | "tokenUrl"> & { ...; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
-  Type '{ clientId: string; clientSecret: string; redirectUri: string; scope: string; tenantId: string | undefined; }' is not assignable to type '{ tenantId?: string; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
-    Types of property 'tenantId' are incompatible.
-      Type 'string | undefined' is not assignable to type 'string'.
-        Type 'undefined' is not assignable to type 'string'.
-src/app/api/oauth/callback/route.ts(38,13): error TS2339: Property 'providerId' does not exist on type '{ id: number; state: string; userId: string; toolId: number; providerId: string; redirectUri: string; codeVerifier: string | null; expiresAt: Date; createdAt: Date; } | undefined'.
-src/app/api/oauth/callback/route.ts(68,47): error TS2379: Argument of type '{ clientId: string; clientSecret: string; redirectUri: string; scope: string; tenantId: string | undefined; }' is not assignable to parameter of type 'Omit<{ id: string; name: string; scope: string; redirectUri: string; authorizationUrl: string; tokenUrl: string; clientId: string; clientSecret: string; options?: Record<string, unknown> | undefined; revokeUrl?: string | undefined; userInfoUrl?: string | undefined; }, "id" | ... 2 more ... | "tokenUrl"> & { ...; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
-  Type '{ clientId: string; clientSecret: string; redirectUri: string; scope: string; tenantId: string | undefined; }' is not assignable to type '{ tenantId?: string; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
-    Types of property 'tenantId' are incompatible.
-      Type 'string | undefined' is not assignable to type 'string'.
-        Type 'undefined' is not assignable to type 'string'.
-src/app/api/test-tool-action/route.ts(48,30): error TS2352: Conversion of type '{ id: number; userId: string; name: string; description: string; type: EventType.TOOL_ACTION; schedule: string; status: EventStatus.ACTIVE; triggerType: EventTriggerType.MANUAL; ... 20 more ...; toolActionConfig: null; }' to type '{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
-  Type '{ id: number; userId: string; name: string; description: string; type: EventType.TOOL_ACTION; schedule: string; status: EventStatus.ACTIVE; triggerType: EventTriggerType.MANUAL; ... 20 more ...; toolActionConfig: null; }' is missing the following properties from type '{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }': shared, content, scheduleNumber, scheduleUnit, and 6 more.
 src/components/action-builder/ActionBuilder.tsx(65,16): error TS2345: Argument of type 'Node[]' is not assignable to parameter of type 'Node<ActionNode>[]'.
   Type 'Node' is not assignable to type 'Node<ActionNode>' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
     Type 'Node' is not assignable to type '{ id: string; position: XYPosition; data: ActionNode; sourcePosition?: Position; targetPosition?: Position; hidden?: boolean; selected?: boolean; ... 17 more ...; measured?: { ...; }; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
@@ -243,12 +140,10 @@ src/components/action-builder/useActionBuilder.ts(122,7): error TS2322: Type '(E
 src/components/action-builder/useActionBuilder.ts(221,74): error TS2339: Property 'label' does not exist on type 'ActionNode'.
 src/components/action-builder/useActionBuilder.ts(226,59): error TS2339: Property 'isConfigured' does not exist on type 'ActionNode'.
 src/components/action-builder/useActionBuilder.ts(229,68): error TS2339: Property 'label' does not exist on type 'ActionNode'.
-src/components/event-form/ConditionalActionsSection.tsx(195,20): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'SetStateAction<string | number | null>'.
-  Type 'undefined' is not assignable to type 'SetStateAction<string | number | null>'.
 src/components/event-form/ConditionalActionsSection.tsx(985,30): error TS2339: Property 'content' does not exist on type '{ id: number; userId: string | null; name: string; description: string | null; toolType: string; actionId: string; parameters: unknown; isSystemTemplate: boolean; createdAt: Date; updatedAt: Date; }'.
 src/components/event-form/EnhancedToolActionSection.tsx(93,41): error TS2339: Property 'getPlugin' does not exist on type 'typeof ToolPluginRegistry'.
 src/components/event-form/EnhancedToolActionSection.tsx(94,45): error TS7006: Parameter 'a' implicitly has an 'any' type.
-src/components/event-form/EnhancedToolActionSection.tsx(108,46): error TS2339: Property 'configured' does not exist on type '{ type: ToolType; id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; }'.
+src/components/event-form/EnhancedToolActionSection.tsx(108,46): error TS2339: Property 'configured' does not exist on type '{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; }'.
 src/components/event-form/EnhancedToolActionSection.tsx(160,14): error TS2379: Argument of type '{ toolType: string; actionId: string; toolId: number; parameters: Record<string, any>; outputMapping: Record<string, string> | undefined; }' is not assignable to parameter of type 'ToolActionConfig' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
   Types of property 'outputMapping' are incompatible.
     Type 'Record<string, string> | undefined' is not assignable to type 'Record<string, string>'.
@@ -264,47 +159,55 @@ src/components/event-form/EnhancedToolActionSection.tsx(324,22): error TS2375: T
   Types of property 'currentValue' are incompatible.
     Type 'Record<string, any> | undefined' is not assignable to type 'Record<string, unknown>'.
       Type 'undefined' is not assignable to type 'Record<string, unknown>'.
-src/components/event-form/EventForm.tsx(448,63): error TS2345: Argument of type '{ envVars: EnvVar[]; tags: string[]; conditionalActions: { type: string; action: string; details: { emailAddresses: string; emailSubject: string; targetEventId: number | null; toolId: number | null; message: string; }; }[]; ... 24 more ...; id: number; }' is not assignable to parameter of type '{ id: number; type?: EventType | undefined; status?: EventStatus | undefined; shared?: boolean | undefined; name?: string | undefined; description?: string | undefined; ... 22 more ...; onFailActions?: { ...; }[] | undefined; }'.
+src/components/event-form/EventForm.tsx(448,63): error TS2345: Argument of type '{ envVars: EnvVar[]; tags: string[]; conditionalActions: { type: string; action: string; details: { emailAddresses: string; emailSubject: string; targetEventId: number | null; toolId: number | null; message: string; }; }[]; ... 24 more ...; id: number; }' is not assignable to parameter of type '{ id: number; shared?: boolean | undefined; name?: string | undefined; description?: string | undefined; status?: EventStatus | undefined; type?: EventType | undefined; ... 22 more ...; onFailActions?: { ...; }[] | undefined; }'.
   Types of property 'toolActionConfig' are incompatible.
     Type 'string | null' is not assignable to type 'string | undefined'.
       Type 'null' is not assignable to type 'string | undefined'.
-src/components/event-form/EventForm.tsx(454,63): error TS2345: Argument of type '{ envVars: EnvVar[]; tags: string[]; conditionalActions: { type: string; action: string; details: { emailAddresses: string; emailSubject: string; targetEventId: number | null; toolId: number | null; message: string; }; }[]; ... 23 more ...; resetCounterOnActive: boolean; }' is not assignable to parameter of type '{ type: EventType; name: string; status?: EventStatus | undefined; shared?: boolean | undefined; description?: string | undefined; content?: string | undefined; ... 21 more ...; onFailActions?: { ...; }[] | undefined; }'.
+src/components/event-form/EventForm.tsx(454,63): error TS2345: Argument of type '{ envVars: EnvVar[]; tags: string[]; conditionalActions: { type: string; action: string; details: { emailAddresses: string; emailSubject: string; targetEventId: number | null; toolId: number | null; message: string; }; }[]; ... 23 more ...; resetCounterOnActive: boolean; }' is not assignable to parameter of type '{ name: string; type: EventType; shared?: boolean | undefined; description?: string | undefined; status?: EventStatus | undefined; content?: string | undefined; ... 21 more ...; onFailActions?: { ...; }[] | undefined; }'.
   Types of property 'toolActionConfig' are incompatible.
     Type 'string | null' is not assignable to type 'string | undefined'.
       Type 'null' is not assignable to type 'string | undefined'.
-src/components/event-form/ImprovedEventForm.tsx(201,5): error TS2322: Type 'Resolver<{ type: EventType; status: EventStatus; name: string; triggerType: EventTriggerType; shared?: boolean | undefined; description?: string | undefined; ... 20 more ...; useCronScheduling?: boolean | undefined; }, any, { ...; }>' is not assignable to type 'Resolver<{ type: EventType; status: EventStatus; shared: boolean; name: string; triggerType: EventTriggerType; scheduleNumber: number; scheduleUnit: TimeUnit; ... 19 more ...; startTime?: string | ... 1 more ... | undefined; }, any, { ...; }>'.
+src/components/event-form/EventForm.tsx(897,11): error TS2322: Type 'ToolWithParsedCredentials[]' is not assignable to type '{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; }[]'.
+  Type 'ToolWithParsedCredentials' is not assignable to type '{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; }'.
+    Types of property 'credentials' are incompatible.
+      Type 'Record<string, any>' is not assignable to type 'string'.
+src/components/event-form/ImprovedEventForm.tsx(201,5): error TS2322: Type 'Resolver<{ name: string; status: EventStatus; type: EventType; triggerType: EventTriggerType; shared?: boolean | undefined; description?: string | undefined; ... 20 more ...; useCronScheduling?: boolean | undefined; }, any, { ...; }>' is not assignable to type 'Resolver<{ shared: boolean; name: string; status: EventStatus; type: EventType; triggerType: EventTriggerType; scheduleNumber: number; scheduleUnit: TimeUnit; ... 19 more ...; startTime?: string | ... 1 more ... | undefined; }, any, { ...; }>'.
   Types of parameters 'options' and 'options' are incompatible.
-    Type 'ResolverOptions<{ type: EventType; status: EventStatus; shared: boolean; name: string; triggerType: EventTriggerType; scheduleNumber: number; scheduleUnit: TimeUnit; ... 19 more ...; startTime?: string | ... 1 more ... | undefined; }>' is not assignable to type 'ResolverOptions<{ type: EventType; status: EventStatus; name: string; triggerType: EventTriggerType; shared?: boolean | undefined; description?: string | undefined; ... 20 more ...; useCronScheduling?: boolean | undefined; }>' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+    Type 'ResolverOptions<{ shared: boolean; name: string; status: EventStatus; type: EventType; triggerType: EventTriggerType; scheduleNumber: number; scheduleUnit: TimeUnit; ... 19 more ...; startTime?: string | ... 1 more ... | undefined; }>' is not assignable to type 'ResolverOptions<{ name: string; status: EventStatus; type: EventType; triggerType: EventTriggerType; shared?: boolean | undefined; description?: string | undefined; ... 20 more ...; useCronScheduling?: boolean | undefined; }>' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
       Type 'boolean | undefined' is not assignable to type 'boolean'.
         Type 'undefined' is not assignable to type 'boolean'.
-src/components/event-form/ImprovedEventForm.tsx(328,23): error TS2339: Property 'envVars' does not exist on type 'Partial<{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }>'.
-src/components/event-form/ImprovedEventForm.tsx(329,32): error TS2339: Property 'envVars' does not exist on type 'Partial<{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }>'.
-src/components/event-form/ImprovedEventForm.tsx(331,52): error TS2339: Property 'envVars' does not exist on type 'Partial<{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }>'.
-src/components/event-form/ImprovedEventForm.tsx(339,46): error TS2339: Property 'envVars' does not exist on type 'Partial<{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }>'.
-src/components/event-form/ImprovedEventForm.tsx(340,43): error TS2339: Property 'envVars' does not exist on type 'Partial<{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }>'.
-src/components/event-form/ImprovedEventForm.tsx(357,23): error TS2339: Property 'servers' does not exist on type 'Partial<{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }>'.
-src/components/event-form/ImprovedEventForm.tsx(357,60): error TS2339: Property 'servers' does not exist on type 'Partial<{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }>'.
-src/components/event-form/ImprovedEventForm.tsx(358,39): error TS2339: Property 'servers' does not exist on type 'Partial<{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }>'.
+src/components/event-form/ImprovedEventForm.tsx(328,23): error TS2339: Property 'envVars' does not exist on type 'Partial<{ shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; type: EventType; ... 23 more ...; tags: unknown; }>'.
+src/components/event-form/ImprovedEventForm.tsx(329,32): error TS2339: Property 'envVars' does not exist on type 'Partial<{ shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; type: EventType; ... 23 more ...; tags: unknown; }>'.
+src/components/event-form/ImprovedEventForm.tsx(331,52): error TS2339: Property 'envVars' does not exist on type 'Partial<{ shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; type: EventType; ... 23 more ...; tags: unknown; }>'.
+src/components/event-form/ImprovedEventForm.tsx(339,46): error TS2339: Property 'envVars' does not exist on type 'Partial<{ shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; type: EventType; ... 23 more ...; tags: unknown; }>'.
+src/components/event-form/ImprovedEventForm.tsx(340,43): error TS2339: Property 'envVars' does not exist on type 'Partial<{ shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; type: EventType; ... 23 more ...; tags: unknown; }>'.
+src/components/event-form/ImprovedEventForm.tsx(357,23): error TS2339: Property 'servers' does not exist on type 'Partial<{ shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; type: EventType; ... 23 more ...; tags: unknown; }>'.
+src/components/event-form/ImprovedEventForm.tsx(357,60): error TS2339: Property 'servers' does not exist on type 'Partial<{ shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; type: EventType; ... 23 more ...; tags: unknown; }>'.
+src/components/event-form/ImprovedEventForm.tsx(358,39): error TS2339: Property 'servers' does not exist on type 'Partial<{ shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; type: EventType; ... 23 more ...; tags: unknown; }>'.
 src/components/event-form/ImprovedEventForm.tsx(360,20): error TS7006: Parameter 'id' implicitly has an 'any' type.
-src/components/event-form/ImprovedEventForm.tsx(419,62): error TS2345: Argument of type '{ content: string | undefined; startTime: string | null; customSchedule: string | undefined; serverId: null; toolActionConfig: string | null; envVars: string; tags: string; conditionalEvents: string; ... 21 more ...; id: number; }' is not assignable to parameter of type '{ id: number; type?: EventType | undefined; status?: EventStatus | undefined; shared?: boolean | undefined; name?: string | undefined; description?: string | undefined; ... 22 more ...; onFailActions?: { ...; }[] | undefined; }'.
+src/components/event-form/ImprovedEventForm.tsx(419,62): error TS2345: Argument of type '{ content: string | undefined; startTime: string | null; customSchedule: string | undefined; serverId: null; toolActionConfig: string | null; envVars: string; tags: string; conditionalEvents: string; ... 21 more ...; id: number; }' is not assignable to parameter of type '{ id: number; shared?: boolean | undefined; name?: string | undefined; description?: string | undefined; status?: EventStatus | undefined; type?: EventType | undefined; ... 22 more ...; onFailActions?: { ...; }[] | undefined; }'.
   Types of property 'toolActionConfig' are incompatible.
     Type 'string | null' is not assignable to type 'string | undefined'.
       Type 'null' is not assignable to type 'string | undefined'.
 src/components/event-form/ImprovedEventForm.tsx(423,20): error TS18048: 'result' is possibly 'undefined'.
-src/components/event-form/ImprovedEventForm.tsx(425,62): error TS2345: Argument of type '{ content: string | undefined; startTime: string | null; customSchedule: string | undefined; serverId: null; toolActionConfig: string | null; envVars: string; tags: string; conditionalEvents: string; ... 20 more ...; httpBody?: string | undefined; }' is not assignable to parameter of type '{ type: EventType; name: string; status?: EventStatus | undefined; shared?: boolean | undefined; description?: string | undefined; content?: string | undefined; ... 21 more ...; onFailActions?: { ...; }[] | undefined; }'.
+src/components/event-form/ImprovedEventForm.tsx(425,62): error TS2345: Argument of type '{ content: string | undefined; startTime: string | null; customSchedule: string | undefined; serverId: null; toolActionConfig: string | null; envVars: string; tags: string; conditionalEvents: string; ... 20 more ...; httpBody?: string | undefined; }' is not assignable to parameter of type '{ name: string; type: EventType; shared?: boolean | undefined; description?: string | undefined; status?: EventStatus | undefined; content?: string | undefined; ... 21 more ...; onFailActions?: { ...; }[] | undefined; }'.
   Types of property 'toolActionConfig' are incompatible.
     Type 'string | null' is not assignable to type 'string | undefined'.
       Type 'null' is not assignable to type 'string | undefined'.
 src/components/event-form/ImprovedEventForm.tsx(426,20): error TS18048: 'result' is possibly 'undefined'.
 src/components/event-form/ImprovedEventForm.tsx(449,34): error TS2345: Argument of type '(data: EventFormData) => Promise<void>' is not assignable to parameter of type 'SubmitHandler<TFieldValues>'.
   Types of parameters 'data' and 'data' are incompatible.
-    Type 'TFieldValues' is not assignable to type '{ type: EventType; status: EventStatus; shared: boolean; name: string; triggerType: EventTriggerType; scheduleNumber: number; scheduleUnit: TimeUnit; ... 19 more ...; startTime?: string | ... 1 more ... | undefined; }'.
-      Type 'FieldValues' is missing the following properties from type '{ type: EventType; status: EventStatus; shared: boolean; name: string; triggerType: EventTriggerType; scheduleNumber: number; scheduleUnit: TimeUnit; ... 19 more ...; startTime?: string | ... 1 more ... | undefined; }': type, status, shared, name, and 14 more.
+    Type 'TFieldValues' is not assignable to type '{ shared: boolean; name: string; status: EventStatus; type: EventType; triggerType: EventTriggerType; scheduleNumber: number; scheduleUnit: TimeUnit; ... 19 more ...; startTime?: string | ... 1 more ... | undefined; }'.
+      Type 'FieldValues' is missing the following properties from type '{ shared: boolean; name: string; status: EventStatus; type: EventType; triggerType: EventTriggerType; scheduleNumber: number; scheduleUnit: TimeUnit; ... 19 more ...; startTime?: string | ... 1 more ... | undefined; }': shared, name, status, type, and 14 more.
 src/components/event-form/ImprovedEventForm.tsx(625,15): error TS2322: Type 'ToolActionConfig | null | undefined' is not assignable to type 'ToolActionConfig | null'.
   Type 'undefined' is not assignable to type 'ToolActionConfig | null'.
-src/components/event-form/ImprovedEventForm.tsx(1290,9): error TS2412: Type 'Partial<{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }> | undefined' is not assignable to type 'EventData | undefined' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the type of the target.
-src/components/event-form/ImprovedToolActionSection.tsx(210,23): error TS2345: Argument of type '{ type: ToolType; id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; } | undefined' is not assignable to parameter of type 'SetStateAction<{ type: ToolType; id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; } | null>'.
-  Type 'undefined' is not assignable to type 'SetStateAction<{ type: ToolType; id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; } | null>'.
+src/components/event-form/ImprovedEventForm.tsx(627,15): error TS2322: Type 'ToolWithParsedCredentials[]' is not assignable to type '{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; }[]'.
+  Type 'ToolWithParsedCredentials' is not assignable to type '{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; }'.
+    Types of property 'credentials' are incompatible.
+      Type 'Record<string, any>' is not assignable to type 'string'.
+src/components/event-form/ImprovedEventForm.tsx(1290,9): error TS2412: Type 'Partial<{ shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; type: EventType; ... 23 more ...; tags: unknown; }> | undefined' is not assignable to type 'EventData | undefined' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the type of the target.
+src/components/event-form/ImprovedToolActionSection.tsx(210,23): error TS2345: Argument of type '{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; } | undefined' is not assignable to parameter of type 'SetStateAction<{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; } | null>'.
+  Type 'undefined' is not assignable to type 'SetStateAction<{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; } | null>'.
 src/components/event-form/ImprovedToolActionSection.tsx(541,16): error TS2375: Type '{ children: Element[]; value: string | undefined; onValueChange: (toolId: string) => void; }' is not assignable to type '{ value?: string; defaultValue?: string; onValueChange?(value: string): void; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
   Types of property 'value' are incompatible.
     Type 'string | undefined' is not assignable to type 'string'.
@@ -373,43 +276,8 @@ src/components/event-form/OptimizedToolActionSection.tsx(168,12): error TS2769: 
       Types of property 'toolId' are incompatible.
         Type 'number | undefined' is not assignable to type 'number'.
           Type 'undefined' is not assignable to type 'number'.
-src/components/tools/__tests__/CredentialHealthIndicator.test.tsx(51,7): error TS2322: Type 'number' is not assignable to type 'string'.
-src/components/tools/__tests__/CredentialHealthIndicator.test.tsx(60,7): error TS2322: Type 'number' is not assignable to type 'string'.
-src/components/tools/__tests__/CredentialHealthIndicator.test.tsx(87,25): error TS2339: Property 'getPlugin' does not exist on type 'typeof ToolPluginRegistry'.
-src/components/tools/__tests__/CredentialHealthIndicator.test.tsx(206,29): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/components/tools/__tests__/CredentialTroubleshooter.test.tsx(40,5): error TS2322: Type 'number' is not assignable to type 'string'.
-src/components/tools/__tests__/CredentialTroubleshooter.test.tsx(54,25): error TS2339: Property 'getPlugin' does not exist on type 'typeof ToolPluginRegistry'.
-src/components/tools/__tests__/CredentialTroubleshooter.test.tsx(291,9): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
-src/components/tools/__tests__/CredentialTroubleshooter.test.tsx(397,27): error TS2339: Property 'getPlugin' does not exist on type 'typeof ToolPluginRegistry'.
-src/components/tools/__tests__/ErrorRecoverySuggestions.test.tsx(270,29): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/components/tools/__tests__/RetryManager.test.tsx(55,12): error TS2532: Object is possibly 'undefined'.
-src/components/tools/__tests__/TestDataGenerator.test.tsx(87,7): error TS2684: The 'this' context of type 'this' is not assignable to method's 'this' of type 'FileReader'.
-  Type '(Anonymous class)' is missing the following properties from type 'FileReader': error, onabort, onerror, onloadend, and 14 more.
-src/components/tools/__tests__/TestDataGenerator.test.tsx(124,7): error TS2741: Property 'output' is missing in type '{ name: string; description: string; input: { email: string; name: string; age: number; isActive: true; }; }' but required in type 'ActionExample'.
-src/components/tools/__tests__/TestDataGenerator.test.tsx(304,29): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/components/tools/__tests__/TestDataGenerator.test.tsx(316,29): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/components/tools/__tests__/TestDataGenerator.test.tsx(335,29): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/components/tools/__tests__/TestDataGenerator.test.tsx(354,29): error TS2345: Argument of type 'Element | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/components/tools/__tests__/TestDataGenerator.test.tsx(481,13): error TS2684: The 'this' context of type 'this' is not assignable to method's 'this' of type 'FileReader'.
-  Type '(Anonymous class)' is missing the following properties from type 'FileReader': error, onabort, onerror, onloadend, and 14 more.
-src/components/tools/__tests__/TestDataGenerator.test.tsx(618,13): error TS2375: Type '{ examples: undefined; id: string; name: string; description: string; category: string; actionType: ActionType; developmentMode: DevelopmentMode; ... 7 more ...; isConditionalAction?: boolean; }' is not assignable to type 'ToolAction' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
-  Types of property 'examples' are incompatible.
-    Type 'undefined' is not assignable to type 'ActionExample[]'.
-src/components/tools/__tests__/TestDataGenerator.test.tsx(667,31): error TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'Element'.
-  Type 'undefined' is not assignable to type 'Element'.
-src/components/tools/__tests__/ToolCredentialManager.test.tsx(96,7): error TS2322: Type 'number' is not assignable to type 'string'.
-src/components/tools/__tests__/ToolCredentialManager.test.tsx(105,7): error TS2322: Type 'number' is not assignable to type 'string'.
-src/components/tools/__tests__/ToolCredentialManager.test.tsx(151,17): error TS2339: Property 'listWithDecryptedConfig' does not exist on type 'DecorateRouterRecord<{ ctx: { session: Session | null; db: NodePgDatabase<typeof import("/Users/addison/Code/cronium/cronium-dev/src/shared/schema")> & { $client: Pool; }; headers: Headers; }; meta: object; errorShape: { ...; }; transformer: true; }, DecorateCreateRouterOptions<...>>'.
-src/components/tools/__tests__/ToolCredentialManager.test.tsx(170,25): error TS2339: Property 'getPlugin' does not exist on type 'typeof ToolPluginRegistry'.
-src/components/tools/__tests__/ToolCredentialManager.test.tsx(171,25): error TS2339: Property 'listPlugins' does not exist on type 'typeof ToolPluginRegistry'.
 src/components/tools/CredentialHealthIndicator.tsx(88,24): error TS2339: Property 'default' does not exist on type '{ readonly realtime: { readonly staleTime: 0; readonly gcTime: number; readonly refetchInterval: 30000; readonly refetchOnWindowFocus: true; readonly refetchOnReconnect: true; }; readonly dynamic: { ...; }; readonly static: { ...; }; readonly stable: { ...; }; readonly background: { ...; }; }'.
-src/components/tools/CredentialHealthIndicator.tsx(160,13): error TS2375: Type '{ overall: "error" | "warning" | "healthy"; checks: HealthCheck[]; lastChecked: Date; nextCheck: Date | undefined; }' is not assignable to type 'HealthStatus' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+src/components/tools/CredentialHealthIndicator.tsx(160,13): error TS2375: Type '{ overall: "error" | "healthy" | "warning"; checks: HealthCheck[]; lastChecked: Date; nextCheck: Date | undefined; }' is not assignable to type 'HealthStatus' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
   Types of property 'nextCheck' are incompatible.
     Type 'Date | undefined' is not assignable to type 'Date'.
       Type 'undefined' is not assignable to type 'Date'.
@@ -418,7 +286,18 @@ src/components/tools/CredentialHealthIndicator.tsx(179,13): error TS2375: Type '
     Type 'Date | undefined' is not assignable to type 'Date'.
       Type 'undefined' is not assignable to type 'Date'.
 src/components/tools/CredentialHealthIndicator.tsx(279,45): error TS2339: Property 'getPlugin' does not exist on type 'typeof ToolPluginRegistry'.
+src/components/tools/CredentialHealthIndicator.tsx(294,39): error TS2345: Argument of type 'ToolWithParsedCredentials' is not assignable to parameter of type 'SetStateAction<{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; } | null>'.
+  Type 'ToolWithParsedCredentials' is not assignable to type '{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; }'.
+    Types of property 'credentials' are incompatible.
+      Type 'Record<string, any>' is not assignable to type 'string'.
 src/components/tools/CredentialHealthIndicator.tsx(370,53): error TS2339: Property 'getPlugin' does not exist on type 'typeof ToolPluginRegistry'.
+src/components/tools/CredentialHealthIndicator.tsx(385,41): error TS2345: Argument of type 'ToolWithParsedCredentials' is not assignable to parameter of type 'SetStateAction<{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; } | null>'.
+  Type 'ToolWithParsedCredentials' is not assignable to type '{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; }'.
+    Types of property 'credentials' are incompatible.
+      Type 'Record<string, any>' is not assignable to type 'string'.
+src/components/tools/CredentialHealthIndicator.tsx(405,47): error TS2345: Argument of type 'ToolWithParsedCredentials' is not assignable to parameter of type '{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; }'.
+  Types of property 'credentials' are incompatible.
+    Type 'Record<string, any>' is not assignable to type 'string'.
 src/components/tools/CredentialHealthIndicator.tsx(464,37): error TS2769: No overload matches this call.
   Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
     Argument of type 'Date | null' is not assignable to parameter of type 'string | number | Date'.
@@ -477,23 +356,34 @@ src/components/tools/lazy/index.tsx(66,20): error TS2339: Property 'ActionParame
 src/components/tools/lazy/index.tsx(112,61): error TS2339: Property 'ErrorHandler' does not exist on type 'typeof import("/Users/addison/Code/cronium/cronium-dev/src/components/tools/ErrorHandler")'.
 src/components/tools/modular-tools-manager.tsx(253,52): error TS2339: Property 'templates' does not exist on type 'DecorateRouterRecord<{ ctx: { session: Session | null; db: NodePgDatabase<typeof import("/Users/addison/Code/cronium/cronium-dev/src/shared/schema")> & { $client: Pool; }; headers: Headers; }; meta: object; errorShape: { ...; }; transformer: true; }, DecorateCreateRouterOptions<...>>'.
 src/components/tools/modular-tools-manager.tsx(262,17): error TS7006: Parameter 'error' implicitly has an 'any' type.
+src/components/tools/modular-tools-manager.tsx(598,33): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: CredentialDisplayProps, context?: any): string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | ... 4 more ... | undefined', gave the following error.
+    Type '{ credentials: Record<string, any>; id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; isActive: boolean; encrypted: boolean; encryptionMetadata: any; description?: string; tags: string[]; }[]' is not assignable to type '{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; }[]'.
+      Type '{ credentials: Record<string, any>; id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; isActive: boolean; encrypted: boolean; encryptionMetadata: any; description?: string; tags: string[]; }' is not assignable to type '{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; }'.
+        Types of property 'credentials' are incompatible.
+          Type 'Record<string, any>' is not assignable to type 'string'.
+  Overload 2 of 2, '(props: CredentialDisplayProps): string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | ... 4 more ... | undefined', gave the following error.
+    Type '{ credentials: Record<string, any>; id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; isActive: boolean; encrypted: boolean; encryptionMetadata: any; description?: string; tags: string[]; }[]' is not assignable to type '{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; }[]'.
+      Type '{ credentials: Record<string, any>; id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; isActive: boolean; encrypted: boolean; encryptionMetadata: any; description?: string; tags: string[]; }' is not assignable to type '{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; }'.
+        Types of property 'credentials' are incompatible.
+          Type 'Record<string, any>' is not assignable to type 'string'.
 src/components/tools/modular-tools-manager.tsx(613,32): error TS2375: Type '{ toolId: number | undefined; compact: true; }' is not assignable to type 'ToolErrorDiagnosticsProps' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
   Types of property 'toolId' are incompatible.
     Type 'number | undefined' is not assignable to type 'number'.
       Type 'undefined' is not assignable to type 'number'.
-src/components/tools/plugins/google-sheets/actions/execute-formula.ts(258,42): error TS18048: 'formula' is possibly 'undefined'.
-src/components/tools/plugins/google-sheets/actions/execute-formula.ts(266,25): error TS18048: 'formula' is possibly 'undefined'.
-src/components/tools/plugins/google-sheets/actions/execute-formula.ts(283,18): error TS18048: 'formula' is possibly 'undefined'.
-src/components/tools/plugins/google-sheets/actions/execute-formula.ts(284,20): error TS18048: 'formula' is possibly 'undefined'.
-src/components/tools/plugins/google-sheets/actions/format-cells.ts(322,27): error TS2339: Property 'foregroundColor' does not exist on type '{}'.
-src/components/tools/plugins/google-sheets/actions/format-cells.ts(324,27): error TS2339: Property 'fontSize' does not exist on type '{}'.
-src/components/tools/plugins/google-sheets/actions/format-cells.ts(326,27): error TS2339: Property 'bold' does not exist on type '{}'.
-src/components/tools/plugins/google-sheets/actions/format-cells.ts(328,27): error TS2339: Property 'italic' does not exist on type '{}'.
-src/components/tools/plugins/google-sheets/actions/format-cells.ts(330,27): error TS2339: Property 'strikethrough' does not exist on type '{}'.
-src/components/tools/plugins/google-sheets/actions/format-cells.ts(332,27): error TS2339: Property 'underline' does not exist on type '{}'.
-src/components/tools/plugins/google-sheets/actions/write-data.ts(279,29): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+src/components/tools/plugins/google-sheets/actions/execute-formula.ts(260,42): error TS18048: 'formula' is possibly 'undefined'.
+src/components/tools/plugins/google-sheets/actions/execute-formula.ts(268,25): error TS18048: 'formula' is possibly 'undefined'.
+src/components/tools/plugins/google-sheets/actions/execute-formula.ts(285,18): error TS18048: 'formula' is possibly 'undefined'.
+src/components/tools/plugins/google-sheets/actions/execute-formula.ts(286,20): error TS18048: 'formula' is possibly 'undefined'.
+src/components/tools/plugins/google-sheets/actions/format-cells.ts(324,27): error TS2339: Property 'foregroundColor' does not exist on type '{}'.
+src/components/tools/plugins/google-sheets/actions/format-cells.ts(326,27): error TS2339: Property 'fontSize' does not exist on type '{}'.
+src/components/tools/plugins/google-sheets/actions/format-cells.ts(328,27): error TS2339: Property 'bold' does not exist on type '{}'.
+src/components/tools/plugins/google-sheets/actions/format-cells.ts(330,27): error TS2339: Property 'italic' does not exist on type '{}'.
+src/components/tools/plugins/google-sheets/actions/format-cells.ts(332,27): error TS2339: Property 'strikethrough' does not exist on type '{}'.
+src/components/tools/plugins/google-sheets/actions/format-cells.ts(334,27): error TS2339: Property 'underline' does not exist on type '{}'.
+src/components/tools/plugins/google-sheets/actions/write-data.ts(281,29): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
   Type 'undefined' is not assignable to type 'string'.
-src/components/tools/plugins/google-sheets/actions/write-data.ts(282,18): error TS18048: 'startCol' is possibly 'undefined'.
+src/components/tools/plugins/google-sheets/actions/write-data.ts(284,18): error TS18048: 'startCol' is possibly 'undefined'.
 src/components/tools/plugins/google-sheets/google-sheets-plugin.tsx(49,5): error TS2322: Type 'Resolver<{ name: string; clientId: string; clientSecret: string; refreshToken?: string | undefined; scope?: string | undefined; }, any, { name: string; scope: string; clientId: string; clientSecret: string; refreshToken?: string | undefined; }>' is not assignable to type 'Resolver<{ name: string; scope: string; clientId: string; clientSecret: string; refreshToken?: string | undefined; }, any, { name: string; scope: string; clientId: string; clientSecret: string; refreshToken?: string | undefined; }>'.
   Types of parameters 'options' and 'options' are incompatible.
     Type 'ResolverOptions<{ name: string; scope: string; clientId: string; clientSecret: string; refreshToken?: string | undefined; }>' is not assignable to type 'ResolverOptions<{ name: string; clientId: string; clientSecret: string; refreshToken?: string | undefined; scope?: string | undefined; }>' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
@@ -504,8 +394,10 @@ src/components/tools/plugins/google-sheets/google-sheets-plugin.tsx(72,39): erro
     Type 'FieldValues' is missing the following properties from type '{ name: string; scope: string; clientId: string; clientSecret: string; refreshToken?: string | undefined; }': name, scope, clientId, clientSecret
 src/components/tools/plugins/google-sheets/google-sheets-plugin.tsx(173,19): error TS2322: Type '{ toolId: number; toolName: string; compact: true; }' is not assignable to type 'IntrinsicAttributes & { toolId: number; toolName: string; onHealthChange?: (healthy: boolean) => void; }'.
   Property 'compact' does not exist on type 'IntrinsicAttributes & { toolId: number; toolName: string; onHealthChange?: (healthy: boolean) => void; }'.
+src/components/tools/plugins/notion/actions/create-page.ts(111,14): error TS2741: Property 'parameters' is missing in type '{ id: string; name: string; description: string; category: string; actionType: "create"; developmentMode: "visual"; inputSchema: ZodObject<{ parentId: ZodString; title: ZodString; icon: ZodOptional<...>; cover: ZodOptional<...>; properties: ZodOptional<...>; children: ZodOptional<...>; }, "strip", ZodTypeAny, { ...;...' but required in type 'ToolAction'.
 src/components/tools/plugins/notion/actions/create-page.ts(340,43): error TS2554: Expected 1 arguments, but got 2.
 src/components/tools/plugins/notion/actions/create-page.ts(403,55): error TS2554: Expected 1 arguments, but got 2.
+src/components/tools/plugins/notion/actions/manage-blocks.ts(81,14): error TS2741: Property 'parameters' is missing in type '{ id: string; name: string; description: string; category: string; actionType: "update"; developmentMode: "visual"; inputSchema: ZodObject<{ operation: ZodEnum<["append", "update", "delete", "retrieve"]>; pageId: ZodOptional<...>; blockId: ZodOptional<...>; blocks: ZodOptional<...>; after: ZodOptional<...>; }, "stri...' but required in type 'ToolAction'.
 src/components/tools/plugins/notion/actions/manage-blocks.ts(284,13): error TS2375: Type '{ success: true; blocks: { id: string; type: string; }[] | undefined; }' is not assignable to type '{ success: boolean; blocks?: unknown[]; error?: string; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
   Types of property 'blocks' are incompatible.
     Type '{ id: string; type: string; }[] | undefined' is not assignable to type 'unknown[]'.
@@ -514,19 +406,18 @@ src/components/tools/plugins/notion/actions/manage-blocks.ts(364,13): error TS23
   Types of property 'blocks' are incompatible.
     Type 'unknown[] | undefined' is not assignable to type 'unknown[]'.
       Type 'undefined' is not assignable to type 'unknown[]'.
-src/components/tools/plugins/notion/actions/manage-blocks.ts(420,55): error TS2339: Property '0' does not exist on type '{ type: "code" | "toggle" | "divider" | "paragraph" | "heading_1" | "heading_2" | "heading_3" | "bulleted_list_item" | "numbered_list_item" | "to_do" | "quote" | "callout" | "bookmark" | "equation" | "table_of_contents"; ... 7 more ...; expression?: string | undefined; }[] | undefined'.
+src/components/tools/plugins/notion/actions/manage-blocks.ts(420,55): error TS2339: Property '0' does not exist on type '{ type: "code" | "toggle" | "paragraph" | "heading_1" | "heading_2" | "heading_3" | "bulleted_list_item" | "numbered_list_item" | "to_do" | "quote" | "divider" | "callout" | "bookmark" | "equation" | "table_of_contents"; ... 7 more ...; language?: string | undefined; }[] | undefined'.
+src/components/tools/plugins/notion/actions/search-content.ts(39,14): error TS2741: Property 'parameters' is missing in type '{ id: string; name: string; description: string; category: string; actionType: "search"; developmentMode: "visual"; inputSchema: ZodObject<{ query: ZodString; filter: ZodOptional<ZodObject<{ property: ZodOptional<ZodEnum<["object", "database", "page"]>>; databases: ZodOptional<...>; }, "strip", ZodTypeAny, { ...; },...' but required in type 'ToolAction'.
 src/components/tools/plugins/notion/actions/search-content.ts(217,47): error TS2554: Expected 1 arguments, but got 2.
 src/components/tools/plugins/notion/actions/search-content.ts(321,23): error TS2532: Object is possibly 'undefined'.
+src/components/tools/plugins/notion/actions/update-database.ts(100,14): error TS2741: Property 'parameters' is missing in type '{ id: string; name: string; description: string; category: string; actionType: "update"; developmentMode: "visual"; inputSchema: ZodObject<{ databaseId: ZodString; pageId: ZodString; properties: ZodRecord<...>; archived: ZodOptional<...>; }, "strip", ZodTypeAny, { ...; }, { ...; }>; outputSchema: ZodObject<...>; exa...' but required in type 'ToolAction'.
 src/components/tools/plugins/notion/actions/update-database.ts(231,53): error TS2554: Expected 1 arguments, but got 2.
 src/components/tools/plugins/notion/actions/update-database.ts(298,65): error TS2554: Expected 1 arguments, but got 2.
-src/components/tools/plugins/slack/actions/_backup/create-channel.ts(4,3): error TS2305: Module '"@/components/tools/types/tool-plugin"' has no exported member 'ToolActionContext'.
-src/components/tools/plugins/slack/actions/_backup/create-channel.ts(37,35): error TS2315: Type 'ToolAction' is not generic.
-src/components/tools/plugins/slack/actions/_backup/schedule-message.ts(4,3): error TS2305: Module '"@/components/tools/types/tool-plugin"' has no exported member 'ToolActionContext'.
-src/components/tools/plugins/slack/actions/_backup/schedule-message.ts(43,37): error TS2315: Type 'ToolAction' is not generic.
-src/components/tools/plugins/slack/actions/_backup/upload-file.ts(4,3): error TS2305: Module '"@/components/tools/types/tool-plugin"' has no exported member 'ToolActionContext'.
-src/components/tools/plugins/slack/actions/_backup/upload-file.ts(42,32): error TS2315: Type 'ToolAction' is not generic.
+src/components/tools/plugins/slack/actions/send-message.ts(18,14): error TS2741: Property 'parameters' is missing in type '{ id: string; name: string; description: string; category: string; actionType: "create"; developmentMode: "visual"; isConditionalAction: true; inputSchema: ZodObject<{ text: ZodString; channel: ZodOptional<...>; }, "strip", ZodTypeAny, { ...; }, { ...; }>; outputSchema: ZodObject<...>; examples: ({ ...; } | { ...; }...' but required in type 'ToolAction'.
+src/components/tools/plugins/teams/actions/create-meeting.ts(64,14): error TS2741: Property 'parameters' is missing in type '{ id: string; name: string; description: string; category: string; actionType: "create"; developmentMode: "visual"; inputSchema: ZodObject<{ subject: ZodString; startDateTime: ZodString; ... 7 more ...; categories: ZodOptional<...>; }, "strip", ZodTypeAny, { ...; }, { ...; }>; outputSchema: ZodObject<...>; examples:...' but required in type 'ToolAction'.
 src/components/tools/plugins/teams/actions/create-meeting.ts(232,45): error TS2554: Expected 1 arguments, but got 2.
 src/components/tools/plugins/teams/actions/create-meeting.ts(300,57): error TS2554: Expected 1 arguments, but got 2.
+src/components/tools/plugins/teams/actions/manage-team.ts(56,14): error TS2741: Property 'parameters' is missing in type '{ id: string; name: string; description: string; category: string; actionType: "update"; developmentMode: "visual"; inputSchema: ZodObject<{ operation: ZodEnum<["create-team", "add-member", "remove-member", "create-channel", "archive-team"]>; ... 8 more ...; membershipType: ZodDefault<...>; }, "strip", ZodTypeAny, {...' but required in type 'ToolAction'.
 src/components/tools/plugins/teams/actions/manage-team.ts(232,17): error TS2375: Type '{ success: true; teamId: string | undefined; }' is not assignable to type '{ success: boolean; teamId?: string; channelId?: string; error?: string; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
   Types of property 'teamId' are incompatible.
     Type 'string | undefined' is not assignable to type 'string'.
@@ -540,18 +431,19 @@ src/components/tools/plugins/teams/actions/send-card.ts(125,3): error TS2322: Ty
 src/components/tools/plugins/teams/actions/send-card.ts(296,50): error TS2554: Expected 1 arguments, but got 2.
 src/components/tools/plugins/teams/actions/send-message.ts(78,3): error TS2322: Type '"notification"' is not assignable to type 'ActionType'.
 src/components/tools/plugins/teams/actions/send-message.ts(236,44): error TS2554: Expected 1 arguments, but got 2.
-src/components/tools/plugins/teams/teams-plugin.tsx(55,5): error TS2322: Type 'Resolver<{ name: string; refreshToken?: string | undefined; scope?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; tenantId?: string | undefined; webhookUrl?: string | undefined; }, any, { ...; }>' is not assignable to type 'Resolver<{ name: string; scope: string; refreshToken?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; tenantId?: string | undefined; webhookUrl?: string | undefined; }, any, { ...; }>'.
+src/components/tools/plugins/teams/teams-plugin.tsx(55,5): error TS2322: Type 'Resolver<{ name: string; refreshToken?: string | undefined; scope?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; webhookUrl?: string | undefined; tenantId?: string | undefined; }, any, { ...; }>' is not assignable to type 'Resolver<{ name: string; scope: string; refreshToken?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; webhookUrl?: string | undefined; tenantId?: string | undefined; }, any, { ...; }>'.
   Types of parameters 'options' and 'options' are incompatible.
-    Type 'ResolverOptions<{ name: string; scope: string; refreshToken?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; tenantId?: string | undefined; webhookUrl?: string | undefined; }>' is not assignable to type 'ResolverOptions<{ name: string; refreshToken?: string | undefined; scope?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; tenantId?: string | undefined; webhookUrl?: string | undefined; }>' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+    Type 'ResolverOptions<{ name: string; scope: string; refreshToken?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; webhookUrl?: string | undefined; tenantId?: string | undefined; }>' is not assignable to type 'ResolverOptions<{ name: string; refreshToken?: string | undefined; scope?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; webhookUrl?: string | undefined; tenantId?: string | undefined; }>' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
       Type 'string | undefined' is not assignable to type 'string'.
         Type 'undefined' is not assignable to type 'string'.
 src/components/tools/plugins/teams/teams-plugin.tsx(80,39): error TS2345: Argument of type '(data: TeamsFormData) => Promise<void>' is not assignable to parameter of type 'SubmitHandler<TFieldValues>'.
   Types of parameters 'data' and 'data' are incompatible.
-    Type 'TFieldValues' is not assignable to type '{ name: string; scope: string; refreshToken?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; tenantId?: string | undefined; webhookUrl?: string | undefined; }'.
-      Type 'FieldValues' is missing the following properties from type '{ name: string; scope: string; refreshToken?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; tenantId?: string | undefined; webhookUrl?: string | undefined; }': name, scope
+    Type 'TFieldValues' is not assignable to type '{ name: string; scope: string; refreshToken?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; webhookUrl?: string | undefined; tenantId?: string | undefined; }'.
+      Type 'FieldValues' is missing the following properties from type '{ name: string; scope: string; refreshToken?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; webhookUrl?: string | undefined; tenantId?: string | undefined; }': name, scope
 src/components/tools/plugins/teams/teams-plugin.tsx(217,19): error TS2322: Type '{ toolId: number; toolName: string; compact: true; }' is not assignable to type 'IntrinsicAttributes & { toolId: number; toolName: string; onHealthChange?: (healthy: boolean) => void; }'.
   Property 'compact' does not exist on type 'IntrinsicAttributes & { toolId: number; toolName: string; onHealthChange?: (healthy: boolean) => void; }'.
 src/components/tools/plugins/teams/teams-plugin.tsx(240,24): error TS18048: 'credentials.webhookUrl' is possibly 'undefined'.
+src/components/tools/plugins/trello/actions/add-checklist.ts(35,14): error TS2741: Property 'parameters' is missing in type '{ id: string; name: string; description: string; category: string; actionType: "update"; developmentMode: "visual"; inputSchema: ZodObject<{ cardId: ZodString; name: ZodString; idChecklistSource: ZodOptional<...>; pos: ZodDefault<...>; checkItems: ZodOptional<...>; }, "strip", ZodTypeAny, { ...; }, { ...; }>; output...' but required in type 'ToolAction'.
 src/components/tools/plugins/trello/actions/add-checklist.ts(139,54): error TS2554: Expected 1 arguments, but got 2.
 src/components/tools/plugins/trello/actions/add-checklist.ts(210,36): error TS18048: 'item' is possibly 'undefined'.
 src/components/tools/plugins/trello/actions/add-checklist.ts(211,22): error TS18048: 'item' is possibly 'undefined'.
@@ -559,11 +451,15 @@ src/components/tools/plugins/trello/actions/add-checklist.ts(214,15): error TS18
 src/components/tools/plugins/trello/actions/add-checklist.ts(215,28): error TS18048: 'item' is possibly 'undefined'.
 src/components/tools/plugins/trello/actions/add-checklist.ts(227,58): error TS18048: 'item' is possibly 'undefined'.
 src/components/tools/plugins/trello/actions/add-checklist.ts(250,60): error TS2554: Expected 1 arguments, but got 2.
+src/components/tools/plugins/trello/actions/add-member.ts(15,14): error TS2741: Property 'parameters' is missing in type '{ id: string; name: string; description: string; category: string; actionType: "update"; developmentMode: "visual"; inputSchema: ZodObject<{ cardId: ZodString; memberId: ZodString; }, "strip", ZodTypeAny, { ...; }, { ...; }>; outputSchema: ZodObject<...>; examples: { ...; }[]; execute(credentials: unknown, params: u...' but required in type 'ToolAction'.
 src/components/tools/plugins/trello/actions/add-member.ts(107,51): error TS2554: Expected 1 arguments, but got 2.
+src/components/tools/plugins/trello/actions/attach-file.ts(21,14): error TS2741: Property 'parameters' is missing in type '{ id: string; name: string; description: string; category: string; actionType: "update"; developmentMode: "visual"; inputSchema: ZodObject<{ cardId: ZodString; url: ZodString; name: ZodOptional<...>; setCover: ZodDefault<...>; }, "strip", ZodTypeAny, { ...; }, { ...; }>; outputSchema: ZodObject<...>; examples: ({ .....' but required in type 'ToolAction'.
 src/components/tools/plugins/trello/actions/attach-file.ts(107,52): error TS2554: Expected 1 arguments, but got 2.
 src/components/tools/plugins/trello/actions/attach-file.ts(178,64): error TS2554: Expected 1 arguments, but got 2.
+src/components/tools/plugins/trello/actions/create-card.ts(55,14): error TS2741: Property 'parameters' is missing in type '{ id: string; name: string; description: string; category: string; actionType: "create"; developmentMode: "visual"; inputSchema: ZodObject<{ listId: ZodString; name: ZodString; ... 8 more ...; keepFromSource: ZodOptional<...>; }, "strip", ZodTypeAny, { ...; }, { ...; }>; outputSchema: ZodObject<...>; examples: ({ .....' but required in type 'ToolAction'.
 src/components/tools/plugins/trello/actions/create-card.ts(201,43): error TS2554: Expected 1 arguments, but got 2.
 src/components/tools/plugins/trello/actions/create-card.ts(267,55): error TS2554: Expected 1 arguments, but got 2.
+src/components/tools/plugins/trello/actions/move-card.ts(27,14): error TS2741: Property 'parameters' is missing in type '{ id: string; name: string; description: string; category: string; actionType: "update"; developmentMode: "visual"; inputSchema: ZodObject<{ cardId: ZodString; destinationListId: ZodOptional<ZodString>; destinationBoardId: ZodOptional<...>; pos: ZodOptional<...>; }, "strip", ZodTypeAny, { ...; }, { ...; }>; outputSc...' but required in type 'ToolAction'.
 src/components/tools/plugins/trello/actions/move-card.ts(129,41): error TS2554: Expected 1 arguments, but got 2.
 src/components/tools/plugins/trello/trello-plugin.tsx(178,19): error TS2322: Type '{ toolId: number; toolName: string; compact: true; }' is not assignable to type 'IntrinsicAttributes & { toolId: number; toolName: string; onHealthChange?: (healthy: boolean) => void; }'.
   Property 'compact' does not exist on type 'IntrinsicAttributes & { toolId: number; toolName: string; onHealthChange?: (healthy: boolean) => void; }'.
@@ -608,27 +504,6 @@ src/components/tools/RetryManager.tsx(491,34): error TS2379: Argument of type '{
   Types of property 'jitterFactor' are incompatible.
     Type 'number | undefined' is not assignable to type 'number'.
       Type 'undefined' is not assignable to type 'number'.
-src/components/tools/templates/ToolActionTemplateManager.tsx(205,14): error TS2375: Type '{ templateId: number | undefined; onSuccess: () => void; onCancel: () => void; }' is not assignable to type 'ToolActionTemplateFormProps' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
-  Types of property 'templateId' are incompatible.
-    Type 'number | undefined' is not assignable to type 'number'.
-      Type 'undefined' is not assignable to type 'number'.
-src/components/tools/tool-browser/ActionPreviewPanel.tsx(51,31): error TS2339: Property 'requiresCredentials' does not exist on type 'ToolAction'.
-src/components/tools/tool-browser/ActionPreviewPanel.tsx(52,31): error TS2339: Property 'credentials' does not exist on type 'ToolPlugin'.
-src/components/tools/tool-browser/ActionPreviewPanel.tsx(55,33): error TS2339: Property 'parameters' does not exist on type 'ToolAction'.
-src/components/tools/tool-browser/ActionPreviewPanel.tsx(55,52): error TS7006: Parameter 'p' implicitly has an 'any' type.
-src/components/tools/tool-browser/ActionPreviewPanel.tsx(56,30): error TS2339: Property 'parameters' does not exist on type 'ToolAction'.
-src/components/tools/tool-browser/ActionPreviewPanel.tsx(137,21): error TS2339: Property 'parameters' does not exist on type 'ToolAction'.
-src/components/tools/tool-browser/ActionPreviewPanel.tsx(137,49): error TS7006: Parameter 'param' implicitly has an 'any' type.
-src/components/tools/tool-browser/ActionPreviewPanel.tsx(152,21): error TS2339: Property 'parameters' does not exist on type 'ToolAction'.
-src/components/tools/tool-browser/ActionPreviewPanel.tsx(154,26): error TS2339: Property 'parameters' does not exist on type 'ToolAction'.
-src/components/tools/tool-browser/ActionPreviewPanel.tsx(166,21): error TS2339: Property 'features' does not exist on type 'ToolAction'.
-src/components/tools/tool-browser/ActionPreviewPanel.tsx(172,21): error TS2339: Property 'features' does not exist on type 'ToolAction'.
-src/components/tools/tool-browser/ActionPreviewPanel.tsx(178,21): error TS2339: Property 'features' does not exist on type 'ToolAction'.
-src/components/tools/tool-browser/ActionPreviewPanel.tsx(184,21): error TS2339: Property 'features' does not exist on type 'ToolAction'.
-src/components/tools/tool-browser/ActionPreviewPanel.tsx(210,18): error TS2322: Type '"warning"' is not assignable to type '"default" | "destructive" | null | undefined'.
-src/components/tools/tool-browser/ActionPreviewPanel.tsx(229,19): error TS2339: Property 'features' does not exist on type 'ToolAction'.
-src/components/tools/tool-browser/ActionPreviewPanel.tsx(242,17): error TS2339: Property 'helpUrl' does not exist on type 'ToolAction'.
-src/components/tools/tool-browser/ActionPreviewPanel.tsx(248,49): error TS2339: Property 'helpUrl' does not exist on type 'ToolAction'.
 src/components/tools/tool-browser/QuickAccessPanel.tsx(16,36): error TS2307: Cannot find module '@/components/tools/ToolPluginRegistry' or its corresponding type declarations.
 src/components/tools/tool-browser/QuickAccessPanel.tsx(54,45): error TS7006: Parameter 'a' implicitly has an 'any' type.
 src/components/tools/tool-browser/QuickAccessPanel.tsx(217,20): error TS7006: Parameter 'a' implicitly has an 'any' type.
@@ -660,9 +535,12 @@ src/components/tools/ToolCredentialManager.tsx(281,39): error TS2339: Property '
 src/components/tools/ToolCredentialManager.tsx(285,34): error TS7006: Parameter 'field' implicitly has an 'any' type.
 src/components/tools/ToolCredentialManager.tsx(298,52): error TS7006: Parameter 't' implicitly has an 'any' type.
 src/components/tools/ToolCredentialManager.tsx(316,9): error TS2353: Object literal may only specify known properties, and 'config' does not exist in type '{ id: number; name?: string | undefined; description?: string | undefined; tags?: string[] | undefined; credentials?: Record<string, any> | undefined; isActive?: boolean | undefined; }'.
-src/components/tools/ToolCredentialManager.tsx(319,33): error TS2345: Argument of type 'CredentialFormData' is not assignable to parameter of type '{ type: ToolType; name: string; credentials: Record<string, any>; description?: string | undefined; tags?: string[] | undefined; isActive?: boolean | undefined; }'.
-  Property 'credentials' is missing in type 'CredentialFormData' but required in type '{ type: ToolType; name: string; credentials: Record<string, any>; description?: string | undefined; tags?: string[] | undefined; isActive?: boolean | undefined; }'.
+src/components/tools/ToolCredentialManager.tsx(319,33): error TS2345: Argument of type 'CredentialFormData' is not assignable to parameter of type '{ name: string; type: ToolType; credentials: Record<string, any>; description?: string | undefined; tags?: string[] | undefined; isActive?: boolean | undefined; }'.
+  Property 'credentials' is missing in type 'CredentialFormData' but required in type '{ name: string; type: ToolType; credentials: Record<string, any>; description?: string | undefined; tags?: string[] | undefined; isActive?: boolean | undefined; }'.
 src/components/tools/ToolCredentialManager.tsx(325,39): error TS2339: Property 'getPlugin' does not exist on type 'typeof ToolPluginRegistry'.
+src/components/tools/ToolCredentialManager.tsx(346,27): error TS2345: Argument of type 'ToolWithParsedCredentials' is not assignable to parameter of type '{ id: number; name: string; createdAt: Date; updatedAt: Date; userId: string; type: ToolType; credentials: string; isActive: boolean; encrypted: boolean; encryptionMetadata: unknown; }'.
+  Types of property 'credentials' are incompatible.
+    Type 'Record<string, any>' is not assignable to type 'string'.
 src/components/tools/ToolCredentialManager.tsx(418,49): error TS2339: Property 'getPlugin' does not exist on type 'typeof ToolPluginRegistry'.
 src/components/tools/ToolCredentialManager.tsx(446,30): error TS7006: Parameter 't' implicitly has an 'any' type.
 src/components/tools/ToolCredentialManager.tsx(495,61): error TS7006: Parameter 'field' implicitly has an 'any' type.
@@ -682,6 +560,10 @@ src/components/tools/ToolHealthIndicator.tsx(46,32): error TS2339: Property 'val
 src/components/tools/ToolHealthIndicator.tsx(51,32): error TS2339: Property 'error' does not exist on type '{ success: boolean; message: string; duration: number; details: Record<string, any>; }'.
 src/components/tools/ToolHealthIndicator.tsx(54,31): error TS2339: Property 'error' does not exist on type '{ success: boolean; message: string; duration: number; details: Record<string, any>; }'.
 src/components/tools/ToolHealthIndicator.tsx(169,32): error TS2339: Property 'valid' does not exist on type '{ success: boolean; message: string; duration: number; details: Record<string, any>; }'.
+src/components/tools/utils/zod-to-parameters.ts(72,3): error TS2375: Type '{ name: string; type: string; required: boolean; description: string | undefined; default: unknown; enum: string[] | undefined; }' is not assignable to type 'ActionParameter' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'description' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
 src/lib/oauth/OAuthFlow.ts(82,9): error TS18048: 'authRequest' is possibly 'undefined'.
 src/lib/oauth/OAuthFlow.ts(91,9): error TS18048: 'authRequest' is possibly 'undefined'.
 src/lib/oauth/OAuthFlow.ts(96,9): error TS18048: 'authRequest' is possibly 'undefined'.
@@ -707,7 +589,7 @@ src/lib/rate-limiting/QuotaEnforcer.ts(227,71): error TS2345: Argument of type '
   Type '{ windowMs: number; maxRequests: number; }' is missing the following properties from type '{ windowMs: number; maxRequests: number; keyPrefix: string; skipSuccessfulRequests: boolean; skipFailedRequests: boolean; }': keyPrefix, skipSuccessfulRequests, skipFailedRequests
 src/lib/rate-limiting/QuotaEnforcer.ts(265,71): error TS2345: Argument of type '{ windowMs: number; maxRequests: number; }' is not assignable to parameter of type '{ windowMs: number; maxRequests: number; keyPrefix: string; skipSuccessfulRequests: boolean; skipFailedRequests: boolean; }'.
   Type '{ windowMs: number; maxRequests: number; }' is missing the following properties from type '{ windowMs: number; maxRequests: number; keyPrefix: string; skipSuccessfulRequests: boolean; skipFailedRequests: boolean; }': keyPrefix, skipSuccessfulRequests, skipFailedRequests
-src/lib/rate-limiting/QuotaEnforcer.ts(290,9): error TS2322: Type '"INSUFFICIENT_STORAGE"' is not assignable to type '"PARSE_ERROR" | "BAD_REQUEST" | "INTERNAL_SERVER_ERROR" | "NOT_IMPLEMENTED" | "BAD_GATEWAY" | "SERVICE_UNAVAILABLE" | "GATEWAY_TIMEOUT" | "UNAUTHORIZED" | "PAYMENT_REQUIRED" | ... 10 more ... | "CLIENT_CLOSED_REQUEST"'.
+src/lib/rate-limiting/QuotaEnforcer.ts(290,9): error TS2322: Type '"INSUFFICIENT_STORAGE"' is not assignable to type '"TIMEOUT" | "PARSE_ERROR" | "BAD_REQUEST" | "INTERNAL_SERVER_ERROR" | "NOT_IMPLEMENTED" | "BAD_GATEWAY" | "SERVICE_UNAVAILABLE" | "GATEWAY_TIMEOUT" | "UNAUTHORIZED" | "PAYMENT_REQUIRED" | ... 9 more ... | "CLIENT_CLOSED_REQUEST"'.
 src/lib/rate-limiting/QuotaManager.ts(85,11): error TS2375: Type '{ allowed: boolean; limit: number; used: number; remaining: number; resetAt: Date | undefined; percentage: number; }' is not assignable to type 'QuotaCheckResult' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
   Types of property 'resetAt' are incompatible.
     Type 'Date | undefined' is not assignable to type 'Date'.
@@ -744,80 +626,6 @@ src/lib/rate-limiting/UsageReporter.ts(161,30): error TS2339: Property 'startedA
 src/lib/rate-limiting/UsageReporter.ts(162,32): error TS2339: Property 'startedAt' does not exist on type 'PgTableWithColumns<{ name: "tool_action_logs"; schema: undefined; columns: { id: PgColumn<{ name: "id"; tableName: "tool_action_logs"; dataType: "number"; columnType: "PgSerial"; data: number; driverParam: number; notNull: true; ... 7 more ...; generated: undefined; }, {}, {}>; ... 9 more ...; createdAt: PgColumn<.....'.
 src/lib/rate-limiting/UsageReporter.ts(217,20): error TS2339: Property 'executedAt' does not exist on type 'PgTableWithColumns<{ name: "logs"; schema: undefined; columns: { id: PgColumn<{ name: "id"; tableName: "logs"; dataType: "number"; columnType: "PgSerial"; data: number; driverParam: number; notNull: true; hasDefault: true; ... 6 more ...; generated: undefined; }, {}, {}>; ... 12 more ...; userId: PgColumn<...>; }; d...'.
 src/lib/rate-limiting/UsageReporter.ts(218,22): error TS2339: Property 'executedAt' does not exist on type 'PgTableWithColumns<{ name: "logs"; schema: undefined; columns: { id: PgColumn<{ name: "id"; tableName: "logs"; dataType: "number"; columnType: "PgSerial"; data: number; driverParam: number; notNull: true; hasDefault: true; ... 6 more ...; generated: undefined; }, {}, {}>; ... 12 more ...; userId: PgColumn<...>; }; d...'.
-src/lib/scheduler/tool-action-executor.ts(79,39): error TS2339: Property 'eventType' does not exist on type '{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }'.
-src/lib/scheduler/tool-action-executor.ts(92,37): error TS2345: Argument of type '{}' is not assignable to parameter of type 'string'.
-src/lib/scheduler/tool-action-executor.ts(105,8): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(106,8): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(107,8): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(115,7): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(120,42): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(138,19): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(173,7): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(189,43): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(191,53): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(194,55): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(200,44): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(234,10): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(264,7): error TS2367: This comparison appears to be unintentional because the types 'ActionType' and '"webhook"' have no overlap.
-src/lib/scheduler/tool-action-executor.ts(270,7): error TS2345: Argument of type '{ readonly maxAttempts: 3; readonly initialDelay: 1000; readonly maxDelay: 10000; readonly backoffMultiplier: 2; readonly jitter: true; readonly retryableErrors: readonly ["timeout", "network", "econnrefused", "rate limit"]; readonly nonRetryableErrors: readonly [...]; } | { ...; }' is not assignable to parameter of type 'Partial<RetryConfig> | undefined'.
-  Type '{ readonly maxAttempts: 3; readonly initialDelay: 1000; readonly maxDelay: 10000; readonly backoffMultiplier: 2; readonly jitter: true; readonly retryableErrors: readonly ["timeout", "network", "econnrefused", "rate limit"]; readonly nonRetryableErrors: readonly [...]; }' is not assignable to type 'Partial<RetryConfig>'.
-    Types of property 'retryableErrors' are incompatible.
-      The type 'readonly ["timeout", "network", "econnrefused", "rate limit"]' is 'readonly' and cannot be assigned to the mutable type 'string[]'.
-src/lib/scheduler/tool-action-executor.ts(284,7): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(285,7): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(292,40): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(314,15): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(340,17): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(350,19): error TS18047: 'toolActionConfig' is possibly 'null'.
-src/lib/scheduler/tool-action-executor.ts(381,38): error TS2345: Argument of type '{}' is not assignable to parameter of type 'string'.
-src/lib/scheduler/tool-action-health-monitor.ts(59,21): error TS2769: No overload matches this call.
-  Overload 1 of 2, '(timeout: string | number | Timeout | undefined): void', gave the following error.
-    Argument of type 'Timer' is not assignable to parameter of type 'string | number | Timeout | undefined'.
-      Type 'Timer' is missing the following properties from type 'Timeout': close, _onTimeout, [Symbol.dispose]
-  Overload 2 of 2, '(id: number | undefined): void', gave the following error.
-    Argument of type 'Timer' is not assignable to parameter of type 'number'.
-src/lib/scheduler/tool-action-health-monitor.ts(75,21): error TS2769: No overload matches this call.
-  Overload 1 of 2, '(timeout: string | number | Timeout | undefined): void', gave the following error.
-    Argument of type 'Timer' is not assignable to parameter of type 'string | number | Timeout | undefined'.
-      Type 'Timer' is missing the following properties from type 'Timeout': close, _onTimeout, [Symbol.dispose]
-  Overload 2 of 2, '(id: number | undefined): void', gave the following error.
-    Argument of type 'Timer' is not assignable to parameter of type 'number'.
-src/lib/security/audit-logger.ts(82,20): error TS2379: Argument of type '{ action: AuditAction; context: AuditContext; success: true; details: Record<string, any> | undefined; }' is not assignable to parameter of type 'AuditLogEntry' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
-  Types of property 'details' are incompatible.
-    Type 'Record<string, any> | undefined' is not assignable to type 'Record<string, any>'.
-      Type 'undefined' is not assignable to type 'Record<string, any>'.
-src/lib/security/audit-logger.ts(99,20): error TS2379: Argument of type '{ action: AuditAction; context: AuditContext; success: false; errorMessage: string; details: Record<string, any> | undefined; }' is not assignable to parameter of type 'AuditLogEntry' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
-  Types of property 'details' are incompatible.
-    Type 'Record<string, any> | undefined' is not assignable to type 'Record<string, any>'.
-      Type 'undefined' is not assignable to type 'Record<string, any>'.
-src/lib/security/audit-logger.ts(149,14): error TS2339: Property 'count' does not exist on type '{ count: number; } | undefined'.
-src/lib/security/audit-logger.ts(228,19): error TS2339: Property 'count' does not exist on type 'QueryResult<never>'.
-src/lib/security/rate-limiter.ts(120,47): error TS18048: 'config' is possibly 'undefined'.
-src/lib/security/rate-limiter.ts(148,18): error TS18048: 'config' is possibly 'undefined'.
-src/lib/security/rate-limiter.ts(149,22): error TS18048: 'config' is possibly 'undefined'.
-src/lib/security/rate-limiter.ts(150,42): error TS18048: 'config' is possibly 'undefined'.
-src/lib/security/rate-limiter.ts(155,41): error TS18048: 'config' is possibly 'undefined'.
-src/lib/security/rate-limiter.ts(157,49): error TS18048: 'config' is possibly 'undefined'.
-src/lib/security/rate-limiter.ts(163,18): error TS18048: 'config' is possibly 'undefined'.
-src/lib/security/rate-limiter.ts(182,16): error TS18048: 'config' is possibly 'undefined'.
-src/lib/security/rate-limiter.ts(183,20): error TS18048: 'config' is possibly 'undefined'.
-src/lib/security/rate-limiter.ts(185,49): error TS18048: 'config' is possibly 'undefined'.
-src/lib/security/rate-limiter.ts(193,16): error TS18048: 'config' is possibly 'undefined'.
-src/lib/security/rate-limiter.ts(194,20): error TS18048: 'config' is possibly 'undefined'.
-src/lib/security/rate-limiter.ts(195,40): error TS18048: 'config' is possibly 'undefined'.
-src/lib/security/rate-limiter.ts(260,26): error TS18048: 'hourlyCount' is possibly 'undefined'.
-src/lib/security/rate-limiter.ts(261,25): error TS18048: 'dailyCount' is possibly 'undefined'.
-src/lib/security/rate-limiter.ts(282,34): error TS18048: 'defaultQuotas.free' is possibly 'undefined'.
-src/lib/security/rate-limiter.ts(283,35): error TS18048: 'defaultQuotas.free' is possibly 'undefined'.
-src/lib/security/rate-limiter.ts(333,19): error TS2339: Property 'count' does not exist on type 'QueryResult<never>'.
-src/lib/security/rate-limiter.ts(371,13): error TS2538: Type 'undefined' cannot be used as an index type.
-src/lib/security/rate-limiter.ts(371,27): error TS2538: Type 'undefined' cannot be used as an index type.
-src/lib/tools/circuit-breaker.ts(232,5): error TS2375: Type '{ state: CircuitState; failures: number; successes: number; totalRequests: number; lastFailureTime: Date | undefined; lastSuccessTime: Date | undefined; errorRate: number; nextAttemptTime: Date | undefined; }' is not assignable to type 'CircuitBreakerMetrics' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
-  Types of property 'lastFailureTime' are incompatible.
-    Type 'Date | undefined' is not assignable to type 'Date'.
-      Type 'undefined' is not assignable to type 'Date'.
-src/lib/tools/circuit-breaker.ts(251,5): error TS2412: Type 'undefined' is not assignable to type 'Date' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the type of the target.
-src/lib/tools/circuit-breaker.ts(269,5): error TS2412: Type 'undefined' is not assignable to type 'Date' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the type of the target.
 src/lib/tools/credential-cache.ts(53,7): error TS2322: Type '(key: string) => Promise<CachedCredential | null>' is not assignable to type 'Fetcher<string, CachedCredential, unknown>'.
   Type 'Promise<CachedCredential | null>' is not assignable to type 'void | CachedCredential | Promise<void | CachedCredential | undefined> | undefined'.
     Type 'Promise<CachedCredential | null>' is not assignable to type 'Promise<void | CachedCredential | undefined>'.
@@ -853,12 +661,12 @@ src/lib/webhooks/WebhookManager.ts(185,11): error TS18048: 'webhookEvent' is pos
 src/lib/webhooks/WebhookManager.ts(187,18): error TS18048: 'webhookEvent' is possibly 'undefined'.
 src/lib/webhooks/WebhookManager.ts(193,39): error TS2379: Argument of type '{ webhookId: number; webhookEventId: number; url: string; secret: string; headers: Record<string, string>; payload: WebhookPayload; retryConfig: WebhookConfig["retryConfig"]; }' is not assignable to parameter of type 'Omit<QueueItem, "id" | "attempts">' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
   Types of property 'retryConfig' are incompatible.
-    Type '{ maxRetries: number; retryDelay: number; backoffMultiplier: number; } | undefined' is not assignable to type '{ maxRetries?: number; retryDelay?: number; backoffMultiplier?: number; }'.
+    Type '{ backoffMultiplier: number; retryDelay: number; maxRetries: number; } | undefined' is not assignable to type '{ maxRetries?: number; retryDelay?: number; backoffMultiplier?: number; }'.
       Type 'undefined' is not assignable to type '{ maxRetries?: number; retryDelay?: number; backoffMultiplier?: number; }'.
 src/lib/webhooks/WebhookManager.ts(195,25): error TS18048: 'webhookEvent' is possibly 'undefined'.
 src/lib/webhooks/WebhookManager.ts(357,37): error TS2379: Argument of type '{ webhookId: number; webhookEventId: number; url: string; secret: string; headers: Record<string, string>; payload: WebhookPayload; retryConfig: WebhookConfig["retryConfig"]; isRetry: true; }' is not assignable to parameter of type 'Omit<QueueItem, "id" | "attempts">' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
   Types of property 'retryConfig' are incompatible.
-    Type '{ maxRetries: number; retryDelay: number; backoffMultiplier: number; } | undefined' is not assignable to type '{ maxRetries?: number; retryDelay?: number; backoffMultiplier?: number; }'.
+    Type '{ backoffMultiplier: number; retryDelay: number; maxRetries: number; } | undefined' is not assignable to type '{ maxRetries?: number; retryDelay?: number; backoffMultiplier?: number; }'.
       Type 'undefined' is not assignable to type '{ maxRetries?: number; retryDelay?: number; backoffMultiplier?: number; }'.
 src/lib/webhooks/WebhookQueue.ts(91,7): error TS2412: Type 'undefined' is not assignable to type 'Timeout' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the type of the target.
 src/lib/webhooks/WebhookQueue.ts(230,5): error TS2412: Type 'undefined' is not assignable to type 'Date' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the type of the target.
@@ -892,8 +700,8 @@ src/scripts/e2e-tool-actions-test.ts(111,23): error TS18048: 'tool' is possibly 
 src/scripts/e2e-tool-actions-test.ts(112,40): error TS18048: 'tool' is possibly 'undefined'.
 src/scripts/e2e-tool-actions-test.ts(114,10): error TS18048: 'tool' is possibly 'undefined'.
 src/scripts/e2e-tool-actions-test.ts(156,9): error TS2769: No overload matches this call.
-  Overload 2 of 2, '(values: { type: SQL<unknown> | EventType | Placeholder<string, any>; name: string | SQL<unknown> | Placeholder<string, any>; userId: string | SQL<...> | Placeholder<...>; ... 29 more ...; tags?: unknown; }[]): PgInsertBase<...>', gave the following error.
-    Object literal may only specify known properties, and 'userId' does not exist in type '{ type: SQL<unknown> | EventType | Placeholder<string, any>; name: string | SQL<unknown> | Placeholder<string, any>; userId: string | SQL<unknown> | Placeholder<...>; ... 29 more ...; tags?: unknown; }[]'.
+  Overload 2 of 2, '(values: { name: string | SQL<unknown> | Placeholder<string, any>; userId: string | SQL<unknown> | Placeholder<string, any>; type: SQL<unknown> | EventType | Placeholder<...>; ... 29 more ...; tags?: unknown; }[]): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'userId' does not exist in type '{ name: string | SQL<unknown> | Placeholder<string, any>; userId: string | SQL<unknown> | Placeholder<string, any>; type: SQL<unknown> | EventType | Placeholder<...>; ... 29 more ...; tags?: unknown; }[]'.
 src/scripts/e2e-tool-actions-test.ts(177,24): error TS18048: 'event' is possibly 'undefined'.
 src/scripts/e2e-tool-actions-test.ts(178,41): error TS18048: 'event' is possibly 'undefined'.
 src/scripts/e2e-tool-actions-test.ts(228,31): error TS18048: 'log' is possibly 'undefined'.
@@ -903,117 +711,44 @@ src/scripts/e2e-tool-actions-test.ts(231,39): error TS18048: 'log' is possibly '
 src/scripts/e2e-tool-actions-test.ts(233,9): error TS18048: 'log' is possibly 'undefined'.
 src/scripts/e2e-tool-actions-test.ts(234,45): error TS18048: 'log' is possibly 'undefined'.
 src/scripts/e2e-tool-actions-test.ts(255,9): error TS2769: No overload matches this call.
-  Overload 2 of 2, '(values: { type: SQL<unknown> | EventType | Placeholder<string, any>; name: string | SQL<unknown> | Placeholder<string, any>; userId: string | SQL<...> | Placeholder<...>; ... 29 more ...; tags?: unknown; }[]): PgInsertBase<...>', gave the following error.
-    Object literal may only specify known properties, and 'userId' does not exist in type '{ type: SQL<unknown> | EventType | Placeholder<string, any>; name: string | SQL<unknown> | Placeholder<string, any>; userId: string | SQL<unknown> | Placeholder<...>; ... 29 more ...; tags?: unknown; }[]'.
-src/scripts/e2e-tool-actions-test.ts(276,31): error TS2345: Argument of type '{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; } | undefined' is not assignable to parameter of type '{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }'.
-  Type 'undefined' is not assignable to type '{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }'.
+  Overload 2 of 2, '(values: { name: string | SQL<unknown> | Placeholder<string, any>; userId: string | SQL<unknown> | Placeholder<string, any>; type: SQL<unknown> | EventType | Placeholder<...>; ... 29 more ...; tags?: unknown; }[]): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'userId' does not exist in type '{ name: string | SQL<unknown> | Placeholder<string, any>; userId: string | SQL<unknown> | Placeholder<string, any>; type: SQL<unknown> | EventType | Placeholder<...>; ... 29 more ...; tags?: unknown; }[]'.
+src/scripts/e2e-tool-actions-test.ts(276,31): error TS2345: Argument of type '{ shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; type: EventType; ... 23 more ...; tags: unknown; } | undefined' is not assignable to parameter of type '{ shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; type: EventType; ... 23 more ...; tags: unknown; }'.
+  Type 'undefined' is not assignable to type '{ shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; type: EventType; ... 23 more ...; tags: unknown; }'.
 src/scripts/e2e-tool-actions-test.ts(287,40): error TS18048: 'badEvent' is possibly 'undefined'.
 src/scripts/e2e-tool-actions-test.ts(301,49): error TS18048: 'badEvent' is possibly 'undefined'.
 src/scripts/e2e-tool-actions-test.ts(338,9): error TS2769: No overload matches this call.
-  Overload 2 of 2, '(values: { type: SQL<unknown> | EventType | Placeholder<string, any>; name: string | SQL<unknown> | Placeholder<string, any>; userId: string | SQL<...> | Placeholder<...>; ... 29 more ...; tags?: unknown; }[]): PgInsertBase<...>', gave the following error.
-    Object literal may only specify known properties, and 'userId' does not exist in type '{ type: SQL<unknown> | EventType | Placeholder<string, any>; name: string | SQL<unknown> | Placeholder<string, any>; userId: string | SQL<unknown> | Placeholder<...>; ... 29 more ...; tags?: unknown; }[]'.
-src/scripts/e2e-tool-actions-test.ts(359,31): error TS2345: Argument of type '{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; } | undefined' is not assignable to parameter of type '{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }'.
-  Type 'undefined' is not assignable to type '{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }'.
+  Overload 2 of 2, '(values: { name: string | SQL<unknown> | Placeholder<string, any>; userId: string | SQL<unknown> | Placeholder<string, any>; type: SQL<unknown> | EventType | Placeholder<...>; ... 29 more ...; tags?: unknown; }[]): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'userId' does not exist in type '{ name: string | SQL<unknown> | Placeholder<string, any>; userId: string | SQL<unknown> | Placeholder<string, any>; type: SQL<unknown> | EventType | Placeholder<...>; ... 29 more ...; tags?: unknown; }[]'.
+src/scripts/e2e-tool-actions-test.ts(359,31): error TS2345: Argument of type '{ shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; type: EventType; ... 23 more ...; tags: unknown; } | undefined' is not assignable to parameter of type '{ shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; type: EventType; ... 23 more ...; tags: unknown; }'.
+  Type 'undefined' is not assignable to type '{ shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; type: EventType; ... 23 more ...; tags: unknown; }'.
 src/scripts/e2e-tool-actions-test.ts(367,43): error TS18048: 'retryEvent' is possibly 'undefined'.
 src/scripts/e2e-tool-actions-test.ts(373,49): error TS18048: 'retryEvent' is possibly 'undefined'.
 src/scripts/migrate-templates-to-tool-actions.ts(12,10): error TS2305: Module '"@/shared/schema"' has no exported member 'templates'.
 src/scripts/test-db-schema.ts(31,36): error TS2532: Object is possibly 'undefined'.
 src/scripts/test-real-tools.ts(106,11): error TS2769: No overload matches this call.
-  Overload 2 of 2, '(values: { type: SQL<unknown> | EventType | Placeholder<string, any>; name: string | SQL<unknown> | Placeholder<string, any>; userId: string | SQL<...> | Placeholder<...>; ... 29 more ...; tags?: unknown; }[]): PgInsertBase<...>', gave the following error.
-    Object literal may only specify known properties, and 'userId' does not exist in type '{ type: SQL<unknown> | EventType | Placeholder<string, any>; name: string | SQL<unknown> | Placeholder<string, any>; userId: string | SQL<unknown> | Placeholder<...>; ... 29 more ...; tags?: unknown; }[]'.
+  Overload 2 of 2, '(values: { userId: string | SQL<unknown> | Placeholder<string, any>; name: string | SQL<unknown> | Placeholder<string, any>; type: SQL<unknown> | EventType | Placeholder<...>; ... 29 more ...; tags?: unknown; }[]): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'userId' does not exist in type '{ userId: string | SQL<unknown> | Placeholder<string, any>; name: string | SQL<unknown> | Placeholder<string, any>; type: SQL<unknown> | EventType | Placeholder<...>; ... 29 more ...; tags?: unknown; }[]'.
 src/scripts/test-real-tools.ts(129,47): error TS18048: 'testEvent' is possibly 'undefined'.
-src/scripts/test-real-tools.ts(136,48): error TS2345: Argument of type '{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; } | undefined' is not assignable to parameter of type '{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }'.
-  Type 'undefined' is not assignable to type '{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }'.
+src/scripts/test-real-tools.ts(136,48): error TS2345: Argument of type '{ status: EventStatus; id: number; userId: string; name: string; description: string | null; createdAt: Date; updatedAt: Date; type: EventType; shared: boolean; ... 23 more ...; tags: unknown; } | undefined' is not assignable to parameter of type '{ status: EventStatus; id: number; userId: string; name: string; description: string | null; createdAt: Date; updatedAt: Date; type: EventType; shared: boolean; ... 23 more ...; tags: unknown; }'.
+  Type 'undefined' is not assignable to type '{ status: EventStatus; id: number; userId: string; name: string; description: string | null; createdAt: Date; updatedAt: Date; type: EventType; shared: boolean; ... 23 more ...; tags: unknown; }'.
 src/scripts/test-real-tools.ts(158,45): error TS18048: 'testEvent' is possibly 'undefined'.
 src/scripts/test-real-tools.ts(165,39): error TS18048: 'log' is possibly 'undefined'.
 src/scripts/test-real-tools.ts(166,47): error TS18048: 'log' is possibly 'undefined'.
 src/scripts/test-real-tools.ts(172,38): error TS2551: Property 'INACTIVE' does not exist on type 'typeof EventStatus'. Did you mean 'ACTIVE'?
 src/scripts/test-real-tools.ts(173,32): error TS18048: 'testEvent' is possibly 'undefined'.
-src/scripts/test-tool-action.ts(46,30): error TS2352: Conversion of type '{ id: number; userId: string; name: string; description: string; type: EventType.TOOL_ACTION; schedule: string; status: EventStatus.ACTIVE; triggerType: EventTriggerType.MANUAL; ... 20 more ...; toolActionConfig: null; }' to type '{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
-  Type '{ id: number; userId: string; name: string; description: string; type: EventType.TOOL_ACTION; schedule: string; status: EventStatus.ACTIVE; triggerType: EventTriggerType.MANUAL; ... 20 more ...; toolActionConfig: null; }' is missing the following properties from type '{ type: EventType; status: EventStatus; shared: boolean; id: number; name: string; description: string | null; createdAt: Date; updatedAt: Date; userId: string; ... 23 more ...; tags: unknown; }': shared, content, scheduleNumber, scheduleUnit, and 6 more.
+src/scripts/test-tool-action.ts(46,30): error TS2352: Conversion of type '{ id: number; userId: string; name: string; description: string; type: EventType.TOOL_ACTION; schedule: string; status: EventStatus.ACTIVE; triggerType: EventTriggerType.MANUAL; ... 20 more ...; toolActionConfig: null; }' to type '{ status: EventStatus; id: number; userId: string; name: string; description: string | null; createdAt: Date; updatedAt: Date; type: EventType; shared: boolean; ... 23 more ...; tags: unknown; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type '{ id: number; userId: string; name: string; description: string; type: EventType.TOOL_ACTION; schedule: string; status: EventStatus.ACTIVE; triggerType: EventTriggerType.MANUAL; ... 20 more ...; toolActionConfig: null; }' is missing the following properties from type '{ status: EventStatus; id: number; userId: string; name: string; description: string | null; createdAt: Date; updatedAt: Date; type: EventType; shared: boolean; ... 23 more ...; tags: unknown; }': shared, content, scheduleNumber, scheduleUnit, and 6 more.
 src/scripts/test-tool-registry.ts(20,35): error TS2339: Property 'toolType' does not exist on type 'ToolPlugin'.
 src/scripts/test-tool-registry.ts(42,30): error TS18048: 'sendAction' is possibly 'undefined'.
 src/scripts/test-tool-registry.ts(52,11): error TS2345: Argument of type '{ logger: { info: (msg: string) => void; error: (msg: string) => void; debug: (msg: string) => void; warn: (msg: string) => void; }; }' is not assignable to parameter of type 'ExecutionContext'.
   Property 'variables' is missing in type '{ logger: { info: (msg: string) => void; error: (msg: string) => void; debug: (msg: string) => void; warn: (msg: string) => void; }; }' but required in type 'ExecutionContext'.
-src/server/api/routers/dashboard.ts(57,18): error TS2339: Property 'count' does not exist on type '{ count: number; } | undefined'.
-src/server/api/routers/quota-management.ts(99,56): error TS2379: Argument of type '{ logRetentionDays?: number | undefined; toolActionsPerMonth?: number | undefined; toolActionsPerDay?: number | undefined; webhooksPerUser?: number | undefined; webhookEventsPerMonth?: number | undefined; ... 6 more ...; apiRequestsPerMinute?: number | undefined; }' is not assignable to parameter of type 'Partial<{ logRetentionDays: number; toolActionsPerMonth: number; toolActionsPerDay: number; webhooksPerUser: number; webhookEventsPerMonth: number; eventsPerUser: number; eventExecutionsPerMonth: number; ... 4 more ...; apiRequestsPerMinute: number; }>' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
-  Types of property 'logRetentionDays' are incompatible.
-    Type 'number | undefined' is not assignable to type 'number'.
-      Type 'undefined' is not assignable to type 'number'.
-src/server/api/routers/quota-management.ts(151,50): error TS2379: Argument of type '{ type: "custom" | "user" | "webhook" | "tool" | "ip" | "api_key"; identifier: string; subIdentifier?: string | undefined; }' is not assignable to parameter of type 'RateLimitKey' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
-  Types of property 'subIdentifier' are incompatible.
-    Type 'string | undefined' is not assignable to type 'string'.
-      Type 'undefined' is not assignable to type 'string'.
-src/server/api/routers/quota-management.ts(158,44): error TS2339: Property 'getEnforcementRules' does not exist on type 'QuotaEnforcer'.
-src/server/api/routers/toolActionLogs.ts(36,11): error TS2741: Property 'where' is missing in type 'Omit<import("/Users/addison/Code/cronium/cronium-dev/node_modules/drizzle-orm/pg-core/query-builders/select").PgSelectBase<"tool_action_logs", { id: import("/Users/addison/Code/cronium/cronium-dev/node_modules/drizzle-orm/pg-core/columns/common").PgColumn<{ name: "id"; tableName: "tool_action_logs"; dataType: "numbe...' but required in type 'Omit<import("/Users/addison/Code/cronium/cronium-dev/node_modules/drizzle-orm/pg-core/query-builders/select").PgSelectBase<"tool_action_logs", { id: import("/Users/addison/Code/cronium/cronium-dev/node_modules/drizzle-orm/pg-core/columns/common").PgColumn<{ name: "id"; tableName: "tool_action_logs"; dataType: "numbe...'.
-src/server/api/routers/toolActionTemplates.ts(203,16): error TS2339: Property 'count' does not exist on type '{ count: unknown; } | undefined'.
-src/server/api/routers/toolActionTemplates.ts(239,16): error TS2339: Property 'count' does not exist on type '{ count: unknown; } | undefined'.
-src/server/api/routers/tools.ts(97,62): error TS2345: Argument of type 'string' is not assignable to parameter of type 'EncryptedData'.
-src/server/api/routers/tools.ts(106,17): error TS2322: Type '{}' is not assignable to type 'string'.
-src/server/api/routers/tools.ts(113,15): error TS2322: Type '{}' is not assignable to type 'string'.
-src/server/api/routers/tools.ts(119,13): error TS2322: Type '{}' is not assignable to type 'string'.
-src/server/api/routers/tools.ts(123,13): error TS2322: Type '{}' is not assignable to type 'string'.
-src/server/api/routers/tools.ts(200,11): error TS2769: No overload matches this call.
-  Overload 1 of 3, '(left: PgColumn<{ name: "type"; tableName: "events"; dataType: "string"; columnType: "PgVarchar"; data: EventType; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; ... 5 more ...; generated: undefined; }, {}, { ...; }>, right: SQLWrapper | EventType): SQL<...>', gave the following error.
-    Argument of type '"TOOL_ACTION"' is not assignable to parameter of type 'SQLWrapper | EventType'.
-  Overload 2 of 3, '(left: Aliased<string>, right: string | SQLWrapper): SQL<unknown>', gave the following error.
-    Argument of type 'PgColumn<{ name: "type"; tableName: "events"; dataType: "string"; columnType: "PgVarchar"; data: EventType; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is not assignable to parameter of type 'Aliased<string>'.
-      Type 'PgColumn<{ name: "type"; tableName: "events"; dataType: "string"; columnType: "PgVarchar"; data: EventType; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is missing the following properties from type 'Aliased<string>': sql, fieldAlias
-  Overload 3 of 3, '(left: never, right: unknown): SQL<unknown>', gave the following error.
-    Argument of type 'PgColumn<{ name: "type"; tableName: "events"; dataType: "string"; columnType: "PgVarchar"; data: EventType; driverParam: string; notNull: true; hasDefault: false; isPrimaryKey: false; isAutoincrement: false; ... 4 more ...; generated: undefined; }, {}, { ...; }>' is not assignable to parameter of type 'never'.
-src/server/api/routers/tools.ts(223,5): error TS2375: Type '{ eventCount: number; workflowCount: number; lastUsed: Date | undefined; recentExecutions: number; }' is not assignable to type '{ eventCount: number; workflowCount: number; lastUsed?: Date; recentExecutions: number; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
-  Types of property 'lastUsed' are incompatible.
-    Type 'Date | undefined' is not assignable to type 'Date'.
-      Type 'undefined' is not assignable to type 'Date'.
-src/server/api/routers/tools.ts(286,69): error TS2339: Property 'webhookUrl' does not exist on type 'string'.
-src/server/api/routers/tools.ts(297,69): error TS2339: Property 'webhookUrl' does not exist on type 'string'.
-src/server/api/routers/tools.ts(308,34): error TS2339: Property 'smtpHost' does not exist on type 'string'.
-src/server/api/routers/tools.ts(309,34): error TS2339: Property 'smtpUser' does not exist on type 'string'.
-src/server/api/routers/tools.ts(310,34): error TS2339: Property 'smtpPassword' does not exist on type 'string'.
-src/server/api/routers/tools.ts(321,69): error TS2339: Property 'url' does not exist on type 'string'.
-src/server/api/routers/tools.ts(384,18): error TS2339: Property 'description' does not exist on type '{ credentials: string; encrypted: any; encryptionMetadata: any; id: number; userId: string; name: string; type: ToolType; isActive: boolean; createdAt: Date; updatedAt: Date; }'.
-src/server/api/routers/tools.ts(385,18): error TS2339: Property 'tags' does not exist on type '{ credentials: string; encrypted: any; encryptionMetadata: any; id: number; userId: string; name: string; type: ToolType; isActive: boolean; createdAt: Date; updatedAt: Date; }'.
-src/server/api/routers/tools.ts(385,29): error TS7006: Parameter 'tag' implicitly has an 'any' type.
-src/server/api/routers/tools.ts(534,21): error TS18048: 'newTool' is possibly 'undefined'.
-src/server/api/routers/tools.ts(535,13): error TS2322: Type 'string | null' is not assignable to type 'string'.
+src/server/api/routers/tools.ts(710,13): error TS2322: Type '{}' is not assignable to type 'string'.
+src/server/api/routers/tools.ts(753,11): error TS2322: Type 'string | null' is not assignable to type 'string'.
   Type 'null' is not assignable to type 'string'.
-src/server/api/routers/tools.ts(538,13): error TS2322: Type 'string | null' is not assignable to type 'string'.
+src/server/api/routers/tools.ts(756,11): error TS2322: Type 'string | null' is not assignable to type 'string'.
   Type 'null' is not assignable to type 'string'.
-src/server/api/routers/tools.ts(547,20): error TS18048: 'newTool' is possibly 'undefined'.
-src/server/api/routers/tools.ts(548,28): error TS18048: 'newTool' is possibly 'undefined'.
-src/server/api/routers/tools.ts(549,17): error TS18048: 'newTool' is possibly 'undefined'.
-src/server/api/routers/tools.ts(655,13): error TS2322: Type 'string | null' is not assignable to type 'string'.
-  Type 'null' is not assignable to type 'string'.
-src/server/api/routers/tools.ts(658,13): error TS2322: Type 'string | null' is not assignable to type 'string'.
-  Type 'null' is not assignable to type 'string'.
-src/server/api/routers/tools.ts(664,27): error TS18048: 'updatedTool' is possibly 'undefined'.
-src/server/api/routers/tools.ts(668,13): error TS18048: 'updatedTool' is possibly 'undefined'.
-src/server/api/routers/tools.ts(670,56): error TS2345: Argument of type 'string' is not assignable to parameter of type 'EncryptedData'.
-src/server/api/routers/tools.ts(673,57): error TS18048: 'updatedTool' is possibly 'undefined'.
-src/server/api/routers/tools.ts(676,13): error TS2322: Type '{}' is not assignable to type 'string'.
-src/server/api/routers/tools.ts(719,11): error TS2322: Type 'string | null' is not assignable to type 'string'.
-  Type 'null' is not assignable to type 'string'.
-src/server/api/routers/tools.ts(722,11): error TS2322: Type 'string | null' is not assignable to type 'string'.
-  Type 'null' is not assignable to type 'string'.
-src/server/api/routers/tools.ts(771,42): error TS2339: Property 'webhookUrl' does not exist on type 'string'.
-src/server/api/routers/tools.ts(772,39): error TS2339: Property 'channel' does not exist on type 'string'.
-src/server/api/routers/tools.ts(778,40): error TS2339: Property 'smtpHost' does not exist on type 'string'.
-src/server/api/routers/tools.ts(779,40): error TS2339: Property 'smtpPort' does not exist on type 'string'.
-src/server/api/routers/tools.ts(786,42): error TS2339: Property 'webhookUrl' does not exist on type 'string'.
-src/server/api/routers/tools.ts(962,29): error TS2339: Property 'description' does not exist on type '{ credentials: string; encrypted: any; encryptionMetadata: any; id: number; userId: string; name: string; type: ToolType; isActive: boolean; createdAt: Date; updatedAt: Date; }'.
-src/server/api/routers/tools.ts(963,22): error TS2339: Property 'tags' does not exist on type '{ credentials: string; encrypted: any; encryptionMetadata: any; id: number; userId: string; name: string; type: ToolType; isActive: boolean; createdAt: Date; updatedAt: Date; }'.
-src/server/api/routers/tools.ts(1027,16): error TS2678: Type '"hour"' is not comparable to type '"day" | "week" | "month" | "year"'.
-src/server/api/routers/tools.ts(1427,51): error TS2379: Argument of type '{ clientId: string; clientSecret: string; redirectUri: string; scope: string; tenantId: string | undefined; }' is not assignable to parameter of type 'Omit<{ id: string; name: string; scope: string; redirectUri: string; authorizationUrl: string; tokenUrl: string; clientId: string; clientSecret: string; options?: Record<string, unknown> | undefined; revokeUrl?: string | undefined; userInfoUrl?: string | undefined; }, "id" | ... 2 more ... | "tokenUrl"> & { ...; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
-  Type '{ clientId: string; clientSecret: string; redirectUri: string; scope: string; tenantId: string | undefined; }' is not assignable to type '{ tenantId?: string; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
-    Types of property 'tenantId' are incompatible.
-      Type 'string | undefined' is not assignable to type 'string'.
-        Type 'undefined' is not assignable to type 'string'.
-src/server/api/routers/tools.ts(1513,51): error TS2379: Argument of type '{ clientId: string; clientSecret: string; redirectUri: string; scope: string; tenantId: string | undefined; }' is not assignable to parameter of type 'Omit<{ id: string; name: string; scope: string; redirectUri: string; authorizationUrl: string; tokenUrl: string; clientId: string; clientSecret: string; options?: Record<string, unknown> | undefined; revokeUrl?: string | undefined; userInfoUrl?: string | undefined; }, "id" | ... 2 more ... | "tokenUrl"> & { ...; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
-  Type '{ clientId: string; clientSecret: string; redirectUri: string; scope: string; tenantId: string | undefined; }' is not assignable to type '{ tenantId?: string; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
-    Types of property 'tenantId' are incompatible.
-      Type 'string | undefined' is not assignable to type 'string'.
-        Type 'undefined' is not assignable to type 'string'.
-src/server/api/routers/webhook-system.ts(84,9): error TS2379: Argument of type '{ secret?: string | undefined; events?: string[] | undefined; headers?: Record<string, string> | undefined; url?: string | undefined; active?: boolean | undefined; retryConfig?: { ...; } | undefined; }' is not assignable to parameter of type 'Partial<{ events: string[]; url: string; active: boolean; secret?: string | undefined; headers?: Record<string, string> | undefined; retryConfig?: { maxRetries: number; retryDelay: number; backoffMultiplier: number; } | undefined; }>' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+src/server/api/routers/webhook-system.ts(84,9): error TS2379: Argument of type '{ events?: string[] | undefined; url?: string | undefined; secret?: string | undefined; headers?: Record<string, string> | undefined; active?: boolean | undefined; retryConfig?: { ...; } | undefined; }' is not assignable to parameter of type 'Partial<{ events: string[]; url: string; active: boolean; secret?: string | undefined; headers?: Record<string, string> | undefined; retryConfig?: { backoffMultiplier: number; retryDelay: number; maxRetries: number; } | undefined; }>' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
   Types of property 'events' are incompatible.
     Type 'string[] | undefined' is not assignable to type 'string[]'.
       Type 'undefined' is not assignable to type 'string[]'.

@@ -203,7 +203,7 @@ export function ToolActionTemplateManager() {
           </CardHeader>
           <CardContent>
             <ToolActionTemplateForm
-              templateId={editingTemplate ?? undefined}
+              {...(editingTemplate !== null && { templateId: editingTemplate })}
               onSuccess={() => {
                 setShowCreateForm(false);
                 setEditingTemplate(null);

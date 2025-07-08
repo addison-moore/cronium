@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ToolAction } from "@/components/tools/types/tool-plugin";
+import type { Node, Edge } from "@xyflow/react";
 
 // Node types for the visual builder
 export enum NodeType {
@@ -10,36 +11,31 @@ export enum NodeType {
   OUTPUT = "OUTPUT",
 }
 
-// Node data structure
-export interface ActionNode {
-  id: string;
-  type: NodeType;
-  position: { x: number; y: number };
-  data: {
-    label: string;
-    description?: string;
-    icon?: React.ComponentType<{ size?: number; className?: string }>;
-    toolId?: string;
-    actionId?: string;
-    action?: ToolAction;
-    parameters?: Record<string, unknown>;
-    isConfigured?: boolean;
-  };
+// Data structure for nodes - must extend Record<string, unknown> for ReactFlow compatibility
+export interface ActionNodeData extends Record<string, unknown> {
+  label: string;
+  description?: string;
+  icon?: React.ComponentType<{ size?: number; className?: string }>;
+  toolId?: string;
+  actionId?: string;
+  action?: ToolAction;
+  parameters?: Record<string, unknown>;
+  isConfigured?: boolean;
+  nodeType: NodeType; // Store the NodeType in data since ReactFlow uses 'type' for custom components
 }
 
-// Connection between nodes
-export interface ActionConnection {
-  id: string;
-  source: string;
-  target: string;
-  sourceHandle?: string;
-  targetHandle?: string;
-  type?: "success" | "failure" | "always";
-  data?: {
-    condition?: string;
-    transformer?: string;
-  };
+// Data structure for connections - must extend Record<string, unknown> for ReactFlow compatibility
+export interface ActionConnectionData extends Record<string, unknown> {
+  condition?: string;
+  transformer?: string;
+  connectionType?: "success" | "failure" | "always";
 }
+
+// ReactFlow compatible node type
+export type ActionNode = Node<ActionNodeData>;
+
+// ReactFlow compatible edge type
+export type ActionConnection = Edge<ActionConnectionData>;
 
 // Builder state
 export interface ActionBuilderState {
@@ -85,61 +81,60 @@ export const CANVAS_CONFIG = {
 };
 
 // Node templates
-export const NODE_TEMPLATES: Record<NodeType, Partial<ActionNode>> = {
+export const NODE_TEMPLATES: Record<NodeType, Partial<ActionNodeData>> = {
   [NodeType.TRIGGER]: {
-    type: NodeType.TRIGGER,
-    data: {
-      label: "Trigger",
-      description: "Start of the workflow",
-    },
+    label: "Trigger",
+    description: "Start of the workflow",
+    nodeType: NodeType.TRIGGER,
   },
   [NodeType.ACTION]: {
-    type: NodeType.ACTION,
-    data: {
-      label: "Action",
-      description: "Execute a tool action",
-    },
+    label: "Action",
+    description: "Execute a tool action",
+    nodeType: NodeType.ACTION,
   },
   [NodeType.CONDITION]: {
-    type: NodeType.CONDITION,
-    data: {
-      label: "Condition",
-      description: "Branch based on conditions",
-    },
+    label: "Condition",
+    description: "Branch based on conditions",
+    nodeType: NodeType.CONDITION,
   },
   [NodeType.TRANSFORMER]: {
-    type: NodeType.TRANSFORMER,
-    data: {
-      label: "Transformer",
-      description: "Transform data between actions",
-    },
+    label: "Transformer",
+    description: "Transform data between actions",
+    nodeType: NodeType.TRANSFORMER,
   },
   [NodeType.OUTPUT]: {
-    type: NodeType.OUTPUT,
-    data: {
-      label: "Output",
-      description: "End of the workflow",
-    },
+    label: "Output",
+    description: "End of the workflow",
+    nodeType: NodeType.OUTPUT,
   },
 };
 
 // Validation schemas
+export const nodeDataSchema = z.object({
+  label: z.string(),
+  description: z.string().optional(),
+  toolId: z.string().optional(),
+  actionId: z.string().optional(),
+  parameters: z.record(z.unknown()).optional(),
+  isConfigured: z.boolean().optional(),
+  nodeType: z.nativeEnum(NodeType),
+}).passthrough(); // Allow additional properties for Record<string, unknown> compatibility
+
 export const nodeSchema = z.object({
   id: z.string(),
-  type: z.nativeEnum(NodeType),
+  type: z.string(), // ReactFlow uses string type for custom components
   position: z.object({
     x: z.number(),
     y: z.number(),
   }),
-  data: z.object({
-    label: z.string(),
-    description: z.string().optional(),
-    toolId: z.string().optional(),
-    actionId: z.string().optional(),
-    parameters: z.record(z.unknown()).optional(),
-    isConfigured: z.boolean().optional(),
-  }),
+  data: nodeDataSchema,
 });
+
+export const connectionDataSchema = z.object({
+  condition: z.string().optional(),
+  transformer: z.string().optional(),
+  connectionType: z.enum(["success", "failure", "always"]).optional(),
+}).passthrough(); // Allow additional properties for Record<string, unknown> compatibility
 
 export const connectionSchema = z.object({
   id: z.string(),
@@ -147,13 +142,8 @@ export const connectionSchema = z.object({
   target: z.string(),
   sourceHandle: z.string().optional(),
   targetHandle: z.string().optional(),
-  type: z.enum(["success", "failure", "always"]).optional(),
-  data: z
-    .object({
-      condition: z.string().optional(),
-      transformer: z.string().optional(),
-    })
-    .optional(),
+  type: z.string().optional(), // ReactFlow edge type
+  data: connectionDataSchema.optional(),
 });
 
 export const builderStateSchema = z.object({

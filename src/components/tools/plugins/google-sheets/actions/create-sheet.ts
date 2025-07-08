@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for create-sheet action parameters
 export const createSheetSchema = z.object({
@@ -45,6 +46,7 @@ export const createSheetAction: ToolAction = {
   actionType: "create",
   developmentMode: "visual",
   inputSchema: createSheetSchema,
+  parameters: zodToParameters(createSheetSchema),
   outputSchema: z.object({
     success: z.boolean(),
     sheetId: z.number().optional(),

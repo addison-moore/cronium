@@ -10,6 +10,7 @@ import { connectionPool } from "@/lib/tools/connection-pool";
 import {
   createRetryExecutor,
   defaultRetryConfigs,
+  type RetryConfig,
 } from "@/lib/tools/retry-strategies";
 import { circuitBreakerManager } from "@/lib/tools/circuit-breaker";
 import { ErrorCategorizer } from "@/lib/tools/error-categorization";
@@ -76,7 +77,7 @@ export async function executeToolAction(
 
   console.log(`[ToolAction] Starting execution for event ${event.id}`);
   console.log(
-    `[ToolAction] Event type: ${event.eventType}, User: ${event.userId}`,
+    `[ToolAction] Event type: ${event.type}, User: ${event.userId}`,
   );
   console.log(`[ToolAction] Input data:`, JSON.stringify(input, null, 2));
 
@@ -89,7 +90,13 @@ export async function executeToolAction(
     // Parse tool action configuration
     try {
       console.log(`[ToolAction] Raw config:`, event.toolActionConfig);
-      toolActionConfig = JSON.parse(event.toolActionConfig || "{}");
+      if (typeof event.toolActionConfig === 'string') {
+        toolActionConfig = JSON.parse(event.toolActionConfig);
+      } else if (event.toolActionConfig && typeof event.toolActionConfig === 'object') {
+        toolActionConfig = event.toolActionConfig as ToolActionConfig;
+      } else {
+        toolActionConfig = null;
+      }
       console.log(
         `[ToolAction] Parsed config:`,
         JSON.stringify(toolActionConfig, null, 2),
@@ -102,6 +109,7 @@ export async function executeToolAction(
     }
 
     if (
+      !toolActionConfig ||
       !toolActionConfig.toolType ||
       !toolActionConfig.actionId ||
       !toolActionConfig.toolId
@@ -259,11 +267,24 @@ export async function executeToolAction(
     );
     context.onProgress?.({ step: "Initializing action", percentage: 10 });
 
-    // Determine retry strategy based on tool type
-    const retryConfig =
-      action.actionType === "webhook"
+    // Determine retry strategy based on action features
+    const baseConfig =
+      action.features?.webhookSupport
         ? defaultRetryConfigs.aggressive
         : defaultRetryConfigs.standard;
+
+    // Create a mutable copy of the config
+    const retryConfig: RetryConfig = {
+      maxAttempts: baseConfig.maxAttempts,
+      initialDelay: baseConfig.initialDelay,
+      maxDelay: baseConfig.maxDelay,
+      backoffMultiplier: baseConfig.backoffMultiplier,
+      jitter: baseConfig.jitter,
+      ...(baseConfig.retryableErrors && { retryableErrors: [...baseConfig.retryableErrors] }),
+      ...('nonRetryableErrors' in baseConfig && baseConfig.nonRetryableErrors && { 
+        nonRetryableErrors: [...baseConfig.nonRetryableErrors] 
+      }),
+    };
 
     const retryExecutor = createRetryExecutor(
       "exponential",
@@ -286,10 +307,11 @@ export async function executeToolAction(
     );
 
     const actionStartTime = Date.now();
+    const toolId = toolActionConfig.toolId; // Capture toolId before async callback
     const result = await circuitBreaker.execute(async () => {
       return retryExecutor.execute(
         () => action.execute(credentials, mergedParameters, context),
-        { actionId: action.id, toolId: toolActionConfig.toolId },
+        { actionId: action.id, toolId },
       );
     });
     const executionTime = Date.now() - actionStartTime;
@@ -377,8 +399,18 @@ export async function executeToolAction(
     console.error(`[ToolAction] Config at failure:`, toolActionConfig);
 
     // Categorize the error
-    const parsedConfig =
-      toolActionConfig || JSON.parse(event.toolActionConfig || "{}");
+    const parsedConfig = toolActionConfig || (() => {
+      if (typeof event.toolActionConfig === 'string') {
+        try {
+          return JSON.parse(event.toolActionConfig);
+        } catch {
+          return {};
+        }
+      } else if (event.toolActionConfig && typeof event.toolActionConfig === 'object') {
+        return event.toolActionConfig as ToolActionConfig;
+      }
+      return {};
+    })();
     const categorizedError = ErrorCategorizer.categorize(
       errorObj,
       parsedConfig.toolType,

@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for send-message action parameters
 export const sendMessageSchema = z.object({
@@ -78,6 +79,7 @@ export const sendMessageAction: ToolAction = {
   actionType: "notification",
   developmentMode: "visual",
   inputSchema: sendMessageSchema,
+  parameters: zodToParameters(sendMessageSchema),
   outputSchema: z.object({
     success: z.boolean(),
     error: z.string().optional(),

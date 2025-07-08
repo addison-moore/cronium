@@ -11,7 +11,9 @@ interface CachedCredential {
   type: ToolType;
   credentials: any;
   isActive: boolean;
-  tags: string[];
+  tags?: string[];
+  encrypted: boolean;
+  encryptionMetadata: unknown;
   createdAt: Date;
   updatedAt: Date;
   // Cache metadata
@@ -52,7 +54,10 @@ export class CredentialCacheManager {
       // Track fetch status
       fetchMethod: async (key: string) => {
         const [toolId, userId] = key.split("-");
-        return this.fetchCredential(parseInt(toolId), userId);
+        if (!toolId || !userId) {
+          return undefined;
+        }
+        return this.fetchCredential(parseInt(toolId), userId) ?? undefined;
       },
     });
 
