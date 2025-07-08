@@ -79,12 +79,15 @@ export class AuditLogger {
     context: AuditContext,
     details?: Record<string, any>,
   ): Promise<void> {
-    await this.log({
+    const entry: AuditLogEntry = {
       action,
       context,
       success: true,
-      details,
-    });
+    };
+    if (details !== undefined) {
+      entry.details = details;
+    }
+    await this.log(entry);
   }
 
   /**
@@ -96,13 +99,16 @@ export class AuditLogger {
     errorMessage: string,
     details?: Record<string, any>,
   ): Promise<void> {
-    await this.log({
+    const entry: AuditLogEntry = {
       action,
       context,
       success: false,
       errorMessage,
-      details,
-    });
+    };
+    if (details !== undefined) {
+      entry.details = details;
+    }
+    await this.log(entry);
   }
 
   /**
@@ -146,10 +152,12 @@ export class AuditLogger {
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     // Get total count
-    const [{ count }] = await db
+    const countResult = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(toolAuditLogs)
       .where(where);
+    
+    const count = countResult[0]?.count ?? 0;
 
     // Get logs
     const logs = await db
@@ -225,7 +233,8 @@ export class AuditLogger {
       .delete(toolAuditLogs)
       .where(sql`${toolAuditLogs.createdAt} < ${cutoffDate}`);
 
-    return result.count;
+    // Drizzle returns an array with result info
+    return (result as any).rowCount ?? 0;
   }
 
   /**

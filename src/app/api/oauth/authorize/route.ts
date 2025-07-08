@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { z } from "zod";
 import { OAuthFlow } from "@/lib/oauth/OAuthFlow";
 import {
@@ -36,7 +36,8 @@ export async function POST(request: NextRequest) {
       .where(eq(toolCredentials.id, toolId))
       .limit(1);
 
-    if (tool.length === 0 || tool[0].userId !== session.user.id) {
+    const toolRecord = tool[0];
+    if (!toolRecord || toolRecord.userId !== session.user.id) {
       return NextResponse.json(
         { error: "Tool not found or unauthorized" },
         { status: 404 },
@@ -72,12 +73,13 @@ export async function POST(request: NextRequest) {
         break;
 
       case "microsoft":
+        const tenantId = process.env.OAUTH_MICROSOFT_TENANT_ID;
         provider = new MicrosoftOAuthProvider({
           clientId,
           clientSecret,
           redirectUri,
           scope: scope ?? "offline_access User.Read",
-          tenantId: process.env.OAUTH_MICROSOFT_TENANT_ID,
+          ...(tenantId && { tenantId }),
         });
         break;
 

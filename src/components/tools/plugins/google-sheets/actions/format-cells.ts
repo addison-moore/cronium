@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for format-cells action parameters
 export const formatCellsSchema = z.object({
@@ -71,6 +72,7 @@ export const formatCellsAction: ToolAction = {
   actionType: "update",
   developmentMode: "visual",
   inputSchema: formatCellsSchema,
+  parameters: zodToParameters(formatCellsSchema),
   outputSchema: z.object({
     success: z.boolean(),
     updatedRange: z.string().optional(),
@@ -319,17 +321,25 @@ function buildFieldMask(format: Record<string, unknown>): string {
 
   if (format.backgroundColor) fields.push("userEnteredFormat.backgroundColor");
   if (format.textFormat) {
-    if (format.textFormat.foregroundColor)
+    const textFormat = format.textFormat as {
+      foregroundColor?: { red?: number; green?: number; blue?: number };
+      fontSize?: number;
+      bold?: boolean;
+      italic?: boolean;
+      strikethrough?: boolean;
+      underline?: boolean;
+    };
+    if (textFormat.foregroundColor)
       fields.push("userEnteredFormat.textFormat.foregroundColor");
-    if (format.textFormat.fontSize !== undefined)
+    if (textFormat.fontSize !== undefined)
       fields.push("userEnteredFormat.textFormat.fontSize");
-    if (format.textFormat.bold !== undefined)
+    if (textFormat.bold !== undefined)
       fields.push("userEnteredFormat.textFormat.bold");
-    if (format.textFormat.italic !== undefined)
+    if (textFormat.italic !== undefined)
       fields.push("userEnteredFormat.textFormat.italic");
-    if (format.textFormat.strikethrough !== undefined)
+    if (textFormat.strikethrough !== undefined)
       fields.push("userEnteredFormat.textFormat.strikethrough");
-    if (format.textFormat.underline !== undefined)
+    if (textFormat.underline !== undefined)
       fields.push("userEnteredFormat.textFormat.underline");
   }
   if (format.numberFormat) fields.push("userEnteredFormat.numberFormat");

@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for update-database action parameters
 export const updateDatabaseSchema = z.object({
@@ -105,6 +106,7 @@ export const updateDatabaseAction: ToolAction = {
   actionType: "update",
   developmentMode: "visual",
   inputSchema: updateDatabaseSchema,
+  parameters: zodToParameters(updateDatabaseSchema),
   outputSchema: z.object({
     success: z.boolean(),
     lastEditedTime: z.string().optional(),

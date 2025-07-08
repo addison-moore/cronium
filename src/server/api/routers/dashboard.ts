@@ -54,10 +54,11 @@ export const dashboardRouter = createTRPCRouter({
         daysAgo.setDate(daysAgo.getDate() - days);
 
         // Get total count of logs for the user
-        const [{ count: totalActivityCount }] = await db
+        const countResult = await db
           .select({ count: sql<number>`count(*)` })
           .from(logs)
           .where(eq(logs.userId, userId));
+        const totalActivityCount = countResult[0]?.count ?? 0;
 
         // Get recent logs with workflow information
         const recentLogs = await db

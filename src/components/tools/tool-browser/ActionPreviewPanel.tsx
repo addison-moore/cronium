@@ -23,6 +23,7 @@ import {
 import {
   type ToolPlugin,
   type ToolAction,
+  type ActionParameter,
 } from "@/components/tools/types/tool-plugin";
 import { cn } from "@/lib/utils";
 
@@ -52,7 +53,7 @@ export function ActionPreviewPanel({
   const hasCredentials = tool.credentials?.configured ?? false;
 
   // Get parameter count
-  const requiredParams = action.parameters.filter((p) => p.required).length;
+  const requiredParams = action.parameters.filter((p: ActionParameter) => p.required).length;
   const totalParams = action.parameters.length;
 
   return (
@@ -134,7 +135,7 @@ export function ActionPreviewPanel({
 
           {/* Parameter List */}
           <div className="mt-4 space-y-2">
-            {action.parameters.slice(0, 5).map((param) => (
+            {action.parameters.slice(0, 5).map((param: ActionParameter) => (
               <div key={param.name} className="flex items-center gap-2 text-sm">
                 <div
                   className={cn(
@@ -207,9 +208,9 @@ export function ActionPreviewPanel({
 
         {/* Authentication Warning */}
         {requiresAuth && !hasCredentials && (
-          <Alert variant="warning">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
+          <Alert className="border-orange-500/50 bg-orange-50 dark:bg-orange-950/20">
+            <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+            <AlertDescription className="text-orange-800 dark:text-orange-200">
               This action requires authentication. Please configure {tool.name}{" "}
               credentials before using this action.
             </AlertDescription>

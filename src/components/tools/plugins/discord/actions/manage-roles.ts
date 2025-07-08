@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for Discord manage roles action parameters
 export const manageRolesSchema = z.object({
@@ -30,6 +31,7 @@ export const manageRolesAction: ToolAction = {
   actionType: "update",
   developmentMode: "visual",
   inputSchema: manageRolesSchema,
+  parameters: zodToParameters(manageRolesSchema),
   outputSchema: z.object({
     success: z.boolean(),
     updated_roles: z.array(z.string()).optional(),

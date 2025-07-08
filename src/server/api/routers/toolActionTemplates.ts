@@ -200,14 +200,14 @@ export const toolActionTemplatesRouter = createTRPCRouter({
         .offset(input.offset)
         .orderBy(toolActionTemplates.createdAt);
 
-      const [{ count }] = await ctx.db
+      const countResult = await ctx.db
         .select({ count: sql`count(*)::int` })
         .from(toolActionTemplates)
         .where(eq(toolActionTemplates.userId, userId));
 
       return {
         templates,
-        total: count ?? 0,
+        total: countResult[0]?.count ?? 0,
       };
     }),
 
@@ -236,14 +236,14 @@ export const toolActionTemplatesRouter = createTRPCRouter({
         .offset(input.offset)
         .orderBy(toolActionTemplates.name);
 
-      const [{ count }] = await ctx.db
+      const countResult = await ctx.db
         .select({ count: sql`count(*)::int` })
         .from(toolActionTemplates)
         .where(and(...conditions));
 
       return {
         templates,
-        total: count ?? 0,
+        total: countResult[0]?.count ?? 0,
       };
     }),
 

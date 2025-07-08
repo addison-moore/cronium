@@ -28,13 +28,12 @@ import { ToolHealthBadge } from "@/components/tools/ToolHealthIndicator";
 
 const googleSheetsSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  scope: z
+    .string()
+    .default("https://www.googleapis.com/auth/spreadsheets"),
   clientId: z.string().min(1, "Client ID is required"),
   clientSecret: z.string().min(1, "Client Secret is required"),
   refreshToken: z.string().optional(),
-  scope: z
-    .string()
-    .optional()
-    .default("https://www.googleapis.com/auth/spreadsheets"),
 });
 
 type GoogleSheetsFormData = z.infer<typeof googleSheetsSchema>;
@@ -69,7 +68,7 @@ function GoogleSheetsCredentialForm({
   };
 
   return (
-    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+    <form onSubmit={form.handleSubmit((data) => handleSubmit(data))} className="space-y-4">
       <Alert>
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>
@@ -170,7 +169,6 @@ function GoogleSheetsCredentialDisplay({
                 <ToolHealthBadge
                   toolId={tool.id}
                   toolName={tool.name}
-                  compact
                 />
                 {!credentials.refreshToken && (
                   <Badge variant="outline" className="text-orange-600">

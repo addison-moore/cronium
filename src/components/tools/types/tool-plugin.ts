@@ -6,6 +6,24 @@ import { type Tool } from "@/shared/schema";
 export type ActionType = "create" | "update" | "search" | "delete";
 export type DevelopmentMode = "visual" | "code";
 
+// Parameter definition for actions
+export interface ActionParameter {
+  name: string;
+  type: string;
+  required: boolean;
+  description?: string;
+  default?: unknown;
+  enum?: string[];
+}
+
+// Features configuration for actions
+export interface ActionFeatures {
+  testMode?: boolean;
+  realTime?: boolean;
+  batchSupport?: boolean;
+  webhookSupport?: boolean;
+}
+
 // Tool Action Interface
 export interface ToolAction {
   id: string;
@@ -36,6 +54,12 @@ export interface ToolAction {
   formConfig?: VisualFormConfig;
   helpText?: string;
   examples?: ActionExample[];
+  
+  // Additional properties for UI
+  requiresCredentials?: boolean;
+  parameters: ActionParameter[];
+  features?: ActionFeatures;
+  helpUrl?: string;
 
   // Flag to indicate if this action can be used as a conditional action
   isConditionalAction?: boolean;
@@ -91,6 +115,12 @@ export interface Logger {
   debug: (message: string) => void;
 }
 
+// Credentials configuration for tools
+export interface ToolCredentials {
+  configured?: boolean;
+  [key: string]: unknown;
+}
+
 // Base interface for all tool plugins
 export interface ToolPlugin {
   // Plugin metadata
@@ -113,6 +143,9 @@ export interface ToolPlugin {
   actions: ToolAction[];
   getActionById: (id: string) => ToolAction | undefined;
   getActionsByType: (type: ActionType) => ToolAction[];
+  
+  // Credentials
+  credentials?: ToolCredentials;
 
   // Plugin actions (legacy - maintained for compatibility)
   validate?: (

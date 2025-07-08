@@ -34,7 +34,7 @@ export class ToolActionHealthMonitor {
   private static instance: ToolActionHealthMonitor;
   private metricsCache = new Map<string, HealthMetrics>();
   private thresholds: HealthThresholds;
-  private updateInterval: NodeJS.Timer | null = null;
+  private updateInterval: ReturnType<typeof setInterval> | null = null;
 
   private constructor(thresholds: Partial<HealthThresholds> = {}) {
     this.thresholds = { ...DEFAULT_THRESHOLDS, ...thresholds };

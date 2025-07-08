@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for Discord message action parameters - Simplified for MVP
 export const sendMessageSchema = z.object({
@@ -24,6 +25,7 @@ export const sendMessageAction: ToolAction = {
   developmentMode: "visual",
   isConditionalAction: true,
   inputSchema: sendMessageSchema,
+  parameters: zodToParameters(sendMessageSchema),
   outputSchema: z.object({
     success: z.boolean(),
     message_id: z.string().optional(),

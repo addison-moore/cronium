@@ -33,6 +33,10 @@ export abstract class RetryStrategy {
 
   abstract calculateDelay(context: RetryContext): number;
 
+  getConfig(): RetryConfig {
+    return this.config;
+  }
+
   shouldRetry(context: RetryContext): RetryDecision {
     // Check max attempts
     if (context.attempt >= this.config.maxAttempts) {
@@ -197,7 +201,7 @@ export class RetryExecutor<T> {
 
     for (
       let attempt = 1;
-      attempt <= this.strategy.config.maxAttempts;
+      attempt <= this.strategy.getConfig().maxAttempts;
       attempt++
     ) {
       try {
@@ -294,9 +298,15 @@ export function createRetryExecutor<T>(
   config: Partial<RetryConfig> = {},
   onRetry?: (context: RetryContext) => void,
 ): RetryExecutor<T> {
+  const defaultConfig = defaultRetryConfigs.standard;
   const finalConfig: RetryConfig = {
-    ...defaultRetryConfigs.standard,
-    ...config,
+    maxAttempts: config.maxAttempts ?? defaultConfig.maxAttempts,
+    initialDelay: config.initialDelay ?? defaultConfig.initialDelay,
+    maxDelay: config.maxDelay ?? defaultConfig.maxDelay,
+    backoffMultiplier: config.backoffMultiplier ?? defaultConfig.backoffMultiplier,
+    jitter: config.jitter ?? defaultConfig.jitter,
+    retryableErrors: config.retryableErrors ?? [...defaultConfig.retryableErrors],
+    nonRetryableErrors: config.nonRetryableErrors ?? (defaultConfig.nonRetryableErrors ? [...defaultConfig.nonRetryableErrors] : undefined),
   };
 
   let strategy: RetryStrategy;

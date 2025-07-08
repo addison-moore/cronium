@@ -29,13 +29,14 @@ export async function GET(request: NextRequest) {
       .where(eq(oauthStates.state, params.state))
       .limit(1);
 
-    if (stateRecord.length === 0) {
+    const state = stateRecord[0];
+    if (!state) {
       return NextResponse.redirect(
         new URL("/dashboard/settings?error=invalid_state", request.url),
       );
     }
 
-    const { providerId } = stateRecord[0];
+    const { providerId } = state;
 
     // Get OAuth configuration
     const clientId = process.env[`OAUTH_${providerId.toUpperCase()}_CLIENT_ID`];
@@ -65,12 +66,13 @@ export async function GET(request: NextRequest) {
         break;
 
       case "microsoft":
+        const tenantId = process.env.OAUTH_MICROSOFT_TENANT_ID;
         provider = new MicrosoftOAuthProvider({
           clientId,
           clientSecret,
           redirectUri,
           scope: "offline_access User.Read",
-          tenantId: process.env.OAUTH_MICROSOFT_TENANT_ID,
+          ...(tenantId && { tenantId }),
         });
         break;
 

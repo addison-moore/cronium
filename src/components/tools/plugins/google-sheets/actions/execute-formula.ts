@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for execute-formula action parameters
 export const executeFormulaSchema = z.object({
@@ -37,6 +38,7 @@ export const executeFormulaAction: ToolAction = {
   actionType: "update",
   developmentMode: "visual",
   inputSchema: executeFormulaSchema,
+  parameters: zodToParameters(executeFormulaSchema),
   outputSchema: z.object({
     success: z.boolean(),
     executedFormulas: z.number().optional(),
