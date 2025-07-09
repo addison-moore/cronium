@@ -1,15 +1,7 @@
 "use client";
 
 import React from "react";
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
-  Panel,
-  ReactFlowProvider,
-  ConnectionMode,
-} from "@xyflow/react";
+import { Panel, ReactFlowProvider } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -66,7 +58,7 @@ export function ActionBuilder({ initialFlow, onSave }: ActionBuilderProps) {
     }
   }, [initialFlow, setNodes, setEdges]);
 
-  const handleNodeSelect = (nodeType: NodeType, data?: any) => {
+  const _handleNodeSelect = (nodeType: NodeType, data?: unknown) => {
     const position = {
       x: Math.random() * 400 + 100,
       y: Math.random() * 400 + 100,
@@ -107,9 +99,12 @@ export function ActionBuilder({ initialFlow, onSave }: ActionBuilderProps) {
 
       try {
         const text = await file.text();
-        const flow = JSON.parse(text);
-        setNodes(flow.nodes || []);
-        setEdges(flow.edges || []);
+        const flow = JSON.parse(text) as {
+          nodes?: ActionNode[];
+          edges?: ActionConnection[];
+        };
+        setNodes(flow.nodes ?? []);
+        setEdges(flow.edges ?? []);
       } catch (error) {
         console.error("Failed to import flow:", error);
       }
@@ -124,7 +119,7 @@ export function ActionBuilder({ initialFlow, onSave }: ActionBuilderProps) {
     return getNodeById(selectedNode);
   }, [selectedNode, getNodeById, nodes]);
 
-  const selectedConnectionData = React.useMemo(() => {
+  const _selectedConnectionData = React.useMemo(() => {
     if (!selectedConnection) return null;
     return getConnectionById(selectedConnection);
   }, [selectedConnection, getConnectionById, edges]);
@@ -134,7 +129,7 @@ export function ActionBuilder({ initialFlow, onSave }: ActionBuilderProps) {
       <div className="flex h-screen">
         {/* Left Panel - Node Library */}
         <div className="bg-background border-r">
-          <NodeLibrary onNodeSelect={handleNodeSelect} />
+          <NodeLibrary />
         </div>
 
         {/* Center - Canvas */}

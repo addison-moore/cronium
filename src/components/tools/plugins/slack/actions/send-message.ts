@@ -5,14 +5,25 @@ import type {
 } from "@/components/tools/types/tool-plugin";
 import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
-// Schema for the send-message action parameters - Simplified for MVP
-export const sendMessageSchema = z.object({
-  text: z.string().min(1).describe("The message text"),
-  channel: z
-    .string()
-    .optional()
-    .describe("Channel ID or name (e.g., #general, @username)"),
-});
+// Schema for the send-message action parameters - Enhanced to support blocks
+export const sendMessageSchema = z
+  .object({
+    channel: z
+      .string()
+      .optional()
+      .describe("Channel ID or name (e.g., #general, @username)"),
+    text: z
+      .string()
+      .optional()
+      .describe("Fallback text for notifications (required if using blocks)"),
+    blocks: z
+      .string()
+      .optional()
+      .describe("Rich message content using Slack Block Kit (JSON format)"),
+  })
+  .refine((data) => data.text ?? data.blocks, {
+    message: "Either text or blocks must be provided",
+  });
 
 export type SendMessageParams = z.infer<typeof sendMessageSchema>;
 
@@ -45,11 +56,35 @@ export const sendMessageAction: ToolAction = {
       },
     },
     {
-      name: "Channel Message",
-      description: "Send a message to a specific channel",
+      name: "Rich Block Message",
+      description: "Send a rich message using Slack Block Kit",
       input: {
-        channel: "#general",
-        text: "Team meeting in 10 minutes!",
+        channel: "#alerts",
+        text: "Event notification",
+        blocks: JSON.stringify({
+          blocks: [
+            {
+              type: "header",
+              text: {
+                type: "plain_text",
+                text: "{{cronium.event.name}} - {{cronium.event.status}}",
+              },
+            },
+            {
+              type: "section",
+              fields: [
+                {
+                  type: "mrkdwn",
+                  text: "*Status:* {{cronium.event.status}}",
+                },
+                {
+                  type: "mrkdwn",
+                  text: "*Duration:* {{formatDuration cronium.event.duration}}",
+                },
+              ],
+            },
+          ],
+        }),
       },
       output: {
         ok: true,
@@ -92,14 +127,42 @@ export const sendMessageAction: ToolAction = {
         onProgress({ step: "Building message payload...", percentage: 30 });
       }
 
-      // Build the payload - Simplified for MVP
-      const payload: Record<string, unknown> = {
-        text: replaceVariables(typedParams.text, variables),
-      };
+      // Build the payload
+      const payload: Record<string, unknown> = {};
 
-      // Add optional channel
+      // Add channel if specified
       if (typedParams.channel) {
         payload.channel = typedParams.channel;
+      }
+
+      // Handle blocks or text
+      if (typedParams.blocks) {
+        try {
+          // Parse and process blocks JSON
+          const blocksJson = replaceVariables(typedParams.blocks, variables);
+          const parsedBlocks = JSON.parse(blocksJson) as { blocks?: unknown[] };
+
+          if (parsedBlocks.blocks && Array.isArray(parsedBlocks.blocks)) {
+            payload.blocks = parsedBlocks.blocks;
+          } else if (Array.isArray(parsedBlocks)) {
+            payload.blocks = parsedBlocks;
+          } else {
+            throw new Error(
+              "Invalid blocks format. Expected an array or object with 'blocks' property.",
+            );
+          }
+
+          // Add fallback text if provided
+          if (typedParams.text) {
+            payload.text = replaceVariables(typedParams.text, variables);
+          }
+        } catch (error) {
+          throw new Error(
+            `Failed to parse blocks JSON: ${error instanceof Error ? error.message : "Invalid JSON"}`,
+          );
+        }
+      } else if (typedParams.text) {
+        payload.text = replaceVariables(typedParams.text, variables);
       }
 
       // Update progress

@@ -63,7 +63,7 @@ export function ActionEdge({
               }
               className="text-xs"
             >
-              {String(data.label)}
+              {(data.label as string) ?? ""}
             </Badge>
           </div>
         </EdgeLabelRenderer>

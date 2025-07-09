@@ -1,7 +1,5 @@
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import {
-  type Node,
-  type Edge,
   type Connection,
   applyNodeChanges,
   applyEdgeChanges,
@@ -13,9 +11,9 @@ import { create } from "zustand";
 import {
   type ActionNode,
   type ActionConnection,
+  type ActionNodeData,
   NodeType,
   NODE_TEMPLATES,
-  DataMapping,
 } from "./types";
 
 interface ActionBuilderState {
@@ -29,7 +27,7 @@ interface ActionBuilderState {
   addNode: (
     type: NodeType,
     position: { x: number; y: number },
-    data?: any,
+    data?: unknown,
   ) => void;
   updateNode: (nodeId: string, data: Partial<ActionNode>) => void;
   deleteNode: (nodeId: string) => void;
@@ -86,11 +84,12 @@ export const useActionBuilderStore = create<ActionBuilderState>((set, get) => ({
       type: "action", // ReactFlow node type for custom component
       position,
       data: {
+        label: template.label ?? type,
         ...template,
-        ...data,
+        ...(data as Record<string, unknown>),
         nodeType: type, // Store our NodeType in data
         id,
-      },
+      } as ActionNodeData,
     };
     set({
       nodes: [...get().nodes, newNode],
@@ -120,7 +119,7 @@ export const useActionBuilderStore = create<ActionBuilderState>((set, get) => ({
     set({
       edges: get().edges.map((edge) =>
         edge.id === connectionId
-          ? { ...edge, data: { ...edge.data, ...data } }
+          ? ({ ...edge, data: { ...edge.data, ...data } } as ActionConnection)
           : edge,
       ),
     });

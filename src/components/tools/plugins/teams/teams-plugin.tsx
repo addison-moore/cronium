@@ -52,7 +52,7 @@ function TeamsCredentialForm({
   onCancel,
 }: CredentialFormProps) {
   const form = useForm<TeamsFormData>({
-    resolver: zodResolver(teamsSchema) as any,
+    resolver: zodResolver(teamsSchema),
     defaultValues: tool
       ? {
           name: tool.name,
@@ -77,10 +77,7 @@ function TeamsCredentialForm({
   };
 
   return (
-    <form
-      onSubmit={form.handleSubmit(handleSubmit as any)}
-      className="space-y-4"
-    >
+    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
       <Alert>
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>

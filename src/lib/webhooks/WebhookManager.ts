@@ -71,7 +71,7 @@ export class WebhookManager extends EventEmitter {
     config: WebhookConfig,
   ): Promise<{ id: number; key: string }> {
     const key = nanoid(32);
-    const secretKey = config.secret || crypto.randomBytes(32).toString("hex");
+    const secretKey = config.secret ?? crypto.randomBytes(32).toString("hex");
 
     const result = await db
       .insert(webhooks)
@@ -81,9 +81,9 @@ export class WebhookManager extends EventEmitter {
         url: config.url,
         events: config.events,
         secret: secretKey,
-        headers: config.headers || {},
+        headers: config.headers ?? {},
         active: config.active,
-        retryConfig: config.retryConfig || {
+        retryConfig: config.retryConfig ?? {
           maxRetries: 3,
           retryDelay: 1000,
           backoffMultiplier: 2,
@@ -423,7 +423,10 @@ export class WebhookManager extends EventEmitter {
       .where(
         and(
           eq(webhookEvents.createdAt, cutoffDate),
-          eq(webhookEvents.id, eventsWithDeliveries as any),
+          eq(
+            webhookEvents.id,
+            eventsWithDeliveries as unknown as typeof webhookEvents.id,
+          ),
         ),
       );
   }

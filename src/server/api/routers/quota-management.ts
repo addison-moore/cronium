@@ -82,7 +82,7 @@ export const quotaManagementRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const result = await quotaManager.checkQuota(
         ctx.session.user.id,
-        input.resource as any,
+        input.resource as keyof QuotaConfig,
         input.amount,
       );
       return result;
@@ -120,7 +120,10 @@ export const quotaManagementRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ input }) => {
-      await quotaManager.resetQuotas(input.userId, input.resources as any);
+      await quotaManager.resetQuotas(
+        input.userId,
+        input.resources as Array<keyof QuotaConfig> | undefined,
+      );
       return { success: true };
     }),
 

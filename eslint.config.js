@@ -30,7 +30,11 @@ module.exports = [
       "**/*.mjs",
       "**/*.cjs",
       "**/__tests__/*",
-      "_backups/*",
+      "**/_backups/*",
+      "docker/*",
+      "plans/*",
+      "package-lock.json",
+      "pnpm-lock.yaml",
     ],
   },
   ...fixupConfigRules(

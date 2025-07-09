@@ -1457,7 +1457,6 @@ cp -r backups/rest-components/* src/components/
 pnpm test              # Unit tests
 pnpm test:integration  # Integration tests
 pnpm lint              # Code quality
-pnpm typecheck         # Type safety
 ```
 
 ## Risk Mitigation

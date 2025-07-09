@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../trpc";
 import { toolActionLogs } from "@/shared/schema";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, and } from "drizzle-orm";
 import { db } from "@/server/db";
 import { TRPCError } from "@trpc/server";
 
@@ -80,7 +80,7 @@ export const toolActionLogsRouter = createTRPCRouter({
         period: z.enum(["hour", "day", "week", "month"]).default("day"),
       }),
     )
-    .query(async ({ input }) => {
+    .query(async () => {
       try {
         // For now, return mock stats
         // TODO: Implement actual aggregation queries
@@ -102,6 +102,3 @@ export const toolActionLogsRouter = createTRPCRouter({
       }
     }),
 });
-
-// Add missing import
-import { and } from "drizzle-orm";

@@ -100,11 +100,11 @@ export const createPageSchema = z.object({
       ]),
     )
     .optional()
-    .describe("Properties for database pages"),
+    .describe("Properties for database pages (JSON format)"),
   children: z
     .array(blockSchema)
     .optional()
-    .describe("Content blocks for the page"),
+    .describe("Content blocks for the page (JSON array)"),
 });
 
 export type CreatePageParams = z.infer<typeof createPageSchema>;
@@ -404,7 +404,9 @@ export const createPageAction: ToolAction = {
         onProgress({ step: "Page created successfully!", percentage: 100 });
       }
 
-      logger.info(`Notion page created successfully - Page ID: ${data.id}`);
+      logger.info(
+        `Notion page created successfully - Page ID: ${data.id ?? "unknown"}`,
+      );
 
       return {
         success: true,
@@ -560,6 +562,7 @@ function replaceVariables(
       return JSON.stringify(value);
     }
     // At this point, value is a primitive (string, number, boolean)
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
     return String(value);
   });
 }

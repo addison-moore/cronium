@@ -9,7 +9,7 @@ interface CachedCredential {
   userId: string;
   name: string;
   type: ToolType;
-  credentials: any;
+  credentials: unknown;
   isActive: boolean;
   tags?: string[];
   encrypted: boolean;
@@ -58,7 +58,7 @@ export class CredentialCacheManager {
           return undefined;
         }
         const result = await this.fetchCredential(parseInt(toolId), userId);
-        return result === null ? undefined : result;
+        return result ?? undefined;
       },
     });
 
@@ -91,7 +91,7 @@ export class CredentialCacheManager {
 
       if (isStale) {
         // Return stale data while revalidating in background
-        this.revalidateInBackground(toolId, userId);
+        void this.revalidateInBackground(toolId, userId);
       }
 
       return cached;
@@ -136,10 +136,7 @@ export class CredentialCacheManager {
           const key = `${tool.id}-${userId}`;
           const cached: CachedCredential = {
             ...tool,
-            credentials:
-              typeof tool.credentials === "string"
-                ? JSON.parse(tool.credentials)
-                : tool.credentials,
+            credentials: tool.credentials,
             cachedAt: new Date(),
             accessCount: 0,
           };
@@ -175,7 +172,7 @@ export class CredentialCacheManager {
       size: this.cache.size,
       maxSize: this.cache.max,
       hitRate: totalAccess > 0 ? this.cache.size / totalAccess : 0,
-      credentials: entries.map(([key, cred]) => ({
+      credentials: entries.map(([_key, cred]) => ({
         toolId: cred.id,
         userId: cred.userId,
         accessCount: cred.accessCount,
@@ -212,10 +209,7 @@ export class CredentialCacheManager {
 
       return {
         ...tool,
-        credentials:
-          typeof tool.credentials === "string"
-            ? JSON.parse(tool.credentials)
-            : tool.credentials,
+        credentials: tool.credentials,
         cachedAt: new Date(),
         accessCount: 1,
       };

@@ -6,22 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, Save, X } from "lucide-react";
-import ActionParameterForm from "@/components/event-form/ActionParameterForm";
-import { type ToolAction } from "@/components/tools/types/tool-plugin";
 import { TemplatePreview } from "./TemplatePreview";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToolPluginRegistry } from "@/components/tools/plugins";
 import { TemplateActionParameterForm } from "./TemplateActionParameterForm";
-import { Plus, Variable } from "lucide-react";
+import { Variable } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -113,7 +104,7 @@ export function ToolActionTemplateForm({
     onError: (error) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to create template",
+        description: error.message ?? "Failed to create template",
         variant: "destructive",
       });
     },
@@ -131,7 +122,7 @@ export function ToolActionTemplateForm({
     onError: (error) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to update template",
+        description: error.message ?? "Failed to update template",
         variant: "destructive",
       });
     },
@@ -139,13 +130,13 @@ export function ToolActionTemplateForm({
 
   // Get plugin and action
   const plugin = ToolPluginRegistry.get(toolType);
-  const currentAction = plugin?.actions?.find((a) => a.id === actionId) || null;
+  const currentAction = plugin?.actions?.find((a) => a.id === actionId) ?? null;
 
   // Load template data when editing
   useEffect(() => {
     if (template) {
       setName(template.name);
-      setDescription(template.description || "");
+      setDescription(template.description ?? "");
       setParameters(template.parameters as Record<string, unknown>);
     }
   }, [template]);
@@ -183,7 +174,7 @@ export function ToolActionTemplateForm({
     if (!currentFieldForVariable) return;
 
     // Get current value of the field
-    const currentValue = (parameters[currentFieldForVariable] as string) || "";
+    const currentValue = (parameters[currentFieldForVariable] as string) ?? "";
 
     // Insert the variable wrapped in handlebars syntax
     const newValue = currentValue + `{{${variableName}}}`;
@@ -243,13 +234,13 @@ export function ToolActionTemplateForm({
               <Label className="text-muted-foreground text-sm">Tool:</Label>
               <div className="flex items-center gap-2">
                 {plugin && <plugin.icon className="h-4 w-4" />}
-                <span className="font-medium">{plugin?.name || toolType}</span>
+                <span className="font-medium">{plugin?.name ?? toolType}</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <Label className="text-muted-foreground text-sm">Action:</Label>
               <span className="font-medium">
-                {currentAction?.name || actionId}
+                {currentAction?.name ?? actionId}
               </span>
             </div>
           </div>

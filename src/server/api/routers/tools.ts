@@ -22,7 +22,7 @@ import { storage } from "@/server/storage";
 import { UserRole, toolCredentials, EventType } from "@/shared/schema";
 import { ToolType } from "@shared/schema";
 import { db } from "@/server/db";
-import { eq, and, or, ilike, desc } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import {
   credentialEncryption,
   type EncryptedData,
@@ -79,9 +79,18 @@ type ToolWithParsedCredentials = Omit<
   typeof toolCredentials.$inferSelect,
   "credentials"
 > & {
-  credentials: Record<string, any>;
+  credentials: Record<string, unknown>;
   encrypted: boolean;
-  encryptionMetadata: any;
+  encryptionMetadata: {
+    algorithm: string;
+    keyDerivation:
+      | string
+      | {
+          method: string;
+          salt: string;
+          iterations: number;
+        };
+  } | null;
   description?: string;
   tags: string[];
 };
@@ -99,15 +108,15 @@ async function getUserTools(
 
     // Parse and decrypt credentials for each tool
     return tools.map((tool): ToolWithParsedCredentials => {
-      let credentials: Record<string, any>;
+      let credentials: Record<string, unknown>;
       const rawCredentials = tool.credentials;
 
       // Handle credentials based on type
       if (typeof rawCredentials === "string") {
         // First, check if it's a JSON string (unencrypted)
         try {
-          credentials = JSON.parse(rawCredentials);
-        } catch (parseError) {
+          credentials = JSON.parse(rawCredentials) as Record<string, unknown>;
+        } catch {
           // Not valid JSON, might be encrypted
           if (tool.encrypted && credentialEncryption.isAvailable()) {
             try {
@@ -117,7 +126,10 @@ async function getUserTools(
               );
               // Try to parse the decrypted value
               try {
-                credentials = JSON.parse(decrypted);
+                credentials = JSON.parse(decrypted as string) as Record<
+                  string,
+                  unknown
+                >;
               } catch (parseError2) {
                 console.error(
                   `Failed to parse decrypted credentials for tool ${tool.id}:`,
@@ -145,18 +157,63 @@ async function getUserTools(
         }
       } else {
         // Already an object
-        credentials = rawCredentials as Record<string, any>;
+        credentials = rawCredentials as Record<string, unknown>;
       }
 
-      return {
+      // Type assertion for properties that might not exist in older records
+      const toolWithDefaults = tool as typeof tool & {
+        encrypted?: boolean;
+        encryptionMetadata?: {
+          algorithm: string;
+          keyDerivation: string;
+        } | null;
+        description?: string;
+        tags?: string[];
+      };
+
+      // Parse encryptionMetadata keyDerivation if it's a JSON string
+      let parsedEncryptionMetadata = toolWithDefaults.encryptionMetadata;
+      if (
+        parsedEncryptionMetadata &&
+        typeof parsedEncryptionMetadata.keyDerivation === "string"
+      ) {
+        try {
+          const parsed = JSON.parse(parsedEncryptionMetadata.keyDerivation) as {
+            method?: string;
+          };
+          if (typeof parsed === "object" && parsed.method) {
+            parsedEncryptionMetadata = {
+              ...parsedEncryptionMetadata,
+              keyDerivation: parsed as {
+                method: string;
+                salt: string;
+                iterations: number;
+              },
+            } as unknown as typeof parsedEncryptionMetadata;
+          }
+        } catch {
+          // Keep as string if not valid JSON
+        }
+      }
+
+      const result: ToolWithParsedCredentials = {
         ...tool,
         credentials,
         // Add default values for new columns if they don't exist
-        encrypted: (tool as any).encrypted ?? false,
-        encryptionMetadata: (tool as any).encryptionMetadata ?? null,
-        description: (tool as any).description ?? undefined,
-        tags: (tool as any).tags ?? [],
+        encrypted: toolWithDefaults.encrypted ?? false,
+        encryptionMetadata: parsedEncryptionMetadata ?? null,
+        tags: toolWithDefaults.tags ?? [],
       };
+
+      // Only add description if it exists
+      if (
+        toolWithDefaults.description !== undefined &&
+        toolWithDefaults.description !== null
+      ) {
+        result.description = toolWithDefaults.description;
+      }
+
+      return result;
     });
   } catch (error) {
     console.error("Error fetching user tools:", error);
@@ -300,7 +357,7 @@ export const toolsRouter = createTRPCRouter({
           success: true,
           message: `${tool.type} connection test successful`,
           duration: 0,
-          details: {} as Record<string, any>,
+          details: {} as Record<string, unknown>,
         };
 
         // Perform tool-specific health checks
@@ -406,8 +463,8 @@ export const toolsRouter = createTRPCRouter({
         filteredTools = filteredTools.filter(
           (tool) =>
             tool.name.toLowerCase().includes(searchLower) ||
-            tool.description?.toLowerCase().includes(searchLower) ||
-            tool.tags.some((tag) => tag.toLowerCase().includes(searchLower)),
+            (tool.description?.toLowerCase().includes(searchLower) ??
+              tool.tags.some((tag) => tag.toLowerCase().includes(searchLower))),
         );
       }
 
@@ -529,12 +586,27 @@ export const toolsRouter = createTRPCRouter({
         }
 
         // Create tool in database
-        const values: any = {
+        type ToolInsertValues = {
+          userId: string;
+          name: string;
+          type: ToolType;
+          credentials: string;
+          description: string;
+          tags: string[];
+          isActive: boolean;
+          encrypted?: boolean;
+          encryptionMetadata?: {
+            algorithm: string;
+            keyDerivation: string;
+          } | null;
+        };
+
+        const values: ToolInsertValues = {
           userId: ctx.userId,
           name: input.name,
           type: input.type,
           credentials: credentialsData,
-          description: input.description ?? null,
+          description: input.description ?? "",
           tags: input.tags ?? [],
           isActive: input.isActive ?? true,
         };
@@ -542,8 +614,16 @@ export const toolsRouter = createTRPCRouter({
         // Only add new columns if database supports them
         try {
           values.encrypted = encrypted;
-          values.encryptionMetadata = encryptionMetadata;
-        } catch (e) {
+          values.encryptionMetadata = encryptionMetadata
+            ? {
+                algorithm: encryptionMetadata.algorithm,
+                keyDerivation:
+                  typeof encryptionMetadata.keyDerivation === "object"
+                    ? JSON.stringify(encryptionMetadata.keyDerivation)
+                    : encryptionMetadata.keyDerivation,
+              }
+            : null;
+        } catch {
           console.log("Database doesn't support encryption columns yet");
         }
 
@@ -579,8 +659,8 @@ export const toolsRouter = createTRPCRouter({
           ...newTool,
           credentials:
             typeof newTool.credentials === "string"
-              ? JSON.parse(newTool.credentials)
-              : newTool.credentials,
+              ? (JSON.parse(newTool.credentials) as Record<string, unknown>)
+              : (newTool.credentials as Record<string, unknown>),
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -635,7 +715,21 @@ export const toolsRouter = createTRPCRouter({
         }
 
         // Update tool in database
-        const updateValues: any = {
+        type ToolUpdateValues = {
+          updatedAt: Date;
+          name?: string;
+          description?: string;
+          tags?: string[];
+          isActive?: boolean;
+          credentials?: string;
+          encrypted?: boolean;
+          encryptionMetadata?: {
+            algorithm: string;
+            keyDerivation: string;
+          } | null;
+        };
+
+        const updateValues: ToolUpdateValues = {
           updatedAt: new Date(),
         };
 
@@ -656,7 +750,10 @@ export const toolsRouter = createTRPCRouter({
             updateValues.encrypted = true;
             updateValues.encryptionMetadata = {
               algorithm: encryptedData.algorithm,
-              keyDerivation: encryptedData.keyDerivation,
+              keyDerivation:
+                typeof encryptedData.keyDerivation === "object"
+                  ? JSON.stringify(encryptedData.keyDerivation)
+                  : encryptedData.keyDerivation,
             };
           } else {
             updateValues.credentials = JSON.stringify(updateData.credentials);
@@ -683,7 +780,7 @@ export const toolsRouter = createTRPCRouter({
         }
 
         // Audit log
-        const changes: Record<string, any> = {};
+        const changes: Record<string, unknown> = {};
         if (updateData.name !== undefined) changes.name = updateData.name;
         if (updateData.isActive !== undefined)
           changes.isActive = updateData.isActive;
@@ -704,12 +801,12 @@ export const toolsRouter = createTRPCRouter({
         );
 
         // Return the updated tool with decrypted credentials
-        let credentials: Record<string, any>;
+        let credentials: Record<string, unknown>;
         const rawCredentials = updatedTool.credentials;
         if (typeof rawCredentials === "string") {
-          credentials = JSON.parse(rawCredentials);
+          credentials = JSON.parse(rawCredentials) as Record<string, unknown>;
         } else {
-          credentials = rawCredentials as Record<string, any>;
+          credentials = rawCredentials as Record<string, unknown>;
         }
         if (updatedTool.encrypted && credentialEncryption.isAvailable()) {
           try {
@@ -718,8 +815,8 @@ export const toolsRouter = createTRPCRouter({
             );
             credentials =
               typeof decryptedData === "string"
-                ? JSON.parse(decryptedData)
-                : decryptedData;
+                ? (JSON.parse(decryptedData) as Record<string, unknown>)
+                : (decryptedData as Record<string, unknown>);
           } catch (error) {
             console.error(
               `Failed to decrypt credentials for tool ${updatedTool.id}:`,
@@ -1281,7 +1378,7 @@ export const toolsRouter = createTRPCRouter({
     .input(
       z.object({
         actionId: z.string(),
-        parameters: z.record(z.any()),
+        parameters: z.record(z.unknown()),
       }),
     )
     .mutation(async ({ input }) => {
@@ -1333,7 +1430,7 @@ export const toolsRouter = createTRPCRouter({
       z.object({
         toolId: z.number(),
         actionId: z.string(),
-        parameters: z.record(z.any()),
+        parameters: z.record(z.unknown()),
         isTest: z.boolean().default(false),
       }),
     )
@@ -1380,7 +1477,7 @@ export const toolsRouter = createTRPCRouter({
         const context = {
           variables: {
             get: (_key: string) => null, // TODO: Implement variable access
-            set: (_key: string, _value: any) => null, // TODO: Implement variable setting
+            set: (_key: string, _value: unknown) => null, // TODO: Implement variable setting
           },
           logger: {
             info: (message: string) => console.log(`[INFO] ${message}`),
@@ -1392,18 +1489,18 @@ export const toolsRouter = createTRPCRouter({
           onProgress: (progress: { step: string; percentage: number }) => {
             console.log(`[PROGRESS] ${progress.step}: ${progress.percentage}%`);
           },
-          onPartialResult: (result: any) => {
+          onPartialResult: (result: unknown) => {
             console.log(`[PARTIAL] ${JSON.stringify(result)}`);
           },
         };
 
         // Execute the action
         const startTime = Date.now();
-        const result = await action.execute(
+        const result = (await action.execute(
           tool.credentials,
           input.parameters,
           context,
-        );
+        )) as unknown;
         const executionTime = Date.now() - startTime;
 
         // Log the execution (this would go to the tool_action_logs table in a real implementation)

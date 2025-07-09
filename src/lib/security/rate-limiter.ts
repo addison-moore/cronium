@@ -100,7 +100,9 @@ const defaultQuotas: Record<string, QuotaConfig> = {
 export class RateLimiter {
   private static instance: RateLimiter;
 
-  private constructor() {}
+  private constructor() {
+    // Rate limiter initialization
+  }
 
   static getInstance(): RateLimiter {
     if (!RateLimiter.instance) {
@@ -116,7 +118,7 @@ export class RateLimiter {
     userId: string,
     toolType: string,
   ): Promise<RateLimitResult> {
-    const config = defaultRateLimits[toolType] || defaultRateLimits.default;
+    const config = defaultRateLimits[toolType] ?? defaultRateLimits.default;
     if (!config) {
       // Fallback if no default config exists
       return {
@@ -233,7 +235,7 @@ export class RateLimiter {
         )
         .limit(1);
 
-      const tier = userQuota?.tier || "free";
+      const tier = userQuota?.tier ?? "free";
       const quotaConfig = {
         ...defaultQuotas[tier],
         ...(userQuota?.customLimits as QuotaConfig | undefined),
@@ -271,15 +273,15 @@ export class RateLimiter {
 
       return {
         allowed:
-          hourlyUsed < (quotaConfig.hourly || Infinity) &&
-          dailyUsed < (quotaConfig.daily || Infinity),
+          hourlyUsed < (quotaConfig.hourly ?? Infinity) &&
+          dailyUsed < (quotaConfig.daily ?? Infinity),
         daily: {
           used: dailyUsed,
-          limit: quotaConfig.daily || 0,
+          limit: quotaConfig.daily ?? 0,
         },
         hourly: {
           used: hourlyUsed,
-          limit: quotaConfig.hourly || 0,
+          limit: quotaConfig.hourly ?? 0,
         },
         tier,
       };
@@ -288,8 +290,8 @@ export class RateLimiter {
       // Fail open
       return {
         allowed: true,
-        daily: { used: 0, limit: defaultQuotas.free?.daily || 0 },
-        hourly: { used: 0, limit: defaultQuotas.free?.hourly || 0 },
+        daily: { used: 0, limit: defaultQuotas.free?.daily ?? 0 },
+        hourly: { used: 0, limit: defaultQuotas.free?.hourly ?? 0 },
         tier: "free",
       };
     }
@@ -308,7 +310,7 @@ export class RateLimiter {
       .values({
         userId,
         toolType,
-        tier: quota.tier || "free",
+        tier: quota.tier ?? "free",
         dailyLimit: quota.daily,
         hourlyLimit: quota.hourly,
         burstLimit: quota.burst,
@@ -319,7 +321,7 @@ export class RateLimiter {
           ? [userToolQuotas.userId, userToolQuotas.toolType]
           : [userToolQuotas.userId],
         set: {
-          tier: quota.tier || "free",
+          tier: quota.tier ?? "free",
           dailyLimit: quota.daily,
           hourlyLimit: quota.hourly,
           burstLimit: quota.burst,
@@ -340,7 +342,7 @@ export class RateLimiter {
       .where(sql`${toolRateLimits.windowStart} < ${cutoffDate}`);
 
     // Drizzle returns an array with result info
-    return (result as any).rowCount ?? 0;
+    return (result as { rowCount?: number }).rowCount ?? 0;
   }
 
   /**
@@ -375,13 +377,13 @@ export class RateLimiter {
       // By tool
       if (record.toolType) {
         byTool[record.toolType] =
-          (byTool[record.toolType] || 0) + record.requestCount;
+          (byTool[record.toolType] ?? 0) + record.requestCount;
       }
 
       // By day
       const day = record.windowStart.toISOString().split("T")[0];
       if (day) {
-        byDay[day] = (byDay[day] || 0) + record.requestCount;
+        byDay[day] = (byDay[day] ?? 0) + record.requestCount;
       }
 
       total += record.requestCount;

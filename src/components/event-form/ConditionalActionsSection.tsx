@@ -165,14 +165,14 @@ export default function ConditionalActionsSection({
     const action = ToolPluginRegistry.getConditionalActionForTool(
       selectedToolType.toLowerCase(),
     );
-    return action?.id || null;
+    return action?.id ?? null;
   }, [selectedToolType]);
 
   const { data: templatesData } =
     trpc.toolActionTemplates.getByToolAction.useQuery(
       {
-        toolType: selectedToolType || "",
-        actionId: conditionalActionId || "",
+        toolType: selectedToolType ?? "",
+        actionId: conditionalActionId ?? "",
       },
       {
         enabled: !!selectedToolType && !!conditionalActionId,
@@ -300,29 +300,49 @@ export default function ConditionalActionsSection({
         setSelectedTemplate(templateId);
 
         // Extract content based on the action's parameter structure
-        const params = template.parameters as Record<string, any>;
+        const params = template.parameters as Record<string, unknown>;
 
         // Get the action to know which field contains the message
         const action = ToolPluginRegistry.getActionById(template.actionId);
         if (action) {
           // For Discord and Slack, use 'content' or 'text' field
           if (template.toolType === "DISCORD") {
-            setNewMessage(params.content ?? "");
+            const content = params.content;
+            setNewMessage(typeof content === "string" ? content : "");
           } else if (template.toolType === "SLACK") {
-            setNewMessage(params.text ?? params.content ?? "");
+            const text = params.text;
+            const content = params.content;
+            const message =
+              typeof text === "string"
+                ? text
+                : typeof content === "string"
+                  ? content
+                  : "";
+            setNewMessage(message);
           } else if (template.toolType === "EMAIL") {
-            setNewMessage(params.body ?? "");
-            setNewEmailSubject(params.subject ?? "");
-            setNewEmailAddresses(params.to ?? "");
+            const body = params.body;
+            const subject = params.subject;
+            const to = params.to;
+            setNewMessage(typeof body === "string" ? body : "");
+            setNewEmailSubject(typeof subject === "string" ? subject : "");
+            setNewEmailAddresses(typeof to === "string" ? to : "");
           } else {
             // For other tools, try common field names
-            setNewMessage(
-              params.message ??
-                params.content ??
-                params.text ??
-                params.body ??
-                "",
-            );
+            const message = params.message;
+            const content = params.content;
+            const text = params.text;
+            const body = params.body;
+            const finalMessage =
+              typeof message === "string"
+                ? message
+                : typeof content === "string"
+                  ? content
+                  : typeof text === "string"
+                    ? text
+                    : typeof body === "string"
+                      ? body
+                      : "";
+            setNewMessage(finalMessage);
           }
         }
       }
@@ -930,7 +950,7 @@ export default function ConditionalActionsSection({
                     <p className="text-muted-foreground text-xs">
                       Select a saved template to populate the message content.{" "}
                       <Link
-                        href={`/${locale}/dashboard/tools/templates`}
+                        href={`/${locale}/dashboard/tools?tab=templates`}
                         className="text-primary hover:underline"
                       >
                         Manage templates
@@ -983,7 +1003,7 @@ export default function ConditionalActionsSection({
                           (
                             ([...userTemplates, ...systemTemplates].find(
                               (t) => t.id.toString() === selectedTemplate,
-                            )?.parameters as Record<string, any>) || {}
+                            )?.parameters as Record<string, unknown>) ?? {}
                           )?.message
                       ) {
                         setSelectedTemplate("");

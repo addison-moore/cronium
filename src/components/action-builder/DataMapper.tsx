@@ -20,8 +20,8 @@ import { type DataMapping } from "./types";
 interface DataMapperProps {
   sourceName: string;
   targetName: string;
-  sourceSchema?: Record<string, any>;
-  targetSchema?: Record<string, any>;
+  sourceSchema?: Record<string, unknown>;
+  targetSchema?: Record<string, unknown>;
   mappings: DataMapping[];
   onMappingsChange: (mappings: DataMapping[]) => void;
 }
@@ -49,7 +49,8 @@ export function DataMapper({
     return Object.keys(targetSchema).map((key) => ({
       name: key,
       type: typeof targetSchema[key],
-      required: targetSchema[key]?.required ?? false,
+      required:
+        (targetSchema[key] as { required?: boolean })?.required ?? false,
     }));
   }, [targetSchema]);
 

@@ -53,7 +53,7 @@ export interface UserQuotaStatus {
 export class QuotaManager extends EventEmitter {
   private static instance: QuotaManager;
   private defaultQuotas: QuotaConfig;
-  private cache = new Map<string, { data: any; expiresAt: Date }>();
+  private cache = new Map<string, { data: QuotaConfig; expiresAt: Date }>();
 
   private constructor() {
     super();
@@ -273,8 +273,8 @@ export class QuotaManager extends EventEmitter {
    * Calculate actual usage from database
    */
   private async calculateActualUsage(
-    userId: string,
-    resource: keyof QuotaConfig,
+    _userId: string,
+    _resource: keyof QuotaConfig,
   ): Promise<number> {
     // This would query the actual tables to calculate usage
     // For now, return 0
@@ -358,8 +358,15 @@ export class QuotaManager extends EventEmitter {
    * Create quota middleware
    */
   createMiddleware(resource: keyof QuotaConfig, amount = 1) {
-    return async (req: any, res: any, next: any) => {
-      const userId = req.user?.id || req.session?.user?.id;
+    return async (
+      req: { user?: { id: string }; session?: { user?: { id: string } } },
+      res: {
+        setHeader: (key: string, value: string) => void;
+        status: (code: number) => { json: (data: unknown) => unknown };
+      },
+      next: () => void,
+    ) => {
+      const userId = req.user?.id ?? req.session?.user?.id;
 
       if (!userId) {
         return next();
@@ -376,13 +383,14 @@ export class QuotaManager extends EventEmitter {
         const rule = this.getEnforcementRules()[resource];
 
         if (rule.action === "block") {
-          return res.status(429).json({
+          res.status(429).json({
             error: "Quota Exceeded",
             message: `You have exceeded your ${resource} quota`,
             limit: result.limit,
             used: result.used,
             resetAt: result.resetAt,
           });
+          return;
         } else if (rule.action === "throttle") {
           // Add delay
           await new Promise((resolve) => setTimeout(resolve, 1000));

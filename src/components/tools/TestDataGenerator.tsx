@@ -26,7 +26,6 @@ import {
   Download,
   Upload,
   Sparkles,
-  Code,
   Database,
   FileJson,
 } from "lucide-react";
@@ -83,7 +82,6 @@ const TEST_DATA_PATTERNS = {
 export default function TestDataGenerator({
   action,
   onApply,
-  currentValue = {},
 }: TestDataGeneratorProps) {
   const [generatedData, setGeneratedData] = useState<TestDataSet[]>([]);
   const [selectedDataSet, setSelectedDataSet] = useState<TestDataSet | null>(
@@ -96,7 +94,7 @@ export default function TestDataGenerator({
   const generateTestData = (schema: z.ZodTypeAny): unknown => {
     if (schema instanceof z.ZodString) {
       // Try to match field patterns
-      const schemaDescription = schema._def.description?.toLowerCase() || "";
+      const schemaDescription = schema._def.description?.toLowerCase() ?? "";
 
       for (const [pattern, generator] of Object.entries(TEST_DATA_PATTERNS)) {
         if (schemaDescription.includes(pattern)) {
@@ -132,7 +130,7 @@ export default function TestDataGenerator({
     }
 
     if (schema instanceof z.ZodArray) {
-      const itemSchema = schema._def.type;
+      const itemSchema = schema._def.type as z.ZodTypeAny;
       const length = faker.number.int({ min: 1, max: 5 });
       return Array.from({ length }, () => generateTestData(itemSchema));
     }
@@ -305,9 +303,11 @@ export default function TestDataGenerator({
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const imported = JSON.parse(e.target?.result as string);
+        const imported = JSON.parse(e.target?.result as string) as {
+          datasets?: unknown;
+        };
         if (imported.datasets && Array.isArray(imported.datasets)) {
-          setGeneratedData(imported.datasets);
+          setGeneratedData(imported.datasets as TestDataSet[]);
         }
       } catch (error) {
         console.error("Failed to import:", error);
@@ -431,7 +431,7 @@ export default function TestDataGenerator({
                               variant="ghost"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                copyToClipboard(dataSet.data, index);
+                                void copyToClipboard(dataSet.data, index);
                               }}
                             >
                               {copiedIndex === index ? (

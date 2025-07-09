@@ -257,24 +257,26 @@ export const measureRestApiBaseline = async () => {
     );
   }
 
-  // Measure GET /api/tools/templates
+  // Measure GET /api/tool-action-templates (new system)
   try {
     await performanceTracker.measureApiCall(
-      "templates.getAll.rest",
+      "toolActionTemplates.getAll.rest",
       async () => {
-        const response = await fetch("/api/tools/templates?type=EMAIL");
+        const response = await fetch(
+          "/api/tool-action-templates?toolType=email",
+        );
         return response.json();
       },
       { measurePayload: true },
     );
   } catch (error) {
-    console.warn("REST template baseline measurement failed");
+    console.warn("REST tool action template baseline measurement failed");
   }
 
   // Save baselines
   performanceTracker.saveBaseline("tools.getAll.rest");
   performanceTracker.saveBaseline("tools.create.rest");
-  performanceTracker.saveBaseline("templates.getAll.rest");
+  performanceTracker.saveBaseline("toolActionTemplates.getAll.rest");
 
   console.log("✅ REST API baseline measurement complete");
   return performanceTracker.getSummary();
@@ -320,17 +322,20 @@ export const measureTrpcPerformance = async (trpc: any) => {
     console.warn("tRPC tool creation measurement failed");
   }
 
-  // Measure integrations.templates.getAll
+  // Measure toolActionTemplates.getByToolAction (new system)
   try {
     await performanceTracker.measureApiCall(
-      "templates.getAll.trpc",
+      "toolActionTemplates.getAll.trpc",
       async () => {
-        return trpc.integrations.templates.getAll.query({ type: "EMAIL" });
+        return trpc.toolActionTemplates.getByToolAction.query({
+          toolType: "email",
+          actionId: "send-email",
+        });
       },
       { measurePayload: true },
     );
   } catch (error) {
-    console.warn("tRPC template measurement failed");
+    console.warn("tRPC tool action template measurement failed");
   }
 
   console.log("✅ tRPC API performance measurement complete");
@@ -341,7 +346,11 @@ export const measureTrpcPerformance = async (trpc: any) => {
 export const compareRestVsTrpc = () => {
   console.log("🔍 Comparing REST vs tRPC performance...");
 
-  const operations = ["tools.getAll", "tools.create", "templates.getAll"];
+  const operations = [
+    "tools.getAll",
+    "tools.create",
+    "toolActionTemplates.getAll",
+  ];
   const comparisons: Record<string, any> = {};
 
   operations.forEach((operation) => {

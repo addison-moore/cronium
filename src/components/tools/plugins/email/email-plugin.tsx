@@ -250,7 +250,10 @@ const sendEmailSchema = z.object({
     .string()
     .min(1, "Subject is required")
     .max(255, "Subject must be less than 255 characters"),
-  body: z.string().min(1, "Email body is required"),
+  body: z
+    .string()
+    .min(1, "Email body is required")
+    .describe("Email body content (HTML supported)"),
 });
 
 const emailActions: ToolAction[] = [

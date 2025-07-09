@@ -11,7 +11,6 @@ import {
 } from "@/shared/schema";
 import { db } from "@/server/db";
 import { toolCredentials } from "@/shared/schema";
-import { eq } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,7 +33,7 @@ export async function GET(request: NextRequest) {
     // Use specified tool or first active tool
     const testTool = toolId
       ? tools.find((t) => t.id === parseInt(toolId))
-      : tools.find((t) => t.isActive) || tools[0];
+      : (tools.find((t) => t.isActive) ?? tools[0]);
 
     if (!testTool) {
       return NextResponse.json(
@@ -84,7 +83,14 @@ export async function GET(request: NextRequest) {
     };
 
     // Configure based on tool type
-    const toolActionConfig: any = {
+    interface ToolActionConfig {
+      toolType: ToolType;
+      toolId: number;
+      actionId: string;
+      parameters: Record<string, unknown>;
+    }
+
+    const toolActionConfig: ToolActionConfig = {
       toolType: testTool.type,
       toolId: testTool.id,
       actionId: "",

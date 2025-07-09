@@ -208,10 +208,21 @@ export class RateLimiter extends EventEmitter {
    * Apply rate limiting middleware
    */
   createMiddleware(config: RateLimitConfig) {
-    return async (req: any, res: any, next: any) => {
+    return async (
+      req: {
+        headers: Record<string, string | string[] | undefined>;
+        ip?: string;
+        connection?: { remoteAddress?: string };
+      },
+      res: {
+        setHeader: (key: string, value: string) => void;
+        status: (code: number) => { json: (data: unknown) => unknown };
+      },
+      next: () => void,
+    ) => {
       const key: RateLimitKey = {
         type: "ip",
-        identifier: this.getClientIP(req) || "unknown",
+        identifier: this.getClientIP(req) ?? "unknown",
       };
 
       const result = await this.checkLimit(key, config);
@@ -224,13 +235,14 @@ export class RateLimiter extends EventEmitter {
       if (!result.allowed) {
         res.setHeader(
           "Retry-After",
-          Math.ceil((result.retryAfter || 0) / 1000).toString(),
+          Math.ceil((result.retryAfter ?? 0) / 1000).toString(),
         );
-        return res.status(429).json({
+        res.status(429).json({
           error: "Too Many Requests",
           message: "Rate limit exceeded",
           retryAfter: result.retryAfter,
         });
+        return;
       }
 
       next();
@@ -333,18 +345,22 @@ export class RateLimiter extends EventEmitter {
   /**
    * Get client IP from request
    */
-  private getClientIP(req: any): string | undefined {
+  private getClientIP(req: {
+    headers: Record<string, string | string[] | undefined>;
+    ip?: string;
+    connection?: { remoteAddress?: string };
+  }): string | undefined {
     const forwardedFor = req.headers["x-forwarded-for"];
-    if (forwardedFor) {
-      return forwardedFor.split(",")[0].trim();
+    if (forwardedFor && typeof forwardedFor === "string") {
+      return forwardedFor.split(",")[0]?.trim();
     }
 
     const realIP = req.headers["x-real-ip"];
-    if (realIP) {
+    if (realIP && typeof realIP === "string") {
       return realIP;
     }
 
-    return req.ip || req.connection?.remoteAddress;
+    return req.ip ?? req.connection?.remoteAddress;
   }
 
   /**

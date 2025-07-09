@@ -5,15 +5,22 @@ import type { ActionParameter } from "../types/tool-plugin";
  * Convert a Zod schema to ActionParameter array
  * This utility helps maintain consistency between Zod schemas and parameter definitions
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function zodToParameters(schema: z.ZodSchema<any>): ActionParameter[] {
   const parameters: ActionParameter[] = [];
 
+  // Unwrap ZodEffects (from .refine(), .transform(), etc.)
+  let unwrappedSchema: z.ZodTypeAny = schema;
+  while (unwrappedSchema instanceof z.ZodEffects) {
+    unwrappedSchema = unwrappedSchema._def.schema as z.ZodTypeAny;
+  }
+
   // Handle ZodObject
-  if (schema instanceof z.ZodObject) {
-    const shape = schema.shape;
+  if (unwrappedSchema instanceof z.ZodObject) {
+    const shape = unwrappedSchema.shape as Record<string, z.ZodTypeAny>;
 
     for (const [key, value] of Object.entries(shape)) {
-      const param = parseZodType(key, value as z.ZodTypeAny);
+      const param = parseZodType(key, value);
       if (param) {
         parameters.push(param);
       }
@@ -41,19 +48,24 @@ function parseZodType(
   ) {
     if (baseSchema instanceof z.ZodOptional) {
       required = false;
-      baseSchema = baseSchema._def.innerType;
+      baseSchema = baseSchema._def.innerType as z.ZodTypeAny;
     } else if (baseSchema instanceof z.ZodDefault) {
-      defaultValue = baseSchema._def.defaultValue();
-      baseSchema = baseSchema._def.innerType;
+      defaultValue = baseSchema._def.defaultValue() as unknown;
+      baseSchema = baseSchema._def.innerType as z.ZodTypeAny;
     } else if (baseSchema instanceof z.ZodNullable) {
       required = false;
-      baseSchema = baseSchema._def.innerType;
+      baseSchema = baseSchema._def.innerType as z.ZodTypeAny;
     }
   }
 
   // Get description if available
-  if (baseSchema._def.description) {
-    description = baseSchema._def.description;
+  if (
+    baseSchema._def &&
+    typeof baseSchema._def === "object" &&
+    "description" in baseSchema._def
+  ) {
+    // Use a type assertion to tell TypeScript that baseSchema._def has a description property
+    description = (baseSchema._def as { description: string }).description;
   }
 
   // Determine type
@@ -71,7 +83,7 @@ function parseZodType(
     type = "object";
   } else if (baseSchema instanceof z.ZodEnum) {
     type = "string";
-    enumValues = baseSchema._def.values;
+    enumValues = baseSchema._def.values as string[];
   }
 
   const param: ActionParameter = {

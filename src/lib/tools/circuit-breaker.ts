@@ -70,7 +70,7 @@ export class CircuitBreaker<T> {
         console.log(`Circuit breaker ${this.name} entering HALF_OPEN state`);
       } else {
         throw new Error(
-          `Circuit breaker ${this.name} is OPEN. Next attempt at ${this.nextAttemptTime?.toISOString()}`,
+          `Circuit breaker ${this.name} is OPEN. Next attempt at ${this.nextAttemptTime?.toISOString() ?? "unknown"}`,
         );
       }
     }
@@ -284,7 +284,7 @@ export class CircuitBreaker<T> {
  */
 export class CircuitBreakerManager {
   private static instance: CircuitBreakerManager;
-  private breakers = new Map<string, CircuitBreaker<any>>();
+  private breakers = new Map<string, CircuitBreaker<unknown>>();
 
   private toolConfigs: Record<string, Partial<CircuitBreakerConfig>> = {
     slack: {
@@ -310,7 +310,9 @@ export class CircuitBreakerManager {
     },
   };
 
-  private constructor() {}
+  private constructor() {
+    // Circuit breaker manager initialization
+  }
 
   static getInstance(): CircuitBreakerManager {
     if (!CircuitBreakerManager.instance) {
@@ -322,11 +324,11 @@ export class CircuitBreakerManager {
   /**
    * Get or create circuit breaker for a tool
    */
-  getBreaker(toolId: number, toolType: string): CircuitBreaker<any> {
+  getBreaker(toolId: number, toolType: string): CircuitBreaker<unknown> {
     const key = `${toolType}-${toolId}`;
 
     if (!this.breakers.has(key)) {
-      const config = this.toolConfigs[toolType] || {};
+      const config = this.toolConfigs[toolType] ?? {};
       const breaker = new CircuitBreaker(key, config);
       this.breakers.set(key, breaker);
     }

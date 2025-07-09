@@ -62,7 +62,7 @@ export class QuotaEnforcer {
       throw new TRPCError({
         code: "TOO_MANY_REQUESTS",
         message: `Rate limit exceeded for tool ${toolId}. Try again in ${Math.ceil(
-          (rateLimit.retryAfter || 0) / 1000,
+          (rateLimit.retryAfter ?? 0) / 1000,
         )} seconds`,
       });
     }
@@ -178,7 +178,7 @@ export class QuotaEnforcer {
       throw new TRPCError({
         code: "TOO_MANY_REQUESTS",
         message: `Too many ${eventType} executions. Try again in ${Math.ceil(
-          (rateLimit.retryAfter || 0) / 1000,
+          (rateLimit.retryAfter ?? 0) / 1000,
         )} seconds`,
       });
     }
@@ -259,7 +259,7 @@ export class QuotaEnforcer {
     // Check per-minute rate limit
     const rateLimitKey: RateLimitKey = {
       type: apiKey ? "api_key" : "user",
-      identifier: apiKey || userId,
+      identifier: apiKey ?? userId,
       subIdentifier: endpoint,
     };
     const rateLimit = await this.rateLimiter.checkLimit(rateLimitKey, {
@@ -270,7 +270,7 @@ export class QuotaEnforcer {
       throw new TRPCError({
         code: "TOO_MANY_REQUESTS",
         message: `API rate limit exceeded. Try again in ${Math.ceil(
-          (rateLimit.retryAfter || 0) / 1000,
+          (rateLimit.retryAfter ?? 0) / 1000,
         )} seconds`,
       });
     }
@@ -297,7 +297,13 @@ export class QuotaEnforcer {
    * Create tRPC middleware for quota enforcement
    */
   createTRPCMiddleware(resource: keyof QuotaConfig, amount = 1) {
-    return async ({ ctx, next }: any) => {
+    return async ({
+      ctx,
+      next,
+    }: {
+      ctx: { session: { user: { id: string } } | null };
+      next: () => Promise<unknown>;
+    }) => {
       if (!ctx.session?.user?.id) {
         return next();
       }

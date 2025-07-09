@@ -205,7 +205,7 @@ export const addChecklistAction: ToolAction = {
           if (!item) continue; // Guard against undefined
 
           const itemUrl = new URL(
-            `https://api.trello.com/1/checklists/${checklistId}/checkItems`,
+            `https://api.trello.com/1/checklists/${checklistId ?? "undefined"}/checkItems`,
           );
           itemUrl.searchParams.append("key", apiKey);
           itemUrl.searchParams.append("token", apiToken);
@@ -251,7 +251,9 @@ export const addChecklistAction: ToolAction = {
         });
       }
 
-      logger.info(`Trello checklist created successfully - ID: ${checklistId}`);
+      logger.info(
+        `Trello checklist created successfully - ID: ${checklistId ?? "unknown"}`,
+      );
 
       return {
         success: true,
@@ -284,6 +286,7 @@ function replaceVariables(
       return JSON.stringify(value);
     }
     // At this point, value is a primitive (string, number, boolean)
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
     return String(value);
   });
 }

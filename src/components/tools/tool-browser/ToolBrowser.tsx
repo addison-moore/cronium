@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -134,7 +134,7 @@ export function ToolBrowser({
     allTools.forEach((tool: ToolPlugin) => {
       // Filter by category if selected
       if (selectedCategory) {
-        const toolsInCategory = categorizedTools[selectedCategory] || [];
+        const toolsInCategory = categorizedTools[selectedCategory] ?? [];
         if (!toolsInCategory.includes(tool)) return;
       }
 
@@ -387,7 +387,7 @@ export function ToolBrowser({
           )}
           {Object.entries(TOOL_CATEGORIES).map(([key, category]) => {
             const Icon = category.icon;
-            const count = categorizedTools[key]?.length || 0;
+            const count = categorizedTools[key]?.length ?? 0;
             if (count === 0) return null;
             return (
               <TabsTrigger
@@ -480,7 +480,7 @@ export function ToolBrowser({
 
         {Object.entries(TOOL_CATEGORIES).map(([key, category]) => {
           const categoryResults = filteredResults.filter((result) =>
-            (categorizedTools[key] || []).includes(result.tool),
+            (categorizedTools[key] ?? []).includes(result.tool),
           );
 
           return (

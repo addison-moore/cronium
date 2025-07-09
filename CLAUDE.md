@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Changelog
+
 IMPORTANT: After making changes to the codebase, log the changes to the changelog folder:
 
 1. Check if a changelog file exists for today's date in the `changelog/` folder (e.g., `changelog/2025-07-07.md`)
@@ -12,7 +16,18 @@ IMPORTANT: After making changes to the codebase, log the changes to the changelo
 
 Change types include: Feature, Bug Fix, Refactor, Documentation, Testing, etc.
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## Code Style
+
+- Use TypeScript for type safety, following the documentation in TYPE_SAFETY_GUIDELINES.md
+- To avoid linting errors, use the eslint.config.js file as a reference
+- Format code using Prettier
+- Run `pnpm format` to automatically format code
+- Run `pnpm lint` to check for linting errors
+- Write concise, readable, and maintainable code
+- Use descriptive variable and function names
+- Follow the established coding patterns and conventions
+- Document complex logic and non-obvious code paths
+- Use meaningful error messages and logging
 
 ## 📚 Documentation
 
@@ -51,7 +66,6 @@ pnpm db:generate      # Generate Drizzle migrations
 
 # Utilities
 pnpm clear            # Remove .next build directory
-pnpm clear-logs       # Clear all application logs
 ```
 
 ## Architecture Overview
@@ -102,16 +116,6 @@ pnpm clear-logs       # Clear all application logs
 - `cronium.input()` / `cronium.output()` - Pass data between events
 - `cronium.getVariable()` / `cronium.setVariable()` - Manage variables
 - `cronium.event()` - Access current event metadata
-
-**Forms Migration:**
-
-- Transitioning from local state to React Hook Form + Zod
-- New forms should use this pattern
-
-**API Migration:**
-
-- Gradually migrating from Next.js API routes to tRPC
-- New endpoints should use tRPC when possible
 
 ## Path Aliases
 

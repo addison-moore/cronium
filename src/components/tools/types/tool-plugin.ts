@@ -36,18 +36,24 @@ export interface ToolAction {
   developmentMode: DevelopmentMode;
 
   // Schemas for validation
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   inputSchema: z.ZodSchema<any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   outputSchema: z.ZodSchema<any>;
 
   // Execution
   execute: (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     credentials: any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     params: any,
     context: ExecutionContext,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ) => Promise<any>;
 
   // Testing support
-  testData?: () => any;
+  testData?: () => Record<string, unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   validate?: (params: any) => { isValid: boolean; errors?: string[] };
 
   // UI configuration
@@ -70,8 +76,10 @@ export interface ExecutionContext {
   variables: VariableManager;
   logger: Logger;
   onProgress?: (progress: { step: string; percentage: number }) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onPartialResult?: (result: any) => void;
   isTest?: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mockData?: any;
 }
 
@@ -99,12 +107,16 @@ export interface FormFieldConfig {
 export interface ActionExample {
   name: string;
   description: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   input: Record<string, any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   output: Record<string, any>;
 }
 
 export interface VariableManager {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   get: (key: string) => any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   set: (key: string, value: any) => void;
 }
 
@@ -163,6 +175,7 @@ export interface ToolPlugin {
 
 // A version of the Tool type with credentials parsed into an object
 export type ToolWithParsedCredentials = Omit<Tool, "credentials"> & {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   credentials: Record<string, any>;
 };
 

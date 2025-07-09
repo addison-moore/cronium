@@ -3,9 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -16,28 +14,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
   Activity,
-  AlertCircle,
-  CheckCircle,
   Clock,
   Info,
-  Pause,
-  Play,
   RefreshCw,
   Settings,
   TrendingUp,
   Zap,
-  RotateCcw,
   Timer,
-  XCircle,
 } from "lucide-react";
 
 export interface RetryConfig {
@@ -76,7 +62,6 @@ interface RetryManagerProps {
   config?: Partial<RetryConfig>;
   onConfigChange?: (config: RetryConfig) => void;
   showConfig?: boolean;
-  showHistory?: boolean;
   className?: string;
 }
 
@@ -147,7 +132,10 @@ export function useRetry<T>(
   // Check if error is retryable
   const isRetryable = useCallback(
     (error: Error): boolean => {
-      const errorCode = (error as any).code || error.message;
+      const errorCode =
+        "code" in error && typeof error.code === "string"
+          ? error.code
+          : error.message;
 
       if (mergedConfig.nonRetryableErrors?.includes(errorCode)) {
         return false;
@@ -238,7 +226,7 @@ export function useRetry<T>(
           setState((prev) => ({ ...prev, nextRetryAt }));
           mergedConfig.onRetryAttempt?.(attempt + 1, delay);
 
-          await new Promise((resolve, reject) => {
+          await new Promise<void>((resolve) => {
             const id = setTimeout(resolve, delay);
             setTimeoutId(id);
           });
@@ -299,7 +287,6 @@ export default function RetryManager({
   config: initialConfig,
   onConfigChange,
   showConfig = true,
-  showHistory = true,
   className,
 }: RetryManagerProps) {
   const [config, setConfig] = useState<RetryConfig>({

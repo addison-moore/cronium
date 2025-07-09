@@ -5,14 +5,31 @@ import type {
 } from "@/components/tools/types/tool-plugin";
 import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
-// Schema for Discord message action parameters - Simplified for MVP
-export const sendMessageSchema = z.object({
-  content: z
-    .string()
-    .min(1)
-    .max(2000)
-    .describe("The message content (up to 2000 characters)"),
-});
+// Schema for Discord message action parameters - Enhanced to support embeds
+export const sendMessageSchema = z
+  .object({
+    content: z
+      .string()
+      .max(2000)
+      .optional()
+      .describe("The message content (up to 2000 characters)"),
+    embeds: z
+      .string()
+      .optional()
+      .describe("Rich embeds for the message (JSON format)"),
+    username: z
+      .string()
+      .optional()
+      .describe("Override the default webhook username"),
+    avatar_url: z
+      .string()
+      .url()
+      .optional()
+      .describe("Override the default webhook avatar"),
+  })
+  .refine((data) => data.content ?? data.embeds, {
+    message: "Either content or embeds must be provided",
+  });
 
 export type SendMessageParams = z.infer<typeof sendMessageSchema>;
 
@@ -44,11 +61,35 @@ export const sendMessageAction: ToolAction = {
       },
     },
     {
-      name: "Event Notification",
-      description: "Send an event status notification",
+      name: "Rich Embed Message",
+      description: "Send a rich embed with event details",
       input: {
-        content:
-          "Event '{{cronium.event.name}}' completed successfully in {{cronium.event.duration}}ms",
+        embeds: JSON.stringify([
+          {
+            title: "{{cronium.event.name}}",
+            description: "Event execution completed",
+            color:
+              "{{#ifEquals cronium.event.status 'success'}}3066993{{else}}15158332{{/ifEquals}}",
+            fields: [
+              {
+                name: "Status",
+                value: "{{cronium.event.status}}",
+                inline: true,
+              },
+              {
+                name: "Duration",
+                value: "{{formatDuration cronium.event.duration}}",
+                inline: true,
+              },
+              {
+                name: "Server",
+                value: "{{cronium.event.server}}",
+                inline: true,
+              },
+            ],
+            timestamp: new Date().toISOString(),
+          },
+        ]),
       },
       output: {
         success: true,
@@ -57,9 +98,11 @@ export const sendMessageAction: ToolAction = {
     },
     {
       name: "Alert Message",
-      description: "Send an alert or warning",
+      description: "Send an alert with custom webhook appearance",
       input: {
         content: "⚠️ Warning: Server CPU usage is above 90%",
+        username: "Cronium Alerts",
+        avatar_url: "https://example.com/alert-icon.png",
       },
       output: {
         success: true,
@@ -92,10 +135,47 @@ export const sendMessageAction: ToolAction = {
         onProgress({ step: "Building message payload...", percentage: 30 });
       }
 
-      // Build the payload - Simplified for MVP
-      const payload = {
-        content: replaceVariables(typedParams.content, variables),
-      };
+      // Build the payload
+      const payload: Record<string, unknown> = {};
+
+      // Add content if provided
+      if (typedParams.content) {
+        payload.content = replaceVariables(typedParams.content, variables);
+      }
+
+      // Handle embeds
+      if (typedParams.embeds) {
+        try {
+          const embedsJson = replaceVariables(typedParams.embeds, variables);
+          const parsedEmbeds = JSON.parse(embedsJson) as unknown;
+
+          if (Array.isArray(parsedEmbeds)) {
+            payload.embeds = parsedEmbeds;
+          } else if (
+            typeof parsedEmbeds === "object" &&
+            parsedEmbeds !== null &&
+            "embeds" in parsedEmbeds
+          ) {
+            payload.embeds = (parsedEmbeds as { embeds: unknown[] }).embeds;
+          } else {
+            throw new Error(
+              "Invalid embeds format. Expected an array or object with 'embeds' property.",
+            );
+          }
+        } catch (error) {
+          throw new Error(
+            `Failed to parse embeds JSON: ${error instanceof Error ? error.message : "Invalid JSON"}`,
+          );
+        }
+      }
+
+      // Add optional username and avatar
+      if (typedParams.username) {
+        payload.username = replaceVariables(typedParams.username, variables);
+      }
+      if (typedParams.avatar_url) {
+        payload.avatar_url = typedParams.avatar_url;
+      }
 
       // Update progress
       if (onProgress) {

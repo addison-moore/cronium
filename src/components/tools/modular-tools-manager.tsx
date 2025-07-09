@@ -30,7 +30,6 @@ import { type ToolWithParsedCredentials } from "./types/tool-plugin";
 import { ToolPluginRegistry } from "./plugins";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
-import { MonacoEditor } from "@/components/ui/monaco-editor";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { ToolErrorDiagnostics } from "./ToolErrorDiagnostics";
@@ -131,25 +130,6 @@ export function ModularToolsManager() {
     },
   });
 
-  const createTemplateMutation = trpc.toolActionTemplates.create.useMutation({
-    onSuccess: () => {
-      toast({
-        title: "Template Created",
-        description: "Template has been saved successfully",
-      });
-      setShowAddTemplateForm(false);
-      setEditingTemplateId(null);
-      void refetchTemplates();
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message ?? "Failed to create template",
-        variant: "destructive",
-      });
-    },
-  });
-
   // Fetch templates for the selected tool
   const { data: templatesData, refetch: refetchTemplates } =
     trpc.toolActionTemplates.getByToolAction.useQuery(
@@ -244,7 +224,10 @@ export function ModularToolsManager() {
         let parsedCredentials = {};
         try {
           if (typeof tool.credentials === "string") {
-            parsedCredentials = JSON.parse(tool.credentials);
+            parsedCredentials = JSON.parse(tool.credentials) as Record<
+              string,
+              unknown
+            >;
           } else if (
             typeof tool.credentials === "object" &&
             tool.credentials !== null
@@ -433,8 +416,8 @@ export function ModularToolsManager() {
                 >
                   <TabsList className="grid w-full flex-shrink-0 grid-cols-3">
                     <TabsTrigger value="credentials">Credentials</TabsTrigger>
-                    <TabsTrigger value="templates">Templates</TabsTrigger>
                     <TabsTrigger value="actions">Actions</TabsTrigger>
+                    <TabsTrigger value="templates">Templates</TabsTrigger>
                   </TabsList>
 
                   <TabsContent

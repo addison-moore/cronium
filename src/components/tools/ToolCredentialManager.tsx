@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -24,8 +24,6 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Progress } from "@/components/ui/progress";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,7 +40,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 import { useToast } from "@/components/ui/use-toast";
-import { type Tool, type ToolType } from "@/shared/schema";
+import { type ToolType } from "@/shared/schema";
 import {
   ToolPluginRegistry,
   type ToolWithParsedCredentials,
@@ -50,10 +48,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   Shield,
-  Key,
-  Settings,
   AlertCircle,
-  CheckCircle,
   RefreshCw,
   MoreHorizontal,
   Plus,
@@ -64,18 +59,9 @@ import {
   Copy,
   ExternalLink,
   HelpCircle,
-  AlertTriangle,
   Clock,
-  Globe,
-  Lock,
-  Unlock,
-  Download,
-  Upload,
   Search,
-  Filter,
-  ChevronRight,
   Activity,
-  Zap,
 } from "lucide-react";
 
 interface ToolCredentialManagerProps {
@@ -94,14 +80,6 @@ interface HealthCheckResult {
   lastChecked?: Date;
   details?: Record<string, unknown>;
 }
-
-// Credential status colors
-const statusColors = {
-  configured: "bg-green-500",
-  unconfigured: "bg-gray-500",
-  error: "bg-red-500",
-  checking: "bg-yellow-500",
-};
 
 // Tool categories for filtering
 const TOOL_CATEGORIES = {
@@ -154,8 +132,7 @@ export default function ToolCredentialManager({
         title: "Tool Added",
         description: "Tool credentials have been saved securely.",
       });
-      utils.tools.list.invalidate();
-      utils.tools.list.invalidate();
+      void utils.tools.list.invalidate();
       setIsAddDialogOpen(false);
       resetForm();
     },
@@ -174,8 +151,7 @@ export default function ToolCredentialManager({
         title: "Tool Updated",
         description: "Tool credentials have been updated.",
       });
-      utils.tools.list.invalidate();
-      utils.tools.list.invalidate();
+      void utils.tools.list.invalidate();
       setIsEditDialogOpen(false);
       setSelectedTool(null);
       resetForm();
@@ -195,8 +171,7 @@ export default function ToolCredentialManager({
         title: "Tool Deleted",
         description: "Tool credentials have been removed.",
       });
-      utils.tools.list.invalidate();
-      utils.tools.list.invalidate();
+      void utils.tools.list.invalidate();
     },
     onError: (error) => {
       toast({
@@ -268,7 +243,7 @@ export default function ToolCredentialManager({
         title: "Copied",
         description: `${field} copied to clipboard`,
       });
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to copy to clipboard",
@@ -491,8 +466,12 @@ export default function ToolCredentialManager({
                               <TableCell>
                                 <div className="space-y-1">
                                   {Object.entries(
-                                    (decryptedTool as any)?.credentials || {},
-                                  ).map(([key, value]: [string, any]) => {
+                                    (
+                                      decryptedTool as {
+                                        credentials?: Record<string, unknown>;
+                                      }
+                                    )?.credentials ?? {},
+                                  ).map(([key, value]) => {
                                     const isSecret =
                                       key.toLowerCase().includes("secret") ||
                                       key.toLowerCase().includes("password") ||
@@ -512,7 +491,8 @@ export default function ToolCredentialManager({
                                             <code className="bg-muted rounded px-1 py-0.5 text-xs">
                                               {isSecret && !isVisible
                                                 ? "••••••••"
-                                                : String(value)}
+                                                : // eslint-disable-next-line @typescript-eslint/no-base-to-string
+                                                  String(value)}
                                             </code>
                                             {isSecret && (
                                               <Button
@@ -538,6 +518,7 @@ export default function ToolCredentialManager({
                                               className="h-6 w-6 p-0"
                                               onClick={() =>
                                                 copyCredential(
+                                                  // eslint-disable-next-line @typescript-eslint/no-base-to-string
                                                   String(value),
                                                   key,
                                                 )
@@ -672,11 +653,13 @@ export default function ToolCredentialManager({
               <div className="space-y-4">
                 <Label>Select Tool Type</Label>
                 <div className="grid grid-cols-2 gap-3">
-                  {ToolPluginRegistry.getAll().map((plugin: any) => (
+                  {ToolPluginRegistry.getAll().map((plugin) => (
                     <Button
                       key={plugin.id}
                       variant={
-                        formData.type === plugin.id ? "default" : "outline"
+                        formData.type === (plugin.id as ToolType)
+                          ? "default"
+                          : "outline"
                       }
                       className="justify-start"
                       onClick={() =>

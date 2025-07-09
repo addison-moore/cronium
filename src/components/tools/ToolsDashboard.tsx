@@ -24,6 +24,10 @@ import { trpc } from "@/lib/trpc";
 import { formatDistanceToNow } from "date-fns";
 import { ModularToolsManager } from "@/components/tools/modular-tools-manager";
 import { usePathname } from "next/navigation";
+import type {
+  ToolAction,
+  ToolPlugin,
+} from "@/components/tools/types/tool-plugin";
 
 // Tool action browser component
 function ActionBrowser({ locale }: { locale: string }) {
@@ -35,8 +39,8 @@ function ActionBrowser({ locale }: { locale: string }) {
   // Get all actions with their tools
   const allActions = useMemo(() => {
     const actions: Array<{
-      action: any;
-      tool: any;
+      action: ToolAction;
+      tool: ToolPlugin;
       category: string;
     }> = [];
 
@@ -46,7 +50,7 @@ function ActionBrowser({ locale }: { locale: string }) {
           actions.push({
             action,
             tool: plugin,
-            category: plugin.category || "Other",
+            category: plugin.category ?? "Other",
           });
         });
       }
@@ -338,7 +342,7 @@ function HealthOverview() {
   );
 }
 
-export default function ToolsDashboard({ dict }: { dict: any }) {
+export default function ToolsDashboard() {
   const [activeTab, setActiveTab] = useState("management");
   const pathname = usePathname();
   const locale = pathname.split("/")[1] ?? "";

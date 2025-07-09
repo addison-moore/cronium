@@ -425,27 +425,6 @@ export const oauthStates = pgTable("oauth_states", {
     .notNull(),
 });
 
-// OLD TEMPLATE SYSTEM - DEPRECATED
-// Keeping for reference during migration
-// TODO: Remove after all references are updated
-// export const templates = pgTable("templates", {
-//   id: serial("id").primaryKey(),
-//   userId: varchar("user_id", { length: 255 }).references(() => users.id, {
-//     onDelete: "cascade",
-//   }),
-//   name: varchar("name", { length: 255 }).notNull(),
-//   type: varchar("type", { length: 50 }).$type<ToolType>().notNull(),
-//   content: text("content").notNull(),
-//   subject: varchar("subject", { length: 500 }), // For email templates
-//   isSystemTemplate: boolean("is_system_template").default(false).notNull(),
-//   createdAt: timestamp("created_at")
-//     .default(sql`CURRENT_TIMESTAMP`)
-//     .notNull(),
-//   updatedAt: timestamp("updated_at")
-//     .default(sql`CURRENT_TIMESTAMP`)
-//     .notNull(),
-// });
-
 // Tool action templates table for saving reusable tool action configurations
 export const toolActionTemplates = pgTable("tool_action_templates", {
   id: serial("id").primaryKey(),
@@ -963,14 +942,6 @@ export const toolCredentialsRelations = relations(
   }),
 );
 
-// OLD TEMPLATE SYSTEM - DEPRECATED
-// export const templatesRelations = relations(templates, ({ one }) => ({
-//   user: one(users, {
-//     fields: [templates.userId],
-//     references: [users.id],
-//   }),
-// }));
-
 export const toolActionTemplatesRelations = relations(
   toolActionTemplates,
   ({ one }) => ({
@@ -1025,10 +996,6 @@ export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;
 
 export type Tool = typeof toolCredentials.$inferSelect;
 export type InsertTool = typeof toolCredentials.$inferInsert;
-
-// OLD TEMPLATE TYPES - REMOVED
-// export type Template = typeof templates.$inferSelect;
-// export type InsertTemplate = typeof templates.$inferInsert;
 
 export type UserVariable = typeof userVariables.$inferSelect;
 export type InsertUserVariable = typeof userVariables.$inferInsert;

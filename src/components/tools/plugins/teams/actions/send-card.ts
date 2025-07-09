@@ -108,7 +108,7 @@ export const sendCardSchema = z.object({
     .string()
     .url()
     .describe("The Microsoft Teams webhook URL for the channel"),
-  card: adaptiveCardSchema.describe("The Adaptive Card to send"),
+  card: adaptiveCardSchema.describe("The Adaptive Card to send (JSON format)"),
   fallbackText: z
     .string()
     .optional()
@@ -382,6 +382,7 @@ function replaceVariables(
       return JSON.stringify(value);
     }
     // At this point, value is a primitive (string, number, boolean)
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
     return String(value);
   });
 }

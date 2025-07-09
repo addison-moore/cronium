@@ -18,17 +18,17 @@ import {
   User,
   AlertCircle,
   Shield,
+  Save,
 } from "lucide-react";
 import { SimpleCodeBlock } from "@/components/docs/api-code-examples";
-
-// DEPRECATED PAGE - This documents the old template system
-// TODO: Update this page to document the new Tool Action Templates system
+import Link from "next/link";
 
 const tableOfContents = [
-  { title: "DEPRECATED - Overview", href: "#overview", level: 2 },
-  { title: "Handlebars Syntax", href: "#handlebars-syntax", level: 2 },
-  { title: "Context Variables", href: "#context-variables", level: 2 },
-  { title: "Template Helpers", href: "#template-helpers", level: 2 },
+  { title: "Overview", href: "#overview", level: 2 },
+  { title: "Tool Action Templates", href: "#tool-action-templates", level: 2 },
+  { title: "Creating Templates", href: "#creating-templates", level: 2 },
+  { title: "Using Templates", href: "#using-templates", level: 2 },
+  { title: "Handlebars Variables", href: "#handlebars-variables", level: 2 },
   { title: "Template Examples", href: "#examples", level: 2 },
   { title: "System vs User Templates", href: "#template-types", level: 2 },
   { title: "Best Practices", href: "#best-practices", level: 2 },
@@ -50,11 +50,13 @@ export default async function TemplatesPage({
             <div className="bg-primary/10 rounded-lg p-2">
               <FileText className="text-primary h-6 w-6" />
             </div>
-            <h1 className="text-4xl font-bold tracking-tight">Templates</h1>
+            <h1 className="text-4xl font-bold tracking-tight">
+              Tool Action Templates
+            </h1>
           </div>
           <p className="text-muted-foreground text-xl">
-            Create dynamic message templates with Handlebars syntax and runtime
-            context variables for powerful automation messaging.
+            Create reusable templates for tool actions with dynamic variables,
+            rich formatting, and powerful automation capabilities.
           </p>
         </div>
 
@@ -64,10 +66,11 @@ export default async function TemplatesPage({
 
           <div className="prose prose-gray dark:prose-invert mb-8 max-w-none">
             <p>
-              Templates in Cronium use Handlebars syntax to create dynamic
-              messages that automatically include event data, runtime variables,
-              and custom conditions. Templates are used in conditional actions
-              for email, Slack, and Discord notifications.
+              Tool Action Templates allow you to create reusable configurations
+              for your tool actions (Slack messages, Discord embeds, emails,
+              etc.). Templates support Handlebars syntax for dynamic content,
+              rich formatting with Monaco editor for JSON/HTML, and can be
+              shared across events and workflows.
             </p>
           </div>
 
@@ -75,14 +78,13 @@ export default async function TemplatesPage({
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Code className="h-5 w-5 text-blue-500" />
-                  Handlebars
+                  <Save className="h-5 w-5 text-blue-500" />
+                  Reusable
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground text-sm">
-                  Use familiar Handlebars syntax with double curly braces for
-                  dynamic content
+                  Save and reuse common tool action configurations across events
                 </p>
               </CardContent>
             </Card>
@@ -91,13 +93,13 @@ export default async function TemplatesPage({
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Database className="h-5 w-5 text-green-500" />
-                  Context Data
+                  Rich Editing
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground text-sm">
-                  Access event details, variables, input data, and conditions
-                  automatically
+                  Monaco editor with syntax highlighting for JSON and HTML
+                  fields
                 </p>
               </CardContent>
             </Card>
@@ -106,22 +108,269 @@ export default async function TemplatesPage({
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Settings className="h-5 w-5 text-purple-500" />
-                  Helpers
+                  Dynamic Content
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground text-sm">
-                  Built-in helpers for formatting, conditions, and safe data
-                  access
+                  Handlebars variables for event data, conditions, and runtime
+                  values
                 </p>
               </CardContent>
             </Card>
           </div>
         </section>
 
+        {/* Tool Action Templates */}
+        <section id="tool-action-templates" className="mb-12">
+          <h2 className="mb-6 text-2xl font-bold">Tool Action Templates</h2>
+
+          <div className="prose prose-gray dark:prose-invert mb-6 max-w-none">
+            <p>
+              Tool Action Templates are pre-configured settings for specific
+              tool actions that can be quickly applied when creating events or
+              conditional actions. Each template is associated with a specific
+              tool (Slack, Discord, Email, etc.) and action type (send message,
+              create channel, etc.).
+            </p>
+          </div>
+
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Template Components</CardTitle>
+                <CardDescription>
+                  Each template contains the following elements
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <Badge className="mt-1">Name</Badge>
+                    <p className="text-sm">
+                      A descriptive name to identify the template (e.g., "Event
+                      Success Notification")
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Badge className="mt-1">Description</Badge>
+                    <p className="text-sm">
+                      Optional details about when and how to use the template
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Badge className="mt-1">Tool & Action</Badge>
+                    <p className="text-sm">
+                      The specific tool and action type this template is for
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Badge className="mt-1">Parameters</Badge>
+                    <p className="text-sm">
+                      Pre-filled values for the action parameters, including
+                      Handlebars variables
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Rich Field Editing</CardTitle>
+                <CardDescription>
+                  Templates support Monaco editor for complex content
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <p className="text-muted-foreground text-sm">
+                    When creating templates, certain fields automatically use
+                    the Monaco editor:
+                  </p>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                      <h4 className="mb-2 font-medium">JSON Fields</h4>
+                      <ul className="space-y-1 text-sm">
+                        <li className="flex items-center gap-2">
+                          <Code className="h-4 w-4" />
+                          Slack blocks
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Code className="h-4 w-4" />
+                          Discord embeds
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Code className="h-4 w-4" />
+                          Teams adaptive cards
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Code className="h-4 w-4" />
+                          Notion page properties
+                        </li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="mb-2 font-medium">HTML Fields</h4>
+                      <ul className="space-y-1 text-sm">
+                        <li className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Email body content
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Rich text notifications
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+
+        {/* Creating Templates */}
+        <section id="creating-templates" className="mb-12">
+          <h2 className="mb-6 text-2xl font-bold">Creating Templates</h2>
+
+          <div className="prose prose-gray dark:prose-invert mb-6 max-w-none">
+            <p>
+              Templates can be created and managed from the Tools page in your
+              dashboard. Navigate to{" "}
+              <Link
+                href="/dashboard/tools?tab=templates"
+                className="text-primary hover:underline"
+              >
+                Tools → Templates
+              </Link>{" "}
+              to get started.
+            </p>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Steps to Create a Template</CardTitle>
+              <CardDescription>
+                Follow these steps to create a new tool action template
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="bg-primary/10 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full">
+                    <span className="text-sm font-semibold">1</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">Select Tool and Action</p>
+                    <p className="text-muted-foreground text-sm">
+                      Choose the tool (Slack, Discord, etc.) and the specific
+                      action type
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="bg-primary/10 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full">
+                    <span className="text-sm font-semibold">2</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">Name Your Template</p>
+                    <p className="text-muted-foreground text-sm">
+                      Give it a descriptive name like "Daily Report" or "Error
+                      Alert"
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="bg-primary/10 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full">
+                    <span className="text-sm font-semibold">3</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">Configure Parameters</p>
+                    <p className="text-muted-foreground text-sm">
+                      Fill in the action parameters, using Handlebars variables
+                      where needed
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="bg-primary/10 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full">
+                    <span className="text-sm font-semibold">4</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">Preview and Save</p>
+                    <p className="text-muted-foreground text-sm">
+                      Preview how your template will look and save it for future
+                      use
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Using Templates */}
+        <section id="using-templates" className="mb-12">
+          <h2 className="mb-6 text-2xl font-bold">Using Templates</h2>
+
+          <div className="prose prose-gray dark:prose-invert mb-6 max-w-none">
+            <p>
+              Templates can be applied when creating events with tool actions or
+              when setting up conditional actions in workflows.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-5 w-5" />
+                  In Events
+                </CardTitle>
+                <CardDescription>
+                  Use templates when creating tool action events
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ol className="space-y-2 text-sm">
+                  <li>1. Create a new event or edit existing</li>
+                  <li>2. Select "Tool Action" as event type</li>
+                  <li>3. Choose your tool and action</li>
+                  <li>4. Select a template from the dropdown</li>
+                  <li>5. Parameters are automatically filled</li>
+                  <li>6. Modify as needed and save</li>
+                </ol>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ArrowRight className="h-5 w-5" />
+                  In Conditional Actions
+                </CardTitle>
+                <CardDescription>
+                  Apply templates in workflow conditional actions
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ol className="space-y-2 text-sm">
+                  <li>1. Edit event conditional actions</li>
+                  <li>2. Add success or failure action</li>
+                  <li>3. Select tool and action type</li>
+                  <li>4. Choose template to apply</li>
+                  <li>5. Template parameters are loaded</li>
+                  <li>6. Save the conditional action</li>
+                </ol>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+
         {/* Handlebars Syntax */}
-        <section id="handlebars-syntax" className="mb-12">
-          <h2 className="mb-6 text-2xl font-bold">Handlebars Syntax</h2>
+        <section id="handlebars-variables" className="mb-12">
+          <h2 className="mb-6 text-2xl font-bold">Handlebars Variables</h2>
 
           <div className="prose prose-gray dark:prose-invert mb-6 max-w-none">
             <p>
@@ -764,11 +1013,14 @@ Variables: {{json cronium.getVariables}}`}
                 </h4>
                 <p className="text-sm text-blue-700 dark:text-blue-300">
                   Manage your templates in the{" "}
-                  <a href={`/${lang}/docs/tools`} className="underline">
-                    Tools section
-                  </a>{" "}
-                  of user settings. Each communication tool has its own template
-                  manager for organizing templates by type.
+                  <Link
+                    href="/dashboard/tools?tab=templates"
+                    className="underline"
+                  >
+                    Tools → Templates
+                  </Link>{" "}
+                  section of your dashboard. Filter by tool and action type to
+                  organize your templates effectively.
                 </p>
               </div>
             </div>

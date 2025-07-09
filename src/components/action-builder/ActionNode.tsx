@@ -104,18 +104,21 @@ export function ActionNode({ data, selected }: NodeProps) {
                   <AlertCircle className="h-4 w-4 text-yellow-500" />
                 )}
               </div>
-              {data.description ? (
+              {data.description && typeof data.description === "string" ? (
                 <p className="text-muted-foreground text-xs">
-                  {String(data.description)}
+                  {data.description}
                 </p>
               ) : null}
-              {data.toolId && data.actionId ? (
+              {data.toolId &&
+              data.actionId &&
+              typeof data.toolId === "string" &&
+              typeof data.actionId === "string" ? (
                 <div className="mt-2 flex items-center gap-2">
                   <Badge variant="secondary" className="text-xs">
-                    {String(data.toolId)}
+                    {data.toolId}
                   </Badge>
                   <Badge variant="outline" className="text-xs">
-                    {String(data.actionId)}
+                    {data.actionId}
                   </Badge>
                 </div>
               ) : null}

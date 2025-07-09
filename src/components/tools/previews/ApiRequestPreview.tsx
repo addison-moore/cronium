@@ -10,7 +10,7 @@ interface ApiRequestPreviewProps {
   url: string;
   headers?: Record<string, string>;
   queryParams?: Record<string, string>;
-  body?: any;
+  body?: string | Record<string, unknown>;
   authType?: "none" | "api_key" | "bearer" | "basic";
   timeout?: number;
 }
@@ -71,6 +71,7 @@ export function ApiRequestPreview({
     try {
       return JSON.stringify(body, null, 2);
     } catch {
+      // eslint-disable-next-line @typescript-eslint/no-base-to-string
       return String(body);
     }
   };

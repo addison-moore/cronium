@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MessageSquare, Hash, AtSign } from "lucide-react";
 import { format } from "date-fns";
@@ -11,8 +12,8 @@ interface SlackMessagePreviewProps {
   username?: string;
   iconEmoji?: string;
   iconUrl?: string;
-  blocks?: any[];
-  attachments?: any[];
+  blocks?: Array<{ type?: string; text?: { text?: string } }>;
+  attachments?: Array<{ title?: string; text?: string }>;
 }
 
 export function SlackMessagePreview({
@@ -27,7 +28,13 @@ export function SlackMessagePreview({
   const renderIcon = () => {
     if (iconUrl) {
       return (
-        <img src={iconUrl} alt={username} className="h-10 w-10 rounded-md" />
+        <Image
+          src={iconUrl}
+          alt={username ?? "User avatar"}
+          width={40}
+          height={40}
+          className="rounded-md"
+        />
       );
     }
 
@@ -106,36 +113,48 @@ export function SlackMessagePreview({
               {/* Blocks rendering (simplified) */}
               {blocks && blocks.length > 0 && (
                 <div className="mt-3 space-y-2">
-                  {blocks.map((block: any, index: number) => (
-                    <div
-                      key={index}
-                      className="rounded border border-slate-700 bg-slate-800 p-2 text-sm"
-                    >
-                      {block.type === "section" && block.text?.text}
-                      {block.type === "divider" && (
-                        <hr className="border-slate-600" />
-                      )}
-                    </div>
-                  ))}
+                  {blocks.map(
+                    (
+                      block: { type?: string; text?: { text?: string } },
+                      index: number,
+                    ) => (
+                      <div
+                        key={index}
+                        className="rounded border border-slate-700 bg-slate-800 p-2 text-sm"
+                      >
+                        {block.type === "section" && block.text?.text}
+                        {block.type === "divider" && (
+                          <hr className="border-slate-600" />
+                        )}
+                      </div>
+                    ),
+                  )}
                 </div>
               )}
 
               {/* Attachments (simplified) */}
               {attachments && attachments.length > 0 && (
                 <div className="mt-3 space-y-2">
-                  {attachments.map((attachment: any, index: number) => (
-                    <div
-                      key={index}
-                      className="border-l-4 border-blue-500 bg-slate-800 p-3"
-                    >
-                      {attachment.title && (
-                        <div className="font-semibold">{attachment.title}</div>
-                      )}
-                      {attachment.text && (
-                        <div className="mt-1 text-sm">{attachment.text}</div>
-                      )}
-                    </div>
-                  ))}
+                  {attachments.map(
+                    (
+                      attachment: { title?: string; text?: string },
+                      index: number,
+                    ) => (
+                      <div
+                        key={index}
+                        className="border-l-4 border-blue-500 bg-slate-800 p-3"
+                      >
+                        {attachment.title && (
+                          <div className="font-semibold">
+                            {attachment.title}
+                          </div>
+                        )}
+                        {attachment.text && (
+                          <div className="mt-1 text-sm">{attachment.text}</div>
+                        )}
+                      </div>
+                    ),
+                  )}
                 </div>
               )}
             </div>

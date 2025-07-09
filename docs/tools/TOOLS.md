@@ -24,6 +24,12 @@ To avoid confusion, let's clarify the key terms used in the Cronium Tools system
 
 - **Tool Category** - A grouping of related tools (e.g., "communication" for Slack/Discord/Email, "productivity" for Trello/Notion).
 
+- **Tool Action Parameters** - The input parameters required to execute a tool action. These are defined in the tool plugin and validated using Zod schemas.
+
+- **Tool Action Output** - The output of a tool action, including any data returned by the external service.
+
+- **Tool Action Type** - The type of tool action (e.g., "create", "update", "search", "delete").
+
 ### What are Tools?
 
 Tools are modular plugins that provide structured access to external services. Each tool:
@@ -42,10 +48,7 @@ Let's use Slack as an example to illustrate these concepts:
 - **Tool Category**: "communication"
 - **Tool Credentials**: Your saved Slack workspace tokens (e.g., "Marketing Team Slack", "Engineering Slack")
 - **Tool Actions**:
-  - "Send Message" - Posts a message to a channel
-  - "Create Channel" - Creates a new Slack channel
-  - "Add Reaction" - Adds an emoji reaction to a message
-  - "Find User" - Searches for a user by email or name
+  - "Send Message" - Posts a message to a channel with optional Block Kit formatting
 - **Tool Action Event**: A Cronium event configured to execute "Send Message" action every morning at 9 AM
 
 ### Tool Actions vs Traditional Scripts
@@ -58,7 +61,7 @@ Let's use Slack as an example to illustrate these concepts:
 | **Type Safety**    | Full input/output validation         | Depends on implementation                |
 | **Monitoring**     | Automatic logging and metrics        | Manual instrumentation needed            |
 
-### Tool Action Categories
+### Tool Action Types
 
 Each tool can provide multiple actions, typically organized into four categories:
 
@@ -223,41 +226,46 @@ Actions: 1. Run Tests
 
 ## Available Integrations
 
-### 📧 Communication
+### Currently Implemented Tools (8 Total)
 
-- **Email**: Gmail, Outlook, SendGrid, Mailchimp
-- **Chat**: Slack, Discord, Microsoft Teams, Telegram
-- **SMS**: Twilio, WhatsApp Business
+#### 📧 Communication
 
-### 📋 Productivity
+- **Email** (1 action)
+  - Send Email - Send emails with HTML support
+- **Slack** (1 action)
+  - Send Message - Send rich messages with Block Kit support
+- **Discord** (1 action)
+  - Send Message - Send messages with embed support
+- **Microsoft Teams** (2 actions)
+  - Send Message - Send messages to channels
+  - Send Card - Send adaptive cards
 
-- **Project Management**: Trello, Asana, Jira, Monday.com, ClickUp
-- **Documents**: Google Docs, Notion, Confluence
-- **Calendars**: Google Calendar, Calendly, Outlook Calendar
+#### 📋 Productivity
 
-### 💼 Business Tools
+- **Google Sheets** (3 actions)
+  - Read Data - Read spreadsheet data
+  - Write Data - Write to spreadsheet
+  - Create Sheet - Create new sheets/spreadsheets
+- **Notion** (4 actions)
+  - Create Page - Create new pages
+  - Update Database - Update database entries
+  - Search Content - Search Notion content
+  - Manage Blocks - Manage page blocks
+- **Trello** (3 actions)
+  - Create Card - Create new cards
+  - Move Card - Move cards between lists
+  - Add Checklist - Add checklists to cards
 
-- **CRM**: Salesforce, HubSpot, Pipedrive, Zoho
-- **Support**: Zendesk, Intercom, Freshdesk
-- **E-commerce**: Shopify, WooCommerce, Stripe
+#### 🛠️ Developer Tools
 
-### 📊 Data & Analytics
+- **Webhook** (1 action)
+  - Send - Send HTTP requests (GET, POST, PUT, DELETE, PATCH)
 
-- **Databases**: PostgreSQL, MySQL, MongoDB, Airtable
-- **Spreadsheets**: Google Sheets, Excel
-- **Analytics**: Google Analytics, Mixpanel, Segment
+### Coming Soon
 
-### 🤖 AI & Automation
-
-- **LLMs**: OpenAI, Anthropic Claude, Google Gemini
-- **ML Services**: Replicate, Hugging Face
-- **Specialized AI**: ElevenLabs (voice), Stability AI (images)
-
-### 🛠️ Developer Tools
-
-- **Version Control**: GitHub, GitLab, Bitbucket
-- **CI/CD**: CircleCI, Jenkins, GitHub Actions
-- **Cloud**: AWS, Google Cloud, Azure, Vercel
+- Additional integrations for CRM, Analytics, AI services, and more
+- Expanded actions for existing tools
+- OAuth support for seamless authentication
 
 ## User Interface
 
@@ -305,6 +313,11 @@ When creating a new event, selecting "Tool Action" as the event type reveals an 
    - Support for variables ({{VARIABLE_NAME}} syntax)
    - Example values and tooltips for guidance
    - **Template Selection** - Choose from pre-configured templates to quickly set up common configurations
+   - **Monaco Editor Support** - Rich editing experience for JSON and HTML fields:
+     - Syntax highlighting for JSON (Slack blocks, Discord embeds) and HTML (email bodies)
+     - Auto-completion and error detection
+     - Format/beautify options
+     - Full-screen editing mode
 
 4. **Testing Interface**
    - Test the action with your actual credentials

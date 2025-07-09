@@ -51,7 +51,7 @@
     "_backups",
     "scripts/*",
     "**/__tests__/*",
-    "**/runtime-helpers/*",
+    "src/runtime-helpers/*",
     "**/_backup/**",
     "**/*.backup.ts",
     "**/*.backup.tsx"

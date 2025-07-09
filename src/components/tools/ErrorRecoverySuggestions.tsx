@@ -12,15 +12,10 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Progress } from "@/components/ui/progress";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import {
-  AlertCircle,
   AlertTriangle,
   CheckCircle,
-  ChevronRight,
   Copy,
   ExternalLink,
   HelpCircle,
@@ -29,17 +24,10 @@ import {
   PlayCircle,
   RefreshCw,
   Settings,
-  Shield,
   Sparkles,
-  Terminal,
   Wrench,
   Zap,
   Clock,
-  Database,
-  Globe,
-  Key,
-  Network,
-  Server,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { type ErrorInfo } from "./ErrorHandler";
@@ -448,8 +436,9 @@ export default function ErrorRecoverySuggestions({
       if (
         error.code === pattern ||
         error.message.includes(pattern) ||
-        (error.details?.statusCode &&
-          error.details.statusCode.toString() === pattern)
+        (error.details &&
+          "statusCode" in error.details &&
+          String(error.details.statusCode) === pattern)
       ) {
         relevantSuggestions.push(...patternSuggestions);
       }
@@ -518,7 +507,7 @@ export default function ErrorRecoverySuggestions({
         title: "Suggestion Applied",
         description: `${suggestion.title} has been applied successfully`,
       });
-    } catch (error) {
+    } catch {
       toast({
         title: "Failed to Apply",
         description: "Could not apply the suggestion. Please try manually.",
@@ -531,7 +520,7 @@ export default function ErrorRecoverySuggestions({
 
   // Copy code snippet
   const copyCode = (code: string) => {
-    navigator.clipboard.writeText(code);
+    void navigator.clipboard.writeText(code);
     toast({
       title: "Copied",
       description: "Code snippet copied to clipboard",

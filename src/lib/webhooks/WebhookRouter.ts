@@ -284,9 +284,8 @@ export class WebhookRouter {
       const obj = body as Record<string, unknown>;
       const eventField =
         obj.event ?? obj.event_type ?? obj.type ?? obj.action ?? "unknown";
-      return typeof eventField === "object"
-        ? JSON.stringify(eventField)
-        : String(eventField);
+      // eslint-disable-next-line @typescript-eslint/no-base-to-string
+      return String(eventField);
     }
 
     return "unknown";

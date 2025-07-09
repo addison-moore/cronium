@@ -14,8 +14,6 @@ import {
 import { storage } from "@/server/storage";
 import { UserRole } from "@/shared/schema";
 import { ToolType } from "@shared/schema";
-import { db } from "@/server/db";
-import { eq, and, sql, or } from "drizzle-orm";
 
 // Custom procedure that handles auth for tRPC fetch adapter
 const integrationProcedure = publicProcedure.use(async ({ ctx, next }) => {

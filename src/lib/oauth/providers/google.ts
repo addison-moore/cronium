@@ -1,5 +1,5 @@
 import { BaseOAuthProvider } from "../OAuthProvider";
-import { type OAuthProviderConfig, OAuthToken } from "../types";
+import { type OAuthProviderConfig } from "../types";
 
 export class GoogleOAuthProvider extends BaseOAuthProvider {
   constructor(

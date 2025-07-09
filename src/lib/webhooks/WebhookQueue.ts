@@ -63,7 +63,7 @@ export class WebhookQueue extends EventEmitter {
 
     // Process immediately if not at capacity
     if (this.processing.size < this.concurrency) {
-      this.processNext();
+      void this.processNext();
     }
 
     return id;
@@ -77,7 +77,7 @@ export class WebhookQueue extends EventEmitter {
 
     this.isProcessing = true;
     this.processInterval = setInterval(() => {
-      this.processNext();
+      void this.processNext();
     }, 1000); // Check every second
   }
 
@@ -102,7 +102,7 @@ export class WebhookQueue extends EventEmitter {
     const now = new Date();
     let nextItem: QueueItem | undefined;
 
-    for (const [id, item] of this.queue) {
+    for (const [_id, item] of this.queue) {
       if (!item.nextRetryAt || item.nextRetryAt <= now) {
         nextItem = item;
         break;
@@ -150,7 +150,9 @@ export class WebhookQueue extends EventEmitter {
       );
 
       if (!result.success) {
-        throw new Error(result.error || `HTTP ${result.statusCode}`);
+        throw new Error(
+          result.error ?? `HTTP ${result.statusCode ?? "unknown"}`,
+        );
       }
 
       this.emit("delivery:success", {

@@ -83,7 +83,7 @@ export class CredentialEncryption {
   /**
    * Encrypt credential data
    */
-  encrypt(data: any): EncryptedData {
+  encrypt(data: unknown): EncryptedData {
     if (!this.isAvailable()) {
       throw new Error(
         "Encryption not initialized. Set CREDENTIAL_ENCRYPTION_KEY environment variable.",
@@ -128,7 +128,7 @@ export class CredentialEncryption {
   /**
    * Decrypt credential data
    */
-  decrypt(encryptedData: EncryptedData): any {
+  decrypt(encryptedData: EncryptedData): unknown {
     if (!this.isAvailable()) {
       throw new Error("Encryption not initialized");
     }
@@ -216,8 +216,8 @@ export class CredentialEncryption {
   async rotateMasterKey(
     newMasterKey: string,
     reencryptCallback: (
-      decrypt: (data: EncryptedData) => any,
-      encrypt: (data: any) => EncryptedData,
+      decrypt: (data: EncryptedData) => unknown,
+      encrypt: (data: unknown) => EncryptedData,
     ) => Promise<void>,
   ): Promise<void> {
     if (!newMasterKey || newMasterKey.length < 32) {
