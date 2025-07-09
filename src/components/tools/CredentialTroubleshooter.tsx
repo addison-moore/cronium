@@ -11,22 +11,15 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type Tool, type ToolType } from "@/shared/schema";
 import { ToolPluginRegistry } from "./types/tool-plugin";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
+  AlertCircle,
   AlertTriangle,
-  CheckCircle,
   ChevronRight,
   Copy,
   ExternalLink,
@@ -37,7 +30,6 @@ import {
   Search,
   Settings,
   Shield,
-  Terminal,
   Wrench,
   Zap,
 } from "lucide-react";
@@ -74,7 +66,7 @@ interface Solution {
 
 // Tool-specific troubleshooting guides
 const TROUBLESHOOTING_GUIDES: Record<ToolType, TroubleshootingStep[]> = {
-  slack: [
+  SLACK: [
     {
       id: "slack-webhook-404",
       title: "Webhook URL Returns 404",
@@ -143,7 +135,7 @@ const TROUBLESHOOTING_GUIDES: Record<ToolType, TroubleshootingStep[]> = {
       ],
     },
   ],
-  discord: [
+  DISCORD: [
     {
       id: "discord-webhook-invalid",
       title: "Invalid Webhook URL",
@@ -175,7 +167,7 @@ const TROUBLESHOOTING_GUIDES: Record<ToolType, TroubleshootingStep[]> = {
       ],
     },
   ],
-  email: [
+  EMAIL: [
     {
       id: "email-smtp-connection",
       title: "SMTP Connection Failed",
@@ -224,7 +216,7 @@ const TROUBLESHOOTING_GUIDES: Record<ToolType, TroubleshootingStep[]> = {
       ],
     },
   ],
-  teams: [
+  WEBHOOK: [
     {
       id: "teams-webhook-blocked",
       title: "Webhook Blocked by Policy",
@@ -256,39 +248,7 @@ const TROUBLESHOOTING_GUIDES: Record<ToolType, TroubleshootingStep[]> = {
       ],
     },
   ],
-  "google-sheets": [
-    {
-      id: "sheets-auth-scope",
-      title: "Insufficient Permissions",
-      description: "The OAuth token doesn't have required scopes",
-      category: "permissions",
-      solutions: [
-        {
-          title: "Request Additional Scopes",
-          steps: [
-            "Revoke current authorization",
-            "Re-authenticate with Cronium",
-            "Ensure you grant all requested permissions",
-            "Specifically allow spreadsheet access",
-          ],
-        },
-        {
-          title: "Use Service Account",
-          steps: [
-            "Create a service account in Google Cloud Console",
-            "Download the JSON key file",
-            "Share your spreadsheet with the service account email",
-            "Use the service account for authentication",
-          ],
-          link: {
-            url: "https://developers.google.com/sheets/api/guides/authorizing",
-            text: "Sheets API Authorization",
-          },
-        },
-      ],
-    },
-  ],
-  notion: [
+  HTTP: [
     {
       id: "notion-integration-access",
       title: "Integration Lacks Access",
@@ -316,30 +276,6 @@ const TROUBLESHOOTING_GUIDES: Record<ToolType, TroubleshootingStep[]> = {
           link: {
             url: "https://developers.notion.com/docs/authorization",
             text: "Notion Authorization Guide",
-          },
-        },
-      ],
-    },
-  ],
-  trello: [
-    {
-      id: "trello-token-invalid",
-      title: "API Token Invalid",
-      description: "The Trello API token is invalid or expired",
-      category: "authentication",
-      solutions: [
-        {
-          title: "Generate New Token",
-          steps: [
-            "Visit trello.com/app-key",
-            "Copy your API key",
-            "Click 'Generate a Token'",
-            "Authorize the app",
-            "Copy the token and update credentials",
-          ],
-          link: {
-            url: "https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/",
-            text: "Trello API Authentication",
           },
         },
       ],
@@ -459,7 +395,7 @@ export default function CredentialTroubleshooter({
         title: "Copied",
         description: "Code copied to clipboard",
       });
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to copy code",
@@ -485,7 +421,7 @@ export default function CredentialTroubleshooter({
           Troubleshooting Guide
           {tool && (
             <Badge variant="outline" className="ml-2">
-              {ToolPluginRegistry.getPlugin(tool.type)?.name}
+              {ToolPluginRegistry.get(tool.type)?.name}
             </Badge>
           )}
         </CardTitle>
@@ -510,7 +446,9 @@ export default function CredentialTroubleshooter({
               <Input
                 placeholder="Search troubleshooting guides..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setSearchQuery(e.target.value)
+                }
                 className="pl-9"
               />
             </div>
@@ -644,20 +582,20 @@ export default function CredentialTroubleshooter({
                 <ChevronRight className="mr-2 h-4 w-4" />
                 Contact Support
               </Button>
-              {tool && ToolPluginRegistry.getPlugin(tool.type)?.docsUrl && (
+              {tool && ToolPluginRegistry.get(tool.type)?.docsUrl && (
                 <Button
                   variant="ghost"
                   size="sm"
                   className="w-full justify-start"
                   onClick={() =>
                     window.open(
-                      ToolPluginRegistry.getPlugin(tool.type)?.docsUrl,
+                      ToolPluginRegistry.get(tool.type)?.docsUrl,
                       "_blank",
                     )
                   }
                 >
                   <ChevronRight className="mr-2 h-4 w-4" />
-                  Official {ToolPluginRegistry.getPlugin(tool.type)?.name} Docs
+                  Official {ToolPluginRegistry.get(tool.type)?.name} Docs
                 </Button>
               )}
             </div>

@@ -31,7 +31,9 @@ export const toolActionLogsRouter = createTRPCRouter({
           ? db
               .select()
               .from(toolActionLogs)
-              .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+              .where(
+                conditions.length === 1 ? conditions[0] : and(...conditions),
+              )
               .orderBy(desc(toolActionLogs.createdAt))
               .limit(input.limit)
           : db

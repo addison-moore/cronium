@@ -55,11 +55,11 @@ export function ApiRequestPreview({
 
     // Add auth headers for preview
     if (authType === "bearer") {
-      allHeaders["Authorization"] = "Bearer ***********";
+      allHeaders.Authorization = "Bearer ***********";
     } else if (authType === "api_key") {
       allHeaders["X-API-Key"] = "***********";
     } else if (authType === "basic") {
-      allHeaders["Authorization"] = "Basic ***********";
+      allHeaders.Authorization = "Basic ***********";
     }
 
     return allHeaders;

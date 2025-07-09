@@ -101,13 +101,6 @@ function SlackCredentialDisplayTrpc({
   const [testingTool, setTestingTool] = React.useState<number | null>(null);
   const { toast } = useToast();
 
-  interface SlackTool {
-    id: number;
-    name: string;
-    isActive: boolean;
-    credentials: string | SlackCredentials;
-  }
-
   const testConnectionMutation = trpc.integrations.testMessage.useMutation({
     onSuccess: (result) => {
       toast({
@@ -135,7 +128,7 @@ function SlackCredentialDisplayTrpc({
     }));
   };
 
-  const handleTestConnection = async (tool: SlackTool) => {
+  const handleTestConnection = async (tool: { id: number }) => {
     setTestingTool(tool.id);
     await testConnectionMutation.mutateAsync({
       toolId: tool.id,
@@ -143,7 +136,7 @@ function SlackCredentialDisplayTrpc({
     });
   };
 
-  const handleSendTestMessage = async (tool: SlackTool) => {
+  const handleSendTestMessage = async (tool: { id: number }) => {
     setTestingTool(tool.id);
     await sendTestMessageMutation.mutateAsync({
       toolId: tool.id,
@@ -202,7 +195,7 @@ function SlackCredentialDisplayTrpc({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleTestConnection(tool as SlackTool)}
+                    onClick={() => handleTestConnection(tool)}
                     disabled={isTesting}
                   >
                     <TestTube size={14} className="mr-1" />
@@ -211,7 +204,7 @@ function SlackCredentialDisplayTrpc({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleSendTestMessage(tool as SlackTool)}
+                    onClick={() => handleSendTestMessage(tool)}
                     disabled={isTesting}
                   >
                     {isTesting ? "Sending..." : "Send Test Message"}

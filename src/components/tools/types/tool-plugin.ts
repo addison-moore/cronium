@@ -54,7 +54,7 @@ export interface ToolAction {
   formConfig?: VisualFormConfig;
   helpText?: string;
   examples?: ActionExample[];
-  
+
   // Additional properties for UI
   requiresCredentials?: boolean;
   parameters: ActionParameter[];
@@ -129,6 +129,7 @@ export interface ToolPlugin {
   description: string;
   icon: LucideIcon | React.ComponentType<{ size?: number; className?: string }>;
   category: string;
+  docsUrl?: string;
 
   // Plugin configuration
   schema: z.ZodSchema<unknown>;
@@ -143,7 +144,7 @@ export interface ToolPlugin {
   actions: ToolAction[];
   getActionById: (id: string) => ToolAction | undefined;
   getActionsByType: (type: ActionType) => ToolAction[];
-  
+
   // Credentials
   credentials?: ToolCredentials;
 
@@ -160,9 +161,14 @@ export interface ToolPlugin {
   ) => Promise<{ success: boolean; message?: string }>;
 }
 
+// A version of the Tool type with credentials parsed into an object
+export type ToolWithParsedCredentials = Omit<Tool, "credentials"> & {
+  credentials: Record<string, any>;
+};
+
 // Props for credential form component
 export interface CredentialFormProps {
-  tool?: Tool | null;
+  tool?: ToolWithParsedCredentials | null;
   onSubmit: (data: {
     name: string;
     credentials: Record<string, unknown>;
@@ -172,10 +178,10 @@ export interface CredentialFormProps {
 
 // Props for credential display component
 export interface CredentialDisplayProps {
-  tools: Tool[];
-  onEdit: (tool: Tool) => void;
+  tools: ToolWithParsedCredentials[];
+  onEdit: (tool: ToolWithParsedCredentials) => void;
   onDelete: (id: number) => void;
-  onTest?: (tool: Tool) => void;
+  onTest?: (tool: ToolWithParsedCredentials) => void;
 }
 
 // Props for template manager component

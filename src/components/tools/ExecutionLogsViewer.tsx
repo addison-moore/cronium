@@ -19,7 +19,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -29,10 +28,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
-import { trpc } from "@/lib/trpc";
-import { QUERY_OPTIONS } from "@/trpc/shared";
 import { cn } from "@/lib/utils";
 import {
   Activity,
@@ -41,28 +36,20 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronRight,
-  Clock,
   Copy,
   Download,
-  Eye,
-  Filter,
   Info,
   Loader2,
   MoreHorizontal,
   Pause,
-  Play,
-  RefreshCw,
   Search,
   Terminal,
   Trash,
   XCircle,
-  Zap,
   FileText,
-  Database,
   TrendingUp,
-  Calendar,
 } from "lucide-react";
-import { format, formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
 
 export interface ExecutionLog {
@@ -117,9 +104,6 @@ export function ExecutionLogsViewer({
   eventId,
   workflowId,
   executionId,
-  autoRefresh = true,
-  refreshInterval = 5,
-  maxLogs = 1000,
   className,
 }: ExecutionLogsViewerProps) {
   const { toast } = useToast();
@@ -128,7 +112,6 @@ export function ExecutionLogsViewer({
   const [filteredLogs, setFilteredLogs] = useState<ExecutionLog[]>([]);
   const [selectedLog, setSelectedLog] = useState<ExecutionLog | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [isPaused, setIsPaused] = useState(false);
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
 
   const [filters, setFilters] = useState<LogFilters>({
@@ -162,18 +145,18 @@ export function ExecutionLogsViewer({
               ] as ExecutionLog["status"])
             : undefined;
 
-        mockLogs.push({
+        const logEntry: ExecutionLog = {
           id: `log-${i}`,
           timestamp,
           level,
           category,
           message: `${category} ${level} log message ${i}`,
           context: {
-            toolName: toolId ? "Slack" : undefined,
-            actionName: toolId ? "send-message" : undefined,
-            eventId: eventId || Math.floor(Math.random() * 100),
+            ...(toolId && { toolName: "Slack" }),
+            ...(toolId && { actionName: "send-message" }),
+            eventId: eventId ?? Math.floor(Math.random() * 100),
             executionId:
-              executionId || `exec-${Math.random().toString(36).substr(2, 9)}`,
+              executionId ?? `exec-${Math.random().toString(36).substr(2, 9)}`,
           },
           metadata: {
             host: "worker-1",
@@ -181,17 +164,21 @@ export function ExecutionLogsViewer({
             version: "1.0.0",
           },
           duration: Math.random() * 5000,
-          status,
-          error:
-            level === "error"
-              ? {
-                  code: "ERR_CONNECTION",
-                  message: "Failed to connect to service",
-                  stack:
-                    "Error: Failed to connect\n    at connect()\n    at main()",
-                }
-              : undefined,
-        });
+        };
+
+        if (status) {
+          logEntry.status = status;
+        }
+
+        if (level === "error") {
+          logEntry.error = {
+            code: "ERR_CONNECTION",
+            message: "Failed to connect to service",
+            stack: "Error: Failed to connect\n    at connect()\n    at main()",
+          };
+        }
+
+        mockLogs.push(logEntry);
       }
 
       setLogs(
@@ -230,8 +217,8 @@ export function ExecutionLogsViewer({
       const searchLower = filters.search.toLowerCase();
       filtered = filtered.filter(
         (log) =>
-          log.message.toLowerCase().includes(searchLower) ||
-          log.error?.message.toLowerCase().includes(searchLower) ||
+          log.message.toLowerCase().includes(searchLower) ??
+          log.error?.message.toLowerCase().includes(searchLower) ??
           JSON.stringify(log.metadata).toLowerCase().includes(searchLower),
       );
     }
@@ -279,11 +266,22 @@ export function ExecutionLogsViewer({
       ...log,
       timestamp: log.timestamp.toISOString(),
     };
-    navigator.clipboard.writeText(JSON.stringify(logData, null, 2));
-    toast({
-      title: "Copied",
-      description: "Log entry copied to clipboard",
-    });
+    navigator.clipboard
+      .writeText(JSON.stringify(logData, null, 2))
+      .then(() => {
+        toast({
+          title: "Copied",
+          description: "Log entry copied to clipboard",
+        });
+      })
+      .catch((err) => {
+        toast({
+          title: "Error",
+          description: "Failed to copy to clipboard",
+          variant: "destructive",
+        });
+        console.error("Clipboard write failed:", err);
+      });
   };
 
   // Export logs
@@ -383,11 +381,11 @@ export function ExecutionLogsViewer({
     let durationCount = 0;
 
     filteredLogs.forEach((log) => {
-      stats.byLevel[log.level] = (stats.byLevel[log.level] || 0) + 1;
+      stats.byLevel[log.level] = (stats.byLevel[log.level] ?? 0) + 1;
       stats.byCategory[log.category] =
-        (stats.byCategory[log.category] || 0) + 1;
+        (stats.byCategory[log.category] ?? 0) + 1;
       if (log.status) {
-        stats.byStatus[log.status] = (stats.byStatus[log.status] || 0) + 1;
+        stats.byStatus[log.status] = (stats.byStatus[log.status] ?? 0) + 1;
       }
       if (log.duration) {
         totalDuration += log.duration;

@@ -339,7 +339,9 @@ export const createPageAction: ToolAction = {
         );
       }
 
-      logger.info(`Creating Notion page - Parent: ${parentId}, Title: ${title}`);
+      logger.info(
+        `Creating Notion page - Parent: ${parentId}, Title: ${title}`,
+      );
 
       if (isTest) {
         // Test mode - simulate creation

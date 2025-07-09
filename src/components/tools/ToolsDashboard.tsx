@@ -16,7 +16,6 @@ import {
   Settings,
   Plus,
   Play,
-  FileText,
 } from "lucide-react";
 import Link from "next/link";
 import { ToolPluginRegistry } from "@/components/tools/plugins";
@@ -277,10 +276,10 @@ function HealthOverview() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statsData?.executionsToday || 0}
+              {statsData?.executionsToday ?? 0}
             </div>
             <p className="text-muted-foreground text-xs">
-              {statsData?.successRate || 0}% success rate
+              {statsData?.successRate ?? 0}% success rate
             </p>
           </CardContent>
         </Card>
@@ -293,7 +292,7 @@ function HealthOverview() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statsData?.avgResponseTime || 0}ms
+              {statsData?.avgResponseTime ?? 0}ms
             </div>
             <p className="text-muted-foreground text-xs">Last 24 hours</p>
           </CardContent>
@@ -346,35 +345,9 @@ export default function ToolsDashboard({ dict }: { dict: any }) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setActiveTab("management")}>
-            <Settings className="mr-2 h-4 w-4" />
-            Manage Credentials
-          </Button>
-          <Link href={`/${locale}/dashboard/tools/templates`}>
-            <Button variant="outline">
-              <FileText className="mr-2 h-4 w-4" />
-              Templates
-            </Button>
-          </Link>
-          <Link href={`/${locale}/dashboard/events/new?type=TOOL_ACTION`}>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Tool Event
-            </Button>
-          </Link>
-        </div>
-      </div>
-
       {/* Main content tabs */}
-      <Tabs
-        value={activeTab}
-        onValueChange={setActiveTab}
-        className="space-y-4"
-      >
-        <TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="management">
             <Settings className="mr-2 h-4 w-4" />
             Management

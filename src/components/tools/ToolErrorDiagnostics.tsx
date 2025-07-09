@@ -23,6 +23,17 @@ import { useToast } from "@/components/ui/use-toast";
 import { format } from "date-fns";
 import { trpc } from "@/lib/trpc";
 
+function getSeverityIcon(severity: "error" | "warning" | "info") {
+  switch (severity) {
+    case "error":
+      return <XCircle className="h-5 w-5 text-red-500" />;
+    case "warning":
+      return <AlertCircle className="h-5 w-5 text-yellow-500" />;
+    case "info":
+      return <CheckCircle className="h-5 w-5 text-blue-500" />;
+  }
+}
+
 interface DiagnosticIssue {
   id: string;
   severity: "error" | "warning" | "info";
@@ -69,16 +80,27 @@ export function ToolErrorDiagnostics({
 
   // Convert logs to diagnostic issues
   const diagnosticIssues: DiagnosticIssue[] = React.useMemo(() => {
-    return logs.map((log) => ({
-      id: log.id.toString(),
-      severity: "error" as const,
-      title: `${log.actionId} failed`,
-      description: log.errorMessage || "Unknown error occurred",
-      solution: getSolutionForError(log.errorMessage || ""),
-      timestamp: log.createdAt,
-      toolId: log.toolType ? undefined : toolId, // Only set if not in log
-      actionId: log.actionId,
-    }));
+    return logs.map((log) => {
+      const solution = getSolutionForError(log.errorMessage || "");
+      const issue: DiagnosticIssue = {
+        id: log.id.toString(),
+        severity: "error" as const,
+        title: `${log.actionId} failed`,
+        description: log.errorMessage || "Unknown error occurred",
+        timestamp: log.createdAt,
+        actionId: log.actionId,
+      };
+
+      // Only add optional properties if they have values
+      if (solution) {
+        issue.solution = solution;
+      }
+      if (!log.toolType && toolId) {
+        issue.toolId = toolId;
+      }
+
+      return issue;
+    });
   }, [logs, toolId]);
 
   const handleCopyError = async (issue: DiagnosticIssue) => {
@@ -214,7 +236,7 @@ function DiagnosticsContent({
           <div key={issue.id} className="space-y-3 rounded-lg border p-4">
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3">
-                {severityIcon(issue.severity)}
+                {getSeverityIcon(issue.severity)}
                 <div className="space-y-1">
                   <h4 className="font-medium">{issue.title}</h4>
                   <p className="text-muted-foreground text-sm">

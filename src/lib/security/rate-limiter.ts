@@ -332,7 +332,7 @@ export class RateLimiter {
   /**
    * Clean up old rate limit records
    */
-  async cleanup(retentionHours: number = 24): Promise<number> {
+  async cleanup(retentionHours = 24): Promise<number> {
     const cutoffDate = new Date(Date.now() - retentionHours * 60 * 60 * 1000);
 
     const result = await db
@@ -348,7 +348,7 @@ export class RateLimiter {
    */
   async getUsageStats(
     userId: string,
-    days: number = 7,
+    days = 7,
   ): Promise<{
     byTool: Record<string, number>;
     byDay: Record<string, number>;

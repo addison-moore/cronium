@@ -107,13 +107,10 @@ export const LazyTestDataGenerator = dynamic(
   },
 );
 
-export const LazyErrorHandler = dynamic(
-  () => import("../ErrorHandler"),
-  {
-    loading: () => <DefaultSkeleton />,
-    ssr: false,
-  },
-);
+export const LazyErrorHandler = dynamic(() => import("../ErrorHandler"), {
+  loading: () => <DefaultSkeleton />,
+  ssr: false,
+});
 
 export const LazyRetryManager = dynamic(() => import("../RetryManager"), {
   loading: () => <DefaultSkeleton />,

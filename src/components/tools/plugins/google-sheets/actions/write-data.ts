@@ -279,9 +279,9 @@ function calculateEndRange(
 
   const startCol = match[1];
   const startRowStr = match[2];
-  
+
   if (!startCol || !startRowStr) return startRange;
-  
+
   const startRow = parseInt(startRowStr);
 
   // Convert column letter to number and back

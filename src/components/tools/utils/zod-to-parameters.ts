@@ -11,7 +11,7 @@ export function zodToParameters(schema: z.ZodSchema<any>): ActionParameter[] {
   // Handle ZodObject
   if (schema instanceof z.ZodObject) {
     const shape = schema.shape;
-    
+
     for (const [key, value] of Object.entries(shape)) {
       const param = parseZodType(key, value as z.ZodTypeAny);
       if (param) {
@@ -23,7 +23,10 @@ export function zodToParameters(schema: z.ZodSchema<any>): ActionParameter[] {
   return parameters;
 }
 
-function parseZodType(name: string, schema: z.ZodTypeAny): ActionParameter | null {
+function parseZodType(
+  name: string,
+  schema: z.ZodTypeAny,
+): ActionParameter | null {
   let baseSchema = schema;
   let required = true;
   let description: string | undefined;
@@ -31,9 +34,11 @@ function parseZodType(name: string, schema: z.ZodTypeAny): ActionParameter | nul
   let enumValues: string[] | undefined;
 
   // Unwrap modifiers
-  while (baseSchema instanceof z.ZodOptional || 
-         baseSchema instanceof z.ZodDefault ||
-         baseSchema instanceof z.ZodNullable) {
+  while (
+    baseSchema instanceof z.ZodOptional ||
+    baseSchema instanceof z.ZodDefault ||
+    baseSchema instanceof z.ZodNullable
+  ) {
     if (baseSchema instanceof z.ZodOptional) {
       required = false;
       baseSchema = baseSchema._def.innerType;
@@ -53,7 +58,7 @@ function parseZodType(name: string, schema: z.ZodTypeAny): ActionParameter | nul
 
   // Determine type
   let type = "string";
-  
+
   if (baseSchema instanceof z.ZodString) {
     type = "string";
   } else if (baseSchema instanceof z.ZodNumber) {
@@ -78,11 +83,11 @@ function parseZodType(name: string, schema: z.ZodTypeAny): ActionParameter | nul
   if (description !== undefined) {
     param.description = description;
   }
-  
+
   if (defaultValue !== undefined) {
     param.default = defaultValue;
   }
-  
+
   if (enumValues !== undefined) {
     param.enum = enumValues;
   }

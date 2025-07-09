@@ -43,7 +43,7 @@ export class CredentialEncryption {
   private readonly tagLength = 16; // 128 bits
 
   private masterKey: Buffer | null = null;
-  private keyCache: Map<string, { key: Buffer; expires: Date }> = new Map();
+  private keyCache = new Map<string, { key: Buffer; expires: Date }>();
 
   private constructor(private config?: EncryptionConfig) {
     if (config) {
@@ -243,7 +243,7 @@ export class CredentialEncryption {
   /**
    * Generate secure random key
    */
-  static generateKey(length: number = 32): string {
+  static generateKey(length = 32): string {
     return randomBytes(length).toString("base64");
   }
 

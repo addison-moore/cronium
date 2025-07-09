@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -19,7 +18,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Plus,
   Search,
   Play,
   Pause,
@@ -601,22 +599,8 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{t("Workflows")}</h1>
-          <p className="text-muted-foreground">{t("ManageWorkflows")}</p>
-        </div>
-        <Link href={`/${lang}/dashboard/workflows/new`}>
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            {t("NewWorkflow")}
-          </Button>
-        </Link>
-      </div>
-
       {/* Filters */}
-      <div className="bg-muted/50 flex flex-wrap items-center gap-4 rounded-lg p-4">
+      <div className="flex flex-wrap items-center gap-4">
         {/* Search */}
         <div className="min-w-[200px] flex-1">
           <div className="relative">

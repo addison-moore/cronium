@@ -180,7 +180,9 @@ export function ToolBrowser({
       .map((actionKey) => {
         const [toolId, actionId] = actionKey.split(":");
         const tool = allTools.find((t: ToolPlugin) => t.id === toolId);
-        const action = tool?.actions?.find((a: ToolAction) => a.id === actionId);
+        const action = tool?.actions?.find(
+          (a: ToolAction) => a.id === actionId,
+        );
         return tool && action ? { tool, action } : null;
       })
       .filter(Boolean) as Array<{ tool: ToolPlugin; action: ToolAction }>;

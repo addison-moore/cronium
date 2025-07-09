@@ -235,8 +235,8 @@ export function DataMapper({
                     <Input
                       placeholder="e.g., Hello {{name}}!"
                       value={
-                        mappings[selectedMapping]?.transformerConfig?.template ??
-                        ""
+                        mappings[selectedMapping]?.transformerConfig
+                          ?.template ?? ""
                       }
                       onChange={(e) =>
                         updateMapping(selectedMapping, {

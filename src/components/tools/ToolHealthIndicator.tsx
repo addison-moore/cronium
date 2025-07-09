@@ -42,15 +42,15 @@ export function ToolHealthIndicator({
 
   const testConnectionMutation = trpc.tools.testConnection.useMutation({
     onSuccess: (result) => {
-      const isHealthy = result.valid;
+      const isHealthy = result.success;
       setStatus(isHealthy ? "healthy" : "unhealthy");
       setLastChecked(new Date());
       onHealthChange?.(isHealthy);
 
-      if (!isHealthy && result.error) {
+      if (!isHealthy) {
         toast({
           title: "Connection Failed",
-          description: result.error,
+          description: result.message,
           variant: "destructive",
         });
       }
@@ -163,7 +163,7 @@ export function ToolHealthBadge({
 
   const testConnectionMutation = trpc.tools.testConnection.useMutation({
     onSuccess: (result) => {
-      const isHealthy = result.valid;
+      const isHealthy = result.success;
       setStatus(isHealthy ? "healthy" : "unhealthy");
       onHealthChange?.(isHealthy);
     },

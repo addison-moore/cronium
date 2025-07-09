@@ -17,27 +17,71 @@ import { useToast } from "@/components/ui/use-toast";
 import { Loader2, Save, X } from "lucide-react";
 import ActionParameterForm from "@/components/event-form/ActionParameterForm";
 import { type ToolAction } from "@/components/tools/types/tool-plugin";
-import { DiscordPlugin } from "@/components/tools/plugins/discord/discord-plugin";
-import { SlackPluginTrpc as SlackPlugin } from "@/components/tools/plugins/slack/slack-plugin";
-import { EmailPlugin } from "@/components/tools/plugins/email/email-plugin";
 import { TemplatePreview } from "./TemplatePreview";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToolPluginRegistry } from "@/components/tools/plugins";
+import { TemplateActionParameterForm } from "./TemplateActionParameterForm";
+import { Plus, Variable } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface ToolActionTemplateFormProps {
-  templateId?: number;
+  toolType: string;
+  actionId: string;
+  templateId?: number | null;
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-// Map of tool plugins
-const TOOL_PLUGINS = {
-  DISCORD: DiscordPlugin,
-  SLACK: SlackPlugin,
-  EMAIL: EmailPlugin,
-  // Add other plugins as needed
-};
+// Template variables available in cronium context
+const TEMPLATE_VARIABLES = [
+  {
+    group: "Event",
+    variables: [
+      { name: "cronium.event.id", description: "Event ID" },
+      { name: "cronium.event.name", description: "Event name" },
+      { name: "cronium.event.status", description: "Execution status" },
+      {
+        name: "cronium.event.duration",
+        description: "Runtime in milliseconds",
+      },
+      { name: "cronium.event.executionTime", description: "Start timestamp" },
+      { name: "cronium.event.server", description: "Execution server name" },
+      { name: "cronium.event.output", description: "Script output" },
+      { name: "cronium.event.error", description: "Error message if any" },
+    ],
+  },
+  {
+    group: "Variables",
+    variables: [
+      { name: "cronium.getVariables.*", description: "User-defined variables" },
+    ],
+  },
+  {
+    group: "Input",
+    variables: [
+      { name: "cronium.input.*", description: "Workflow input data" },
+    ],
+  },
+  {
+    group: "Conditions",
+    variables: [
+      { name: "cronium.getCondition.*", description: "Conditional flags" },
+    ],
+  },
+];
 
 export function ToolActionTemplateForm({
+  toolType,
+  actionId,
   templateId,
   onSuccess,
   onCancel,
@@ -45,10 +89,10 @@ export function ToolActionTemplateForm({
   const { toast } = useToast();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [selectedTool, setSelectedTool] = useState("");
-  const [selectedAction, setSelectedAction] = useState("");
   const [parameters, setParameters] = useState<Record<string, unknown>>({});
-  const [currentAction, setCurrentAction] = useState<ToolAction | null>(null);
+  const [currentFieldForVariable, setCurrentFieldForVariable] = useState<
+    string | null
+  >(null);
 
   // Fetch template if editing
   const { data: template, isLoading: isLoadingTemplate } =
@@ -93,47 +137,24 @@ export function ToolActionTemplateForm({
     },
   });
 
+  // Get plugin and action
+  const plugin = ToolPluginRegistry.get(toolType);
+  const currentAction = plugin?.actions?.find((a) => a.id === actionId) || null;
+
   // Load template data when editing
   useEffect(() => {
     if (template) {
       setName(template.name);
       setDescription(template.description || "");
-      setSelectedTool(template.toolType);
-      setSelectedAction(template.actionId);
       setParameters(template.parameters as Record<string, unknown>);
-
-      // Set current action
-      const plugin =
-        TOOL_PLUGINS[template.toolType as keyof typeof TOOL_PLUGINS];
-      if (plugin && plugin.getActionById) {
-        const action = plugin.getActionById(template.actionId);
-        if (action) {
-          setCurrentAction(action);
-        }
-      }
     }
   }, [template]);
 
-  // Update current action when selection changes
-  useEffect(() => {
-    if (selectedTool && selectedAction) {
-      const plugin = TOOL_PLUGINS[selectedTool as keyof typeof TOOL_PLUGINS];
-      if (plugin && plugin.getActionById) {
-        const action = plugin.getActionById(selectedAction);
-        if (action) {
-          setCurrentAction(action);
-        }
-      }
-    } else {
-      setCurrentAction(null);
-    }
-  }, [selectedTool, selectedAction]);
-
   const handleSubmit = async () => {
-    if (!name || !selectedTool || !selectedAction) {
+    if (!name) {
       toast({
         title: "Validation error",
-        description: "Please fill in all required fields",
+        description: "Please provide a template name",
         variant: "destructive",
       });
       return;
@@ -142,8 +163,8 @@ export function ToolActionTemplateForm({
     const data = {
       name,
       description,
-      toolType: selectedTool,
-      actionId: selectedAction,
+      toolType,
+      actionId,
       parameters,
     };
 
@@ -157,19 +178,30 @@ export function ToolActionTemplateForm({
   const isLoading =
     createMutation.isPending || updateMutation.isPending || isLoadingTemplate;
 
-  // Get available actions for selected tool
-  const getAvailableActions = () => {
-    if (!selectedTool) return [];
-    const plugin = TOOL_PLUGINS[selectedTool as keyof typeof TOOL_PLUGINS];
-    if (!plugin || !plugin.actions) return [];
-    return plugin.actions;
-  };
+  // Handle variable insertion
+  const insertVariable = (variableName: string) => {
+    if (!currentFieldForVariable) return;
 
-  const availableActions = getAvailableActions();
+    // Get current value of the field
+    const currentValue = (parameters[currentFieldForVariable] as string) || "";
+
+    // Insert the variable wrapped in handlebars syntax
+    const newValue = currentValue + `{{${variableName}}}`;
+
+    setParameters({
+      ...parameters,
+      [currentFieldForVariable]: newValue,
+    });
+
+    toast({
+      title: "Variable inserted",
+      description: `Added {{${variableName}}} to the field`,
+    });
+  };
 
   return (
     <Tabs defaultValue="form" className="space-y-4">
-      <TabsList>
+      <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="form">Template Details</TabsTrigger>
         <TabsTrigger value="preview" disabled={!currentAction}>
           Preview
@@ -204,76 +236,81 @@ export function ToolActionTemplateForm({
           />
         </div>
 
-        {/* Tool Selection */}
-        <div className="space-y-2">
-          <Label htmlFor="tool">
-            Tool <span className="text-red-500">*</span>
-          </Label>
-          <Select
-            value={selectedTool}
-            onValueChange={(value) => {
-              setSelectedTool(value);
-              setSelectedAction("");
-              setParameters({});
-            }}
-            disabled={isLoading || !!templateId}
-          >
-            <SelectTrigger id="tool">
-              <SelectValue placeholder="Select a tool" />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.keys(TOOL_PLUGINS).map((tool) => (
-                <SelectItem key={tool} value={tool}>
-                  {tool}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Action Selection */}
-        {selectedTool && (
+        {/* Show selected tool and action (read-only) */}
+        <div className="bg-muted/50 rounded-lg border p-4">
           <div className="space-y-2">
-            <Label htmlFor="action">
-              Action <span className="text-red-500">*</span>
-            </Label>
-            <Select
-              value={selectedAction}
-              onValueChange={(value) => {
-                setSelectedAction(value);
-                setParameters({});
-              }}
-              disabled={isLoading || !!templateId}
-            >
-              <SelectTrigger id="action">
-                <SelectValue placeholder="Select an action" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableActions.map((action) => (
-                  <SelectItem key={action.id} value={action.id}>
-                    {action.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              <Label className="text-muted-foreground text-sm">Tool:</Label>
+              <div className="flex items-center gap-2">
+                {plugin && <plugin.icon className="h-4 w-4" />}
+                <span className="font-medium">{plugin?.name || toolType}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label className="text-muted-foreground text-sm">Action:</Label>
+              <span className="font-medium">
+                {currentAction?.name || actionId}
+              </span>
+            </div>
           </div>
-        )}
+        </div>
 
         {/* Parameters Form */}
         {currentAction && (
           <div className="space-y-2">
-            <Label>Action Parameters</Label>
+            <div className="flex items-center justify-between">
+              <Label>Action Parameters</Label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Variable className="mr-2 h-4 w-4" />
+                    Insert Variable
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-80">
+                  {TEMPLATE_VARIABLES.map((group) => (
+                    <DropdownMenuSub key={group.group}>
+                      <DropdownMenuSubTrigger>
+                        {group.group}
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        {group.variables.map((variable) => (
+                          <DropdownMenuItem
+                            key={variable.name}
+                            onClick={() => insertVariable(variable.name)}
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-mono text-sm">
+                                {variable.name}
+                              </span>
+                              <span className="text-muted-foreground text-xs">
+                                {variable.description}
+                              </span>
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <div className="text-muted-foreground px-2 py-1.5 text-xs">
+                    Click on a field below, then select a variable to insert
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             <div className="rounded-lg border p-4">
-              <ActionParameterForm
+              <TemplateActionParameterForm
                 action={currentAction}
                 value={parameters}
                 onChange={setParameters}
+                onFieldFocus={setCurrentFieldForVariable}
                 disabled={isLoading}
               />
             </div>
             <p className="text-muted-foreground text-sm">
-              Use {"{{cronium.event.name}}"}, {"{{cronium.event.status}}"}, and
-              other variables in your template fields.
+              Use Handlebars syntax like {"{{cronium.event.name}}"} in your
+              template fields.
             </p>
           </div>
         )}
@@ -300,7 +337,7 @@ export function ToolActionTemplateForm({
           <TemplatePreview
             action={currentAction}
             parameters={parameters}
-            toolType={selectedTool}
+            toolType={toolType}
           />
         )}
       </TabsContent>

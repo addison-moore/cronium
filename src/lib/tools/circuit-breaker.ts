@@ -284,7 +284,7 @@ export class CircuitBreaker<T> {
  */
 export class CircuitBreakerManager {
   private static instance: CircuitBreakerManager;
-  private breakers: Map<string, CircuitBreaker<any>> = new Map();
+  private breakers = new Map<string, CircuitBreaker<any>>();
 
   private toolConfigs: Record<string, Partial<CircuitBreakerConfig>> = {
     slack: {

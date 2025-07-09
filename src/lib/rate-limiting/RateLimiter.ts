@@ -76,11 +76,11 @@ export class RateLimiter extends EventEmitter {
         remaining: allowed ? remaining - 1 : remaining,
         resetAt: memoryBucket.resetAt,
       };
-      
+
       if (!allowed) {
         result.retryAfter = memoryBucket.resetAt.getTime() - now.getTime();
       }
-      
+
       return result;
     }
 
@@ -99,7 +99,7 @@ export class RateLimiter extends EventEmitter {
         remaining: bucket.remaining,
         resetAt: bucket.resetAt,
       };
-      
+
       if (!bucket.allowed) {
         result.retryAfter = bucket.resetAt.getTime() - now.getTime();
       }
@@ -322,7 +322,7 @@ export class RateLimiter extends EventEmitter {
     if (!newBucket) {
       throw new Error("Failed to create rate limit bucket");
     }
-    
+
     return {
       allowed: true,
       remaining: config.maxRequests - 1,

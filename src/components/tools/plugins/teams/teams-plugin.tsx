@@ -28,7 +28,7 @@ import { ToolHealthBadge } from "@/components/tools/ToolHealthIndicator";
 
 const teamsSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  scope: z.string().default("https://graph.microsoft.com/.default"),
+  scope: z.string().min(1, "Scope is required"),
   webhookUrl: z
     .string()
     .url("Must be a valid URL")
@@ -52,7 +52,7 @@ function TeamsCredentialForm({
   onCancel,
 }: CredentialFormProps) {
   const form = useForm<TeamsFormData>({
-    resolver: zodResolver(teamsSchema),
+    resolver: zodResolver(teamsSchema) as any,
     defaultValues: tool
       ? {
           name: tool.name,
@@ -77,7 +77,10 @@ function TeamsCredentialForm({
   };
 
   return (
-    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+    <form
+      onSubmit={form.handleSubmit(handleSubmit as any)}
+      className="space-y-4"
+    >
       <Alert>
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>
@@ -211,9 +214,7 @@ function TeamsCredentialDisplay({
                 <Badge variant={tool.isActive ? "default" : "secondary"}>
                   {tool.isActive ? "Active" : "Inactive"}
                 </Badge>
-                <ToolHealthBadge
-                  toolId={tool.id}
-                />
+                <ToolHealthBadge toolId={tool.id} />
                 {hasWebhook && (
                   <Badge variant="outline" className="text-blue-600">
                     Webhook

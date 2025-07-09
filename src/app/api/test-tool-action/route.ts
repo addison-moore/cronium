@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { executeToolAction } from "@/lib/scheduler/tool-action-executor";
 import {
-  Event,
+  type Event,
   EventType,
   EventStatus,
   EventTriggerType,
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
     };
 
     // Configure based on tool type
-    let toolActionConfig: any = {
+    const toolActionConfig: any = {
       toolType: testTool.type,
       toolId: testTool.id,
       actionId: "",

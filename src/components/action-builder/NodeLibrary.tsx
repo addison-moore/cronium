@@ -7,7 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Play, Zap, GitBranch, Shuffle, Target, Search } from "lucide-react";
 import { NodeType, NODE_TEMPLATES } from "./types";
-import { ToolPluginRegistry, type ToolPlugin, type ToolAction } from "@/components/tools/types/tool-plugin";
+import {
+  ToolPluginRegistry,
+  type ToolPlugin,
+  type ToolAction,
+} from "@/components/tools/types/tool-plugin";
 import { Input } from "@/components/ui/input";
 
 const NODE_ICONS: Record<
@@ -44,7 +48,7 @@ export function NodeLibrary({ onNodeSelect }: NodeLibraryProps) {
   const filteredActions = React.useMemo(() => {
     if (!selectedTool) return [];
 
-    const tool = tools.find((t: typeof tools[0]) => t.id === selectedTool);
+    const tool = tools.find((t: (typeof tools)[0]) => t.id === selectedTool);
     if (!tool) return [];
 
     if (!searchTerm) return tool.actions;
@@ -96,9 +100,7 @@ export function NodeLibrary({ onNodeSelect }: NodeLibraryProps) {
                       <div className="flex items-center gap-3">
                         <Icon className="h-5 w-5" />
                         <div className="flex-1">
-                          <div className="font-medium">
-                            {template.label}
-                          </div>
+                          <div className="font-medium">{template.label}</div>
                           <div className="text-muted-foreground text-xs">
                             {template.description}
                           </div>
@@ -129,7 +131,7 @@ export function NodeLibrary({ onNodeSelect }: NodeLibraryProps) {
               <div className="w-24 border-r">
                 <ScrollArea className="h-full">
                   <div className="p-2">
-                    {tools.map((tool: typeof tools[0]) => {
+                    {tools.map((tool: (typeof tools)[0]) => {
                       const Icon = tool.icon;
                       return (
                         <button

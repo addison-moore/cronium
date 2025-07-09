@@ -172,9 +172,7 @@ function TrelloCredentialDisplay({
                 <Badge variant={tool.isActive ? "default" : "secondary"}>
                   {tool.isActive ? "Active" : "Inactive"}
                 </Badge>
-                <ToolHealthBadge
-                  toolId={tool.id}
-                />
+                <ToolHealthBadge toolId={tool.id} />
               </div>
               <div className="text-muted-foreground grid grid-cols-1 gap-2 text-sm">
                 <div className="flex items-center gap-2">

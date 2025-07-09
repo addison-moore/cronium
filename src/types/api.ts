@@ -115,7 +115,6 @@ export interface ToolTestResponse extends ApiResponse {
   };
 }
 
-
 // Conditional Events API Types
 export interface ConditionalEventsResponse
   extends PaginatedResponse<ConditionalAction> {
@@ -251,7 +250,6 @@ export type AnyApiResponse =
   | WorkflowsResponse
   | VariablesResponse
   | ToolsResponse
-  | TemplatesResponse
   | DashboardStatsResponse
   | SystemSettingsResponse
   | ErrorApiResponse;

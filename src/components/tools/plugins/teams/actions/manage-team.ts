@@ -230,7 +230,7 @@ export const manageTeamAction: ToolAction = {
             if (location) {
               // Extract team ID from location header
               const match = /teams\('([^']+)'\)/.exec(location);
-              if (match && match[1]) {
+              if (match?.[1]) {
                 result = { success: true, teamId: match[1] };
               }
             }

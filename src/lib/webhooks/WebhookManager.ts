@@ -165,12 +165,10 @@ export class WebhookManager extends EventEmitter {
       .from(webhooks)
       .where(and(eq(webhooks.active, true)));
 
-    const subscribedWebhooks = activeWebhooks.filter(
-      (webhook) => {
-        const events = webhook.events as string[];
-        return events.includes(event) || events.includes("*");
-      }
-    );
+    const subscribedWebhooks = activeWebhooks.filter((webhook) => {
+      const events = webhook.events as string[];
+      return events.includes(event) || events.includes("*");
+    });
 
     if (subscribedWebhooks.length === 0) {
       return;
@@ -202,11 +200,13 @@ export class WebhookManager extends EventEmitter {
     };
 
     for (const webhook of subscribedWebhooks) {
-      const retryConfig = webhook.retryConfig as {
-        maxRetries: number;
-        retryDelay: number;
-        backoffMultiplier: number;
-      } | undefined;
+      const retryConfig = webhook.retryConfig as
+        | {
+            maxRetries: number;
+            retryDelay: number;
+            backoffMultiplier: number;
+          }
+        | undefined;
 
       await this.webhookQueue.enqueue({
         webhookId: webhook.id,
@@ -372,11 +372,13 @@ export class WebhookManager extends EventEmitter {
     }
 
     // Re-queue the delivery
-    const retryConfig = webhook.retryConfig as {
-      maxRetries: number;
-      retryDelay: number;
-      backoffMultiplier: number;
-    } | undefined;
+    const retryConfig = webhook.retryConfig as
+      | {
+          maxRetries: number;
+          retryDelay: number;
+          backoffMultiplier: number;
+        }
+      | undefined;
 
     await this.webhookQueue.enqueue({
       webhookId: webhook.id,

@@ -14,6 +14,8 @@ import {
   EventStatus,
   EventTriggerType,
   ToolType,
+  RunLocation,
+  TimeUnit,
 } from "@/shared/schema";
 import { executeToolAction } from "@/lib/scheduler/tool-action-executor";
 
@@ -109,17 +111,15 @@ async function testRealTools() {
           type: EventType.TOOL_ACTION,
           status: EventStatus.ACTIVE,
           triggerType: EventTriggerType.MANUAL,
-          runLocation: "LOCAL",
-          schedule: "{}",
+          runLocation: RunLocation.LOCAL,
+          scheduleNumber: 1,
+          scheduleUnit: TimeUnit.MINUTES,
           timeoutValue: 30,
-          timeoutUnit: "SECONDS",
+          timeoutUnit: TimeUnit.SECONDS,
           retries: 0,
           maxExecutions: 1,
           executionCount: 0,
-          envVars: "[]",
-          conditionalEvents: "[]",
           tags: ["test", "tool-action"],
-          code: "",
           toolActionConfig: JSON.stringify(toolActionConfig),
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -131,7 +131,7 @@ async function testRealTools() {
         console.error("   ❌ Failed to create test event");
         continue;
       }
-      
+
       console.log(`   ✅ Created test event: ${testEvent.name}`);
 
       // 3. Execute the event

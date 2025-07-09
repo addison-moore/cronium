@@ -8,7 +8,6 @@ import {
   QuotaManager,
   QuotaConfigSchema,
   RateLimiter,
-  QuotaEnforcer,
   UsageReporter,
   type RateLimitKey,
   type QuotaConfig,
@@ -18,7 +17,6 @@ import { TRPCError } from "@trpc/server";
 
 const quotaManager = QuotaManager.getInstance();
 const rateLimiter = RateLimiter.getInstance();
-const quotaEnforcer = QuotaEnforcer.getInstance();
 const usageReporter = UsageReporter.getInstance();
 
 export const quotaManagementRouter = createTRPCRouter({
@@ -98,7 +96,7 @@ export const quotaManagementRouter = createTRPCRouter({
         quotas: QuotaConfigSchema.partial(),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ input }) => {
       // Filter out undefined values to satisfy exactOptionalPropertyTypes
       const quotaUpdates = Object.entries(input.quotas).reduce(
         (acc, [key, value]) => {
@@ -121,7 +119,7 @@ export const quotaManagementRouter = createTRPCRouter({
         resources: z.array(z.string()).optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ input }) => {
       await quotaManager.resetQuotas(input.userId, input.resources as any);
       return { success: true };
     }),

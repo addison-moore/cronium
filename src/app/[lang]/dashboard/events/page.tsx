@@ -3,7 +3,7 @@
 import { useTranslations, useLocale } from "next-intl";
 import { Plus, MoreVertical } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
-import EventsList from "@/components/dashboard/EventsList";
+import EventsList from "@/components/event-list/EventsList";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

@@ -676,7 +676,9 @@ export default function ToolActionSection({
                 {/* Template Selection */}
                 {selectedAction && availableTemplates.length > 0 && (
                   <div className="space-y-2">
-                    <Label htmlFor="template-select">Use Template (Optional)</Label>
+                    <Label htmlFor="template-select">
+                      Use Template (Optional)
+                    </Label>
                     <Select
                       value={selectedTemplateId?.toString() ?? "custom"}
                       onValueChange={handleTemplateChange}
@@ -726,8 +728,8 @@ export default function ToolActionSection({
                   <Alert>
                     <FileText className="h-4 w-4" />
                     <AlertDescription>
-                      Template parameters have been applied. You can customize them
-                      below.
+                      Template parameters have been applied. You can customize
+                      them below.
                     </AlertDescription>
                   </Alert>
                 )}

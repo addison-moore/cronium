@@ -39,9 +39,7 @@ interface ActionBuilderState {
   ) => void;
   deleteConnection: (connectionId: string) => void;
   getNodeById: (nodeId: string) => ActionNode | undefined;
-  getConnectionById: (
-    connectionId: string,
-  ) => ActionConnection | undefined;
+  getConnectionById: (connectionId: string) => ActionConnection | undefined;
   getExecutionOrder: () => string[];
   validateFlow: () => { isValid: boolean; errors: string[] };
   clearFlow: () => void;
@@ -76,7 +74,7 @@ export const useActionBuilderStore = create<ActionBuilderState>((set, get) => ({
       },
     } as ActionConnection;
     set({
-      edges: addEdge(newEdge, get().edges) as ActionConnection[],
+      edges: addEdge(newEdge, get().edges),
     });
   },
 
@@ -196,13 +194,17 @@ export const useActionBuilderStore = create<ActionBuilderState>((set, get) => ({
     const errors: string[] = [];
 
     // Check for trigger node
-    const triggerNodes = nodes.filter((n) => n.data.nodeType === NodeType.TRIGGER);
+    const triggerNodes = nodes.filter(
+      (n) => n.data.nodeType === NodeType.TRIGGER,
+    );
     if (triggerNodes.length === 0) {
       errors.push("Flow must have at least one trigger node");
     }
 
     // Check for output node
-    const outputNodes = nodes.filter((n) => n.data.nodeType === NodeType.OUTPUT);
+    const outputNodes = nodes.filter(
+      (n) => n.data.nodeType === NodeType.OUTPUT,
+    );
     if (outputNodes.length === 0) {
       errors.push("Flow must have at least one output node");
     }

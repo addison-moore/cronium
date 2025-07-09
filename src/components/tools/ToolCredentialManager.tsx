@@ -43,7 +43,10 @@ import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 import { useToast } from "@/components/ui/use-toast";
 import { type Tool, type ToolType } from "@/shared/schema";
-import { ToolPluginRegistry } from "./types/tool-plugin";
+import {
+  ToolPluginRegistry,
+  type ToolWithParsedCredentials,
+} from "./types/tool-plugin";
 import { cn } from "@/lib/utils";
 import {
   Shield,
@@ -122,7 +125,8 @@ export default function ToolCredentialManager({
   const [showSecrets, setShowSecrets] = useState<Record<number, boolean>>({});
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
+  const [selectedTool, setSelectedTool] =
+    useState<ToolWithParsedCredentials | null>(null);
   const [formData, setFormData] = useState<CredentialFormData>({
     name: "",
     type: "email" as ToolType,
@@ -138,7 +142,7 @@ export default function ToolCredentialManager({
   // Queries
   const { data: tools = [], isLoading } = trpc.tools.list.useQuery(undefined, {
     ...QUERY_OPTIONS.static,
-  });
+  }) as { data: ToolWithParsedCredentials[]; isLoading: boolean };
 
   // Note: Since the tools.list query returns decrypted credentials, we use the same data
   const toolsWithDecrypted = tools;
@@ -251,7 +255,7 @@ export default function ToolCredentialManager({
   };
 
   // Test connection
-  const testConnection = (tool: Tool) => {
+  const testConnection = (tool: ToolWithParsedCredentials) => {
     setIsTestingConnection(tool.id);
     testConnectionMutation.mutate({ id: tool.id });
   };
@@ -286,15 +290,15 @@ export default function ToolCredentialManager({
   };
 
   // Handle edit
-  const handleEdit = (tool: Tool) => {
-    const decryptedTool = toolsWithDecrypted.find((t: any) => t.id === tool.id);
+  const handleEdit = (tool: ToolWithParsedCredentials) => {
+    const decryptedTool = toolsWithDecrypted.find((t) => t.id === tool.id);
     if (!decryptedTool) return;
 
     setSelectedTool(tool);
     setFormData({
       name: tool.name,
       type: tool.type,
-      config: (decryptedTool as any).credentials || {},
+      config: decryptedTool.credentials || {},
     });
     setIsEditDialogOpen(true);
   };
@@ -342,7 +346,7 @@ export default function ToolCredentialManager({
       acc[tool.type].push(tool);
       return acc;
     },
-    {} as Record<ToolType, Tool[]>,
+    {} as Record<ToolType, ToolWithParsedCredentials[]>,
   );
 
   return (
@@ -486,8 +490,13 @@ export default function ToolCredentialManager({
                               </TableCell>
                               <TableCell>
                                 <div className="space-y-1">
-                                  {Object.entries((decryptedTool as any)?.credentials || {}).map(([key, value]: [string, any]) => {
-                                    const isSecret = key.toLowerCase().includes('secret') || key.toLowerCase().includes('password') || key.toLowerCase().includes('token');
+                                  {Object.entries(
+                                    (decryptedTool as any)?.credentials || {},
+                                  ).map(([key, value]: [string, any]) => {
+                                    const isSecret =
+                                      key.toLowerCase().includes("secret") ||
+                                      key.toLowerCase().includes("password") ||
+                                      key.toLowerCase().includes("token");
                                     const isVisible = showSecrets[tool.id];
 
                                     return (
@@ -596,7 +605,8 @@ export default function ToolCredentialManager({
                                     {plugin.actions?.[0]?.helpUrl && (
                                       <DropdownMenuItem
                                         onClick={() => {
-                                          const url = plugin.actions?.[0]?.helpUrl;
+                                          const url =
+                                            plugin.actions?.[0]?.helpUrl;
                                           if (url) window.open(url, "_blank");
                                         }}
                                       >
@@ -700,15 +710,27 @@ export default function ToolCredentialManager({
                 {Object.entries(formData.config).map(([key, value]) => (
                   <div key={key} className="space-y-2">
                     <Label htmlFor={key}>
-                      {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1').trim()}
+                      {key.charAt(0).toUpperCase() +
+                        key
+                          .slice(1)
+                          .replace(/([A-Z])/g, " $1")
+                          .trim()}
                       {/* Mark common required fields */}
-                      {(key === 'apiKey' || key === 'token' || key === 'clientId') && (
+                      {(key === "apiKey" ||
+                        key === "token" ||
+                        key === "clientId") && (
                         <span className="text-destructive ml-1">*</span>
                       )}
                     </Label>
                     <Input
                       id={key}
-                      type={key.toLowerCase().includes('secret') || key.toLowerCase().includes('password') || key.toLowerCase().includes('token') ? 'password' : 'text'}
+                      type={
+                        key.toLowerCase().includes("secret") ||
+                        key.toLowerCase().includes("password") ||
+                        key.toLowerCase().includes("token")
+                          ? "password"
+                          : "text"
+                      }
                       value={value || ""}
                       onChange={(e) =>
                         setFormData({

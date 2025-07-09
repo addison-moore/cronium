@@ -219,11 +219,11 @@ export class ErrorCategorizer {
       technicalMessage: error.message,
       suggestedAction: "Try again or contact support if the issue persists",
     };
-    
+
     if (context) {
       result.metadata = context;
     }
-    
+
     return result;
   }
 
@@ -375,10 +375,7 @@ export class ErrorCategorizer {
   /**
    * Get user-friendly error message
    */
-  static getUserMessage(
-    error: CategorizedError,
-    includeAction: boolean = true,
-  ): string {
+  static getUserMessage(error: CategorizedError, includeAction = true): string {
     let message = error.userMessage;
 
     if (includeAction && error.suggestedAction) {

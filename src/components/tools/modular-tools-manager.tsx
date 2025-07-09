@@ -1,13 +1,19 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings, ChevronRight, Plus, Zap, Search } from "lucide-react";
+import {
+  Settings,
+  ChevronRight,
+  Plus,
+  Zap,
+  Search,
+  Edit,
+  Trash2,
+  FileText,
+} from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
@@ -19,173 +25,37 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { type Tool as ToolBase, type ToolType } from "@/shared/schema";
-
-// Tool with parsed credentials
-type Tool = Omit<ToolBase, 'credentials'> & {
-  credentials: Record<string, any>;
-  description?: string;
-  tags: string[];
-};
+import { type ToolType } from "@/shared/schema";
+import { type ToolWithParsedCredentials } from "./types/tool-plugin";
 import { ToolPluginRegistry } from "./plugins";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { MonacoEditor } from "@/components/ui/monaco-editor";
 import { trpc } from "@/lib/trpc";
-import { QUERY_OPTIONS } from "@/trpc/shared";
 import { Badge } from "@/components/ui/badge";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { ToolHealthBadge } from "./ToolHealthIndicator";
 import { ToolErrorDiagnostics } from "./ToolErrorDiagnostics";
 import Link from "next/link";
-
-// Create dynamic schema based on tool type
-const createTemplateSchema = (toolType: string) => {
-  const baseSchema = {
-    name: z
-      .string()
-      .min(1, "Template name is required")
-      .max(100, "Template name is too long"),
-    content: z.string().min(1, "Content is required"),
-  };
-
-  if (toolType === "email") {
-    return z.object({
-      ...baseSchema,
-      subject: z
-        .string()
-        .min(1, "Subject is required")
-        .max(200, "Subject is too long"),
-    });
-  }
-
-  return z.object(baseSchema);
-};
-
-type TemplateFormData = {
-  name: string;
-  subject?: string;
-  content: string;
-};
-
-// Generic template form component - refactored to use React Hook Form and tRPC
-function TemplateForm({
-  toolType,
-  onSubmit,
-  onCancel,
-}: {
-  toolType: string;
-  onSubmit: (data: TemplateFormData) => void;
-  onCancel: () => void;
-}) {
-  // Use tRPC query for editor settings
-  const { data: editorSettings } = trpc.settings.getEditorSettings.useQuery(
-    undefined,
-    {
-      ...QUERY_OPTIONS.static,
-    },
-  );
-
-  const form = useForm<TemplateFormData>({
-    resolver: zodResolver(createTemplateSchema(toolType)),
-    defaultValues: {
-      name: "",
-      subject: "",
-      content: "",
-    },
-  });
-
-  const handleSubmit = (data: TemplateFormData) => {
-    onSubmit(data);
-  };
-
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Template Name</FormLabel>
-              <FormControl>
-                <Input {...field} placeholder="Enter template name" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {toolType === "email" && (
-          <FormField
-            control={form.control}
-            name="subject"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Subject</FormLabel>
-                <FormControl>
-                  <Input {...field} placeholder="Email subject" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
-
-        <FormField
-          control={form.control}
-          name="content"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>
-                {toolType === "email" ? "Message Content" : "Message Template"}
-              </FormLabel>
-              <FormControl>
-                <MonacoEditor
-                  value={field.value}
-                  onChange={field.onChange}
-                  language="html"
-                  height="200px"
-                  editorSettings={
-                    editorSettings ?? {
-                      fontSize: 14,
-                      theme: "vs-dark",
-                      wordWrap: true,
-                      minimap: false,
-                      lineNumbers: true,
-                    }
-                  }
-                  className="border-0"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={form.formState.isSubmitting}>
-            Save Template
-          </Button>
-        </div>
-      </form>
-    </Form>
-  );
-}
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ToolActionTemplateForm } from "./templates/ToolActionTemplateForm";
 
 export function ModularToolsManager() {
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
-  const [editingTool, setEditingTool] = useState<Tool | null>(null);
+  const [editingTool, setEditingTool] =
+    useState<ToolWithParsedCredentials | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<
     "credentials" | "templates" | "actions"
@@ -193,6 +63,10 @@ export function ModularToolsManager() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showAddTemplateForm, setShowAddTemplateForm] = useState(false);
   const [toolSearchQuery, setToolSearchQuery] = useState("");
+  const [editingTemplateId, setEditingTemplateId] = useState<number | null>(
+    null,
+  );
+  const [selectedActionType, setSelectedActionType] = useState<string>("all");
   const { toast } = useToast();
 
   // tRPC queries and mutations
@@ -257,27 +131,59 @@ export function ModularToolsManager() {
     },
   });
 
-  const createTemplateMutation = trpc.toolActionTemplates.create.useMutation(
-    {
-      onSuccess: () => {
-        toast({
-          title: "Template Created",
-          description: "Template has been saved successfully",
-        });
-        setShowAddTemplateForm(false);
-      },
-      onError: (error) => {
-        toast({
-          title: "Error",
-          description: error.message ?? "Failed to create template",
-          variant: "destructive",
-        });
-      },
+  const createTemplateMutation = trpc.toolActionTemplates.create.useMutation({
+    onSuccess: () => {
+      toast({
+        title: "Template Created",
+        description: "Template has been saved successfully",
+      });
+      setShowAddTemplateForm(false);
+      setEditingTemplateId(null);
+      void refetchTemplates();
     },
-  );
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message ?? "Failed to create template",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Fetch templates for the selected tool
+  const { data: templatesData, refetch: refetchTemplates } =
+    trpc.toolActionTemplates.getByToolAction.useQuery(
+      {
+        toolType: selectedTool ?? "",
+        actionId:
+          selectedActionType === "all" ? "" : (selectedActionType ?? ""),
+      },
+      {
+        enabled: !!selectedTool,
+      },
+    );
+
+  // Delete template mutation
+  const deleteTemplateMutation = trpc.toolActionTemplates.delete.useMutation({
+    onSuccess: () => {
+      toast({
+        title: "Template Deleted",
+        description: "The template has been deleted successfully",
+      });
+      void refetchTemplates();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message ?? "Failed to delete template",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Extract tools array from the response structure
   const tools = toolsData?.tools ?? [];
+  const templates = templatesData ?? [];
 
   const handleCredentialSubmit = async (data: {
     name: string;
@@ -307,7 +213,7 @@ export function ModularToolsManager() {
     }
   };
 
-  const handleEdit = (tool: Tool) => {
+  const handleEdit = (tool: ToolWithParsedCredentials) => {
     setEditingTool(tool);
     setSelectedTool(tool.type.toLowerCase());
     setShowAddForm(true);
@@ -331,49 +237,32 @@ export function ModularToolsManager() {
     setActiveTab("credentials");
   };
 
-  const handleAddTemplate = () => {
-    setShowAddTemplateForm(true);
-    setShowAddForm(false);
-    setEditingTool(null);
-    setActiveTab("templates");
-  };
-
-  const handleTemplateSubmit = async (data: TemplateFormData) => {
-    try {
-      // Get the selected tool action
-      const plugin = ToolPluginRegistry.get(selectedTool ?? "");
-      const firstAction = plugin?.actions?.[0];
-      
-      if (!firstAction) {
-        throw new Error("No actions available for this tool");
-      }
-
-      const templateData = {
-        name: data.name,
-        toolType: selectedTool ?? "",
-        actionId: firstAction.id,
-        parameters: {
-          content: data.content,
-          subject: data.subject ?? "",
-        },
-        description: `Template for ${data.name}`,
-      };
-
-      await createTemplateMutation.mutateAsync(templateData);
-    } catch (error) {
-      // Error is handled by mutation callbacks
-      console.error("Error creating template:", error);
-    }
-  };
-
-  const getFilteredTools = (pluginId: string) => {
+  const getFilteredTools = (pluginId: string): ToolWithParsedCredentials[] => {
     return tools
       .filter((tool) => tool.type.toLowerCase() === pluginId.toLowerCase())
-      .map((tool) => ({
-        ...tool,
-        // Keep credentials as-is, don't stringify if already an object
-        credentials: tool.credentials,
-      }));
+      .map((tool) => {
+        let parsedCredentials = {};
+        try {
+          if (typeof tool.credentials === "string") {
+            parsedCredentials = JSON.parse(tool.credentials);
+          } else if (
+            typeof tool.credentials === "object" &&
+            tool.credentials !== null
+          ) {
+            parsedCredentials = tool.credentials;
+          }
+        } catch (error) {
+          console.error(
+            "Failed to parse credentials for tool:",
+            tool.name,
+            error,
+          );
+        }
+        return {
+          ...tool,
+          credentials: parsedCredentials,
+        };
+      });
   };
 
   const allPlugins = ToolPluginRegistry.getAll();
@@ -454,7 +343,14 @@ export function ModularToolsManager() {
                           ? "border-l-primary bg-muted/50"
                           : "border-l-transparent",
                       )}
-                      onClick={() => setSelectedTool(plugin.id)}
+                      onClick={() => {
+                        setSelectedTool(plugin.id);
+                        // Close template form when switching tools
+                        setShowAddTemplateForm(false);
+                        setEditingTemplateId(null);
+                        // Reset action type filter
+                        setSelectedActionType("all");
+                      }}
                     >
                       <Icon size={20} className="text-primary flex-shrink-0" />
                       <div className="min-w-0 flex-1">
@@ -623,7 +519,9 @@ export function ModularToolsManager() {
                             )}
                           </div>
                           {(() => {
-                            const tools = getFilteredTools(selectedPluginInstance.id);
+                            const tools = getFilteredTools(
+                              selectedPluginInstance.id,
+                            );
                             const firstToolId = tools[0]?.id;
                             return tools.length > 0 && firstToolId ? (
                               <div className="mt-4">
@@ -644,36 +542,193 @@ export function ModularToolsManager() {
                     className="mt-4 flex-1 overflow-hidden"
                   >
                     <div className="h-full space-y-4 overflow-y-auto p-1">
-                      {selectedPluginInstance.TemplateManager ? (
-                        showAddTemplateForm ? (
-                          <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                              <h3 className="font-medium">Add New Template</h3>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setShowAddTemplateForm(false)}
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                            <TemplateForm
-                              toolType={selectedPluginInstance.id}
-                              onSubmit={handleTemplateSubmit}
-                              onCancel={() => setShowAddTemplateForm(false)}
-                            />
+                      {/* Action Type Filter and New Template Button */}
+                      <div className="flex items-center justify-end gap-4">
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={selectedActionType}
+                            onValueChange={setSelectedActionType}
+                          >
+                            <SelectTrigger className="w-[200px]">
+                              <SelectValue placeholder="Filter by action type..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Actions</SelectItem>
+                              {selectedPluginInstance?.actions?.map(
+                                (action) => (
+                                  <SelectItem key={action.id} value={action.id}>
+                                    {action.name}
+                                  </SelectItem>
+                                ),
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button
+                          onClick={() => {
+                            if (
+                              !selectedActionType ||
+                              selectedActionType === "all"
+                            ) {
+                              toast({
+                                title: "Select an action type",
+                                description:
+                                  "Please select an action type before creating a template",
+                                variant: "destructive",
+                              });
+                              return;
+                            }
+                            setShowAddTemplateForm(true);
+                            setEditingTemplateId(null);
+                          }}
+                          disabled={
+                            !selectedActionType || selectedActionType === "all"
+                          }
+                          size="sm"
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          New Template
+                        </Button>
+                      </div>
+
+                      {/* Template Form (when adding/editing) */}
+                      {(showAddTemplateForm || editingTemplateId) &&
+                        selectedPluginInstance && (
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="text-base">
+                                {editingTemplateId
+                                  ? "Edit Template"
+                                  : "Create New Template"}
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <ToolActionTemplateForm
+                                toolType={selectedPluginInstance.id}
+                                actionId={selectedActionType}
+                                templateId={editingTemplateId}
+                                onSuccess={() => {
+                                  setShowAddTemplateForm(false);
+                                  setEditingTemplateId(null);
+                                  void refetchTemplates();
+                                }}
+                                onCancel={() => {
+                                  setShowAddTemplateForm(false);
+                                  setEditingTemplateId(null);
+                                }}
+                              />
+                            </CardContent>
+                          </Card>
+                        )}
+
+                      {/* Templates Table */}
+                      <div>
+                        {templates.length === 0 ? (
+                          <div className="text-muted-foreground flex flex-col items-center justify-center rounded-lg border border-dashed py-12">
+                            <FileText className="mb-3 h-12 w-12 opacity-50" />
+                            <p className="text-lg font-medium">
+                              No templates yet
+                            </p>
+                            <p className="mt-1 text-sm">
+                              {selectedActionType
+                                ? "Create your first template for this action"
+                                : "Select an action type and create a template"}
+                            </p>
                           </div>
                         ) : (
-                          <selectedPluginInstance.TemplateManager
-                            toolType={selectedPluginInstance.id}
-                            onAddTemplate={handleAddTemplate}
-                          />
-                        )
-                      ) : (
-                        <div className="text-muted-foreground py-8 text-center">
-                          Templates not available for this tool type
-                        </div>
-                      )}
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="w-12">Icon</TableHead>
+                                <TableHead>Template Name</TableHead>
+                                <TableHead>Action Type</TableHead>
+                                <TableHead>Description</TableHead>
+                                <TableHead>Created</TableHead>
+                                <TableHead className="text-right">
+                                  Actions
+                                </TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {templates
+                                .filter(
+                                  (template) =>
+                                    !selectedActionType ||
+                                    selectedActionType === "all" ||
+                                    template.actionId === selectedActionType,
+                                )
+                                .map((template) => {
+                                  const action =
+                                    selectedPluginInstance?.actions?.find(
+                                      (a) => a.id === template.actionId,
+                                    );
+                                  return (
+                                    <TableRow key={template.id}>
+                                      <TableCell>
+                                        {selectedPluginInstance && (
+                                          <selectedPluginInstance.icon className="text-muted-foreground h-5 w-5" />
+                                        )}
+                                      </TableCell>
+                                      <TableCell className="font-medium">
+                                        {template.name}
+                                      </TableCell>
+                                      <TableCell>
+                                        <Badge
+                                          variant="secondary"
+                                          className="text-xs"
+                                        >
+                                          {action?.name ?? template.actionId}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-muted-foreground max-w-[300px] truncate text-sm">
+                                        {template.description ?? "-"}
+                                      </TableCell>
+                                      <TableCell className="text-muted-foreground text-sm">
+                                        {new Date(
+                                          template.createdAt,
+                                        ).toLocaleDateString()}
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        <div className="flex justify-end gap-1">
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                              setEditingTemplateId(template.id);
+                                              setSelectedActionType(
+                                                template.actionId,
+                                              );
+                                              setShowAddTemplateForm(false);
+                                            }}
+                                          >
+                                            <Edit className="h-4 w-4" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                              if (
+                                                confirm(
+                                                  "Are you sure you want to delete this template?",
+                                                )
+                                              ) {
+                                                deleteTemplateMutation.mutate({
+                                                  id: template.id,
+                                                });
+                                              }
+                                            }}
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                            </TableBody>
+                          </Table>
+                        )}
+                      </div>
                     </div>
                   </TabsContent>
 

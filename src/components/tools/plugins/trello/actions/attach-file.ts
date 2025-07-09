@@ -177,7 +177,9 @@ export const attachFileAction: ToolAction = {
         onProgress({ step: "File attached successfully!", percentage: 100 });
       }
 
-      logger.info(`File attached to Trello card successfully - Attachment ID: ${data.id}`);
+      logger.info(
+        `File attached to Trello card successfully - Attachment ID: ${data.id}`,
+      );
 
       return {
         success: true,

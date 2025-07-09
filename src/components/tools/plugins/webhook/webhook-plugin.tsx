@@ -1,4 +1,8 @@
-import { ToolPlugin, ToolAction, ExecutionContext } from "@/components/tools/types/tool-plugin";
+import {
+  type ToolPlugin,
+  type ToolAction,
+  type ExecutionContext,
+} from "@/components/tools/types/tool-plugin";
 import { z } from "zod";
 import { Link } from "lucide-react";
 import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
@@ -59,7 +63,7 @@ const sendWebhookAction: ToolAction = {
 
     // Add auth header if needed
     if (creds.auth?.type === "bearer" && creds.auth.credentials?.token) {
-      allHeaders["Authorization"] = `Bearer ${creds.auth.credentials.token}`;
+      allHeaders.Authorization = `Bearer ${creds.auth.credentials.token}`;
     }
 
     // Make request
@@ -100,18 +104,18 @@ export const WebhookPlugin: ToolPlugin = {
   defaultValues: {
     url: "",
   },
-  
+
   // Components
   CredentialForm: WebhookCredentialForm,
   CredentialDisplay: WebhookCredentialDisplay,
-  
+
   // Tool Actions
   actions: [sendWebhookAction],
-  getActionById: (id: string) => 
-    [sendWebhookAction].find(action => action.id === id),
+  getActionById: (id: string) =>
+    [sendWebhookAction].find((action) => action.id === id),
   getActionsByType: (type) =>
-    [sendWebhookAction].filter(action => action.actionType === type),
-    
+    [sendWebhookAction].filter((action) => action.actionType === type),
+
   test: async (credentials: Record<string, unknown>) => {
     try {
       const creds = WebhookCredentialsSchema.parse(credentials);

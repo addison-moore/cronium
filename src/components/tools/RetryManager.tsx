@@ -392,7 +392,7 @@ export default function RetryManager({
                 value={[config.maxAttempts]}
                 onValueChange={([value]) => {
                   if (value !== undefined) {
-                    updateConfig({ maxAttempts: value })
+                    updateConfig({ maxAttempts: value });
                   }
                 }}
               />
@@ -414,7 +414,7 @@ export default function RetryManager({
                 value={[config.initialDelay]}
                 onValueChange={([value]) => {
                   if (value !== undefined) {
-                    updateConfig({ initialDelay: value })
+                    updateConfig({ initialDelay: value });
                   }
                 }}
               />
@@ -436,7 +436,7 @@ export default function RetryManager({
                 value={[config.maxDelay]}
                 onValueChange={([value]) => {
                   if (value !== undefined) {
-                    updateConfig({ maxDelay: value })
+                    updateConfig({ maxDelay: value });
                   }
                 }}
               />
@@ -459,7 +459,7 @@ export default function RetryManager({
                   value={[config.backoffMultiplier]}
                   onValueChange={([value]) => {
                     if (value !== undefined) {
-                      updateConfig({ backoffMultiplier: value })
+                      updateConfig({ backoffMultiplier: value });
                     }
                   }}
                 />
@@ -498,7 +498,7 @@ export default function RetryManager({
                   value={[config.jitterFactor]}
                   onValueChange={([value]) => {
                     if (value !== undefined) {
-                      updateConfig({ jitterFactor: value })
+                      updateConfig({ jitterFactor: value });
                     }
                   }}
                 />
