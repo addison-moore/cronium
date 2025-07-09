@@ -230,7 +230,7 @@ export const updateDatabaseAction: ToolAction = {
         updateData.archived = typedParams.archived;
       }
 
-      logger.info("Updating Notion database entry", { pageId });
+      logger.info(`Updating Notion database entry: ${pageId}`);
 
       if (isTest) {
         // Test mode - simulate update
@@ -297,7 +297,7 @@ export const updateDatabaseAction: ToolAction = {
         });
       }
 
-      logger.info("Notion database entry updated successfully", { pageId });
+      logger.info(`Notion database entry updated successfully: ${pageId}`);
 
       return {
         success: true,

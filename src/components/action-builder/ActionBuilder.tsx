@@ -1,15 +1,14 @@
 "use client";
 
 import React from "react";
-import ReactFlow, {
+import {
+  ReactFlow,
   Background,
   Controls,
   MiniMap,
   Panel,
   ReactFlowProvider,
   ConnectionMode,
-  type Node,
-  type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Card } from "@/components/ui/card";
@@ -30,14 +29,14 @@ import { ConnectionManager } from "./ConnectionManager";
 import { DataMapper } from "./DataMapper";
 import { PreviewPanel } from "./PreviewPanel";
 import { useActionBuilder } from "./useActionBuilder";
-import { type NodeType } from "./types";
+import { type NodeType, type ActionNode, type ActionConnection } from "./types";
 
 interface ActionBuilderProps {
   initialFlow?: {
-    nodes: Node[];
-    edges: Edge[];
+    nodes: ActionNode[];
+    edges: ActionConnection[];
   };
-  onSave?: (flow: { nodes: Node[]; edges: Edge[] }) => void;
+  onSave?: (flow: { nodes: ActionNode[]; edges: ActionConnection[] }) => void;
 }
 
 export function ActionBuilder({ initialFlow, onSave }: ActionBuilderProps) {

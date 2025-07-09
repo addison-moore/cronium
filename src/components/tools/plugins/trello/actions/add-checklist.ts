@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for add-checklist action parameters
 export const addChecklistSchema = z.object({
@@ -40,6 +41,7 @@ export const addChecklistAction: ToolAction = {
   actionType: "update",
   developmentMode: "visual",
   inputSchema: addChecklistSchema,
+  parameters: zodToParameters(addChecklistSchema),
   outputSchema: z.object({
     success: z.boolean(),
     checklistId: z.string().optional(),
@@ -136,7 +138,7 @@ export const addChecklistAction: ToolAction = {
         checklistData.idChecklistSource = typedParams.idChecklistSource;
       }
 
-      logger.info("Adding checklist to Trello card", { cardId, name });
+      logger.info(`Adding checklist to Trello card ${cardId}: ${name}`);
 
       if (isTest) {
         // Test mode - simulate creation
@@ -200,6 +202,8 @@ export const addChecklistAction: ToolAction = {
 
         for (let i = 0; i < typedParams.checkItems.length; i++) {
           const item = typedParams.checkItems[i];
+          if (!item) continue; // Guard against undefined
+          
           const itemUrl = new URL(
             `https://api.trello.com/1/checklists/${checklistId}/checkItems`,
           );
@@ -247,7 +251,7 @@ export const addChecklistAction: ToolAction = {
         });
       }
 
-      logger.info("Trello checklist created successfully", { checklistId });
+      logger.info(`Trello checklist created successfully - ID: ${checklistId}`);
 
       return {
         success: true,

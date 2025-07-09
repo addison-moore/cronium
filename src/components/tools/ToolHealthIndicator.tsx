@@ -32,7 +32,6 @@ type HealthStatus = "healthy" | "unhealthy" | "unknown" | "checking";
 
 export function ToolHealthIndicator({
   toolId,
-  toolName,
   className,
   showTestButton = true,
   onHealthChange,
@@ -155,11 +154,9 @@ export function ToolHealthIndicator({
 // Compact version for use in lists
 export function ToolHealthBadge({
   toolId,
-  toolName,
   onHealthChange,
 }: {
   toolId: number;
-  toolName: string;
   onHealthChange?: (healthy: boolean) => void;
 }) {
   const [status, setStatus] = useState<HealthStatus>("unknown");

@@ -69,12 +69,23 @@ function parseZodType(name: string, schema: z.ZodTypeAny): ActionParameter | nul
     enumValues = baseSchema._def.values;
   }
 
-  return {
+  const param: ActionParameter = {
     name,
     type,
     required,
-    description,
-    default: defaultValue,
-    enum: enumValues,
   };
+
+  if (description !== undefined) {
+    param.description = description;
+  }
+  
+  if (defaultValue !== undefined) {
+    param.default = defaultValue;
+  }
+  
+  if (enumValues !== undefined) {
+    param.enum = enumValues;
+  }
+
+  return param;
 }

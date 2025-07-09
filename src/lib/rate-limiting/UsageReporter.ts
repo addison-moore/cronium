@@ -120,33 +120,35 @@ export class UsageReporter {
     startDate: Date,
     endDate: Date,
   ): Promise<UsageMetrics["toolActions"]> {
-    // Total actions
+    // Total actions - we need to join with events to get userId
     const [totalResult] = await db
       .select({ count: sql<number>`count(*)` })
       .from(toolActionLogs)
+      .innerJoin(events, eq(toolActionLogs.eventId, events.id))
       .where(
         and(
-          eq(toolActionLogs.userId, userId),
-          gte(toolActionLogs.startedAt, startDate),
-          sql`${toolActionLogs.startedAt} <= ${endDate}`,
+          eq(events.userId, userId),
+          gte(toolActionLogs.createdAt, startDate),
+          sql`${toolActionLogs.createdAt} <= ${endDate}`,
         ),
       );
 
     // By tool
     const byToolResults = await db
       .select({
-        toolId: toolActionLogs.toolId,
+        toolType: toolActionLogs.toolType,
         count: sql<number>`count(*)`,
       })
       .from(toolActionLogs)
+      .innerJoin(events, eq(toolActionLogs.eventId, events.id))
       .where(
         and(
-          eq(toolActionLogs.userId, userId),
-          gte(toolActionLogs.startedAt, startDate),
-          sql`${toolActionLogs.startedAt} <= ${endDate}`,
+          eq(events.userId, userId),
+          gte(toolActionLogs.createdAt, startDate),
+          sql`${toolActionLogs.createdAt} <= ${endDate}`,
         ),
       )
-      .groupBy(toolActionLogs.toolId);
+      .groupBy(toolActionLogs.toolType);
 
     // Success rate
     const [successResult] = await db
@@ -155,17 +157,18 @@ export class UsageReporter {
         successful: sql<number>`count(case when ${toolActionLogs.status} = 'success' then 1 end)`,
       })
       .from(toolActionLogs)
+      .innerJoin(events, eq(toolActionLogs.eventId, events.id))
       .where(
         and(
-          eq(toolActionLogs.userId, userId),
-          gte(toolActionLogs.startedAt, startDate),
-          sql`${toolActionLogs.startedAt} <= ${endDate}`,
+          eq(events.userId, userId),
+          gte(toolActionLogs.createdAt, startDate),
+          sql`${toolActionLogs.createdAt} <= ${endDate}`,
         ),
       );
 
     const byTool: Record<string, number> = {};
     for (const result of byToolResults) {
-      byTool[result.toolId] = Number(result.count);
+      byTool[result.toolType] = Number(result.count);
     }
 
     const total = Number(totalResult?.count ?? 0);
@@ -214,8 +217,8 @@ export class UsageReporter {
       .where(
         and(
           eq(events.userId, userId),
-          gte(logs.executedAt, startDate),
-          sql`${logs.executedAt} <= ${endDate}`,
+          gte(logs.startTime, startDate),
+          sql`${logs.startTime} <= ${endDate}`,
         ),
       );
 

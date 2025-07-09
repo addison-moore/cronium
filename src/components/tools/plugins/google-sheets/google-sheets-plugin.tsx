@@ -68,7 +68,7 @@ function GoogleSheetsCredentialForm({
   };
 
   return (
-    <form onSubmit={form.handleSubmit((data) => handleSubmit(data))} className="space-y-4">
+    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
       <Alert>
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>
@@ -168,7 +168,6 @@ function GoogleSheetsCredentialDisplay({
                 </Badge>
                 <ToolHealthBadge
                   toolId={tool.id}
-                  toolName={tool.name}
                 />
                 {!credentials.refreshToken && (
                   <Badge variant="outline" className="text-orange-600">

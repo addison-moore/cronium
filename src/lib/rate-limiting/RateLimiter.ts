@@ -31,7 +31,7 @@ export interface RateLimitKey {
 export class RateLimiter extends EventEmitter {
   private static instance: RateLimiter;
   private memoryStore = new Map<string, { count: number; resetAt: Date }>();
-  private cleanupInterval?: NodeJS.Timeout;
+  private cleanupInterval: NodeJS.Timeout | undefined;
 
   private constructor() {
     super();
@@ -50,9 +50,9 @@ export class RateLimiter extends EventEmitter {
    */
   async checkLimit(
     key: RateLimitKey,
-    config: RateLimitConfig = {},
+    config: Partial<RateLimitConfig> = {},
   ): Promise<RateLimitResult> {
-    const fullConfig = { ...RateLimitConfigSchema.parse({}), ...config };
+    const fullConfig = RateLimitConfigSchema.parse(config);
     const bucketKey = this.generateKey(key, fullConfig.keyPrefix);
     const now = new Date();
     const resetAt = new Date(now.getTime() + fullConfig.windowMs);
@@ -70,15 +70,18 @@ export class RateLimiter extends EventEmitter {
         memoryBucket.count++;
       }
 
-      return {
+      const result: RateLimitResult = {
         allowed,
         limit: fullConfig.maxRequests,
         remaining: allowed ? remaining - 1 : remaining,
         resetAt: memoryBucket.resetAt,
-        retryAfter: allowed
-          ? undefined
-          : memoryBucket.resetAt.getTime() - now.getTime(),
       };
+      
+      if (!allowed) {
+        result.retryAfter = memoryBucket.resetAt.getTime() - now.getTime();
+      }
+      
+      return result;
     }
 
     // Check database for distributed rate limiting
@@ -95,10 +98,11 @@ export class RateLimiter extends EventEmitter {
         limit: fullConfig.maxRequests,
         remaining: bucket.remaining,
         resetAt: bucket.resetAt,
-        retryAfter: bucket.allowed
-          ? undefined
-          : bucket.resetAt.getTime() - now.getTime(),
       };
+      
+      if (!bucket.allowed) {
+        result.retryAfter = bucket.resetAt.getTime() - now.getTime();
+      }
 
       // Update memory store
       this.memoryStore.set(bucketKey, {
@@ -133,7 +137,7 @@ export class RateLimiter extends EventEmitter {
     key: RateLimitKey,
     config: Partial<RateLimitConfig> = {},
   ): Promise<void> {
-    const fullConfig = { ...RateLimitConfigSchema.parse({}), ...config };
+    const fullConfig = RateLimitConfigSchema.parse(config);
     const bucketKey = this.generateKey(key, fullConfig.keyPrefix);
 
     // Clear from memory
@@ -154,7 +158,7 @@ export class RateLimiter extends EventEmitter {
     key: RateLimitKey,
     config: Partial<RateLimitConfig> = {},
   ): Promise<RateLimitResult> {
-    const fullConfig = { ...RateLimitConfigSchema.parse({}), ...config };
+    const fullConfig = RateLimitConfigSchema.parse(config);
     const bucketKey = this.generateKey(key, fullConfig.keyPrefix);
     const now = new Date();
 
@@ -315,6 +319,10 @@ export class RateLimiter extends EventEmitter {
       })
       .returning();
 
+    if (!newBucket) {
+      throw new Error("Failed to create rate limit bucket");
+    }
+    
     return {
       allowed: true,
       remaining: config.maxRequests - 1,

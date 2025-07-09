@@ -28,6 +28,7 @@ import { ToolHealthBadge } from "@/components/tools/ToolHealthIndicator";
 
 const teamsSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  scope: z.string().default("https://graph.microsoft.com/.default"),
   webhookUrl: z
     .string()
     .url("Must be a valid URL")
@@ -40,7 +41,6 @@ const teamsSchema = z.object({
     .describe("Azure AD application client secret"),
   tenantId: z.string().optional().describe("Azure AD tenant ID"),
   refreshToken: z.string().optional(),
-  scope: z.string().optional().default("https://graph.microsoft.com/.default"),
 });
 
 type TeamsFormData = z.infer<typeof teamsSchema>;
@@ -213,8 +213,6 @@ function TeamsCredentialDisplay({
                 </Badge>
                 <ToolHealthBadge
                   toolId={tool.id}
-                  toolName={tool.name}
-                  compact
                 />
                 {hasWebhook && (
                   <Badge variant="outline" className="text-blue-600">
@@ -237,7 +235,7 @@ function TeamsCredentialDisplay({
                   <div className="flex items-center gap-2">
                     <span className="font-medium">Webhook:</span>
                     <span className="font-mono text-xs">
-                      {credentials.webhookUrl.substring(0, 40)}...
+                      {credentials.webhookUrl?.substring(0, 40)}...
                     </span>
                   </div>
                 )}

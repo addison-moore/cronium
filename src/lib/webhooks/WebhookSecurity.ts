@@ -100,10 +100,9 @@ export class WebhookSecurity {
       return clientIP === allowedIP;
     });
 
-    return {
-      isValid: isWhitelisted,
-      error: isWhitelisted ? undefined : "IP not whitelisted",
-    };
+    return isWhitelisted
+      ? { isValid: true }
+      : { isValid: false, error: "IP not whitelisted" };
   }
 
   /**
@@ -230,6 +229,9 @@ export class WebhookSecurity {
   private isIPInCIDR(ip: string, cidr: string): boolean {
     // Simple implementation - in production, use a proper IP library
     const [network, bits = "32"] = cidr.split("/");
+    if (!network) {
+      return false;
+    }
     const mask = ~(2 ** (32 - parseInt(bits)) - 1);
 
     const ipNum = this.ipToNumber(ip);
@@ -260,7 +262,7 @@ export class WebhookSecurity {
       "'": "&#39;",
     };
 
-    return str.replace(/[&<>"']/g, (match) => htmlEscapes[match]);
+    return str.replace(/[&<>"']/g, (match) => htmlEscapes[match] || match);
   }
 
   /**

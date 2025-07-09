@@ -73,6 +73,10 @@ export class TokenManager {
       }
 
       const row = result[0];
+      if (!row) {
+        return null;
+      }
+      
       return {
         accessToken: row.accessToken,
         refreshToken: row.refreshToken ?? undefined,

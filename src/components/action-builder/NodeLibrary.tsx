@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Play, Zap, GitBranch, Shuffle, Target, Search } from "lucide-react";
 import { NodeType, NODE_TEMPLATES } from "./types";
-import { ToolPluginRegistry } from "@/components/tools/types/tool-plugin";
+import { ToolPluginRegistry, type ToolPlugin, type ToolAction } from "@/components/tools/types/tool-plugin";
 import { Input } from "@/components/ui/input";
 
 const NODE_ICONS: Record<
@@ -31,8 +31,8 @@ export function NodeLibrary({ onNodeSelect }: NodeLibraryProps) {
 
   // Get all available tools and actions
   const tools = React.useMemo(() => {
-    const allTools = ToolPluginRegistry.getAllPlugins();
-    return allTools.map((plugin) => ({
+    const allTools = ToolPluginRegistry.getAll();
+    return allTools.map((plugin: ToolPlugin) => ({
       id: plugin.id,
       name: plugin.name,
       icon: plugin.icon,
@@ -44,14 +44,14 @@ export function NodeLibrary({ onNodeSelect }: NodeLibraryProps) {
   const filteredActions = React.useMemo(() => {
     if (!selectedTool) return [];
 
-    const tool = tools.find((t) => t.id === selectedTool);
+    const tool = tools.find((t: typeof tools[0]) => t.id === selectedTool);
     if (!tool) return [];
 
     if (!searchTerm) return tool.actions;
 
     const lowerSearch = searchTerm.toLowerCase();
     return tool.actions.filter(
-      (action) =>
+      (action: ToolAction) =>
         action.name.toLowerCase().includes(lowerSearch) ||
         action.description.toLowerCase().includes(lowerSearch),
     );
@@ -60,7 +60,7 @@ export function NodeLibrary({ onNodeSelect }: NodeLibraryProps) {
   const handleDragStart = (
     event: React.DragEvent,
     nodeType: NodeType,
-    data?: any,
+    data?: Record<string, unknown>,
   ) => {
     event.dataTransfer.setData("nodeType", nodeType);
     if (data) {
@@ -97,10 +97,10 @@ export function NodeLibrary({ onNodeSelect }: NodeLibraryProps) {
                         <Icon className="h-5 w-5" />
                         <div className="flex-1">
                           <div className="font-medium">
-                            {template.data?.label}
+                            {template.label}
                           </div>
                           <div className="text-muted-foreground text-xs">
-                            {template.data?.description}
+                            {template.description}
                           </div>
                         </div>
                       </div>
@@ -129,7 +129,7 @@ export function NodeLibrary({ onNodeSelect }: NodeLibraryProps) {
               <div className="w-24 border-r">
                 <ScrollArea className="h-full">
                   <div className="p-2">
-                    {tools.map((tool) => {
+                    {tools.map((tool: typeof tools[0]) => {
                       const Icon = tool.icon;
                       return (
                         <button
@@ -156,7 +156,7 @@ export function NodeLibrary({ onNodeSelect }: NodeLibraryProps) {
                   {selectedTool ? (
                     <div className="space-y-2">
                       {filteredActions.length > 0 ? (
-                        filteredActions.map((action) => (
+                        filteredActions.map((action: ToolAction) => (
                           <div
                             key={action.id}
                             draggable

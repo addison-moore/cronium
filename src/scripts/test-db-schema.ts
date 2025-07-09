@@ -28,7 +28,8 @@ async function testSchema() {
       )
     `);
 
-    console.log("\nTable exists:", tableExists.rows[0].exists);
+    const firstRow = tableExists.rows[0];
+    console.log("\nTable exists:", firstRow ? firstRow.exists : "No result");
   } catch (error) {
     console.error("Error checking schema:", error);
   }

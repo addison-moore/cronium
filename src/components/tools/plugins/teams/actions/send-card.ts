@@ -123,7 +123,7 @@ export const sendCardAction: ToolAction = {
   description:
     "Send an Adaptive Card to a Microsoft Teams channel using a webhook",
   category: "Messaging",
-  actionType: "notification",
+  actionType: "create",
   developmentMode: "visual",
   inputSchema: sendCardSchema,
   parameters: zodToParameters(sendCardSchema),
@@ -295,7 +295,7 @@ export const sendCardAction: ToolAction = {
         payload.text = replaceVariables(typedParams.fallbackText, variables);
       }
 
-      logger.info("Sending Teams Adaptive Card", { webhookUrl });
+      logger.info(`Sending Teams Adaptive Card to webhook`);
 
       if (isTest) {
         // Test mode - simulate sending

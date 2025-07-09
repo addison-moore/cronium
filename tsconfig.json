@@ -52,6 +52,8 @@
     "scripts/*",
     "**/__tests__/*",
     "**/runtime-helpers/*",
-    "**/_backup/**"
+    "**/_backup/**",
+    "**/*.backup.ts",
+    "**/*.backup.tsx"
   ]
 }

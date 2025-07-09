@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for attach-file action parameters
 export const attachFileSchema = z.object({
@@ -26,6 +27,7 @@ export const attachFileAction: ToolAction = {
   actionType: "update",
   developmentMode: "visual",
   inputSchema: attachFileSchema,
+  parameters: zodToParameters(attachFileSchema),
   outputSchema: z.object({
     success: z.boolean(),
     attachmentId: z.string().optional(),
@@ -104,7 +106,7 @@ export const attachFileAction: ToolAction = {
         ? replaceVariables(typedParams.name, variables)
         : undefined;
 
-      logger.info("Attaching file to Trello card", { cardId, url });
+      logger.info(`Attaching file to Trello card ${cardId}: ${url}`);
 
       if (isTest) {
         // Test mode - simulate attachment
@@ -175,9 +177,7 @@ export const attachFileAction: ToolAction = {
         onProgress({ step: "File attached successfully!", percentage: 100 });
       }
 
-      logger.info("File attached to Trello card successfully", {
-        attachmentId: data.id,
-      });
+      logger.info(`File attached to Trello card successfully - Attachment ID: ${data.id}`);
 
       return {
         success: true,

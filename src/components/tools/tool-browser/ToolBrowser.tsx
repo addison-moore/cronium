@@ -20,8 +20,8 @@ import {
   List,
   Filter,
 } from "lucide-react";
-import { ToolPluginRegistry } from "@/components/tools/ToolPluginRegistry";
 import {
+  ToolPluginRegistry,
   type ToolPlugin,
   type ToolAction,
 } from "@/components/tools/types/tool-plugin";
@@ -92,7 +92,7 @@ export function ToolBrowser({
 
   // Get all tools from registry
   const allTools = useMemo(() => {
-    return ToolPluginRegistry.getAllPlugins();
+    return ToolPluginRegistry.getAll();
   }, []);
 
   // Categorize tools
@@ -106,20 +106,20 @@ export function ToolBrowser({
       other: [],
     };
 
-    allTools.forEach((tool) => {
+    allTools.forEach((tool: ToolPlugin) => {
       // Simple categorization based on tool ID or name
       if (["slack", "discord", "teams", "email"].includes(tool.id)) {
-        categories.communication.push(tool);
+        categories.communication?.push(tool);
       } else if (["notion", "trello", "asana"].includes(tool.id)) {
-        categories.productivity.push(tool);
+        categories.productivity?.push(tool);
       } else if (["google-sheets", "airtable"].includes(tool.id)) {
-        categories.data.push(tool);
+        categories.data?.push(tool);
       } else if (["github", "gitlab", "bitbucket"].includes(tool.id)) {
-        categories.development.push(tool);
+        categories.development?.push(tool);
       } else if (["aws", "gcp", "azure"].includes(tool.id)) {
-        categories.cloud.push(tool);
+        categories.cloud?.push(tool);
       } else {
-        categories.other.push(tool);
+        categories.other?.push(tool);
       }
     });
 
@@ -131,7 +131,7 @@ export function ToolBrowser({
     const query = searchQuery.toLowerCase();
     const results: Array<{ tool: ToolPlugin; action: ToolAction }> = [];
 
-    allTools.forEach((tool) => {
+    allTools.forEach((tool: ToolPlugin) => {
       // Filter by category if selected
       if (selectedCategory) {
         const toolsInCategory = categorizedTools[selectedCategory] || [];
@@ -139,12 +139,13 @@ export function ToolBrowser({
       }
 
       // Filter by availability if enabled
-      if (showOnlyAvailable && !tool.isAvailable) return;
+      // Note: isAvailable property is not part of ToolPlugin interface
+      // if (showOnlyAvailable && !tool.isAvailable) return;
 
       // Search in tool name and actions
       const toolMatches = tool.name.toLowerCase().includes(query);
 
-      tool.actions?.forEach((action) => {
+      tool.actions?.forEach((action: ToolAction) => {
         const actionMatches =
           action.name.toLowerCase().includes(query) ||
           action.description.toLowerCase().includes(query) ||
@@ -178,8 +179,8 @@ export function ToolBrowser({
     return recentActions
       .map((actionKey) => {
         const [toolId, actionId] = actionKey.split(":");
-        const tool = allTools.find((t) => t.id === toolId);
-        const action = tool?.actions?.find((a) => a.id === actionId);
+        const tool = allTools.find((t: ToolPlugin) => t.id === toolId);
+        const action = tool?.actions?.find((a: ToolAction) => a.id === actionId);
         return tool && action ? { tool, action } : null;
       })
       .filter(Boolean) as Array<{ tool: ToolPlugin; action: ToolAction }>;
@@ -214,7 +215,7 @@ export function ToolBrowser({
         className={cn(
           "cursor-pointer transition-all hover:shadow-md",
           selected && "ring-primary ring-2",
-          !tool.isAvailable && "opacity-60",
+          // !tool.isAvailable && "opacity-60",
         )}
         onClick={() => handleActionClick(tool, action)}
       >
@@ -288,7 +289,7 @@ export function ToolBrowser({
         className={cn(
           "hover:bg-accent flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-all",
           selected && "ring-primary bg-accent ring-2",
-          !tool.isAvailable && "opacity-60",
+          // !tool.isAvailable && "opacity-60",
         )}
         onClick={() => handleActionClick(tool, action)}
       >

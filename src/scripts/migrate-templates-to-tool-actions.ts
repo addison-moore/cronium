@@ -1,12 +1,22 @@
 /**
+ * DEPRECATED: This migration script is no longer needed.
+ * The templates table has been removed from the schema and the migration 
+ * to tool action templates has been completed.
+ * 
+ * This file is kept for historical reference only.
+ * 
+ * Original purpose:
  * Migration script to convert old templates to new tool action templates
- *
- * This script:
- * 1. Reads all existing templates from the templates table
- * 2. Converts them to tool action templates
- * 3. Inserts them into the tool_action_templates table
- * 4. Maps the old template types to new tool types and actions
  */
+
+console.log("DEPRECATED: This migration script is no longer needed.");
+console.log("The templates table has been removed and migration is complete.");
+console.log("This file is kept for historical reference only.");
+
+// Prevent accidental execution
+process.exit(0);
+
+/* ORIGINAL CODE COMMENTED OUT - NO LONGER FUNCTIONAL
 
 import { db } from "@/server/db";
 import { templates, toolActionTemplates } from "@/shared/schema";
@@ -81,7 +91,7 @@ async function migrateTemplates() {
           };
         }
 
-        // Check if this template already exists (to prevent duplicates)
+        // Check if already migrated
         const existingMigrated = await db
           .select()
           .from(toolActionTemplates)
@@ -162,3 +172,5 @@ if (require.main === module) {
 }
 
 export { migrateTemplates };
+
+*/

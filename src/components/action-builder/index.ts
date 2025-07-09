@@ -1,10 +1,13 @@
+// Export types
 export * from "./types";
-export * from "./ActionBuilder";
-export * from "./Canvas";
-export * from "./ActionNode";
-export * from "./ActionEdge";
-export * from "./NodeLibrary";
-export * from "./ConnectionManager";
-export * from "./DataMapper";
-export * from "./PreviewPanel";
-export * from "./useActionBuilder";
+
+// Export components (avoid naming conflicts)
+export { ActionBuilder } from "./ActionBuilder";
+export { Canvas } from "./Canvas";
+export { ActionNode as ActionNodeComponent } from "./ActionNode";
+export { ActionEdge } from "./ActionEdge";
+export { NodeLibrary } from "./NodeLibrary";
+export { ConnectionManager } from "./ConnectionManager";
+export { DataMapper } from "./DataMapper";
+export { PreviewPanel } from "./PreviewPanel";
+export { useActionBuilder } from "./useActionBuilder";

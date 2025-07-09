@@ -100,7 +100,7 @@ async function testRealTools() {
         parameters: config.parameters,
       };
 
-      const [testEvent] = await db
+      const testEventResult = await db
         .insert(events)
         .values({
           userId: tool.userId,
@@ -126,6 +126,12 @@ async function testRealTools() {
         })
         .returning();
 
+      const testEvent = testEventResult[0];
+      if (!testEvent) {
+        console.error("   ❌ Failed to create test event");
+        continue;
+      }
+      
       console.log(`   ✅ Created test event: ${testEvent.name}`);
 
       // 3. Execute the event
@@ -161,15 +167,17 @@ async function testRealTools() {
 
         if (logs.length > 0) {
           const log = logs[0];
-          console.log(`   📝 Log entry created:`);
-          console.log(`   - Status: ${log.status}`);
-          console.log(`   - Execution Time: ${log.executionTime}ms`);
+          if (log) {
+            console.log(`   📝 Log entry created:`);
+            console.log(`   - Status: ${log.status}`);
+            console.log(`   - Execution Time: ${log.executionTime}ms`);
+          }
         }
 
         // 5. Clean up - set event to inactive
         await db
           .update(events)
-          .set({ status: EventStatus.INACTIVE })
+          .set({ status: EventStatus.DRAFT })
           .where(eq(events.id, testEvent.id));
       } catch (error) {
         console.error(`   ❌ Execution failed:`, error);

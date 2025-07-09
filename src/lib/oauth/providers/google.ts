@@ -76,6 +76,6 @@ export function createGoogleProvider(
     clientId,
     clientSecret,
     redirectUri,
-    scope: scopes[service] ?? scopes.all,
+    scope: scopes[service],
   });
 }

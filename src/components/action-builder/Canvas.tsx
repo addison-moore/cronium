@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useCallback, useMemo, useRef } from "react";
-import ReactFlow, {
+import {
+  ReactFlow,
   Background,
   Controls,
   MiniMap,
@@ -57,7 +58,7 @@ function CanvasContent({
   onConnectionSelect,
 }: CanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const { project } = useReactFlow();
+  const { screenToFlowPosition } = useReactFlow();
   const {
     nodes,
     edges,
@@ -101,7 +102,7 @@ function CanvasContent({
         return;
       }
 
-      const position = project({
+      const position = screenToFlowPosition({
         x: event.clientX - reactFlowBounds.left,
         y: event.clientY - reactFlowBounds.top,
       });
@@ -121,7 +122,7 @@ function CanvasContent({
 
       addNode(type, position, additionalData);
     },
-    [project, addNode, setNodes],
+    [screenToFlowPosition, addNode, setNodes],
   );
 
   // Handle save
@@ -208,8 +209,8 @@ function CanvasContent({
         minZoom={CANVAS_CONFIG.minZoom}
         maxZoom={CANVAS_CONFIG.maxZoom}
         fitView
-        onNodeClick={(_, node) => onNodeSelect?.(node.id)}
-        onEdgeClick={(_, edge) => onConnectionSelect?.(edge.id)}
+        onNodeClick={(_event, node) => onNodeSelect?.(node.id)}
+        onEdgeClick={(_event, edge) => onConnectionSelect?.(edge.id)}
         onPaneClick={() => {
           onNodeSelect?.(null);
           onConnectionSelect?.(null);

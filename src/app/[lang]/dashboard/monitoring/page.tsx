@@ -283,7 +283,7 @@ export default function MonitoringPage() {
       <div className="space-y-6">
         {/* Top Row: User Statistics and Server Status Side by Side */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {/* User Statistics - Compact */}
+          {/* User Statistics */}
           <Card className="h-fit">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center text-base">
@@ -355,7 +355,7 @@ export default function MonitoringPage() {
             </CardContent>
           </Card>
 
-          {/* Server Status - Compact */}
+          {/* Server Status */}
           {transformedData.servers && (
             <Card className="h-fit">
               <CardHeader className="pb-3">

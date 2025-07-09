@@ -31,9 +31,6 @@ import {
   CheckCircle,
   Clock,
   RefreshCw,
-  TrendingDown,
-  TrendingUp,
-  Zap,
   BarChart3,
   Info,
   ArrowRight,
@@ -43,13 +40,6 @@ interface ToolActionHealthMonitorProps {
   toolId?: number;
   compact?: boolean;
   refreshInterval?: number; // in seconds
-}
-
-interface HealthMetric {
-  label: string;
-  value: string | number;
-  status?: "good" | "warning" | "bad";
-  trend?: "up" | "down" | "stable";
 }
 
 export default function ToolActionHealthMonitor({
@@ -70,7 +60,7 @@ export default function ToolActionHealthMonitor({
     refetch,
     isLoading,
   } = trpc.tools.getToolActionHealth.useQuery(toolId ? { toolId } : undefined, {
-    ...QUERY_OPTIONS.default,
+    ...QUERY_OPTIONS.dynamic,
     refetchInterval: autoRefresh ? refreshInterval * 1000 : undefined,
   });
 
@@ -80,7 +70,7 @@ export default function ToolActionHealthMonitor({
       ? { toolId: selectedAction.toolId, actionId: selectedAction.actionId }
       : undefined,
     {
-      ...QUERY_OPTIONS.default,
+      ...QUERY_OPTIONS.dynamic,
       enabled: !!selectedAction,
     },
   );

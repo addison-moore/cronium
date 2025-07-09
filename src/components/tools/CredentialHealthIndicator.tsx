@@ -23,6 +23,9 @@ import {
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 import { type Tool } from "@/shared/schema";
+import type { RouterOutputs } from "@/trpc/shared";
+
+type ToolWithParsedCredentials = RouterOutputs["tools"]["list"][number];
 import { ToolPluginRegistry } from "./types/tool-plugin";
 import { cn } from "@/lib/utils";
 import {
@@ -78,14 +81,14 @@ export default function CredentialHealthIndicator({
   >({});
   const [isChecking, setIsChecking] = useState<Record<number, boolean>>({});
   const [autoCheckEnabled, setAutoCheckEnabled] = useState(autoCheck);
-  const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
+  const [selectedTool, setSelectedTool] = useState<ToolWithParsedCredentials | null>(null);
   const [showDetails, setShowDetails] = useState(false);
 
   // Queries
   const { data: tools = [] } = trpc.tools.list.useQuery(
     toolId ? { id: toolId } : undefined,
     {
-      ...QUERY_OPTIONS.default,
+      ...QUERY_OPTIONS.dynamic,
     },
   );
 
@@ -161,9 +164,9 @@ export default function CredentialHealthIndicator({
         overall,
         checks,
         lastChecked: new Date(),
-        nextCheck: autoCheckEnabled
-          ? new Date(Date.now() + checkInterval * 60 * 1000)
-          : undefined,
+        ...(autoCheckEnabled && {
+          nextCheck: new Date(Date.now() + checkInterval * 60 * 1000),
+        }),
       };
 
       setHealthStatus((prev) => ({
@@ -186,9 +189,9 @@ export default function CredentialHealthIndicator({
           },
         ],
         lastChecked: new Date(),
-        nextCheck: autoCheckEnabled
-          ? new Date(Date.now() + checkInterval * 60 * 1000)
-          : undefined,
+        ...(autoCheckEnabled && {
+          nextCheck: new Date(Date.now() + checkInterval * 60 * 1000),
+        }),
       };
 
       setHealthStatus((prev) => ({
@@ -233,7 +236,7 @@ export default function CredentialHealthIndicator({
   }, [tools, autoCheckEnabled, checkInterval, healthStatus, isChecking]);
 
   // Manual check
-  const checkHealth = (tool: Tool) => {
+  const checkHealth = (tool: ToolWithParsedCredentials) => {
     testConnectionMutation.mutate({ id: tool.id });
   };
 
@@ -276,7 +279,7 @@ export default function CredentialHealthIndicator({
       <div className="flex items-center gap-4">
         {tools.map((tool) => {
           const status = healthStatus[tool.id];
-          const plugin = ToolPluginRegistry.getPlugin(tool.type);
+          const plugin = ToolPluginRegistry.get(tool.type);
           const checking = isChecking[tool.id];
 
           return (
@@ -367,7 +370,7 @@ export default function CredentialHealthIndicator({
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {tools.map((tool) => {
                   const status = healthStatus[tool.id];
-                  const plugin = ToolPluginRegistry.getPlugin(tool.type);
+                  const plugin = ToolPluginRegistry.get(tool.type);
                   const checking = isChecking[tool.id];
 
                   return (
@@ -460,9 +463,11 @@ export default function CredentialHealthIndicator({
 
                                 <div className="text-muted-foreground flex items-center gap-1 text-xs">
                                   <Clock className="h-3 w-3" />
-                                  {new Date(
-                                    status.lastChecked,
-                                  ).toLocaleTimeString()}
+                                  {status.lastChecked
+                                    ? new Date(
+                                        status.lastChecked,
+                                      ).toLocaleTimeString()
+                                    : "Never"}
                                   {status.nextCheck && (
                                     <>
                                       <ArrowRight className="h-3 w-3" />
@@ -532,9 +537,9 @@ export default function CredentialHealthIndicator({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {selectedTool &&
-                ToolPluginRegistry.getPlugin(selectedTool.type)?.icon &&
+                ToolPluginRegistry.get(selectedTool.type)?.icon &&
                 (() => {
-                  const Icon = ToolPluginRegistry.getPlugin(
+                  const Icon = ToolPluginRegistry.get(
                     selectedTool.type,
                   )!.icon;
                   return <Icon className="h-5 w-5" />;
@@ -548,19 +553,33 @@ export default function CredentialHealthIndicator({
 
           {selectedTool && (
             <div className="space-y-4">
-              {healthStatus[selectedTool.id] ? (
-                <>
-                  <div
-                    className={cn(
-                      "flex items-center justify-between rounded-lg p-4",
-                      getStatusColor(healthStatus[selectedTool.id].overall),
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      {getStatusIcon(healthStatus[selectedTool.id].overall)}
-                      <span className="font-medium capitalize">
-                        Overall Status: {healthStatus[selectedTool.id].overall}
-                      </span>
+              {(() => {
+                const status = healthStatus[selectedTool.id];
+                if (!status) {
+                  return (
+                    <Alert>
+                      <Info className="h-4 w-4" />
+                      <AlertDescription>
+                        No health check data available. Click refresh to run a
+                        check.
+                      </AlertDescription>
+                    </Alert>
+                  );
+                }
+                
+                return (
+                  <>
+                    <div
+                      className={cn(
+                        "flex items-center justify-between rounded-lg p-4",
+                        getStatusColor(status.overall),
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        {getStatusIcon(status.overall)}
+                        <span className="font-medium capitalize">
+                          Overall Status: {status.overall}
+                        </span>
                     </div>
                     <Button
                       variant="ghost"
@@ -581,7 +600,7 @@ export default function CredentialHealthIndicator({
                     <h4 className="text-sm font-medium">Health Checks</h4>
                     <ScrollArea className="h-[300px] rounded-lg border p-4">
                       <div className="space-y-3">
-                        {healthStatus[selectedTool.id].checks.map(
+                        {status.checks.map(
                           (check, idx) => (
                             <div
                               key={idx}
@@ -629,40 +648,35 @@ export default function CredentialHealthIndicator({
                   <div className="text-muted-foreground flex items-center justify-between text-sm">
                     <span>
                       Last checked:{" "}
-                      {new Date(
-                        healthStatus[selectedTool.id].lastChecked,
-                      ).toLocaleString()}
+                      {status.lastChecked
+                        ? new Date(
+                            status.lastChecked,
+                          ).toLocaleString()
+                        : "Never"}
                     </span>
-                    {healthStatus[selectedTool.id].nextCheck && (
+                    {status.nextCheck && (
                       <span>
                         Next check:{" "}
                         {new Date(
-                          healthStatus[selectedTool.id].nextCheck!,
+                          status.nextCheck,
                         ).toLocaleString()}
                       </span>
                     )}
                   </div>
                 </>
-              ) : (
-                <Alert>
-                  <Info className="h-4 w-4" />
-                  <AlertDescription>
-                    No health check data available. Click refresh to run a
-                    check.
-                  </AlertDescription>
-                </Alert>
-              )}
+                );
+              })()}
 
-              {ToolPluginRegistry.getPlugin(selectedTool.type)?.docsUrl && (
+              {(ToolPluginRegistry.get(selectedTool.type) as any)?.docsUrl && (
                 <Button
                   variant="outline"
                   className="w-full"
-                  onClick={() =>
-                    window.open(
-                      ToolPluginRegistry.getPlugin(selectedTool.type)?.docsUrl,
-                      "_blank",
-                    )
-                  }
+                  onClick={() => {
+                    const docsUrl = (ToolPluginRegistry.get(selectedTool.type) as any)?.docsUrl;
+                    if (docsUrl) {
+                      window.open(docsUrl, "_blank");
+                    }
+                  }}
                 >
                   <ExternalLink className="mr-2 h-4 w-4" />
                   View Documentation

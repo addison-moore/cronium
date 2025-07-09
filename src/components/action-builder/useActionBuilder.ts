@@ -19,10 +19,10 @@ import {
 } from "./types";
 
 interface ActionBuilderState {
-  nodes: Node<ActionNode>[];
-  edges: Edge<ActionConnection>[];
-  setNodes: (nodes: Node<ActionNode>[]) => void;
-  setEdges: (edges: Edge<ActionConnection>[]) => void;
+  nodes: ActionNode[];
+  edges: ActionConnection[];
+  setNodes: (nodes: ActionNode[]) => void;
+  setEdges: (edges: ActionConnection[]) => void;
   onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onConnect: (connection: Connection) => void;
@@ -38,10 +38,10 @@ interface ActionBuilderState {
     data: Partial<ActionConnection>,
   ) => void;
   deleteConnection: (connectionId: string) => void;
-  getNodeById: (nodeId: string) => Node<ActionNode> | undefined;
+  getNodeById: (nodeId: string) => ActionNode | undefined;
   getConnectionById: (
     connectionId: string,
-  ) => Edge<ActionConnection> | undefined;
+  ) => ActionConnection | undefined;
   getExecutionOrder: () => string[];
   validateFlow: () => { isValid: boolean; errors: string[] };
   clearFlow: () => void;
@@ -56,40 +56,41 @@ export const useActionBuilderStore = create<ActionBuilderState>((set, get) => ({
 
   onNodesChange: (changes) => {
     set({
-      nodes: applyNodeChanges(changes, get().nodes),
+      nodes: applyNodeChanges(changes, get().nodes) as ActionNode[],
     });
   },
 
   onEdgesChange: (changes) => {
     set({
-      edges: applyEdgeChanges(changes, get().edges),
+      edges: applyEdgeChanges(changes, get().edges) as ActionConnection[],
     });
   },
 
   onConnect: (connection) => {
-    const newEdge = {
+    const newEdge: ActionConnection = {
       ...connection,
+      id: `edge-${Date.now()}`,
       type: "action",
       data: {
-        type: "always" as const,
+        connectionType: "always" as const,
       },
-    };
+    } as ActionConnection;
     set({
-      edges: addEdge(newEdge, get().edges),
+      edges: addEdge(newEdge, get().edges) as ActionConnection[],
     });
   },
 
   addNode: (type, position, data) => {
     const template = NODE_TEMPLATES[type];
     const id = `${type}-${Date.now()}`;
-    const newNode: Node<ActionNode> = {
+    const newNode: ActionNode = {
       id,
-      type: "action",
+      type: "action", // ReactFlow node type for custom component
       position,
       data: {
-        ...template.data,
+        ...template,
         ...data,
-        type,
+        nodeType: type, // Store our NodeType in data
         id,
       },
     };
@@ -150,7 +151,7 @@ export const useActionBuilderStore = create<ActionBuilderState>((set, get) => ({
     // Find trigger nodes (nodes with no incoming edges)
     const triggerNodes = nodes.filter(
       (node) =>
-        node.data.type === NodeType.TRIGGER ||
+        node.data.nodeType === NodeType.TRIGGER ||
         !edges.some((edge) => edge.target === node.id),
     );
 
@@ -195,13 +196,13 @@ export const useActionBuilderStore = create<ActionBuilderState>((set, get) => ({
     const errors: string[] = [];
 
     // Check for trigger node
-    const triggerNodes = nodes.filter((n) => n.data.type === NodeType.TRIGGER);
+    const triggerNodes = nodes.filter((n) => n.data.nodeType === NodeType.TRIGGER);
     if (triggerNodes.length === 0) {
       errors.push("Flow must have at least one trigger node");
     }
 
     // Check for output node
-    const outputNodes = nodes.filter((n) => n.data.type === NodeType.OUTPUT);
+    const outputNodes = nodes.filter((n) => n.data.nodeType === NodeType.OUTPUT);
     if (outputNodes.length === 0) {
       errors.push("Flow must have at least one output node");
     }

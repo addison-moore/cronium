@@ -138,6 +138,7 @@ export default function EditEventPage() {
           initialData={transformedEvent}
           isEditing={true}
           onSuccess={handleSuccess}
+          layout="page"
         />
       </div>
     </div>

@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 
 export function ActionNode({ data, selected }: NodeProps) {
   const getNodeStyle = () => {
-    switch (data.type as NodeType) {
+    switch (data.nodeType) {
       case NodeType.TRIGGER:
         return "border-blue-500 bg-blue-50 dark:bg-blue-950";
       case NodeType.ACTION:
@@ -27,7 +27,7 @@ export function ActionNode({ data, selected }: NodeProps) {
   };
 
   const getHandlePositions = () => {
-    const type = data.type as NodeType;
+    const type = data.nodeType;
     const handles = [];
 
     // Input handle (except for triggers)
@@ -84,7 +84,7 @@ export function ActionNode({ data, selected }: NodeProps) {
 
   return (
     <>
-      {getHandlePositions()}
+      {...getHandlePositions()}
       <Card
         className={cn(
           "min-w-[280px] border-2 transition-all",
@@ -97,28 +97,28 @@ export function ActionNode({ data, selected }: NodeProps) {
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <div className="mb-1 flex items-center gap-2">
-                <h3 className="text-sm font-semibold">{data.label}</h3>
+                <h3 className="text-sm font-semibold">{String(data.label)}</h3>
                 {data.isConfigured ? (
                   <CheckCircle className="h-4 w-4 text-green-500" />
                 ) : (
                   <AlertCircle className="h-4 w-4 text-yellow-500" />
                 )}
               </div>
-              {data.description && (
+              {data.description ? (
                 <p className="text-muted-foreground text-xs">
-                  {data.description}
+                  {String(data.description)}
                 </p>
-              )}
-              {data.toolId && data.actionId && (
+              ) : null}
+              {data.toolId && data.actionId ? (
                 <div className="mt-2 flex items-center gap-2">
                   <Badge variant="secondary" className="text-xs">
-                    {data.toolId}
+                    {String(data.toolId)}
                   </Badge>
                   <Badge variant="outline" className="text-xs">
-                    {data.actionId}
+                    {String(data.actionId)}
                   </Badge>
                 </div>
-              )}
+              ) : null}
             </div>
             <button
               className="hover:bg-muted rounded p-1"

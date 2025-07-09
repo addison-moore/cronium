@@ -243,6 +243,7 @@ export const executeFormulaAction: ToolAction = {
 
       for (let i = 0; i < processedFormulas.length; i++) {
         const formula = processedFormulas[i];
+        if (!formula) continue; // Guard against undefined
 
         // Update progress
         if (onProgress) {

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Label } from "@/components/ui/label";
 import {
   Accordion,
   AccordionContent,
@@ -17,6 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import {
   AlertCircle,
+  AlertTriangle,
   CheckCircle,
   ChevronRight,
   Copy,
