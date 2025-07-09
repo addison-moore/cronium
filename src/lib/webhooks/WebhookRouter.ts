@@ -83,7 +83,9 @@ export class WebhookRouter {
         },
         {
           secret: webhook.secret,
-          ...(webhook.ipWhitelist && { ipWhitelist: webhook.ipWhitelist as string[] }),
+          ...(webhook.ipWhitelist
+            ? { ipWhitelist: webhook.ipWhitelist as string[] }
+            : {}),
           verifyTimestamp: webhook.verifyTimestamp ?? true,
         },
       );
@@ -91,7 +93,9 @@ export class WebhookRouter {
       if (!verificationResult.isValid) {
         await this.logWebhookRequest(webhook.id, {
           success: false,
-          ...(verificationResult.error !== undefined && { error: verificationResult.error }),
+          ...(verificationResult.error !== undefined && {
+            error: verificationResult.error,
+          }),
           duration: Date.now() - startTime,
         });
 
@@ -102,7 +106,10 @@ export class WebhookRouter {
       }
 
       // Check rate limit
-      const rateLimit = webhook.rateLimit as { requests?: number; window?: number } | null | undefined;
+      const rateLimit = webhook.rateLimit as
+        | { requests?: number; window?: number }
+        | null
+        | undefined;
       const rateLimitResult = await this.webhookSecurity.checkRateLimit(
         `webhook:${webhook.id}`,
         rateLimit?.requests ?? 100,

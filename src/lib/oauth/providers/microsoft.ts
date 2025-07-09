@@ -79,7 +79,7 @@ export function createMicrosoftProvider(
     clientId,
     clientSecret,
     redirectUri,
-    scope: scopes[service],
-    tenantId,
+    scope: scopes[service]!,
+    ...(tenantId && { tenantId }),
   });
 }

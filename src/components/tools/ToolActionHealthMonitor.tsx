@@ -59,10 +59,15 @@ export default function ToolActionHealthMonitor({
     data: healthData,
     refetch,
     isLoading,
-  } = trpc.tools.getToolActionHealth.useQuery(toolId ? { toolId } : undefined, {
-    ...QUERY_OPTIONS.dynamic,
-    refetchInterval: autoRefresh ? refreshInterval * 1000 : undefined,
-  });
+  } = trpc.tools.getToolActionHealth.useQuery(
+    toolId ? { toolId } : undefined,
+    autoRefresh
+      ? {
+          ...QUERY_OPTIONS.dynamic,
+          refetchInterval: refreshInterval * 1000,
+        }
+      : QUERY_OPTIONS.dynamic,
+  );
 
   // Query for specific action health
   const { data: actionHealthData } = trpc.tools.getToolActionHealth.useQuery(

@@ -90,8 +90,7 @@ export default function DashboardStats() {
 
   // Use the total activity count from the API if available
   const totalActivityCount =
-    (dashboardData?.totalActivityCount as number | undefined) ??
-    stats.recentActivity.length;
+    dashboardData?.totalActivityCount ?? stats.recentActivity.length;
 
   const refreshData = useCallback(async () => {
     await refetchDashboard();

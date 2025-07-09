@@ -156,7 +156,7 @@ export class AuditLogger {
       .select({ count: sql<number>`count(*)::int` })
       .from(toolAuditLogs)
       .where(where);
-    
+
     const count = countResult[0]?.count ?? 0;
 
     // Get logs
@@ -176,7 +176,7 @@ export class AuditLogger {
    */
   async getUserSummary(
     userId: string,
-    days: number = 30,
+    days = 30,
   ): Promise<{
     totalActions: number;
     successRate: number;
@@ -225,7 +225,7 @@ export class AuditLogger {
   /**
    * Clean up old audit logs
    */
-  async cleanup(retentionDays: number = 90): Promise<number> {
+  async cleanup(retentionDays = 90): Promise<number> {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 

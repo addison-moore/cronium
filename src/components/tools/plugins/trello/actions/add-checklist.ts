@@ -203,7 +203,7 @@ export const addChecklistAction: ToolAction = {
         for (let i = 0; i < typedParams.checkItems.length; i++) {
           const item = typedParams.checkItems[i];
           if (!item) continue; // Guard against undefined
-          
+
           const itemUrl = new URL(
             `https://api.trello.com/1/checklists/${checklistId}/checkItems`,
           );

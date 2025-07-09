@@ -16,6 +16,8 @@ import { circuitBreakerManager } from "@/lib/tools/circuit-breaker";
 import { ErrorCategorizer } from "@/lib/tools/error-categorization";
 import { rateLimiter } from "@/lib/security/rate-limiter";
 import { auditLog } from "@/lib/security/audit-logger";
+import { processToolActionTemplate } from "@/lib/tool-action-template-processor";
+import { createTemplateContext } from "@/lib/template-processor";
 
 export interface ToolActionConfig {
   toolType: string;
@@ -76,9 +78,7 @@ export async function executeToolAction(
   let toolActionConfig: ToolActionConfig | null = null;
 
   console.log(`[ToolAction] Starting execution for event ${event.id}`);
-  console.log(
-    `[ToolAction] Event type: ${event.type}, User: ${event.userId}`,
-  );
+  console.log(`[ToolAction] Event type: ${event.type}, User: ${event.userId}`);
   console.log(`[ToolAction] Input data:`, JSON.stringify(input, null, 2));
 
   // Check if tool action execution is enabled
@@ -90,9 +90,12 @@ export async function executeToolAction(
     // Parse tool action configuration
     try {
       console.log(`[ToolAction] Raw config:`, event.toolActionConfig);
-      if (typeof event.toolActionConfig === 'string') {
+      if (typeof event.toolActionConfig === "string") {
         toolActionConfig = JSON.parse(event.toolActionConfig);
-      } else if (event.toolActionConfig && typeof event.toolActionConfig === 'object') {
+      } else if (
+        event.toolActionConfig &&
+        typeof event.toolActionConfig === "object"
+      ) {
         toolActionConfig = event.toolActionConfig as ToolActionConfig;
       } else {
         toolActionConfig = null;
@@ -109,8 +112,7 @@ export async function executeToolAction(
     }
 
     if (
-      !toolActionConfig ||
-      !toolActionConfig.toolType ||
+      !toolActionConfig?.toolType ||
       !toolActionConfig.actionId ||
       !toolActionConfig.toolId
     ) {
@@ -237,9 +239,41 @@ export async function executeToolAction(
       isTest: false,
     };
 
-    // Merge input data with configured parameters
+    // Get user variables for template context
+    const userVariables = await storage.getUserVariables(event.userId);
+    const variablesMap: Record<string, any> = {};
+    userVariables.forEach((variable) => {
+      variablesMap[variable.key] = variable.value;
+    });
+
+    // Create template context from event data and input
+    const templateContext = createTemplateContext(
+      {
+        id: event.id,
+        name: event.name,
+        status: "running", // Current execution status
+        duration: 0, // Will be updated after execution
+        executionTime: new Date().toISOString(),
+        server: event.serverId ? `server-${event.serverId}` : "local",
+        output: "", // Will be populated during execution
+      },
+      {
+        ...variablesMap, // User-defined variables
+        ...input, // Include all input data as variables (can override user variables)
+      },
+      input, // Pass input data for cronium.input.* access
+      {}, // Empty conditions object (can be populated from workflow context later)
+    );
+
+    // Process template parameters
+    const processedTemplateData = processToolActionTemplate(
+      { parameters: toolActionConfig.parameters },
+      templateContext,
+    );
+
+    // Merge processed parameters with input data (input can still override)
     const mergedParameters = {
-      ...toolActionConfig.parameters,
+      ...processedTemplateData.parameters,
       ...input, // Input from workflow can override configured parameters
     };
 
@@ -268,10 +302,9 @@ export async function executeToolAction(
     context.onProgress?.({ step: "Initializing action", percentage: 10 });
 
     // Determine retry strategy based on action features
-    const baseConfig =
-      action.features?.webhookSupport
-        ? defaultRetryConfigs.aggressive
-        : defaultRetryConfigs.standard;
+    const baseConfig = action.features?.webhookSupport
+      ? defaultRetryConfigs.aggressive
+      : defaultRetryConfigs.standard;
 
     // Create a mutable copy of the config
     const retryConfig: RetryConfig = {
@@ -280,10 +313,13 @@ export async function executeToolAction(
       maxDelay: baseConfig.maxDelay,
       backoffMultiplier: baseConfig.backoffMultiplier,
       jitter: baseConfig.jitter,
-      ...(baseConfig.retryableErrors && { retryableErrors: [...baseConfig.retryableErrors] }),
-      ...('nonRetryableErrors' in baseConfig && baseConfig.nonRetryableErrors && { 
-        nonRetryableErrors: [...baseConfig.nonRetryableErrors] 
+      ...(baseConfig.retryableErrors && {
+        retryableErrors: [...baseConfig.retryableErrors],
       }),
+      ...("nonRetryableErrors" in baseConfig &&
+        baseConfig.nonRetryableErrors && {
+          nonRetryableErrors: [...baseConfig.nonRetryableErrors],
+        }),
     };
 
     const retryExecutor = createRetryExecutor(
@@ -399,18 +435,23 @@ export async function executeToolAction(
     console.error(`[ToolAction] Config at failure:`, toolActionConfig);
 
     // Categorize the error
-    const parsedConfig = toolActionConfig || (() => {
-      if (typeof event.toolActionConfig === 'string') {
-        try {
-          return JSON.parse(event.toolActionConfig);
-        } catch {
-          return {};
+    const parsedConfig =
+      toolActionConfig ||
+      (() => {
+        if (typeof event.toolActionConfig === "string") {
+          try {
+            return JSON.parse(event.toolActionConfig);
+          } catch {
+            return {};
+          }
+        } else if (
+          event.toolActionConfig &&
+          typeof event.toolActionConfig === "object"
+        ) {
+          return event.toolActionConfig as ToolActionConfig;
         }
-      } else if (event.toolActionConfig && typeof event.toolActionConfig === 'object') {
-        return event.toolActionConfig as ToolActionConfig;
-      }
-      return {};
-    })();
+        return {};
+      })();
     const categorizedError = ErrorCategorizer.categorize(
       errorObj,
       parsedConfig.toolType,

@@ -81,7 +81,8 @@ export default function CredentialHealthIndicator({
   >({});
   const [isChecking, setIsChecking] = useState<Record<number, boolean>>({});
   const [autoCheckEnabled, setAutoCheckEnabled] = useState(autoCheck);
-  const [selectedTool, setSelectedTool] = useState<ToolWithParsedCredentials | null>(null);
+  const [selectedTool, setSelectedTool] =
+    useState<ToolWithParsedCredentials | null>(null);
   const [showDetails, setShowDetails] = useState(false);
 
   // Queries
@@ -216,8 +217,7 @@ export default function CredentialHealthIndicator({
       tools.forEach((tool) => {
         const status = healthStatus[tool.id];
         const shouldCheck =
-          !status ||
-          !status.lastChecked ||
+          !status?.lastChecked ||
           (status.nextCheck && new Date() >= status.nextCheck);
 
         if (shouldCheck && !isChecking[tool.id]) {
@@ -539,9 +539,7 @@ export default function CredentialHealthIndicator({
               {selectedTool &&
                 ToolPluginRegistry.get(selectedTool.type)?.icon &&
                 (() => {
-                  const Icon = ToolPluginRegistry.get(
-                    selectedTool.type,
-                  )!.icon;
+                  const Icon = ToolPluginRegistry.get(selectedTool.type)!.icon;
                   return <Icon className="h-5 w-5" />;
                 })()}
               {selectedTool?.name} Health Details
@@ -566,7 +564,7 @@ export default function CredentialHealthIndicator({
                     </Alert>
                   );
                 }
-                
+
                 return (
                   <>
                     <div
@@ -580,28 +578,27 @@ export default function CredentialHealthIndicator({
                         <span className="font-medium capitalize">
                           Overall Status: {status.overall}
                         </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => checkHealth(selectedTool)}
+                        disabled={isChecking[selectedTool.id]}
+                      >
+                        <RefreshCw
+                          className={cn(
+                            "h-4 w-4",
+                            isChecking[selectedTool.id] && "animate-spin",
+                          )}
+                        />
+                      </Button>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => checkHealth(selectedTool)}
-                      disabled={isChecking[selectedTool.id]}
-                    >
-                      <RefreshCw
-                        className={cn(
-                          "h-4 w-4",
-                          isChecking[selectedTool.id] && "animate-spin",
-                        )}
-                      />
-                    </Button>
-                  </div>
 
-                  <div className="space-y-3">
-                    <h4 className="text-sm font-medium">Health Checks</h4>
-                    <ScrollArea className="h-[300px] rounded-lg border p-4">
-                      <div className="space-y-3">
-                        {status.checks.map(
-                          (check, idx) => (
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-medium">Health Checks</h4>
+                      <ScrollArea className="h-[300px] rounded-lg border p-4">
+                        <div className="space-y-3">
+                          {status.checks.map((check, idx) => (
                             <div
                               key={idx}
                               className="space-y-2 border-b pb-3 last:border-0"
@@ -639,31 +636,26 @@ export default function CredentialHealthIndicator({
                                 </pre>
                               )}
                             </div>
-                          ),
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </div>
 
-                  <div className="text-muted-foreground flex items-center justify-between text-sm">
-                    <span>
-                      Last checked:{" "}
-                      {status.lastChecked
-                        ? new Date(
-                            status.lastChecked,
-                          ).toLocaleString()
-                        : "Never"}
-                    </span>
-                    {status.nextCheck && (
+                    <div className="text-muted-foreground flex items-center justify-between text-sm">
                       <span>
-                        Next check:{" "}
-                        {new Date(
-                          status.nextCheck,
-                        ).toLocaleString()}
+                        Last checked:{" "}
+                        {status.lastChecked
+                          ? new Date(status.lastChecked).toLocaleString()
+                          : "Never"}
                       </span>
-                    )}
-                  </div>
-                </>
+                      {status.nextCheck && (
+                        <span>
+                          Next check:{" "}
+                          {new Date(status.nextCheck).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  </>
                 );
               })()}
 
@@ -672,7 +664,9 @@ export default function CredentialHealthIndicator({
                   variant="outline"
                   className="w-full"
                   onClick={() => {
-                    const docsUrl = (ToolPluginRegistry.get(selectedTool.type) as any)?.docsUrl;
+                    const docsUrl = (
+                      ToolPluginRegistry.get(selectedTool.type) as any
+                    )?.docsUrl;
                     if (docsUrl) {
                       window.open(docsUrl, "_blank");
                     }

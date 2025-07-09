@@ -14,10 +14,10 @@ interface DocumentationMessages {
 export async function generateMetadata({
   params,
 }: {
-  params: { lang: string };
+  params: Promise<{ lang: string }>;
 }) {
   try {
-    const lang = params.lang;
+    const { lang } = await params;
     const messages = (await getMessages(lang || "en")) as DocumentationMessages;
 
     return {
@@ -40,10 +40,10 @@ export default async function DocsLayout({
   params,
 }: {
   children: ReactNode;
-  params: { lang: string };
+  params: Promise<{ lang: string }>;
 }) {
   try {
-    const lang = params.lang;
+    const { lang } = await params;
     const messages = (await getMessages(lang || "en")) as DocumentationMessages;
 
     return (

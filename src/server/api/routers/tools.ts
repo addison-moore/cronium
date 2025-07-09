@@ -23,7 +23,10 @@ import { UserRole, toolCredentials, EventType } from "@/shared/schema";
 import { ToolType } from "@shared/schema";
 import { db } from "@/server/db";
 import { eq, and, or, ilike, desc } from "drizzle-orm";
-import { credentialEncryption, type EncryptedData } from "@/lib/security/credential-encryption";
+import {
+  credentialEncryption,
+  type EncryptedData,
+} from "@/lib/security/credential-encryption";
 import { auditLog } from "@/lib/security/audit-logger";
 
 // Custom procedure that handles auth for tRPC fetch adapter
@@ -72,7 +75,10 @@ const toolProcedure = publicProcedure.use(async ({ ctx, next }) => {
 });
 
 // Type for tool with parsed credentials
-type ToolWithParsedCredentials = Omit<typeof toolCredentials.$inferSelect, 'credentials'> & {
+type ToolWithParsedCredentials = Omit<
+  typeof toolCredentials.$inferSelect,
+  "credentials"
+> & {
   credentials: Record<string, any>;
   encrypted: boolean;
   encryptionMetadata: any;
@@ -81,7 +87,9 @@ type ToolWithParsedCredentials = Omit<typeof toolCredentials.$inferSelect, 'cred
 };
 
 // Helper function to get user tools from database
-async function getUserTools(userId: string): Promise<ToolWithParsedCredentials[]> {
+async function getUserTools(
+  userId: string,
+): Promise<ToolWithParsedCredentials[]> {
   try {
     const tools = await db
       .select()
@@ -104,7 +112,9 @@ async function getUserTools(userId: string): Promise<ToolWithParsedCredentials[]
           if (tool.encrypted && credentialEncryption.isAvailable()) {
             try {
               // Try to decrypt
-              const decrypted = credentialEncryption.decrypt(rawCredentials as unknown as EncryptedData);
+              const decrypted = credentialEncryption.decrypt(
+                rawCredentials as unknown as EncryptedData,
+              );
               // Try to parse the decrypted value
               try {
                 credentials = JSON.parse(decrypted);
@@ -541,7 +551,7 @@ export const toolsRouter = createTRPCRouter({
           .insert(toolCredentials)
           .values(values)
           .returning();
-        
+
         const newTool = result[0];
         if (!newTool) {
           throw new TRPCError({
@@ -556,10 +566,10 @@ export const toolsRouter = createTRPCRouter({
             userId: ctx.userId,
             toolId: newTool.id,
             ipAddress:
-              ctx.headers?.get?.("x-forwarded-for") ||
-              ctx.headers?.get?.("x-real-ip") ||
+              ctx.headers?.get?.("x-forwarded-for") ??
+              ctx.headers?.get?.("x-real-ip") ??
               "unknown",
-            userAgent: ctx.headers?.get?.("user-agent") || "unknown",
+            userAgent: ctx.headers?.get?.("user-agent") ?? "unknown",
           },
           input.type,
         );
@@ -663,7 +673,7 @@ export const toolsRouter = createTRPCRouter({
             ),
           )
           .returning();
-          
+
         const updatedTool = updateResult[0];
         if (!updatedTool) {
           throw new TRPCError({
@@ -685,10 +695,10 @@ export const toolsRouter = createTRPCRouter({
             userId: ctx.userId,
             toolId: id,
             ipAddress:
-              ctx.headers?.get?.("x-forwarded-for") ||
-              ctx.headers?.get?.("x-real-ip") ||
+              ctx.headers?.get?.("x-forwarded-for") ??
+              ctx.headers?.get?.("x-real-ip") ??
               "unknown",
-            userAgent: ctx.headers?.get?.("user-agent") || "unknown",
+            userAgent: ctx.headers?.get?.("user-agent") ?? "unknown",
           },
           changes,
         );
@@ -703,8 +713,13 @@ export const toolsRouter = createTRPCRouter({
         }
         if (updatedTool.encrypted && credentialEncryption.isAvailable()) {
           try {
-            const decryptedData = credentialEncryption.decrypt(credentials as unknown as EncryptedData);
-            credentials = typeof decryptedData === 'string' ? JSON.parse(decryptedData) : decryptedData;
+            const decryptedData = credentialEncryption.decrypt(
+              credentials as unknown as EncryptedData,
+            );
+            credentials =
+              typeof decryptedData === "string"
+                ? JSON.parse(decryptedData)
+                : decryptedData;
           } catch (error) {
             console.error(
               `Failed to decrypt credentials for tool ${updatedTool.id}:`,
@@ -754,10 +769,10 @@ export const toolsRouter = createTRPCRouter({
           userId: ctx.userId,
           toolId: input.id,
           ipAddress:
-            ctx.headers?.get?.("x-forwarded-for") ||
-            ctx.headers?.get?.("x-real-ip") ||
+            ctx.headers?.get?.("x-forwarded-for") ??
+            ctx.headers?.get?.("x-real-ip") ??
             "unknown",
-          userAgent: ctx.headers?.get?.("user-agent") || "unknown",
+          userAgent: ctx.headers?.get?.("user-agent") ?? "unknown",
         },
         tool.type,
       );
@@ -1080,11 +1095,10 @@ export const toolsRouter = createTRPCRouter({
         let executionsToday = 0;
         let successCount = 0;
         let totalExecutionTime = 0;
-        let executionCount = 0;
 
         try {
           const { toolActionLogs } = await import("@/shared/schema");
-          const { gte, and, eq, sql } = await import("drizzle-orm");
+          const { gte, sql } = await import("drizzle-orm");
 
           // Get today's executions
           const todayStart = new Date();
@@ -1099,9 +1113,9 @@ export const toolsRouter = createTRPCRouter({
             .from(toolActionLogs)
             .where(gte(toolActionLogs.createdAt, todayStart));
 
-          executionsToday = todayStats?.count || 0;
-          successCount = todayStats?.successCount || 0;
-          totalExecutionTime = todayStats?.avgTime || 0;
+          executionsToday = todayStats?.count ?? 0;
+          successCount = todayStats?.successCount ?? 0;
+          totalExecutionTime = todayStats?.avgTime ?? 0;
         } catch (error) {
           console.log("Could not fetch execution stats:", error);
         }
@@ -1161,7 +1175,7 @@ export const toolsRouter = createTRPCRouter({
           const plugin = ToolPluginRegistry.get(input.toolType);
           return {
             success: true,
-            actions: plugin?.actions || [],
+            actions: plugin?.actions ?? [],
           };
         } else {
           // Return all actions from all plugins
@@ -1365,8 +1379,8 @@ export const toolsRouter = createTRPCRouter({
         // Create execution context
         const context = {
           variables: {
-            get: (key: string) => null, // TODO: Implement variable access
-            set: (key: string, value: any) => null, // TODO: Implement variable setting
+            get: (_key: string) => null, // TODO: Implement variable access
+            set: (_key: string, _value: any) => null, // TODO: Implement variable setting
           },
           logger: {
             info: (message: string) => console.log(`[INFO] ${message}`),

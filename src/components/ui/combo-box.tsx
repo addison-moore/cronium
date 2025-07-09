@@ -131,7 +131,7 @@ export function ComboBox({
               className,
             )}
           >
-            <span className="truncate">{displayValue}</span>
+            <span className="w-full truncate">{displayValue}</span>
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>

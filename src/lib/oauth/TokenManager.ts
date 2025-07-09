@@ -76,7 +76,7 @@ export class TokenManager {
       if (!row) {
         return null;
       }
-      
+
       return {
         accessToken: row.accessToken,
         refreshToken: row.refreshToken ?? undefined,

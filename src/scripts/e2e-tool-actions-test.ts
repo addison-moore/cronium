@@ -111,7 +111,7 @@ class E2ETestRunner {
       .returning();
 
     if (!tool) throw new Error("Failed to create tool");
-    
+
     this.testToolId = tool.id;
     console.log(`   Created tool ID: ${tool.id}`);
   }
@@ -176,7 +176,7 @@ class E2ETestRunner {
 
     const event = eventResult[0];
     if (!event) throw new Error("Failed to create event");
-    
+
     this.testEventId = event.id;
     console.log(`   Created event ID: ${event.id}`);
   }
@@ -228,7 +228,7 @@ class E2ETestRunner {
 
     const log = logs[0];
     if (!log) throw new Error("No log entry found");
-    
+
     console.log(`   Found ${logs.length} log entries`);
     console.log(`   Status: ${log.status}`);
     console.log(`   Tool type: ${log.toolType}`);
@@ -277,7 +277,7 @@ class E2ETestRunner {
 
     const badEvent = badEventResult[0];
     if (!badEvent) throw new Error("Failed to create bad event");
-    
+
     try {
       await executeToolAction(badEvent);
       throw new Error("Expected execution to fail but it succeeded");
@@ -361,7 +361,7 @@ class E2ETestRunner {
 
     const retryEvent = retryEventResult[0];
     if (!retryEvent) throw new Error("Failed to create retry event");
-    
+
     try {
       await executeToolAction(retryEvent);
     } catch (error) {

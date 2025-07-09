@@ -50,8 +50,12 @@ export function QuickAccessPanel({
     return actionKeys
       .map((key) => {
         const [toolId, actionId] = key.split(":");
+        if (!toolId || !actionId) return null;
+
         const tool = ToolPluginRegistry.get(toolId);
-        const action = tool?.actions?.find((a: ToolAction) => a.id === actionId);
+        const action = tool?.actions?.find(
+          (a: ToolAction) => a.id === actionId,
+        );
 
         if (!tool || !action) return null;
 
@@ -228,8 +232,7 @@ export function QuickAccessPanel({
               variant="outline"
               className="w-full justify-start"
               onClick={() => {
-                const sheetsTool =
-                  ToolPluginRegistry.get("google-sheets");
+                const sheetsTool = ToolPluginRegistry.get("google-sheets");
                 const writeData = sheetsTool?.actions?.find(
                   (a: ToolAction) => a.id === "write-data",
                 );

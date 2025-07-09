@@ -125,22 +125,26 @@ export function EventEditTab({
     action: ConditionalAction,
   ): {
     id: number;
-    type: ConditionalActionType;
-    value?: string | undefined;
-    emailSubject?: string | undefined;
-    targetEventId?: number | undefined;
-    toolId?: number | undefined;
-    message?: string | undefined;
+    type: string;
+    value?: string;
+    emailSubject?: string;
+    targetEventId?: number;
+    toolId?: number;
+    message?: string;
   } => {
-    return {
+    const result: any = {
       id: action.id,
-      type: action.type,
-      value: action.value ?? undefined,
-      emailSubject: action.emailSubject ?? undefined,
-      targetEventId: action.targetEventId ?? undefined,
-      toolId: action.toolId ?? undefined,
-      message: action.message ?? undefined,
+      type: action.type as string, // Convert enum to string
     };
+
+    // Only add properties if they have values (not null or undefined)
+    if (action.value) result.value = action.value;
+    if (action.emailSubject) result.emailSubject = action.emailSubject;
+    if (action.targetEventId) result.targetEventId = action.targetEventId;
+    if (action.toolId) result.toolId = action.toolId;
+    if (action.message) result.message = action.message;
+
+    return result;
   };
 
   const eventWithDateObjects = {

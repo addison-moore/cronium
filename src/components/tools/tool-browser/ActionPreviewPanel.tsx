@@ -53,7 +53,9 @@ export function ActionPreviewPanel({
   const hasCredentials = tool.credentials?.configured ?? false;
 
   // Get parameter count
-  const requiredParams = action.parameters.filter((p: ActionParameter) => p.required).length;
+  const requiredParams = action.parameters.filter(
+    (p: ActionParameter) => p.required,
+  ).length;
   const totalParams = action.parameters.length;
 
   return (

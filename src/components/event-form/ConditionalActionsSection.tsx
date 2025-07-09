@@ -27,7 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ConditionalActionType, ToolType } from "@/shared/schema";
+import { ConditionalActionType, type ToolType } from "@/shared/schema";
 import { ToolPluginRegistry } from "@/components/tools/plugins";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/use-toast";
@@ -296,7 +296,7 @@ export default function ConditionalActionsSection({
       // Find template in both user and system templates
       const allTemplates = [...userTemplates, ...systemTemplates];
       const template = allTemplates.find((t) => t.id.toString() === templateId);
-      if (template && template.parameters) {
+      if (template?.parameters) {
         setSelectedTemplate(templateId);
 
         // Extract content based on the action's parameter structure
@@ -980,9 +980,11 @@ export default function ConditionalActionsSection({
                       if (
                         selectedTemplate &&
                         value !==
-                          (([...userTemplates, ...systemTemplates].find(
-                            (t) => t.id.toString() === selectedTemplate,
-                          )?.parameters as Record<string, any>) || {})?.message
+                          (
+                            ([...userTemplates, ...systemTemplates].find(
+                              (t) => t.id.toString() === selectedTemplate,
+                            )?.parameters as Record<string, any>) || {}
+                          )?.message
                       ) {
                         setSelectedTemplate("");
                       }

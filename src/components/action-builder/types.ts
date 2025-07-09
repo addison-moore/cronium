@@ -110,15 +110,17 @@ export const NODE_TEMPLATES: Record<NodeType, Partial<ActionNodeData>> = {
 };
 
 // Validation schemas
-export const nodeDataSchema = z.object({
-  label: z.string(),
-  description: z.string().optional(),
-  toolId: z.string().optional(),
-  actionId: z.string().optional(),
-  parameters: z.record(z.unknown()).optional(),
-  isConfigured: z.boolean().optional(),
-  nodeType: z.nativeEnum(NodeType),
-}).passthrough(); // Allow additional properties for Record<string, unknown> compatibility
+export const nodeDataSchema = z
+  .object({
+    label: z.string(),
+    description: z.string().optional(),
+    toolId: z.string().optional(),
+    actionId: z.string().optional(),
+    parameters: z.record(z.unknown()).optional(),
+    isConfigured: z.boolean().optional(),
+    nodeType: z.nativeEnum(NodeType),
+  })
+  .passthrough(); // Allow additional properties for Record<string, unknown> compatibility
 
 export const nodeSchema = z.object({
   id: z.string(),
@@ -130,11 +132,13 @@ export const nodeSchema = z.object({
   data: nodeDataSchema,
 });
 
-export const connectionDataSchema = z.object({
-  condition: z.string().optional(),
-  transformer: z.string().optional(),
-  connectionType: z.enum(["success", "failure", "always"]).optional(),
-}).passthrough(); // Allow additional properties for Record<string, unknown> compatibility
+export const connectionDataSchema = z
+  .object({
+    condition: z.string().optional(),
+    transformer: z.string().optional(),
+    connectionType: z.enum(["success", "failure", "always"]).optional(),
+  })
+  .passthrough(); // Allow additional properties for Record<string, unknown> compatibility
 
 export const connectionSchema = z.object({
   id: z.string(),

@@ -35,6 +35,8 @@ import {
 } from "lucide-react";
 import { ToolActionTemplateForm } from "./ToolActionTemplateForm";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatToolName, formatActionName } from "@/lib/utils/tool-utils";
+import { ToolPluginRegistry } from "@/components/tools/plugins";
 
 // Tool types - matching what we have in the system
 const TOOL_TYPES = [
@@ -49,9 +51,11 @@ const TOOL_TYPES = [
 export function ToolActionTemplateManager() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedToolType, setSelectedToolType] = useState<string>("");
+  const [selectedToolType, setSelectedToolType] = useState<string>("all");
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<number | null>(null);
+  const [createFormToolType, setCreateFormToolType] = useState<string>("");
+  const [createFormActionId, setCreateFormActionId] = useState<string>("");
 
   // Fetch user templates
   const { data: userTemplatesData, isLoading: isLoadingUser } =
@@ -63,7 +67,8 @@ export function ToolActionTemplateManager() {
   // Fetch system templates
   const { data: systemTemplatesData, isLoading: isLoadingSystem } =
     trpc.toolActionTemplates.getSystemTemplates.useQuery({
-      toolType: selectedToolType || undefined,
+      toolType:
+        selectedToolType === "all" ? undefined : selectedToolType || undefined,
       limit: 100,
       offset: 0,
     });
@@ -137,9 +142,10 @@ export function ToolActionTemplateManager() {
             false)
         : true;
 
-      const matchesToolType = selectedToolType
-        ? template.toolType === selectedToolType
-        : true;
+      const matchesToolType =
+        selectedToolType && selectedToolType !== "all"
+          ? template.toolType === selectedToolType
+          : true;
 
       return matchesSearch && matchesToolType;
     });
@@ -176,7 +182,7 @@ export function ToolActionTemplateManager() {
                   <SelectValue placeholder="All tools" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All tools</SelectItem>
+                  <SelectItem value="all">All tools</SelectItem>
                   {TOOL_TYPES.map((tool) => (
                     <SelectItem key={tool.value} value={tool.value}>
                       {tool.label}
@@ -203,6 +209,8 @@ export function ToolActionTemplateManager() {
           </CardHeader>
           <CardContent>
             <ToolActionTemplateForm
+              toolType={createFormToolType || "SLACK"}
+              actionId={createFormActionId || "send-message"}
               {...(editingTemplate !== null && { templateId: editingTemplate })}
               onSuccess={() => {
                 setShowCreateForm(false);
@@ -267,10 +275,28 @@ export function ToolActionTemplateManager() {
                           {template.name}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">{template.toolType}</Badge>
+                          <div className="flex items-center gap-2">
+                            {(() => {
+                              const plugin = ToolPluginRegistry.get(
+                                template.toolType.toLowerCase(),
+                              );
+                              return plugin ? (
+                                <>
+                                  <plugin.icon className="h-4 w-4" />
+                                  <span>{plugin.name}</span>
+                                </>
+                              ) : (
+                                <Badge variant="outline">
+                                  {formatToolName(template.toolType)}
+                                </Badge>
+                              );
+                            })()}
+                          </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="secondary">{template.actionId}</Badge>
+                          <Badge variant="secondary">
+                            {formatActionName(template.actionId)}
+                          </Badge>
                         </TableCell>
                         <TableCell className="max-w-[300px] truncate">
                           {template.description || "-"}
@@ -354,10 +380,28 @@ export function ToolActionTemplateManager() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">{template.toolType}</Badge>
+                          <div className="flex items-center gap-2">
+                            {(() => {
+                              const plugin = ToolPluginRegistry.get(
+                                template.toolType.toLowerCase(),
+                              );
+                              return plugin ? (
+                                <>
+                                  <plugin.icon className="h-4 w-4" />
+                                  <span>{plugin.name}</span>
+                                </>
+                              ) : (
+                                <Badge variant="outline">
+                                  {formatToolName(template.toolType)}
+                                </Badge>
+                              );
+                            })()}
+                          </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="secondary">{template.actionId}</Badge>
+                          <Badge variant="secondary">
+                            {formatActionName(template.actionId)}
+                          </Badge>
                         </TableCell>
                         <TableCell className="max-w-[300px] truncate">
                           {template.description || "-"}

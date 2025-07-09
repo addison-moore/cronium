@@ -299,7 +299,9 @@ export const createMeetingAction: ToolAction = {
         onProgress({ step: "Meeting created successfully!", percentage: 100 });
       }
 
-      logger.info(`Teams meeting created successfully - Meeting ID: ${data.id}`);
+      logger.info(
+        `Teams meeting created successfully - Meeting ID: ${data.id}`,
+      );
 
       return {
         success: true,

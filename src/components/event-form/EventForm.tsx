@@ -28,7 +28,9 @@ import {
 import { MonacoEditor } from "@/components/ui/monaco-editor";
 import { TagsInput } from "@/components/ui/tags-input";
 import AIScriptAssistant from "@/components/dashboard/AIScriptAssistant";
-import ConditionalActionsSection, { type EventData } from "./ConditionalActionsSection";
+import ConditionalActionsSection, {
+  type EventData,
+} from "./ConditionalActionsSection";
 import ToolActionSection from "./ToolActionSection";
 import EditorSettingsModal, {
   type EditorSettings,
@@ -42,6 +44,7 @@ import {
   TimeUnit,
   EventTriggerType,
   type Event,
+  type Tool,
 } from "@/shared/schema";
 import type { ToolActionConfig } from "./ToolActionSection";
 
@@ -179,11 +182,7 @@ const eventFormSchema = z
     (data) => {
       // Validate Tool Action config
       if (data.type === EventType.TOOL_ACTION) {
-        return (
-          data.toolActionConfig &&
-          data.toolActionConfig.toolId &&
-          data.toolActionConfig.actionId
-        );
+        return data.toolActionConfig?.toolId && data.toolActionConfig.actionId;
       }
       return true;
     },
@@ -209,7 +208,7 @@ const eventFormSchema = z
 type EventFormData = z.infer<typeof eventFormSchema>;
 
 // Layout types for different contexts
-type EventFormLayout = 'page' | 'modal' | 'embedded';
+type EventFormLayout = "page" | "modal" | "embedded";
 
 interface EventFormProps {
   initialData?: EventFormInitialData;
@@ -230,7 +229,7 @@ export default function EventForm({
   isEditing = false,
   eventId,
   onSuccess,
-  layout = 'page',
+  layout = "page",
   onCancel,
   showHeader = true,
   showFooter = true,
@@ -349,12 +348,14 @@ export default function EventForm({
   }, [editorSettingsData]);
 
   // Form submission handler will be defined below
-  const onSubmitRef = useRef<((data: EventFormData) => Promise<void>) | null>(null);
+  const onSubmitRef = useRef<((data: EventFormData) => Promise<void>) | null>(
+    null,
+  );
 
   // Keyboard shortcut support (Ctrl+S / Cmd+S)
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         if (onSubmitRef.current) {
           form.handleSubmit(onSubmitRef.current)();
@@ -362,8 +363,8 @@ export default function EventForm({
       }
     };
 
-    document.addEventListener('keydown', handleKeyPress);
-    return () => document.removeEventListener('keydown', handleKeyPress);
+    document.addEventListener("keydown", handleKeyPress);
+    return () => document.removeEventListener("keydown", handleKeyPress);
   }, [form]);
 
   // Initialize form data from initialData
@@ -402,7 +403,9 @@ export default function EventForm({
       if (initialData.environmentVariables) {
         if (typeof initialData.environmentVariables === "string") {
           try {
-            const envVars = JSON.parse(initialData.environmentVariables) as Array<{
+            const envVars = JSON.parse(
+              initialData.environmentVariables,
+            ) as Array<{
               key: string;
               value: string;
             }>;
@@ -455,85 +458,116 @@ export default function EventForm({
   };
 
   // Form submission
-  const onSubmit = useCallback(async (data: EventFormData) => {
-    try {
-      // Prepare form data for submission
-      const formData = {
-        ...data,
-        content: isScriptType ? data.content : "",
-        startTime: data.startTime
-          ? new Date(data.startTime).toISOString()
-          : null,
-        customSchedule: data.useCronScheduling ? data.customSchedule : "",
-        serverId: null, // Deprecated, using selectedServerIds
-        toolActionConfig:
-          isToolAction && data.toolActionConfig
-            ? JSON.stringify(data.toolActionConfig)
+  const onSubmit = useCallback(
+    async (data: EventFormData) => {
+      try {
+        // Prepare form data for submission
+        // Remove form-only fields and prepare for API
+        const {
+          conditionalActions,
+          useCronScheduling,
+          httpHeaders,
+          ...baseData
+        } = data;
+
+        const formData = {
+          ...baseData,
+          content: isScriptType ? data.content : undefined,
+          startTime: data.startTime
+            ? new Date(data.startTime).toISOString()
+            : null,
+          customSchedule: data.useCronScheduling
+            ? data.customSchedule
             : undefined,
-        envVars: JSON.stringify(data.envVars),
-        tags: JSON.stringify(data.tags),
-        conditionalEvents: JSON.stringify(
-          data.conditionalActions.map((action) => ({
-            type: action.type,
-            action: action.action,
-            details: {
-              emailAddresses: action.emailAddresses ?? "",
-              emailSubject: action.emailSubject ?? "",
-              targetEventId: action.targetEventId ?? null,
-              toolId: action.toolId ?? null,
-              message: action.message ?? "",
-            },
-          })),
-        ),
-      };
+          serverId: null, // Deprecated, using selectedServerIds
+          toolActionConfig:
+            isToolAction && data.toolActionConfig
+              ? JSON.stringify(data.toolActionConfig)
+              : undefined,
+          envVars: data.envVars, // Already an array
+          tags: data.tags, // Already an array
+          conditionalEvents: JSON.stringify(
+            conditionalActions.map((action) => ({
+              type: action.type,
+              action: action.action,
+              details: {
+                emailAddresses: action.emailAddresses ?? "",
+                emailSubject: action.emailSubject ?? "",
+                targetEventId: action.targetEventId ?? null,
+                toolId: action.toolId ?? null,
+                message: action.message ?? "",
+              },
+            })),
+          ),
+          // Include httpHeaders as array if it's HTTP request
+          ...(isHttpRequest &&
+            data.httpHeaders && {
+              httpHeaders: data.httpHeaders, // Already an array
+            }),
+        };
 
-      let resultId: number | undefined;
+        let resultId: number | undefined;
 
-      if (isEditing && eventId) {
-        const result = await updateEventMutation.mutateAsync({
-          id: eventId,
-          ...formData,
+        if (isEditing && eventId) {
+          const result = await updateEventMutation.mutateAsync({
+            id: eventId,
+            ...formData,
+          });
+          resultId = result?.id;
+        } else {
+          const result = await createEventMutation.mutateAsync(formData);
+          resultId = result?.id;
+        }
+
+        toast({
+          title: isEditing ? "Event Updated" : "Event Created",
+          description: `Successfully ${isEditing ? "updated" : "created"} "${data.name}"`,
+          variant: "success",
         });
-        resultId = result?.id;
-      } else {
-        const result = await createEventMutation.mutateAsync(formData);
-        resultId = result?.id;
-      }
 
-      toast({
-        title: isEditing ? "Event Updated" : "Event Created",
-        description: `Successfully ${isEditing ? "updated" : "created"} "${data.name}"`,
-        variant: "success",
-      });
-
-      if (onSuccess) {
-        onSuccess(resultId);
+        if (onSuccess) {
+          onSuccess(resultId);
+        }
+      } catch (error) {
+        console.error("Error submitting form:", error);
+        toast({
+          title: "Error",
+          description: `Failed to ${isEditing ? "update" : "create"} event. Please try again.`,
+          variant: "destructive",
+        });
       }
-    } catch (error) {
-      console.error("Error submitting form:", error);
-      toast({
-        title: "Error",
-        description: `Failed to ${isEditing ? "update" : "create"} event. Please try again.`,
-        variant: "destructive",
-      });
-    }
-  }, [isEditing, eventId, createEventMutation, updateEventMutation, toast, onSuccess, type, isScriptType, isHttpRequest, isToolAction]);
+    },
+    [
+      isEditing,
+      eventId,
+      createEventMutation,
+      updateEventMutation,
+      toast,
+      onSuccess,
+      type,
+      isScriptType,
+      isHttpRequest,
+      isToolAction,
+    ],
+  );
 
   // Update ref after onSubmit is defined
   onSubmitRef.current = onSubmit;
 
   // Layout-specific styles
-  const formClassName = layout === 'modal' 
-    ? "space-y-4" 
-    : layout === 'embedded' 
-    ? "space-y-4" 
-    : "space-y-6";
-    
-  const contentClassName = layout === 'modal'
-    ? "max-h-[60vh] overflow-y-auto px-1"
-    : layout === 'embedded'
-    ? ""
-    : "";
+  const formClassName =
+    layout === "modal"
+      ? "space-y-4"
+      : layout === "embedded"
+        ? "space-y-4"
+        : "space-y-6";
+
+  const contentClassName =
+    layout === "modal"
+      ? "max-h-[60vh] overflow-y-auto px-1"
+      : layout === "embedded"
+        ? ""
+        : "";
 
   const formContent = (
     <>
@@ -1379,12 +1413,11 @@ export default function EventForm({
       <ConditionalActionsSection
         eventData={initialData as EventData}
         availableEvents={availableEvents}
-        eventId={eventId}
+        {...(eventId !== undefined && { eventId })}
         onConditionalActionsChange={(actions) => {
           setValue("conditionalActions", actions);
         }}
       />
-
     </>
   );
 
@@ -1395,10 +1428,12 @@ export default function EventForm({
       ) : (
         formContent
       )}
-      
+
       {/* Form Actions */}
       {showFooter && (
-        <div className={`flex ${onCancel ? 'justify-between' : 'justify-end'} space-x-4 ${layout === 'modal' ? 'sticky bottom-0 bg-background pt-4 border-t' : ''}`}>
+        <div
+          className={`flex ${onCancel ? "justify-between" : "justify-end"} space-x-4 ${layout === "modal" ? "bg-background sticky bottom-0 border-t pt-4" : ""}`}
+        >
           {onCancel && (
             <Button type="button" variant="outline" onClick={onCancel}>
               {t("Cancel")}

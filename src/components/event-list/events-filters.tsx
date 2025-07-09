@@ -77,9 +77,6 @@ export function EventsFilters({
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {/* Search Bar - spans 1 column */}
         <div>
-          <label className="text-foreground mb-1 block text-sm font-medium">
-            {t("Search")}
-          </label>
           <div className="relative">
             <Search className="text-muted-foreground absolute top-2.5 left-2.5 h-4 w-4" />
             <Input
@@ -106,9 +103,6 @@ export function EventsFilters({
 
         {/* Sort By */}
         <div>
-          <label className="text-foreground mb-1 block text-sm font-medium">
-            {t("SortBy") || "Sort By"}
-          </label>
           <div className="flex gap-2">
             <Select
               value={filters.sortBy}
@@ -157,9 +151,6 @@ export function EventsFilters({
 
         {/* Event Type */}
         <div>
-          <label className="text-foreground mb-1 block text-sm font-medium">
-            {t("EventType")}
-          </label>
           <Select
             value={filters.typeFilter}
             onValueChange={(value) => {
@@ -234,9 +225,6 @@ export function EventsFilters({
 
         {/* Status */}
         <div>
-          <label className="text-foreground mb-1 block text-sm font-medium">
-            {t("StatusLabel")}
-          </label>
           <Select
             value={filters.statusFilter}
             onValueChange={(value) => {
@@ -296,9 +284,6 @@ export function EventsFilters({
 
         {/* Execution Server */}
         <div>
-          <label className="text-foreground mb-1 block text-sm font-medium">
-            {t("ExecutionServer")}
-          </label>
           <Select
             value={filters.serverFilter}
             onValueChange={(value) => {
@@ -342,9 +327,6 @@ export function EventsFilters({
 
         {/* Workflow */}
         <div>
-          <label className="text-foreground mb-1 block text-sm font-medium">
-            Workflow
-          </label>
           <ComboBox
             options={workflowOptions}
             value={filters.workflowFilter}
@@ -359,9 +341,6 @@ export function EventsFilters({
 
         {/* Tags */}
         <div>
-          <label className="text-foreground mb-1 block text-sm font-medium">
-            {t("Tags")}
-          </label>
           <ComboBox
             options={tagOptions}
             value={filters.tagFilter}

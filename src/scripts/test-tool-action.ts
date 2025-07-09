@@ -93,7 +93,7 @@ async function testToolActionExecution() {
 
     // 4. Create a test event in the database
     console.log("\n3. Creating test event...");
-    
+
     const eventResult = await db
       .insert(events)
       .values({
@@ -104,18 +104,16 @@ async function testToolActionExecution() {
         status: EventStatus.DRAFT,
         triggerType: EventTriggerType.MANUAL,
         runLocation: RunLocation.LOCAL,
+        scheduleNumber: 1,
+        scheduleUnit: TimeUnit.MINUTES,
         timeoutValue: 30,
         timeoutUnit: TimeUnit.SECONDS,
         retries: 0,
         maxExecutions: 1,
         executionCount: 0,
-        envVars: "[]",
-        conditionalEvents: "[]",
         tags: ["test"],
         content: null,
         shared: false,
-        scheduleNumber: 1,
-        scheduleUnit: TimeUnit.MINUTES,
         toolActionConfig: toolActionConfig,
       })
       .returning();

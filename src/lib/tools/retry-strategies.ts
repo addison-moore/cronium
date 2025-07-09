@@ -145,8 +145,7 @@ export class FibonacciBackoffStrategy extends RetryStrategy {
  * Adaptive retry strategy that adjusts based on error patterns
  */
 export class AdaptiveRetryStrategy extends RetryStrategy {
-  private errorHistory: Map<string, { count: number; lastSeen: Date }> =
-    new Map();
+  private errorHistory = new Map<string, { count: number; lastSeen: Date }>();
 
   calculateDelay(context: RetryContext): number {
     const errorType = this.classifyError(context.error);
@@ -303,13 +302,22 @@ export function createRetryExecutor<T>(
     maxAttempts: config.maxAttempts ?? defaultConfig.maxAttempts,
     initialDelay: config.initialDelay ?? defaultConfig.initialDelay,
     maxDelay: config.maxDelay ?? defaultConfig.maxDelay,
-    backoffMultiplier: config.backoffMultiplier ?? defaultConfig.backoffMultiplier,
+    backoffMultiplier:
+      config.backoffMultiplier ?? defaultConfig.backoffMultiplier,
     jitter: config.jitter ?? defaultConfig.jitter,
     ...(config.retryableErrors || defaultConfig.retryableErrors
-      ? { retryableErrors: config.retryableErrors ?? [...defaultConfig.retryableErrors] }
+      ? {
+          retryableErrors: config.retryableErrors ?? [
+            ...defaultConfig.retryableErrors,
+          ],
+        }
       : {}),
     ...(config.nonRetryableErrors || defaultConfig.nonRetryableErrors
-      ? { nonRetryableErrors: config.nonRetryableErrors ?? [...defaultConfig.nonRetryableErrors] }
+      ? {
+          nonRetryableErrors: config.nonRetryableErrors ?? [
+            ...defaultConfig.nonRetryableErrors,
+          ],
+        }
       : {}),
   };
 

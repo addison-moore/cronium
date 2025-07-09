@@ -28,9 +28,7 @@ import { ToolHealthBadge } from "@/components/tools/ToolHealthIndicator";
 
 const googleSheetsSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  scope: z
-    .string()
-    .default("https://www.googleapis.com/auth/spreadsheets"),
+  scope: z.string().min(1, "Scope is required"),
   clientId: z.string().min(1, "Client ID is required"),
   clientSecret: z.string().min(1, "Client Secret is required"),
   refreshToken: z.string().optional(),
@@ -45,7 +43,7 @@ function GoogleSheetsCredentialForm({
   onCancel,
 }: CredentialFormProps) {
   const form = useForm<GoogleSheetsFormData>({
-    resolver: zodResolver(googleSheetsSchema),
+    resolver: zodResolver(googleSheetsSchema) as any,
     defaultValues: tool
       ? {
           name: tool.name,
@@ -68,7 +66,10 @@ function GoogleSheetsCredentialForm({
   };
 
   return (
-    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+    <form
+      onSubmit={form.handleSubmit(handleSubmit as any)}
+      className="space-y-4"
+    >
       <Alert>
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>
@@ -166,9 +167,7 @@ function GoogleSheetsCredentialDisplay({
                 <Badge variant={tool.isActive ? "default" : "secondary"}>
                   {tool.isActive ? "Active" : "Inactive"}
                 </Badge>
-                <ToolHealthBadge
-                  toolId={tool.id}
-                />
+                <ToolHealthBadge toolId={tool.id} />
                 {!credentials.refreshToken && (
                   <Badge variant="outline" className="text-orange-600">
                     Authorization Required

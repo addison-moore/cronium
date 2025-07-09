@@ -1,10 +1,10 @@
 /**
  * DEPRECATED: This migration script is no longer needed.
- * The templates table has been removed from the schema and the migration 
+ * The templates table has been removed from the schema and the migration
  * to tool action templates has been completed.
- * 
+ *
  * This file is kept for historical reference only.
- * 
+ *
  * Original purpose:
  * Migration script to convert old templates to new tool action templates
  */

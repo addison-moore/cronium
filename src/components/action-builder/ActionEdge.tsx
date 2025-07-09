@@ -58,7 +58,9 @@ export function ActionEdge({
             className="nodrag nopan"
           >
             <Badge
-              variant={data.connectionType === "success" ? "default" : "secondary"}
+              variant={
+                data.connectionType === "success" ? "default" : "secondary"
+              }
               className="text-xs"
             >
               {String(data.label)}
