@@ -175,7 +175,7 @@ function SlackCredentialDisplayTrpc({
                 <Badge variant={tool.isActive ? "default" : "secondary"}>
                   {tool.isActive ? "Active" : "Inactive"}
                 </Badge>
-                <ToolHealthBadge toolId={tool.id} toolName={tool.name} />
+                <ToolHealthBadge toolId={tool.id} />
               </div>
               <div className="text-muted-foreground grid grid-cols-1 gap-4 text-sm">
                 <div className="flex items-center gap-2">

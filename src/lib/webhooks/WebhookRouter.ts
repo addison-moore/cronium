@@ -74,15 +74,16 @@ export class WebhookRouter {
       const headers = this.extractHeaders(request.headers);
 
       // Verify webhook security
+      const clientIp = this.getClientIP(request);
       const verificationResult = await this.webhookSecurity.verifyWebhook(
         {
           body: JSON.stringify(body),
           headers,
-          ip: this.getClientIP(request),
+          ...(clientIp !== undefined && { ip: clientIp }),
         },
         {
           secret: webhook.secret,
-          ipWhitelist: webhook.ipWhitelist as string[] | undefined,
+          ...(webhook.ipWhitelist && { ipWhitelist: webhook.ipWhitelist as string[] }),
           verifyTimestamp: webhook.verifyTimestamp ?? true,
         },
       );
@@ -90,7 +91,7 @@ export class WebhookRouter {
       if (!verificationResult.isValid) {
         await this.logWebhookRequest(webhook.id, {
           success: false,
-          error: verificationResult.error,
+          ...(verificationResult.error !== undefined && { error: verificationResult.error }),
           duration: Date.now() - startTime,
         });
 
@@ -101,10 +102,11 @@ export class WebhookRouter {
       }
 
       // Check rate limit
+      const rateLimit = webhook.rateLimit as { requests?: number; window?: number } | null | undefined;
       const rateLimitResult = await this.webhookSecurity.checkRateLimit(
         `webhook:${webhook.id}`,
-        (webhook.rateLimit?.requests as number | undefined) ?? 100,
-        (webhook.rateLimit?.window as number | undefined) ?? 60000,
+        rateLimit?.requests ?? 100,
+        rateLimit?.window ?? 60000,
       );
 
       if (!rateLimitResult.allowed) {
@@ -113,7 +115,7 @@ export class WebhookRouter {
           {
             status: 429,
             headers: {
-              "X-RateLimit-Limit": String(webhook.rateLimit?.requests ?? 100),
+              "X-RateLimit-Limit": String(rateLimit?.requests ?? 100),
               "X-RateLimit-Remaining": String(rateLimitResult.remaining),
               "X-RateLimit-Reset": rateLimitResult.resetAt.toISOString(),
             },
@@ -131,7 +133,7 @@ export class WebhookRouter {
       );
 
       // Store event
-      const [event] = await db
+      const result = await db
         .insert(webhookEvents)
         .values({
           event: eventType,
@@ -139,6 +141,12 @@ export class WebhookRouter {
           createdAt: new Date(),
         })
         .returning();
+
+      if (!result[0]) {
+        throw new Error("Failed to create webhook event");
+      }
+
+      const event = result[0];
 
       // Trigger internal events
       await this.webhookManager.triggerEvent(
@@ -238,7 +246,8 @@ export class WebhookRouter {
     // Check common headers for client IP
     const forwardedFor = request.headers.get("x-forwarded-for");
     if (forwardedFor) {
-      return forwardedFor.split(",")[0].trim();
+      const firstIp = forwardedFor.split(",")[0];
+      return firstIp?.trim();
     }
 
     const realIP = request.headers.get("x-real-ip");
@@ -246,8 +255,8 @@ export class WebhookRouter {
       return realIP;
     }
 
-    // Fall back to request IP
-    return request.ip ?? undefined;
+    // No IP found
+    return undefined;
   }
 
   /**

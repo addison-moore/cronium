@@ -186,9 +186,8 @@ export function useRetry<T>(
         const duration = Date.now() - startTime;
 
         setState((prev) => ({
-          ...prev,
+          attempts: prev.attempts,
           isRetrying: false,
-          lastError: undefined,
           history: [
             ...prev.history,
             {
@@ -391,9 +390,11 @@ export default function RetryManager({
                 max={10}
                 step={1}
                 value={[config.maxAttempts]}
-                onValueChange={([value]) =>
-                  updateConfig({ maxAttempts: value })
-                }
+                onValueChange={([value]) => {
+                  if (value !== undefined) {
+                    updateConfig({ maxAttempts: value })
+                  }
+                }}
               />
             </div>
 
@@ -411,9 +412,11 @@ export default function RetryManager({
                 max={5000}
                 step={100}
                 value={[config.initialDelay]}
-                onValueChange={([value]) =>
-                  updateConfig({ initialDelay: value })
-                }
+                onValueChange={([value]) => {
+                  if (value !== undefined) {
+                    updateConfig({ initialDelay: value })
+                  }
+                }}
               />
             </div>
 
@@ -431,7 +434,11 @@ export default function RetryManager({
                 max={60000}
                 step={1000}
                 value={[config.maxDelay]}
-                onValueChange={([value]) => updateConfig({ maxDelay: value })}
+                onValueChange={([value]) => {
+                  if (value !== undefined) {
+                    updateConfig({ maxDelay: value })
+                  }
+                }}
               />
             </div>
 
@@ -450,9 +457,11 @@ export default function RetryManager({
                   max={3}
                   step={0.1}
                   value={[config.backoffMultiplier]}
-                  onValueChange={([value]) =>
-                    updateConfig({ backoffMultiplier: value })
-                  }
+                  onValueChange={([value]) => {
+                    if (value !== undefined) {
+                      updateConfig({ backoffMultiplier: value })
+                    }
+                  }}
                 />
               </div>
             )}
@@ -487,9 +496,11 @@ export default function RetryManager({
                   max={0.5}
                   step={0.05}
                   value={[config.jitterFactor]}
-                  onValueChange={([value]) =>
-                    updateConfig({ jitterFactor: value })
-                  }
+                  onValueChange={([value]) => {
+                    if (value !== undefined) {
+                      updateConfig({ jitterFactor: value })
+                    }
+                  }}
                 />
               </div>
             )}

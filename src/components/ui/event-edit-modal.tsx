@@ -147,6 +147,9 @@ export function EventEditModal({
             }}
             isEditing={true}
             onSuccess={handleEventUpdate}
+            layout="modal"
+            onCancel={handleClose}
+            showFooter={false}
           />
         </div>
       ) : (

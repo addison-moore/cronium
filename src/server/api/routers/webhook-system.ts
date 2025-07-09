@@ -78,10 +78,19 @@ export const webhookSystemRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const updates: Partial<import("@/lib/webhooks").WebhookConfig> = {
+        ...(input.updates.url !== undefined && { url: input.updates.url }),
+        ...(input.updates.events !== undefined && { events: input.updates.events }),
+        ...(input.updates.secret !== undefined && { secret: input.updates.secret }),
+        ...(input.updates.headers !== undefined && { headers: input.updates.headers }),
+        ...(input.updates.active !== undefined && { active: input.updates.active }),
+        ...(input.updates.retryConfig !== undefined && { retryConfig: input.updates.retryConfig }),
+      };
+
       await webhookManager.updateWebhook(
         input.id,
         ctx.session.user.id,
-        input.updates,
+        updates,
       );
 
       return { success: true };

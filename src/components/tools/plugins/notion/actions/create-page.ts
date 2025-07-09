@@ -339,7 +339,7 @@ export const createPageAction: ToolAction = {
         );
       }
 
-      logger.info("Creating Notion page", { parentId, title });
+      logger.info(`Creating Notion page - Parent: ${parentId}, Title: ${title}`);
 
       if (isTest) {
         // Test mode - simulate creation
@@ -402,7 +402,7 @@ export const createPageAction: ToolAction = {
         onProgress({ step: "Page created successfully!", percentage: 100 });
       }
 
-      logger.info("Notion page created successfully", { pageId: data.id });
+      logger.info(`Notion page created successfully - Page ID: ${data.id}`);
 
       return {
         success: true,

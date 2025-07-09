@@ -57,7 +57,8 @@ export class CredentialCacheManager {
         if (!toolId || !userId) {
           return undefined;
         }
-        return this.fetchCredential(parseInt(toolId), userId) ?? undefined;
+        const result = await this.fetchCredential(parseInt(toolId), userId);
+        return result === null ? undefined : result;
       },
     });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useParams } from "next/navigation";
-import ImprovedEventForm from "@/components/event-form/ImprovedEventForm";
+import EventForm from "@/components/event-form/EventForm";
 
 export default function NewEventPage() {
   const router = useRouter();
@@ -19,7 +19,7 @@ export default function NewEventPage() {
   return (
     <div className="container mx-auto p-4">
       <h1 className="mb-6 text-2xl font-bold">Create New Event</h1>
-      <ImprovedEventForm isEditing={false} onSuccess={handleSuccess} />
+      <EventForm isEditing={false} onSuccess={handleSuccess} layout="page" />
     </div>
   );
 }

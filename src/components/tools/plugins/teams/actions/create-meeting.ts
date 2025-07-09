@@ -231,7 +231,7 @@ export const createMeetingAction: ToolAction = {
         meeting.categories = typedParams.categories;
       }
 
-      logger.info("Creating Teams meeting", { subject });
+      logger.info(`Creating Teams meeting with subject: ${subject}`);
 
       if (isTest) {
         // Test mode - simulate creation
@@ -299,9 +299,7 @@ export const createMeetingAction: ToolAction = {
         onProgress({ step: "Meeting created successfully!", percentage: 100 });
       }
 
-      logger.info("Teams meeting created successfully", {
-        meetingId: data.id,
-      });
+      logger.info(`Teams meeting created successfully - Meeting ID: ${data.id}`);
 
       return {
         success: true,

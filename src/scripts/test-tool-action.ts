@@ -4,28 +4,30 @@
 
 import { executeToolAction } from "@/lib/scheduler/tool-action-executor";
 import {
-  Event,
+  events,
   EventType,
   EventStatus,
   EventTriggerType,
   ToolType,
+  RunLocation,
+  TimeUnit,
+  toolCredentials,
 } from "@/shared/schema";
 import { db } from "@/server/db";
-import { toolCredentials } from "@/shared/schema";
 import { eq } from "drizzle-orm";
 
 async function testToolActionExecution() {
   console.log("=== Testing Tool Action Execution ===\n");
 
   try {
-    // 1. First, check if we have any tools configured
-    console.log("1. Checking for configured tools...");
-    const tools = await db.select().from(toolCredentials).limit(5);
+    // 1. Find configured tools
+    const tools = await db
+      .select()
+      .from(toolCredentials)
+      .where(eq(toolCredentials.isActive, true));
 
     if (tools.length === 0) {
-      console.error(
-        "❌ No tools configured. Please configure at least one tool first.",
-      );
+      console.error("❌ No active tools found. Please configure a tool first.");
       return;
     }
 
@@ -42,40 +44,7 @@ async function testToolActionExecution() {
     }
     console.log(`\n2. Using tool: ${testTool.name} (${testTool.type})`);
 
-    // 3. Create a mock event with tool action configuration
-    const mockEvent: Event = {
-      id: 99999,
-      userId: testTool.userId,
-      name: "Test Tool Action Event",
-      description: "Testing tool action execution",
-      type: EventType.TOOL_ACTION,
-      schedule: "{}",
-      status: EventStatus.ACTIVE,
-      triggerType: EventTriggerType.MANUAL,
-      runLocation: "LOCAL" as any,
-      serverId: null,
-      timeoutValue: 30,
-      timeoutUnit: "SECONDS" as any,
-      retries: 0,
-      maxExecutions: 1,
-      executionCount: 0,
-      envVars: "[]",
-      conditionalEvents: "[]",
-      tags: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      code: "",
-      httpMethod: null,
-      httpUrl: null,
-      httpHeaders: null,
-      httpBody: null,
-      pythonVersion: null,
-      selectedServerIds: [],
-      resetCounterOnActive: false,
-      toolActionConfig: null, // Will be set based on tool type
-    } as Event;
-
-    // 4. Configure based on tool type
+    // 3. Configure based on tool type
     let toolActionConfig: any = {
       toolType: testTool.type,
       toolId: testTool.id,
@@ -87,15 +56,15 @@ async function testToolActionExecution() {
       case ToolType.SLACK:
         toolActionConfig.actionId = "slack.send-message";
         toolActionConfig.parameters = {
-          channel: "#test",
-          message: "Test message from Cronium Tool Action test script",
+          channel: "#general",
+          text: `Test message from Cronium at ${new Date().toISOString()}`,
         };
         break;
 
       case ToolType.DISCORD:
         toolActionConfig.actionId = "discord.send-message";
         toolActionConfig.parameters = {
-          content: "Test message from Cronium Tool Action test script",
+          content: `Test message from Cronium at ${new Date().toISOString()}`,
         };
         break;
 
@@ -103,8 +72,17 @@ async function testToolActionExecution() {
         toolActionConfig.actionId = "email.send";
         toolActionConfig.parameters = {
           to: "test@example.com",
-          subject: "Test from Cronium",
-          body: "This is a test email from the Tool Action test script",
+          subject: "Test Email from Cronium",
+          body: `This is a test email sent at ${new Date().toISOString()}`,
+        };
+        break;
+
+      case ToolType.WEBHOOK:
+        toolActionConfig.actionId = "webhook.send";
+        toolActionConfig.parameters = {
+          method: "POST",
+          body: JSON.stringify({ test: true, timestamp: new Date() }),
+          headers: { "Content-Type": "application/json" },
         };
         break;
 
@@ -113,16 +91,50 @@ async function testToolActionExecution() {
         return;
     }
 
-    mockEvent.toolActionConfig = JSON.stringify(toolActionConfig);
-    console.log("\n3. Tool action configuration:");
+    // 4. Create a test event in the database
+    console.log("\n3. Creating test event...");
+    
+    const eventResult = await db
+      .insert(events)
+      .values({
+        userId: testTool.userId,
+        name: "Test Tool Action Event",
+        description: "Testing tool action execution",
+        type: EventType.TOOL_ACTION,
+        status: EventStatus.DRAFT,
+        triggerType: EventTriggerType.MANUAL,
+        runLocation: RunLocation.LOCAL,
+        timeoutValue: 30,
+        timeoutUnit: TimeUnit.SECONDS,
+        retries: 0,
+        maxExecutions: 1,
+        executionCount: 0,
+        envVars: "[]",
+        conditionalEvents: "[]",
+        tags: ["test"],
+        content: null,
+        shared: false,
+        scheduleNumber: 1,
+        scheduleUnit: TimeUnit.MINUTES,
+        toolActionConfig: toolActionConfig,
+      })
+      .returning();
+
+    const mockEvent = eventResult[0];
+    if (!mockEvent) {
+      console.error("❌ Failed to create test event");
+      return;
+    }
+
+    console.log("\n4. Tool action configuration:");
     console.log(JSON.stringify(toolActionConfig, null, 2));
 
     // 5. Execute the tool action
-    console.log("\n4. Executing tool action...\n");
+    console.log("\n5. Executing tool action...");
     const result = await executeToolAction(mockEvent);
 
     // 6. Display results
-    console.log("\n5. Execution Results:");
+    console.log("\n6. Execution Results:");
     console.log("   Exit Code:", result.exitCode);
     console.log("   Success:", result.exitCode === 0 ? "✅ Yes" : "❌ No");
 
@@ -147,15 +159,24 @@ async function testToolActionExecution() {
       console.log(`   - Latency: ${result.healthStatus.latency}ms`);
     }
 
-    console.log("\n✅ Tool action execution test completed!");
+    // 7. Clean up
+    console.log("\n7. Cleaning up test event...");
+    await db.delete(events).where(eq(events.id, mockEvent.id));
+    console.log("   ✅ Test event deleted");
+
+    console.log("\n🎉 Test completed successfully!");
   } catch (error) {
-    console.error("\n❌ Test failed with error:");
-    console.error(error);
-  } finally {
-    process.exit(0);
+    console.error("\n❌ Test failed with error:", error);
   }
 }
 
 // Run the test
-console.log("Starting tool action test...\n");
-testToolActionExecution().catch(console.error);
+testToolActionExecution()
+  .then(() => {
+    console.log("\n✅ Script completed");
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error("\n❌ Script failed:", error);
+    process.exit(1);
+  });

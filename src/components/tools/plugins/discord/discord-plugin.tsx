@@ -114,7 +114,7 @@ function DiscordCredentialDisplay({
                 <Badge variant={tool.isActive ? "default" : "secondary"}>
                   {tool.isActive ? "Active" : "Inactive"}
                 </Badge>
-                <ToolHealthBadge toolId={tool.id} toolName={tool.name} />
+                <ToolHealthBadge toolId={tool.id} />
               </div>
               <div className="text-muted-foreground text-sm">
                 <div className="flex items-center gap-2">

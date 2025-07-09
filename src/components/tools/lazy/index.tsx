@@ -49,7 +49,10 @@ const DefaultSkeleton = () => (
 
 // Lazy-loaded components with proper error boundaries and loading states
 export const LazyToolBrowser = dynamic(
-  () => import("../tool-browser/ToolBrowser"),
+  () =>
+    import("../tool-browser/ToolBrowser").then((mod) => ({
+      default: mod.ToolBrowser,
+    })),
   {
     loading: () => (
       <Suspense fallback={<ToolBrowserSkeleton />}>
@@ -61,10 +64,7 @@ export const LazyToolBrowser = dynamic(
 );
 
 export const LazyActionParameterForm = dynamic(
-  () =>
-    import("../../event-form/ActionParameterForm").then((mod) => ({
-      default: mod.ActionParameterForm,
-    })),
+  () => import("../../event-form/ActionParameterForm"),
   {
     loading: () => <DefaultSkeleton />,
     ssr: false,
@@ -108,8 +108,7 @@ export const LazyTestDataGenerator = dynamic(
 );
 
 export const LazyErrorHandler = dynamic(
-  () =>
-    import("../ErrorHandler").then((mod) => ({ default: mod.ErrorHandler })),
+  () => import("../ErrorHandler"),
   {
     loading: () => <DefaultSkeleton />,
     ssr: false,
@@ -134,15 +133,6 @@ export const LazyExecutionLogsViewer = dynamic(
 
 export const LazyErrorRecoverySuggestions = dynamic(
   () => import("../ErrorRecoverySuggestions"),
-  {
-    loading: () => <DefaultSkeleton />,
-    ssr: false,
-  },
-);
-
-// Enhanced tool action components bundle
-export const LazyEnhancedToolActionSection = dynamic(
-  () => import("../../event-form/EnhancedToolActionSection"),
   {
     loading: () => <DefaultSkeleton />,
     ssr: false,

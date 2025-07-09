@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for move-card action parameters
 export const moveCardSchema = z.object({
@@ -32,6 +33,7 @@ export const moveCardAction: ToolAction = {
   actionType: "update",
   developmentMode: "visual",
   inputSchema: moveCardSchema,
+  parameters: zodToParameters(moveCardSchema),
   outputSchema: z.object({
     success: z.boolean(),
     error: z.string().optional(),
@@ -126,7 +128,7 @@ export const moveCardAction: ToolAction = {
         throw new Error("No destination specified for card move");
       }
 
-      logger.info("Moving Trello card", { cardId, ...updateData });
+      logger.info(`Moving Trello card ${cardId}`);
 
       if (isTest) {
         // Test mode - simulate move

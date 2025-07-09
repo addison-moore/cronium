@@ -14,7 +14,6 @@ import type {
   Workflow,
   UserVariable,
   Tool,
-  Template,
 } from "@shared/schema";
 import type { ApiResponse, PaginatedResponse, ErrorResponse } from "./index";
 
@@ -116,14 +115,6 @@ export interface ToolTestResponse extends ApiResponse {
   };
 }
 
-// Template API Types
-export interface TemplatesResponse extends PaginatedResponse<Template> {
-  templates: Template[];
-}
-
-export interface TemplateResponse extends ApiResponse<Template> {
-  template?: Template;
-}
 
 // Conditional Events API Types
 export interface ConditionalEventsResponse

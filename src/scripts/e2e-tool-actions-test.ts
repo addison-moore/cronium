@@ -11,6 +11,8 @@ import {
   EventStatus,
   EventTriggerType,
   ToolType,
+  RunLocation,
+  TimeUnit,
 } from "@/shared/schema";
 import { executeToolAction } from "@/lib/scheduler/tool-action-executor";
 import { ToolPluginRegistry } from "@/components/tools/types/tool-plugin";
@@ -108,10 +110,10 @@ class E2ETestRunner {
       })
       .returning();
 
+    if (!tool) throw new Error("Failed to create tool");
+    
     this.testToolId = tool.id;
     console.log(`   Created tool ID: ${tool.id}`);
-
-    if (!tool.id) throw new Error("Failed to create tool");
   }
 
   private async testToolRegistry() {
@@ -150,7 +152,7 @@ class E2ETestRunner {
       },
     };
 
-    const [event] = await db
+    const eventResult = await db
       .insert(events)
       .values({
         userId: this.userId,
@@ -159,21 +161,22 @@ class E2ETestRunner {
         type: EventType.TOOL_ACTION,
         status: EventStatus.ACTIVE,
         triggerType: EventTriggerType.MANUAL,
-        runLocation: "LOCAL",
-        schedule: "{}",
+        runLocation: RunLocation.LOCAL,
+        scheduleNumber: 1,
+        scheduleUnit: TimeUnit.MINUTES,
         timeoutValue: 30,
-        timeoutUnit: "SECONDS",
+        timeoutUnit: TimeUnit.SECONDS,
         retries: 0,
         maxExecutions: 1,
-        executionCount: 0,
-        envVars: "[]",
-        conditionalEvents: "[]",
         tags: ["test", "e2e"],
-        code: "",
+        content: "",
         toolActionConfig: JSON.stringify(toolActionConfig),
       })
       .returning();
 
+    const event = eventResult[0];
+    if (!event) throw new Error("Failed to create event");
+    
     this.testEventId = event.id;
     console.log(`   Created event ID: ${event.id}`);
   }
@@ -224,6 +227,8 @@ class E2ETestRunner {
     }
 
     const log = logs[0];
+    if (!log) throw new Error("No log entry found");
+    
     console.log(`   Found ${logs.length} log entries`);
     console.log(`   Status: ${log.status}`);
     console.log(`   Tool type: ${log.toolType}`);
@@ -249,7 +254,7 @@ class E2ETestRunner {
       },
     };
 
-    const [badEvent] = await db
+    const badEventResult = await db
       .insert(events)
       .values({
         userId: this.userId,
@@ -257,21 +262,22 @@ class E2ETestRunner {
         type: EventType.TOOL_ACTION,
         status: EventStatus.ACTIVE,
         triggerType: EventTriggerType.MANUAL,
-        runLocation: "LOCAL",
-        schedule: "{}",
+        runLocation: RunLocation.LOCAL,
+        scheduleNumber: 1,
+        scheduleUnit: TimeUnit.MINUTES,
         timeoutValue: 30,
-        timeoutUnit: "SECONDS",
+        timeoutUnit: TimeUnit.SECONDS,
         retries: 0,
         maxExecutions: 1,
-        executionCount: 0,
-        envVars: "[]",
-        conditionalEvents: "[]",
         tags: ["test", "e2e", "error"],
-        code: "",
+        content: "",
         toolActionConfig: JSON.stringify(badConfig),
       })
       .returning();
 
+    const badEvent = badEventResult[0];
+    if (!badEvent) throw new Error("Failed to create bad event");
+    
     try {
       await executeToolAction(badEvent);
       throw new Error("Expected execution to fail but it succeeded");
@@ -332,7 +338,7 @@ class E2ETestRunner {
       },
     };
 
-    const [retryEvent] = await db
+    const retryEventResult = await db
       .insert(events)
       .values({
         userId: this.userId,
@@ -340,21 +346,22 @@ class E2ETestRunner {
         type: EventType.TOOL_ACTION,
         status: EventStatus.ACTIVE,
         triggerType: EventTriggerType.MANUAL,
-        runLocation: "LOCAL",
-        schedule: "{}",
+        runLocation: RunLocation.LOCAL,
+        scheduleNumber: 1,
+        scheduleUnit: TimeUnit.MINUTES,
         timeoutValue: 30,
-        timeoutUnit: "SECONDS",
+        timeoutUnit: TimeUnit.SECONDS,
         retries: 2, // Enable retries
         maxExecutions: 1,
-        executionCount: 0,
-        envVars: "[]",
-        conditionalEvents: "[]",
         tags: ["test", "e2e", "retry"],
-        code: "",
+        content: "",
         toolActionConfig: JSON.stringify(retryConfig),
       })
       .returning();
 
+    const retryEvent = retryEventResult[0];
+    if (!retryEvent) throw new Error("Failed to create retry event");
+    
     try {
       await executeToolAction(retryEvent);
     } catch (error) {

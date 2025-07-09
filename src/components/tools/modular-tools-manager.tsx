@@ -19,7 +19,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { type Tool, type ToolType } from "@/shared/schema";
+import { type Tool as ToolBase, type ToolType } from "@/shared/schema";
+
+// Tool with parsed credentials
+type Tool = Omit<ToolBase, 'credentials'> & {
+  credentials: Record<string, any>;
+  description?: string;
+  tags: string[];
+};
 import { ToolPluginRegistry } from "./plugins";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -250,7 +257,7 @@ export function ModularToolsManager() {
     },
   });
 
-  const createTemplateMutation = trpc.integrations.templates.create.useMutation(
+  const createTemplateMutation = trpc.toolActionTemplates.create.useMutation(
     {
       onSuccess: () => {
         toast({
@@ -333,15 +340,23 @@ export function ModularToolsManager() {
 
   const handleTemplateSubmit = async (data: TemplateFormData) => {
     try {
+      // Get the selected tool action
+      const plugin = ToolPluginRegistry.get(selectedTool ?? "");
+      const firstAction = plugin?.actions?.[0];
+      
+      if (!firstAction) {
+        throw new Error("No actions available for this tool");
+      }
+
       const templateData = {
         name: data.name,
-        type: (selectedTool?.toUpperCase() ?? "") as ToolType,
-        content: data.content,
-        subject: data.subject ?? "",
-        description: "",
-        variables: [],
-        isSystemTemplate: false,
-        tags: [],
+        toolType: selectedTool ?? "",
+        actionId: firstAction.id,
+        parameters: {
+          content: data.content,
+          subject: data.subject ?? "",
+        },
+        description: `Template for ${data.name}`,
       };
 
       await createTemplateMutation.mutateAsync(templateData);
@@ -607,18 +622,18 @@ export function ModularToolsManager() {
                               </div>
                             )}
                           </div>
-                          {getFilteredTools(selectedPluginInstance.id).length >
-                            0 && (
-                            <div className="mt-4">
-                              <ToolErrorDiagnostics
-                                toolId={
-                                  getFilteredTools(selectedPluginInstance.id)[0]
-                                    ?.id
-                                }
-                                compact
-                              />
-                            </div>
-                          )}
+                          {(() => {
+                            const tools = getFilteredTools(selectedPluginInstance.id);
+                            const firstToolId = tools[0]?.id;
+                            return tools.length > 0 && firstToolId ? (
+                              <div className="mt-4">
+                                <ToolErrorDiagnostics
+                                  toolId={firstToolId}
+                                  compact
+                                />
+                              </div>
+                            ) : null;
+                          })()}
                         </div>
                       )}
                     </div>

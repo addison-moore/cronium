@@ -305,8 +305,12 @@ export function createRetryExecutor<T>(
     maxDelay: config.maxDelay ?? defaultConfig.maxDelay,
     backoffMultiplier: config.backoffMultiplier ?? defaultConfig.backoffMultiplier,
     jitter: config.jitter ?? defaultConfig.jitter,
-    retryableErrors: config.retryableErrors ?? [...defaultConfig.retryableErrors],
-    nonRetryableErrors: config.nonRetryableErrors ?? (defaultConfig.nonRetryableErrors ? [...defaultConfig.nonRetryableErrors] : undefined),
+    ...(config.retryableErrors || defaultConfig.retryableErrors
+      ? { retryableErrors: config.retryableErrors ?? [...defaultConfig.retryableErrors] }
+      : {}),
+    ...(config.nonRetryableErrors || defaultConfig.nonRetryableErrors
+      ? { nonRetryableErrors: config.nonRetryableErrors ?? [...defaultConfig.nonRetryableErrors] }
+      : {}),
   };
 
   let strategy: RetryStrategy;

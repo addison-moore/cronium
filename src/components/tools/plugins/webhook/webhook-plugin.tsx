@@ -1,7 +1,7 @@
-import { ToolPlugin, ToolAction } from "@/components/tools/types/tool-plugin";
+import { ToolPlugin, ToolAction, ExecutionContext } from "@/components/tools/types/tool-plugin";
 import { z } from "zod";
-import { ToolType } from "@/shared/schema";
 import { Link } from "lucide-react";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Webhook credential schema
 const WebhookCredentialsSchema = z.object({
@@ -10,30 +10,35 @@ const WebhookCredentialsSchema = z.object({
   auth: z
     .object({
       type: z.enum(["none", "basic", "bearer"]),
-      credentials: z.any().optional(),
+      credentials: z.record(z.string()),
     })
     .optional(),
 });
 
 // Send webhook action
+const sendWebhookSchema = z.object({
+  method: z.enum(["GET", "POST", "PUT", "DELETE", "PATCH"]).default("POST"),
+  body: z.any().optional(),
+  headers: z.record(z.string()).optional(),
+  queryParams: z.record(z.string()).optional(),
+});
+
 const sendWebhookAction: ToolAction = {
   id: "webhook.send",
   name: "Send Webhook",
   description: "Send an HTTP request to a webhook URL",
-  actionType: "message",
-  inputSchema: z.object({
-    method: z.enum(["GET", "POST", "PUT", "DELETE", "PATCH"]).default("POST"),
-    body: z.any().optional(),
-    headers: z.record(z.string()).optional(),
-    queryParams: z.record(z.string()).optional(),
-  }),
+  category: "Integration",
+  actionType: "create",
+  developmentMode: "visual",
+  inputSchema: sendWebhookSchema,
+  parameters: zodToParameters(sendWebhookSchema),
   outputSchema: z.object({
     status: z.number(),
     statusText: z.string(),
     data: z.any(),
     headers: z.record(z.string()),
   }),
-  execute: async (credentials, parameters, context) => {
+  execute: async (credentials, parameters, context: ExecutionContext) => {
     const creds = WebhookCredentialsSchema.parse(credentials);
     const { method, body, headers: paramHeaders, queryParams } = parameters;
 
@@ -61,7 +66,7 @@ const sendWebhookAction: ToolAction = {
     const response = await fetch(url, {
       method,
       headers: allHeaders,
-      body: body ? JSON.stringify(body) : undefined,
+      ...(body !== undefined && { body: JSON.stringify(body) }),
     });
 
     const responseData = await response.json().catch(() => response.text());
@@ -75,16 +80,39 @@ const sendWebhookAction: ToolAction = {
   },
 };
 
+// Component placeholders
+const WebhookCredentialForm = () => {
+  return <div>Webhook credential form not implemented</div>;
+};
+
+const WebhookCredentialDisplay = () => {
+  return <div>Webhook credential display not implemented</div>;
+};
+
 // Webhook plugin definition
 export const WebhookPlugin: ToolPlugin = {
   id: "webhook",
   name: "Webhook",
   description: "Send HTTP requests to any webhook URL",
-  toolType: ToolType.WEBHOOK,
   icon: Link,
-  credentialSchema: WebhookCredentialsSchema,
+  category: "Integration",
+  schema: WebhookCredentialsSchema,
+  defaultValues: {
+    url: "",
+  },
+  
+  // Components
+  CredentialForm: WebhookCredentialForm,
+  CredentialDisplay: WebhookCredentialDisplay,
+  
+  // Tool Actions
   actions: [sendWebhookAction],
-  testConnection: async (credentials) => {
+  getActionById: (id: string) => 
+    [sendWebhookAction].find(action => action.id === id),
+  getActionsByType: (type) =>
+    [sendWebhookAction].filter(action => action.actionType === type),
+    
+  test: async (credentials: Record<string, unknown>) => {
     try {
       const creds = WebhookCredentialsSchema.parse(credentials);
       const response = await fetch(creds.url, { method: "HEAD" });
@@ -101,51 +129,5 @@ export const WebhookPlugin: ToolPlugin = {
         message: error instanceof Error ? error.message : "Connection failed",
       };
     }
-  },
-  healthCheck: async (credentials) => {
-    try {
-      const startTime = Date.now();
-      const result = await WebhookPlugin.testConnection!(credentials);
-      const latency = Date.now() - startTime;
-
-      return {
-        status: result.success ? "healthy" : "failing",
-        message: result.message,
-        details: { latency },
-      };
-    } catch (error) {
-      return {
-        status: "failing",
-        message: error instanceof Error ? error.message : "Health check failed",
-      };
-    }
-  },
-  renderConfig: () => {
-    return (
-      <div className="space-y-4">
-        <div>
-          <label className="mb-1 block text-sm font-medium">Webhook URL</label>
-          <input
-            type="url"
-            name="url"
-            className="w-full rounded-md border px-3 py-2"
-            placeholder="https://example.com/webhook"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">
-            Headers (JSON)
-          </label>
-          <textarea
-            name="headers"
-            className="w-full rounded-md border px-3 py-2"
-            placeholder='{"X-Custom-Header": "value"}'
-            rows={3}
-          />
-        </div>
-      </div>
-    );
   },
 };

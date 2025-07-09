@@ -980,9 +980,9 @@ export default function ConditionalActionsSection({
                       if (
                         selectedTemplate &&
                         value !==
-                          [...userTemplates, ...systemTemplates].find(
+                          (([...userTemplates, ...systemTemplates].find(
                             (t) => t.id.toString() === selectedTemplate,
-                          )?.content
+                          )?.parameters as Record<string, any>) || {})?.message
                       ) {
                         setSelectedTemplate("");
                       }

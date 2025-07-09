@@ -88,7 +88,7 @@ export class WebhookQueue extends EventEmitter {
     this.isProcessing = false;
     if (this.processInterval) {
       clearInterval(this.processInterval);
-      this.processInterval = undefined;
+      delete this.processInterval;
     }
   }
 
@@ -227,7 +227,7 @@ export class WebhookQueue extends EventEmitter {
 
     // Reset attempts and move back to main queue
     item.attempts = 0;
-    item.nextRetryAt = undefined;
+    delete item.nextRetryAt;
 
     this.deadLetterQueue.delete(id);
     this.stats.deadLetter--;

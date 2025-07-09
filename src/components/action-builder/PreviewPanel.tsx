@@ -69,7 +69,7 @@ export function PreviewPanel({
           ...updated[i],
           status: "running",
           startTime: new Date(),
-        };
+        } as ExecutionStep;
         return updated;
       });
 
@@ -86,7 +86,7 @@ export function PreviewPanel({
           endTime: new Date(),
           output: isSuccess ? { result: "Success data" } : undefined,
           error: isSuccess ? undefined : "Simulated error",
-        };
+        } as ExecutionStep;
         return updated;
       });
 
@@ -196,11 +196,11 @@ export function PreviewPanel({
                                 {nodeData?.description}
                               </div>
                             </div>
-                            {nodeData?.type && (
+                            {nodeData?.type ? (
                               <Badge variant="outline" className="text-xs">
-                                {nodeData.type}
+                                {String(nodeData.type)}
                               </Badge>
-                            )}
+                            ) : null}
                           </div>
                           {index < executionOrder.length - 1 && (
                             <div className="my-1 ml-6">

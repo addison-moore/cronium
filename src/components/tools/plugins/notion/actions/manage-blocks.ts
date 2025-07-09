@@ -274,7 +274,7 @@ export const manageBlocksAction: ToolAction = {
               },
               body: JSON.stringify({
                 children,
-                after: typedParams.after,
+                ...(typedParams.after && { after: typedParams.after }),
               }),
             },
           );
@@ -285,7 +285,7 @@ export const manageBlocksAction: ToolAction = {
             };
             result = {
               success: true,
-              blocks: data.results,
+              ...(data.results && { blocks: data.results }),
             };
           }
           break;
@@ -365,7 +365,7 @@ export const manageBlocksAction: ToolAction = {
             const data = (await response.json()) as { results?: unknown[] };
             result = {
               success: true,
-              blocks: data.results,
+              ...(data.results && { blocks: data.results }),
             };
           }
           break;
@@ -419,7 +419,7 @@ export const manageBlocksAction: ToolAction = {
 
 // Helper function to process blocks
 function processBlock(
-  block: z.infer<typeof manageBlocksSchema>["blocks"][0],
+  block: NonNullable<z.infer<typeof manageBlocksSchema>["blocks"]>[0],
   variables: { get: (key: string) => unknown },
 ): Record<string, unknown> {
   const processedBlock: Record<string, unknown> = {

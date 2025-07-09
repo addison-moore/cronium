@@ -13,8 +13,8 @@ import {
   TrendingUp,
   Sparkles,
 } from "lucide-react";
-import { ToolPluginRegistry } from "@/components/tools/ToolPluginRegistry";
 import {
+  ToolPluginRegistry,
   type ToolPlugin,
   type ToolAction,
 } from "@/components/tools/types/tool-plugin";
@@ -50,8 +50,8 @@ export function QuickAccessPanel({
     return actionKeys
       .map((key) => {
         const [toolId, actionId] = key.split(":");
-        const tool = ToolPluginRegistry.getPlugin(toolId);
-        const action = tool?.actions?.find((a) => a.id === actionId);
+        const tool = ToolPluginRegistry.get(toolId);
+        const action = tool?.actions?.find((a: ToolAction) => a.id === actionId);
 
         if (!tool || !action) return null;
 
@@ -212,9 +212,9 @@ export function QuickAccessPanel({
               variant="outline"
               className="w-full justify-start"
               onClick={() => {
-                const slackTool = ToolPluginRegistry.getPlugin("slack");
+                const slackTool = ToolPluginRegistry.get("slack");
                 const sendMessage = slackTool?.actions?.find(
-                  (a) => a.id === "send-message",
+                  (a: ToolAction) => a.id === "send-message",
                 );
                 if (slackTool && sendMessage) {
                   onActionSelect?.(slackTool, sendMessage);
@@ -229,9 +229,9 @@ export function QuickAccessPanel({
               className="w-full justify-start"
               onClick={() => {
                 const sheetsTool =
-                  ToolPluginRegistry.getPlugin("google-sheets");
+                  ToolPluginRegistry.get("google-sheets");
                 const writeData = sheetsTool?.actions?.find(
-                  (a) => a.id === "write-data",
+                  (a: ToolAction) => a.id === "write-data",
                 );
                 if (sheetsTool && writeData) {
                   onActionSelect?.(sheetsTool, writeData);
@@ -245,9 +245,9 @@ export function QuickAccessPanel({
               variant="outline"
               className="w-full justify-start"
               onClick={() => {
-                const trelloTool = ToolPluginRegistry.getPlugin("trello");
+                const trelloTool = ToolPluginRegistry.get("trello");
                 const createCard = trelloTool?.actions?.find(
-                  (a) => a.id === "create-card",
+                  (a: ToolAction) => a.id === "create-card",
                 );
                 if (trelloTool && createCard) {
                   onActionSelect?.(trelloTool, createCard);

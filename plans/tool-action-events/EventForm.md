@@ -6,8 +6,8 @@
 
 ### ✅ Completed
 
-- ImprovedEventForm component with React Hook Form + Zod validation
-- ImprovedToolActionSection with visual tool browser and two-tab interface
+- Unified EventForm component with React Hook Form + Zod validation (formerly ImprovedEventForm)
+- Unified ToolActionSection with visual tool browser and two-tab interface (formerly ImprovedToolActionSection)
 - Conditional rendering (hides script IDE for Tool Actions)
 - Tool search, filtering, and category organization
 - Action selection with visual cards and type badges
@@ -300,16 +300,16 @@ const [toolActionState, setToolActionState] = useState<{
 
 ### Phase 1: Basic Improvements
 
-- [x] Hide script IDE for Tool Action events (Completed in ImprovedEventForm)
+- [x] Hide script IDE for Tool Action events (Completed in unified EventForm)
 - [x] Move tool action section higher in form (Tool action section appears instead of script content)
 - [x] Add loading states for tool data (Using tRPC with loading states)
 - [x] Implement conditional rendering based on event type
-- [x] Create ImprovedEventForm with React Hook Form + Zod validation
+- [x] Create unified EventForm with React Hook Form + Zod validation
 - [x] Add type-safe form handling following TYPE_SAFETY_GUIDELINES
 
 ### Phase 2: Tool Selection
 
-- [x] Implement visual tool browser (Created in ImprovedToolActionSection)
+- [x] Implement visual tool browser (Created in unified ToolActionSection)
 - [x] Add tool search/filter (Search input and category filtering implemented)
 - [x] Show tool status and health (Active/Inactive badges with health indicators)
 - [x] Create tool cards with icons and descriptions
@@ -342,6 +342,7 @@ const [toolActionState, setToolActionState] = useState<{
 - [x] Add loading state for test execution
 - [x] Show success/error toast notifications
 - [ ] Display test results inline
+- [x] Integrate template functionality
 
 ### Phase 6: Polish
 
@@ -365,7 +366,7 @@ const [toolActionState, setToolActionState] = useState<{
 
 ### Immediate Priorities
 
-1. **Integration**: Replace existing EventForm with ImprovedEventForm
+1. **Integration**: ✅ COMPLETED - All pages using unified EventForm
    - [x] Update `/dashboard/events/new/page.tsx`
    - [x] Update `/dashboard/events/[id]/page.tsx` (via EventEditTab)
    - [x] Test with existing events data
@@ -378,7 +379,7 @@ const [toolActionState, setToolActionState] = useState<{
    - [x] Email preview with formatting
    - [x] API request preview
    - [x] Discord message preview (using Slack preview)
-   - [x] Integrate previews into ImprovedToolActionSection
+   - [x] Integrate previews into unified ToolActionSection
 4. **Variable Substitution**: Support dynamic variables
    - [ ] Parse {{VARIABLE_NAME}} syntax
    - [ ] Show available variables
@@ -393,8 +394,8 @@ const [toolActionState, setToolActionState] = useState<{
 
 ### Testing Requirements
 
-- [ ] Unit tests for ImprovedEventForm
-- [ ] Unit tests for ImprovedToolActionSection
+- [ ] Unit tests for unified EventForm
+- [ ] Unit tests for unified ToolActionSection
 - [ ] Integration tests for tool action creation flow
 - [ ] E2E tests for complete event lifecycle
 

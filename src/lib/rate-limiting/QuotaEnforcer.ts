@@ -287,7 +287,7 @@ export class QuotaEnforcer {
     );
     if (!check.allowed) {
       throw new TRPCError({
-        code: "INSUFFICIENT_STORAGE",
+        code: "PAYLOAD_TOO_LARGE",
         message: `Storage limit exceeded. Used: ${check.used}MB, Limit: ${check.limit}MB`,
       });
     }

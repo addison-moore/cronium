@@ -17,7 +17,7 @@ async function testRegistry() {
 
   allPlugins.forEach((plugin) => {
     console.log(`Plugin: ${plugin.name} (${plugin.id})`);
-    console.log(`  Type: ${plugin.toolType}`);
+    console.log(`  Category: ${plugin.category}`);
     console.log(`  Actions: ${plugin.actions?.length || 0}`);
 
     if (plugin.actions) {
@@ -36,6 +36,10 @@ async function testRegistry() {
 
     if (webhookPlugin.actions && webhookPlugin.actions.length > 0) {
       const sendAction = webhookPlugin.actions[0];
+      if (!sendAction) {
+        console.error("❌ No send action found in webhook plugin");
+        return;
+      }
 
       try {
         // Test with httpbin
@@ -50,6 +54,10 @@ async function testRegistry() {
             headers: { "Content-Type": "application/json" },
           },
           {
+            variables: {
+              get: (key: string) => undefined,
+              set: (key: string, value: unknown) => {},
+            },
             logger: {
               info: (msg: string) => console.log(`  [INFO] ${msg}`),
               error: (msg: string) => console.error(`  [ERROR] ${msg}`),

@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -138,13 +137,11 @@ export default function ToolCredentialManager({
 
   // Queries
   const { data: tools = [], isLoading } = trpc.tools.list.useQuery(undefined, {
-    ...QUERY_OPTIONS.default,
+    ...QUERY_OPTIONS.static,
   });
 
-  const { data: toolsWithDecrypted = [] } =
-    trpc.tools.listWithDecryptedConfig.useQuery(undefined, {
-      ...QUERY_OPTIONS.sensitive,
-    });
+  // Note: Since the tools.list query returns decrypted credentials, we use the same data
+  const toolsWithDecrypted = tools;
 
   // Mutations
   const createToolMutation = trpc.tools.create.useMutation({
@@ -154,7 +151,7 @@ export default function ToolCredentialManager({
         description: "Tool credentials have been saved securely.",
       });
       utils.tools.list.invalidate();
-      utils.tools.listWithDecryptedConfig.invalidate();
+      utils.tools.list.invalidate();
       setIsAddDialogOpen(false);
       resetForm();
     },
@@ -174,7 +171,7 @@ export default function ToolCredentialManager({
         description: "Tool credentials have been updated.",
       });
       utils.tools.list.invalidate();
-      utils.tools.listWithDecryptedConfig.invalidate();
+      utils.tools.list.invalidate();
       setIsEditDialogOpen(false);
       setSelectedTool(null);
       resetForm();
@@ -195,7 +192,7 @@ export default function ToolCredentialManager({
         description: "Tool credentials have been removed.",
       });
       utils.tools.list.invalidate();
-      utils.tools.listWithDecryptedConfig.invalidate();
+      utils.tools.list.invalidate();
     },
     onError: (error) => {
       toast({
@@ -278,31 +275,26 @@ export default function ToolCredentialManager({
 
   // Handle tool selection for add
   const handleToolTypeSelect = (type: ToolType) => {
-    const plugin = ToolPluginRegistry.getPlugin(type);
+    const plugin = ToolPluginRegistry.get(type);
     if (!plugin) return;
-
-    const defaultConfig: Record<string, string> = {};
-    plugin.configFields.forEach((field) => {
-      defaultConfig[field.name] = field.defaultValue || "";
-    });
 
     setFormData({
       name: `${plugin.name} - ${new Date().toLocaleDateString()}`,
       type,
-      config: defaultConfig,
+      config: plugin.defaultValues as Record<string, string>,
     });
   };
 
   // Handle edit
   const handleEdit = (tool: Tool) => {
-    const decryptedTool = toolsWithDecrypted.find((t) => t.id === tool.id);
+    const decryptedTool = toolsWithDecrypted.find((t: any) => t.id === tool.id);
     if (!decryptedTool) return;
 
     setSelectedTool(tool);
     setFormData({
       name: tool.name,
       type: tool.type,
-      config: decryptedTool.config as Record<string, string>,
+      config: (decryptedTool as any).credentials || {},
     });
     setIsEditDialogOpen(true);
   };
@@ -313,16 +305,20 @@ export default function ToolCredentialManager({
       updateToolMutation.mutate({
         id: selectedTool.id,
         name: formData.name,
-        config: formData.config,
+        credentials: formData.config,
       });
     } else {
-      createToolMutation.mutate(formData);
+      createToolMutation.mutate({
+        name: formData.name,
+        type: formData.type,
+        credentials: formData.config,
+      });
     }
   };
 
   // Filter tools
   const filteredTools = tools.filter((tool) => {
-    const plugin = ToolPluginRegistry.getPlugin(tool.type);
+    const plugin = ToolPluginRegistry.get(tool.type);
     if (!plugin) return false;
 
     const matchesCategory =
@@ -415,7 +411,7 @@ export default function ToolCredentialManager({
         ) : (
           <div className="space-y-6">
             {Object.entries(groupedTools).map(([type, typeTools]) => {
-              const plugin = ToolPluginRegistry.getPlugin(type as ToolType);
+              const plugin = ToolPluginRegistry.get(type as ToolType);
               if (!plugin) return null;
 
               return (
@@ -442,9 +438,7 @@ export default function ToolCredentialManager({
                       <TableBody>
                         {typeTools.map((tool) => {
                           const healthCheck = healthChecks[tool.id];
-                          const decryptedTool = toolsWithDecrypted.find(
-                            (t) => t.id === tool.id,
-                          );
+                          const decryptedTool = tool;
 
                           return (
                             <TableRow key={tool.id}>
@@ -492,26 +486,24 @@ export default function ToolCredentialManager({
                               </TableCell>
                               <TableCell>
                                 <div className="space-y-1">
-                                  {plugin.configFields.map((field) => {
-                                    const value =
-                                      decryptedTool?.config?.[field.name];
-                                    const isSecret = field.type === "password";
+                                  {Object.entries((decryptedTool as any)?.credentials || {}).map(([key, value]: [string, any]) => {
+                                    const isSecret = key.toLowerCase().includes('secret') || key.toLowerCase().includes('password') || key.toLowerCase().includes('token');
                                     const isVisible = showSecrets[tool.id];
 
                                     return (
                                       <div
-                                        key={field.name}
+                                        key={key}
                                         className="flex items-center gap-2 text-sm"
                                       >
                                         <span className="text-muted-foreground">
-                                          {field.label}:
+                                          {key}:
                                         </span>
                                         {value ? (
                                           <div className="flex items-center gap-1">
                                             <code className="bg-muted rounded px-1 py-0.5 text-xs">
                                               {isSecret && !isVisible
                                                 ? "••••••••"
-                                                : value}
+                                                : String(value)}
                                             </code>
                                             {isSecret && (
                                               <Button
@@ -537,8 +529,8 @@ export default function ToolCredentialManager({
                                               className="h-6 w-6 p-0"
                                               onClick={() =>
                                                 copyCredential(
-                                                  value,
-                                                  field.label,
+                                                  String(value),
+                                                  key,
                                                 )
                                               }
                                             >
@@ -601,11 +593,12 @@ export default function ToolCredentialManager({
                                       <Edit className="mr-2 h-4 w-4" />
                                       Edit
                                     </DropdownMenuItem>
-                                    {plugin.docsUrl && (
+                                    {plugin.actions?.[0]?.helpUrl && (
                                       <DropdownMenuItem
-                                        onClick={() =>
-                                          window.open(plugin.docsUrl, "_blank")
-                                        }
+                                        onClick={() => {
+                                          const url = plugin.actions?.[0]?.helpUrl;
+                                          if (url) window.open(url, "_blank");
+                                        }}
                                       >
                                         <ExternalLink className="mr-2 h-4 w-4" />
                                         View Docs
@@ -669,7 +662,7 @@ export default function ToolCredentialManager({
               <div className="space-y-4">
                 <Label>Select Tool Type</Label>
                 <div className="grid grid-cols-2 gap-3">
-                  {ToolPluginRegistry.listPlugins().map((plugin) => (
+                  {ToolPluginRegistry.getAll().map((plugin: any) => (
                     <Button
                       key={plugin.id}
                       variant={
@@ -703,76 +696,55 @@ export default function ToolCredentialManager({
                   />
                 </div>
 
-                {ToolPluginRegistry.getPlugin(formData.type)?.configFields.map(
-                  (field) => (
-                    <div key={field.name} className="space-y-2">
-                      <Label htmlFor={field.name}>
-                        {field.label}
-                        {field.required && (
-                          <span className="text-destructive ml-1">*</span>
-                        )}
-                      </Label>
-                      {field.type === "textarea" ? (
-                        <Textarea
-                          id={field.name}
-                          value={formData.config[field.name] || ""}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              config: {
-                                ...formData.config,
-                                [field.name]: e.target.value,
-                              },
-                            })
-                          }
-                          placeholder={field.placeholder}
-                          rows={4}
-                        />
-                      ) : (
-                        <Input
-                          id={field.name}
-                          type={field.type}
-                          value={formData.config[field.name] || ""}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              config: {
-                                ...formData.config,
-                                [field.name]: e.target.value,
-                              },
-                            })
-                          }
-                          placeholder={field.placeholder}
-                        />
+                {/* Render generic inputs for the config object */}
+                {Object.entries(formData.config).map(([key, value]) => (
+                  <div key={key} className="space-y-2">
+                    <Label htmlFor={key}>
+                      {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1').trim()}
+                      {/* Mark common required fields */}
+                      {(key === 'apiKey' || key === 'token' || key === 'clientId') && (
+                        <span className="text-destructive ml-1">*</span>
                       )}
-                      {field.description && (
-                        <p className="text-muted-foreground text-sm">
-                          {field.description}
-                        </p>
-                      )}
-                    </div>
-                  ),
-                )}
+                    </Label>
+                    <Input
+                      id={key}
+                      type={key.toLowerCase().includes('secret') || key.toLowerCase().includes('password') || key.toLowerCase().includes('token') ? 'password' : 'text'}
+                      value={value || ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          config: {
+                            ...formData.config,
+                            [key]: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder={`Enter ${key}`}
+                    />
+                  </div>
+                ))}
 
                 {/* Setup Guide */}
-                {ToolPluginRegistry.getPlugin(formData.type)?.docsUrl && (
-                  <Alert>
-                    <HelpCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      Need help setting up?{" "}
-                      <a
-                        href={
-                          ToolPluginRegistry.getPlugin(formData.type)?.docsUrl
-                        }
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-medium underline"
-                      >
-                        View setup guide
-                      </a>
-                    </AlertDescription>
-                  </Alert>
-                )}
+                {(() => {
+                  const plugin = ToolPluginRegistry.get(formData.type);
+                  const helpUrl = plugin?.actions?.[0]?.helpUrl;
+                  return helpUrl ? (
+                    <Alert>
+                      <HelpCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Need help setting up?{" "}
+                        <a
+                          href={helpUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium underline"
+                        >
+                          View setup guide
+                        </a>
+                      </AlertDescription>
+                    </Alert>
+                  ) : null;
+                })()}
               </>
             )}
           </div>

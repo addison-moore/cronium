@@ -76,7 +76,7 @@ export const sendMessageAction: ToolAction = {
   name: "Send Message",
   description: "Send a message to a Microsoft Teams channel using a webhook",
   category: "Messaging",
-  actionType: "notification",
+  actionType: "create",
   developmentMode: "visual",
   inputSchema: sendMessageSchema,
   parameters: zodToParameters(sendMessageSchema),
@@ -235,7 +235,7 @@ export const sendMessageAction: ToolAction = {
         payload.potentialAction = typedParams.potentialAction;
       }
 
-      logger.info("Sending Teams message", { webhookUrl: webhookUrl });
+      logger.info(`Sending Teams message to webhook`);
 
       if (isTest) {
         // Test mode - simulate sending

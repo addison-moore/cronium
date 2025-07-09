@@ -174,8 +174,6 @@ function TrelloCredentialDisplay({
                 </Badge>
                 <ToolHealthBadge
                   toolId={tool.id}
-                  toolName={tool.name}
-                  compact
                 />
               </div>
               <div className="text-muted-foreground grid grid-cols-1 gap-2 text-sm">

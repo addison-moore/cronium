@@ -58,26 +58,21 @@ export function ConnectionManager({
   }
 
   const handleTypeChange = (type: "success" | "failure" | "always") => {
-    updateConnection(connection.id, { type });
-    onUpdate?.(connection.id, { type });
+    const updatedData = { data: { ...connection.data, connectionType: type } };
+    updateConnection(connection.id, updatedData);
+    onUpdate?.(connection.id, updatedData);
   };
 
   const handleConditionChange = (condition: string) => {
-    updateConnection(connection.id, {
-      data: { ...connection.data, condition },
-    });
-    onUpdate?.(connection.id, {
-      data: { ...connection.data, condition },
-    });
+    const updatedData = { data: { ...connection.data, condition } };
+    updateConnection(connection.id, updatedData);
+    onUpdate?.(connection.id, updatedData);
   };
 
   const handleTransformerChange = (transformer: string) => {
-    updateConnection(connection.id, {
-      data: { ...connection.data, transformer },
-    });
-    onUpdate?.(connection.id, {
-      data: { ...connection.data, transformer },
-    });
+    const updatedData = { data: { ...connection.data, transformer } };
+    updateConnection(connection.id, updatedData);
+    onUpdate?.(connection.id, updatedData);
   };
 
   const handleDelete = () => {
@@ -108,11 +103,11 @@ export function ConnectionManager({
         </div>
 
         {/* Connection Type (for condition nodes) */}
-        {sourceNode.type === NodeType.CONDITION && (
+        {sourceNode.data.nodeType === NodeType.CONDITION && (
           <div className="space-y-2">
             <Label>Connection Type</Label>
             <Select
-              value={connection.type ?? "always"}
+              value={connection.data?.connectionType ?? "always"}
               onValueChange={(value) =>
                 handleTypeChange(value as "success" | "failure" | "always")
               }
@@ -130,7 +125,7 @@ export function ConnectionManager({
         )}
 
         {/* Condition Configuration */}
-        {connection.type !== "always" && (
+        {connection.data?.connectionType !== "always" && (
           <div className="space-y-2">
             <Label>Condition Expression</Label>
             <Textarea

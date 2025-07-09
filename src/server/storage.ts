@@ -73,6 +73,9 @@ import {
   encryptionService,
 } from "../lib/encryption-service";
 
+// Re-export types from schema for convenience
+export type { WorkflowExecution } from "../shared/schema";
+
 // Type definitions for complex return types
 export interface EventWithRelations extends Script {
   envVars: EnvVar[];

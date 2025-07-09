@@ -77,6 +77,9 @@ export class OAuthFlow {
     }
 
     const authRequest = stateRecord[0];
+    if (!authRequest) {
+      throw new OAuthError("Invalid state parameter", "invalid_state", 400);
+    }
 
     // Check if state is expired
     if (authRequest.expiresAt < new Date()) {

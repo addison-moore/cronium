@@ -73,7 +73,7 @@ export class WebhookManager extends EventEmitter {
     const key = nanoid(32);
     const secretKey = config.secret || crypto.randomBytes(32).toString("hex");
 
-    const [webhook] = await db
+    const result = await db
       .insert(webhooks)
       .values({
         userId,
@@ -94,7 +94,11 @@ export class WebhookManager extends EventEmitter {
       })
       .returning();
 
-    return { id: webhook.id, key };
+    if (!result[0]) {
+      throw new Error("Failed to create webhook");
+    }
+
+    return { id: result[0].id, key };
   }
 
   /**
@@ -162,8 +166,10 @@ export class WebhookManager extends EventEmitter {
       .where(and(eq(webhooks.active, true)));
 
     const subscribedWebhooks = activeWebhooks.filter(
-      (webhook) =>
-        webhook.events.includes(event) || webhook.events.includes("*"),
+      (webhook) => {
+        const events = webhook.events as string[];
+        return events.includes(event) || events.includes("*");
+      }
     );
 
     if (subscribedWebhooks.length === 0) {
@@ -171,7 +177,7 @@ export class WebhookManager extends EventEmitter {
     }
 
     // Create webhook event record
-    const [webhookEvent] = await db
+    const result = await db
       .insert(webhookEvents)
       .values({
         event,
@@ -180,16 +186,28 @@ export class WebhookManager extends EventEmitter {
       })
       .returning();
 
+    if (!result[0]) {
+      throw new Error("Failed to create webhook event");
+    }
+
+    const webhookEvent = result[0];
+
     // Queue deliveries for each webhook
     const payload: WebhookPayload = {
       id: webhookEvent.id.toString(),
       event,
       timestamp: webhookEvent.createdAt,
       data,
-      metadata,
+      ...(metadata !== undefined && { metadata }),
     };
 
     for (const webhook of subscribedWebhooks) {
+      const retryConfig = webhook.retryConfig as {
+        maxRetries: number;
+        retryDelay: number;
+        backoffMultiplier: number;
+      } | undefined;
+
       await this.webhookQueue.enqueue({
         webhookId: webhook.id,
         webhookEventId: webhookEvent.id,
@@ -197,7 +215,7 @@ export class WebhookManager extends EventEmitter {
         secret: webhook.secret,
         headers: webhook.headers as Record<string, string>,
         payload,
-        retryConfig: webhook.retryConfig as WebhookConfig["retryConfig"],
+        ...(retryConfig !== undefined && { retryConfig }),
       });
     }
 
@@ -354,6 +372,12 @@ export class WebhookManager extends EventEmitter {
     }
 
     // Re-queue the delivery
+    const retryConfig = webhook.retryConfig as {
+      maxRetries: number;
+      retryDelay: number;
+      backoffMultiplier: number;
+    } | undefined;
+
     await this.webhookQueue.enqueue({
       webhookId: webhook.id,
       webhookEventId: event.id,
@@ -361,7 +385,7 @@ export class WebhookManager extends EventEmitter {
       secret: webhook.secret,
       headers: webhook.headers as Record<string, string>,
       payload: event.payload as WebhookPayload,
-      retryConfig: webhook.retryConfig as WebhookConfig["retryConfig"],
+      ...(retryConfig !== undefined && { retryConfig }),
       isRetry: true,
     });
 

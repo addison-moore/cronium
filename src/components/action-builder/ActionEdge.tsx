@@ -31,10 +31,10 @@ export function ActionEdge({
   });
 
   const getEdgeStyle = () => {
-    if (data?.type === "success") {
+    if (data?.connectionType === "success") {
       return { stroke: "#10b981", strokeWidth: 2 };
     }
-    if (data?.type === "failure") {
+    if (data?.connectionType === "failure") {
       return { stroke: "#ef4444", strokeWidth: 2 };
     }
     return { stroke: "#6b7280", strokeWidth: 2 };
@@ -44,7 +44,7 @@ export function ActionEdge({
     <>
       <BaseEdge
         path={edgePath}
-        markerEnd={markerEnd}
+        {...(markerEnd ? { markerEnd } : {})}
         style={{ ...getEdgeStyle(), ...style }}
       />
       {data?.label && (
@@ -58,10 +58,10 @@ export function ActionEdge({
             className="nodrag nopan"
           >
             <Badge
-              variant={data.type === "success" ? "default" : "secondary"}
+              variant={data.connectionType === "success" ? "default" : "secondary"}
               className="text-xs"
             >
-              {data.label}
+              {String(data.label)}
             </Badge>
           </div>
         </EdgeLabelRenderer>

@@ -65,7 +65,7 @@ export function DataMapper({
 
   const updateMapping = (index: number, updates: Partial<DataMapping>) => {
     const newMappings = [...mappings];
-    newMappings[index] = { ...newMappings[index], ...updates };
+    newMappings[index] = { ...newMappings[index], ...updates } as DataMapping;
     onMappingsChange(newMappings);
   };
 
@@ -209,12 +209,13 @@ export function DataMapper({
                 <div className="space-y-2">
                   <Label>Transformer</Label>
                   <Select
-                    value={mappings[selectedMapping].transformer}
-                    onValueChange={(value) =>
-                      updateMapping(selectedMapping, {
-                        transformer: value as DataMapping["transformer"],
-                      })
-                    }
+                    value={mappings[selectedMapping].transformer ?? "direct"}
+                    onValueChange={(value) => {
+                      const transformer = value as DataMapping["transformer"];
+                      if (transformer) {
+                        updateMapping(selectedMapping, { transformer });
+                      }
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -228,19 +229,19 @@ export function DataMapper({
                   </Select>
                 </div>
 
-                {mappings[selectedMapping].transformer === "template" && (
+                {mappings[selectedMapping]?.transformer === "template" && (
                   <div className="space-y-2">
                     <Label>Template</Label>
                     <Input
                       placeholder="e.g., Hello {{name}}!"
                       value={
-                        mappings[selectedMapping].transformerConfig?.template ??
+                        mappings[selectedMapping]?.transformerConfig?.template ??
                         ""
                       }
                       onChange={(e) =>
                         updateMapping(selectedMapping, {
                           transformerConfig: {
-                            ...mappings[selectedMapping].transformerConfig,
+                            ...mappings[selectedMapping]?.transformerConfig,
                             template: e.target.value,
                           },
                         })
@@ -249,19 +250,19 @@ export function DataMapper({
                   </div>
                 )}
 
-                {mappings[selectedMapping].transformer === "expression" && (
+                {mappings[selectedMapping]?.transformer === "expression" && (
                   <div className="space-y-2">
                     <Label>Expression</Label>
                     <Textarea
                       placeholder="e.g., value.toUpperCase()"
                       value={
-                        mappings[selectedMapping].transformerConfig
+                        mappings[selectedMapping]?.transformerConfig
                           ?.expression ?? ""
                       }
                       onChange={(e) =>
                         updateMapping(selectedMapping, {
                           transformerConfig: {
-                            ...mappings[selectedMapping].transformerConfig,
+                            ...mappings[selectedMapping]?.transformerConfig,
                             expression: e.target.value,
                           },
                         })
@@ -272,7 +273,7 @@ export function DataMapper({
                   </div>
                 )}
 
-                {mappings[selectedMapping].transformer === "custom" && (
+                {mappings[selectedMapping]?.transformer === "custom" && (
                   <div className="space-y-2">
                     <Label>Custom Function</Label>
                     <Textarea
@@ -280,13 +281,13 @@ export function DataMapper({
   return value;
 }"
                       value={
-                        mappings[selectedMapping].transformerConfig
+                        mappings[selectedMapping]?.transformerConfig
                           ?.customFunction ?? ""
                       }
                       onChange={(e) =>
                         updateMapping(selectedMapping, {
                           transformerConfig: {
-                            ...mappings[selectedMapping].transformerConfig,
+                            ...mappings[selectedMapping]?.transformerConfig,
                             customFunction: e.target.value,
                           },
                         })

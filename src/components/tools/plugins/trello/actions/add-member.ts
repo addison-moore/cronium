@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for add-member action parameters
 export const addMemberSchema = z.object({
@@ -20,6 +21,7 @@ export const addMemberAction: ToolAction = {
   actionType: "update",
   developmentMode: "visual",
   inputSchema: addMemberSchema,
+  parameters: zodToParameters(addMemberSchema),
   outputSchema: z.object({
     success: z.boolean(),
     members: z
@@ -104,7 +106,7 @@ export const addMemberAction: ToolAction = {
       const cardId = replaceVariables(typedParams.cardId, variables);
       const memberId = replaceVariables(typedParams.memberId, variables);
 
-      logger.info("Adding member to Trello card", { cardId, memberId });
+      logger.info(`Adding member ${memberId} to Trello card ${cardId}`);
 
       if (isTest) {
         // Test mode - simulate adding member

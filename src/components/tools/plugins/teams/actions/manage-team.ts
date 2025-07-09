@@ -164,7 +164,7 @@ export const manageTeamAction: ToolAction = {
           onProgress({ step: "Test completed successfully!", percentage: 100 });
         }
 
-        const result: {
+        let result: {
           success: boolean;
           teamId?: string;
           channelId?: string;
@@ -173,9 +173,9 @@ export const manageTeamAction: ToolAction = {
         };
 
         if (typedParams.operation === "create-team") {
-          result.teamId = "TEST-TEAM-ID";
+          result = { ...result, teamId: "TEST-TEAM-ID" };
         } else if (typedParams.operation === "create-channel") {
-          result.channelId = "TEST-CHANNEL-ID";
+          result = { ...result, channelId: "TEST-CHANNEL-ID" };
         }
 
         return result;
@@ -230,7 +230,7 @@ export const manageTeamAction: ToolAction = {
             if (location) {
               // Extract team ID from location header
               const match = /teams\('([^']+)'\)/.exec(location);
-              if (match) {
+              if (match && match[1]) {
                 result = { success: true, teamId: match[1] };
               }
             }
@@ -358,7 +358,7 @@ export const manageTeamAction: ToolAction = {
 
           if (response.ok) {
             const data = (await response.json()) as { id?: string };
-            result = { success: true, channelId: data.id };
+            result = { success: true, ...(data.id && { channelId: data.id }) };
           }
           break;
         }
@@ -414,7 +414,7 @@ export const manageTeamAction: ToolAction = {
         });
       }
 
-      logger.info("Teams operation completed successfully", result);
+      logger.info("Teams operation completed successfully");
       return result;
     } catch (error) {
       const errorMessage =

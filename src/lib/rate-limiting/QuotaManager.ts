@@ -87,7 +87,7 @@ export class QuotaManager extends EventEmitter {
       limit,
       used,
       remaining,
-      resetAt: usage.resetAt,
+      ...(usage.resetAt && { resetAt: usage.resetAt }),
       percentage: (used / limit) * 100,
     };
 
@@ -260,13 +260,13 @@ export class QuotaManager extends EventEmitter {
       .limit(1);
 
     if (usage) {
-      return { current: usage.amount, resetAt };
+      return { current: usage.amount, ...(resetAt && { resetAt }) };
     }
 
     // Check actual usage from various tables
     const actualUsage = await this.calculateActualUsage(userId, resource);
 
-    return { current: actualUsage, resetAt };
+    return { current: actualUsage, ...(resetAt && { resetAt }) };
   }
 
   /**

@@ -216,7 +216,7 @@ export const searchContentAction: ToolAction = {
         searchRequest.sort = typedParams.sort;
       }
 
-      logger.info("Searching Notion content", { query });
+      logger.info(`Searching Notion content with query: ${query}`);
 
       if (isTest) {
         // Test mode - return sample results
@@ -320,7 +320,10 @@ export const searchContentAction: ToolAction = {
               titleProp as { title?: Array<{ plain_text: string }> }
             ).title;
             if (titleArray && titleArray.length > 0) {
-              title = titleArray[0].plain_text;
+              const firstTitle = titleArray[0];
+              if (firstTitle) {
+                title = firstTitle.plain_text;
+              }
             }
           }
         } else if (item.object === "database" && item.title) {

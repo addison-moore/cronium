@@ -3,6 +3,7 @@ import type {
   ToolAction,
   ExecutionContext,
 } from "@/components/tools/types/tool-plugin";
+import { zodToParameters } from "@/components/tools/utils/zod-to-parameters";
 
 // Schema for create-card action parameters
 export const createCardSchema = z.object({
@@ -60,6 +61,7 @@ export const createCardAction: ToolAction = {
   actionType: "create",
   developmentMode: "visual",
   inputSchema: createCardSchema,
+  parameters: zodToParameters(createCardSchema),
   outputSchema: z.object({
     success: z.boolean(),
     cardId: z.string().optional(),
@@ -198,7 +200,7 @@ export const createCardAction: ToolAction = {
         }
       }
 
-      logger.info("Creating Trello card", { listId, name });
+      logger.info(`Creating Trello card in list ${listId}: ${name}`);
 
       if (isTest) {
         // Test mode - simulate creation
@@ -264,7 +266,7 @@ export const createCardAction: ToolAction = {
         onProgress({ step: "Card created successfully!", percentage: 100 });
       }
 
-      logger.info("Trello card created successfully", { cardId: data.id });
+      logger.info(`Trello card created successfully - Card ID: ${data.id}`);
 
       return {
         success: true,

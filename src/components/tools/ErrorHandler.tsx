@@ -27,7 +27,6 @@ import {
   AlertCircle,
   AlertTriangle,
   CheckCircle,
-  ChevronDown,
   ChevronRight,
   Copy,
   Download,
@@ -38,7 +37,6 @@ import {
   Terminal,
   XCircle,
   Zap,
-  Clock,
   Activity,
   FileText,
   HelpCircle,
@@ -231,6 +229,7 @@ export default function ErrorHandler({
 
       return () => clearInterval(interval);
     }
+    return undefined;
   }, [error.retry]);
 
   // Handle retry
@@ -547,7 +546,7 @@ export default function ErrorHandler({
             <Accordion
               type="single"
               collapsible
-              value={showFullDetails ? "details" : undefined}
+              value={showFullDetails ? "details" : ""}
               onValueChange={(value) => setShowFullDetails(!!value)}
             >
               <AccordionItem value="details" className="border-0">
