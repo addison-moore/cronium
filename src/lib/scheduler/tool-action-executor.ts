@@ -3,8 +3,7 @@ import { storage } from "@/server/storage";
 import { isToolActionsExecutionEnabled } from "@/lib/featureFlags";
 import { toolActionHealthMonitor } from "./tool-action-health-monitor";
 import { db } from "@/server/db";
-import { toolCredentials, toolActionLogs } from "@/shared/schema";
-import { eq } from "drizzle-orm";
+import { toolActionLogs } from "@/shared/schema";
 import { credentialCache } from "@/lib/tools/credential-cache";
 import { connectionPool } from "@/lib/tools/connection-pool";
 import {
@@ -23,7 +22,7 @@ export interface ToolActionConfig {
   toolType: string;
   actionId: string;
   toolId: number;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
   outputMapping?: Record<string, string>;
 }
 
@@ -31,7 +30,7 @@ export interface ToolActionResult {
   stdout: string;
   stderr: string;
   exitCode: number;
-  data?: any;
+  data?: unknown;
   healthStatus?: ToolActionHealthStatus;
 }
 
@@ -52,8 +51,8 @@ export interface ToolActionHealthStatus {
 
 export interface ToolActionExecutionContext {
   variables: {
-    get: (key: string) => any;
-    set: (key: string, value: any) => void;
+    get: (key: string) => unknown;
+    set: (key: string, value: unknown) => void;
   };
   logger: {
     info: (message: string) => void;
@@ -62,9 +61,9 @@ export interface ToolActionExecutionContext {
     debug: (message: string) => void;
   };
   onProgress?: (progress: { step: string; percentage: number }) => void;
-  onPartialResult?: (result: any) => void;
+  onPartialResult?: (result: unknown) => void;
   isTest?: boolean;
-  mockData?: any;
+  mockData?: unknown;
 }
 
 /**
@@ -91,7 +90,9 @@ export async function executeToolAction(
     try {
       console.log(`[ToolAction] Raw config:`, event.toolActionConfig);
       if (typeof event.toolActionConfig === "string") {
-        toolActionConfig = JSON.parse(event.toolActionConfig);
+        toolActionConfig = JSON.parse(
+          event.toolActionConfig,
+        ) as ToolActionConfig;
       } else if (
         event.toolActionConfig &&
         typeof event.toolActionConfig === "object"
@@ -152,7 +153,7 @@ export async function executeToolAction(
       );
 
       throw new Error(
-        `Rate limit exceeded. Try again in ${rateLimitResult.retryAfter} seconds`,
+        `Rate limit exceeded. Try again in ${rateLimitResult.retryAfter ?? 60} seconds`,
       );
     }
 
@@ -169,7 +170,7 @@ export async function executeToolAction(
       );
     }
 
-    const credentials = cachedTool.credentials;
+    const credentials = cachedTool.credentials as Record<string, unknown>;
     console.log(
       `[ToolAction] Tool found: ${cachedTool.name} (${cachedTool.type})`,
     );
@@ -219,7 +220,7 @@ export async function executeToolAction(
           console.log(`Getting variable: ${key}`);
           return null;
         },
-        set: (key: string, value: any) => {
+        set: (key: string, value: unknown) => {
           // TODO: Implement proper variable setting
           console.log(`Setting variable: ${key} = ${JSON.stringify(value)}`);
         },
@@ -241,7 +242,7 @@ export async function executeToolAction(
 
     // Get user variables for template context
     const userVariables = await storage.getUserVariables(event.userId);
-    const variablesMap: Record<string, any> = {};
+    const variablesMap: Record<string, unknown> = {};
     userVariables.forEach((variable) => {
       variablesMap[variable.key] = variable.value;
     });
@@ -282,9 +283,11 @@ export async function executeToolAction(
       action.inputSchema.parse(mergedParameters);
     } catch (validationError) {
       if (validationError instanceof Error && "errors" in validationError) {
-        const zodError = validationError as any;
+        const zodError = validationError as {
+          errors: Array<{ path: string[]; message: string }>;
+        };
         const errors = zodError.errors.map(
-          (err: any) => `${err.path.join(".")}: ${err.message}`,
+          (err) => `${err.path.join(".")}: ${err.message}`,
         );
         throw new Error(`Parameter validation failed: ${errors.join(", ")}`);
       }
@@ -435,14 +438,14 @@ export async function executeToolAction(
     console.error(`[ToolAction] Config at failure:`, toolActionConfig);
 
     // Categorize the error
-    const parsedConfig =
-      toolActionConfig ||
+    const parsedConfig: Partial<ToolActionConfig> =
+      toolActionConfig ??
       (() => {
         if (typeof event.toolActionConfig === "string") {
           try {
-            return JSON.parse(event.toolActionConfig);
+            return JSON.parse(event.toolActionConfig) as ToolActionConfig;
           } catch {
-            return {};
+            return {} as Partial<ToolActionConfig>;
           }
         } else if (
           event.toolActionConfig &&
@@ -450,22 +453,22 @@ export async function executeToolAction(
         ) {
           return event.toolActionConfig as ToolActionConfig;
         }
-        return {};
+        return {} as Partial<ToolActionConfig>;
       })();
     const categorizedError = ErrorCategorizer.categorize(
       errorObj,
-      parsedConfig.toolType,
+      parsedConfig.toolType ?? "unknown",
       {
-        toolId: parsedConfig.toolId,
-        actionId: parsedConfig.actionId,
+        toolId: parsedConfig.toolId ?? 0,
+        actionId: parsedConfig.actionId ?? "unknown",
         userId: event.userId,
       },
     );
 
     // Generate failing health status
     const healthStatus: ToolActionHealthStatus = {
-      toolId: parsedConfig.toolId || 0,
-      actionId: parsedConfig.actionId || "unknown",
+      toolId: parsedConfig.toolId ?? 0,
+      actionId: parsedConfig.actionId ?? "unknown",
       status: "failing",
       latency: Date.now() - startTime,
       timestamp: new Date(),
@@ -484,9 +487,9 @@ export async function executeToolAction(
     await auditLog.toolExecutionFailed(
       {
         userId: event.userId,
-        toolId: parsedConfig.toolId || 0,
+        toolId: parsedConfig.toolId ?? 0,
       },
-      parsedConfig.actionId || "unknown",
+      parsedConfig.actionId ?? "unknown",
       errorMessage,
     );
 
@@ -494,10 +497,10 @@ export async function executeToolAction(
     try {
       await db.insert(toolActionLogs).values({
         eventId: event.id,
-        toolType: parsedConfig.toolType || "unknown",
+        toolType: parsedConfig.toolType ?? "unknown",
         actionType: "unknown",
-        actionId: parsedConfig.actionId || "unknown",
-        parameters: parsedConfig.parameters || {},
+        actionId: parsedConfig.actionId ?? "unknown",
+        parameters: parsedConfig.parameters ?? {},
         result: null,
         status: "FAILURE",
         executionTime: Date.now() - startTime,
@@ -517,7 +520,7 @@ export async function executeToolAction(
         error: categorizedError,
         suggestions: ErrorCategorizer.getRecoverySuggestions(
           categorizedError,
-          parsedConfig.toolType,
+          parsedConfig.toolType ?? "unknown",
         ),
       },
       healthStatus,

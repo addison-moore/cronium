@@ -139,20 +139,20 @@ export const LazyErrorRecoverySuggestions = dynamic(
 // Preload utilities for critical paths
 export const preloadToolComponents = () => {
   // Preload critical components
-  import("../tool-browser/ToolBrowser");
-  import("../../event-form/ActionParameterForm");
-  import("../ToolCredentialManager");
+  void import("../tool-browser/ToolBrowser");
+  void import("../../event-form/ActionParameterForm");
+  void import("../ToolCredentialManager");
 };
 
 export const preloadErrorComponents = () => {
   // Preload error handling components
-  import("../ErrorHandler");
-  import("../ErrorRecoverySuggestions");
-  import("../RetryManager");
+  void import("../ErrorHandler");
+  void import("../ErrorRecoverySuggestions");
+  void import("../RetryManager");
 };
 
 export const preloadMonitoringComponents = () => {
   // Preload monitoring components
-  import("../ExecutionLogsViewer");
-  import("../CredentialHealthIndicator");
+  void import("../ExecutionLogsViewer");
+  void import("../CredentialHealthIndicator");
 };

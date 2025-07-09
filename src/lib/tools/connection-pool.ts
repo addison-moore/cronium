@@ -7,7 +7,7 @@ interface PooledConnection {
   lastUsed: Date;
   useCount: number;
   // Connection-specific data (headers, auth tokens, etc.)
-  connectionData: Record<string, any>;
+  connectionData: Record<string, unknown>;
 }
 
 interface ConnectionPoolOptions {
@@ -90,7 +90,7 @@ export class ConnectionPoolManager {
     toolId: number,
     toolType: ToolType,
     userId: string,
-    connectionData: Record<string, any>,
+    connectionData: Record<string, unknown>,
   ): void {
     const pool = this.getPool(toolType);
     const key = `${toolId}-${userId}`;
@@ -128,7 +128,7 @@ export class ConnectionPoolManager {
   /**
    * Get pool statistics
    */
-  getStats(toolType?: ToolType): Record<string, any> {
+  getStats(toolType?: ToolType): Record<string, unknown> {
     if (toolType) {
       const pool = this.pools.get(toolType);
       if (!pool) return { size: 0, connections: [] };
@@ -146,7 +146,7 @@ export class ConnectionPoolManager {
     }
 
     // Return stats for all pools
-    const stats: Record<string, any> = {};
+    const stats: Record<string, unknown> = {};
     for (const [type, pool] of this.pools.entries()) {
       stats[type] = {
         size: pool.size,
@@ -177,7 +177,7 @@ export class PooledHttpClient {
     baseUrl: string,
     headers?: Record<string, string>,
   ): PooledHttpClient {
-    const key = `${baseUrl}-${JSON.stringify(headers || {})}`;
+    const key = `${baseUrl}-${JSON.stringify(headers ?? {})}`;
 
     if (!this.clients.has(key)) {
       this.clients.set(key, new PooledHttpClient(baseUrl, headers));

@@ -44,10 +44,23 @@ interface ServerDetailsPageProps {
   params: Promise<{ id: string; lang: string }>;
 }
 
+interface SystemInfo {
+  platform?: string;
+  release?: string;
+  cpuCores?: number;
+  totalMemory?: string;
+  freeMemory?: string;
+  uptime?: {
+    days: number;
+    hours: number;
+    minutes: number;
+  };
+}
+
 export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
   const resolvedParams = use(params);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [systemInfo, setSystemInfo] = useState<any>(null);
+  const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [hasCheckedHealth, setHasCheckedHealth] = useState(false);
   const [isManualCheck, setIsManualCheck] = useState(false);
 
@@ -243,25 +256,25 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
               <CardTitle>System Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {systemInfo.platform && (
+              {systemInfo?.platform && (
                 <div>
                   <p className="text-sm font-medium text-gray-500">Platform</p>
                   <p className="font-medium">{systemInfo.platform}</p>
                 </div>
               )}
-              {systemInfo.release && (
+              {systemInfo?.release && (
                 <div>
                   <p className="text-sm font-medium text-gray-500">Release</p>
                   <p className="font-medium">{systemInfo.release}</p>
                 </div>
               )}
-              {systemInfo.cpuCores && (
+              {systemInfo?.cpuCores && (
                 <div>
                   <p className="text-sm font-medium text-gray-500">CPU Cores</p>
                   <p className="font-medium">{systemInfo.cpuCores}</p>
                 </div>
               )}
-              {systemInfo.totalMemory && (
+              {systemInfo?.totalMemory && (
                 <div>
                   <p className="text-sm font-medium text-gray-500">
                     Total Memory
@@ -269,7 +282,7 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
                   <p className="font-medium">{systemInfo.totalMemory}</p>
                 </div>
               )}
-              {systemInfo.freeMemory && (
+              {systemInfo?.freeMemory && (
                 <div>
                   <p className="text-sm font-medium text-gray-500">
                     Free Memory
@@ -277,7 +290,7 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
                   <p className="font-medium">{systemInfo.freeMemory}</p>
                 </div>
               )}
-              {systemInfo.uptime && (
+              {systemInfo?.uptime && (
                 <div>
                   <p className="text-sm font-medium text-gray-500">Uptime</p>
                   <p className="font-medium">

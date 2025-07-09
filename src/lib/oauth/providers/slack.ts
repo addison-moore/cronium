@@ -53,7 +53,9 @@ export class SlackOAuthProvider extends BaseOAuthProvider {
     },
   ): OAuthToken {
     if (!response.ok) {
-      throw new Error(`Slack OAuth error: ${response.error}`);
+      throw new Error(
+        `Slack OAuth error: ${response.error ?? "Unknown error"}`,
+      );
     }
 
     // Slack returns tokens differently

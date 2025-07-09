@@ -191,8 +191,9 @@ export default function ErrorHandler({
       if (
         error.code === code ||
         error.message.includes(code) ||
-        (error.details?.statusCode &&
-          error.details.statusCode.toString() === code)
+        (error.details &&
+          "statusCode" in error.details &&
+          String(error.details.statusCode) === code)
       ) {
         return transformation;
       }
@@ -202,7 +203,7 @@ export default function ErrorHandler({
     return {
       title: "An Error Occurred",
       message: error.message,
-      suggestions: error.suggestions || [],
+      suggestions: error.suggestions ?? [],
     };
   };
 
@@ -243,7 +244,7 @@ export default function ErrorHandler({
         title: "Retry Successful",
         description: "The operation completed successfully.",
       });
-    } catch (retryError) {
+    } catch {
       toast({
         title: "Retry Failed",
         description: "The operation failed again. Please try later.",
@@ -268,7 +269,7 @@ export default function ErrorHandler({
       },
     };
 
-    navigator.clipboard.writeText(JSON.stringify(details, null, 2));
+    void navigator.clipboard.writeText(JSON.stringify(details, null, 2));
     toast({
       title: "Copied",
       description: "Error details copied to clipboard",
@@ -564,7 +565,7 @@ export default function ErrorHandler({
                     <TabsContent value="details" className="mt-4">
                       <ScrollArea className="bg-muted/50 h-[200px] rounded-lg border p-3">
                         <pre className="text-xs">
-                          {JSON.stringify(error.details || {}, null, 2)}
+                          {JSON.stringify(error.details ?? {}, null, 2)}
                         </pre>
                       </ScrollArea>
                     </TabsContent>
@@ -572,7 +573,7 @@ export default function ErrorHandler({
                     <TabsContent value="stack" className="mt-4">
                       <ScrollArea className="bg-muted/50 h-[200px] rounded-lg border p-3">
                         <pre className="font-mono text-xs">
-                          {error.stack || "No stack trace available"}
+                          {error.stack ?? "No stack trace available"}
                         </pre>
                       </ScrollArea>
                     </TabsContent>

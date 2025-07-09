@@ -8,12 +8,6 @@ import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -85,7 +79,7 @@ export default function ToolActionHealthMonitor({
     if (!autoRefresh) return;
 
     const interval = setInterval(() => {
-      refetch();
+      void refetch();
     }, refreshInterval * 1000);
 
     return () => clearInterval(interval);

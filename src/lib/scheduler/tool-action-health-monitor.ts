@@ -1,5 +1,4 @@
 import { type ToolActionHealthStatus } from "./tool-action-executor";
-import { storage } from "@/server/storage";
 
 interface HealthMetrics {
   toolId: number;
@@ -60,11 +59,11 @@ export class ToolActionHealthMonitor {
     }
 
     this.updateInterval = setInterval(() => {
-      this.updateHealthMetrics();
+      void this.updateHealthMetrics();
     }, intervalMs);
 
     // Initial update
-    this.updateHealthMetrics();
+    void this.updateHealthMetrics();
   }
 
   /**
@@ -83,7 +82,7 @@ export class ToolActionHealthMonitor {
   async recordExecution(healthStatus: ToolActionHealthStatus): Promise<void> {
     const key = `${healthStatus.toolId}-${healthStatus.actionId}`;
     const metrics =
-      this.metricsCache.get(key) ||
+      this.metricsCache.get(key) ??
       this.createEmptyMetrics(healthStatus.toolId, healthStatus.actionId);
 
     // Update metrics based on execution result
@@ -130,7 +129,7 @@ export class ToolActionHealthMonitor {
    */
   getHealthMetrics(toolId: number, actionId: string): HealthMetrics | null {
     const key = `${toolId}-${actionId}`;
-    return this.metricsCache.get(key) || null;
+    return this.metricsCache.get(key) ?? null;
   }
 
   /**

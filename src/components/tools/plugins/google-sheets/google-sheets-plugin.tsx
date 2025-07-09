@@ -43,7 +43,7 @@ function GoogleSheetsCredentialForm({
   onCancel,
 }: CredentialFormProps) {
   const form = useForm<GoogleSheetsFormData>({
-    resolver: zodResolver(googleSheetsSchema) as any,
+    resolver: zodResolver(googleSheetsSchema),
     defaultValues: tool
       ? {
           name: tool.name,
@@ -66,10 +66,7 @@ function GoogleSheetsCredentialForm({
   };
 
   return (
-    <form
-      onSubmit={form.handleSubmit(handleSubmit as any)}
-      className="space-y-4"
-    >
+    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
       <Alert>
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>

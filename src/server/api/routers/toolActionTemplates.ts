@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { toolActionTemplates } from "@/shared/schema";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 export const toolActionTemplatesRouter = createTRPCRouter({
@@ -33,7 +33,7 @@ export const toolActionTemplatesRouter = createTRPCRouter({
           .returning();
 
         return template;
-      } catch (error) {
+      } catch {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to create tool action template",
@@ -296,6 +296,3 @@ export const toolActionTemplatesRouter = createTRPCRouter({
       return clonedTemplate;
     }),
 });
-
-// Helper to import sql
-import { sql } from "drizzle-orm";

@@ -303,6 +303,7 @@ function replaceVariables(
     if (typeof value === "object") {
       return JSON.stringify(value);
     }
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
     return String(value);
   });
 }

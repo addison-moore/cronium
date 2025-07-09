@@ -394,6 +394,7 @@ function replaceVariables(
     if (typeof value === "number") return value.toString();
     if (typeof value === "boolean") return value.toString();
     // This should never be reached, but satisfies TypeScript
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
     return String(value);
   });
 }

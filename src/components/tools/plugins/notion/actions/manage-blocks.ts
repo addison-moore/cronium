@@ -372,7 +372,9 @@ export const manageBlocksAction: ToolAction = {
         }
 
         default:
-          throw new Error(`Unknown operation: ${typedParams.operation}`);
+          throw new Error(
+            `Unknown operation: ${typedParams.operation as string}`,
+          );
       }
 
       // Update progress
@@ -509,6 +511,7 @@ function replaceVariables(
       return JSON.stringify(value);
     }
     // At this point, value is a primitive (string, number, boolean)
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
     return String(value);
   });
 }

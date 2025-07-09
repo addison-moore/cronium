@@ -23,7 +23,7 @@ export interface CategorizedError {
   userMessage: string;
   technicalMessage: string;
   suggestedAction?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -194,7 +194,7 @@ export class ErrorCategorizer {
   static categorize(
     error: Error,
     toolType?: string,
-    context?: Record<string, any>,
+    context?: Record<string, unknown>,
   ): CategorizedError {
     // Check tool-specific patterns first
     if (toolType && toolSpecificPatterns[toolType]) {
@@ -252,7 +252,7 @@ export class ErrorCategorizer {
   private static createCategorizedError(
     error: Error,
     match: (typeof errorPatterns)[0],
-    context?: Record<string, any>,
+    context?: Record<string, unknown>,
   ): CategorizedError {
     const result: CategorizedError = {
       category: match.category,

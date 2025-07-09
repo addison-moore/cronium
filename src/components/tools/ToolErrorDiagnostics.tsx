@@ -2,7 +2,6 @@
 
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -81,12 +80,12 @@ export function ToolErrorDiagnostics({
   // Convert logs to diagnostic issues
   const diagnosticIssues: DiagnosticIssue[] = React.useMemo(() => {
     return logs.map((log) => {
-      const solution = getSolutionForError(log.errorMessage || "");
+      const solution = getSolutionForError(log.errorMessage ?? "");
       const issue: DiagnosticIssue = {
         id: log.id.toString(),
         severity: "error" as const,
         title: `${log.actionId} failed`,
-        description: log.errorMessage || "Unknown error occurred",
+        description: log.errorMessage ?? "Unknown error occurred",
         timestamp: log.createdAt,
         actionId: log.actionId,
       };
@@ -123,28 +122,6 @@ export function ToolErrorDiagnostics({
   if (compact && diagnosticIssues.length === 0) {
     return null;
   }
-
-  const severityIcon = (severity: DiagnosticIssue["severity"]) => {
-    switch (severity) {
-      case "error":
-        return <XCircle className="h-4 w-4 text-red-500" />;
-      case "warning":
-        return <AlertCircle className="h-4 w-4 text-yellow-500" />;
-      case "info":
-        return <CheckCircle className="h-4 w-4 text-blue-500" />;
-    }
-  };
-
-  const severityBadge = (severity: DiagnosticIssue["severity"]) => {
-    switch (severity) {
-      case "error":
-        return <Badge variant="destructive">Error</Badge>;
-      case "warning":
-        return <Badge variant="secondary">Warning</Badge>;
-      case "info":
-        return <Badge variant="outline">Info</Badge>;
-    }
-  };
 
   if (compact) {
     return (

@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { useTranslations } from "next-intl";
 
 export default function ToolsPage() {
-  const t = useTranslations();
+  const _t = useTranslations();
 
   return (
     <div className="container mx-auto p-4">
@@ -15,7 +15,7 @@ export default function ToolsPage() {
       />
 
       {/* Dashboard component */}
-      <ToolsDashboard dict={t} />
+      <ToolsDashboard />
     </div>
   );
 }

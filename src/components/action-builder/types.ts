@@ -29,6 +29,7 @@ export interface ActionConnectionData extends Record<string, unknown> {
   condition?: string;
   transformer?: string;
   connectionType?: "success" | "failure" | "always";
+  label?: string;
 }
 
 // ReactFlow compatible node type

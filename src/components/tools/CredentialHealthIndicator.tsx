@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -22,7 +21,6 @@ import {
 } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
-import { type Tool } from "@/shared/schema";
 import type { RouterOutputs } from "@/trpc/shared";
 
 type ToolWithParsedCredentials = RouterOutputs["tools"]["list"][number];
@@ -34,12 +32,9 @@ import {
   CheckCircle,
   Clock,
   RefreshCw,
-  Shield,
   Zap,
   AlertTriangle,
   ArrowRight,
-  ExternalLink,
-  FileText,
   HelpCircle,
   Info,
   Play,
@@ -105,7 +100,7 @@ export default function CredentialHealthIndicator({
       checks.push({
         name: "Connection",
         status: result.success ? "pass" : "fail",
-        message: result.message || "Connection test completed",
+        message: result.message ?? "Connection test completed",
         duration: result.duration,
       });
 
@@ -123,7 +118,9 @@ export default function CredentialHealthIndicator({
 
         if (result.details.permissions) {
           const hasAllPermissions = Array.isArray(result.details.permissions)
-            ? result.details.permissions.every((p: any) => p.granted)
+            ? (result.details.permissions as Array<{ granted: boolean }>).every(
+                (p) => p.granted,
+              )
             : true;
 
           checks.push({
@@ -132,26 +129,27 @@ export default function CredentialHealthIndicator({
             message: hasAllPermissions
               ? "All required permissions granted"
               : "Some permissions missing",
-            details: result.details.permissions,
+            details: result.details.permissions as Record<string, unknown>,
           });
         }
 
         if (result.details.quota) {
-          const quotaUsed =
-            (result.details.quota.used / result.details.quota.limit) * 100;
+          const quota = result.details.quota as { used: number; limit: number };
+          const quotaUsed = (quota.used / quota.limit) * 100;
           checks.push({
             name: "API Quota",
             status: quotaUsed > 90 ? "warning" : "pass",
             message: `${quotaUsed.toFixed(0)}% of quota used`,
-            details: result.details.quota,
+            details: result.details.quota as Record<string, unknown>,
           });
         }
 
-        if (result.details.latency) {
+        if (result.details.latency !== undefined) {
+          const latency = result.details.latency as number;
           checks.push({
             name: "Latency",
-            status: result.details.latency > 1000 ? "warning" : "pass",
-            message: `${result.details.latency}ms response time`,
+            status: latency > 1000 ? "warning" : "pass",
+            message: `${latency}ms response time`,
           });
         }
       }
@@ -186,7 +184,7 @@ export default function CredentialHealthIndicator({
           {
             name: "Connection",
             status: "fail",
-            message: error.message || "Connection test failed",
+            message: error.message ?? "Connection test failed",
           },
         ],
         lastChecked: new Date(),
@@ -302,7 +300,7 @@ export default function CredentialHealthIndicator({
                     {checking ? (
                       <RefreshCw className="h-4 w-4 animate-spin" />
                     ) : (
-                      getStatusIcon(status?.overall || "unknown")
+                      getStatusIcon(status?.overall ?? "unknown")
                     )}
                     {tool.name}
                   </Button>
@@ -310,7 +308,7 @@ export default function CredentialHealthIndicator({
                 <TooltipContent>
                   <div className="space-y-1">
                     <p className="font-medium">
-                      Status: {status?.overall || "Not checked"}
+                      Status: {status?.overall ?? "Not checked"}
                     </p>
                     {status?.lastChecked && (
                       <p className="text-xs">
@@ -658,24 +656,6 @@ export default function CredentialHealthIndicator({
                   </>
                 );
               })()}
-
-              {(ToolPluginRegistry.get(selectedTool.type) as any)?.docsUrl && (
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => {
-                    const docsUrl = (
-                      ToolPluginRegistry.get(selectedTool.type) as any
-                    )?.docsUrl;
-                    if (docsUrl) {
-                      window.open(docsUrl, "_blank");
-                    }
-                  }}
-                >
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  View Documentation
-                </Button>
-              )}
             </div>
           )}
         </DialogContent>

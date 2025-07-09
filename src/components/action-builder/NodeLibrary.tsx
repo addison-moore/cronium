@@ -25,11 +25,7 @@ const NODE_ICONS: Record<
   [NodeType.OUTPUT]: Target,
 };
 
-interface NodeLibraryProps {
-  onNodeSelect?: (nodeType: NodeType, data?: any) => void;
-}
-
-export function NodeLibrary({ onNodeSelect }: NodeLibraryProps) {
+export function NodeLibrary() {
   const [searchTerm, setSearchTerm] = React.useState("");
   const [selectedTool, setSelectedTool] = React.useState<string | null>(null);
 

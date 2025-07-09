@@ -44,7 +44,17 @@ const sendWebhookAction: ToolAction = {
   }),
   execute: async (credentials, parameters, context: ExecutionContext) => {
     const creds = WebhookCredentialsSchema.parse(credentials);
-    const { method, body, headers: paramHeaders, queryParams } = parameters;
+    const {
+      method,
+      body,
+      headers: paramHeaders,
+      queryParams,
+    } = parameters as {
+      method: string;
+      body?: unknown;
+      headers?: Record<string, string>;
+      queryParams?: Record<string, string>;
+    };
 
     context.logger.info(`Sending ${method} request to webhook`);
 
@@ -58,7 +68,7 @@ const sendWebhookAction: ToolAction = {
     // Merge headers
     const allHeaders: Record<string, string> = {
       ...creds.headers,
-      ...paramHeaders,
+      ...(paramHeaders ?? {}),
     };
 
     // Add auth header if needed
@@ -73,7 +83,9 @@ const sendWebhookAction: ToolAction = {
       ...(body !== undefined && { body: JSON.stringify(body) }),
     });
 
-    const responseData = await response.json().catch(() => response.text());
+    const responseData: unknown = await response
+      .json()
+      .catch(() => response.text());
 
     return {
       status: response.status,

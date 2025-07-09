@@ -15,7 +15,6 @@ import {
   Clock,
   ArrowRight,
 } from "lucide-react";
-import { ActionNode, ActionConnection, NodeType } from "./types";
 import { useActionBuilder } from "./useActionBuilder";
 
 interface PreviewPanelProps {
@@ -29,8 +28,8 @@ interface ExecutionStep {
   status: "pending" | "running" | "success" | "error" | "skipped";
   startTime?: Date;
   endTime?: Date;
-  input?: any;
-  output?: any;
+  input?: unknown;
+  output?: unknown;
   error?: string;
 }
 
@@ -39,7 +38,7 @@ export function PreviewPanel({
   onStop,
   onReset,
 }: PreviewPanelProps) {
-  const { nodes, connections, getExecutionOrder } = useActionBuilder();
+  const { nodes, getExecutionOrder } = useActionBuilder();
   const [isExecuting, setIsExecuting] = React.useState(false);
   const [executionSteps, setExecutionSteps] = React.useState<ExecutionStep[]>(
     [],
@@ -198,7 +197,7 @@ export function PreviewPanel({
                             </div>
                             {nodeData?.type ? (
                               <Badge variant="outline" className="text-xs">
-                                {String(nodeData.type)}
+                                {nodeData.type as string}
                               </Badge>
                             ) : null}
                           </div>
@@ -245,7 +244,7 @@ export function PreviewPanel({
                               </Badge>
                             )}
                           </div>
-                          {step.input && (
+                          {step.input !== undefined && step.input !== null && (
                             <div className="bg-muted rounded p-2">
                               <div className="text-xs font-medium">Input:</div>
                               <pre className="text-xs">
@@ -253,14 +252,17 @@ export function PreviewPanel({
                               </pre>
                             </div>
                           )}
-                          {step.output && (
-                            <div className="bg-muted rounded p-2">
-                              <div className="text-xs font-medium">Output:</div>
-                              <pre className="text-xs">
-                                {JSON.stringify(step.output, null, 2)}
-                              </pre>
-                            </div>
-                          )}
+                          {step.output !== undefined &&
+                            step.output !== null && (
+                              <div className="bg-muted rounded p-2">
+                                <div className="text-xs font-medium">
+                                  Output:
+                                </div>
+                                <pre className="text-xs">
+                                  {JSON.stringify(step.output, null, 2)}
+                                </pre>
+                              </div>
+                            )}
                           {step.error && (
                             <div className="bg-destructive/10 text-destructive rounded p-2">
                               <div className="text-xs font-medium">Error:</div>

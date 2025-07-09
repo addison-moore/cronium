@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
-import { WebhookManager, WebhookConfigSchema } from "@/lib/webhooks";
+import {
+  WebhookManager,
+  WebhookConfigSchema,
+  type WebhookConfig,
+} from "@/lib/webhooks";
 import { TRPCError } from "@trpc/server";
 import { webhooks, webhookDeliveries, webhookEvents } from "@/shared/schema";
 import { eq, and, desc } from "drizzle-orm";
@@ -21,9 +25,9 @@ export const webhookSystemRouter = createTRPCRouter({
         return {
           id: result.id,
           key: result.key,
-          url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/${result.key}`,
+          url: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/webhooks/${result.key}`,
         };
-      } catch (error) {
+      } catch {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to create webhook",
@@ -37,7 +41,7 @@ export const webhookSystemRouter = createTRPCRouter({
 
     return userWebhooks.map((webhook) => ({
       ...webhook,
-      endpoint: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/${webhook.key}`,
+      endpoint: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/webhooks/${webhook.key}`,
     }));
   }),
 
@@ -65,7 +69,7 @@ export const webhookSystemRouter = createTRPCRouter({
 
       return {
         ...webhook,
-        endpoint: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/${webhook.key}`,
+        endpoint: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/webhooks/${webhook.key}`,
       };
     }),
 
@@ -78,7 +82,7 @@ export const webhookSystemRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const updates: Partial<import("@/lib/webhooks").WebhookConfig> = {
+      const updates: Partial<WebhookConfig> = {
         ...(input.updates.url !== undefined && { url: input.updates.url }),
         ...(input.updates.events !== undefined && {
           events: input.updates.events,

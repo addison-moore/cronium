@@ -6,12 +6,7 @@ import EventForm from "@/components/event-form/EventForm";
 import { type Event } from "./types";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/use-toast";
-import {
-  TimeUnit,
-  RunLocation,
-  type ConditionalAction,
-  type ConditionalActionType,
-} from "@/shared/schema";
+import { TimeUnit, RunLocation, type ConditionalAction } from "@/shared/schema";
 
 interface EventEditTabProps {
   event: Event;
@@ -132,7 +127,15 @@ export function EventEditTab({
     toolId?: number;
     message?: string;
   } => {
-    const result: any = {
+    const result: {
+      id: number;
+      type: string;
+      value?: string;
+      emailSubject?: string;
+      targetEventId?: number;
+      toolId?: number;
+      message?: string;
+    } = {
       id: action.id,
       type: action.type as string, // Convert enum to string
     };

@@ -266,7 +266,9 @@ export const createCardAction: ToolAction = {
         onProgress({ step: "Card created successfully!", percentage: 100 });
       }
 
-      logger.info(`Trello card created successfully - Card ID: ${data.id}`);
+      logger.info(
+        `Trello card created successfully - Card ID: ${data.id ?? "unknown"}`,
+      );
 
       return {
         success: true,
@@ -300,6 +302,7 @@ function replaceVariables(
       return JSON.stringify(value);
     }
     // At this point, value is a primitive (string, number, boolean)
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
     return String(value);
   });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useRef } from "react";
+import React, { useCallback, useRef } from "react";
 import {
   ReactFlow,
   Background,
@@ -15,8 +15,6 @@ import {
   type Edge,
   type Node,
   type OnConnect,
-  OnNodesChange,
-  OnEdgesChange,
   ReactFlowProvider,
   useReactFlow,
 } from "@xyflow/react";
@@ -24,11 +22,7 @@ import "@xyflow/react/dist/style.css";
 import { ActionNode } from "./ActionNode";
 import { ActionEdge } from "./ActionEdge";
 import { useActionBuilder } from "./useActionBuilder";
-import {
-  CANVAS_CONFIG,
-  type NodeType,
-  ActionNode as ActionNodeType,
-} from "./types";
+import { CANVAS_CONFIG, type NodeType } from "./types";
 import { Button } from "@/components/ui/button";
 import { Save, Play, RotateCcw, Download, Upload } from "lucide-react";
 
@@ -62,8 +56,8 @@ function CanvasContent({
   const {
     nodes,
     edges,
-    onNodesChange: onStoreNodesChange,
-    onEdgesChange: onStoreEdgesChange,
+    onNodesChange: _onStoreNodesChange,
+    onEdgesChange: _onStoreEdgesChange,
     onConnect: onStoreConnect,
     addNode,
     clearFlow,
@@ -118,7 +112,9 @@ function CanvasContent({
       }
 
       const nodeData = event.dataTransfer.getData("nodeData");
-      const additionalData = nodeData ? JSON.parse(nodeData) : {};
+      const additionalData = nodeData
+        ? (JSON.parse(nodeData) as Record<string, unknown>)
+        : {};
 
       addNode(type, position, additionalData);
     },
@@ -156,9 +152,9 @@ function CanvasContent({
       if (file) {
         const text = await file.text();
         try {
-          const data = JSON.parse(text);
-          setNodes(data.nodes || []);
-          setEdges(data.edges || []);
+          const data = JSON.parse(text) as { nodes?: Node[]; edges?: Edge[] };
+          setNodes(data.nodes ?? []);
+          setEdges(data.edges ?? []);
         } catch (error) {
           console.error("Failed to import flow:", error);
         }

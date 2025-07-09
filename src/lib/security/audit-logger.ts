@@ -25,7 +25,7 @@ export interface AuditContext {
   toolId?: number;
   ipAddress?: string;
   userAgent?: string;
-  additionalData?: Record<string, any>;
+  additionalData?: Record<string, unknown>;
 }
 
 export interface AuditLogEntry {
@@ -33,7 +33,7 @@ export interface AuditLogEntry {
   context: AuditContext;
   success: boolean;
   errorMessage?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 }
 
 /**
@@ -77,7 +77,7 @@ export class AuditLogger {
   async logSuccess(
     action: AuditAction,
     context: AuditContext,
-    details?: Record<string, any>,
+    details?: Record<string, unknown>,
   ): Promise<void> {
     const entry: AuditLogEntry = {
       action,
@@ -97,7 +97,7 @@ export class AuditLogger {
     action: AuditAction,
     context: AuditContext,
     errorMessage: string,
-    details?: Record<string, any>,
+    details?: Record<string, unknown>,
   ): Promise<void> {
     const entry: AuditLogEntry = {
       action,
@@ -165,8 +165,8 @@ export class AuditLogger {
       .from(toolAuditLogs)
       .where(where)
       .orderBy(desc(toolAuditLogs.createdAt))
-      .limit(options.limit || 50)
-      .offset(options.offset || 0);
+      .limit(options.limit ?? 50)
+      .offset(options.offset ?? 0);
 
     return { logs, total: count };
   }
@@ -205,7 +205,7 @@ export class AuditLogger {
     // Action breakdown
     const actionBreakdown: Record<string, number> = {};
     logs.forEach((log) => {
-      actionBreakdown[log.action] = (actionBreakdown[log.action] || 0) + 1;
+      actionBreakdown[log.action] = (actionBreakdown[log.action] ?? 0) + 1;
     });
 
     // Recent failures
@@ -234,7 +234,7 @@ export class AuditLogger {
       .where(sql`${toolAuditLogs.createdAt} < ${cutoffDate}`);
 
     // Drizzle returns an array with result info
-    return (result as any).rowCount ?? 0;
+    return (result as { rowCount?: number }).rowCount ?? 0;
   }
 
   /**
@@ -254,7 +254,7 @@ export class AuditLogger {
         toolId:
           entry.action === "credential.delete"
             ? null
-            : entry.context.toolId || null,
+            : (entry.context.toolId ?? null),
         action: entry.action,
         actionDetails: {
           ...entry.details,
@@ -264,10 +264,10 @@ export class AuditLogger {
             ? { toolId: entry.context.toolId }
             : {}),
         },
-        ipAddress: entry.context.ipAddress || null,
-        userAgent: entry.context.userAgent || null,
+        ipAddress: entry.context.ipAddress ?? null,
+        userAgent: entry.context.userAgent ?? null,
         success: entry.success,
-        errorMessage: entry.errorMessage || null,
+        errorMessage: entry.errorMessage ?? null,
       }));
 
       // Batch insert
@@ -315,8 +315,10 @@ export const auditLog = {
   credentialCreated: (context: AuditContext, toolType: string) =>
     auditLogger.logSuccess("credential.create", context, { toolType }),
 
-  credentialUpdated: (context: AuditContext, changes: Record<string, any>) =>
-    auditLogger.logSuccess("credential.update", context, { changes }),
+  credentialUpdated: (
+    context: AuditContext,
+    changes: Record<string, unknown>,
+  ) => auditLogger.logSuccess("credential.update", context, { changes }),
 
   credentialDeleted: (context: AuditContext, toolType: string) =>
     auditLogger.logSuccess("credential.delete", context, { toolType }),

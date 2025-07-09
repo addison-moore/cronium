@@ -46,7 +46,7 @@ function processParametersRecursively(
             context,
           );
         }
-        return item;
+        return item as unknown;
       });
     } else if (typeof value === "object" && value !== null) {
       // Process nested objects recursively

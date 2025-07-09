@@ -7,12 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Copy, RefreshCw, Eye } from "lucide-react";
+import { Copy, Eye } from "lucide-react";
 import { type ToolAction } from "@/components/tools/types/tool-plugin";
 import {
   processToolActionTemplate,
   extractTemplateVariables,
 } from "@/lib/tool-action-template-processor";
+import { type TemplateContext } from "@/lib/template-processor";
 import { createTemplateContext } from "@/lib/template-processor";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -81,7 +82,7 @@ export function TemplatePreview({
   const getCurrentContext = () => {
     if (useCustomContext && customContext) {
       try {
-        return JSON.parse(customContext);
+        return JSON.parse(customContext) as Record<string, unknown>;
       } catch (error) {
         console.error("Invalid custom context:", error);
         return selectedContext === "success"
@@ -97,7 +98,7 @@ export function TemplatePreview({
   // Process the template with sample data
   const processedTemplate = processToolActionTemplate(
     { parameters },
-    getCurrentContext(),
+    getCurrentContext() as TemplateContext,
   );
 
   // Extract variables used in the template
@@ -111,7 +112,7 @@ export function TemplatePreview({
         title: "Copied to clipboard",
         description: "The processed value has been copied to your clipboard.",
       });
-    } catch (error) {
+    } catch {
       toast({
         title: "Failed to copy",
         description: "Could not copy to clipboard",

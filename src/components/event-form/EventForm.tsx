@@ -21,10 +21,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
-import {
-  getDefaultScriptContent,
-  getDefaultHttpRequest,
-} from "@/lib/scriptTemplates";
+import { getDefaultScriptContent } from "@/lib/scriptTemplates";
 import { MonacoEditor } from "@/components/ui/monaco-editor";
 import { TagsInput } from "@/components/ui/tags-input";
 import AIScriptAssistant from "@/components/dashboard/AIScriptAssistant";
@@ -231,7 +228,7 @@ export default function EventForm({
   onSuccess,
   layout = "page",
   onCancel,
-  showHeader = true,
+  showHeader: _showHeader = true,
   showFooter = true,
 }: EventFormProps) {
   const { toast } = useToast();
@@ -253,6 +250,7 @@ export default function EventForm({
 
   // Initialize form with React Hook Form
   const form = useForm<EventFormData>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
     resolver: zodResolver(eventFormSchema) as any,
     defaultValues: {
       name: initialData?.name ?? "",
@@ -358,7 +356,8 @@ export default function EventForm({
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         if (onSubmitRef.current) {
-          form.handleSubmit(onSubmitRef.current)();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
+          void form.handleSubmit(onSubmitRef.current as any)();
         }
       }
     };
@@ -395,7 +394,7 @@ export default function EventForm({
             setValue("tags", []);
           }
         } else if (Array.isArray(initialData.tags)) {
-          setValue("tags", initialData.tags);
+          setValue("tags", initialData.tags as string[]);
         }
       }
 
@@ -465,8 +464,8 @@ export default function EventForm({
         // Remove form-only fields and prepare for API
         const {
           conditionalActions,
-          useCronScheduling,
-          httpHeaders,
+          useCronScheduling: _useCronScheduling,
+          httpHeaders: _httpHeaders,
           ...baseData
         } = data;
 
@@ -1422,7 +1421,11 @@ export default function EventForm({
   );
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className={formClassName}>
+    <form
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
+      onSubmit={handleSubmit(onSubmit as any)}
+      className={formClassName}
+    >
       {contentClassName ? (
         <div className={contentClassName}>{formContent}</div>
       ) : (

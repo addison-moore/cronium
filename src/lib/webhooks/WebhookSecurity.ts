@@ -262,7 +262,7 @@ export class WebhookSecurity {
       "'": "&#39;",
     };
 
-    return str.replace(/[&<>"']/g, (match) => htmlEscapes[match] || match);
+    return str.replace(/[&<>"']/g, (match) => htmlEscapes[match] ?? match);
   }
 
   /**

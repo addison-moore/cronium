@@ -4,11 +4,7 @@ import { oauthStates } from "@/shared/schema";
 import { eq } from "drizzle-orm";
 import { type OAuthProvider } from "./providers";
 import { TokenManager } from "./TokenManager";
-import {
-  OAuthAuthRequest,
-  type OAuthCallbackParams,
-  OAuthError,
-} from "./types";
+import { type OAuthCallbackParams, OAuthError } from "./types";
 
 export class OAuthFlow {
   private tokenManager: TokenManager;

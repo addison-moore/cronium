@@ -3,7 +3,6 @@
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, Filter } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -38,7 +37,7 @@ export default function ActionSelector({
 
   // Get plugin and actions
   const plugin = ToolPluginRegistry.get(toolType);
-  const actions = plugin?.actions || [];
+  const actions = plugin?.actions ?? [];
 
   // Filter actions
   const filteredActions = actions.filter((action) => {
@@ -57,9 +56,7 @@ export default function ActionSelector({
   const actionsByCategory = filteredActions.reduce(
     (acc, action) => {
       const category = action.category;
-      if (!acc[category]) {
-        acc[category] = [];
-      }
+      acc[category] ??= [];
       acc[category].push(action);
       return acc;
     },

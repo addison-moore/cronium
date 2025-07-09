@@ -8,7 +8,7 @@ import {
   webhooks,
   workflows,
 } from "@/shared/schema";
-import { eq, and, gte, sql, desc } from "drizzle-orm";
+import { eq, and, gte, sql } from "drizzle-orm";
 import { QuotaManager } from "./QuotaManager";
 import { RateLimiter } from "./RateLimiter";
 
@@ -329,7 +329,7 @@ export class UsageReporter {
    * Get storage metrics
    */
   private async getStorageMetrics(
-    userId: string,
+    _userId: string,
   ): Promise<UsageMetrics["storage"]> {
     // This is a simplified version - in production, you'd calculate actual storage
     // TODO: Implement actual storage calculation
@@ -394,21 +394,34 @@ export class UsageReporter {
     recommendations: string[];
   }> {
     const quotaStatus = await this.quotaManager.getQuotaStatus(userId);
-    const quotas: Record<string, any> = {};
+    const quotas: Record<
+      string,
+      {
+        used: number;
+        limit: number;
+        percentage: number;
+        status: "ok" | "warning" | "critical";
+      }
+    > = {};
     const recommendations: string[] = [];
 
     for (const [key, value] of Object.entries(quotaStatus)) {
       let status: "ok" | "warning" | "critical" = "ok";
-      if (value.percentage >= 100) {
+      const quotaValue = value as {
+        used: number;
+        limit: number;
+        percentage: number;
+      };
+      if (quotaValue.percentage >= 100) {
         status = "critical";
-      } else if (value.percentage >= 80) {
+      } else if (quotaValue.percentage >= 80) {
         status = "warning";
       }
 
       quotas[key] = {
-        used: value.used,
-        limit: value.limit,
-        percentage: value.percentage,
+        used: quotaValue.used,
+        limit: quotaValue.limit,
+        percentage: quotaValue.percentage,
         status,
       };
 
@@ -419,7 +432,7 @@ export class UsageReporter {
         );
       } else if (status === "warning") {
         recommendations.push(
-          `You're approaching your ${key} limit (${value.percentage.toFixed(1)}% used).`,
+          `You're approaching your ${key} limit (${quotaValue.percentage.toFixed(1)}% used).`,
         );
       }
     }

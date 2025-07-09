@@ -149,7 +149,7 @@ export class AdaptiveRetryStrategy extends RetryStrategy {
 
   calculateDelay(context: RetryContext): number {
     const errorType = this.classifyError(context.error);
-    const history = this.errorHistory.get(errorType) || {
+    const history = this.errorHistory.get(errorType) ?? {
       count: 0,
       lastSeen: new Date(),
     };
@@ -219,7 +219,7 @@ export class RetryExecutor<T> {
 
         if (!decision.shouldRetry) {
           throw new Error(
-            `Retry failed: ${decision.reason}. Original error: ${lastError.message}`,
+            `Retry failed: ${decision.reason ?? "Unknown reason"}. Original error: ${lastError.message}`,
           );
         }
 
@@ -233,7 +233,7 @@ export class RetryExecutor<T> {
 
         // Log retry attempt
         console.log(
-          `Retry attempt ${attempt} for ${context?.actionId || "unknown action"} ` +
+          `Retry attempt ${attempt} for ${context?.actionId ?? "unknown action"} ` +
             `after ${lastDelay}ms delay. Total elapsed: ${totalElapsed}ms`,
         );
 
@@ -242,7 +242,7 @@ export class RetryExecutor<T> {
       }
     }
 
-    throw lastError || new Error("Max retry attempts reached");
+    throw lastError ?? new Error("Max retry attempts reached");
   }
 }
 
@@ -305,14 +305,14 @@ export function createRetryExecutor<T>(
     backoffMultiplier:
       config.backoffMultiplier ?? defaultConfig.backoffMultiplier,
     jitter: config.jitter ?? defaultConfig.jitter,
-    ...(config.retryableErrors || defaultConfig.retryableErrors
+    ...((config.retryableErrors ?? defaultConfig.retryableErrors)
       ? {
           retryableErrors: config.retryableErrors ?? [
             ...defaultConfig.retryableErrors,
           ],
         }
       : {}),
-    ...(config.nonRetryableErrors || defaultConfig.nonRetryableErrors
+    ...((config.nonRetryableErrors ?? defaultConfig.nonRetryableErrors)
       ? {
           nonRetryableErrors: config.nonRetryableErrors ?? [
             ...defaultConfig.nonRetryableErrors,

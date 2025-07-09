@@ -4,7 +4,12 @@ import {
   createTemplateContext,
 } from "@/lib/template-processor";
 import type { ConditionalAction } from "@/shared/schema";
-import { ConditionalActionType, EventType } from "@/shared/schema";
+import {
+  ConditionalActionType,
+  EventType,
+  ToolType,
+  type Event,
+} from "@/shared/schema";
 import {
   executeToolAction,
   type ToolActionConfig,
@@ -315,9 +320,9 @@ export async function processEvent(
         );
 
         // Prepare parameters based on tool type
-        let actionParameters: Record<string, any> = {};
+        let actionParameters: Record<string, unknown> = {};
 
-        if (tool.type === "EMAIL") {
+        if (tool.type === ToolType.EMAIL) {
           const subject =
             conditional_event.emailSubject ??
             `Event ${isSuccess ? "Success" : "Failure"}: ${event.name ?? ""}`;
@@ -333,7 +338,10 @@ export async function processEvent(
             message: processedMessage,
             isHtml: true,
           };
-        } else if (tool.type === "SLACK" || tool.type === "DISCORD") {
+        } else if (
+          tool.type === ToolType.SLACK ||
+          tool.type === ToolType.DISCORD
+        ) {
           // For Slack and Discord, just pass the message
           actionParameters = {
             message: processedMessage,
@@ -361,11 +369,11 @@ export async function processEvent(
             toolId: conditional_event.toolId,
             parameters: actionParameters,
           } as ToolActionConfig),
-        } as any;
+        };
 
         // Execute the tool action
         const result = await executeToolAction(
-          toolActionEvent,
+          toolActionEvent as unknown as Event,
           actionParameters,
         );
 

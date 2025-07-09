@@ -16,23 +16,22 @@ This plan details the implementation of a unified execution model where all scri
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                   Docker Compose                         │
+│                   Docker Compose                        │
 ├─────────────────────────┬───────────────────────────────┤
 │                         │                               │
-│    Cronium App          │    Local Execution           │
-│    Container            │    Container                 │
+│    Cronium App          │    Local Execution            │
+│    Container            │    Container                  │
 │                         │                               │
-│  - Next.js App          │  - Script Execution Env      │
-│  - API/tRPC             │  - Isolated & Secure         │
-│  - WebSockets           │  - Resource Limited          │
-│  - Database             │  - Multi-language Support    │
+│  - Next.js App          │  - Script Execution Env       │
+│  - API/tRPC             │  - Isolated & Secure          │
+│  - WebSockets           │  - Resource Limited           │
+│  - Database             │                               │
 │                         │                               │
 └─────────────────────────┴───────────────────────────────┘
                           │
                           │ Docker Network
                           │
                     ┌─────▼─────┐
-                    │   Neon    │
                     │ Database  │
                     └───────────┘
 ```

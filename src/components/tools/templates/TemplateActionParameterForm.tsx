@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef } from "react";
+import React from "react";
 import { z } from "zod";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,7 +39,6 @@ export function TemplateActionParameterForm({
   const [touchedFields, setTouchedFields] = React.useState<Set<string>>(
     new Set(),
   );
-  const editorRefs = useRef<Record<string, any>>({});
 
   // Fetch editor settings for Monaco
   const { data: editorSettings } = trpc.settings.getEditorSettings.useQuery(
@@ -51,13 +50,20 @@ export function TemplateActionParameterForm({
 
   // Get schema shape from Zod schema
   const getSchemaShape = () => {
-    if (action.inputSchema instanceof z.ZodObject) {
-      return action.inputSchema.shape;
+    let schema: z.ZodTypeAny = action.inputSchema;
+
+    // Unwrap ZodEffects (from .refine(), .transform(), etc.)
+    while (schema instanceof z.ZodEffects) {
+      schema = schema._def.schema as z.ZodTypeAny;
+    }
+
+    if (schema instanceof z.ZodObject) {
+      return schema.shape as Record<string, z.ZodTypeAny>;
     }
     return {};
   };
 
-  const schemaShape = getSchemaShape();
+  const schemaShape: Record<string, z.ZodTypeAny> = getSchemaShape();
 
   // Handle field change
   const handleFieldChange = (key: string, fieldValue: unknown) => {
@@ -106,7 +112,7 @@ export function TemplateActionParameterForm({
   const shouldUseMonaco = (key: string, schema: z.ZodTypeAny): boolean => {
     // Check for explicit format hints
     const description =
-      (schema as { description?: string }).description?.toLowerCase() || "";
+      (schema as { description?: string }).description?.toLowerCase() ?? "";
     if (description.includes("json") || description.includes("html")) {
       return true;
     }
@@ -137,7 +143,7 @@ export function TemplateActionParameterForm({
     schema: z.ZodTypeAny,
   ): "html" | "json" => {
     const description =
-      (schema as { description?: string }).description?.toLowerCase() || "";
+      (schema as { description?: string }).description?.toLowerCase() ?? "";
     const lowerKey = key.toLowerCase();
 
     if (
@@ -161,7 +167,7 @@ export function TemplateActionParameterForm({
 
     if (schema instanceof z.ZodOptional) {
       isOptional = true;
-      baseSchema = schema._def.innerType;
+      baseSchema = schema._def.innerType as z.ZodTypeAny;
     }
 
     // Get description from schema
@@ -184,14 +190,22 @@ export function TemplateActionParameterForm({
           >
             <MonacoEditor
               value={
-                typeof fieldValue === "object"
+                typeof fieldValue === "object" && fieldValue !== null
                   ? JSON.stringify(fieldValue, null, 2)
-                  : String(fieldValue ?? "")
+                  : typeof fieldValue === "string"
+                    ? fieldValue
+                    : fieldValue != null
+                      ? // eslint-disable-next-line @typescript-eslint/no-base-to-string
+                        String(fieldValue)
+                      : ""
               }
               onChange={(newValue) => {
                 if (language === "json") {
                   try {
-                    const parsed = JSON.parse(newValue || "{}");
+                    const parsed = JSON.parse(newValue || "{}") as Record<
+                      string,
+                      unknown
+                    >;
                     handleFieldChange(key, parsed);
                   } catch {
                     handleFieldChange(key, newValue);
@@ -396,13 +410,18 @@ export function TemplateActionParameterForm({
         <Textarea
           id={key}
           value={
-            typeof fieldValue === "object"
+            typeof fieldValue === "object" && fieldValue !== null
               ? JSON.stringify(fieldValue, null, 2)
-              : String(fieldValue ?? "")
+              : typeof fieldValue === "string"
+                ? fieldValue
+                : fieldValue != null
+                  ? // eslint-disable-next-line @typescript-eslint/no-base-to-string
+                    String(fieldValue)
+                  : ""
           }
           onChange={(e) => {
             try {
-              const parsed = JSON.parse(e.target.value);
+              const parsed = JSON.parse(e.target.value) as unknown;
               handleFieldChange(key, parsed);
             } catch {
               handleFieldChange(key, e.target.value);
@@ -432,7 +451,7 @@ export function TemplateActionParameterForm({
       {/* Render all fields */}
       <div className="space-y-4">
         {Object.entries(schemaShape).map(([key, schema]) =>
-          renderField(key, schema as z.ZodTypeAny),
+          renderField(key, schema),
         )}
       </div>
 

@@ -20,16 +20,13 @@ import {
   Search,
   Zap,
   MessageSquare,
-  Plus,
   Database,
   Mail,
   Globe,
   Users,
   FileText,
-  CheckCircle,
   AlertCircle,
   TestTube,
-  ChevronRight,
   Info,
   X,
 } from "lucide-react";
@@ -54,7 +51,7 @@ export interface ToolActionConfig {
   toolType: string;
   actionId: string;
   toolId: number;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
   outputMapping?: Record<string, string>;
 }
 
@@ -97,7 +94,7 @@ export default function ToolActionSection({
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [selectedPlugin, setSelectedPlugin] = useState<ToolPlugin | null>(null);
   const [selectedAction, setSelectedAction] = useState<ToolAction | null>(null);
-  const [parameters, setParameters] = useState<Record<string, any>>({});
+  const [parameters, setParameters] = useState<Record<string, unknown>>({});
   const [isTestingAction, setIsTestingAction] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(
     null,
@@ -126,9 +123,7 @@ export default function ToolActionSection({
     const grouped: Record<string, Tool[]> = {};
     availableTools.forEach((tool) => {
       const type = tool.type.toLowerCase();
-      if (!grouped[type]) {
-        grouped[type] = [];
-      }
+      grouped[type] ??= [];
       grouped[type].push(tool);
     });
     return grouped;
@@ -157,7 +152,7 @@ export default function ToolActionSection({
       types = types.filter((type) => {
         const plugin = allPlugins.find((p) => p.id === type);
         return (
-          plugin?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          plugin?.name.toLowerCase().includes(searchQuery.toLowerCase()) ??
           type.toLowerCase().includes(searchQuery.toLowerCase())
         );
       });
@@ -188,12 +183,12 @@ export default function ToolActionSection({
   // Get tools for selected type
   const toolsForSelectedType = useMemo(() => {
     if (!selectedToolType) return [];
-    return toolsByType[selectedToolType.toLowerCase()] || [];
+    return toolsByType[selectedToolType.toLowerCase()] ?? [];
   }, [selectedToolType, toolsByType]);
 
   // Initialize from value
   useEffect(() => {
-    if (value && value.toolId && value.actionId) {
+    if (value?.toolId && value?.actionId) {
       const tool = availableTools.find((t) => t.id === value.toolId);
       if (tool) {
         const plugin = allPlugins.find(
@@ -257,7 +252,7 @@ export default function ToolActionSection({
     setShowTemplateAlert(false);
 
     // Initialize with default parameters
-    const defaultParams = action.testData?.() || {};
+    const defaultParams = action.testData?.() ?? {};
     setParameters(defaultParams);
 
     // Update configuration
@@ -284,7 +279,7 @@ export default function ToolActionSection({
     );
     if (template && selectedTool && selectedPlugin && selectedAction) {
       setSelectedTemplateId(template.id);
-      const templateParams = template.parameters as Record<string, any>;
+      const templateParams = template.parameters as Record<string, unknown>;
       setParameters(templateParams);
       setShowTemplateAlert(true);
 
@@ -302,7 +297,7 @@ export default function ToolActionSection({
   };
 
   // Handle parameter changes
-  const handleParametersChange = (newParams: Record<string, any>) => {
+  const handleParametersChange = (newParams: Record<string, unknown>) => {
     setParameters(newParams);
 
     if (selectedTool && selectedPlugin && selectedAction) {
@@ -417,31 +412,59 @@ export default function ToolActionSection({
     if (selectedPlugin.id === "slack" && selectedAction.id === "send-message") {
       return (
         <SlackMessagePreview
-          channel={parameters.channel || "#general"}
-          message={parameters.text || ""}
-          username={parameters.username}
-          iconEmoji={parameters.icon_emoji}
-          iconUrl={parameters.icon_url}
-          blocks={parameters.blocks}
-          attachments={parameters.attachments}
+          channel={
+            typeof parameters.channel === "string"
+              ? parameters.channel
+              : "#general"
+          }
+          message={typeof parameters.text === "string" ? parameters.text : ""}
+          {...(typeof parameters.username === "string" && {
+            username: parameters.username,
+          })}
+          {...(typeof parameters.icon_emoji === "string" && {
+            iconEmoji: parameters.icon_emoji,
+          })}
+          {...(typeof parameters.icon_url === "string" && {
+            iconUrl: parameters.icon_url,
+          })}
+          {...(Array.isArray(parameters.blocks) && {
+            blocks: parameters.blocks as Array<{
+              type?: string;
+              text?: { text?: string };
+            }>,
+          })}
+          {...(Array.isArray(parameters.attachments) && {
+            attachments: parameters.attachments as Array<{
+              title?: string;
+              text?: string;
+            }>,
+          })}
         />
       );
     }
 
     // Email preview
     if (selectedPlugin.id === "email" && selectedAction.id === "send-email") {
-      return (
-        <EmailPreview
-          to={parameters.to || ""}
-          cc={parameters.cc}
-          bcc={parameters.bcc}
-          subject={parameters.subject || ""}
-          body={parameters.body || ""}
-          priority={parameters.priority}
-          isHtml={parameters.isHtml}
-          attachments={parameters.attachments}
-        />
-      );
+      const emailProps: React.ComponentProps<typeof EmailPreview> = {
+        to: typeof parameters.to === "string" ? parameters.to : "",
+        subject:
+          typeof parameters.subject === "string" ? parameters.subject : "",
+        body: typeof parameters.body === "string" ? parameters.body : "",
+      };
+
+      if (parameters.cc) emailProps.cc = parameters.cc as string;
+      if (parameters.bcc) emailProps.bcc = parameters.bcc as string;
+      if (parameters.priority)
+        emailProps.priority = parameters.priority as "low" | "normal" | "high";
+      if (parameters.isHtml !== undefined)
+        emailProps.isHtml = parameters.isHtml as boolean;
+      if (Array.isArray(parameters.attachments)) {
+        emailProps.attachments = parameters.attachments.filter(
+          (a): a is string => typeof a === "string",
+        );
+      }
+
+      return <EmailPreview {...emailProps} />;
     }
 
     // Webhook/API preview
@@ -449,17 +472,27 @@ export default function ToolActionSection({
       selectedPlugin.id === "webhook" &&
       selectedAction.id === "send-request"
     ) {
-      return (
-        <ApiRequestPreview
-          method={parameters.method || "GET"}
-          url={parameters.url || ""}
-          headers={parameters.headers}
-          queryParams={parameters.queryParams}
-          body={parameters.body}
-          authType={parameters.authType}
-          timeout={parameters.timeout}
-        />
-      );
+      const apiProps: React.ComponentProps<typeof ApiRequestPreview> = {
+        method:
+          typeof parameters.method === "string" ? parameters.method : "GET",
+        url: typeof parameters.url === "string" ? parameters.url : "",
+      };
+
+      if (parameters.headers)
+        apiProps.headers = parameters.headers as Record<string, string>;
+      if (parameters.queryParams)
+        apiProps.queryParams = parameters.queryParams as Record<string, string>;
+      if (parameters.body)
+        apiProps.body = parameters.body as string | Record<string, unknown>;
+      if (parameters.authType)
+        apiProps.authType = parameters.authType as
+          | "none"
+          | "api_key"
+          | "bearer"
+          | "basic";
+      if (parameters.timeout) apiProps.timeout = parameters.timeout as number;
+
+      return <ApiRequestPreview {...apiProps} />;
     }
 
     // Discord preview (similar to Slack)
@@ -470,9 +503,17 @@ export default function ToolActionSection({
       return (
         <SlackMessagePreview
           channel={parameters.webhook_url ? "Discord Channel" : "#general"}
-          message={parameters.content || ""}
-          username={parameters.username || "Cronium Bot"}
-          iconUrl={parameters.avatar_url}
+          message={
+            typeof parameters.content === "string" ? parameters.content : ""
+          }
+          username={
+            typeof parameters.username === "string"
+              ? parameters.username
+              : "Cronium Bot"
+          }
+          {...(typeof parameters.avatar_url === "string" && {
+            iconUrl: parameters.avatar_url,
+          })}
         />
       );
     }
@@ -589,54 +630,53 @@ export default function ToolActionSection({
 
             <Separator />
 
-            {/* Credential selection */}
-            <div className="space-y-2">
-              <Label htmlFor="credential-select">Select Credential</Label>
-              <Select
-                value={selectedTool?.id.toString() ?? ""}
-                onValueChange={handleCredentialSelect}
-              >
-                <SelectTrigger id="credential-select">
-                  <SelectValue placeholder="Choose a credential" />
-                </SelectTrigger>
-                <SelectContent>
-                  {toolsForSelectedType.map((tool) => (
-                    <SelectItem key={tool.id} value={tool.id.toString()}>
-                      <div className="flex items-center gap-2">
-                        <span>{tool.name}</span>
-                        {tool.isActive ? (
-                          <Badge
-                            variant="outline"
-                            className="text-xs text-green-600"
-                          >
-                            Active
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="outline"
-                            className="text-xs text-gray-500"
-                          >
-                            Inactive
-                          </Badge>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {toolsForSelectedType.length === 0 && (
-                <p className="text-muted-foreground text-sm">
-                  No credentials available for this tool.
-                  <Button variant="link" asChild className="h-auto p-0 text-sm">
-                    <a href="/dashboard/settings#tools">Add credential</a>
-                  </Button>
-                </p>
-              )}
-            </div>
+            {/* Credential and Action selection - side by side on large screens */}
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Credential selection */}
+              <div className="space-y-2">
+                <Label htmlFor="credential-select">Select Credential</Label>
+                <Select
+                  value={selectedTool?.id.toString() ?? ""}
+                  onValueChange={handleCredentialSelect}
+                >
+                  <SelectTrigger id="credential-select">
+                    <SelectValue placeholder="Choose a credential" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {toolsForSelectedType.map((tool) => (
+                      <SelectItem key={tool.id} value={tool.id.toString()}>
+                        <div className="flex items-center gap-2">
+                          {/* Minimal status indicator */}
+                          <div
+                            className={cn(
+                              "h-2 w-2 rounded-full",
+                              tool.isActive ? "bg-green-500" : "bg-gray-400",
+                            )}
+                          />
+                          <span>{tool.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {toolsForSelectedType.length === 0 && (
+                  <p className="text-muted-foreground text-sm">
+                    No credentials available for this tool.
+                    <Button
+                      variant="link"
+                      asChild
+                      className="h-auto p-0 text-sm"
+                    >
+                      <Link href="/dashboard/settings#tools">
+                        Add credential
+                      </Link>
+                    </Button>
+                  </p>
+                )}
+              </div>
 
-            {/* Action selection */}
-            {selectedTool && selectedPlugin && (
-              <>
+              {/* Action selection */}
+              {selectedTool && selectedPlugin && (
                 <div className="space-y-2">
                   <Label htmlFor="action-select">Select Action</Label>
                   <Select
@@ -650,17 +690,12 @@ export default function ToolActionSection({
                       {selectedPlugin.actions?.map((action) => (
                         <SelectItem key={action.id} value={action.id}>
                           <div className="flex items-center justify-between gap-4">
-                            <div>
-                              <div className="font-medium">{action.name}</div>
-                              <div className="text-muted-foreground text-xs">
-                                {action.description}
-                              </div>
-                            </div>
+                            <span className="font-medium">{action.name}</span>
                             <Badge
                               variant="secondary"
                               className={cn(
                                 "ml-2 text-xs",
-                                ACTION_TYPE_COLORS[action.actionType] ||
+                                ACTION_TYPE_COLORS[action.actionType] ??
                                   "bg-gray-500 text-white",
                               )}
                             >
@@ -672,9 +707,14 @@ export default function ToolActionSection({
                     </SelectContent>
                   </Select>
                 </div>
+              )}
+            </div>
 
+            {/* Continue with remaining content after action selection */}
+            {selectedTool && selectedPlugin && selectedAction && (
+              <>
                 {/* Template Selection */}
-                {selectedAction && availableTemplates.length > 0 && (
+                {availableTemplates.length > 0 && (
                   <div className="space-y-2">
                     <Label htmlFor="template-select">
                       Use Template (Optional)
@@ -735,42 +775,38 @@ export default function ToolActionSection({
                 )}
 
                 {/* Action parameters */}
-                {selectedAction && (
-                  <>
-                    <Separator />
+                <Separator />
 
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <Label>Configure Parameters</Label>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleTestAction}
-                          disabled={isTestingAction}
-                          className="flex items-center gap-2"
-                        >
-                          <TestTube
-                            className={cn(
-                              "h-4 w-4",
-                              isTestingAction && "animate-spin",
-                            )}
-                          />
-                          Test Action
-                        </Button>
-                      </div>
-
-                      <ActionParameterForm
-                        action={selectedAction}
-                        value={parameters}
-                        onChange={handleParametersChange}
-                        isTest={false}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label>Configure Parameters</Label>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleTestAction}
+                      disabled={isTestingAction}
+                      className="flex items-center gap-2"
+                    >
+                      <TestTube
+                        className={cn(
+                          "h-4 w-4",
+                          isTestingAction && "animate-spin",
+                        )}
                       />
-                    </div>
+                      Test Action
+                    </Button>
+                  </div>
 
-                    {/* Live Preview */}
-                    {renderActionPreview()}
-                  </>
-                )}
+                  <ActionParameterForm
+                    action={selectedAction}
+                    value={parameters}
+                    onChange={handleParametersChange}
+                    isTest={false}
+                  />
+                </div>
+
+                {/* Live Preview */}
+                {renderActionPreview()}
               </>
             )}
           </div>

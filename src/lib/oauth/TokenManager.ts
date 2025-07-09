@@ -119,7 +119,7 @@ export class TokenManager {
         );
         await this.storeTokens(userId, toolId, newTokens);
         return newTokens.accessToken;
-      } catch (error) {
+      } catch {
         // If refresh fails, delete the invalid tokens
         await this.deleteTokens(userId, toolId);
         throw new OAuthError(
