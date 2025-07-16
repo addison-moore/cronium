@@ -2,7 +2,6 @@ import { z } from "zod";
 import { createTRPCRouter, protectedProcedure, withTiming } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { dashboardService } from "@/lib/services/dashboard-service";
-import { cachedQueries, cacheInvalidation } from "../middleware/cache";
 
 // Schemas
 const dashboardStatsSchema = z.object({
@@ -21,19 +20,13 @@ export const dashboardRouter = createTRPCRouter({
         const days = input.days ?? 30;
         const activityLimit = input.activityLimit ?? 50;
 
-        // Use cached query wrapper for dashboard stats
-        const stats = await cachedQueries.dashboardStats(
-          { days, activityLimit },
+        // Direct call to dashboard service without caching
+        // Use the optimized dashboard service that executes queries in parallel
+        // and eliminates N+1 query patterns
+        const stats = await dashboardService.getDashboardStats(
           userId,
-          async () => {
-            // Use the optimized dashboard service that executes queries in parallel
-            // and eliminates N+1 query patterns
-            return dashboardService.getDashboardStats(
-              userId,
-              days,
-              activityLimit,
-            );
-          },
+          days,
+          activityLimit,
         );
 
         return stats;

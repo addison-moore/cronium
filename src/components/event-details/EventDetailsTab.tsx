@@ -34,6 +34,7 @@ import type { Event } from "./types";
 import { Save, Edit, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/use-toast";
+import { formatDate } from "@/lib/utils";
 
 interface EventDetailsTabProps {
   event: Event;
@@ -340,16 +341,12 @@ export function EventDetailsTab({
 
             <div>
               <span className="text-sm font-medium">{t("created")}:</span>
-              <p className="mt-1 text-sm">
-                {new Date(event.createdAt).toLocaleString()}
-              </p>
+              <p className="mt-1 text-sm">{formatDate(event.createdAt)}</p>
             </div>
 
             <div>
               <span className="text-sm font-medium">{t("updated")}:</span>
-              <p className="mt-1 text-sm">
-                {new Date(event.updatedAt).toLocaleString()}
-              </p>
+              <p className="mt-1 text-sm">{formatDate(event.updatedAt)}</p>
             </div>
 
             {event.executionCount !== undefined && (

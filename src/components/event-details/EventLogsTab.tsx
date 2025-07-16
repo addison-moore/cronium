@@ -34,6 +34,7 @@ import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { type Log } from "./types";
+import { formatDate as formatDateUtil } from "@/lib/utils";
 
 interface EventLogsTabProps {
   logs: Log[];
@@ -63,8 +64,7 @@ export function EventLogsTab({
 
   const formatDate = (dateValue: string | Date | null | undefined) => {
     if (!dateValue) return t("never");
-    const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
-    return date.toLocaleString();
+    return formatDateUtil(dateValue);
   };
 
   const formatDuration = (durationMs: number | null) => {

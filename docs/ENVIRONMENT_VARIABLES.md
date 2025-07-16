@@ -103,11 +103,11 @@ postgresql://user:password@localhost:5432/cronium?sslmode=require
 
 ### Service Communication
 
-| Variable           | Description                            | Type           | Default                    | Required | Service |
-| ------------------ | -------------------------------------- | -------------- | -------------------------- | -------- | ------- |
-| `ORCHESTRATOR_URL` | Orchestrator service URL               | `string` (URL) | `http://orchestrator:8080` | Yes      | 📱      |
-| `VALKEY_URL`       | Valkey/Redis connection URL            | `string` (URL) | `valkey://valkey:6379`     | Yes      | 📱 🎯   |
-| `BACKEND_URL`      | Backend service URL (for orchestrator) | `string` (URL) | `http://cronium-app:5001`  | Yes      | 🎯      |
+| Variable           | Description                                                                             | Type           | Default                    | Required | Service |
+| ------------------ | --------------------------------------------------------------------------------------- | -------------- | -------------------------- | -------- | ------- |
+| `ORCHESTRATOR_URL` | Orchestrator service URL                                                                | `string` (URL) | `http://orchestrator:8080` | Yes      | 📱      |
+| `VALKEY_URL`       | Valkey/Redis connection URL (for caching static resources, sessions, and rate limiting) | `string` (URL) | `valkey://valkey:6379`     | Yes      | 📱 🎯   |
+| `BACKEND_URL`      | Backend service URL (for orchestrator)                                                  | `string` (URL) | `http://cronium-app:5001`  | Yes      | 🎯      |
 
 ## Optional Variables
 
@@ -189,6 +189,14 @@ These variables are only used by the orchestrator service and should NOT be incl
 | ------------------- | ------------------------- | -------- | ------- | -------- |
 | `VALKEY_PORT`       | Valkey/Redis port         | `number` | `6379`  | No       |
 | `VALKEY_MAX_MEMORY` | Maximum memory allocation | `string` | `256mb` | No       |
+
+**Caching Strategy Note:** As of 2025-07-16, Cronium uses selective caching only for:
+
+- **Static Resources**: Script templates, tool configurations (1 hour TTL)
+- **Session Data**: User authentication and permissions (10 minute TTL)
+- **Rate Limiting**: API request tracking (1 minute TTL)
+
+All CRUD operations (events, workflows, servers, logs) and real-time data (dashboard stats, monitoring) are NOT cached to ensure data freshness. See `/docs/CACHING_STRATEGY.md` for details.
 
 ## Development Variables
 

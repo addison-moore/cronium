@@ -269,6 +269,9 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
+      workspace:
+        specifier: 'link:'
+        version: 'link:'
       ws:
         specifier: ^8.18.3
         version: 8.18.3(bufferutil@4.0.9)

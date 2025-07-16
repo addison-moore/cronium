@@ -23,6 +23,7 @@ import {
   Play,
 } from "lucide-react";
 import { type Event, type ServerData } from "./types";
+import { formatDate } from "@/lib/utils";
 
 interface EventsTableProps {
   events: Event[];
@@ -87,7 +88,7 @@ export function EventsTable({
 
   const formatLastRunTime = (lastRunAt: string | null): string => {
     if (!lastRunAt) return t("Never");
-    return new Date(lastRunAt).toLocaleString();
+    return formatDate(lastRunAt);
   };
 
   const formatServerLocation = (event: Event): string => {

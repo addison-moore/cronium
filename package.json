@@ -13,7 +13,7 @@
     "start": "next start -p 5001",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
-    "lint:log": "prettier --write . && next lint --fix && next lint > lint.log 2>&1",
+    "lint:log": "pnpm lint > logs/lint.log 2>&1 ",
     "format": "prettier --write .",
     "db:push": "npx drizzle-kit push",
     "db:studio": "npx drizzle-kit studio",
@@ -119,6 +119,7 @@
     "ts-node": "^10.9.2",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3",
+    "workspace": "link:",
     "ws": "^8.18.3",
     "zod": "^3.25.76",
     "zustand": "^5.0.6"
