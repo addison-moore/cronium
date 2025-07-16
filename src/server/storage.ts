@@ -568,22 +568,9 @@ class DatabaseStorage implements IStorage {
   async getEventWithRelations(
     id: number,
   ): Promise<EventWithRelations | undefined> {
-    // Check if caching is available
-    const { withCache } = await import("@/server/api/middleware/cache");
-    const { CACHE_TTL } = await import("@/lib/cache/cache-service");
-
-    return withCache(
-      {
-        key: `event:${id}:full`,
-        keyPrefix: "storage:",
-        ttl: CACHE_TTL.EVENT_DETAILS,
-        tags: [`event:${id}`, "events", "event-relations"],
-      },
-      async () => {
-        // Optimized implementation with parallel queries
-        return this.getEventWithRelationsOptimized(id);
-      },
-    );
+    // Direct call without caching
+    // Optimized implementation with parallel queries
+    return this.getEventWithRelationsOptimized(id);
   }
 
   private async getEventWithRelationsOptimized(

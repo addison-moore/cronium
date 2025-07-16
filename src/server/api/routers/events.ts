@@ -1,10 +1,25 @@
+/**
+ * Events Router
+ *
+ * Note: This router does NOT use caching for any operations.
+ * As a CRUD-heavy application with real-time monitoring requirements,
+ * caching was removed to ensure users always see the latest data.
+ *
+ * Previous issues with cache invalidation:
+ * - Users saw stale event names after updates
+ * - Event status changes weren't reflected immediately
+ * - Only 9.5% of routers had proper cache invalidation
+ *
+ * Current approach: All queries fetch fresh data directly from storage.
+ * For more details, see /docs/CACHING_STRATEGY.md
+ */
+
 import { TRPCError } from "@trpc/server";
 import {
   createTRPCRouter,
   publicProcedure,
   withTiming,
   withRateLimit,
-  withCache,
   withTransaction,
 } from "../trpc";
 import { EventStatus, LogStatus, UserRole, RunLocation } from "@/shared/schema";
@@ -22,7 +37,6 @@ import {
 } from "@/shared/schemas/events";
 import { storage } from "@/server/storage";
 import { scheduler } from "@/lib/scheduler";
-import { cachedQueries, cacheInvalidation } from "../middleware/cache";
 
 // Type for authenticated event context
 interface EventContext {
@@ -98,59 +112,50 @@ export const eventsRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const eventCtx = ctx as EventContext;
       try {
-        // Use cached query wrapper for event lists
-        const result = await cachedQueries.eventList(
-          input,
-          eventCtx.userId,
-          async () => {
-            const events = await storage.getAllEvents(eventCtx.userId);
+        // Direct storage call without caching
+        const events = await storage.getAllEvents(eventCtx.userId);
 
-            // Apply filters
-            let filteredEvents = events;
+        // Apply filters
+        let filteredEvents = events;
 
-            if (input.search) {
-              const searchLower = input.search.toLowerCase();
-              filteredEvents = filteredEvents.filter(
-                (event) =>
-                  (event.name?.toLowerCase().includes(searchLower) ?? false) ||
-                  (event.description?.toLowerCase().includes(searchLower) ??
-                    false),
-              );
-            }
+        if (input.search) {
+          const searchLower = input.search.toLowerCase();
+          filteredEvents = filteredEvents.filter(
+            (event) =>
+              (event.name?.toLowerCase().includes(searchLower) ?? false) ||
+              (event.description?.toLowerCase().includes(searchLower) ?? false),
+          );
+        }
 
-            if (input.status) {
-              filteredEvents = filteredEvents.filter(
-                (event) => event.status === input.status,
-              );
-            }
+        if (input.status) {
+          filteredEvents = filteredEvents.filter(
+            (event) => event.status === input.status,
+          );
+        }
 
-            if (input.type) {
-              filteredEvents = filteredEvents.filter(
-                (event) => event.type === input.type,
-              );
-            }
+        if (input.type) {
+          filteredEvents = filteredEvents.filter(
+            (event) => event.type === input.type,
+          );
+        }
 
-            if (input.shared !== undefined) {
-              filteredEvents = filteredEvents.filter(
-                (event) => event.shared === input.shared,
-              );
-            }
+        if (input.shared !== undefined) {
+          filteredEvents = filteredEvents.filter(
+            (event) => event.shared === input.shared,
+          );
+        }
 
-            // Apply pagination
-            const paginatedEvents = filteredEvents.slice(
-              input.offset,
-              input.offset + input.limit,
-            );
-
-            return {
-              events: paginatedEvents,
-              total: filteredEvents.length,
-              hasMore: input.offset + input.limit < filteredEvents.length,
-            };
-          },
+        // Apply pagination
+        const paginatedEvents = filteredEvents.slice(
+          input.offset,
+          input.offset + input.limit,
         );
 
-        return result;
+        return {
+          events: paginatedEvents,
+          total: filteredEvents.length,
+          hasMore: input.offset + input.limit < filteredEvents.length,
+        };
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -173,22 +178,14 @@ export const eventsRouter = createTRPCRouter({
         });
       }
 
-      // Use cached query wrapper for individual events
-      const event = await cachedQueries.eventById(
-        { id: input.id },
-        eventCtx.userId,
-        async () => {
-          const event = await storage.getEventWithRelations(input.id);
-          if (!event) {
-            throw new TRPCError({
-              code: "NOT_FOUND",
-              message: "Event not found",
-            });
-          }
-          return event;
-        },
-      );
-
+      // Direct storage call without caching
+      const event = await storage.getEventWithRelations(input.id);
+      if (!event) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Event not found",
+        });
+      }
       return event;
     } catch (error) {
       if (error instanceof TRPCError) throw error;
@@ -292,9 +289,6 @@ export const eventsRouter = createTRPCRouter({
 
         // Get the complete event with relations
         const completeEvent = await storage.getEventWithRelations(event.id);
-
-        // Invalidate caches
-        await cacheInvalidation.invalidateEvent(event.id, eventCtx.userId);
 
         return completeEvent;
       } catch (error) {
@@ -430,9 +424,6 @@ export const eventsRouter = createTRPCRouter({
         // Get the updated event with relations
         const updatedEvent = await storage.getEventWithRelations(id);
 
-        // Invalidate caches
-        await cacheInvalidation.invalidateEvent(id, eventCtx.userId);
-
         return updatedEvent;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -460,9 +451,6 @@ export const eventsRouter = createTRPCRouter({
         }
 
         await storage.deleteScript(input.id);
-
-        // Invalidate caches
-        await cacheInvalidation.invalidateEvent(input.id, eventCtx.userId);
 
         return { success: true };
       } catch (error) {

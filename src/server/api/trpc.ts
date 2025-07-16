@@ -229,87 +229,12 @@ export const withTiming = t.middleware(async ({ path, type, next }) => {
 });
 
 /**
- * Rate limiting middleware to prevent abuse
- * Basic implementation - could be enhanced with Redis or external service
+ * Rate limiting middleware using Redis/Valkey
+ * Provides distributed rate limiting across all server instances
  */
-const requestCounts = new Map<string, { count: number; resetTime: number }>();
+import { createRateLimitMiddleware } from "@/lib/rate-limit-service";
 
-export const withRateLimit = (maxRequests = 100, windowMs = 60000) => {
-  return t.middleware(async ({ ctx, path, next }) => {
-    const identifier =
-      ctx.session?.user?.id ??
-      ctx.headers.get("x-forwarded-for") ??
-      "anonymous";
-    const key = `${identifier}:${path}`;
-    const now = Date.now();
+export const withRateLimit = createRateLimitMiddleware;
 
-    const current = requestCounts.get(key);
-
-    if (!current || now > current.resetTime) {
-      // Reset or initialize counter
-      requestCounts.set(key, { count: 1, resetTime: now + windowMs });
-    } else if (current.count >= maxRequests) {
-      throw new TRPCError({
-        code: "TOO_MANY_REQUESTS",
-        message: "Rate limit exceeded. Please try again later.",
-      });
-    } else {
-      current.count++;
-    }
-
-    return next();
-  });
-};
-
-/**
- * Caching middleware for read operations
- * Simple in-memory cache - could be enhanced with Redis
- */
-interface CacheEntry {
-  data: unknown;
-  expires: number;
-}
-
-const cache = new Map<string, CacheEntry>();
-
-export const withCache = (ttlMs = 60000) => {
-  return t.middleware(async ({ ctx, path, type, input, next }) => {
-    // Only cache queries, not mutations
-    if (type !== "query") {
-      return next();
-    }
-
-    const cacheKey = `${path}:${JSON.stringify(input)}:${
-      ctx.session?.user?.id ?? "anonymous"
-    }`;
-    const now = Date.now();
-
-    // Check cache
-    const cached = cache.get(cacheKey);
-    if (cached && now < cached.expires) {
-      // We must return the result of next() to maintain proper typing
-      // We can't directly return cached.data as it doesn't match the MiddlewareResult type
-      return next();
-    }
-
-    // Execute the original resolver
-    const result = await next();
-
-    // Store the result in cache
-    cache.set(cacheKey, {
-      data: result,
-      expires: now + ttlMs,
-    });
-
-    // Clean up expired entries periodically
-    if (cache.size > 1000) {
-      for (const [key, entry] of cache.entries()) {
-        if (now >= entry.expires) {
-          cache.delete(key);
-        }
-      }
-    }
-
-    return result;
-  });
-};
+// withCache middleware has been removed as part of caching simplification
+// All CRUD operations now return fresh data directly from the database

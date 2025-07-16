@@ -13,5 +13,8 @@ _duplicates/
 pyproject.toml
 uv.lock
 attached_assets/
-# Claude Code configuration
 .claude/
+logs
+plans/*
+.pnpm-store/*
+.swc

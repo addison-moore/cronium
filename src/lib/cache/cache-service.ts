@@ -2,28 +2,18 @@ import Redis, { type Redis as RedisClient } from "ioredis";
 import { env } from "@/env.mjs";
 import superjson from "superjson";
 
-// Cache key prefixes for different data types
+// Cache key prefixes for remaining cache use cases
 export const CACHE_PREFIXES = {
-  EVENT: "event:",
-  EVENT_LIST: "event_list:",
-  USER: "user:",
-  SERVER: "server:",
-  WORKFLOW: "workflow:",
-  LOG: "log:",
-  DASHBOARD: "dashboard:",
-  WEBHOOK: "webhook:",
+  USER: "user:", // For session/auth caching
+  RATE_LIMIT: "rate_limit:", // For rate limiting
+  STATIC: "static:", // For static resources
 } as const;
 
-// TTL values in seconds
+// TTL values in seconds for remaining cache use cases
 export const CACHE_TTL = {
-  EVENT: 300, // 5 minutes
-  EVENT_LIST: 300, // 5 minutes
-  USER: 600, // 10 minutes
-  SERVER: 900, // 15 minutes
-  WORKFLOW: 300, // 5 minutes
-  LOG: 120, // 2 minutes
-  DASHBOARD: 60, // 1 minute
-  WEBHOOK: 300, // 5 minutes
+  USER: 600, // 10 minutes for session data
+  RATE_LIMIT: 60, // 1 minute for rate limiting windows
+  STATIC: 3600, // 1 hour for static resources
 } as const;
 
 export interface CacheOptions {
@@ -140,7 +130,7 @@ export class CacheService {
       }
 
       const serialized = superjson.stringify(value);
-      const ttl = options.ttl || CACHE_TTL.EVENT;
+      const ttl = options.ttl || CACHE_TTL.STATIC;
 
       if (ttl > 0) {
         await this.client.setex(key, ttl, serialized);
@@ -333,13 +323,9 @@ export const cacheHelpers = {
   },
 
   /**
-   * Invalidate cache for a user's entities
+   * Invalidate cache for a user's session/auth data
    */
   async invalidateUserCache(userId: string): Promise<void> {
-    await Promise.all([
-      cacheService.deleteByPattern(`${CACHE_PREFIXES.USER}${userId}*`),
-      cacheService.deleteByPattern(`${CACHE_PREFIXES.DASHBOARD}${userId}*`),
-      cacheService.deleteByPattern(`${CACHE_PREFIXES.EVENT_LIST}${userId}*`),
-    ]);
+    await cacheService.deleteByPattern(`${CACHE_PREFIXES.USER}${userId}*`);
   },
 };

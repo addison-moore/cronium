@@ -1,26 +1,1135 @@
-cronium-app-dev     | Error in getEventWithRelations for event 550: Error: Failed query: select "events"."id", "events"."user_id", "events"."name", "events"."description", "events"."shared", "events"."type", "events"."content", "events"."http_method", "events"."http_url", "events"."http_headers", "events"."http_body", "events"."tool_action_config", "events"."status", "events"."trigger_type", "events"."schedule_number", "events"."schedule_unit", "events"."custom_schedule", "events"."run_location", "events"."server_id", "events"."timeout_value", "events"."timeout_unit", "events"."retries", "events"."start_time", "events"."execution_count", "events"."max_executions", "events"."reset_counter_on_active", "events"."last_run_at", "events"."next_run_at", "events"."success_count", "events"."failure_count", "events"."tags", "events"."created_at", "events"."updated_at", "events_envVars"."data" as "envVars", "events_server"."data" as "server", "events_eventServers"."data" as "eventServers", "events_onSuccessEvents"."data" as "onSuccessEvents", "events_onFailEvents"."data" as "onFailEvents", "events_onAlwaysEvents"."data" as "onAlwaysEvents" from "events" "events" left join lateral (select coalesce(json_agg(json_build_array("events_envVars"."id", "events_envVars"."event_id", "events_envVars"."key", "events_envVars"."value", "events_envVars"."created_at", "events_envVars"."updated_at")), '[]'::json) as "data" from "env_vars" "events_envVars" where "events_envVars"."event_id" = "events"."id") "events_envVars" on true left join lateral (select json_build_array("events_server"."id", "events_server"."user_id", "events_server"."name", "events_server"."address", "events_server"."ssh_key", "events_server"."username", "events_server"."port", "events_server"."shared", "events_server"."online", "events_server"."last_checked", "events_server"."created_at", "events_server"."updated_at") as "data" from (select * from "servers" "events_server" where "events_server"."id" = "events"."server_id" limit $1) "events_server") "events_server" on true left join lateral (select coalesce(json_agg(json_build_array("events_eventServers"."id", "events_eventServers"."event_id", "events_eventServers"."server_id", "events_eventServers"."created_at", "events_eventServers_server"."data")), '[]'::json) as "data" from "event_servers" "events_eventServers" left join lateral (select json_build_array("events_eventServers_server"."id", "events_eventServers_server"."user_id", "events_eventServers_server"."name", "events_eventServers_server"."address", "events_eventServers_server"."ssh_key", "events_eventServers_server"."username", "events_eventServers_server"."port", "events_eventServers_server"."shared", "events_eventServers_server"."online", "events_eventServers_server"."last_checked", "events_eventServers_server"."created_at", "events_eventServers_server"."updated_at") as "data" from (select * from "servers" "events_eventServers_server" where "events_eventServers_server"."id" = "events_eventServers"."server_id" limit $2) "events_eventServers_server") "events_eventServers_server" on true where "events_eventServers"."event_id" = "events"."id") "events_eventServers" on true left join lateral (select coalesce(json_agg(json_build_array("events_onSuccessEvents"."id", "events_onSuccessEvents"."type", "events_onSuccessEvents"."value", "events_onSuccessEvents"."success_event_id", "events_onSuccessEvents"."fail_event_id", "events_onSuccessEvents"."always_event_id", "events_onSuccessEvents"."condition_event_id", "events_onSuccessEvents"."target_event_id", "events_onSuccessEvents"."tool_id", "events_onSuccessEvents"."message", "events_onSuccessEvents"."email_addresses", "events_onSuccessEvents"."email_subject", "events_onSuccessEvents"."created_at", "events_onSuccessEvents"."updated_at", "events_onSuccessEvents_targetEvent"."data")), '[]'::json) as "data" from "conditional_actions" "events_onSuccessEvents" left join lateral (select json_build_array("events_onSuccessEvents_targetEvent"."id", "events_onSuccessEvents_targetEvent"."user_id", "events_onSuccessEvents_targetEvent"."name", "events_onSuccessEvents_targetEvent"."description", "events_onSuccessEvents_targetEvent"."shared", "events_onSuccessEvents_targetEvent"."type", "events_onSuccessEvents_targetEvent"."content", "events_onSuccessEvents_targetEvent"."http_method", "events_onSuccessEvents_targetEvent"."http_url", "events_onSuccessEvents_targetEvent"."http_headers", "events_onSuccessEvents_targetEvent"."http_body", "events_onSuccessEvents_targetEvent"."tool_action_config", "events_onSuccessEvents_targetEvent"."status", "events_onSuccessEvents_targetEvent"."trigger_type", "events_onSuccessEvents_targetEvent"."schedule_number", "events_onSuccessEvents_targetEvent"."schedule_unit", "events_onSuccessEvents_targetEvent"."custom_schedule", "events_onSuccessEvents_targetEvent"."run_location", "events_onSuccessEvents_targetEvent"."server_id", "events_onSuccessEvents_targetEvent"."timeout_value", "events_onSuccessEvents_targetEvent"."timeout_unit", "events_onSuccessEvents_targetEvent"."retries", "events_onSuccessEvents_targetEvent"."start_time", "events_onSuccessEvents_targetEvent"."execution_count", "events_onSuccessEvents_targetEvent"."max_executions", "events_onSuccessEvents_targetEvent"."reset_counter_on_active", "events_onSuccessEvents_targetEvent"."last_run_at", "events_onSuccessEvents_targetEvent"."next_run_at", "events_onSuccessEvents_targetEvent"."success_count", "events_onSuccessEvents_targetEvent"."failure_count", "events_onSuccessEvents_targetEvent"."tags", "events_onSuccessEvents_targetEvent"."created_at", "events_onSuccessEvents_targetEvent"."updated_at") as "data" from (select * from "events" "events_onSuccessEvents_targetEvent" where "events_onSuccessEvents_targetEvent"."id" = "events_onSuccessEvents"."target_event_id" limit $3) "events_onSuccessEvents_targetEvent") "events_onSuccessEvents_targetEvent" on true where "events_onSuccessEvents"."success_event_id" = "events"."id") "events_onSuccessEvents" on true left join lateral (select coalesce(json_agg(json_build_array("events_onFailEvents"."id", "events_onFailEvents"."type", "events_onFailEvents"."value", "events_onFailEvents"."success_event_id", "events_onFailEvents"."fail_event_id", "events_onFailEvents"."always_event_id", "events_onFailEvents"."condition_event_id", "events_onFailEvents"."target_event_id", "events_onFailEvents"."tool_id", "events_onFailEvents"."message", "events_onFailEvents"."email_addresses", "events_onFailEvents"."email_subject", "events_onFailEvents"."created_at", "events_onFailEvents"."updated_at", "events_onFailEvents_targetEvent"."data")), '[]'::json) as "data" from "conditional_actions" "events_onFailEvents" left join lateral (select json_build_array("events_onFailEvents_targetEvent"."id", "events_onFailEvents_targetEvent"."user_id", "events_onFailEvents_targetEvent"."name", "events_onFailEvents_targetEvent"."description", "events_onFailEvents_targetEvent"."shared", "events_onFailEvents_targetEvent"."type", "events_onFailEvents_targetEvent"."content", "events_onFailEvents_targetEvent"."http_method", "events_onFailEvents_targetEvent"."http_url", "events_onFailEvents_targetEvent"."http_headers", "events_onFailEvents_targetEvent"."http_body", "events_onFailEvents_targetEvent"."tool_action_config", "events_onFailEvents_targetEvent"."status", "events_onFailEvents_targetEvent"."trigger_type", "events_onFailEvents_targetEvent"."schedule_number", "events_onFailEvents_targetEvent"."schedule_unit", "events_onFailEvents_targetEvent"."custom_schedule", "events_onFailEvents_targetEvent"."run_location", "events_onFailEvents_targetEvent"."server_id", "events_onFailEvents_targetEvent"."timeout_value", "events_onFailEvents_targetEvent"."timeout_unit", "events_onFailEvents_targetEvent"."retries", "events_onFailEvents_targetEvent"."start_time", "events_onFailEvents_targetEvent"."execution_count", "events_onFailEvents_targetEvent"."max_executions", "events_onFailEvents_targetEvent"."reset_counter_on_active", "events_onFailEvents_targetEvent"."last_run_at", "events_onFailEvents_targetEvent"."next_run_at", "events_onFailEvents_targetEvent"."success_count", "events_onFailEvents_targetEvent"."failure_count", "events_onFailEvents_targetEvent"."tags", "events_onFailEvents_targetEvent"."created_at", "events_onFailEvents_targetEvent"."updated_at") as "data" from (select * from "events" "events_onFailEvents_targetEvent" where "events_onFailEvents_targetEvent"."id" = "events_onFailEvents"."target_event_id" limit $4) "events_onFailEvents_targetEvent") "events_onFailEvents_targetEvent" on true where "events_onFailEvents"."fail_event_id" = "events"."id") "events_onFailEvents" on true left join lateral (select coalesce(json_agg(json_build_array("events_onAlwaysEvents"."id", "events_onAlwaysEvents"."type", "events_onAlwaysEvents"."value", "events_onAlwaysEvents"."success_event_id", "events_onAlwaysEvents"."fail_event_id", "events_onAlwaysEvents"."always_event_id", "events_onAlwaysEvents"."condition_event_id", "events_onAlwaysEvents"."target_event_id", "events_onAlwaysEvents"."tool_id", "events_onAlwaysEvents"."message", "events_onAlwaysEvents"."email_addresses", "events_onAlwaysEvents"."email_subject", "events_onAlwaysEvents"."created_at", "events_onAlwaysEvents"."updated_at", "events_onAlwaysEvents_targetEvent"."data")), '[]'::json) as "data" from "conditional_actions" "events_onAlwaysEvents" left join lateral (select json_build_array("events_onAlwaysEvents_targetEvent"."id", "events_onAlwaysEvents_targetEvent"."user_id", "events_onAlwaysEvents_targetEvent"."name", "events_onAlwaysEvents_targetEvent"."description", "events_onAlwaysEvents_targetEvent"."shared", "events_onAlwaysEvents_targetEvent"."type", "events_onAlwaysEvents_targetEvent"."content", "events_onAlwaysEvents_targetEvent"."http_method", "events_onAlwaysEvents_targetEvent"."http_url", "events_onAlwaysEvents_targetEvent"."http_headers", "events_onAlwaysEvents_targetEvent"."http_body", "events_onAlwaysEvents_targetEvent"."tool_action_config", "events_onAlwaysEvents_targetEvent"."status", "events_onAlwaysEvents_targetEvent"."trigger_type", "events_onAlwaysEvents_targetEvent"."schedule_number", "events_onAlwaysEvents_targetEvent"."schedule_unit", "events_onAlwaysEvents_targetEvent"."custom_schedule", "events_onAlwaysEvents_targetEvent"."run_location", "events_onAlwaysEvents_targetEvent"."server_id", "events_onAlwaysEvents_targetEvent"."timeout_value", "events_onAlwaysEvents_targetEvent"."timeout_unit", "events_onAlwaysEvents_targetEvent"."retries", "events_onAlwaysEvents_targetEvent"."start_time", "events_onAlwaysEvents_targetEvent"."execution_count", "events_onAlwaysEvents_targetEvent"."max_executions", "events_onAlwaysEvents_targetEvent"."reset_counter_on_active", "events_onAlwaysEvents_targetEvent"."last_run_at", "events_onAlwaysEvents_targetEvent"."next_run_at", "events_onAlwaysEvents_targetEvent"."success_count", "events_onAlwaysEvents_targetEvent"."failure_count", "events_onAlwaysEvents_targetEvent"."tags", "events_onAlwaysEvents_targetEvent"."created_at", "events_onAlwaysEvents_targetEvent"."updated_at") as "data" from (select * from "events" "events_onAlwaysEvents_targetEvent" where "events_onAlwaysEvents_targetEvent"."id" = "events_onAlwaysEvents"."target_event_id" limit $5) "events_onAlwaysEvents_targetEvent") "events_onAlwaysEvents_targetEvent" on true where "events_onAlwaysEvents"."always_event_id" = "events"."id") "events_onAlwaysEvents" on true where "events"."id" = $6 limit $7
-cronium-app-dev     | params: 1,1,1,1,1,550,1
-cronium-app-dev     |     at async DatabaseStorage.getEventWithRelations (src/server/storage.ts:573:33)
-cronium-app-dev     |     at async eval (src/lib/scheduler/scheduler.ts:408:37)
-cronium-app-dev     |   571 |     try {
-cronium-app-dev     |   572 |       // Use Drizzle's relational query to fetch everything in a single query
-cronium-app-dev     | > 573 |       const eventWithRelations = await db.query.events.findFirst({
-cronium-app-dev     |       |                                 ^
-cronium-app-dev     |   574 |         where: eq(events.id, id),
-cronium-app-dev     |   575 |         with: {
-cronium-app-dev     |   576 |           envVars: true, {
-cronium-app-dev     |   query: `select "events"."id", "events"."user_id", "events"."name", "events"."description", "events"."shared", "events"."type", "events"."content", "events"."http_method", "events"."http_url", "events"."http_headers", "events"."http_body", "events"."tool_action_config", "events"."status", "events"."trigger_type", "events"."schedule_number", "events"."schedule_unit", "events"."custom_schedule", "events"."run_location", "events"."server_id", "events"."timeout_value", "events"."timeout_unit", "events"."retries", "events"."start_time", "events"."execution_count", "events"."max_executions", "events"."reset_counter_on_active", "events"."last_run_at", "events"."next_run_at", "events"."success_count", "events"."failure_count", "events"."tags", "events"."created_at", "events"."updated_at", "events_envVars"."data" as "envVars", "events_server"."data" as "server", "events_eventServers"."data" as "eventServers", "events_onSuccessEvents"."data" as "onSuccessEvents", "events_onFailEvents"."data" as "onFailEvents", "events_onAlwaysEvents"."data" as "onAlwaysEvents" from "events" "events" left join lateral (select coalesce(json_agg(json_build_array("events_envVars"."id", "events_envVars"."event_id", "events_envVars"."key", "events_envVars"."value", "events_envVars"."created_at", "events_envVars"."updated_at")), '[]'::json) as "data" from "env_vars" "events_envVars" where "events_envVars"."event_id" = "events"."id") "events_envVars" on true left join lateral (select json_build_array("events_server"."id", "events_server"."user_id", "events_server"."name", "events_server"."address", "events_server"."ssh_key", "events_server"."username", "events_server"."port", "events_server"."shared", "events_server"."online", "events_server"."last_checked", "events_server"."created_at", "events_server"."updated_at") as "data" from (select * from "servers" "events_server" where "events_server"."id" = "events"."server_id" limit $1) "events_server") "events_server" on true left join lateral (select coalesce(json_agg(json_build_array("events_eventServers"."id", "events_eventServers"."event_id", "events_eventServers"."server_id", "events_eventServers"."created_at", "events_eventServers_server"."data")), '[]'::json) as "data" from "event_servers" "events_eventServers" left join lateral (select json_build_array("events_eventServers_server"."id", "events_eventServers_server"."user_id", "events_eventServers_server"."name", "events_eventServers_server"."address", "events_eventServers_server"."ssh_key", "events_eventServers_server"."username", "events_eventServers_server"."port", "events_eventServers_server"."shared", "events_eventServers_server"."online", "events_eventServers_server"."last_checked", "events_eventServers_server"."created_at", "events_eventServers_server"."updated_at") as "data" from (select * from "servers" "events_eventServers_server" where "events_eventServers_server"."id" = "events_eventServers"."server_id" limit $2) "events_eventServers_server") "events_eventServers_server" on true where "events_eventServers"."event_id" = "events"."id") "events_eventServers" on true left join lateral (select coalesce(json_agg(json_build_array("events_onSuccessEvents"."id", "events_onSuccessEvents"."type", "events_onSuccessEvents"."value", "events_onSuccessEvents"."success_event_id", "events_onSuccessEvents"."fail_event_id", "events_onSuccessEvents"."always_event_id", "events_onSuccessEvents"."condition_event_id", "events_onSuccessEvents"."target_event_id", "events_onSuccessEvents"."tool_id", "events_onSuccessEvents"."message", "events_onSuccessEvents"."email_addresses", "events_onSuccessEvents"."email_subject", "events_onSuccessEvents"."created_at", "events_onSuccessEvents"."updated_at", "events_onSuccessEvents_targetEvent"."data")), '[]'::json) as "data" from "conditional_actions" "events_onSuccessEvents" left join lateral (select json_build_array("events_onSuccessEvents_targetEvent"."id", "events_onSuccessEvents_targetEvent"."user_id", "events_onSuccessEvents_targetEvent"."name", "events_onSuccessEvents_targetEvent"."description", "events_onSuccessEvents_targetEvent"."shared", "events_onSuccessEvents_targetEvent"."type", "events_onSuccessEvents_targetEvent"."content", "events_onSuccessEvents_targetEvent"."http_method", "events_onSuccessEvents_targetEvent"."http_url", "events_onSuccessEvents_targetEvent"."http_headers", "events_onSuccessEvents_targetEvent"."http_body", "events_onSuccessEvents_targetEvent"."tool_action_config", "events_onSuccessEvents_targetEvent"."status", "events_onSuccessEvents_targetEvent"."trigger_type", "events_onSuccessEvents_targetEvent"."schedule_number", "events_onSuccessEvents_targetEvent"."schedule_unit", "events_onSuccessEvents_targetEvent"."custom_schedule", "events_onSuccessEvents_targetEvent"."run_location", "events_onSuccessEvents_targetEvent"."server_id", "events_onSuccessEvents_targetEvent"."timeout_value", "events_onSuccessEvents_targetEvent"."timeout_unit", "events_onSuccessEvents_targetEvent"."retries", "events_onSuccessEvents_targetEvent"."start_time", "events_onSuccessEvents_targetEvent"."execution_count", "events_onSuccessEvents_targetEvent"."max_executions", "events_onSuccessEvents_targetEvent"."reset_counter_on_active", "events_onSuccessEvents_targetEvent"."last_run_at", "events_onSuccessEvents_targetEvent"."next_run_at", "events_onSuccessEvents_targetEvent"."success_count", "events_onSuccessEvents_targetEvent"."failure_count", "events_onSuccessEvents_targetEvent"."tags", "events_onSuccessEvents_targetEvent"."created_at", "events_onSuccessEvents_targetEvent"."updated_at") as "data" from (select * from "events" "events_onSuccessEvents_targetEvent" where "events_onSuccessEvents_targetEvent"."id" = "events_onSuccessEvents"."target_event_id" limit $3) "events_onSuccessEvents_targetEvent") "events_onSuccessEvents_targetEvent" on true where "events_onSuccessEvents"."success_event_id" = "events"."id") "events_onSuccessEvents" on true left join lateral (select coalesce(json_agg(json_build_array("events_onFailEvents"."id", "events_onFailEvents"."type", "events_onFailEvents"."value", "events_onFailEvents"."success_event_id", "events_onFailEvents"."fail_event_id", "events_onFailEvents"."always_event_id", "events_onFailEvents"."condition_event_id", "events_onFailEvents"."target_event_id", "events_onFailEvents"."tool_id", "events_onFailEvents"."message", "events_onFailEvents"."email_addresses", "events_onFailEvents"."email_subject", "events_onFailEvents"."created_at", "events_onFailEvents"."updated_at", "events_onFailEvents_targetEvent"."data")), '[]'::json) as "data" from "conditional_actions" "events_onFailEvents" left join lateral (select json_build_array("events_onFailEvents_targetEvent"."id", "events_onFailEvents_targetEvent"."user_id", "events_onFailEvents_targetEvent"."name", "events_onFailEvents_targetEvent"."description", "events_onFailEvents_targetEvent"."shared", "events_onFailEvents_targetEvent"."type", "events_onFailEvents_targetEvent"."content", "events_onFailEvents_targetEvent"."http_method", "events_onFailEvents_targetEvent"."http_url", "events_onFailEvents_targetEvent"."http_headers", "events_onFailEvents_targetEvent"."http_body", "events_onFailEvents_targetEvent"."tool_action_config", "events_onFailEvents_targetEvent"."status", "events_onFailEvents_targetEvent"."trigger_type", "events_onFailEvents_targetEvent"."schedule_number", "events_onFailEvents_targetEvent"."schedule_unit", "events_onFailEvents_targetEvent"."custom_schedule", "events_onFailEvents_targetEvent"."run_location", "events_onFailEvents_targetEvent"."server_id", "events_onFailEvents_targetEvent"."timeout_value", "events_onFailEvents_targetEvent"."timeout_unit", "events_onFailEvents_targetEvent"."retries", "events_onFailEvents_targetEvent"."start_time", "events_onFailEvents_targetEvent"."execution_count", "events_onFailEvents_targetEvent"."max_executions", "events_onFailEvents_targetEvent"."reset_counter_on_active", "events_onFailEvents_targetEvent"."last_run_at", "events_onFailEvents_targetEvent"."next_run_at", "events_onFailEvents_targetEvent"."success_count", "events_onFailEvents_targetEvent"."failure_count", "events_onFailEvents_targetEvent"."tags", "events_onFailEvents_targetEvent"."created_at", "events_onFailEvents_targetEvent"."updated_at") as "data" from (select * from "events" "events_onFailEvents_targetEvent" where "events_onFailEvents_targetEvent"."id" = "events_onFailEvents"."target_event_id" limit $4) "events_onFailEvents_targetEvent") "events_onFailEvents_targetEvent" on true where "events_onFailEvents"."fail_event_id" = "events"."id") "events_onFailEvents" on true left join lateral (select coalesce(json_agg(json_build_array("events_onAlwaysEvents"."id", "events_onAlwaysEvents"."type", "events_onAlwaysEvents"."value", "events_onAlwaysEvents"."success_event_id", "events_onAlwaysEvents"."fail_event_id", "events_onAlwaysEvents"."always_event_id", "events_onAlwaysEvents"."condition_event_id", "events_onAlwaysEvents"."target_event_id", "events_onAlwaysEvents"."tool_id", "events_onAlwaysEvents"."message", "events_onAlwaysEvents"."email_addresses", "events_onAlwaysEvents"."email_subject", "events_onAlwaysEvents"."created_at", "events_onAlwaysEvents"."updated_at", "events_onAlwaysEvents_targetEvent"."data")), '[]'::json) as "data" from "conditional_actions" "events_onAlwaysEvents" left join lateral (select json_build_array("events_onAlwaysEvents_targetEvent"."id", "events_onAlwaysEvents_targetEvent"."user_id", "events_onAlwaysEvents_targetEvent"."name", "events_onAlwaysEvents_targetEvent"."description", "events_onAlwaysEvents_targetEvent"."shared", "events_onAlwaysEvents_targetEvent"."type", "events_onAlwaysEvents_targetEvent"."content", "events_onAlwaysEvents_targetEvent"."http_method", "events_onAlwaysEvents_targetEvent"."http_url", "events_onAlwaysEvents_targetEvent"."http_headers", "events_onAlwaysEvents_targetEvent"."http_body", "events_onAlwaysEvents_targetEvent"."tool_action_config", "events_onAlwaysEvents_targetEvent"."status", "even`... 1424 more characters,
-cronium-app-dev     |   params: [Array],
-cronium-app-dev     |   [cause]: Error: Connection terminated due to connection timeout
-cronium-app-dev     |       at async DatabaseStorage.getEventWithRelations (src/server/storage.ts:573:33)
-cronium-app-dev     |       at async eval (src/lib/scheduler/scheduler.ts:408:37)
-cronium-app-dev     |     571 |     try {
-cronium-app-dev     |     572 |       // Use Drizzle's relational query to fetch everything in a single query
-cronium-app-dev     |   > 573 |       const eventWithRelations = await db.query.events.findFirst({
-cronium-app-dev     |         |                                 ^
-cronium-app-dev     |     574 |         where: eq(events.id, id),
-cronium-app-dev     |     575 |         with: {
-cronium-app-dev     |     576 |           envVars: true, {
-cronium-app-dev     |     [cause]: [Error: Connection terminated unexpectedly]
-cronium-app-dev     |   }
-cronium-app-dev     | }
+Error: A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <HTTPAccessFallbackBoundary notFound={undefined} forbidden={undefined} unauthorized={undefined}>
+      <RedirectBoundary>
+        <RedirectErrorBoundary router={{...}}>
+          <InnerLayoutRouter url="/en" tree={[...]} cacheNode={{lazyData:null, ...}} segmentPath={[...]}>
+            <Home>
+              <div className="flex min-h...">
+                <Navbar lang="en">
+                  <nav className="bg-seconda...">
+                    <div className="mx-auto ma...">
+                      <div className="flex h-16 ...">
+                        <div className="flex">
+                          ...
+                            <div className="h-6 w-6 re...">
+                              <img
+                                alt="Cronium Logo"
+                                fetchPriority={undefined}
+                                loading="lazy"
+                                width={24}
+                                height={24}
+                                decoding="async"
+                                data-nimg="1"
+                                className="object-contain"
++                               style={{color:"transparent"}}
+-                               style={{color:"transparent",--darkreader-inline-color:"transparent"}}
+                                sizes={undefined}
+                                srcSet={"/_next/image?url=%2Fassets%2Flogo-icon.svg&w=32&q=75 1x, /_next/image?url=%2..."}
+                                src={"/_next/image?url=%2Fassets%2Flogo-icon.svg&w=48&q=75"}
+                                ref={function}
+                                onLoad={function onLoad}
+                                onError={function onError}
+-                               data-darkreader-inline-color=""
+                              >
+                          <div className="hidden ite...">
+                            <LinkComponent>
+                            ...
+                              <a className="hover:text..." ref={function} onClick={function onClick} ...>
+                                <Book className="h-4 w-4">
+                                  <_c ref={null} iconNode={[...]} className="lucide-boo...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-book h-4 w-4"
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                                ...
+                            ...
+                              <button className="justify-ce..." ref={function} type="button" id="radix-_R_1..." ...>
+                                <ChevronDown className="h-4 w-4">
+                                  <_c ref={null} iconNode={[...]} className="lucide-che...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-chevron-down h-4 w-4"
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                        <div className="hidden gap...">
+                          ...
+                            <button className="justify-ce..." ref={null}>
+                              <LogIn className="h-4 w-4">
+                                <_c ref={null} iconNode={[...]} className="lucide-log...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-log-in h-4 w-4"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                              ...
+                          ...
+                            <button className="justify-ce..." ref={null}>
+                              <UserPlus className="h-4 w-4">
+                                <_c ref={null} iconNode={[...]} className="lucide-use...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-user-plus h-4 w-4"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                              ...
+                        <div className="flex items...">
+                          <button onClick={function toggleMenu} className="text-prima...">
+                            <span>
+                            <Menu className="block h-6 w-6" aria-hidden="true">
+                              <_c ref={null} iconNode={[...]} className="lucide-men..." aria-hidden="true">
+                                <svg
+                                  ref={null}
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width={24}
+                                  height={24}
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="lucide lucide-menu block h-6 w-6"
+                                  aria-hidden="true"
+-                                 data-darkreader-inline-stroke=""
+-                                 style={{--darkreader-inline-stroke:"currentColor"}}
+                                >
+                    <div className="sm:hidden ...">
+                      <div className="border-bor...">
+                        <LinkComponent>
+                        <LinkComponent href="/en/docs" className="hover:text..." onClick={function onClick}>
+                          <a className="hover:text..." ref={function} onClick={function onClick} ...>
+                            <Book className="h-4 w-4">
+                              <_c ref={null} iconNode={[...]} className="lucide-boo...">
+                                <svg
+                                  ref={null}
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width={24}
+                                  height={24}
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="lucide lucide-book h-4 w-4"
+                                  aria-hidden="true"
+-                                 data-darkreader-inline-stroke=""
+-                                 style={{--darkreader-inline-stroke:"currentColor"}}
+                                >
+                            ...
+                        <div>
+                        <div className="flex flex-...">
+                          ...
+                            <button className="whitespace..." ref={null}>
+                              <LogIn className="h-4 w-4">
+                                <_c ref={null} iconNode={[...]} className="lucide-log...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-log-in h-4 w-4"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                              ...
+                          ...
+                            <button className="whitespace..." ref={null}>
+                              <UserPlus className="h-4 w-4">
+                                <_c ref={null} iconNode={[...]} className="lucide-use...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-user-plus h-4 w-4"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                              ...
+                <main className="flex-grow">
+                  ...
+                    <div className="mx-auto ma...">
+                      ...
+                        <a ref={function} onClick={function onClick} onMouseEnter={function onMouseEnter} ...>
+                          <_c size="lg" className="bg-primary...">
+                            <button className="inline-fle..." ref={null}>
+                              <ArrowRight className="ml-2 h-4 w-4">
+                                <_c ref={null} iconNode={[...]} className="lucide-arr...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-arrow-right ml-2 h-4 w-4"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                      ...
+                        <div className="grid grid-...">
+                          ...
+                            <div className="mb-1 flex ...">
+                              <Terminal className="h-3 w-3">
+                                <_c ref={null} iconNode={[...]} className="lucide-ter...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-terminal h-3 w-3"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                              ...
+                          ...
+                            <div className="mb-1 flex ...">
+                              <Terminal className="h-3 w-3">
+                                <_c ref={null} iconNode={[...]} className="lucide-ter...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-terminal h-3 w-3"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                              ...
+                      ...
+                        <dl className="grid max-w...">
+                          <div className="relative p...">
+                            <dt className="text-lg le...">
+                              <div className="bg-primary...">
+                                <icon className="text-prima..." aria-hidden="true">
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="text-primary-foreground h-5 w-5"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                              ...
+                            <dd>
+                            <div className="mt-4">
+                              <div className="mt-2 flex ...">
+                                <CircleCheckBig className="text-secon...">
+                                  <_c ref={null} iconNode={[...]} className="lucide-cir...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-circle-check-big text-secondary dark:text-secondary mr-..."
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                                ...
+                              <div className="mt-2 flex ...">
+                                <CircleCheckBig className="text-secon...">
+                                  <_c ref={null} iconNode={[...]} className="lucide-cir...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-circle-check-big text-secondary dark:text-secondary mr-..."
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                                ...
+                              <div className="mt-2 flex ...">
+                                <CircleCheckBig className="text-secon...">
+                                  <_c ref={null} iconNode={[...]} className="lucide-cir...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-circle-check-big text-secondary dark:text-secondary mr-..."
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                                ...
+                              <div className="mt-2 flex ...">
+                                <CircleCheckBig className="text-secon...">
+                                  <_c ref={null} iconNode={[...]} className="lucide-cir...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-circle-check-big text-secondary dark:text-secondary mr-..."
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                                ...
+                          <div className="relative p...">
+                            <dt className="text-lg le...">
+                              <div className="bg-primary...">
+                                <icon className="text-prima..." aria-hidden="true">
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="text-primary-foreground h-5 w-5"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                              ...
+                            <dd>
+                            <div className="mt-4">
+                              <div className="mt-2 flex ...">
+                                <CircleCheckBig className="text-secon...">
+                                  <_c ref={null} iconNode={[...]} className="lucide-cir...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-circle-check-big text-secondary dark:text-secondary mr-..."
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                                ...
+                              <div className="mt-2 flex ...">
+                                <CircleCheckBig className="text-secon...">
+                                  <_c ref={null} iconNode={[...]} className="lucide-cir...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-circle-check-big text-secondary dark:text-secondary mr-..."
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                                ...
+                              <div className="mt-2 flex ...">
+                                <CircleCheckBig className="text-secon...">
+                                  <_c ref={null} iconNode={[...]} className="lucide-cir...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-circle-check-big text-secondary dark:text-secondary mr-..."
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                                ...
+                              <div className="mt-2 flex ...">
+                                <CircleCheckBig className="text-secon...">
+                                  <_c ref={null} iconNode={[...]} className="lucide-cir...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-circle-check-big text-secondary dark:text-secondary mr-..."
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                                ...
+                          <div className="relative p...">
+                            <dt className="text-lg le...">
+                              <div className="bg-primary...">
+                                <icon className="text-prima..." aria-hidden="true">
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="text-primary-foreground h-5 w-5"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                              ...
+                            <dd>
+                            <div className="mt-4">
+                              <div className="mt-2 flex ...">
+                                <CircleCheckBig className="text-secon...">
+                                  <_c ref={null} iconNode={[...]} className="lucide-cir...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-circle-check-big text-secondary dark:text-secondary mr-..."
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                                ...
+                              <div className="mt-2 flex ...">
+                                <CircleCheckBig className="text-secon...">
+                                  <_c ref={null} iconNode={[...]} className="lucide-cir...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-circle-check-big text-secondary dark:text-secondary mr-..."
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                                ...
+                              <div className="mt-2 flex ...">
+                                <CircleCheckBig className="text-secon...">
+                                  <_c ref={null} iconNode={[...]} className="lucide-cir...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-circle-check-big text-secondary dark:text-secondary mr-..."
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                                ...
+                              <div className="mt-2 flex ...">
+                                <CircleCheckBig className="text-secon...">
+                                  <_c ref={null} iconNode={[...]} className="lucide-cir...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-circle-check-big text-secondary dark:text-secondary mr-..."
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                                ...
+                          <div className="relative p...">
+                            <dt className="text-lg le...">
+                              <div className="bg-primary...">
+                                <icon className="text-prima..." aria-hidden="true">
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="text-primary-foreground h-5 w-5"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                              ...
+                            <dd>
+                            <div className="mt-4">
+                              <div className="mt-2 flex ...">
+                                <CircleCheckBig className="text-secon...">
+                                  <_c ref={null} iconNode={[...]} className="lucide-cir...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-circle-check-big text-secondary dark:text-secondary mr-..."
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                                ...
+                              <div className="mt-2 flex ...">
+                                <CircleCheckBig className="text-secon...">
+                                  <_c ref={null} iconNode={[...]} className="lucide-cir...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-circle-check-big text-secondary dark:text-secondary mr-..."
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                                ...
+                              <div className="mt-2 flex ...">
+                                <CircleCheckBig className="text-secon...">
+                                  <_c ref={null} iconNode={[...]} className="lucide-cir...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-circle-check-big text-secondary dark:text-secondary mr-..."
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                                ...
+                              <div className="mt-2 flex ...">
+                                <CircleCheckBig className="text-secon...">
+                                  <_c ref={null} iconNode={[...]} className="lucide-cir...">
+                                    <svg
+                                      ref={null}
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width={24}
+                                      height={24}
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="lucide lucide-circle-check-big text-secondary dark:text-secondary mr-..."
+                                      aria-hidden="true"
+-                                     data-darkreader-inline-stroke=""
+-                                     style={{--darkreader-inline-stroke:"currentColor"}}
+                                    >
+                                ...
+                  <section>
+                  <Features>
+                    <section id="features" className="bg-gradien...">
+                      <div className="container ...">
+                        <div>
+                        <div className="grid grid-...">
+                          <div className="group rela...">
+                            <div>
+                            <div className="from-prima...">
+                              <Workflow className="h-6 w-6">
+                                <_c ref={null} iconNode={[...]} className="lucide-wor...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-workflow h-6 w-6"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                            ...
+                          <div className="group rela...">
+                            <div>
+                            <div className="from-prima...">
+                              <Server className="h-6 w-6">
+                                <_c ref={null} iconNode={[...]} className="lucide-ser...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-server h-6 w-6"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                            ...
+                          <div className="group rela...">
+                            <div>
+                            <div className="from-prima...">
+                              <Clock className="h-6 w-6">
+                                <_c ref={null} iconNode={[...]} className="lucide-clo...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-clock h-6 w-6"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                            ...
+                          <div className="group rela...">
+                            <div>
+                            <div className="from-prima...">
+                              <Terminal className="h-6 w-6">
+                                <_c ref={null} iconNode={[...]} className="lucide-ter...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-terminal h-6 w-6"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                            ...
+                          <div className="group rela...">
+                            <div>
+                            <div className="from-prima...">
+                              <Code className="h-6 w-6">
+                                <_c ref={null} iconNode={[...]} className="lucide-cod...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-code h-6 w-6"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                            ...
+                          <div className="group rela...">
+                            <div>
+                            <div className="from-prima...">
+                              <Shield className="h-6 w-6">
+                                <_c ref={null} iconNode={[...]} className="lucide-shi...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-shield h-6 w-6"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                            ...
+                          <div className="group rela...">
+                            <div>
+                            <div className="from-prima...">
+                              <Users className="h-6 w-6">
+                                <_c ref={null} iconNode={[...]} className="lucide-use...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-users h-6 w-6"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                            ...
+                          <div className="group rela...">
+                            <div>
+                            <div className="from-prima...">
+                              <Database className="h-6 w-6">
+                                <_c ref={null} iconNode={[...]} className="lucide-dat...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-database h-6 w-6"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                            ...
+                          <div className="group rela...">
+                            <div>
+                            <div className="from-prima...">
+                              <Key className="h-6 w-6">
+                                <_c ref={null} iconNode={[...]} className="lucide-key...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-key h-6 w-6"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                            ...
+                          <div className="group rela...">
+                            <div>
+                            <div className="from-prima...">
+                              <Brain className="h-6 w-6">
+                                <_c ref={null} iconNode={[...]} className="lucide-bra...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-brain h-6 w-6"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                            ...
+                          <div className="group rela...">
+                            <div>
+                            <div className="from-prima...">
+                              <Bell className="h-6 w-6">
+                                <_c ref={null} iconNode={[...]} className="lucide-bel...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-bell h-6 w-6"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                            ...
+                          <div className="group rela...">
+                            <div>
+                            <div className="from-prima...">
+                              <ChartNoAxesColumnIncreasing className="h-6 w-6">
+                                <_c ref={null} iconNode={[...]} className="lucide-cha...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-chart-no-axes-column-increasing h-6 w-6"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                            ...
+                        ...
+                  <section className="bg-white p...">
+                    <div className="container ...">
+                      <div className="rounded-xl...">
+                        <h2>
+                        <p>
+                        <p>
+                        <div className="flex flex-...">
+                          <LinkComponent href="/en/auth/s...">
+                            <a ref={function} onClick={function onClick} onMouseEnter={function onMouseEnter} ...>
+                              <Button>
+                                <button className="inline-fle...">
+                                  <ArrowRight>
+                                    <>
+                                      <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        width={24}
+                                        height={24}
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        className="lucide lucide-arrow-right ml-2 h-4 w-4"
+                                        aria-hidden="true"
+-                                       data-darkreader-inline-stroke=""
+-                                       style={{--darkreader-inline-stroke:"currentColor"}}
+                                      >
+                          <LinkComponent href="https://gi..." target="_blank" rel="noopener n...">
+                            <a target="_blank" rel="noopener n..." ref={function} onClick={function onClick} ...>
+                              <Button>
+                                <button className="inline-fle...">
+                                  <svg
+                                    className="mr-2 h-5 w-5"
+                                    fill="currentColor"
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-fill=""
+-                                   style={{--darkreader-inline-fill:"currentColor"}}
+                                  >
+                                  ...
+                          ...
+                <Footer lang="en">
+                  <footer className="bg-seconda...">
+                    <div className="mx-auto ma...">
+                      <div className="mb-8 flex ...">
+                        <Logo size="lg">
+                          <div className={"flex ite..."}>
+                            <div className="h-7 w-7 re...">
+                              <img
+                                alt="Cronium Logo"
+                                fetchPriority={undefined}
+                                loading="lazy"
+                                width={32}
+                                height={32}
+                                decoding="async"
+                                data-nimg="1"
+                                className="object-contain"
++                               style={{color:"transparent"}}
+-                               style={{color:"transparent",--darkreader-inline-color:"transparent"}}
+                                sizes={undefined}
+                                srcSet={"/_next/image?url=%2Fassets%2Flogo-icon.svg&w=32&q=75 1x, /_next/image?url=%2..."}
+                                src={"/_next/image?url=%2Fassets%2Flogo-icon.svg&w=64&q=75"}
+                                ref={function}
+                                onLoad={function onLoad}
+                                onError={function onError}
+-                               data-darkreader-inline-color=""
+                              >
+                            ...
+                      ...
+                        <ul role="list" className="mt-4 space...">
+                          <li>
+                            <a href="https://gi..." className="hover:text...">
+                              <Github className="mr-2 h-4 w-4">
+                                <_c ref={null} iconNode={[...]} className="lucide-git...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-github mr-2 h-4 w-4"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                              ...
+                          <li>
+                            <a href="https://tw..." className="hover:text...">
+                              <Twitter className="mr-2 h-4 w-4">
+                                <_c ref={null} iconNode={[...]} className="lucide-twi...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-twitter mr-2 h-4 w-4"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                              ...
+                          <li>
+                            <a href="mailto:sup..." className="hover:text...">
+                              <Mail className="mr-2 h-4 w-4">
+                                <_c ref={null} iconNode={[...]} className="lucide-mai...">
+                                  <svg
+                                    ref={null}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={24}
+                                    height={24}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="lucide lucide-mail mr-2 h-4 w-4"
+                                    aria-hidden="true"
+-                                   data-darkreader-inline-stroke=""
+-                                   style={{--darkreader-inline-stroke:"currentColor"}}
+                                  >
+                              ...
+                      <div className="mt-5 flex ...">
+                        <p>
+                        <p className="flex items...">
+                          <Heart className="mx-1 h-3 w...">
+                            <_c ref={null} iconNode={[...]} className="lucide-hea...">
+                              <svg
+                                ref={null}
+                                xmlns="http://www.w3.org/2000/svg"
+                                width={24}
+                                height={24}
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="lucide lucide-heart mx-1 h-3 w-3 text-red-500"
+                                aria-hidden="true"
+-                               data-darkreader-inline-stroke=""
+-                               style={{--darkreader-inline-stroke:"currentColor"}}
+                              >
+                          ...
+            ...
+
+    at createConsoleError (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.4.2-canary.1_@babel+core@7.28.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/next-devtools/shared/console-error.js:23:71)
+    at handleConsoleError (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.4.2-canary.1_@babel+core@7.28.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/next-devtools/userspace/app/errors/use-error-handler.js:45:54)
+    at console.error (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.4.2-canary.1_@babel+core@7.28.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/next-devtools/userspace/app/errors/intercept-console-error.js:50:57)
+    at eval (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.4.2-canary.1_@babel+core@7.28.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:4709:19)
+    at runWithFiberInDEV (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.4.2-canary.1_@babel+core@7.28.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:873:30)
+    at emitPendingHydrationWarnings (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.4.2-canary.1_@babel+core@7.28.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:4708:9)
+    at completeWork (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.4.2-canary.1_@babel+core@7.28.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:11881:17)
+    at runWithFiberInDEV (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.4.2-canary.1_@babel+core@7.28.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:873:30)
+    at completeUnitOfWork (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.4.2-canary.1_@babel+core@7.28.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:15814:19)
+    at performUnitOfWork (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.4.2-canary.1_@babel+core@7.28.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:15695:11)
+    at workLoopConcurrentByScheduler (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.4.2-canary.1_@babel+core@7.28.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:15672:9)
+    at renderRootConcurrent (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.4.2-canary.1_@babel+core@7.28.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:15647:15)
+    at performWorkOnRoot (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.4.2-canary.1_@babel+core@7.28.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:14941:13)
+    at performWorkOnRootViaSchedulerTask (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.4.2-canary.1_@babel+core@7.28.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:16767:7)
+    at MessagePort.performWorkUntilDeadline (webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.4.2-canary.1_@babel+core@7.28.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:45:48)

@@ -1,11 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import {
-  createTRPCRouter,
-  publicProcedure,
-  withTiming,
-  withCache,
-} from "../trpc";
+import { createTRPCRouter, publicProcedure, withTiming } from "../trpc";
 import { jobService } from "@/lib/services/job-service";
 import { JobStatus, logs } from "@/shared/schema";
 import { db } from "@/server/db";
@@ -68,7 +63,6 @@ export const jobsRouter = createTRPCRouter({
   // Get a specific job
   get: jobProcedure
     .use(withTiming)
-    .use(withCache(5000)) // Cache for 5 seconds
     .input(getJobSchema)
     .query(async ({ ctx, input }) => {
       const jobCtx = ctx as JobContext;
@@ -96,7 +90,6 @@ export const jobsRouter = createTRPCRouter({
   // List jobs for the current user
   list: jobProcedure
     .use(withTiming)
-    .use(withCache(5000)) // Cache for 5 seconds
     .input(listJobsSchema)
     .query(async ({ ctx, input }) => {
       const jobCtx = ctx as JobContext;
@@ -119,14 +112,11 @@ export const jobsRouter = createTRPCRouter({
     }),
 
   // Get job statistics
-  stats: jobProcedure
-    .use(withTiming)
-    .use(withCache(10000)) // Cache for 10 seconds
-    .query(async ({ ctx }) => {
-      const jobCtx = ctx as JobContext;
+  stats: jobProcedure.use(withTiming).query(async ({ ctx }) => {
+    const jobCtx = ctx as JobContext;
 
-      return await jobService.getJobStats(jobCtx.userId);
-    }),
+    return await jobService.getJobStats(jobCtx.userId);
+  }),
 
   // Cancel a job
   cancel: jobProcedure
@@ -179,7 +169,6 @@ export const jobsRouter = createTRPCRouter({
   // Get job logs
   logs: jobProcedure
     .use(withTiming)
-    .use(withCache(5000)) // Cache for 5 seconds
     .input(getJobLogsSchema)
     .query(async ({ ctx, input }) => {
       const jobCtx = ctx as JobContext;

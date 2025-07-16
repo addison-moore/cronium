@@ -67,13 +67,11 @@ This directory contains the modernized tRPC configuration for Cronium, optimized
    export const timedProcedure = publicProcedure.use(withTiming);
    ```
 
-2. **Caching Middleware**
+2. **Caching Middleware** (Removed)
 
-   ```typescript
-   import { withCache } from "@/server/api/trpc";
-
-   // Cache responses for 5 minutes
-   export const cachedProcedure = publicProcedure.use(withCache(300000));
+   ```
+   // withCache middleware has been removed as part of caching simplification
+   // All CRUD operations now return fresh data directly from the database
    ```
 
 3. **Rate Limiting**
@@ -327,10 +325,9 @@ The `withTiming` middleware automatically logs:
 
 3. **Apply middleware to procedures:**
    ```typescript
-   // Add timing and caching to expensive operations
+   // Add timing to expensive operations
    export const expensiveQuery = publicProcedure
      .use(withTiming)
-     .use(withCache(300000))
      .query(async ({ ctx, input }) => {
        // Expensive operation
      });

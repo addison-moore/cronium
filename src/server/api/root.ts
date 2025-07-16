@@ -20,6 +20,7 @@ import { quotaManagementRouter } from "./routers/quota-management";
 import { toolActionLogsRouter } from "./routers/toolActionLogs";
 import { toolActionTemplatesRouter } from "./routers/toolActionTemplates";
 import { jobsRouter } from "./routers/jobs";
+import { staticResourcesRouter } from "./routers/static-resources";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 
 /**
@@ -49,6 +50,7 @@ export const appRouter = createTRPCRouter({
   toolActionLogs: toolActionLogsRouter,
   toolActionTemplates: toolActionTemplatesRouter,
   jobs: jobsRouter,
+  staticResources: staticResourcesRouter,
 });
 
 // export type definition of API

@@ -9,6 +9,7 @@ import { useTranslations } from "next-intl";
 import { type Event } from "./types";
 import { EventTypeIcon } from "@/components/ui/event-type-icon";
 import WorkflowsCard from "./WorkflowsCard";
+import { formatDate as formatDateUtil } from "@/lib/utils";
 
 interface EventOverviewTabProps {
   event: Event;
@@ -31,7 +32,7 @@ export function EventOverviewTab({
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return t("never");
-    return new Date(dateString).toLocaleString();
+    return formatDateUtil(dateString);
   };
 
   const formatSchedule = () => {

@@ -1,10 +1,25 @@
+/**
+ * Monitoring Router
+ *
+ * Note: This router does NOT use caching for any operations.
+ * All monitoring data, health checks, and system metrics are
+ * fetched in real-time to ensure accurate system status.
+ *
+ * Real-time data includes:
+ * - Health checks (database, services, orchestrator)
+ * - System metrics (CPU, memory, disk usage)
+ * - Activity feeds and execution analytics
+ * - Dashboard statistics
+ *
+ * See /docs/CACHING_STRATEGY.md for details on the caching strategy.
+ */
+
 import { TRPCError } from "@trpc/server";
 import {
   createTRPCRouter,
   publicProcedure,
   withTiming,
   withRateLimit,
-  withCache,
 } from "../trpc";
 import {
   monitoringQuerySchema,
@@ -89,8 +104,7 @@ async function getSystemInformation() {
 // Create base procedure with common middleware
 const baseMonitoringProcedure = publicProcedure
   .use(withTiming)
-  .use(withRateLimit(200, 60000)) // 200 requests per minute
-  .use(withCache(10000)); // Cache for 10 seconds
+  .use(withRateLimit(200, 60000)); // 200 requests per minute
 
 // Admin procedure built on top of base procedure
 const adminProcedureWithMiddleware = baseMonitoringProcedure.use(
