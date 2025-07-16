@@ -6,7 +6,7 @@ import Link from "next/link";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { registerUser } from "@/app/[lang]/auth/signup/actions";
+import { registerUser } from "@/app/[lang]/(auth)/auth/signup/actions";
 import { useLanguage } from "@/components/providers/language-provider";
 import {
   Form,
@@ -73,13 +73,13 @@ export default function SignUpForm() {
       if (!result.success) {
         setError("root.serverError", {
           type: "manual",
-          message: result.error ?? t("Auth.RegistrationFailed"),
+          message: result.error || t("Auth.RegistrationFailed"),
         });
         return;
       }
 
       // Registration successful
-      setSuccessMessage(result.message ?? t("Auth.RegistrationSuccessful"));
+      setSuccessMessage(result.message || t("Auth.RegistrationSuccessful"));
       setRegistrationComplete(true);
 
       // After a delay, redirect to sign in page

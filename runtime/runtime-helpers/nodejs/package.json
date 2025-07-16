@@ -1,0 +1,46 @@
+{
+  "name": "cronium",
+  "version": "2.0.0",
+  "description": "Runtime SDK for Cronium containerized script execution",
+  "main": "cronium.js",
+  "types": "cronium.d.ts",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint cronium.js test/**/*.js",
+    "format": "prettier --write cronium.js cronium.d.ts test/**/*.js"
+  },
+  "keywords": [
+    "cronium",
+    "runtime",
+    "sdk",
+    "containerized",
+    "execution"
+  ],
+  "author": "Cronium Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cronium/cronium.git"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "jest": "^29.5.0",
+    "eslint": "^8.40.0",
+    "prettier": "^2.8.8",
+    "@types/node": "^20.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "cronium.js"
+    ],
+    "testMatch": [
+      "**/test/**/*.test.js"
+    ]
+  }
+}

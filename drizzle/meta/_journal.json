@@ -15,6 +15,27 @@
       "when": 1751402000000,
       "tag": "0001_rename_conditional_events_to_actions",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1752520440686,
+      "tag": "0002_vengeful_yellow_claw",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1752533786618,
+      "tag": "0003_yellow_justin_hammer",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1752557008261,
+      "tag": "0004_pretty_wild_pack",
+      "breakpoints": true
     }
   ]
 }

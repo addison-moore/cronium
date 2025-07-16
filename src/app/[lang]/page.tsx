@@ -15,6 +15,13 @@ interface TranslationMessages {
     | Array<string | TranslationMessages>;
 }
 
+// Enable Partial Prerendering for this page
+export const experimental_ppr = true;
+
+// ISR configuration - revalidate every 6 hours
+export const revalidate = 21600; // 6 hours
+export const dynamic = "force-static";
+
 export default async function Home({ params }: { params: { lang: string } }) {
   const { lang } = await Promise.resolve(params);
 

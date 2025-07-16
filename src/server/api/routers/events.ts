@@ -9,6 +9,7 @@ import {
 } from "../trpc";
 import { EventStatus, LogStatus, UserRole, RunLocation } from "@/shared/schema";
 import type { ConditionalActionType } from "@/shared/schema";
+import { validateConditionalActions } from "@/server/utils/event-validation";
 import {
   createEventSchema,
   updateEventSchema,
@@ -21,6 +22,7 @@ import {
 } from "@/shared/schemas/events";
 import { storage } from "@/server/storage";
 import { scheduler } from "@/lib/scheduler";
+import { cachedQueries, cacheInvalidation } from "../middleware/cache";
 
 // Type for authenticated event context
 interface EventContext {
@@ -92,54 +94,63 @@ export const eventsRouter = createTRPCRouter({
   // Get all events for user
   getAll: eventProcedure
     .use(withTiming)
-    .use(withCache(30000)) // Cache for 30 seconds
     .input(eventQuerySchema)
     .query(async ({ ctx, input }) => {
       const eventCtx = ctx as EventContext;
       try {
-        const events = await storage.getAllEvents(eventCtx.userId);
+        // Use cached query wrapper for event lists
+        const result = await cachedQueries.eventList(
+          input,
+          eventCtx.userId,
+          async () => {
+            const events = await storage.getAllEvents(eventCtx.userId);
 
-        // Apply filters
-        let filteredEvents = events;
+            // Apply filters
+            let filteredEvents = events;
 
-        if (input.search) {
-          const searchLower = input.search.toLowerCase();
-          filteredEvents = filteredEvents.filter(
-            (event) =>
-              event.name.toLowerCase().includes(searchLower) ||
-              event.description?.toLowerCase().includes(searchLower),
-          );
-        }
+            if (input.search) {
+              const searchLower = input.search.toLowerCase();
+              filteredEvents = filteredEvents.filter(
+                (event) =>
+                  (event.name?.toLowerCase().includes(searchLower) ?? false) ||
+                  (event.description?.toLowerCase().includes(searchLower) ??
+                    false),
+              );
+            }
 
-        if (input.status) {
-          filteredEvents = filteredEvents.filter(
-            (event) => event.status === input.status,
-          );
-        }
+            if (input.status) {
+              filteredEvents = filteredEvents.filter(
+                (event) => event.status === input.status,
+              );
+            }
 
-        if (input.type) {
-          filteredEvents = filteredEvents.filter(
-            (event) => event.type === input.type,
-          );
-        }
+            if (input.type) {
+              filteredEvents = filteredEvents.filter(
+                (event) => event.type === input.type,
+              );
+            }
 
-        if (input.shared !== undefined) {
-          filteredEvents = filteredEvents.filter(
-            (event) => event.shared === input.shared,
-          );
-        }
+            if (input.shared !== undefined) {
+              filteredEvents = filteredEvents.filter(
+                (event) => event.shared === input.shared,
+              );
+            }
 
-        // Apply pagination
-        const paginatedEvents = filteredEvents.slice(
-          input.offset,
-          input.offset + input.limit,
+            // Apply pagination
+            const paginatedEvents = filteredEvents.slice(
+              input.offset,
+              input.offset + input.limit,
+            );
+
+            return {
+              events: paginatedEvents,
+              total: filteredEvents.length,
+              hasMore: input.offset + input.limit < filteredEvents.length,
+            };
+          },
         );
 
-        return {
-          events: paginatedEvents,
-          total: filteredEvents.length,
-          hasMore: input.offset + input.limit < filteredEvents.length,
-        };
+        return result;
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -153,16 +164,30 @@ export const eventsRouter = createTRPCRouter({
   getById: eventProcedure.input(eventIdSchema).query(async ({ ctx, input }) => {
     const eventCtx = ctx as EventContext;
     try {
-      // Check permissions
+      // Check permissions first (not cached)
       const canView = await storage.canViewEvent(input.id, eventCtx.userId);
       if (!canView) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Event not found",
+        });
       }
 
-      const event = await storage.getEventWithRelations(input.id);
-      if (!event) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
-      }
+      // Use cached query wrapper for individual events
+      const event = await cachedQueries.eventById(
+        { id: input.id },
+        eventCtx.userId,
+        async () => {
+          const event = await storage.getEventWithRelations(input.id);
+          if (!event) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Event not found",
+            });
+          }
+          return event;
+        },
+      );
 
       return event;
     } catch (error) {
@@ -216,6 +241,26 @@ export const eventsRouter = createTRPCRouter({
           await storage.setEventServers(event.id, input.selectedServerIds);
         }
 
+        // Validate conditional actions before creating them
+        const allConditionalActions = [
+          ...(input.onSuccessActions ?? []),
+          ...(input.onFailActions ?? []),
+        ];
+
+        const validationErrors = await validateConditionalActions(
+          event.id,
+          allConditionalActions,
+        );
+
+        if (validationErrors.length > 0) {
+          // Rollback the event creation by deleting it
+          await storage.deleteScript(event.id);
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: validationErrors.join(" "),
+          });
+        }
+
         // Handle conditional actions - Fixed to use proper storage methods and data structure
         if (input.onSuccessActions && input.onSuccessActions.length > 0) {
           for (const conditionalAction of input.onSuccessActions) {
@@ -247,6 +292,10 @@ export const eventsRouter = createTRPCRouter({
 
         // Get the complete event with relations
         const completeEvent = await storage.getEventWithRelations(event.id);
+
+        // Invalidate caches
+        await cacheInvalidation.invalidateEvent(event.id, eventCtx.userId);
+
         return completeEvent;
       } catch (error) {
         throw new TRPCError({
@@ -326,6 +375,24 @@ export const eventsRouter = createTRPCRouter({
 
         // Handle conditional actions - Fixed to use proper storage methods and data structure
         if (onSuccessActions !== undefined || onFailActions !== undefined) {
+          // Validate conditional actions before updating
+          const allConditionalActions = [
+            ...(onSuccessActions ?? []),
+            ...(onFailActions ?? []),
+          ];
+
+          const validationErrors = await validateConditionalActions(
+            id,
+            allConditionalActions,
+          );
+
+          if (validationErrors.length > 0) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: validationErrors.join(" "),
+            });
+          }
+
           // Delete existing conditional actions
           await storage.deleteActionsByEventId(id);
 
@@ -362,6 +429,10 @@ export const eventsRouter = createTRPCRouter({
 
         // Get the updated event with relations
         const updatedEvent = await storage.getEventWithRelations(id);
+
+        // Invalidate caches
+        await cacheInvalidation.invalidateEvent(id, eventCtx.userId);
+
         return updatedEvent;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -389,6 +460,10 @@ export const eventsRouter = createTRPCRouter({
         }
 
         await storage.deleteScript(input.id);
+
+        // Invalidate caches
+        await cacheInvalidation.invalidateEvent(input.id, eventCtx.userId);
+
         return { success: true };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -502,27 +577,90 @@ export const eventsRouter = createTRPCRouter({
           });
         }
 
+        // Import job service
+        const { jobService } = await import("@/lib/services/job-service");
+        const { JobType } = await import("@/shared/schema");
+
+        // Determine job type based on event type
+        const jobTypeMap: Record<
+          string,
+          (typeof JobType)[keyof typeof JobType]
+        > = {
+          HTTP_REQUEST: JobType.HTTP_REQUEST,
+          TOOL_ACTION: JobType.TOOL_ACTION,
+        };
+        const jobType = jobTypeMap[event.type] ?? JobType.SCRIPT;
+
         // Create log entry
         const log = await storage.createLog({
           eventId: input.id,
-          status: LogStatus.RUNNING,
+          status: LogStatus.PENDING,
           startTime: new Date(),
-          eventName: event.name,
-          scriptType: event.type,
-          userId: eventCtx.userId,
+          eventName: event.name ?? "Unknown",
+          eventType: event.type,
+          userId: eventCtx.userId as number,
         });
 
-        // Add existing logId to event object to prevent duplicate log creation
-        const eventWithLogId = {
-          ...event,
-          existingLogId: log.id,
-          tags: event.tags as string[], // Type assertion since jsonb is typed as unknown
+        // Import job payload builder
+        const { buildJobPayload } = await import(
+          "@/lib/scheduler/job-payload-builder"
+        );
+
+        // Build comprehensive job payload
+        const jobPayload = buildJobPayload(
+          event,
+          log.id,
+          input.input as Record<string, unknown> | undefined,
+        ) as {
+          script?: {
+            type: ScriptType;
+            content: string;
+          };
+          httpRequest?: {
+            method: string;
+            url: string;
+            headers?: Record<string, string>;
+            body?: string;
+          };
+          toolAction?: {
+            toolType: string;
+            config: Record<string, unknown>;
+          };
+          environment?: Record<string, string>;
+          target?: {
+            serverId?: number;
+            containerImage?: string;
+          };
+          input?: Record<string, unknown>;
+          workflowId?: number;
+          executionLogId?: number;
+          timeout?: {
+            value: number;
+            unit: string;
+          };
+          retries?: number;
         };
 
-        // Execute the event asynchronously
-        void scheduler.executeScript(eventWithLogId);
+        // Create job in the queue
+        const job = await jobService.createJob({
+          eventId: input.id,
+          userId: String(eventCtx.userId),
+          type: jobType,
+          payload: jobPayload,
+          metadata: {
+            eventName: event.name,
+            triggeredBy: "manual",
+            logId: log.id,
+          },
+        });
 
-        return { success: true, logId: log.id };
+        // Update log with job ID
+        await storage.updateLog(log.id, {
+          jobId: job.id,
+          status: LogStatus.PENDING,
+        });
+
+        return { success: true, logId: log.id, jobId: job.id };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -668,7 +806,7 @@ export const eventsRouter = createTRPCRouter({
             }
             return {
               format: "json",
-              filename: `${event.name}.json`,
+              filename: `${String(event.name ?? "event")}.json`,
               data: JSON.stringify(event, null, 2),
             };
           }

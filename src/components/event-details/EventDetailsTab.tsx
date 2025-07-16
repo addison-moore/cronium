@@ -1,7 +1,16 @@
 "use client";
 
 import React, { useState } from "react";
-import { MonacoEditor } from "@/components/ui/monaco-editor";
+import { MonacoEditor } from "@/components/ui/monaco-editor-lazy";
+import dynamic from "next/dynamic";
+
+// Lazy load CodeViewer for read-only code display
+const CodeViewer = dynamic(() => import("@/components/ui/code-viewer"), {
+  ssr: false,
+  loading: () => (
+    <div className="bg-muted/50 h-[200px] animate-pulse rounded-lg" />
+  ),
+});
 import { EventType } from "@/shared/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -169,18 +178,12 @@ export function EventDetailsTab({
           <div className="space-y-2">
             <span className="text-sm font-medium">{t("body")}:</span>
             <div className="border-border overflow-hidden rounded border">
-              <MonacoEditor
-                height="200px"
+              <CodeViewer
+                code={event.httpRequest.body}
                 language="json"
-                value={event.httpRequest.body}
-                readOnly={true}
-                editorSettings={{
-                  fontSize: 12,
-                  theme: "vs-dark",
-                  minimap: false,
-                  lineNumbers: true,
-                  wordWrap: false,
-                }}
+                height="200px"
+                theme="dark"
+                showLineNumbers={true}
               />
             </div>
           </div>
@@ -267,8 +270,8 @@ export function EventDetailsTab({
           </div>
         ) : (
           <div className="border-border overflow-hidden rounded border">
-            <MonacoEditor
-              height="400px"
+            <CodeViewer
+              code={event.content ?? ""}
               language={
                 event.type === EventType.NODEJS
                   ? "javascript"
@@ -278,15 +281,9 @@ export function EventDetailsTab({
                       ? "bash"
                       : "text"
               }
-              value={event.content ?? ""}
-              readOnly={true}
-              editorSettings={{
-                fontSize: 12,
-                theme: "vs-dark",
-                wordWrap: false,
-                minimap: false,
-                lineNumbers: true,
-              }}
+              height="400px"
+              theme="dark"
+              showLineNumbers={true}
             />
           </div>
         )}

@@ -129,7 +129,7 @@ cronium_output "$result"
     python: `# cronium is automatically available - no imports needed!
 
 # Get a stored variable
-api_key = cronium.getVariable('API_KEY')
+example_api_key = cronium.getVariable('EXAMPLE_API_KEY')
 database_url = cronium.getVariable('DATABASE_URL')
 
 # Use variables with defaults
@@ -144,7 +144,7 @@ print(f"Processing count: {cronium.getVariable('COUNTER')}")`,
     nodejs: `// cronium is automatically available - no imports needed!
 
 // Get a stored variable
-const apiKey = cronium.getVariable('API_KEY');
+const exampleApiKey = cronium.getVariable('EXAMPLE_API_KEY');
 const databaseUrl = cronium.getVariable('DATABASE_URL');
 
 // Use variables with defaults
@@ -159,7 +159,7 @@ console.log(\`Processing count: \${cronium.getVariable('COUNTER')}\`);`,
     curl: `# cronium functions are automatically available - no sourcing needed!
 
 # Get a stored variable
-api_key=$(cronium_getVariable "API_KEY")
+example_api_key=$(cronium_getVariable "EXAMPLE_API_KEY")
 database_url=$(cronium_getVariable "DATABASE_URL")
 
 # Use variables with defaults
@@ -506,6 +506,12 @@ main "$@"`,
   },
 };
 
+// Enable Partial Prerendering for this page
+export const experimental_ppr = true;
+
+// ISR configuration - revalidate every hour
+export const revalidate = 3600; // 1 hour
+export const dynamic = "force-static";
 export default async function RuntimeHelpersPage({
   params,
 }: {

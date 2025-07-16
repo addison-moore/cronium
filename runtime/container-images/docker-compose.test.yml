@@ -1,0 +1,98 @@
+version: "3.8"
+
+services:
+  # Test Python container
+  python-test:
+    build:
+      context: ./python
+      dockerfile: Dockerfile
+    image: cronium/python:test
+    environment:
+      - CRONIUM_RUNTIME_API=http://runtime-api:8081
+      - CRONIUM_EXECUTION_TOKEN=test-token
+      - CRONIUM_EXECUTION_ID=test-exec-python
+    networks:
+      - cronium-test
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app
+    security_opt:
+      - no-new-privileges:true
+    command: |
+      python3 -c "
+      import cronium
+      print('Python SDK loaded successfully')
+      print(f'Execution ID: {cronium.cronium.executionId}')
+      "
+
+  # Test Node.js container
+  nodejs-test:
+    build:
+      context: ./nodejs
+      dockerfile: Dockerfile
+    image: cronium/nodejs:test
+    environment:
+      - CRONIUM_RUNTIME_API=http://runtime-api:8081
+      - CRONIUM_EXECUTION_TOKEN=test-token
+      - CRONIUM_EXECUTION_ID=test-exec-nodejs
+    networks:
+      - cronium-test
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app
+    security_opt:
+      - no-new-privileges:true
+    command: |
+      node -e "
+      const cronium = require('cronium');
+      console.log('Node.js SDK loaded successfully');
+      console.log('Execution ID:', process.env.CRONIUM_EXECUTION_ID);
+      "
+
+  # Test Bash container
+  bash-test:
+    build:
+      context: ./bash
+      dockerfile: Dockerfile
+    image: cronium/bash:test
+    environment:
+      - CRONIUM_RUNTIME_API=http://runtime-api:8081
+      - CRONIUM_EXECUTION_TOKEN=test-token
+      - CRONIUM_EXECUTION_ID=test-exec-bash
+    networks:
+      - cronium-test
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app
+    security_opt:
+      - no-new-privileges:true
+    command: |
+      bash -c "
+      source /usr/local/bin/cronium.sh
+      echo 'Bash SDK loaded successfully'
+      echo \"Execution ID: \$CRONIUM_EXEC_ID\"
+      cronium_info
+      "
+
+  # Mock Runtime API for testing
+  runtime-api:
+    image: nginx:alpine
+    networks:
+      - cronium-test
+    volumes:
+      - ./test-api-mock.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8081:80"
+
+networks:
+  cronium-test:
+    driver: bridge

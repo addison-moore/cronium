@@ -63,9 +63,9 @@ export async function GET(
     // Return log with additional event info that the UI needs
     return NextResponse.json({
       ...log,
-      eventName: event.name,
-      scriptContent: event.content,
-      scriptType: event.type,
+      eventName: String(event.name ?? ""),
+      scriptContent: String(event.content ?? ""),
+      eventType: event.type,
     });
   } catch (error) {
     console.error(`Error fetching log ${(await params).id}:`, error);

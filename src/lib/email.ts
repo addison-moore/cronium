@@ -127,7 +127,7 @@ export async function sendEmail(
 
 // Send an invitation email
 export async function sendInvitationEmail(email: string, inviteToken: string) {
-  const baseUrl = env.HOST_URL ?? `http://localhost:5000`;
+  const baseUrl = env.PUBLIC_APP_URL ?? `http://localhost:5000`;
 
   // Create invitation URL
   const inviteUrl = `${baseUrl}/auth/activate?token=${inviteToken}`;
@@ -166,7 +166,7 @@ export async function sendPasswordResetEmail(
   resetToken: string,
 ) {
   // Get base URL from environment or default
-  const baseUrl = env.HOST_URL ?? `http://localhost:5000`;
+  const baseUrl = env.PUBLIC_APP_URL ?? `http://localhost:5000`;
 
   // Create reset URL
   const resetUrl = `${baseUrl}/en/auth/reset-password?token=${resetToken}`;

@@ -1,0 +1,111 @@
+# Orchestrator Configuration Template
+# Copy to orchestrator.config.yaml and update values
+
+orchestrator:
+  id: "${ORCHESTRATOR_ID}"
+  name: "Production Orchestrator"
+  description: "Main job orchestrator for Cronium"
+
+backend:
+  url: "http://cronium-app:5001"
+  apiKey: "${INTERNAL_API_KEY}"
+  timeout: 30s
+  retryAttempts: 3
+  retryDelay: 1s
+
+runtime:
+  url: "http://runtime-api:8081"
+  timeout: 30s
+
+jobQueue:
+  pollInterval: 5s
+  batchSize: 10
+  maxConcurrentJobs: 10
+  jobTypes:
+    - "script"
+    - "http"
+    - "workflow"
+  priorities:
+    - "critical"
+    - "high"
+    - "normal"
+    - "low"
+
+docker:
+  host: "unix:///var/run/docker.sock"
+  version: "1.41"
+  network: "cronium-network"
+  registry: "${DOCKER_REGISTRY}"
+  registryAuth:
+    username: "${DOCKER_USERNAME}"
+    password: "${DOCKER_PASSWORD}"
+
+containers:
+  defaultTimeout: 300s
+  maxRetries: 3
+  resources:
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+  security:
+    runAsNonRoot: true
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - "ALL"
+
+executors:
+  docker:
+    enabled: true
+    maxConcurrent: 10
+    cleanupInterval: 5m
+    imageWhitelist:
+      - "cronium/python:*"
+      - "cronium/node:*"
+      - "cronium/bash:*"
+  ssh:
+    enabled: true
+    maxConcurrent: 5
+    connectionTimeout: 30s
+    commandTimeout: 300s
+    keyPath: "/app/ssh/keys"
+
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+  enableCaller: true
+  enableStacktrace: false
+
+metrics:
+  enabled: true
+  path: "/metrics"
+  namespace: "cronium_orchestrator"
+  port: 8080
+
+health:
+  enabled: true
+  path: "/health"
+  port: 8080
+  checkInterval: 30s
+
+storage:
+  type: "local"
+  path: "/app/data"
+  maxSize: "10GB"
+
+websocket:
+  enabled: true
+  url: "ws://cronium-app:5002"
+  reconnectInterval: 5s
+  maxReconnectAttempts: 10
+
+cleanup:
+  enabled: true
+  interval: 1h
+  retentionDays: 7
+  batchSize: 100

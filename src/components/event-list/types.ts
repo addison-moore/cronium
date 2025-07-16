@@ -50,6 +50,7 @@ export interface WorkflowData {
   id: number;
   name: string;
   description?: string;
+  eventIds: number[];
 }
 
 export interface EventListFilters {

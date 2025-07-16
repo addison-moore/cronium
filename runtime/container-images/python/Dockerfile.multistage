@@ -1,0 +1,89 @@
+# Multi-stage Python runtime image for Cronium with enhanced security
+# Stage 1: Build stage
+FROM python:3.12-slim AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy and install Python dependencies
+COPY requirements.txt /tmp/
+RUN pip install --no-cache-dir --user -r /tmp/requirements.txt
+
+# Stage 2: Runtime stage
+FROM python:3.12-slim
+
+# Install only runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tini \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd -g 1000 cronium && \
+    useradd -u 1000 -g cronium -m -d /home/cronium -s /bin/bash cronium
+
+# Copy installed packages from builder
+COPY --from=builder --chown=cronium:cronium /root/.local /home/cronium/.local
+
+# Set up directories
+RUN mkdir -p /app /tmp/cronium && \
+    chown -R cronium:cronium /app /tmp/cronium
+
+# Copy Cronium SDK and health check
+COPY --chown=cronium:cronium cronium.py /home/cronium/.local/lib/python3.12/site-packages/
+COPY --chown=cronium:cronium healthcheck.py /usr/local/bin/
+RUN chmod +x /usr/local/bin/healthcheck.py
+
+# Security hardening
+# Remove package managers and development tools
+RUN apt-get purge -y --auto-remove \
+    apt \
+    dpkg \
+    && rm -rf /var/lib/apt/lists/* \
+    /etc/apt \
+    /var/log/apt \
+    /var/log/dpkg.log
+
+# Clear caches and temporary files
+RUN rm -rf /root/.cache \
+    /tmp/* \
+    /var/tmp/* \
+    /usr/share/man/* \
+    /usr/share/doc/* \
+    /usr/share/info/* \
+    /var/cache/debconf/*
+
+# Remove setuid/setgid binaries
+RUN find / -perm /6000 -type f -exec chmod a-s {} \; 2>/dev/null || true
+
+# Remove shell for security
+RUN rm -rf /bin/bash /bin/sh && \
+    ln -s /bin/false /bin/sh && \
+    ln -s /bin/false /bin/bash
+
+# Environment setup
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONHASHSEED=random \
+    PYTHONPATH=/home/cronium/.local/lib/python3.12/site-packages \
+    PATH=/home/cronium/.local/bin:$PATH \
+    HOME=/home/cronium \
+    USER=cronium \
+    LANG=C.UTF-8 \
+    TZ=UTC
+
+# Switch to non-root user
+USER cronium
+WORKDIR /app
+
+# Use tini as entrypoint
+ENTRYPOINT ["/usr/bin/tini", "--"]
+
+# Default command runs Python directly (no shell)
+CMD ["python3", "-c", "print('Cronium Python Runtime Ready')"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD python3 /usr/local/bin/healthcheck.py || exit 1

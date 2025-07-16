@@ -1,0 +1,41 @@
+# Git files
+.git
+.gitignore
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+orchestrator
+tmp/
+
+# Development files
+.air.toml
+.env
+.env.local
+*.log
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test files
+*_test.go
+testdata/
+coverage.txt
+coverage.html
+
+# Documentation
+*.md
+docs/
+
+# Development data
+data/
+logs/

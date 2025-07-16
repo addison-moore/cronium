@@ -6,7 +6,14 @@ import {
   type ConditionalActionType,
   type UserRole,
 } from "@shared/schema";
-import { type IconType } from "react-icons";
+
+// Custom IconType to replace react-icons dependency
+export type IconType = React.ComponentType<{
+  className?: string;
+  size?: number | string;
+  color?: string;
+  style?: React.CSSProperties;
+}>;
 
 // Extend NextAuth types
 import "next-auth";

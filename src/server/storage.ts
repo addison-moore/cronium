@@ -16,6 +16,10 @@ import {
   workflowExecutionEvents,
   eventServers,
   userVariables,
+  webhooks,
+  webhookEvents,
+  webhookDeliveries,
+  type ConditionalActionType,
   type User,
   type InsertUser,
   type EnvVar,
@@ -46,8 +50,8 @@ import {
   type EventServer,
   type UserVariable,
   type InsertUserVariable,
-  type Script,
-  type InsertScript, // For backwards compatibility
+  type Event,
+  type InsertEvent,
   RunLocation,
   UserStatus,
   TokenStatus,
@@ -57,6 +61,7 @@ import { db } from "./db";
 import {
   eq,
   and,
+  or,
   desc,
   asc,
   sql,
@@ -64,7 +69,6 @@ import {
   gte,
   lte,
   lt,
-  or,
   inArray,
 } from "drizzle-orm";
 import {
@@ -75,6 +79,9 @@ import {
 
 // Re-export types from schema for convenience
 export type { WorkflowExecution } from "../shared/schema";
+
+// Type alias for backward compatibility
+type Script = Event;
 
 // Type definitions for complex return types
 export interface EventWithRelations extends Script {
@@ -142,14 +149,15 @@ export interface IStorage {
   deleteUser(id: string): Promise<void>;
 
   // Script methods
-  getEvent(id: number): Promise<Script | undefined>;
+  getEvent(id: number): Promise<Event | undefined>;
   getEventWithRelations(id: number): Promise<EventWithRelations | undefined>;
-  getAllEvents(userId: string): Promise<Script[]>;
-  getEventsByServerId(serverId: number, userId: string): Promise<Script[]>;
+  getActiveEventsWithRelations(): Promise<EventWithRelations[]>;
+  getAllEvents(userId: string): Promise<Event[]>;
+  getEventsByServerId(serverId: number, userId: string): Promise<Event[]>;
   canViewEvent(eventId: number, userId: string): Promise<boolean>;
   canEditEvent(eventId: number, userId: string): Promise<boolean>;
-  createScript(insertScript: InsertScript): Promise<Script>;
-  updateScript(id: number, updateData: Partial<InsertScript>): Promise<Script>;
+  createScript(insertScript: InsertEvent): Promise<Event>;
+  updateScript(id: number, updateData: Partial<InsertEvent>): Promise<Event>;
   deleteScript(id: number): Promise<void>;
 
   // Environment variable methods
@@ -170,8 +178,7 @@ export interface IStorage {
   deleteFailEventsByScriptId(eventId: number): Promise<void>;
   deleteAlwaysEventsByScriptId(eventId: number): Promise<void>;
   deleteConditionEventsByScriptId(eventId: number): Promise<void>;
-  deleteConditionEventsByScriptId(eventId: number): Promise<void>;
-  deleteConditionEventsByScriptId(eventId: number): Promise<void>;
+  getConditionalActionsByEventId(eventId: number): Promise<ConditionalAction[]>;
 
   // Log methods
   getLog(id: number): Promise<Log | undefined>;
@@ -342,6 +349,24 @@ export interface IStorage {
   getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
   markPasswordResetTokenAsUsed(token: string): Promise<void>;
   deleteExpiredPasswordResetTokens(): Promise<void>;
+
+  // Webhook methods
+  getActiveWebhooksForEvent(
+    event: string,
+  ): Promise<(typeof webhooks.$inferSelect)[]>;
+  getWebhookDeliveryWithRelations(deliveryId: string): Promise<{
+    delivery: typeof webhookDeliveries.$inferSelect;
+    webhook: typeof webhooks.$inferSelect;
+    event: typeof webhookEvents.$inferSelect;
+  } | null>;
+  getUserWebhooksWithStats(userId: string): Promise<
+    Array<{
+      webhook: typeof webhooks.$inferSelect;
+      totalDeliveries: number;
+      successfulDeliveries: number;
+      failedDeliveries: number;
+    }>
+  >;
 }
 
 class DatabaseStorage implements IStorage {
@@ -455,19 +480,49 @@ class DatabaseStorage implements IStorage {
   }
 
   async deleteUser(id: string): Promise<void> {
-    // First get all the user's scripts
-    const userScripts = await this.getAllEvents(id);
+    // Use batch operations to delete user data efficiently
+    // Note: Due to foreign key constraints, we need to delete in the correct order
 
-    // Delete each script
-    for (const script of userScripts) {
-      await this.deleteScript(script.id);
+    // Get all user's event IDs for batch deletion
+    const userEvents = await db
+      .select({ id: events.id })
+      .from(events)
+      .where(eq(events.userId, id));
+
+    const eventIds = userEvents.map((e) => e.id);
+
+    if (eventIds.length > 0) {
+      // Delete all related data in batch operations
+      // Delete logs
+      await db.delete(logs).where(inArray(logs.eventId, eventIds));
+
+      // Delete environment variables
+      await db.delete(envVars).where(inArray(envVars.eventId, eventIds));
+
+      // Delete event servers
+      await db
+        .delete(eventServers)
+        .where(inArray(eventServers.eventId, eventIds));
+
+      // Delete conditional actions
+      await db
+        .delete(conditionalActions)
+        .where(
+          or(
+            inArray(conditionalActions.successEventId, eventIds),
+            inArray(conditionalActions.failEventId, eventIds),
+            inArray(conditionalActions.alwaysEventId, eventIds),
+            inArray(conditionalActions.conditionEventId, eventIds),
+            inArray(conditionalActions.targetEventId, eventIds),
+          ),
+        );
+
+      // Delete the events themselves
+      await db.delete(events).where(inArray(events.id, eventIds));
     }
 
     // Delete the user's servers
-    const userServers = await this.getAllServers(id);
-    for (const server of userServers) {
-      await this.deleteServer(server.id);
-    }
+    await db.delete(servers).where(eq(servers.userId, id));
 
     // Delete the user's API tokens
     const userTokens = await this.getUserApiTokens(id);
@@ -513,87 +568,337 @@ class DatabaseStorage implements IStorage {
   async getEventWithRelations(
     id: number,
   ): Promise<EventWithRelations | undefined> {
+    // Check if caching is available
+    const { withCache } = await import("@/server/api/middleware/cache");
+    const { CACHE_TTL } = await import("@/lib/cache/cache-service");
+
+    return withCache(
+      {
+        key: `event:${id}:full`,
+        keyPrefix: "storage:",
+        ttl: CACHE_TTL.EVENT_DETAILS,
+        tags: [`event:${id}`, "events", "event-relations"],
+      },
+      async () => {
+        // Optimized implementation with parallel queries
+        return this.getEventWithRelationsOptimized(id);
+      },
+    );
+  }
+
+  private async getEventWithRelationsOptimized(
+    id: number,
+  ): Promise<EventWithRelations | undefined> {
     try {
-      // Get script
-      const script = await this.getEvent(id);
-      if (!script) return undefined;
+      // Step 1: Fetch base event with simple relations
+      const eventPromise = db.query.events.findFirst({
+        where: eq(events.id, id),
+        with: {
+          envVars: true,
+          server: true,
+          eventServers: {
+            with: {
+              server: true,
+            },
+          },
+        },
+      });
 
-      // Get environment variables
-      const scriptEnvVars = await this.getEnvVars(id);
+      // Step 2: Fetch conditional actions in parallel (without deep nesting)
+      const conditionalActionsPromises = Promise.all([
+        // Success events
+        db.query.conditionalActions.findMany({
+          where: eq(conditionalActions.successEventId, id),
+        }),
+        // Fail events
+        db.query.conditionalActions.findMany({
+          where: eq(conditionalActions.failEventId, id),
+        }),
+        // Always events
+        db.query.conditionalActions.findMany({
+          where: eq(conditionalActions.alwaysEventId, id),
+        }),
+        // Condition events
+        db.query.conditionalActions.findMany({
+          where: eq(conditionalActions.conditionEventId, id),
+        }),
+      ]);
 
-      // Get server if needed (legacy single server support)
-      let scriptServer;
-      if (script.serverId) {
-        try {
-          scriptServer = await this.getServer(script.serverId);
-        } catch (error) {
-          console.error(`Error fetching server ${script.serverId}:`, error);
-          // Continue without the server rather than failing completely
-          scriptServer = undefined;
-        }
+      // Execute all queries in parallel
+      const [
+        event,
+        [successEvents, failEvents, alwaysEvents, conditionEvents],
+      ] = await Promise.all([eventPromise, conditionalActionsPromises]);
+
+      if (!event) {
+        return undefined;
       }
 
-      // Get multiple servers through junction table
-      const eventServerList = await this.getEventServers(id);
-      const servers = [];
-      for (const eventServer of eventServerList) {
-        try {
-          const server = await this.getServer(eventServer.serverId);
-          if (server) {
-            servers.push(server);
-          }
-        } catch (error) {
-          console.error(
-            `Error fetching server ${eventServer.serverId}:`,
-            error,
-          );
-          // Continue without this server rather than failing completely
-        }
-      }
+      // Transform the data to match the expected EventWithRelations structure
+      const servers =
+        event.eventServers
+          ?.map((es) => es.server)
+          .filter((s): s is Server => s !== null) || [];
 
-      // Get success, failure, always, and condition events
-      const successEvents = await this.getSuccessActions(id);
-      const failEvents = await this.getFailActions(id);
-      const alwaysEvents = await this.getAlwaysActions(id);
-      const conditionEvents = await this.getConditionActions(id);
+      const result: EventWithRelations = {
+        ...event,
+        servers,
+        successEvents: successEvents || [],
+        failEvents: failEvents || [],
+        alwaysEvents: alwaysEvents || [],
+        conditionEvents: conditionEvents || [],
+        // For backward compatibility
+        onSuccessEvents: successEvents || [],
+        onFailEvents: failEvents || [],
+        onAlwaysEvents: alwaysEvents || [],
+      };
 
-      // Combine all data
-      return {
-        ...script,
-        envVars: scriptEnvVars,
-        server: scriptServer, // Keep for backward compatibility
-        servers, // New multi-server support
-        successEvents,
-        failEvents,
-        alwaysEvents,
-        conditionEvents,
-      } as EventWithRelations;
+      return result;
     } catch (error) {
-      console.error(`Error in getEventWithRelations for event ${id}:`, error);
-      throw error;
+      console.error(
+        `Error in getEventWithRelationsOptimized for event ${id}:`,
+        error,
+      );
+
+      // Fallback to simple version on error
+      return this.getEventWithRelationsSimple(id);
     }
   }
 
-  async getAllEvents(userId: string): Promise<Script[]> {
-    // Get user's own scripts and shared scripts from other users
-    const userScripts = await db
-      .select()
-      .from(events)
-      .where(sql`${events.userId} = ${userId} OR ${events.shared} = true`)
-      .orderBy(desc(events.updatedAt));
+  private async getEventWithRelationsSimple(
+    id: number,
+  ): Promise<EventWithRelations | undefined> {
+    try {
+      // First get the base event
+      const event = await db.query.events.findFirst({
+        where: eq(events.id, id),
+      });
 
-    // Enhance each script with server association data
-    const enrichedScripts = await Promise.all(
-      userScripts.map(async (script) => {
-        // Get event servers associations
-        const eventServers = await this.getEventServers(script.id);
+      if (!event) {
+        return undefined;
+      }
 
-        return {
-          ...script,
-          eventServers: eventServers.map((es) => es.serverId), // Array of server IDs
-        };
-      }),
+      // Fetch only essential related data in parallel
+      const [envVars, eventServers] = await Promise.all([
+        // Get env vars
+        db.query.envVars.findMany({
+          where: eq(envVars.eventId, id),
+        }),
+        // Get event servers with server data
+        db.query.eventServers.findMany({
+          where: eq(eventServers.eventId, id),
+          with: {
+            server: true,
+          },
+        }),
+      ]);
+
+      // Return simplified structure
+      const result: EventWithRelations = {
+        ...event,
+        envVars: envVars || [],
+        server: event.serverId
+          ? await db.query.servers.findFirst({
+              where: eq(servers.id, event.serverId),
+            })
+          : undefined,
+        eventServers: eventServers || [],
+        servers:
+          eventServers?.map((es: any) => es.server).filter(Boolean) || [],
+        // Empty arrays for conditional actions to avoid timeout
+        successEvents: [],
+        failEvents: [],
+        alwaysEvents: [],
+        conditionEvents: [],
+        onSuccessEvents: [],
+        onFailEvents: [],
+        onAlwaysEvents: [],
+      };
+
+      return result;
+    } catch (error) {
+      console.error(
+        `Error in getEventWithRelationsSimple for event ${id}:`,
+        error,
+      );
+      // Return minimal event data on error
+      const event = await db.query.events.findFirst({
+        where: eq(events.id, id),
+      });
+
+      if (!event) {
+        return undefined;
+      }
+
+      return {
+        ...event,
+        envVars: [],
+        server: undefined,
+        eventServers: [],
+        servers: [],
+        successEvents: [],
+        failEvents: [],
+        alwaysEvents: [],
+        conditionEvents: [],
+        onSuccessEvents: [],
+        onFailEvents: [],
+        onAlwaysEvents: [],
+      } as EventWithRelations;
+    }
+  }
+
+  async getActiveEventsWithRelations(): Promise<EventWithRelations[]> {
+    const { EventStatus } = await import("@/shared/schema");
+    const activeEvents = await db.query.events.findMany({
+      where: eq(events.status, EventStatus.ACTIVE),
+      with: {
+        envVars: true,
+        server: true,
+        eventServers: {
+          with: {
+            server: true,
+          },
+        },
+        onSuccessEvents: {
+          with: {
+            targetEvent: true,
+          },
+        },
+        onFailEvents: {
+          with: {
+            targetEvent: true,
+          },
+        },
+        onAlwaysEvents: {
+          with: {
+            targetEvent: true,
+          },
+        },
+      },
+    });
+
+    // Get condition events for all active events in one query
+    const eventIds = activeEvents.map((e) => e.id);
+    const conditionEvents =
+      eventIds.length > 0
+        ? await db
+            .select()
+            .from(conditionalActions)
+            .where(
+              and(
+                inArray(conditionalActions.conditionEventId, eventIds),
+                eq(
+                  conditionalActions.type,
+                  "runEvent" as ConditionalActionType,
+                ),
+              ),
+            )
+        : [];
+
+    // Create a map for quick lookup
+    const conditionEventsByEventId = conditionEvents.reduce(
+      (acc, ce) => {
+        const conditionEventId = ce.conditionEventId;
+        if (conditionEventId) {
+          if (!acc[conditionEventId]) {
+            acc[conditionEventId] = [];
+          }
+          acc[conditionEventId].push(ce);
+        }
+        return acc;
+      },
+      {} as Record<number, typeof conditionEvents>,
     );
+
+    // Transform the results
+    return activeEvents.map((event) => {
+      const {
+        onSuccessEvents = [],
+        onFailEvents = [],
+        onAlwaysEvents = [],
+        ...eventData
+      } = event;
+
+      const transformed: EventWithRelations = {
+        ...eventData,
+        envVars: event.envVars ?? [],
+        server: event.server || null,
+        eventServers: event.eventServers ?? [],
+        // Map conditional actions from the related events
+        onSuccessActions: onSuccessEvents.map((se) => ({
+          id: se.id,
+          type: se.type,
+          successEventId: se.successEventId,
+          failEventId: se.failEventId,
+          alwaysEventId: se.alwaysEventId,
+          conditionEventId: se.conditionEventId,
+          targetEventId: se.targetEventId,
+          toolId: se.toolId,
+          message: se.message,
+          emailAddresses: se.emailAddresses,
+          emailSubject: se.emailSubject,
+          createdAt: se.createdAt,
+          updatedAt: se.updatedAt,
+          targetEvent: se.targetEvent ?? undefined,
+        })),
+        onFailActions: onFailEvents.map((fe) => ({
+          id: fe.id,
+          type: fe.type,
+          successEventId: fe.successEventId,
+          failEventId: fe.failEventId,
+          alwaysEventId: fe.alwaysEventId,
+          conditionEventId: fe.conditionEventId,
+          targetEventId: fe.targetEventId,
+          toolId: fe.toolId,
+          message: fe.message,
+          emailAddresses: fe.emailAddresses,
+          emailSubject: fe.emailSubject,
+          createdAt: fe.createdAt,
+          updatedAt: fe.updatedAt,
+          targetEvent: fe.targetEvent ?? undefined,
+        })),
+        onAlwaysActions: onAlwaysEvents.map((ae) => ({
+          id: ae.id,
+          type: ae.type,
+          successEventId: ae.successEventId,
+          failEventId: ae.failEventId,
+          alwaysEventId: ae.alwaysEventId,
+          conditionEventId: ae.conditionEventId,
+          targetEventId: ae.targetEventId,
+          toolId: ae.toolId,
+          message: ae.message,
+          emailAddresses: ae.emailAddresses,
+          emailSubject: ae.emailSubject,
+          createdAt: ae.createdAt,
+          updatedAt: ae.updatedAt,
+          targetEvent: ae.targetEvent ?? undefined,
+        })),
+        conditionActions: conditionEventsByEventId[event.id] ?? [],
+      };
+
+      return transformed;
+    });
+  }
+
+  async getAllEvents(userId: string): Promise<Event[]> {
+    // Get user's own scripts and shared scripts from other users with all relations in a single query
+    const eventsWithRelations = await db.query.events.findMany({
+      where: or(eq(events.userId, userId), eq(events.shared, true)),
+      orderBy: [desc(events.updatedAt)],
+      with: {
+        eventServers: {
+          columns: {
+            serverId: true,
+          },
+        },
+      },
+    });
+
+    // Transform to include eventServers array for backward compatibility
+    const enrichedScripts = eventsWithRelations.map((event) => ({
+      ...event,
+      eventServers: event.eventServers.map((es) => es.serverId),
+    }));
 
     return enrichedScripts;
   }
@@ -601,40 +906,37 @@ class DatabaseStorage implements IStorage {
   async getEventsByServerId(
     serverId: number,
     userId: string,
-  ): Promise<Script[]> {
-    // Get events that are associated with the specified server
-    const eventsForServer = await db
-      .select({
-        event: events,
-      })
-      .from(events)
-      .innerJoin(eventServers, eq(events.id, eventServers.eventId))
-      .where(
-        and(
-          eq(eventServers.serverId, serverId),
-          sql`${events.userId} = ${userId} OR ${events.shared} = true`,
-        ),
-      )
-      .orderBy(desc(events.updatedAt));
+  ): Promise<Event[]> {
+    // Get events that are associated with the specified server with all eventServers in a single query
+    const eventsWithRelations = await db.query.events.findMany({
+      where: and(
+        sql`${events.id} IN (
+          SELECT ${eventServers.eventId} 
+          FROM ${eventServers} 
+          WHERE ${eventServers.serverId} = ${serverId}
+        )`,
+        or(eq(events.userId, userId), eq(events.shared, true)),
+      ),
+      orderBy: [desc(events.updatedAt)],
+      with: {
+        eventServers: {
+          columns: {
+            serverId: true,
+          },
+        },
+      },
+    });
 
-    // Extract the events and enhance with server association data
-    const enrichedScripts = await Promise.all(
-      eventsForServer.map(async (row) => {
-        const script = row.event;
-        // Get event servers associations
-        const eventServers = await this.getEventServers(script.id);
-
-        return {
-          ...script,
-          eventServers: eventServers.map((es) => es.serverId), // Array of server IDs
-        };
-      }),
-    );
+    // Transform to include eventServers array for backward compatibility
+    const enrichedScripts = eventsWithRelations.map((event) => ({
+      ...event,
+      eventServers: event.eventServers.map((es) => es.serverId),
+    }));
 
     return enrichedScripts;
   }
 
-  async createScript(insertScript: InsertScript): Promise<Script> {
+  async createScript(insertScript: InsertEvent): Promise<Event> {
     const [script] = await db.insert(events).values(insertScript).returning();
 
     if (!script) {
@@ -645,15 +947,21 @@ class DatabaseStorage implements IStorage {
 
   async updateScript(
     id: number,
-    updateData: Partial<InsertScript>,
-  ): Promise<Script> {
+    updateData: Partial<InsertEvent>,
+  ): Promise<Event> {
     // Special handling for boolean values to ensure they are stored correctly
-    if ("resetCounterOnActive" in updateData) {
+    if (
+      "resetCounterOnActive" in updateData &&
+      updateData.resetCounterOnActive !== undefined
+    ) {
       // Force the value to be a true boolean to prevent PostgreSQL string conversion
-      updateData.resetCounterOnActive =
-        updateData.resetCounterOnActive === true;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+      (updateData as any).resetCounterOnActive =
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+        (updateData as any).resetCounterOnActive === true;
       console.log(
-        `In storage layer - resetCounterOnActive: ${updateData.resetCounterOnActive}`,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+        `In storage layer - resetCounterOnActive: ${String((updateData as any).resetCounterOnActive)}`,
       );
     }
 
@@ -917,6 +1225,23 @@ class DatabaseStorage implements IStorage {
       .where(eq(conditionalActions.conditionEventId, eventId));
   }
 
+  async getConditionalActionsByEventId(
+    eventId: number,
+  ): Promise<ConditionalAction[]> {
+    const actions = await db
+      .select()
+      .from(conditionalActions)
+      .where(
+        or(
+          eq(conditionalActions.successEventId, eventId),
+          eq(conditionalActions.failEventId, eventId),
+          eq(conditionalActions.alwaysEventId, eventId),
+          eq(conditionalActions.conditionEventId, eventId),
+        ),
+      );
+    return actions;
+  }
+
   // Log methods
   async getLog(id: number): Promise<Log | undefined> {
     const [log] = await db.select().from(logs).where(eq(logs.id, id));
@@ -1062,7 +1387,7 @@ class DatabaseStorage implements IStorage {
       duration: logs.duration,
       successful: logs.successful,
       eventName: logs.eventName,
-      scriptType: logs.scriptType,
+      eventType: logs.eventType,
       retries: logs.retries,
       error: logs.error,
       userId: logs.userId,
@@ -1477,27 +1802,77 @@ class DatabaseStorage implements IStorage {
   async getWorkflowWithRelations(
     id: number,
   ): Promise<WorkflowWithRelations | null> {
-    const workflow = await this.getWorkflow(id);
-    if (!workflow) return null;
+    // Fetch workflow with all relations in a single query
+    const workflowWithRelations = await db.query.workflows.findFirst({
+      where: eq(workflows.id, id),
+      with: {
+        nodes: {
+          with: {
+            event: {
+              with: {
+                envVars: true,
+                server: true,
+                eventServers: {
+                  with: {
+                    server: true,
+                  },
+                },
+                onSuccessEvents: {
+                  with: {
+                    targetEvent: true,
+                  },
+                },
+                onFailEvents: {
+                  with: {
+                    targetEvent: true,
+                  },
+                },
+                onAlwaysEvents: {
+                  with: {
+                    targetEvent: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        connections: true,
+      },
+    });
 
-    const nodes = await this.getWorkflowNodes(id);
-    const connections = await this.getWorkflowConnections(id);
+    if (!workflowWithRelations) return null;
 
-    // Get the events for each node
-    const nodesWithEvents = await Promise.all(
-      nodes.map(async (node): Promise<WorkflowNodeWithEvent> => {
-        if (node.eventId) {
-          const event = await this.getEventWithRelations(node.eventId);
-          return { ...node, event };
-        }
-        return { ...node, event: undefined };
-      }),
-    );
+    // Transform nodes to include properly structured event relations
+    const nodesWithEvents = workflowWithRelations.nodes.map((node) => {
+      if (node.event) {
+        // Transform event data to match EventWithRelations structure
+        const servers =
+          node.event.eventServers
+            ?.map((es) => es.server)
+            .filter((s): s is Server => s !== null) || [];
+        const successEvents = node.event.onSuccessEvents || [];
+        const failEvents = node.event.onFailEvents || [];
+        const alwaysEvents = node.event.onAlwaysEvents || [];
+        const conditionEvents: ConditionalAction[] = [];
+
+        return {
+          ...node,
+          event: {
+            ...node.event,
+            servers,
+            successEvents,
+            failEvents,
+            alwaysEvents,
+            conditionEvents,
+          },
+        };
+      }
+      return node;
+    });
 
     return {
-      ...workflow,
+      ...workflowWithRelations,
       nodes: nodesWithEvents,
-      connections,
     };
   }
 
@@ -1743,6 +2118,48 @@ class DatabaseStorage implements IStorage {
       .select({ count: count() })
       .from(workflowExecutions)
       .where(eq(workflowExecutions.workflowId, workflowId));
+
+    return {
+      executions,
+      total: totalResult?.count ?? 0,
+    };
+  }
+
+  async getUserWorkflowExecutions(
+    userId: string,
+    limit = 50,
+    offset = 0,
+  ): Promise<{ executions: WorkflowExecution[]; total: number }> {
+    // Get all workflow executions for a user's workflows in a single query
+    const executions = await db
+      .select({
+        id: workflowExecutions.id,
+        workflowId: workflowExecutions.workflowId,
+        userId: workflowExecutions.userId,
+        status: workflowExecutions.status,
+        triggerType: workflowExecutions.triggerType,
+        startedAt: workflowExecutions.startedAt,
+        completedAt: workflowExecutions.completedAt,
+        totalDuration: workflowExecutions.totalDuration,
+        totalEvents: workflowExecutions.totalEvents,
+        successfulEvents: workflowExecutions.successfulEvents,
+        failedEvents: workflowExecutions.failedEvents,
+        executionData: workflowExecutions.executionData,
+        createdAt: workflowExecutions.createdAt,
+        updatedAt: workflowExecutions.updatedAt,
+      })
+      .from(workflowExecutions)
+      .innerJoin(workflows, eq(workflowExecutions.workflowId, workflows.id))
+      .where(eq(workflows.userId, userId))
+      .orderBy(desc(workflowExecutions.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [totalResult] = await db
+      .select({ count: count() })
+      .from(workflowExecutions)
+      .innerJoin(workflows, eq(workflowExecutions.workflowId, workflows.id))
+      .where(eq(workflows.userId, userId));
 
     return {
       executions,
@@ -2217,6 +2634,76 @@ class DatabaseStorage implements IStorage {
     await db
       .delete(passwordResetTokens)
       .where(lt(passwordResetTokens.expiresAt, new Date()));
+  }
+
+  // Webhook methods
+  async getActiveWebhooksForEvent(
+    event: string,
+  ): Promise<(typeof webhooks.$inferSelect)[]> {
+    // Optimized query that filters by event subscription in the database
+    const activeWebhooks = await db
+      .select()
+      .from(webhooks)
+      .where(
+        and(
+          eq(webhooks.active, true),
+          or(
+            sql`${webhooks.events}::jsonb @> ${JSON.stringify([event])}::jsonb`,
+            sql`${webhooks.events}::jsonb @> ${JSON.stringify(["*"])}::jsonb`,
+          ),
+        ),
+      );
+
+    return activeWebhooks;
+  }
+
+  async getWebhookDeliveryWithRelations(deliveryId: string): Promise<{
+    delivery: typeof webhookDeliveries.$inferSelect;
+    webhook: typeof webhooks.$inferSelect;
+    event: typeof webhookEvents.$inferSelect;
+  } | null> {
+    // Single query to get delivery with webhook and event data
+    const result = await db
+      .select({
+        delivery: webhookDeliveries,
+        webhook: webhooks,
+        event: webhookEvents,
+      })
+      .from(webhookDeliveries)
+      .innerJoin(webhooks, eq(webhookDeliveries.webhookId, webhooks.id))
+      .innerJoin(
+        webhookEvents,
+        eq(webhookDeliveries.webhookEventId, webhookEvents.id),
+      )
+      .where(eq(webhookDeliveries.deliveryId, deliveryId))
+      .limit(1);
+
+    return result[0] ?? null;
+  }
+
+  async getUserWebhooksWithStats(userId: string): Promise<
+    Array<{
+      webhook: typeof webhooks.$inferSelect;
+      totalDeliveries: number;
+      successfulDeliveries: number;
+      failedDeliveries: number;
+    }>
+  > {
+    // Optimized query to get webhooks with delivery statistics
+    const result = await db
+      .select({
+        webhook: webhooks,
+        totalDeliveries: count(webhookDeliveries.id),
+        successfulDeliveries: sql<number>`COUNT(CASE WHEN ${webhookDeliveries.status} = 'success' THEN 1 END)`,
+        failedDeliveries: sql<number>`COUNT(CASE WHEN ${webhookDeliveries.status} = 'failed' THEN 1 END)`,
+      })
+      .from(webhooks)
+      .leftJoin(webhookDeliveries, eq(webhooks.id, webhookDeliveries.webhookId))
+      .where(eq(webhooks.userId, userId))
+      .groupBy(webhooks.id)
+      .orderBy(desc(webhooks.createdAt));
+
+    return result;
   }
 }
 

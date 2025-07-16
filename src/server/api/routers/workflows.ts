@@ -19,6 +19,7 @@ import {
   type WorkflowExecution,
 } from "@/server/storage";
 import { EventStatus, LogStatus, UserRole } from "@shared/schema";
+import { cachedQueries, cacheInvalidation } from "../middleware/cache";
 
 // Custom procedure that handles auth for tRPC fetch adapter
 const workflowProcedure = publicProcedure.use(async ({ ctx, next }) => {
@@ -73,49 +74,58 @@ export const workflowsRouter = createTRPCRouter({
     .input(workflowQuerySchema)
     .query(async ({ ctx, input }) => {
       try {
-        const workflows = await storage.getAllWorkflows(ctx.userId);
+        // Use cached query wrapper for workflow lists
+        const result = await cachedQueries.workflowList(
+          input,
+          ctx.userId,
+          async () => {
+            const workflows = await storage.getAllWorkflows(ctx.userId);
 
-        // Apply filters
-        let filteredWorkflows = workflows;
+            // Apply filters
+            let filteredWorkflows = workflows;
 
-        if (input.search) {
-          const searchLower = input.search.toLowerCase();
-          filteredWorkflows = filteredWorkflows.filter(
-            (workflow) =>
-              workflow.name.toLowerCase().includes(searchLower) ||
-              workflow.description?.toLowerCase().includes(searchLower),
-          );
-        }
+            if (input.search) {
+              const searchLower = input.search.toLowerCase();
+              filteredWorkflows = filteredWorkflows.filter(
+                (workflow) =>
+                  workflow.name.toLowerCase().includes(searchLower) ||
+                  workflow.description?.toLowerCase().includes(searchLower),
+              );
+            }
 
-        if (input.status) {
-          filteredWorkflows = filteredWorkflows.filter(
-            (workflow) => workflow.status === input.status,
-          );
-        }
+            if (input.status) {
+              filteredWorkflows = filteredWorkflows.filter(
+                (workflow) => workflow.status === input.status,
+              );
+            }
 
-        if (input.triggerType) {
-          filteredWorkflows = filteredWorkflows.filter(
-            (workflow) => workflow.triggerType === input.triggerType,
-          );
-        }
+            if (input.triggerType) {
+              filteredWorkflows = filteredWorkflows.filter(
+                (workflow) => workflow.triggerType === input.triggerType,
+              );
+            }
 
-        if (input.shared !== undefined) {
-          filteredWorkflows = filteredWorkflows.filter(
-            (workflow) => workflow.shared === input.shared,
-          );
-        }
+            if (input.shared !== undefined) {
+              filteredWorkflows = filteredWorkflows.filter(
+                (workflow) => workflow.shared === input.shared,
+              );
+            }
 
-        // Apply pagination
-        const paginatedWorkflows = filteredWorkflows.slice(
-          input.offset,
-          input.offset + input.limit,
+            // Apply pagination
+            const paginatedWorkflows = filteredWorkflows.slice(
+              input.offset,
+              input.offset + input.limit,
+            );
+
+            return {
+              workflows: paginatedWorkflows,
+              total: filteredWorkflows.length,
+              hasMore: input.offset + input.limit < filteredWorkflows.length,
+            };
+          },
         );
 
-        return {
-          workflows: paginatedWorkflows,
-          total: filteredWorkflows.length,
-          hasMore: input.offset + input.limit < filteredWorkflows.length,
-        };
+        return result;
       } catch (error: unknown) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -130,18 +140,30 @@ export const workflowsRouter = createTRPCRouter({
     .input(workflowIdSchema)
     .query(async ({ ctx, input }) => {
       try {
-        const workflow = await storage.getWorkflowWithRelations(input.id);
-        if (!workflow) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Workflow not found",
-          });
-        }
+        // Use cached query wrapper for individual workflows
+        const workflow = await cachedQueries.workflowById(
+          { id: input.id },
+          ctx.userId,
+          async () => {
+            const workflow = await storage.getWorkflowWithRelations(input.id);
+            if (!workflow) {
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message: "Workflow not found",
+              });
+            }
 
-        // Check if user owns the workflow or it's shared
-        if (workflow.userId !== ctx.userId && !workflow.shared) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-        }
+            // Check if user owns the workflow or it's shared
+            if (workflow.userId !== ctx.userId && !workflow.shared) {
+              throw new TRPCError({
+                code: "FORBIDDEN",
+                message: "Access denied",
+              });
+            }
+
+            return workflow;
+          },
+        );
 
         return workflow;
       } catch (error: unknown) {
@@ -351,7 +373,7 @@ export const workflowsRouter = createTRPCRouter({
         }
 
         // Create workflow execution record
-        const execution = await storage.createWorkflowExecution({
+        const _execution = await storage.createWorkflowExecution({
           workflowId: input.id,
           userId: ctx.userId,
           status: LogStatus.RUNNING,
@@ -360,9 +382,17 @@ export const workflowsRouter = createTRPCRouter({
           executionData: input.payload ?? {},
         });
 
-        // TODO: Integrate with workflow executor
-        // For now, just return the execution ID
-        return { success: true, executionId: execution.id };
+        // Import and use workflow executor
+        const { workflowExecutor } = await import("@/lib/workflow-executor");
+
+        // Execute the workflow
+        const result = await workflowExecutor.executeWorkflow(
+          input.id,
+          ctx.userId,
+          input.payload,
+        );
+
+        return result;
       } catch (error: unknown) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -415,37 +445,16 @@ export const workflowsRouter = createTRPCRouter({
             };
           }
 
-          // Aggregate executions from all user workflows
-          const allExecutions: WorkflowExecution[] = [];
-          let totalCount = 0;
-
-          // Get executions for each workflow
-          for (const workflow of userWorkflows) {
-            const workflowExecutions = await storage.getWorkflowExecutions(
-              workflow.id,
-              100, // Get more than needed so we can sort and paginate properly
-              1,
-            );
-            allExecutions.push(...workflowExecutions.executions);
-            totalCount += workflowExecutions.total;
-          }
-
-          // Sort all executions by createdAt descending (most recent first)
-          allExecutions.sort((a, b) => {
-            const dateA = new Date(a.createdAt).getTime();
-            const dateB = new Date(b.createdAt).getTime();
-            return dateB - dateA;
-          });
-
-          // Apply pagination
-          const paginatedExecutions = allExecutions.slice(
+          // Use optimized method to get all user workflow executions in a single query
+          const userExecutions = await storage.getUserWorkflowExecutions(
+            ctx.userId,
+            input.limit,
             input.offset,
-            input.offset + input.limit,
           );
 
           return {
-            executions: { executions: paginatedExecutions, total: totalCount },
-            hasMore: allExecutions.length > input.offset + input.limit,
+            executions: userExecutions,
+            hasMore: userExecutions.total > input.offset + input.limit,
           };
         }
       } catch (error: unknown) {

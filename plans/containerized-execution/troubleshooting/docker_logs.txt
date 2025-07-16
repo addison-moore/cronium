@@ -1,0 +1,171 @@
+Attaching to cronium-agent-dev, cronium-app-dev, cronium-valkey-dev
+cronium-agent-dev   | 
+cronium-agent-dev   |   __    _   ___  
+cronium-agent-dev   |  / /\  | | | |_) 
+cronium-agent-dev   | /_/--\ |_| |_| \_ v1.52.0, built with Go go1.23.11
+cronium-agent-dev   | 
+cronium-agent-dev   | [06:38:16] mkdir /app/tmp
+cronium-agent-dev   | [06:38:16] watching .
+cronium-valkey-dev  | 1:C 15 Jul 2025 06:38:16.095 * oO0OoO0OoO0Oo Valkey is starting oO0OoO0OoO0Oo
+cronium-valkey-dev  | 1:C 15 Jul 2025 06:38:16.095 * Valkey version=7.2.10, bits=64, commit=00000000, modified=0, pid=1, just started
+cronium-valkey-dev  | 1:C 15 Jul 2025 06:38:16.095 * Configuration loaded
+cronium-agent-dev   | [06:38:16] watching cmd
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:16.095 * monotonic clock: POSIX clock_gettime
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:16.096 * Running mode=standalone, port=6379.
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:16.098 * Server initialized
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:16.098 * Reading RDB base file on AOF loading...
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:16.099 * Loading RDB produced by valkey version 7.2.10
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:16.099 * RDB age 172368 seconds
+cronium-agent-dev   | [06:38:16] watching cmd/cronium-agent
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:16.099 * RDB memory usage when created 0.84 Mb
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:16.099 * RDB is base AOF
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:16.099 * Done loading RDB, keys loaded: 0, keys expired: 0.
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:16.099 * DB loaded from base file appendonly.aof.1.base.rdb: 0.000 seconds
+cronium-agent-dev   | [06:38:16] watching config
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:16.099 * DB loaded from append only file: 0.000 seconds
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:16.099 * Opening AOF incr file appendonly.aof.1.incr.aof on server start
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:16.099 * Ready to accept connections tcp
+cronium-agent-dev   | [06:38:16] !exclude configs
+cronium-agent-dev   | [06:38:16] !exclude data
+cronium-agent-dev   | [06:38:16] watching internal
+cronium-agent-dev   | [06:38:16] watching internal/api
+cronium-agent-dev   | [06:38:16] watching internal/config
+cronium-agent-dev   | [06:38:16] watching internal/executors
+cronium-agent-dev   | [06:38:16] watching internal/executors/container
+cronium-agent-dev   | [06:38:16] watching internal/executors/ssh
+cronium-agent-dev   | [06:38:16] watching internal/health
+cronium-agent-dev   | [06:38:16] watching internal/jobs
+cronium-agent-dev   | [06:38:16] watching internal/logger
+cronium-agent-dev   | [06:38:16] watching internal/metrics
+cronium-agent-dev   | [06:38:16] watching pkg
+cronium-agent-dev   | [06:38:16] watching pkg/errors
+cronium-agent-dev   | [06:38:16] watching pkg/types
+cronium-agent-dev   | [06:38:16] watching pkg/utils
+cronium-agent-dev   | [06:38:16] watching runtime
+cronium-agent-dev   | [06:38:16] watching runtime/cronium-runtime
+cronium-agent-dev   | [06:38:16] watching scripts
+cronium-agent-dev   | [06:38:16] watching test
+cronium-agent-dev   | [06:38:16] !exclude tmp
+cronium-agent-dev   | [06:38:16] building...
+cronium-agent-dev   | [06:38:17] running...
+cronium-agent-dev   | INFO[2025-07-15 06:38:17] Starting Cronium Agent                        build=unknown commit=unknown version=dev
+cronium-agent-dev   | INFO[2025-07-15 06:38:17] Starting metrics server                       port=9090
+cronium-agent-dev   | INFO[2025-07-15 06:38:17] Starting health check server                  port=8080
+cronium-agent-dev   | INFO[2025-07-15 06:38:17] Starting orchestrator                        
+cronium-agent-dev   | WARN[2025-07-15 06:38:17] Failed to connect log streaming, will retry   error="failed to connect to WebSocket: dial tcp: lookup cronium-app-dev on 127.0.0.11:53: no such host"
+cronium-agent-dev   | INFO[2025-07-15 06:38:18] Attempting to reconnect WebSocket            
+cronium-agent-dev   | WARN[2025-07-15 06:38:18] Failed to reconnect WebSocket                 error="failed to connect to WebSocket: dial tcp: lookup cronium-app-dev on 127.0.0.11:53: no such host"
+cronium-agent-dev   | INFO[2025-07-15 06:38:20] Attempting to reconnect WebSocket            
+cronium-agent-dev   | WARN[2025-07-15 06:38:20] Failed to reconnect WebSocket                 error="failed to connect to WebSocket: dial tcp: lookup cronium-app-dev on 127.0.0.11:53: no such host"
+cronium-agent-dev   | DEBU[2025-07-15 06:38:22] API request                                   method=GET url="http://cronium-app-dev:5001/api/internal/jobs/queue?batchSize=5"
+cronium-agent-dev   | WARN[2025-07-15 06:38:22] API request failed                            error="Get \"http://cronium-app-dev:5001/api/internal/jobs/queue?batchSize=5\": dial tcp: lookup cronium-app-dev on 127.0.0.11:53: no such host"
+cronium-agent-dev   | WARN[2025-07-15 06:38:23] API request failed                            error="Get \"http://cronium-app-dev:5001/api/internal/jobs/queue?batchSize=5\": dial tcp: lookup cronium-app-dev on 127.0.0.11:53: no such host"
+cronium-agent-dev   | INFO[2025-07-15 06:38:24] Attempting to reconnect WebSocket            
+cronium-agent-dev   | WARN[2025-07-15 06:38:24] Failed to reconnect WebSocket                 error="failed to connect to WebSocket: dial tcp: lookup cronium-app-dev on 127.0.0.11:53: no such host"
+cronium-agent-dev   | WARN[2025-07-15 06:38:25] API request failed                            error="Get \"http://cronium-app-dev:5001/api/internal/jobs/queue?batchSize=5\": dial tcp: lookup cronium-app-dev on 127.0.0.11:53: no such host"
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:26.171 - Accepted 127.0.0.1:53640
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:26.172 - Client closed connection id=4 addr=127.0.0.1:53640 laddr=127.0.0.1:6379 fd=9 name= age=0 idle=0 flags=N db=0 sub=0 psub=0 ssub=0 multi=-1 qbuf=0 qbuf-free=20474 argv-mem=0 multi-mem=0 rbs=16384 rbp=16384 obl=0 oll=0 omem=0 tot-mem=37760 events=r cmd=ping user=default redir=-1 resp=2 lib-name= lib-ver=
+cronium-app-dev     | 
+cronium-app-dev     | > workspace@1.0.0 dev:socket /app
+cronium-app-dev     | > tsx --env-file=.env.local server.ts
+cronium-app-dev     | 
+cronium-app-dev     | 
+cronium-app-dev     | > workspace@1.0.0 dev /app
+cronium-app-dev     | > next dev -p 5001
+cronium-app-dev     | 
+cronium-app-dev     | Socket.IO server listening on port 5002
+cronium-app-dev     |    ▲ Next.js 15.3.5
+cronium-app-dev     |    - Local:        http://localhost:5001
+cronium-app-dev     |    - Network:      http://172.18.0.4:5001
+cronium-app-dev     |    - Environments: .env.local, .env
+cronium-app-dev     | 
+cronium-app-dev     |  ✓ Starting...
+cronium-app-dev     |  ✓ Ready in 1571ms
+cronium-app-dev     |  ○ Compiling /middleware ...
+cronium-app-dev     |  ✓ Compiled /middleware in 1405ms (312 modules)
+cronium-app-dev     |  ○ Compiling /[lang]/dashboard/events/[id] ...
+cronium-agent-dev   | INFO[2025-07-15 06:38:32] Attempting to reconnect WebSocket            
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:36.246 - Accepted 127.0.0.1:51476
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:36.246 - Client closed connection id=5 addr=127.0.0.1:51476 laddr=127.0.0.1:6379 fd=9 name= age=0 idle=0 flags=N db=0 sub=0 psub=0 ssub=0 multi=-1 qbuf=0 qbuf-free=20474 argv-mem=0 multi-mem=0 rbs=16384 rbp=16384 obl=0 oll=0 omem=0 tot-mem=37760 events=r cmd=ping user=default redir=-1 resp=2 lib-name= lib-ver=
+cronium-agent-dev   | WARN[2025-07-15 06:38:42] Failed to reconnect WebSocket                 error="failed to connect to WebSocket: read tcp 172.18.0.3:42184->172.18.0.4:5001: i/o timeout"
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:46.319 - Accepted 127.0.0.1:35814
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:46.320 - Client closed connection id=6 addr=127.0.0.1:35814 laddr=127.0.0.1:6379 fd=9 name= age=0 idle=0 flags=N db=0 sub=0 psub=0 ssub=0 multi=-1 qbuf=0 qbuf-free=20474 argv-mem=0 multi-mem=0 rbs=16384 rbp=16384 obl=0 oll=0 omem=0 tot-mem=37760 events=r cmd=ping user=default redir=-1 resp=2 lib-name= lib-ver=
+cronium-agent-dev   | DEBU[2025-07-15 06:38:47] API request                                   method=GET url="http://cronium-app-dev:5001/api/internal/orchestrator/health"
+cronium-agent-dev   | WARN[2025-07-15 06:38:52] API request failed                            error="Get \"http://cronium-app-dev:5001/api/internal/orchestrator/health\": context deadline exceeded"
+cronium-agent-dev   | WARN[2025-07-15 06:38:53] API request failed                            error="Get \"http://cronium-app-dev:5001/api/internal/orchestrator/health\": context deadline exceeded"
+cronium-agent-dev   | WARN[2025-07-15 06:38:55] API request failed                            error="Get \"http://cronium-app-dev:5001/api/internal/orchestrator/health\": context deadline exceeded"
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:56.398 - Accepted 127.0.0.1:59768
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:38:56.399 - Client closed connection id=7 addr=127.0.0.1:59768 laddr=127.0.0.1:6379 fd=9 name= age=0 idle=0 flags=N db=0 sub=0 psub=0 ssub=0 multi=-1 qbuf=0 qbuf-free=20474 argv-mem=0 multi-mem=0 rbs=16384 rbp=16384 obl=0 oll=0 omem=0 tot-mem=37760 events=r cmd=ping user=default redir=-1 resp=2 lib-name= lib-ver=
+cronium-agent-dev   | INFO[2025-07-15 06:38:58] Attempting to reconnect WebSocket            
+cronium-agent-dev   | WARN[2025-07-15 06:38:59] API request failed                            error="Get \"http://cronium-app-dev:5001/api/internal/orchestrator/health\": context deadline exceeded"
+cronium-agent-dev   | WARN[2025-07-15 06:38:59] API health check failed                       error="request failed after 3 attempts: Get \"http://cronium-app-dev:5001/api/internal/orchestrator/health\": context deadline exceeded"
+cronium-agent-dev   | WARN[2025-07-15 06:38:59] API request failed                            error="Get \"http://cronium-app-dev:5001/api/internal/jobs/queue?batchSize=5\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"
+cronium-agent-dev   | ERRO[2025-07-15 06:38:59] Failed to poll jobs                           error="failed to poll jobs: request failed after 3 attempts: Get \"http://cronium-app-dev:5001/api/internal/jobs/queue?batchSize=5\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"
+cronium-agent-dev   | DEBU[2025-07-15 06:38:59] API request                                   method=GET url="http://cronium-app-dev:5001/api/internal/jobs/queue?batchSize=5"
+cronium-app-dev     |  ✓ Compiled /api/internal/orchestrator/health in 29.3s (2929 modules)
+cronium-agent-dev   | DEBU[2025-07-15 06:39:01] No jobs available                            
+cronium-app-dev     |  GET /api/internal/jobs/queue?batchSize=5 200 in 1590ms
+cronium-agent-dev   | DEBU[2025-07-15 06:39:02] API request                                   method=GET url="http://cronium-app-dev:5001/api/internal/jobs/queue?batchSize=5"
+cronium-app-dev     |  GET /en/dashboard/events/459 200 in 31356ms
+cronium-agent-dev   | DEBU[2025-07-15 06:39:02] No jobs available                            
+cronium-app-dev     |  GET /api/internal/jobs/queue?batchSize=5 200 in 63ms
+cronium-app-dev     |  ○ Compiling /api/trpc/[trpc] ...
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:39:06.487 - Accepted 127.0.0.1:42548
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:39:06.488 - Client closed connection id=8 addr=127.0.0.1:42548 laddr=127.0.0.1:6379 fd=9 name= age=0 idle=0 flags=N db=0 sub=0 psub=0 ssub=0 multi=-1 qbuf=0 qbuf-free=20474 argv-mem=0 multi-mem=0 rbs=16384 rbp=16384 obl=0 oll=0 omem=0 tot-mem=37760 events=r cmd=ping user=default redir=-1 resp=2 lib-name= lib-ver=
+cronium-agent-dev   | DEBU[2025-07-15 06:39:07] API request                                   method=GET url="http://cronium-app-dev:5001/api/internal/jobs/queue?batchSize=5"
+cronium-agent-dev   | WARN[2025-07-15 06:39:08] Failed to reconnect WebSocket                 error="failed to connect to WebSocket: read tcp 172.18.0.3:49852->172.18.0.4:5001: i/o timeout"
+cronium-app-dev     |  ✓ Compiled /api/trpc/[trpc] in 5.5s (3420 modules)
+cronium-app-dev     | Credential encryption initialized
+cronium-app-dev     | Creating new global scheduler instance
+cronium-app-dev     |  GET /api/internal/jobs/queue?batchSize=5 200 in 3495ms
+cronium-agent-dev   | DEBU[2025-07-15 06:39:11] No jobs available                            
+cronium-app-dev     |  GET /en/dashboard/events/459 200 in 237ms
+cronium-app-dev     |  ○ Compiling /manifest.json ...
+cronium-app-dev     | [next-auth][warn][NEXTAUTH_URL] 
+cronium-app-dev     | https://next-auth.js.org/warnings#nextauth_url
+cronium-app-dev     | Credential encryption initialized
+cronium-app-dev     |  GET /api/auth/session 200 in 7464ms
+cronium-app-dev     |  ✓ Compiled /manifest.json in 592ms (2089 modules)
+cronium-app-dev     |  GET /manifest.json 200 in 698ms
+cronium-agent-dev   | DEBU[2025-07-15 06:39:12] API request                                   method=GET url="http://cronium-app-dev:5001/api/internal/jobs/queue?batchSize=5"
+cronium-app-dev     | Creating new global scheduler instance
+cronium-app-dev     | Cancelling all existing scheduled jobs
+cronium-app-dev     | Found 0 active events to schedule
+cronium-app-dev     | Event scheduler initialized with 0 active events
+cronium-app-dev     |  POST /api/trpc/system.startServices?batch=1 200 in 7529ms
+cronium-app-dev     | [next-auth][warn][NEXTAUTH_URL] 
+cronium-app-dev     | https://next-auth.js.org/warnings#nextauth_url
+cronium-app-dev     |  GET /api/auth/session 200 in 237ms
+cronium-app-dev     | Creating new global scheduler instance
+cronium-app-dev     | Credential encryption initialized
+cronium-app-dev     |  GET /api/trpc/events.getById,events.getLogs?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22id%22%3A459%7D%7D%2C%221%22%3A%7B%22json%22%3A%7B%22id%22%3A459%2C%22limit%22%3A10%2C%22offset%22%3A0%7D%7D%7D 200 in 8050ms
+cronium-app-dev     |  GET /api/trpc/userAuth.getCurrentUser?batch=1&input=%7B%220%22%3A%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%7D%7D%7D 200 in 599ms
+cronium-app-dev     |  GET /api/internal/jobs/queue?batchSize=5 200 in 579ms
+cronium-agent-dev   | DEBU[2025-07-15 06:39:13] No jobs available                            
+cronium-app-dev     | Credential encryption initialized
+cronium-app-dev     | Creating new global scheduler instance
+cronium-app-dev     |  POST /api/trpc/events.execute?batch=1 200 in 130ms
+cronium-app-dev     |  GET /api/trpc/events.getLogs?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22id%22%3A459%2C%22limit%22%3A10%2C%22offset%22%3A0%7D%7D%7D 200 in 65ms
+cronium-app-dev     | Credential encryption initialized
+cronium-app-dev     | Creating new global scheduler instance
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:39:16.580 - Accepted 127.0.0.1:47092
+cronium-valkey-dev  | 1:M 15 Jul 2025 06:39:16.581 - Client closed connection id=9 addr=127.0.0.1:47092 laddr=127.0.0.1:6379 fd=9 name= age=0 idle=0 flags=N db=0 sub=0 psub=0 ssub=0 multi=-1 qbuf=0 qbuf-free=20474 argv-mem=0 multi-mem=0 rbs=16384 rbp=16384 obl=0 oll=0 omem=0 tot-mem=37760 events=r cmd=ping user=default redir=-1 resp=2 lib-name= lib-ver=
+cronium-agent-dev   | 
+cronium-agent-dev   | DEBU[2025-07-15 06:39:17] API request                                   method=GET url="http://cronium-app-dev:5001/api/internal/jobs/queue?batchSize=5"
+cronium-app-dev     |  GET /api/internal/jobs/queue?batchSize=5 200 in 73ms
+cronium-agent-dev   | DEBU[2025-07-15 06:39:17] API request                                   method=GET url="http://cronium-app-dev:5001/api/internal/orchestrator/health"INFO[2025-07-15 06:39:17] Received jobs from queue                      count=1
+cronium-agent-dev   | DEBU[2025-07-15 06:39:17] API request                                   method=POST url="http://cronium-app-dev:5001/api/internal/jobs/job_PR79T7LFeynw/acknowledge"
+cronium-app-dev     |  GET /api/internal/orchestrator/health 200 in 87ms
+cronium-agent-dev   | DEBU[2025-07-15 06:39:17] API health check passed                      
+cronium-app-dev     |  ○ Compiling /api/internal/jobs/[jobId]/acknowledge ...
+cronium-app-dev     |  ✓ Compiled /api/internal/jobs/[jobId]/acknowledge in 628ms (3410 modules)
+cronium-app-dev     |  POST /api/internal/jobs/job_PR79T7LFeynw/acknowledge 200 in 1365ms
+cronium-agent-dev   | INFO[2025-07-15 06:39:19] Starting job execution                        jobID=job_PR79T7LFeynw
+cronium-agent-dev   | DEBU[2025-07-15 06:39:19] Started job logging                           jobID=job_PR79T7LFeynw
+cronium-agent-dev   | DEBU[2025-07-15 06:39:19] API request                                   method=PUT url="http://cronium-app-dev:5001/api/internal/jobs/job_PR79T7LFeynw/status"
+cronium-app-dev     |  ○ Compiling /api/internal/jobs/[jobId]/status ...
+cronium-app-dev     |  ✓ Compiled /api/internal/jobs/[jobId]/status in 582ms (3412 modules)
+cronium-app-dev     |  PUT /api/internal/jobs/job_PR79T7LFeynw/status 200 in 1732ms
+cronium-agent-dev   | ERRO[2025-07-15 06:39:20] Execution error                               error="failed to create runtime sidecar: failed to create runtime sidecar: Error response from daemon: No such image: cronium/runtime-api:latest" jobID=job_PR79T7LFeynw
+cronium-agent-dev   | DEBU[2025-07-15 06:39:20] API request                                   method=POST url="http://cronium-app-dev:5001/api/internal/jobs/job_PR79T7LFeynw/complete"
+cronium-app-dev     |  ○ Compiling /api/internal/jobs/[jobId]/complete ...

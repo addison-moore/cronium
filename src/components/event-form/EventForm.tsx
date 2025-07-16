@@ -22,9 +22,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 import { getDefaultScriptContent } from "@/lib/scriptTemplates";
-import { MonacoEditor } from "@/components/ui/monaco-editor";
+import { MonacoEditor } from "@/components/ui/monaco-editor-lazy";
 import { TagsInput } from "@/components/ui/tags-input";
-import AIScriptAssistant from "@/components/dashboard/AIScriptAssistant";
+import AIScriptAssistant from "@/components/dashboard/AIScriptAssistant-lazy";
 import ConditionalActionsSection, {
   type EventData,
 } from "./ConditionalActionsSection";
@@ -529,9 +529,17 @@ export default function EventForm({
         }
       } catch (error) {
         console.error("Error submitting form:", error);
+
+        // Extract error message from tRPC error
+        let errorMessage = `Failed to ${isEditing ? "update" : "create"} event. Please try again.`;
+
+        if (error && typeof error === "object" && "message" in error) {
+          errorMessage = error.message as string;
+        }
+
         toast({
           title: "Error",
-          description: `Failed to ${isEditing ? "update" : "create"} event. Please try again.`,
+          description: errorMessage,
           variant: "destructive",
         });
       }

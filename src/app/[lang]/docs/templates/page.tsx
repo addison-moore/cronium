@@ -34,6 +34,12 @@ const tableOfContents = [
   { title: "Best Practices", href: "#best-practices", level: 2 },
 ];
 
+// Enable Partial Prerendering for this page
+export const experimental_ppr = true;
+
+// ISR configuration - revalidate every hour
+export const revalidate = 3600; // 1 hour
+export const dynamic = "force-static";
 export default async function TemplatesPage({
   params,
 }: {
@@ -546,7 +552,7 @@ export default async function TemplatesPage({
               <CardContent>
                 <div className="space-y-3">
                   <SimpleCodeBlock language="handlebars">
-                    {`{{cronium.getVariables.api_key}}
+                    {`{{cronium.getVariables.example_api_key}}
 {{cronium.getVariables.database_url}}
 {{get cronium.getVariables "config.timeout" "30"}}`}
                   </SimpleCodeBlock>
@@ -741,7 +747,7 @@ Variables: {{json cronium.getVariables}}`}
               <CardContent>
                 <div className="space-y-4">
                   <SimpleCodeBlock language="handlebars">
-                    {`{{lookup cronium.getVariables "api_key"}}
+                    {`{{lookup cronium.getVariables "example_api_key"}}
 {{lookup cronium.event "status"}}`}
                   </SimpleCodeBlock>
                   <p className="text-muted-foreground text-sm">

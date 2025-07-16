@@ -1,13 +1,9 @@
 import { EventStatus, TimeUnit, type ConditionalAction } from "@/shared/schema";
 import { scheduleJob, RecurrenceRule, gracefulShutdown } from "node-schedule";
 import type { Job as NodeScheduleJob } from "node-schedule";
-import { db } from "@/server/db";
-import { sql } from "drizzle-orm";
 import { storage, type EventWithRelations } from "@/server/storage";
-import { events } from "@/shared/schema";
 
 // Import modules
-import { executeScript, type ExecutionEvent } from "./execute-script";
 import {
   handleSuccessActions,
   handleFailureActions,
@@ -96,11 +92,8 @@ export class ScriptScheduler {
       this.lastExecutionTimes.clear();
       this.executingEvents.clear();
 
-      // Load ONLY active events from the database
-      const activeEvents = await db
-        .select()
-        .from(events)
-        .where(sql`${events.status} = 'ACTIVE'`);
+      // Load ALL active events with relations in a single optimized query
+      const activeEvents = await storage.getActiveEventsWithRelations();
 
       console.log(
         `Found ${String(activeEvents.length)} active events to schedule`,
@@ -108,11 +101,8 @@ export class ScriptScheduler {
 
       // Schedule each active event with a fresh state
       for (const event of activeEvents) {
-        const fullEvent = (await storage.getEventWithRelations(
-          event.id,
-        )) as EventWithRelations | null;
-        if (fullEvent && fullEvent.status === EventStatus.ACTIVE) {
-          await this.scheduleScript(fullEvent);
+        if (event.status === EventStatus.ACTIVE) {
+          await this.scheduleScript(event);
         }
       }
 
@@ -149,7 +139,7 @@ export class ScriptScheduler {
 
   async scheduleScript(event: EventWithRelations) {
     console.log(
-      `Attempting to schedule event ${String(event.id)}: ${event.name ?? ""}`,
+      `Attempting to schedule event ${String(event.id)}: ${String(event.name ?? "")}`,
     );
 
     // Prevent duplicate scheduling attempts during the process
@@ -190,10 +180,10 @@ export class ScriptScheduler {
 
       // Debug log to help diagnose issues
       console.log(
-        `Scheduling event ${String(typedRefreshedScript.id)} (${typedRefreshedScript.name ?? ""})`,
+        `Scheduling event ${String(typedRefreshedScript.id)} (${String(typedRefreshedScript.name ?? "")})`,
       );
       console.log(
-        `Script status: ${typedRefreshedScript.status ?? ""}, Start time: ${typedRefreshedScript.startTime ? new Date(typedRefreshedScript.startTime).toISOString() : "Not set"}`,
+        `Script status: ${String(typedRefreshedScript.status ?? "")}, Start time: ${typedRefreshedScript.startTime ? new Date(typedRefreshedScript.startTime as string | number | Date).toISOString() : "Not set"}`,
       );
 
       // Check if event has a start time in the future
@@ -238,7 +228,7 @@ export class ScriptScheduler {
         // Store the initial job
         this.jobs.set(typedRefreshedScript.id, initialJob);
         console.log(
-          `Initial job scheduled for event ${String(typedRefreshedScript.id)}: ${typedRefreshedScript.name ?? ""} at ${startDate?.toISOString() ?? ""}`,
+          `Initial job scheduled for event ${String(typedRefreshedScript.id)}: ${String(typedRefreshedScript.name ?? "")} at ${String(startDate?.toISOString() ?? "")}`,
         );
       } else {
         // Set up the recurring schedule immediately
@@ -262,7 +252,7 @@ export class ScriptScheduler {
     // Create a unique ID for this setup process for better debugging
     const setupId = `setup-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     console.log(
-      `[${setupId}] Setting up schedule for event ${String(event.id)}: ${event.name ?? ""}`,
+      `[${setupId}] Setting up schedule for event ${String(event.id)}: ${String(event.name ?? "")}`,
     );
 
     // Prevent duplicate scheduling attempts
@@ -310,7 +300,7 @@ export class ScriptScheduler {
         // Use custom cron schedule
         rule = event.customSchedule;
         console.log(
-          `[${setupId}] Using custom schedule: ${event.customSchedule ?? ""}`,
+          `[${setupId}] Using custom schedule: ${String(event.customSchedule)}`,
         );
       } else {
         // Create a precise recurrence rule
@@ -375,7 +365,7 @@ export class ScriptScheduler {
             break;
           }
           default: {
-            const exhaustiveCheck: never = event.scheduleUnit;
+            const exhaustiveCheck = event.scheduleUnit;
             console.error(
               `[${setupId}] Unsupported schedule unit: ${String(exhaustiveCheck)}`,
             );
@@ -597,7 +587,7 @@ export class ScriptScheduler {
       }
 
       console.log(
-        `[${setupId}] Successfully scheduled event ${String(event.id)}: ${event.name ?? ""}`,
+        `[${setupId}] Successfully scheduled event ${String(event.id)}: ${String(event.name ?? "")}`,
       );
     } catch (error) {
       console.error(
@@ -611,68 +601,82 @@ export class ScriptScheduler {
     }
   }
 
-  // Execute a script by delegating to the appropriate execution module
-  async executeScript(event: EventWithRelations) {
+  // Execute a script by creating a job in the queue
+  async executeScript(
+    event: EventWithRelations,
+    inputData?: Record<string, unknown>,
+  ) {
     // Create a unique execution ID to help with debugging
     const executionId = `exec-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     console.log(
-      `[${executionId}] Starting execution of script ${String(event.id)}: ${event.name ?? ""}`,
+      `[${executionId}] Creating job for script ${String(event.id)}: ${event.name ?? ""}`,
     );
 
-    // Check for existing execution locks before we do anything else
-    const currentExecutions = Array.from(this.executingEvents);
-    if (currentExecutions.length > 0) {
-      console.log(
-        `[${executionId}] Current executions in progress: ${currentExecutions.join(", ")}`,
-      );
-    }
-
     try {
-      // IMPORTANT FIX: We're getting false positives on the execution tracking
-      // Let's RESET our tracking state completely and start fresh with this execution
-      if (this.executingEvents.has(event.id)) {
-        console.log(
-          `[${executionId}] Clearing previous execution state for script ${String(event.id)}`,
-        );
-        this.executingEvents.delete(event.id);
-      }
+      // Import necessary modules
+      const { jobService } = await import("@/lib/services/job-service");
+      const { JobType, LogStatus } = await import("@/shared/schema");
 
-      // Mark it as executing
-      this.executingEvents.add(event.id);
+      // Determine job type based on event type
+      const jobTypeMap: Record<string, (typeof JobType)[keyof typeof JobType]> =
+        {
+          HTTP_REQUEST: JobType.HTTP_REQUEST,
+          TOOL_ACTION: JobType.TOOL_ACTION,
+        };
+      const jobType = jobTypeMap[event.type] ?? JobType.SCRIPT;
+
+      // Create log entry
+      const log = await storage.createLog({
+        eventId: event.id,
+        status: LogStatus.PENDING,
+        startTime: new Date(),
+        eventName: event.name ?? "Unknown",
+        eventType: event.type,
+        userId: event.userId,
+      });
+
+      // Import job payload builder
+      const { buildJobPayload } = await import(
+        "@/lib/scheduler/job-payload-builder"
+      );
+
+      // Build comprehensive job payload
+      const jobPayload = buildJobPayload(event, log.id, inputData);
+
+      // Create job in the queue
+      const job = await jobService.createJob({
+        eventId: event.id,
+        userId: String(event.userId),
+        type: jobType,
+        payload: jobPayload,
+        metadata: {
+          eventName: event.name,
+          triggeredBy: "schedule",
+          logId: log.id,
+        },
+      });
+
+      // Update log with job ID
+      await storage.updateLog(log.id, {
+        jobId: job.id,
+        status: LogStatus.PENDING,
+      });
+
       console.log(
-        `[${executionId}] Added script ${String(event.id)} to executing set: ${Array.from(this.executingEvents).join(", ")}`,
+        `[${executionId}] Created job ${job.id} for script ${String(event.id)}: ${event.name ?? ""}`,
       );
 
-      // Execute the script through the modular function
-      // IMPORTANT: Pass this.executingEvents directly to ensure proper tracking
-      const result = await executeScript(
-        event as ExecutionEvent,
-        this.executingEvents, // Pass the actual Set we're tracking
-        this.handleSuccessActions.bind(this),
-        this.handleFailureActions.bind(this),
-        this.handleAlwaysActions.bind(this),
-        this.handleConditionActions.bind(this),
-        this.handleExecutionCount.bind(this),
-        {}, // No input data for scheduled executions
-        undefined, // No workflowId for regular script executions
-      );
-
-      console.log(
-        `[${executionId}] Finished execution of script ${String(event.id)}: ${event.name ?? ""}, success: ${String(result.success)}`,
-      );
-      return result;
+      // Return a result that matches the expected interface
+      return {
+        success: true,
+        output: `Job ${job.id} created and queued for execution`,
+      };
     } catch (error) {
       console.error(
-        `[${executionId}] Error executing script ${String(event.id)}:`,
+        `[${executionId}] Error creating job for script ${String(event.id)}:`,
         error instanceof Error ? error.message : String(error),
       );
       throw error;
-    } finally {
-      // Make sure we ALWAYS clear the executing state, even on errors
-      this.executingEvents.delete(event.id);
-      console.log(
-        `[${executionId}] Cleared executing state for script ${String(event.id)}, remaining: ${Array.from(this.executingEvents).join(", ")}`,
-      );
     }
   }
 
@@ -729,26 +733,69 @@ export class ScriptScheduler {
 
     const startTime = Date.now();
 
-    // Make sure we're not tracking it as already executing
-    this.executingEvents.delete(eventId);
+    // Import necessary modules
+    const { jobService } = await import("@/lib/services/job-service");
+    const { JobType, LogStatus } = await import("@/shared/schema");
 
-    // Execute directly with the imported function, passing input data and workflowId
-    const result = await executeScript(
-      event as ExecutionEvent,
-      new Set<number>(), // Empty set to avoid double checking
-      this.handleSuccessActions.bind(this),
-      this.handleFailureActions.bind(this),
-      this.handleAlwaysActions.bind(this),
-      this.handleConditionActions.bind(this),
-      this.handleExecutionCount.bind(this),
-      input,
-      workflowId,
+    // Determine job type based on event type
+    const jobTypeMap: Record<string, (typeof JobType)[keyof typeof JobType]> = {
+      HTTP_REQUEST: JobType.HTTP_REQUEST,
+      TOOL_ACTION: JobType.TOOL_ACTION,
+    };
+    const jobType = jobTypeMap[event.type] ?? JobType.SCRIPT;
+
+    // Create log entry
+    const log = await storage.createLog({
+      eventId: event.id,
+      workflowId: workflowId,
+      status: LogStatus.PENDING,
+      startTime: new Date(),
+      eventName: event.name ?? "Unknown",
+      eventType: event.type,
+      userId: event.userId,
+    });
+
+    // Import job payload builder
+    const { buildJobPayload } = await import(
+      "@/lib/scheduler/job-payload-builder"
     );
+
+    // Build comprehensive job payload
+    const basePayload = buildJobPayload(event, log.id, input);
+    const jobPayload = {
+      ...basePayload,
+      workflowId: workflowId,
+      workflowExecutionId: workflowExecutionId,
+    };
+
+    // Create job in the queue
+    const job = await jobService.createJob({
+      eventId: event.id,
+      userId: String(event.userId),
+      type: jobType,
+      payload: jobPayload,
+      metadata: {
+        eventName: event.name,
+        triggeredBy: "workflow",
+        logId: log.id,
+        workflowId: workflowId,
+        workflowExecutionId: workflowExecutionId,
+      },
+    });
+
+    // Update log with job ID
+    await storage.updateLog(log.id, {
+      jobId: job.id,
+      status: LogStatus.PENDING,
+    });
 
     const duration = Date.now() - startTime;
 
+    // Return immediately with job creation info
+    // The actual execution will happen asynchronously
     return {
-      ...result,
+      success: true,
+      output: `Job ${job.id} created and queued for execution`,
       duration,
     };
   }
@@ -764,21 +811,8 @@ export class ScriptScheduler {
 
     console.log(`Running script ${String(eventId)} immediately`);
 
-    // Make sure we're not tracking it as already executing
-    this.executingEvents.delete(eventId);
-
-    // Execute directly with the imported function
-    return executeScript(
-      event as ExecutionEvent,
-      new Set<number>(), // Empty set to avoid double checking
-      this.handleSuccessActions.bind(this),
-      this.handleFailureActions.bind(this),
-      this.handleAlwaysActions.bind(this),
-      this.handleConditionActions.bind(this),
-      this.handleExecutionCount.bind(this),
-      {}, // No input data for immediate execution
-      undefined, // No workflowId for immediate script executions
-    );
+    // Use the same executeScript method which now creates jobs
+    return this.executeScript(event);
   }
 
   // Update an existing script's schedule
@@ -804,12 +838,12 @@ export class ScriptScheduler {
 
       if (event.status === EventStatus.ACTIVE) {
         console.log(
-          `Re-scheduling updated event ${String(eventId)}: ${event.name ?? ""}`,
+          `Re-scheduling updated event ${String(eventId)}: ${String(event.name ?? "")}`,
         );
         await this.scheduleScript(event);
       } else {
         console.log(
-          `Updated script ${String(eventId)}: ${event.name ?? ""} is not active. Skipping scheduling.`,
+          `Updated script ${String(eventId)}: ${String(event.name ?? "")} is not active. Skipping scheduling.`,
         );
       }
     } catch (error) {

@@ -35,7 +35,7 @@ import { TagsInput } from "@/components/ui/tags-input";
 import type { UseFormReturn } from "react-hook-form";
 import { EventStatus, WorkflowTriggerType } from "@/shared/schema";
 import type { EventType, RunLocation } from "@/shared/schema";
-import WorkflowCanvas from "@/components/workflows/WorkflowCanvas";
+import WorkflowCanvas from "@/components/workflows/WorkflowCanvas-lazy";
 import type { Node, Edge } from "@xyflow/react";
 import { trpc } from "@/lib/trpc";
 

@@ -1,7 +1,0 @@
-
-> workspace@1.0.0 lint /Users/addison/Code/cronium/cronium-dev
-> next lint
-
-
- ⚠ The Next.js plugin was not detected in your ESLint configuration. See https://nextjs.org/docs/app/api-reference/config/eslint#migrating-existing-config
-✔ No ESLint warnings or errors

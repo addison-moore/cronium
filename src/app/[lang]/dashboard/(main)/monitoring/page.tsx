@@ -1,0 +1,52 @@
+import { Suspense } from "react";
+import { getTranslations } from "next-intl/server";
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
+import { authOptions } from "@/lib/auth";
+import { MonitoringPageSkeleton } from "@/components/dashboard/DashboardStatsSkeleton";
+import { UserRole } from "@/shared/schema";
+import dynamic from "next/dynamic";
+
+// Dynamic import the client component
+const MonitoringClient = dynamic(() => import("./page-original"), {
+  ssr: false,
+  loading: () => <MonitoringPageSkeleton />,
+});
+
+interface MonitoringPageParams {
+  params: {
+    lang: string;
+  };
+}
+
+export async function generateMetadata({
+  params: _params,
+}: MonitoringPageParams) {
+  const t = await getTranslations();
+
+  return {
+    title: t("Monitoring.Title"),
+    description: t("Monitoring.Description"),
+  };
+}
+
+export default async function MonitoringPage({ params }: MonitoringPageParams) {
+  // Check authentication
+  const session = await getServerSession(authOptions);
+  const { lang } = await Promise.resolve(params);
+
+  if (!session) {
+    redirect(`/${lang}/auth/signin`);
+  }
+
+  // Check admin role
+  if (session.user.role !== UserRole.ADMIN) {
+    redirect(`/${lang}/dashboard`);
+  }
+
+  return (
+    <Suspense fallback={<MonitoringPageSkeleton />}>
+      <MonitoringClient />
+    </Suspense>
+  );
+}

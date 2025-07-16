@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "es2015",
+    "target": "es2020",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
@@ -51,7 +51,6 @@
     "_backups",
     "scripts/*",
     "**/__tests__/*",
-    "src/runtime-helpers/*",
     "**/_backup/**",
     "**/*.backup.ts",
     "**/*.backup.tsx"

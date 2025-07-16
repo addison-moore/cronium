@@ -14,8 +14,8 @@ const inputData = cronium.input();
 console.log('Input received:', inputData);
 
 // Example: Access environment variables
-const apiKey = process.env.API_KEY;
-console.log('Environment variable example:', apiKey ? 'API key found' : 'No API key set');
+const exampleApiKey = process.env.EXAMPLE_API_KEY;
+console.log('Environment variable example:', exampleApiKey ? 'API key found' : 'No API key set');
 
 // Your script logic goes here
 async function main() {
@@ -75,8 +75,8 @@ input_data = cronium.input()
 print(f"Input received: {input_data}")
 
 # Example: Access environment variables
-api_key = os.environ.get('API_KEY')
-print(f"Environment variable example: {'API key found' if api_key else 'No API key set'}")
+example_api_key = os.environ.get('EXAMPLE_API_KEY')
+print(f"Environment variable example: {'API key found' if example_api_key else 'No API key set'}")
 
 # Your script logic goes here
 def main():
@@ -129,7 +129,7 @@ input_data=$(cronium_input)
 echo "Input received: $input_data"
 
 # Example: Access environment variables
-if [ -n "$API_KEY" ]; then
+if [ -n "$EXAMPLE_API_KEY" ]; then
     echo "Environment variable example: API key found"
 else
     echo "Environment variable example: No API key set"
