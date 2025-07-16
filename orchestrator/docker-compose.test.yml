@@ -1,0 +1,93 @@
+version: "3.8"
+
+services:
+  # Valkey (Redis-compatible) for caching
+  valkey:
+    image: valkey/valkey:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkey_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Runtime API Service
+  runtime-api:
+    build:
+      context: ../runtime/cronium-runtime
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - PORT=8081
+      - LOG_LEVEL=debug
+      - BACKEND_URL=http://host.docker.internal:5001
+      - JWT_SECRET=test-jwt-secret-for-development
+      - CACHE_URL=valkey://valkey:6379
+      - CACHE_TTL=300
+    ports:
+      - "8081:8081"
+    depends_on:
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8081/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Orchestrator
+  orchestrator:
+    build:
+      context: ./cronium-orchestrator
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - CRONIUM_API_ENDPOINT=http://host.docker.internal:5001
+      - CRONIUM_API_TOKEN=test-orchestrator-token
+      - CRONIUM_CONTAINER_RUNTIME_BACKEND_URL=http://host.docker.internal:5001
+      - CRONIUM_CONTAINER_RUNTIME_VALKEY_URL=valkey://valkey:6379
+      - CRONIUM_CONTAINER_RUNTIME_JWT_SECRET=test-jwt-secret-for-development
+      - CRONIUM_LOGGING_LEVEL=debug
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config/cronium-orchestrator.yaml:/etc/cronium/config.yaml:ro
+    depends_on:
+      runtime-api:
+        condition: service_healthy
+    command: ["--config", "/etc/cronium/config.yaml"]
+    ports:
+      - "8080:8080" # Health check
+      - "9090:9090" # Metrics
+
+  # Test container to verify networking
+  test-runner:
+    image: cronium/python:latest
+    profiles: ["test"]
+    environment:
+      - CRONIUM_RUNTIME_API=http://runtime-api:8081
+      - CRONIUM_EXECUTION_TOKEN=test-token
+      - CRONIUM_EXECUTION_ID=test-execution-123
+    command: |
+      python -c "
+      import cronium
+      print('Testing runtime API connection...')
+      try:
+          # This would normally work with a valid token
+          print('Runtime API URL:', cronium.api_url)
+          print('Test completed')
+      except Exception as e:
+          print('Error:', e)
+      "
+    depends_on:
+      - runtime-api
+
+volumes:
+  valkey_data:
+
+networks:
+  default:
+    name: cronium-test-network

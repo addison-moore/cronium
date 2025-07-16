@@ -1,0 +1,344 @@
+# Cronium Orchestrator Configuration
+# This is a sample configuration file with all available options
+
+orchestrator:
+  # Unique identifier for this orchestrator instance
+  # Use "auto" to generate based on hostname and timestamp
+  id: ${ORCHESTRATOR_ID:-auto}
+
+  # Human-readable name for this orchestrator
+  name: production-orchestrator
+
+  # Environment (development, staging, production)
+  environment: ${ENVIRONMENT:-production}
+
+  # Region or datacenter identifier
+  region: us-east-1
+
+  # Tags for grouping/filtering orchestrators
+  tags:
+    - primary
+    - docker-enabled
+
+# API configuration for backend communication
+api:
+  # Backend API endpoint (required)
+  endpoint: ${CRONIUM_API_URL:-http://localhost:5001/api/internal}
+
+  # Service authentication token (required)
+  token: ${CRONIUM_SERVICE_TOKEN}
+
+  # WebSocket endpoint for real-time communication
+  # If not specified, derived from endpoint
+  wsEndpoint: ${CRONIUM_WS_URL:-ws://localhost:5001/api/socket}
+
+  # Request timeout
+  timeout: 30s
+
+  # Retry configuration
+  retry:
+    maxAttempts: 3
+    backoffType: exponential
+    initialDelay: 1s
+    maxDelay: 30s
+
+  # Rate limiting
+  rateLimit:
+    enabled: true
+    requestsPerSecond: 10
+
+# Job processing configuration
+jobs:
+  # How often to poll for new jobs
+  pollInterval: 1s
+
+  # Number of jobs to fetch per poll
+  pollBatchSize: 10
+
+  # Maximum concurrent job executions
+  maxConcurrent: ${MAX_CONCURRENT:-5}
+
+  # Default timeout for jobs without explicit timeout
+  defaultTimeout: 1h
+
+  # Queue strategy (priority, fifo, lifo)
+  queueStrategy: priority
+
+  # How often to renew job leases
+  leaseRenewal: 30s
+
+# Container execution configuration
+container:
+  # Docker daemon configuration
+  docker:
+    # Docker endpoint
+    endpoint: ${DOCKER_HOST:-unix:///var/run/docker.sock}
+
+    # Docker API version
+    version: "1.41"
+
+    # TLS verification
+    tlsVerify: false
+
+    # TLS certificate path (if tlsVerify is true)
+    certPath: ${DOCKER_CERT_PATH}
+
+  # Container images for different script types
+  images:
+    bash: cronium/runner:bash-alpine
+    python: cronium/runner:python-alpine
+    node: cronium/runner:node-alpine
+
+  # Resource limits
+  resources:
+    # Default resource allocation
+    defaults:
+      cpu: 0.5 # CPU cores
+      memory: 512MB
+      disk: 1GB
+      pids: 100
+
+    # Maximum allowed resources
+    limits:
+      cpu: 2.0
+      memory: 2GB
+      disk: 10GB
+      pids: 1000
+
+  # Security configuration
+  security:
+    # User to run containers as
+    user: "1000:1000"
+
+    # Prevent privilege escalation
+    noNewPrivileges: true
+
+    # Capabilities to drop
+    dropCapabilities:
+      - ALL
+
+    # Read-only root filesystem
+    readOnlyRootfs: false
+
+    # Seccomp profile
+    seccompProfile: default
+
+  # Volume configuration
+  volumes:
+    # Base path for execution data
+    basePath: /var/lib/cronium/executions
+
+    # Temporary path
+    tempPath: /tmp/cronium
+
+    # How long to retain execution data
+    retention: 24h
+
+  # Network configuration
+  network:
+    # Network mode (bridge, host, none)
+    mode: bridge
+
+    # Enable inter-container communication
+    enableICC: false
+
+    # DNS servers
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+
+# SSH execution configuration
+ssh:
+  # Connection pool settings
+  connectionPool:
+    # Maximum connections per server
+    maxPerServer: 5
+
+    # Minimum connections to maintain
+    minPerServer: 1
+
+    # Idle connection timeout
+    idleTimeout: 5m
+
+    # Health check interval
+    healthCheckInterval: 30s
+
+    # Connection timeout
+    connectionTimeout: 10s
+
+  # Execution settings
+  execution:
+    # Default shell
+    defaultShell: /bin/bash
+
+    # Temporary directory on remote servers
+    tempDir: /tmp/cronium
+
+    # Clean up after execution
+    cleanupAfter: true
+
+    # Use PTY mode
+    ptyMode: false
+
+  # Circuit breaker configuration
+  circuitBreaker:
+    # Enable circuit breaker
+    enabled: true
+
+    # Failure threshold to open circuit
+    failureThreshold: 5
+
+    # Success threshold to close circuit
+    successThreshold: 2
+
+    # Timeout before trying half-open
+    timeout: 60s
+
+    # Requests allowed in half-open state
+    halfOpenRequests: 3
+
+  # Security settings
+  security:
+    # Strict host key checking
+    strictHostKeyChecking: true
+
+    # Known hosts file
+    knownHostsFile: /etc/cronium/known_hosts
+
+    # Allowed SSH ciphers
+    allowedCiphers:
+      - aes128-ctr
+      - aes256-ctr
+      - aes128-gcm@openssh.com
+      - aes256-gcm@openssh.com
+
+    # Allowed key exchange algorithms
+    allowedKeyExchanges:
+      - curve25519-sha256
+      - ecdh-sha2-nistp256
+      - ecdh-sha2-nistp384
+      - ecdh-sha2-nistp521
+
+# Logging configuration
+logging:
+  # Log level (debug, info, warn, error)
+  level: ${LOG_LEVEL:-info}
+
+  # Log format (json, text)
+  format: json
+
+  # Log output (stdout, file)
+  output: stdout
+
+  # File logging configuration
+  file:
+    # Enable file logging
+    enabled: false
+
+    # Log file path
+    path: /var/log/cronium/orchestrator.log
+
+    # Maximum file size before rotation
+    maxSize: 100MB
+
+    # Number of backup files to keep
+    maxBackups: 10
+
+    # Maximum age of log files (days)
+    maxAge: 30
+
+  # WebSocket log streaming
+  websocket:
+    # Enable WebSocket streaming
+    enabled: true
+
+    # Log buffer size
+    bufferSize: 1000
+
+    # Flush interval
+    flushInterval: 100ms
+
+    # Batch size for sending
+    batchSize: 50
+
+    # Enable compression
+    compression: true
+
+# Monitoring configuration
+monitoring:
+  # Enable monitoring endpoints
+  enabled: true
+
+  # Metrics port (Prometheus format)
+  metricsPort: ${METRICS_PORT:-9090}
+
+  # Health check port
+  healthPort: ${HEALTH_PORT:-8080}
+
+  # Distributed tracing
+  tracing:
+    # Enable tracing
+    enabled: ${TRACING_ENABLED:-false}
+
+    # Tracing provider
+    provider: opentelemetry
+
+    # Trace collector endpoint
+    endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+
+    # Sampling rate (0.0-1.0)
+    samplingRate: 0.1
+
+  # Profiling configuration
+  profiling:
+    # Enable profiling endpoint
+    enabled: false
+
+    # Profiling port
+    port: 6060
+
+# Security configuration
+security:
+  # TLS configuration
+  tls:
+    # Enable TLS
+    enabled: ${TLS_ENABLED:-false}
+
+    # Certificate file
+    certFile: ${TLS_CERT_FILE}
+
+    # Key file
+    keyFile: ${TLS_KEY_FILE}
+
+    # CA file for verification
+    caFile: ${TLS_CA_FILE}
+
+  # Authentication settings
+  authentication:
+    # Enable token rotation
+    tokenRotation: true
+
+    # Token TTL
+    tokenTTL: 24h
+
+  # Encryption settings
+  encryption:
+    # Encryption algorithm
+    algorithm: aes-256-gcm
+
+    # Key derivation function
+    keyDerivation: pbkdf2
+
+# Feature flags
+features:
+  # Enable container pooling (experimental)
+  containerPooling: false
+
+  # Enable advanced scheduling
+  advancedScheduling: false
+
+  # Enable distributed tracing
+  distributedTracing: false
+
+  # Enable experimental SSH features
+  experimentalSSH: false

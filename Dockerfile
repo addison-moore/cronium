@@ -6,6 +6,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     openssl \
+    python3 \
+    make \
+    g++ \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -21,6 +24,14 @@ COPY package.json pnpm-lock.yaml ./
 # Install dependencies
 FROM base AS deps
 RUN pnpm install --frozen-lockfile
+
+# Development stage - for running dev server
+FROM base AS development
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+# Don't build in development, just prepare the environment
+EXPOSE 5001 5002
+CMD ["pnpm", "dev"]
 
 # Build stage
 FROM base AS builder
@@ -51,7 +62,6 @@ RUN groupadd -g 1001 nodejs && \
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/src/runtime-helpers ./src/runtime-helpers
 COPY --from=builder --chown=nextjs:nodejs /app/src/server ./src/server
 
 # Create required directories

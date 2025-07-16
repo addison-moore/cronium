@@ -296,6 +296,12 @@ cronium_output '{"result": "success", "processed": true}'`,
   },
 };
 
+// Enable Partial Prerendering for this page
+export const experimental_ppr = true;
+
+// ISR configuration - revalidate every hour
+export const revalidate = 3600; // 1 hour
+export const dynamic = "force-static";
 export default async function UnifiedIOPage({
   params,
 }: {
@@ -613,8 +619,8 @@ Authorization: Bearer YOUR_API_TOKEN
                           Runtime helper not found
                         </h5>
                         <p className="mt-1 text-sm text-red-700 dark:text-red-300">
-                          Ensure the import path is correct:{" "}
-                          <code>/tmp/runtime-helpers/cronium.py</code>
+                          The cronium object is automatically available in
+                          containerized execution. No imports needed.
                         </p>
                       </div>
 

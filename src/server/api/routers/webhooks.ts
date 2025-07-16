@@ -807,8 +807,7 @@ export const webhooksRouter = createTRPCRouter({
     .input(generateWebhookUrlSchema)
     .mutation(async ({ input }) => {
       try {
-        const baseUrl =
-          process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:5001";
+        const baseUrl = process.env.PUBLIC_APP_URL ?? "http://localhost:5001";
         const key =
           input.customKey ??
           `webhook-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;

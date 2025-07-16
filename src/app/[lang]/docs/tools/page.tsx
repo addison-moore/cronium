@@ -35,6 +35,12 @@ const tableOfContents = [
   { title: "Best Practices", href: "#best-practices", level: 2 },
 ];
 
+// Enable Partial Prerendering for this page
+export const experimental_ppr = true;
+
+// ISR configuration - revalidate every hour
+export const revalidate = 3600; // 1 hour
+export const dynamic = "force-static";
 export default async function ToolsPage({
   params,
 }: {

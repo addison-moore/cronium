@@ -15,7 +15,7 @@ import {
 import { toast } from "@/components/ui/use-toast";
 import { EventType } from "@/shared/schema";
 import { trpc } from "@/lib/trpc";
-import { MonacoEditor } from "@/components/ui/monaco-editor";
+import { MonacoEditor } from "@/components/ui/monaco-editor-lazy";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 
 interface AIScriptAssistantProps {

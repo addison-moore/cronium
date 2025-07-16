@@ -184,6 +184,12 @@ function EndpointCard({
   );
 }
 
+// Enable Partial Prerendering for this page
+export const experimental_ppr = true;
+
+// ISR configuration - revalidate every hour
+export const revalidate = 3600; // 1 hour
+export const dynamic = "force-static";
 export default async function APIDocsPage({
   params,
 }: {

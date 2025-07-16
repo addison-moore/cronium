@@ -19,6 +19,7 @@ import { webhookSystemRouter } from "./routers/webhook-system";
 import { quotaManagementRouter } from "./routers/quota-management";
 import { toolActionLogsRouter } from "./routers/toolActionLogs";
 import { toolActionTemplatesRouter } from "./routers/toolActionTemplates";
+import { jobsRouter } from "./routers/jobs";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 
 /**
@@ -47,6 +48,7 @@ export const appRouter = createTRPCRouter({
   quotaManagement: quotaManagementRouter,
   toolActionLogs: toolActionLogsRouter,
   toolActionTemplates: toolActionTemplatesRouter,
+  jobs: jobsRouter,
 });
 
 // export type definition of API

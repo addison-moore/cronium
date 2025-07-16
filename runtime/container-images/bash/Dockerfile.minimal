@@ -1,0 +1,84 @@
+# Minimal Bash runtime image for Cronium with enhanced security
+FROM alpine:3.19 AS builder
+
+# Install packages in builder
+RUN apk add --no-cache \
+    bash \
+    curl \
+    jq \
+    coreutils \
+    tini \
+    ca-certificates
+
+# Final stage
+FROM scratch
+
+# Copy only essential files from Alpine
+COPY --from=builder /lib/ld-musl-*.so.1 /lib/
+COPY --from=builder /lib/libc.musl-*.so.1 /lib/
+COPY --from=builder /lib/libz.so.1 /lib/
+
+# Copy executables
+COPY --from=builder /bin/bash /bin/
+COPY --from=builder /bin/sh /bin/
+COPY --from=builder /usr/bin/curl /usr/bin/
+COPY --from=builder /usr/bin/jq /usr/bin/
+COPY --from=builder /usr/bin/env /usr/bin/
+COPY --from=builder /sbin/tini /sbin/
+
+# Copy required libraries for curl
+COPY --from=builder /usr/lib/libcurl.so.4 /usr/lib/
+COPY --from=builder /usr/lib/libnghttp2.so.14 /usr/lib/
+COPY --from=builder /lib/libssl.so.3 /lib/
+COPY --from=builder /lib/libcrypto.so.3 /lib/
+
+# Copy coreutils binaries we need
+COPY --from=builder /usr/bin/basename /usr/bin/
+COPY --from=builder /usr/bin/cat /usr/bin/
+COPY --from=builder /usr/bin/chmod /usr/bin/
+COPY --from=builder /usr/bin/echo /usr/bin/
+COPY --from=builder /usr/bin/false /usr/bin/
+COPY --from=builder /usr/bin/head /usr/bin/
+COPY --from=builder /usr/bin/mktemp /usr/bin/
+COPY --from=builder /usr/bin/printf /usr/bin/
+COPY --from=builder /usr/bin/rm /usr/bin/
+COPY --from=builder /usr/bin/sleep /usr/bin/
+COPY --from=builder /usr/bin/tail /usr/bin/
+COPY --from=builder /usr/bin/test /usr/bin/
+COPY --from=builder /usr/bin/true /usr/bin/
+
+# Copy CA certificates
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+# Create minimal filesystem structure
+COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /etc/group /etc/group
+
+# Create directories
+RUN mkdir -p /app /tmp /home/cronium /usr/local/bin
+
+# Copy Cronium SDK
+COPY --chown=1000:1000 cronium.sh /usr/local/bin/
+COPY --chown=1000:1000 healthcheck.sh /usr/local/bin/
+
+# Set permissions
+RUN chmod +x /usr/local/bin/cronium.sh /usr/local/bin/healthcheck.sh && \
+    chown -R 1000:1000 /app /tmp /home/cronium
+
+# Environment
+ENV HOME=/home/cronium \
+    USER=cronium \
+    PATH=/usr/local/bin:/usr/bin:/bin \
+    LANG=C.UTF-8
+
+# Use non-root user
+USER 1000:1000
+WORKDIR /app
+
+# Entrypoint
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["/bin/bash"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD /usr/local/bin/healthcheck.sh || exit 1

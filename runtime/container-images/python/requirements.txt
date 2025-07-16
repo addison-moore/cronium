@@ -1,0 +1,3 @@
+# Python dependencies for Cronium runtime
+requests==2.31.0
+aiohttp==3.9.1

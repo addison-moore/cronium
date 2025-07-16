@@ -381,7 +381,7 @@ async function main() {
     } else {
       console.log(`\n✅ Successfully encrypted ${totalEncrypted} records!`);
       console.log(
-        "⚠️  Remember to backup your ENCRYPTION_MASTER_KEY environment variable.",
+        "⚠️  Remember to backup your ENCRYPTION_KEY environment variable.",
       );
     }
   } catch (error) {

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
-import EventForm from "@/components/event-form/EventForm";
+import EventForm from "@/components/event-form/EventForm-lazy";
 import { type Event } from "./types";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/use-toast";

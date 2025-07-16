@@ -46,6 +46,12 @@ function DocStep({
   );
 }
 
+// Enable Partial Prerendering for this page
+export const experimental_ppr = true;
+
+// ISR configuration - revalidate every hour
+export const revalidate = 3600; // 1 hour
+export const dynamic = "force-static";
 export default async function GettingStartedPage({
   params,
 }: {
@@ -210,8 +216,8 @@ print(f"Current time: {now}")`}</code>
                     <pre className="mt-4 rounded-md bg-zinc-950 p-3 text-sm text-zinc-200">
                       <code>{`import os
 
-api_key = os.environ.get("API_KEY")
-print(f"Using API key: {api_key}")`}</code>
+example_api_key = os.environ.get("EXAMPLE_API_KEY")
+print(f"Using API key: {example_api_key}")`}</code>
                     </pre>
                   </>
                 }

@@ -4,7 +4,7 @@ import React from "react";
 import { Modal } from "@/components/ui/modal";
 import { toast } from "@/components/ui/use-toast";
 import { Spinner } from "@/components/ui/spinner";
-import EventForm from "@/components/event-form/EventForm";
+import EventForm from "@/components/event-form/EventForm-lazy";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 

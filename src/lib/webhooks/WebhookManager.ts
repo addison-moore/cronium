@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "@/server/db";
 import { webhooks, webhookEvents, webhookDeliveries } from "@/shared/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { storage } from "@/server/storage";
 import { WebhookSecurity } from "./WebhookSecurity";
 import { WebhookQueue } from "./WebhookQueue";
 import { nanoid } from "nanoid";
@@ -159,16 +160,8 @@ export class WebhookManager extends EventEmitter {
     data: Record<string, unknown>,
     metadata?: Record<string, unknown>,
   ): Promise<void> {
-    // Find all active webhooks subscribed to this event
-    const activeWebhooks = await db
-      .select()
-      .from(webhooks)
-      .where(and(eq(webhooks.active, true)));
-
-    const subscribedWebhooks = activeWebhooks.filter((webhook) => {
-      const events = webhook.events as string[];
-      return events.includes(event) || events.includes("*");
-    });
+    // Use optimized query to find all active webhooks subscribed to this event
+    const subscribedWebhooks = await storage.getActiveWebhooksForEvent(event);
 
     if (subscribedWebhooks.length === 0) {
       return;
@@ -341,35 +334,14 @@ export class WebhookManager extends EventEmitter {
    * Retry failed webhook delivery
    */
   async retryDelivery(deliveryId: string): Promise<WebhookDeliveryResult> {
-    const [delivery] = await db
-      .select()
-      .from(webhookDeliveries)
-      .where(eq(webhookDeliveries.deliveryId, deliveryId))
-      .limit(1);
+    // Use optimized query to get delivery with webhook and event in single query
+    const result = await storage.getWebhookDeliveryWithRelations(deliveryId);
 
-    if (!delivery) {
+    if (!result) {
       throw new Error("Delivery not found");
     }
 
-    const [webhook] = await db
-      .select()
-      .from(webhooks)
-      .where(eq(webhooks.id, delivery.webhookId))
-      .limit(1);
-
-    if (!webhook) {
-      throw new Error("Webhook not found");
-    }
-
-    const [event] = await db
-      .select()
-      .from(webhookEvents)
-      .where(eq(webhookEvents.id, delivery.webhookEventId))
-      .limit(1);
-
-    if (!event) {
-      throw new Error("Event not found");
-    }
+    const { delivery, webhook, event } = result;
 
     // Re-queue the delivery
     const retryConfig = webhook.retryConfig as

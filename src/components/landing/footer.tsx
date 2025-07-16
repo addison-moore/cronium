@@ -180,7 +180,7 @@ export default function Footer({ lang = "en" }: { lang?: string }) {
             <ul role="list" className="mt-4 space-y-3">
               <li>
                 <a
-                  href="https://github.com/cronium"
+                  href="https://github.com/addison-more/cronium"
                   className="hover:text-primary dark:hover:text-secondary flex items-center text-sm leading-6 text-gray-600 dark:text-gray-400"
                 >
                   <Github className="mr-2 h-4 w-4" />

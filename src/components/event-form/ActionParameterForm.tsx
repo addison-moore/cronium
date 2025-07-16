@@ -16,7 +16,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
 import { type ToolAction } from "@/components/tools/types/tool-plugin";
-import { MonacoEditor } from "@/components/ui/monaco-editor";
+import { MonacoEditor } from "@/components/ui/monaco-editor-lazy";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 

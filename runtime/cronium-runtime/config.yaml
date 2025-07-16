@@ -1,0 +1,51 @@
+# Cronium Runtime Service Configuration
+
+version: "1.0.0"
+
+server:
+  port: 8081
+  readTimeout: 30s
+  writeTimeout: 30s
+  idleTimeout: 120s
+
+cache:
+  url: valkey://localhost:6379
+  db: 0
+  maxRetries: 3
+  dialTimeout: 5s
+  readTimeout: 3s
+  writeTimeout: 3s
+  poolSize: 10
+  minIdleConns: 2
+  maxConnAge: 30m
+  ttl: 5m
+
+backend:
+  url: http://localhost:5001
+  timeout: 30s
+  maxRetries: 3
+  retryDelay: 1s
+
+auth:
+  jwtSecret: ${JWT_SECRET}
+  tokenExpiration: 1h
+  refreshExpiration: 24h
+
+logging:
+  level: info
+  format: json
+
+security:
+  enableCors: true
+  allowedOrigins:
+    - "*"
+  allowedMethods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+  allowedHeaders:
+    - "*"
+  rateLimitPerMin: 1000
+  enableTls: false

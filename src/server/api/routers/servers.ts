@@ -15,6 +15,7 @@ import {
 import { type InsertServer, UserRole } from "@shared/schema";
 import { storage } from "@/server/storage";
 import { type Log } from "@shared/schema";
+import { cachedQueries, cacheInvalidation } from "../middleware/cache";
 
 // Custom procedure that handles auth for tRPC fetch adapter
 const serverProcedure = publicProcedure.use(async ({ ctx, next }) => {

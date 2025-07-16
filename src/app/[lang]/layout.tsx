@@ -55,10 +55,12 @@ export default async function LocaleLayout({
   return (
     <div lang={lang}>
       <NextIntlProvider locale={lang as SupportedLocale} messages={messages}>
-        <Providers>
-          <main className="min-h-screen">{children}</main>
-          <Toaster />
-        </Providers>
+        <React.Suspense fallback={null}>
+          <Providers>
+            <main className="min-h-screen">{children}</main>
+            <Toaster />
+          </Providers>
+        </React.Suspense>
       </NextIntlProvider>
     </div>
   );

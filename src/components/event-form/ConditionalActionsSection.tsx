@@ -19,8 +19,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { MonacoEditor } from "@/components/ui/monaco-editor";
-import { Trash2, Plus, Code, MessageSquare, Edit, Mail } from "lucide-react";
+import { MonacoEditor } from "@/components/ui/monaco-editor-lazy";
+import {
+  Trash2,
+  Plus,
+  Code,
+  MessageSquare,
+  Edit,
+  Mail,
+  Info,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -1055,6 +1063,12 @@ export default function ConditionalActionsSection({
                     ))}
                 </SelectContent>
               </Select>
+              {eventId && (
+                <p className="text-muted-foreground text-sm">
+                  <Info className="mr-1 inline-block h-3 w-3" />
+                  Events cannot trigger themselves to prevent infinite loops.
+                </p>
+              )}
             </div>
           )}
 

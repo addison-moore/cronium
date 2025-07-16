@@ -1,0 +1,121 @@
+{
+  "services": {
+    "postgres": {
+      "host": "postgres",
+      "port": 5432,
+      "protocol": "postgresql",
+      "healthCheck": {
+        "type": "tcp",
+        "interval": 10,
+        "timeout": 5
+      }
+    },
+    "valkey": {
+      "host": "valkey",
+      "port": 6379,
+      "protocol": "redis",
+      "healthCheck": {
+        "type": "tcp",
+        "interval": 10,
+        "timeout": 5
+      }
+    },
+    "runtime-api": {
+      "host": "runtime-api",
+      "port": 8081,
+      "protocol": "http",
+      "endpoints": {
+        "base": "http://runtime-api:8081",
+        "health": "/health",
+        "metrics": "/metrics"
+      },
+      "healthCheck": {
+        "type": "http",
+        "path": "/health",
+        "interval": 30,
+        "timeout": 10
+      }
+    },
+    "orchestrator": {
+      "host": "orchestrator",
+      "port": 8080,
+      "protocol": "http",
+      "endpoints": {
+        "base": "http://orchestrator:8080",
+        "health": "/health",
+        "metrics": "/metrics"
+      },
+      "healthCheck": {
+        "type": "http",
+        "path": "/health",
+        "interval": 30,
+        "timeout": 10
+      }
+    },
+    "cronium-app": {
+      "host": "cronium-app",
+      "port": 5001,
+      "protocol": "http",
+      "endpoints": {
+        "base": "http://cronium-app:5001",
+        "api": "/api",
+        "health": "/api/health"
+      },
+      "healthCheck": {
+        "type": "http",
+        "path": "/api/health",
+        "interval": 30,
+        "timeout": 10
+      }
+    },
+    "websocket": {
+      "host": "websocket",
+      "port": 5002,
+      "protocol": "ws",
+      "endpoints": {
+        "base": "ws://websocket:5002",
+        "socket.io": "/socket.io/"
+      },
+      "healthCheck": {
+        "type": "tcp",
+        "interval": 30,
+        "timeout": 10
+      }
+    },
+    "prometheus": {
+      "host": "prometheus",
+      "port": 9090,
+      "protocol": "http",
+      "endpoints": {
+        "base": "http://prometheus:9090",
+        "api": "/api/v1",
+        "query": "/api/v1/query",
+        "health": "/-/healthy"
+      }
+    },
+    "grafana": {
+      "host": "grafana",
+      "port": 3000,
+      "protocol": "http",
+      "endpoints": {
+        "base": "http://grafana:3000",
+        "api": "/api",
+        "health": "/api/health"
+      }
+    }
+  },
+  "networks": {
+    "internal": {
+      "name": "cronium-network",
+      "subnet": "172.20.0.0/16",
+      "driver": "bridge"
+    }
+  },
+  "discovery": {
+    "method": "dns",
+    "cache": {
+      "ttl": 60,
+      "negative_ttl": 10
+    }
+  }
+}

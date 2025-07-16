@@ -210,9 +210,9 @@ export const logsRouter = createTRPCRouter({
       // Return log with additional event info
       return {
         ...log,
-        eventName: event.name,
-        scriptContent: event.content,
-        scriptType: event.type,
+        eventName: event.name ?? "Unknown",
+        scriptContent: event.content ?? "",
+        eventType: event.type,
       };
     } catch (error) {
       if (error instanceof TRPCError) throw error;

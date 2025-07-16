@@ -400,7 +400,7 @@ export class WebhookRouter {
     authentication: string;
     examples: Record<string, unknown>;
   } {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:5001";
+    const baseUrl = process.env.PUBLIC_APP_URL ?? "http://localhost:5001";
 
     return {
       endpoint: `${baseUrl}/api/webhooks/${webhookKey}`,

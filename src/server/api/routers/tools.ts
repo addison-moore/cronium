@@ -1557,7 +1557,7 @@ export const toolsRouter = createTRPCRouter({
           };
         }
 
-        const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:5001";
+        const baseUrl = process.env.AUTH_URL ?? "http://localhost:5001";
         const redirectUri = `${baseUrl}/api/oauth/callback`;
 
         // Create provider
@@ -1645,7 +1645,7 @@ export const toolsRouter = createTRPCRouter({
           });
         }
 
-        const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:5001";
+        const baseUrl = process.env.AUTH_URL ?? "http://localhost:5001";
         const redirectUri = `${baseUrl}/api/oauth/callback`;
 
         // Create provider

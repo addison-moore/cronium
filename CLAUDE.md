@@ -18,7 +18,7 @@ Change types include: Feature, Bug Fix, Refactor, Documentation, Testing, etc.
 
 ## Code Style
 
-- Use TypeScript for type safety, following the documentation in TYPE_SAFETY_GUIDELINES.md
+- Use TypeScript for type safety, following the documentation in TYPE_SAFETY.md
 - To avoid linting errors, use the eslint.config.js file as a reference
 - Format code using Prettier
 - Run `pnpm format` to automatically format code
@@ -31,11 +31,12 @@ Change types include: Feature, Bug Fix, Refactor, Documentation, Testing, etc.
 
 ## 📚 Documentation
 
-- [AUTH.md](AUTH.md) - Authentication and user management
-- [CONTEXT.md](CONTEXT.md) - Project context and guidelines
-- [tRPC_API.md](tRPC_API.md) - tRPC API patterns and conventions
-- [EXECUTION.md](EXECUTION.md) - Event execution and workflow management
-- [TYPE_SAFETY_GUIDELINES.md](TYPE_SAFETY_GUIDELINES.md) - Type safety guidelines
+- [GETTING_STARTED.md](docs/GETTING_STARTED.md) - Quick start guide for development setup
+- [AUTH.md](docs/AUTH.md) - Authentication and user management
+- [CONTEXT.md](docs/CONTEXT.md) - Project context and guidelines
+- [TRPC.md](docs/TRPC.md) - tRPC API patterns and conventions
+- [TYPE_SAFETY.md](docs/TYPE_SAFETY.md) - Type safety guidelines
+- [ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md) - Complete environment variable reference
 
 * additional documentation can be found in the docs directory
 
@@ -43,8 +44,8 @@ Change types include: Feature, Bug Fix, Refactor, Documentation, Testing, etc.
 
 - [plans/](plans/)
 
-Plans are contained in the plans directory. Completed plans should be moved to the plans/completed directory.
-Plans should be updated as needed. As progress is made, update the plans to reflect the current state of the project.
+Plans are contained in the plans directory. Plans should be updated as needed. As progress is made, update the plans to reflect the current state of the project.
+IMPORTANT: Cronium is meant to be an open-source, self-hosted application. This is not a large enterprise product. The app is in early development and hasn't been released publicly yet. Keep this in mind when making plans.
 
 ## Common Commands
 
@@ -76,9 +77,9 @@ pnpm clear            # Remove .next build directory
 - TailwindCSS 4 for styling
 - Drizzle ORM with PostgreSQL/Neon
 - Next-Auth for authentication
-- tRPC for type-safe APIs (gradual migration)
+- tRPC for type-safe APIs
 - Socket.IO/WebSockets for real-time features
-- React Hook Form + Zod for forms (migration in progress)
+- React Hook Form + Zod for forms
 
 **Core Concepts:**
 
@@ -95,7 +96,6 @@ pnpm clear            # Remove .next build directory
 - `src/lib/` - Core business logic and utilities
 - `src/server/` - tRPC setup and server-side code
 - `src/shared/` - Database schema and shared types
-- `src/runtime-helpers/` - Helper scripts for event execution (cronium.js/py/sh)
 
 ## Important Implementation Notes
 
@@ -107,8 +107,8 @@ pnpm clear            # Remove .next build directory
 
 **Script Execution:**
 
-- Currently executes directly on host (security concern)
-- Planned migration to Docker/LXC containers for isolation
+- Local execution runs in isolated Docker containers via orchestrator
+- SSH execution does not support runtime helpers (will be added with signed runner)
 - Terminal via xterm.js + WebSockets
 
 **Runtime Helpers:**
@@ -132,9 +132,19 @@ pnpm clear            # Remove .next build directory
 
 Located in `src/shared/schema.ts` using Drizzle ORM.
 
+## Database Migrations
+
+**Completed Migration (2025-07-15)**: The database has been migrated to support containerized execution with 17 new tables for job queuing, OAuth, webhooks, and rate limiting.
+
+**Migration Scripts**: All migration scripts have been archived to `src/scripts/migrations/archived/`. For future migrations:
+
+1. Use Drizzle Kit for schema changes: `npx drizzle-kit generate` and `pnpm db:push`
+2. Create new migration scripts in `src/scripts/migrations/` if data transformation is needed
+3. Document all migrations in the changelog
+
 ## Security Considerations
 
-- All user scripts should be containerized (not yet implemented)
+- All local scripts run in isolated Docker containers
 - Role-based access control throughout the application
 - Encryption for sensitive data (API tokens, passwords)
 - SSH key management for remote server access

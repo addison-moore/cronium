@@ -1,0 +1,69 @@
+# Runtime API Configuration Template
+# Copy to runtime-api.config.yaml and update values
+
+server:
+  port: 8081
+  host: "0.0.0.0"
+  readTimeout: 30s
+  writeTimeout: 30s
+  maxRequestSize: "10MB"
+
+backend:
+  url: "http://cronium-app:5001"
+  timeout: 30s
+  retryAttempts: 3
+  retryDelay: 1s
+
+cache:
+  type: "valkey"
+  url: "valkey://valkey:6379"
+  ttl: 300s
+  maxConnections: 50
+  connectTimeout: 5s
+  readTimeout: 3s
+  writeTimeout: 3s
+
+auth:
+  jwtSecret: "${JWT_SECRET}"
+  tokenExpiry: 1h
+  refreshTokenExpiry: 7d
+
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+  enableCaller: true
+  enableStacktrace: false
+
+metrics:
+  enabled: true
+  path: "/metrics"
+  namespace: "cronium_runtime"
+
+rateLimit:
+  enabled: true
+  requestsPerMinute: 1000
+  burst: 100
+
+cors:
+  enabled: true
+  allowedOrigins:
+    - "http://localhost:5001"
+    - "http://localhost:5002"
+  allowedMethods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "OPTIONS"
+  allowedHeaders:
+    - "Authorization"
+    - "Content-Type"
+    - "X-Request-ID"
+  allowCredentials: true
+  maxAge: 3600
+
+health:
+  path: "/health"
+  checkInterval: 30s
+  timeout: 5s

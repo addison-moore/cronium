@@ -86,7 +86,7 @@ export class CredentialEncryption {
   encrypt(data: unknown): EncryptedData {
     if (!this.isAvailable()) {
       throw new Error(
-        "Encryption not initialized. Set CREDENTIAL_ENCRYPTION_KEY environment variable.",
+        "Encryption not initialized. Set ENCRYPTION_KEY environment variable.",
       );
     }
 
@@ -296,7 +296,7 @@ export class CredentialEncryption {
 export const credentialEncryption = CredentialEncryption.getInstance();
 
 // Initialize from environment variable if available
-const encryptionKey = process.env.CREDENTIAL_ENCRYPTION_KEY;
+const encryptionKey = process.env.ENCRYPTION_KEY;
 if (encryptionKey) {
   try {
     credentialEncryption.initialize(encryptionKey);

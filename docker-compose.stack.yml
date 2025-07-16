@@ -1,0 +1,170 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: cronium-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cronium}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cronium}
+      POSTGRES_DB: ${POSTGRES_DB:-cronium}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cronium}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Valkey (Redis-compatible) for caching
+  valkey:
+    image: valkey/valkey:7-alpine
+    container_name: cronium-valkey
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkey_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Runtime API Service
+  runtime-api:
+    build:
+      context: ./runtime/cronium-runtime
+      dockerfile: Dockerfile
+    container_name: cronium-runtime-api
+    environment:
+      PORT: 8081
+      BACKEND_URL: http://cronium-app:5001
+      VALKEY_URL: valkey://valkey:6379
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret}
+      CACHE_TTL: 300
+      LOG_LEVEL: info
+    ports:
+      - "8081:8081"
+    depends_on:
+      valkey:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Orchestrator Service
+  orchestrator:
+    build:
+      context: ./orchestrator/cronium-orchestrator
+      dockerfile: Dockerfile
+    container_name: cronium-orchestrator
+    environment:
+      CONFIG_FILE: /app/config/cronium-orchestrator.yaml
+      BACKEND_URL: http://cronium-app:5001
+      RUNTIME_API_URL: http://runtime-api:8081
+      DOCKER_HOST: unix:///var/run/docker.sock
+      ORCHESTRATOR_ID: ${ORCHESTRATOR_ID:-local-orchestrator}
+      API_KEY: ${INTERNAL_API_KEY:-your-internal-api-key}
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./orchestrator/cronium-orchestrator/configs:/app/config:ro
+    depends_on:
+      runtime-api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Main Cronium Application
+  cronium-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    container_name: cronium-app
+    ports:
+      - "5001:5001" # Next.js app
+    environment:
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cronium}:${POSTGRES_PASSWORD:-cronium}@postgres:5432/${POSTGRES_DB:-cronium}
+
+      # Auth
+      AUTH_URL: ${AUTH_URL:-http://localhost:5001}
+      AUTH_SECRET: ${AUTH_SECRET:-your-nextauth-secret}
+
+      # Encryption
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-your-encryption-key}
+
+      # Services
+      ORCHESTRATOR_URL: http://orchestrator:8080
+      RUNTIME_API_URL: http://runtime-api:8081
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-your-internal-api-key}
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret}
+
+      # WebSocket
+      SOCKET_PORT: 5002
+    depends_on:
+      postgres:
+        condition: service_healthy
+      orchestrator:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test:
+        ["CMD", "wget", "-q", "--spider", "http://localhost:5001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # WebSocket Server
+  websocket:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    container_name: cronium-websocket
+    command: ["node", "server.js"]
+    ports:
+      - "5002:5002"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cronium}:${POSTGRES_PASSWORD:-cronium}@postgres:5432/${POSTGRES_DB:-cronium}
+      SOCKET_PORT: 5002
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy (optional, for production)
+  nginx:
+    image: nginx:alpine
+    container_name: cronium-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - cronium-app
+      - websocket
+    restart: unless-stopped
+    profiles:
+      - production
+
+volumes:
+  postgres_data:
+  valkey_data:
+
+networks:
+  default:
+    name: cronium-network

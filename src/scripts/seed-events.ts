@@ -136,7 +136,7 @@ async function sendEmailReport() {
   // Send mail with defined transport object
   let info = await transporter.sendMail({
     from: '"System Monitor" <system@example.com>',
-    to: process.env.RECIPIENT_EMAIL || "admin@example.com",
+    to: "admin@example.com",
     subject: \`Daily System Report - \${dateStr}\`,
     text: \`
       Daily System Report - \${dateStr}
@@ -188,8 +188,8 @@ async function processAnalytics() {
   console.log('Processing user analytics data...');
   
   // Path to analytics data
-  const dataDir = process.env.DATA_DIR || './data';
-  const outputDir = process.env.OUTPUT_DIR || './reports';
+  const dataDir = './data';
+  const outputDir = './reports';
   
   // Ensure directories exist
   if (!fs.existsSync(outputDir)) {
@@ -251,10 +251,8 @@ async function sendWelcomeEmail() {
   console.log('Sending welcome email...');
   
   // Check if email address was provided
-  const recipientEmail = process.env.RECIPIENT_EMAIL;
-  if (!recipientEmail) {
-    throw new Error('Recipient email not provided. Set the RECIPIENT_EMAIL environment variable.');
-  }
+  const recipientEmail = "admin@example.com";
+
   
   // Create test SMTP service
   let testAccount = await nodemailer.createTestAccount();
@@ -433,8 +431,8 @@ def cleanup_old_data():
     print("Starting data cleanup process...")
     
     # Get data directory from environment or use default
-    data_dir = os.environ.get('DATA_DIR', './data')
-    backup_dir = os.environ.get('BACKUP_DIR', './backups')
+    data_dir = './data'
+    backup_dir = './backups'
     
     # Ensure backup directory exists
     os.makedirs(backup_dir, exist_ok=True)

@@ -18,12 +18,12 @@ export async function handleExecutionCount(eventId: number) {
     // Check if event has max executions configured (0 means unlimited)
     if (event.maxExecutions && event.maxExecutions > 0) {
       // Calculate new execution count
-      const newExecutionCount = (event.executionCount || 0) + 1;
+      const newExecutionCount = Number(event.executionCount ?? 0) + 1;
 
       // Check if we've hit the max execution limit
       if (newExecutionCount >= event.maxExecutions) {
         console.log(
-          `Event ${eventId}: ${event.name} reached maximum executions (${event.maxExecutions}). Pausing.`,
+          `Event ${String(eventId)}: ${String(event.name)} reached maximum executions (${String(event.maxExecutions)}). Pausing.`,
         );
 
         // Pause the event automatically
@@ -51,20 +51,20 @@ export async function handleExecutionCount(eventId: number) {
         // Use PAUSED status instead of SUCCESS for clarity
         await storage.createLog({
           eventId: eventId,
-          output: `Automatically paused after reaching max executions (${event.maxExecutions})`,
+          output: `Automatically paused after reaching max executions (${String(event.maxExecutions)})`,
           status: LogStatus.PAUSED,
           startTime: new Date(),
           endTime: new Date(),
           successful: false, // Not a successful execution
-          eventName: event.name,
-          scriptType: event.type,
-          userId: event.userId,
+          eventName: String(event.name ?? "Unknown"),
+          eventType: event.type,
+          userId: event.userId as number,
         });
       }
     } else {
       // Just increment the execution count without checking max
       // Get current count first to ensure accurate updates
-      const currentCount = event.executionCount || 0;
+      const currentCount = Number(event.executionCount ?? 0);
       await storage.updateScript(eventId, {
         executionCount: currentCount + 1,
       });

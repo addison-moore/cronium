@@ -198,7 +198,9 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
       scheduleNumber:
         typeof event.scheduleNumber === "number" ? event.scheduleNumber : 1,
       scheduleUnit:
-        typeof event.scheduleUnit === "string" ? event.scheduleUnit : "MINUTES",
+        typeof event.scheduleUnit === "string"
+          ? (event.scheduleUnit as TimeUnit)
+          : TimeUnit.MINUTES,
       customSchedule:
         typeof event.customSchedule === "string" ? event.customSchedule : null,
       userId: typeof event.userId === "string" ? event.userId : "",
@@ -219,7 +221,9 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
         : [],
       serverId: typeof event.serverId === "number" ? event.serverId : null,
       timeoutUnit:
-        typeof event.timeoutUnit === "string" ? event.timeoutUnit : "SECONDS",
+        typeof event.timeoutUnit === "string"
+          ? (event.timeoutUnit as TimeUnit)
+          : TimeUnit.SECONDS,
     };
 
     // Add optional properties if they exist and are valid

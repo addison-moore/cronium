@@ -25,7 +25,7 @@ export const webhookSystemRouter = createTRPCRouter({
         return {
           id: result.id,
           key: result.key,
-          url: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/webhooks/${result.key}`,
+          url: `${process.env.PUBLIC_APP_URL ?? ""}/api/webhooks/${result.key}`,
         };
       } catch {
         throw new TRPCError({
@@ -41,7 +41,7 @@ export const webhookSystemRouter = createTRPCRouter({
 
     return userWebhooks.map((webhook) => ({
       ...webhook,
-      endpoint: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/webhooks/${webhook.key}`,
+      endpoint: `${process.env.PUBLIC_APP_URL ?? ""}/api/webhooks/${webhook.key}`,
     }));
   }),
 
@@ -69,7 +69,7 @@ export const webhookSystemRouter = createTRPCRouter({
 
       return {
         ...webhook,
-        endpoint: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/webhooks/${webhook.key}`,
+        endpoint: `${process.env.PUBLIC_APP_URL ?? ""}/api/webhooks/${webhook.key}`,
       };
     }),
 

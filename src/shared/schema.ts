@@ -106,6 +106,31 @@ export enum ToolType {
   HTTP = "HTTP",
 }
 
+// Job Queue Enums
+export enum JobType {
+  SCRIPT = "SCRIPT",
+  HTTP_REQUEST = "HTTP_REQUEST",
+  TOOL_ACTION = "TOOL_ACTION",
+}
+
+export enum JobStatus {
+  QUEUED = "queued",
+  CLAIMED = "claimed",
+  RUNNING = "running",
+  COMPLETED = "completed",
+  FAILED = "failed",
+  CANCELLED = "cancelled",
+}
+
+export enum JobPriority {
+  LOW = 0,
+  NORMAL = 1,
+  HIGH = 2,
+  CRITICAL = 3,
+}
+
+export type ScriptType = EventType.NODEJS | EventType.PYTHON | EventType.BASH;
+
 export const users = pgTable("users", {
   id: varchar("id", { length: 255 }).primaryKey().notNull(),
   email: varchar("email", { length: 255 }).unique(),
@@ -238,6 +263,7 @@ export const logs = pgTable("logs", {
     .references(() => events.id)
     .notNull(),
   workflowId: integer("workflow_id").references(() => workflows.id),
+  jobId: varchar("job_id", { length: 50 }).references(() => jobs.id),
   status: varchar("status", { length: 50 })
     .$type<LogStatus>()
     .default(LogStatus.RUNNING)
@@ -249,11 +275,48 @@ export const logs = pgTable("logs", {
   endTime: timestamp("end_time"),
   duration: integer("duration"), // in milliseconds
   successful: boolean("successful").default(false),
-  eventName: varchar("script_name", { length: 255 }),
-  scriptType: varchar("script_type", { length: 50 }).$type<EventType>(),
+  eventName: varchar("event_name", { length: 255 }),
+  eventType: varchar("event_type", { length: 50 }).$type<EventType>(),
   retries: integer("retries").default(0),
   error: text("error"),
   userId: varchar("user_id", { length: 255 }),
+});
+
+// Job Queue Table
+export const jobs = pgTable("jobs", {
+  id: varchar("id", { length: 50 }).primaryKey(),
+  eventId: integer("event_id")
+    .references(() => events.id)
+    .notNull(),
+  userId: varchar("user_id", { length: 255 })
+    .references(() => users.id)
+    .notNull(),
+  type: varchar("type", { length: 50 }).$type<JobType>().notNull(),
+  status: varchar("status", { length: 50 })
+    .$type<JobStatus>()
+    .default(JobStatus.QUEUED)
+    .notNull(),
+  priority: integer("priority")
+    .$type<JobPriority>()
+    .default(JobPriority.NORMAL)
+    .notNull(),
+  payload: jsonb("payload").notNull(),
+  scheduledFor: timestamp("scheduled_for")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
+  orchestratorId: varchar("orchestrator_id", { length: 255 }),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  result: jsonb("result"),
+  attempts: integer("attempts").default(0).notNull(),
+  lastError: text("last_error"),
+  metadata: jsonb("metadata").default("{}").notNull(),
+  createdAt: timestamp("created_at")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
+  updatedAt: timestamp("updated_at")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
 });
 
 export const eventServers = pgTable("event_servers", {
@@ -624,6 +687,22 @@ export const logsRelations = relations(logs, ({ one }) => ({
     fields: [logs.workflowId],
     references: [workflows.id],
   }),
+  job: one(jobs, {
+    fields: [logs.jobId],
+    references: [jobs.id],
+  }),
+}));
+
+export const jobsRelations = relations(jobs, ({ one, many }) => ({
+  event: one(events, {
+    fields: [jobs.eventId],
+    references: [events.id],
+  }),
+  user: one(users, {
+    fields: [jobs.userId],
+    references: [users.id],
+  }),
+  logs: many(logs),
 }));
 
 export const conditionalActionsRelations = relations(
@@ -982,6 +1061,9 @@ export type InsertServer = typeof servers.$inferInsert;
 export type Log = typeof logs.$inferSelect;
 export type InsertLog = typeof logs.$inferInsert;
 
+export type Job = typeof jobs.$inferSelect;
+export type InsertJob = typeof jobs.$inferInsert;
+
 export type ConditionalAction = typeof conditionalActions.$inferSelect;
 export type InsertConditionalAction = typeof conditionalActions.$inferInsert;
 
@@ -1228,8 +1310,3 @@ export type InsertQuotaUsage = typeof quotaUsage.$inferInsert;
 
 export type ToolUsageMetric = typeof toolUsageMetrics.$inferSelect;
 export type InsertToolUsageMetric = typeof toolUsageMetrics.$inferInsert;
-
-// Remap for backwards compatibility during transition
-// We can remove these after all code is updated
-export type Script = Event;
-export type InsertScript = InsertEvent;

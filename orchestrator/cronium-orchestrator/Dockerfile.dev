@@ -1,0 +1,37 @@
+# Development Dockerfile for Cronium Orchestrator with hot reload
+FROM golang:1.23-alpine
+
+# Install dependencies
+RUN apk add --no-cache git ca-certificates tzdata wget bash
+
+# Install air for hot reload - use v1.52.0 with old package name
+RUN go install github.com/cosmtrek/air@v1.52.0
+
+# Create non-root user
+RUN addgroup -g 1000 cronium && \
+    adduser -u 1000 -G cronium -s /bin/bash -D cronium
+
+# Set working directory
+WORKDIR /app
+
+# Copy go mod files first for better caching
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Create necessary directories
+RUN mkdir -p /app/data /app/tmp && chown -R cronium:cronium /app
+
+# Don't switch to non-root user yet - let Docker handle permissions
+# USER cronium
+
+# Expose ports
+EXPOSE 8080 9090
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+
+# Default command (will be overridden by docker-compose)
+CMD ["air", "-c", ".air.toml"]

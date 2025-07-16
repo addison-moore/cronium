@@ -102,7 +102,7 @@ However, it lacks:
 1. **Containerization**
 
    ```
-   - Implement Docker/Podman for script isolation
+   - Implement Docker for script isolation
    - Use cgroups for resource limiting
    - Apply seccomp profiles for syscall filtering
    - Network isolation per execution
@@ -111,7 +111,7 @@ However, it lacks:
 2. **High Availability**
 
    ```
-   - Implement Redis/etcd for distributed state
+   - Implement Valkey for distributed state
    - Add leader election for scheduler instances
    - Enable hot standby configurations
    - Implement proper graceful shutdown
@@ -130,7 +130,7 @@ However, it lacks:
 1. **Distributed Job Queue**
 
    ```
-   - Replace in-process scheduling with Redis/RabbitMQ
+   - Replace in-process scheduling with Valkey
    - Implement job priority and fair scheduling
    - Add dead letter queues for failed jobs
    - Enable job distribution across workers
@@ -139,8 +139,6 @@ However, it lacks:
 2. **Observability**
 
    ```
-   - Implement OpenTelemetry for distributed tracing
-   - Add Prometheus metrics for monitoring
    - Structured logging with correlation IDs
    - Health check endpoints
    ```
