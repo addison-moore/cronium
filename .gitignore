@@ -14,7 +14,9 @@ pyproject.toml
 uv.lock
 attached_assets/
 .claude/
-logs
-plans/*
-.pnpm-store/*
+.pnpm-store
 .swc
+
+# Docker development data directories
+data/valkey/
+data/orchestrator/

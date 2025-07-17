@@ -38,7 +38,7 @@ export async function withCache<T>(
 
   // Cache the result if it passes the shouldCache check
   if (!config.shouldCache || config.shouldCache(result)) {
-    const ttl = config.ttl || CACHE_TTL.STATIC;
+    const ttl = config.ttl ?? CACHE_TTL.STATIC;
     await cacheService.set(cacheKey, result, { ttl });
   }
 

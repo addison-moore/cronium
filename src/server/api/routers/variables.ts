@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, publicProcedure } from "../trpc";
-import { type EventType, type EventStatus, UserRole } from "@/shared/schema";
-import type { Session } from "next-auth";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { normalizePagination } from "@/server/utils/db-patterns";
+import { type EventType, type EventStatus } from "@/shared/schema";
 import {
   variableQuerySchema,
   createUserVariableSchema,
@@ -15,74 +15,16 @@ import {
 } from "@shared/schemas/variables";
 import { storage } from "@/server/storage";
 
-// Custom procedure that handles auth for tRPC fetch adapter
-const variableProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  // Try to get session from headers/cookies
-  let session: Session | null = null;
-  let userId: string | null = null;
-
-  try {
-    // If session exists in context, use it
-    if (ctx.session?.user?.id) {
-      session = ctx.session;
-      userId = ctx.session.user.id;
-    } else {
-      // For development, get first admin user
-      if (process.env.NODE_ENV === "development") {
-        const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter(
-          (user) => user.role === UserRole.ADMIN,
-        );
-        const firstAdmin = adminUsers[0];
-        if (firstAdmin) {
-          userId = firstAdmin.id;
-          session = {
-            user: {
-              id: firstAdmin.id,
-              email: firstAdmin.email,
-              username: firstAdmin.username,
-              role: firstAdmin.role,
-              status: firstAdmin.status,
-              firstName: firstAdmin.firstName,
-              lastName: firstAdmin.lastName,
-              profileImageUrl: firstAdmin.profileImageUrl,
-            },
-            expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-          } as Session;
-        }
-      }
-    }
-
-    if (!userId) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "Authentication required",
-      });
-    }
-
-    return next({
-      ctx: {
-        ...ctx,
-        session,
-        userId,
-      },
-    });
-  } catch (error) {
-    console.error("Auth error in variableProcedure:", error);
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Authentication failed",
-    });
-  }
-});
+// Use centralized authentication from trpc.ts
 
 export const variablesRouter = createTRPCRouter({
   // Get all user variables
-  getAll: variableProcedure
+  getAll: protectedProcedure
     .input(variableQuerySchema)
     .query(async ({ ctx, input }) => {
       try {
-        const variables = await storage.getUserVariables(ctx.userId);
+        const variables = await storage.getUserVariables(ctx.session.user.id);
+        const pagination = normalizePagination(input);
 
         // Apply search filter
         let filteredVariables = variables;
@@ -133,14 +75,15 @@ export const variablesRouter = createTRPCRouter({
 
         // Apply pagination
         const paginatedVariables = filteredVariables.slice(
-          input.offset,
-          input.offset + input.limit,
+          pagination.offset,
+          pagination.offset + pagination.limit,
         );
 
         return {
           variables: paginatedVariables,
           total: filteredVariables.length,
-          hasMore: input.offset + input.limit < filteredVariables.length,
+          hasMore:
+            pagination.offset + pagination.limit < filteredVariables.length,
         };
       } catch (error) {
         throw new TRPCError({
@@ -152,11 +95,11 @@ export const variablesRouter = createTRPCRouter({
     }),
 
   // Get single variable by ID
-  getById: variableProcedure
+  getById: protectedProcedure
     .input(variableIdSchema)
     .query(async ({ ctx, input }) => {
       try {
-        const variables = await storage.getUserVariables(ctx.userId);
+        const variables = await storage.getUserVariables(ctx.session.user.id);
         const variable = variables.find((v) => v.id === input.id);
 
         if (!variable) {
@@ -178,11 +121,14 @@ export const variablesRouter = createTRPCRouter({
     }),
 
   // Get variable by key
-  getByKey: variableProcedure
+  getByKey: protectedProcedure
     .input(variableKeySchema)
     .query(async ({ ctx, input }) => {
       try {
-        const variable = await storage.getUserVariable(ctx.userId, input.key);
+        const variable = await storage.getUserVariable(
+          ctx.session.user.id,
+          input.key,
+        );
 
         if (!variable) {
           throw new TRPCError({
@@ -203,13 +149,13 @@ export const variablesRouter = createTRPCRouter({
     }),
 
   // Create new variable
-  create: variableProcedure
+  create: protectedProcedure
     .input(createUserVariableSchema)
     .mutation(async ({ ctx, input }) => {
       try {
         // Check if variable with this key already exists
         const existingVariable = await storage.getUserVariable(
-          ctx.userId,
+          ctx.session.user.id,
           input.key,
         );
         if (existingVariable) {
@@ -220,7 +166,7 @@ export const variablesRouter = createTRPCRouter({
         }
 
         const variable = await storage.createUserVariable({
-          userId: ctx.userId,
+          userId: ctx.session.user.id,
           key: input.key,
           value: input.value,
           description: input.description ?? null,
@@ -238,7 +184,7 @@ export const variablesRouter = createTRPCRouter({
     }),
 
   // Update existing variable
-  update: variableProcedure
+  update: protectedProcedure
     .input(updateUserVariableSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -249,7 +195,7 @@ export const variablesRouter = createTRPCRouter({
         );
 
         // Check if variable exists and belongs to user
-        const variables = await storage.getUserVariables(ctx.userId);
+        const variables = await storage.getUserVariables(ctx.session.user.id);
         const existingVariable = variables.find((v) => v.id === id);
 
         if (!existingVariable) {
@@ -262,7 +208,7 @@ export const variablesRouter = createTRPCRouter({
         // Check for key conflicts if key is being updated
         if (updateData.key && updateData.key !== existingVariable.key) {
           const conflictingVariable = await storage.getUserVariable(
-            ctx.userId,
+            ctx.session.user.id,
             updateData.key,
           );
           if (conflictingVariable) {
@@ -275,7 +221,7 @@ export const variablesRouter = createTRPCRouter({
 
         const updatedVariable = await storage.updateUserVariable(
           id,
-          ctx.userId,
+          ctx.session.user.id,
           updateData,
         );
         if (!updatedVariable) {
@@ -297,11 +243,14 @@ export const variablesRouter = createTRPCRouter({
     }),
 
   // Delete variable
-  delete: variableProcedure
+  delete: protectedProcedure
     .input(variableIdSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const success = await storage.deleteUserVariable(input.id, ctx.userId);
+        const success = await storage.deleteUserVariable(
+          input.id,
+          ctx.session.user.id,
+        );
         if (!success) {
           throw new TRPCError({
             code: "NOT_FOUND",
@@ -321,12 +270,12 @@ export const variablesRouter = createTRPCRouter({
     }),
 
   // Delete variable by key
-  deleteByKey: variableProcedure
+  deleteByKey: protectedProcedure
     .input(variableKeySchema)
     .mutation(async ({ ctx, input }) => {
       try {
         const success = await storage.deleteUserVariableByKey(
-          ctx.userId,
+          ctx.session.user.id,
           input.key,
         );
         if (!success) {
@@ -348,12 +297,14 @@ export const variablesRouter = createTRPCRouter({
     }),
 
   // Bulk operations on variables
-  bulkOperation: variableProcedure
+  bulkOperation: protectedProcedure
     .input(bulkVariableOperationSchema)
     .mutation(async ({ ctx, input }) => {
       try {
         const results = [];
-        const userVariables = await storage.getUserVariables(ctx.userId);
+        const userVariables = await storage.getUserVariables(
+          ctx.session.user.id,
+        );
         const userVariableIds = userVariables.map((v) => v.id);
 
         for (const variableId of input.variableIds) {
@@ -372,7 +323,7 @@ export const variablesRouter = createTRPCRouter({
               case "delete":
                 const success = await storage.deleteUserVariable(
                   variableId,
-                  ctx.userId,
+                  ctx.session.user.id,
                 );
                 if (!success) {
                   results.push({
@@ -409,11 +360,13 @@ export const variablesRouter = createTRPCRouter({
     }),
 
   // Export variables
-  export: variableProcedure
+  export: protectedProcedure
     .input(variableExportSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const userVariables = await storage.getUserVariables(ctx.userId);
+        const userVariables = await storage.getUserVariables(
+          ctx.session.user.id,
+        );
         const variablesToExport = userVariables.filter((v) =>
           input.variableIds.includes(v.id),
         );
@@ -506,7 +459,7 @@ export const variablesRouter = createTRPCRouter({
     }),
 
   // Validate variable (check key format and duplicates)
-  validate: variableProcedure
+  validate: protectedProcedure
     .input(validateVariableSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -515,7 +468,7 @@ export const variablesRouter = createTRPCRouter({
         // Check if key already exists if checkDuplicates is true
         if (input.checkDuplicates) {
           const existingVariable = await storage.getUserVariable(
-            ctx.userId,
+            ctx.session.user.id,
             input.key,
           );
           if (existingVariable) {
@@ -564,14 +517,14 @@ export const variablesRouter = createTRPCRouter({
     }),
 
   // Get variable usage in events and workflows
-  getUsage: variableProcedure
+  getUsage: protectedProcedure
     .input(variableUsageSchema)
     .query(async ({ ctx, input }) => {
       try {
         let variableKey: string;
 
         if (input.variableId) {
-          const variables = await storage.getUserVariables(ctx.userId);
+          const variables = await storage.getUserVariables(ctx.session.user.id);
           const variable = variables.find((v) => v.id === input.variableId);
           if (!variable) {
             throw new TRPCError({
@@ -602,7 +555,7 @@ export const variablesRouter = createTRPCRouter({
 
         // Search for variable usage in events
         if (input.includeEvents) {
-          const events = await storage.getAllEvents(ctx.userId);
+          const events = await storage.getAllEvents(ctx.session.user.id);
           const eventsUsingVariable = events.filter(
             (event) =>
               (event.content?.includes(
@@ -627,7 +580,7 @@ export const variablesRouter = createTRPCRouter({
 
         // Search for variable usage in workflows
         if (input.includeWorkflows) {
-          const workflows = await storage.getAllWorkflows(ctx.userId);
+          const workflows = await storage.getAllWorkflows(ctx.session.user.id);
           // Note: This is a simplified check. In a real implementation,
           // you'd need to search through workflow node configurations
           usage.workflows = workflows.map((workflow) => ({

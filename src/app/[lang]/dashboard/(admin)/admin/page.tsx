@@ -105,10 +105,10 @@ export default function AdminPage() {
     });
 
   const inviteUserMutation = trpc.admin.inviteUser.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (response) => {
       toast({
         title: "Success",
-        description: `Invitation sent to ${String(data.email ?? "user")}`,
+        description: `Invitation sent to ${String(response.data.email ?? "user")}`,
       });
       void refetchUsers();
     },
@@ -156,10 +156,10 @@ export default function AdminPage() {
   });
 
   const resendInvitationMutation = trpc.admin.resendInvitation.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (response) => {
       toast({
         title: "Success",
-        description: `Invitation sent to ${data.email ?? "user"}`,
+        description: `Invitation sent to ${(response as any).email ?? "user"}`,
       });
       void refetchUsers();
     },
@@ -355,7 +355,7 @@ export default function AdminPage() {
 
         <TabsContent value="roles">
           <RolesManagement
-            roles={roles ?? []}
+            roles={roles?.items ?? []}
             isLoading={isRolesLoading}
             onRefresh={async () => {
               await refetchRoles();

@@ -2,7 +2,7 @@ import type { Server, Socket } from "socket.io";
 import { storage } from "@/server/storage";
 import { getLogsByJobId } from "@/server/storage-extensions";
 import { jobService } from "@/lib/services/job-service";
-import type { Job, Log } from "@/shared/schema";
+import { LogStatus, type Job, type Log } from "@/shared/schema";
 
 interface LogStreamAuth {
   userId: string;
@@ -83,8 +83,9 @@ export class LogsWebSocketHandler {
                 const logs = await storage.getLogsByEventId(job.eventId, {
                   limit: 1,
                 });
-                if (logs.length > 0) {
-                  logId = (logs as { logs: Log[] }).logs[0]?.id;
+                const logList = (logs as { logs: Log[] }).logs;
+                if (logList.length > 0) {
+                  logId = logList[0]?.id;
                 }
               }
             } else if (data.logId) {
@@ -204,7 +205,7 @@ export class LogsWebSocketHandler {
       .then((logs) => {
         for (const log of logs) {
           this.broadcastLogUpdate(log.id, {
-            status: this.mapJobStatusToLogStatus(job.status),
+            status: this.mapJobStatusToLogStatus(job.status) as LogStatus,
           });
         }
       })

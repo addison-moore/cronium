@@ -14,6 +14,7 @@
     "lint": "next lint",
     "lint:fix": "next lint --fix",
     "lint:log": "pnpm lint > logs/lint.log 2>&1 ",
+    "tsc:log": "tsc --noEmit > logs/tsc.log 2>&1",
     "format": "prettier --write .",
     "db:push": "npx drizzle-kit push",
     "db:studio": "npx drizzle-kit studio",
@@ -22,9 +23,6 @@
     "clear-logs": "npx tsx scripts/clear-all-logs.ts",
     "dev:socket": "tsx --env-file=.env.local server.ts",
     "prepare": "husky",
-    "migrate:events": "tsx --env-file=.env.local src/scripts/migrations/run-migration.ts",
-    "migrate:events:test": "tsx --env-file=.env.local src/scripts/migrations/run-migration.ts --test",
-    "migrate:events:dry-run": "tsx --env-file=.env.local src/scripts/migrations/run-migration.ts --dry-run",
     "dev:docker": "./scripts/dev-docker.sh up"
   },
   "keywords": [],

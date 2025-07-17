@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure, withTiming } from "../trpc";
-import { TRPCError } from "@trpc/server";
+import { withErrorHandling } from "@/server/utils/error-utils";
+import { statsResponse, listResponse } from "@/server/utils/api-patterns";
 import { dashboardService } from "@/lib/services/dashboard-service";
 
 // Schemas
@@ -15,28 +16,37 @@ export const dashboardRouter = createTRPCRouter({
     .use(withTiming)
     .input(dashboardStatsSchema.optional())
     .query(async ({ ctx, input = {} }) => {
-      try {
-        const userId = ctx.session.user.id;
-        const days = input.days ?? 30;
-        const activityLimit = input.activityLimit ?? 50;
+      return withErrorHandling(
+        async () => {
+          const userId = ctx.session.user.id;
+          const days = input.days ?? 30;
+          const activityLimit = input.activityLimit ?? 50;
 
-        // Direct call to dashboard service without caching
-        // Use the optimized dashboard service that executes queries in parallel
-        // and eliminates N+1 query patterns
-        const stats = await dashboardService.getDashboardStats(
-          userId,
-          days,
-          activityLimit,
-        );
+          // Direct call to dashboard service without caching
+          // Use the optimized dashboard service that executes queries in parallel
+          // and eliminates N+1 query patterns
+          const stats = await dashboardService.getDashboardStats(
+            userId,
+            days,
+            activityLimit,
+          );
 
-        return stats;
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to fetch dashboard statistics",
-          cause: error instanceof Error ? error : new Error(String(error)),
-        });
-      }
+          return statsResponse(
+            {
+              start: new Date(
+                Date.now() - days * 24 * 60 * 60 * 1000,
+              ).toISOString(),
+              end: new Date().toISOString(),
+            },
+            stats as unknown as Record<string, number | string>,
+          );
+        },
+        {
+          component: "dashboardRouter",
+          operationName: "getStats",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 
   // Get recent activity - now using optimized queries
@@ -45,23 +55,30 @@ export const dashboardRouter = createTRPCRouter({
       z.object({ limit: z.number().min(1).max(50).default(10) }).optional(),
     )
     .query(async ({ ctx, input = {} }) => {
-      try {
-        const userId = ctx.session.user.id;
-        const limit = input.limit ?? 10;
+      return withErrorHandling(
+        async () => {
+          const userId = ctx.session.user.id;
+          const limit = input.limit ?? 10;
 
-        // Use the optimized dashboard service that executes queries efficiently
-        const recentActivity = await dashboardService.getRecentActivity(
-          userId,
-          limit,
-        );
+          // Use the optimized dashboard service that executes queries efficiently
+          const recentActivity = await dashboardService.getRecentActivity(
+            userId,
+            limit,
+          );
 
-        return recentActivity;
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to fetch recent activity",
-          cause: error instanceof Error ? error : new Error(String(error)),
-        });
-      }
+          return listResponse({
+            items: recentActivity,
+            total: recentActivity.length,
+            hasMore: false,
+            limit: limit,
+            offset: 0,
+          });
+        },
+        {
+          component: "dashboardRouter",
+          operationName: "getRecentActivity",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 });

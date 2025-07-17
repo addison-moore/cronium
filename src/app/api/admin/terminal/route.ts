@@ -185,7 +185,8 @@ const getAutocompleteSuggestions = async (
             console.error("Error using compgen:", error);
             throw error; // Use the fallback below
           }
-        } catch {
+        } catch (error) {
+          console.error("Failed to get available commands:", error);
           // Fallback when compgen is not available: use common commands list
           console.info(
             "Compgen not available or error occurred, using common commands list",

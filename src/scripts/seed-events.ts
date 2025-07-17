@@ -1,5 +1,5 @@
-import { db } from "../server/db";
-import { events, EventStatus, EventType, TimeUnit } from "../shared/schema";
+import { db } from "@server/db";
+import { events, EventStatus, EventType, TimeUnit } from "@shared/schema";
 
 /**
  * This script seeds the database with sample events/scripts

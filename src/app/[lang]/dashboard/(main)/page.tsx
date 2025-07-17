@@ -10,9 +10,9 @@ import { DashboardStatsSkeleton } from "@/components/dashboard/DashboardStatsSke
 import { authOptions } from "@/lib/auth";
 
 interface DashboardPageParams {
-  params: {
+  params: Promise<{
     lang: string;
-  };
+  }>;
 }
 
 // Client wrapper for DashboardStats
@@ -23,7 +23,7 @@ function DashboardStatsWrapper() {
 export default async function Dashboard({ params }: DashboardPageParams) {
   // Check authentication
   const session = await getServerSession(authOptions);
-  const { lang } = await Promise.resolve(params);
+  const { lang } = await params;
 
   if (!session) {
     redirect(`/${lang}/auth/signin`);

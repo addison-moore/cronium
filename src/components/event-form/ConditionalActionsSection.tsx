@@ -361,20 +361,20 @@ export default function ConditionalActionsSection({
   // Update system SMTP settings when data loads
   useEffect(() => {
     if (systemSettings) {
-      const smtpEnabled = systemSettings.smtpEnabled === "true";
+      const smtpEnabled = systemSettings.data.smtpEnabled === "true";
       setSystemSmtpEnabled(smtpEnabled);
     }
   }, [systemSettings]);
 
   // Update editor settings when data loads
   useEffect(() => {
-    if (editorSettingsData) {
+    if (editorSettingsData?.data) {
       setEditorSettings({
-        fontSize: editorSettingsData.fontSize ?? 14,
-        theme: editorSettingsData.theme ?? "vs-dark",
-        wordWrap: editorSettingsData.wordWrap !== false,
-        minimap: editorSettingsData.minimap !== true,
-        lineNumbers: editorSettingsData.lineNumbers !== false,
+        fontSize: editorSettingsData.data.fontSize ?? 14,
+        theme: editorSettingsData.data.theme ?? "vs-dark",
+        wordWrap: editorSettingsData.data.wordWrap !== false,
+        minimap: editorSettingsData.data.minimap !== true,
+        lineNumbers: editorSettingsData.data.lineNumbers !== false,
       });
     }
   }, [editorSettingsData]);

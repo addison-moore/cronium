@@ -41,8 +41,8 @@ export class DashboardService {
    */
   async getDashboardStats(
     userId: string,
-    days: number = 30,
-    activityLimit: number = 50,
+    days = 30,
+    activityLimit = 50,
   ): Promise<DashboardStats> {
     const daysAgo = new Date();
     daysAgo.setDate(daysAgo.getDate() - days);
@@ -200,7 +200,7 @@ export class DashboardService {
    */
   async getRecentActivity(
     userId: string,
-    limit: number = 10,
+    limit = 10,
   ): Promise<RecentActivity[]> {
     // Get recent logs with workflow information and event names in a single query
     const [recentLogs, userEvents] = await Promise.all([

@@ -70,13 +70,21 @@ export function extractJobResult(job: Job): JobResult {
       condition?: boolean;
     };
 
-    return {
+    const jobResult: JobResult = {
       success: true,
       output: result.output ?? `Job ${job.id} completed successfully`,
-      duration,
-      scriptOutput: result.scriptOutput,
-      condition: result.condition,
+      duration: duration ?? 0,
     };
+
+    if (result.scriptOutput !== undefined) {
+      jobResult.scriptOutput = result.scriptOutput;
+    }
+
+    if (result.condition !== undefined) {
+      jobResult.condition = result.condition;
+    }
+
+    return jobResult;
   }
 
   if (job.status === JobStatus.FAILED) {
@@ -86,16 +94,21 @@ export function extractJobResult(job: Job): JobResult {
         job.lastError ??
         (job.result as { error?: string } | null)?.error ??
         `Job ${job.id} failed`,
-      duration,
+      duration: duration ?? 0,
     };
   }
 
   // Job is in an unexpected state
-  return {
+  const unexpectedResult: JobResult = {
     success: false,
     output: `Job ${job.id} in unexpected state: ${job.status}`,
-    duration,
   };
+
+  if (duration !== undefined) {
+    unexpectedResult.duration = duration;
+  }
+
+  return unexpectedResult;
 }
 
 /**
@@ -126,6 +139,9 @@ export async function executeEventAndWait(
   }
 
   const jobId = jobIdMatch[1];
+  if (!jobId) {
+    throw new Error("Could not extract job ID from output");
+  }
 
   // Wait for the job to complete
   return waitForJobCompletion(jobId);

@@ -6,6 +6,7 @@ import { EventDetails } from "@/components/event-details/EventDetails";
 import { EventDetailsSkeleton } from "@/components/event-details/EventDetailsSkeleton";
 import { api } from "@/trpc/server";
 import type { Metadata } from "next";
+import type { Event } from "@/shared/schema";
 
 interface EventDetailPageProps {
   params: Promise<{
@@ -27,12 +28,12 @@ export async function generateMetadata({
   }
 
   try {
-    const event = await api.events.getById({ id: parsedId });
+    const event: Event = await api.events.getById({ id: parsedId });
     return {
       title: `${event.name} - Event Details`,
       description: event.description ?? `Details for event ${event.name}`,
     };
-  } catch (_error) {
+  } catch {
     return {
       title: "Event Not Found",
     };
@@ -70,7 +71,7 @@ export default async function EventDetailPage({
   // Verify event exists (optional - for better error handling)
   try {
     await api.events.getById({ id: parsedId });
-  } catch (_error) {
+  } catch {
     notFound();
   }
 

@@ -1,6 +1,6 @@
-import { db, pool } from "../server/db";
-import { env } from "../env.mjs";
-import { users, systemSettings, UserRole, UserStatus } from "../shared/schema";
+import { db, pool } from "@server/db";
+import { env } from "@/env.mjs";
+import { users, systemSettings, UserRole, UserStatus } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { hash } from "bcrypt";
 import { nanoid } from "nanoid";

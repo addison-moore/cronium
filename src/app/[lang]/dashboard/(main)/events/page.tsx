@@ -9,14 +9,13 @@ import { EventsPageActions } from "@/components/event-list/EventsPageActions";
 import { EventsTableSkeleton } from "@/components/ui/table-skeleton";
 import { authOptions } from "@/lib/auth";
 import { api } from "@/trpc/server";
-import type { EventType } from "@/shared/schema";
 import type { Event, WorkflowData } from "@/components/event-list";
 import type { Metadata } from "next";
 
 interface EventsPageParams {
-  params: {
+  params: Promise<{
     lang: string;
-  };
+  }>;
 }
 
 export async function generateMetadata({
@@ -46,9 +45,10 @@ async function EventsList({ lang: _lang }: { lang: string }) {
     if (rawEvent.tags) {
       try {
         tags = Array.isArray(rawEvent.tags)
-          ? rawEvent.tags
-          : JSON.parse(rawEvent.tags as string);
-      } catch {
+          ? (rawEvent.tags as string[])
+          : (JSON.parse(rawEvent.tags as string) as string[]);
+      } catch (error) {
+        console.error("Failed to parse event tags:", error);
         tags = [];
       }
     }
@@ -58,19 +58,23 @@ async function EventsList({ lang: _lang }: { lang: string }) {
     if (rawEvent.httpHeaders) {
       try {
         httpHeaders = Array.isArray(rawEvent.httpHeaders)
-          ? rawEvent.httpHeaders
-          : JSON.parse(rawEvent.httpHeaders as string);
-      } catch {
+          ? (rawEvent.httpHeaders as Array<{ key: string; value: string }>)
+          : (JSON.parse(rawEvent.httpHeaders as string) as Array<{
+              key: string;
+              value: string;
+            }>);
+      } catch (error) {
+        console.error("Failed to parse httpHeaders:", error);
         httpHeaders = undefined;
       }
     }
 
-    // Create a properly typed Event object
-    const event: Event = {
+    // Create a base event object
+    const baseEvent = {
       id: rawEvent.id,
       name: rawEvent.name,
       description: rawEvent.description,
-      type: rawEvent.type as EventType,
+      type: rawEvent.type,
       status: rawEvent.status,
       content: rawEvent.content,
       scheduleNumber: rawEvent.scheduleNumber,
@@ -83,16 +87,23 @@ async function EventsList({ lang: _lang }: { lang: string }) {
       nextRunAt: rawEvent.nextRunAt ? rawEvent.nextRunAt.toISOString() : null,
       successCount: rawEvent.successCount,
       failureCount: rawEvent.failureCount,
-      // Server related fields
-      runLocation: rawEvent.runLocation ?? undefined,
       serverId: rawEvent.serverId ?? null,
-      eventServers: (rawEvent as any).eventServers ?? undefined,
-      // Additional fields
       timeoutValue: rawEvent.timeoutValue,
       timeoutUnit: rawEvent.timeoutUnit,
       retries: rawEvent.retries,
       shared: rawEvent.shared,
     };
+
+    // Add eventServers only if it exists
+    const eventServers =
+      "eventServers" in rawEvent &&
+      (rawEvent as { eventServers?: number[] }).eventServers
+        ? (rawEvent as { eventServers?: number[] }).eventServers
+        : undefined;
+
+    const event: Event = eventServers
+      ? { ...baseEvent, eventServers, runLocation: rawEvent.runLocation }
+      : { ...baseEvent, runLocation: rawEvent.runLocation };
 
     // Add optional properties only if they have values
     if (tags !== undefined) {
@@ -125,6 +136,7 @@ async function EventsList({ lang: _lang }: { lang: string }) {
     const workflowData: WorkflowData = {
       id: workflow.id,
       name: workflow.name,
+      eventIds: [],
     };
     if (workflow.description !== null) {
       workflowData.description = workflow.description;
@@ -144,7 +156,7 @@ async function EventsList({ lang: _lang }: { lang: string }) {
 export default async function EventsPage({ params }: EventsPageParams) {
   // Check authentication
   const session = await getServerSession(authOptions);
-  const { lang } = await Promise.resolve(params);
+  const { lang } = await params;
 
   if (!session) {
     redirect(`/${lang}/auth/signin`);

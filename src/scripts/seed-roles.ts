@@ -1,5 +1,5 @@
-import { db } from "../server/db";
-import { roles, users } from "../shared/schema";
+import { db } from "@server/db";
+import { roles, users } from "@shared/schema";
 import { eq, isNull } from "drizzle-orm";
 
 async function seedRoles() {

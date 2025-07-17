@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { normalizePagination } from "@/server/utils/db-patterns";
 import {
   toolQuerySchema,
   createToolSchema,
@@ -18,8 +19,7 @@ import {
   webhookCredentialsSchema,
   httpCredentialsSchema,
 } from "@shared/schemas/tools";
-import { storage } from "@/server/storage";
-import { UserRole, toolCredentials, EventType } from "@/shared/schema";
+import { toolCredentials, EventType } from "@/shared/schema";
 import { ToolType } from "@shared/schema";
 import { db } from "@/server/db";
 import { eq, and, desc } from "drizzle-orm";
@@ -29,50 +29,7 @@ import {
 } from "@/lib/security/credential-encryption";
 import { auditLog } from "@/lib/security/audit-logger";
 
-// Custom procedure that handles auth for tRPC fetch adapter
-const toolProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  let session = null;
-  let userId = null;
-
-  try {
-    if (ctx.session?.user?.id) {
-      session = ctx.session;
-      userId = ctx.session.user.id;
-    } else {
-      if (process.env.NODE_ENV === "development") {
-        const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter(
-          (user) => user.role === UserRole.ADMIN,
-        );
-        if (adminUsers.length > 0) {
-          userId = adminUsers[0]!.id;
-          session = { user: { id: adminUsers[0]!.id } };
-        }
-      }
-    }
-
-    if (!userId) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "Authentication required",
-      });
-    }
-
-    return next({
-      ctx: {
-        ...ctx,
-        session,
-        userId,
-      },
-    });
-  } catch (error) {
-    console.error("Auth error in toolProcedure:", error);
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Authentication failed",
-    });
-  }
-});
+// Use centralized authentication from trpc.ts
 
 // Type for tool with parsed credentials
 type ToolWithParsedCredentials = Omit<
@@ -116,7 +73,8 @@ async function getUserTools(
         // First, check if it's a JSON string (unencrypted)
         try {
           credentials = JSON.parse(rawCredentials) as Record<string, unknown>;
-        } catch {
+        } catch (error) {
+          console.error("Failed to parse tool credentials as JSON:", error);
           // Not valid JSON, might be encrypted
           if (tool.encrypted && credentialEncryption.isAvailable()) {
             try {
@@ -191,7 +149,8 @@ async function getUserTools(
               },
             } as unknown as typeof parsedEncryptionMetadata;
           }
-        } catch {
+        } catch (error) {
+          console.error("Failed to parse keyDerivation as JSON:", error);
           // Keep as string if not valid JSON
         }
       }
@@ -320,11 +279,11 @@ async function checkToolActionUsage(toolId: number): Promise<{
 
 export const toolsRouter = createTRPCRouter({
   // List tools with optional filtering (simpler version for CredentialHealthIndicator)
-  list: toolProcedure
+  list: protectedProcedure
     .input(z.object({ id: z.number().optional() }).optional())
     .query(async ({ ctx, input }) => {
       try {
-        const tools = await getUserTools(ctx.userId);
+        const tools = await getUserTools(ctx.session.user.id);
 
         if (input?.id) {
           return tools.filter((tool) => tool.id === input.id);
@@ -341,11 +300,11 @@ export const toolsRouter = createTRPCRouter({
     }),
 
   // Test tool connection with health checks
-  testConnection: toolProcedure
+  testConnection: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       try {
-        const tools = await getUserTools(ctx.userId);
+        const tools = await getUserTools(ctx.session.user.id);
         const tool = tools.find((t) => t.id === input.id);
 
         if (!tool) {
@@ -445,107 +404,114 @@ export const toolsRouter = createTRPCRouter({
     }),
 
   // Get all user tools
-  getAll: toolProcedure.input(toolQuerySchema).query(async ({ ctx, input }) => {
-    try {
-      const tools = await getUserTools(ctx.userId);
+  getAll: protectedProcedure
+    .input(toolQuerySchema)
+    .query(async ({ ctx, input }) => {
+      try {
+        const tools = await getUserTools(ctx.session.user.id);
+        const pagination = normalizePagination(input);
 
-      // Apply filters
-      let filteredTools = tools;
+        // Apply filters
+        let filteredTools = tools;
 
-      if (input.type) {
-        filteredTools = filteredTools.filter(
-          (tool) => tool.type === input.type,
-        );
-      }
-
-      if (input.search) {
-        const searchLower = input.search.toLowerCase();
-        filteredTools = filteredTools.filter(
-          (tool) =>
-            tool.name.toLowerCase().includes(searchLower) ||
-            (tool.description?.toLowerCase().includes(searchLower) ??
-              tool.tags.some((tag) => tag.toLowerCase().includes(searchLower))),
-        );
-      }
-
-      // Apply sorting
-      filteredTools.sort((a, b) => {
-        let aValue: string | Date, bValue: string | Date;
-
-        switch (input.sortBy) {
-          case "name":
-            aValue = a.name;
-            bValue = b.name;
-            break;
-          case "type":
-            aValue = a.type;
-            bValue = b.type;
-            break;
-          case "createdAt":
-            aValue = a.createdAt;
-            bValue = b.createdAt;
-            break;
-          case "updatedAt":
-            aValue = a.updatedAt;
-            bValue = b.updatedAt;
-            break;
-          default:
-            aValue = a.name;
-            bValue = b.name;
+        if (input.type) {
+          filteredTools = filteredTools.filter(
+            (tool) => tool.type === input.type,
+          );
         }
 
-        if (input.sortOrder === "desc") {
-          return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
-        } else {
-          return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+        if (input.search) {
+          const searchLower = input.search.toLowerCase();
+          filteredTools = filteredTools.filter(
+            (tool) =>
+              tool.name.toLowerCase().includes(searchLower) ||
+              (tool.description?.toLowerCase().includes(searchLower) ??
+                tool.tags.some((tag) =>
+                  tag.toLowerCase().includes(searchLower),
+                )),
+          );
         }
-      });
 
-      // Apply pagination
-      const paginatedTools = filteredTools.slice(
-        input.offset,
-        input.offset + input.limit,
-      );
+        // Apply sorting
+        filteredTools.sort((a, b) => {
+          let aValue: string | Date, bValue: string | Date;
 
-      // Return tools without sanitization for the owner
-      // The frontend components handle hiding sensitive data
-      return {
-        tools: paginatedTools,
-        total: filteredTools.length,
-        hasMore: input.offset + input.limit < filteredTools.length,
-      };
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to fetch tools",
-        cause: error,
-      });
-    }
-  }),
+          switch (input.sortBy) {
+            case "name":
+              aValue = a.name;
+              bValue = b.name;
+              break;
+            case "type":
+              aValue = a.type;
+              bValue = b.type;
+              break;
+            case "createdAt":
+              aValue = a.createdAt;
+              bValue = b.createdAt;
+              break;
+            case "updatedAt":
+              aValue = a.updatedAt;
+              bValue = b.updatedAt;
+              break;
+            default:
+              aValue = a.name;
+              bValue = b.name;
+          }
+
+          if (input.sortOrder === "desc") {
+            return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+          } else {
+            return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+          }
+        });
+
+        // Apply pagination
+        const paginatedTools = filteredTools.slice(
+          pagination.offset,
+          pagination.offset + pagination.limit,
+        );
+
+        // Return tools without sanitization for the owner
+        // The frontend components handle hiding sensitive data
+        return {
+          tools: paginatedTools,
+          total: filteredTools.length,
+          hasMore: pagination.offset + pagination.limit < filteredTools.length,
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch tools",
+          cause: error,
+        });
+      }
+    }),
 
   // Get single tool by ID
-  getById: toolProcedure.input(toolIdSchema).query(async ({ ctx, input }) => {
-    try {
-      const tools = await getUserTools(ctx.userId);
-      const tool = tools.find((t) => t.id === input.id);
+  getById: protectedProcedure
+    .input(toolIdSchema)
+    .query(async ({ ctx, input }) => {
+      try {
+        const tools = await getUserTools(ctx.session.user.id);
+        const tool = tools.find((t) => t.id === input.id);
 
-      if (!tool) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Tool not found" });
+        if (!tool) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Tool not found" });
+        }
+
+        return tool;
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch tool",
+          cause: error,
+        });
       }
-
-      return tool;
-    } catch (error) {
-      if (error instanceof TRPCError) throw error;
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to fetch tool",
-        cause: error,
-      });
-    }
-  }),
+    }),
 
   // Create new tool
-  create: toolProcedure
+  create: protectedProcedure
     .input(createToolSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -562,7 +528,7 @@ export const toolsRouter = createTRPCRouter({
         }
 
         // Check if tool with this name already exists
-        const existingTools = await getUserTools(ctx.userId);
+        const existingTools = await getUserTools(ctx.session.user.id);
         if (existingTools.some((tool) => tool.name === input.name)) {
           throw new TRPCError({
             code: "CONFLICT",
@@ -602,7 +568,7 @@ export const toolsRouter = createTRPCRouter({
         };
 
         const values: ToolInsertValues = {
-          userId: ctx.userId,
+          userId: ctx.session.user.id,
           name: input.name,
           type: input.type,
           credentials: credentialsData,
@@ -643,7 +609,7 @@ export const toolsRouter = createTRPCRouter({
         // Audit log
         await auditLog.credentialCreated(
           {
-            userId: ctx.userId,
+            userId: ctx.session.user.id,
             toolId: newTool.id,
             ipAddress:
               ctx.headers?.get?.("x-forwarded-for") ??
@@ -673,13 +639,13 @@ export const toolsRouter = createTRPCRouter({
     }),
 
   // Update existing tool
-  update: toolProcedure
+  update: protectedProcedure
     .input(updateToolSchema)
     .mutation(async ({ ctx, input }) => {
       try {
         const { id, ...updateData } = input;
 
-        const tools = await getUserTools(ctx.userId);
+        const tools = await getUserTools(ctx.session.user.id);
         const existingTool = tools.find((t) => t.id === id);
 
         if (!existingTool) {
@@ -766,7 +732,7 @@ export const toolsRouter = createTRPCRouter({
           .where(
             and(
               eq(toolCredentials.id, id),
-              eq(toolCredentials.userId, ctx.userId),
+              eq(toolCredentials.userId, ctx.session.user.id),
             ),
           )
           .returning();
@@ -789,7 +755,7 @@ export const toolsRouter = createTRPCRouter({
 
         await auditLog.credentialUpdated(
           {
-            userId: ctx.userId,
+            userId: ctx.session.user.id,
             toolId: id,
             ipAddress:
               ctx.headers?.get?.("x-forwarded-for") ??
@@ -841,116 +807,120 @@ export const toolsRouter = createTRPCRouter({
     }),
 
   // Delete tool
-  delete: toolProcedure.input(toolIdSchema).mutation(async ({ ctx, input }) => {
-    try {
-      const tools = await getUserTools(ctx.userId);
-      const tool = tools.find((t) => t.id === input.id);
+  delete: protectedProcedure
+    .input(toolIdSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const tools = await getUserTools(ctx.session.user.id);
+        const tool = tools.find((t) => t.id === input.id);
 
-      if (!tool) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Tool not found" });
-      }
+        if (!tool) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Tool not found" });
+        }
 
-      // Delete tool from database
-      await db
-        .delete(toolCredentials)
-        .where(
-          and(
-            eq(toolCredentials.id, input.id),
-            eq(toolCredentials.userId, ctx.userId),
-          ),
+        // Delete tool from database
+        await db
+          .delete(toolCredentials)
+          .where(
+            and(
+              eq(toolCredentials.id, input.id),
+              eq(toolCredentials.userId, ctx.session.user.id),
+            ),
+          );
+
+        // Audit log
+        await auditLog.credentialDeleted(
+          {
+            userId: ctx.session.user.id,
+            toolId: input.id,
+            ipAddress:
+              ctx.headers?.get?.("x-forwarded-for") ??
+              ctx.headers?.get?.("x-real-ip") ??
+              "unknown",
+            userAgent: ctx.headers?.get?.("user-agent") ?? "unknown",
+          },
+          tool.type,
         );
 
-      // Audit log
-      await auditLog.credentialDeleted(
-        {
-          userId: ctx.userId,
-          toolId: input.id,
-          ipAddress:
-            ctx.headers?.get?.("x-forwarded-for") ??
-            ctx.headers?.get?.("x-real-ip") ??
-            "unknown",
-          userAgent: ctx.headers?.get?.("user-agent") ?? "unknown",
-        },
-        tool.type,
-      );
-
-      return { success: true };
-    } catch (error) {
-      if (error instanceof TRPCError) throw error;
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to delete tool",
-        cause: error,
-      });
-    }
-  }),
+        return { success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to delete tool",
+          cause: error,
+        });
+      }
+    }),
 
   // Test tool connection
-  test: toolProcedure.input(testToolSchema).mutation(async ({ ctx, input }) => {
-    try {
-      const tools = await getUserTools(ctx.userId);
-      const tool = tools.find((t) => t.id === input.id);
+  test: protectedProcedure
+    .input(testToolSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const tools = await getUserTools(ctx.session.user.id);
+        const tool = tools.find((t) => t.id === input.id);
 
-      if (!tool) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Tool not found" });
+        if (!tool) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Tool not found" });
+        }
+
+        // Mock testing tool connection
+        const testResults = {
+          success: true,
+          message: `${tool.type} connection test successful`,
+          details: {
+            toolType: tool.type,
+            toolName: tool.name,
+            testDuration: Math.floor(Math.random() * 1000) + 100, // 100-1100ms
+            timestamp: new Date().toISOString(),
+          } as {
+            toolType: ToolType;
+            toolName: string;
+            testDuration: number;
+            timestamp: string;
+            [key: string]: unknown; // Allow additional properties
+          },
+        };
+
+        // Add type-specific test details
+        switch (tool.type) {
+          case ToolType.SLACK:
+            testResults.details = {
+              ...testResults.details,
+              webhookUrl: tool.credentials.webhookUrl ? "Valid" : "Invalid",
+              channel: tool.credentials.channel ?? "Default",
+            };
+            break;
+          case ToolType.EMAIL:
+            testResults.details = {
+              ...testResults.details,
+              smtpHost: tool.credentials.smtpHost,
+              smtpPort: tool.credentials.smtpPort,
+              authenticationTest: "Passed",
+            };
+            break;
+          case ToolType.DISCORD:
+            testResults.details = {
+              ...testResults.details,
+              webhookUrl: tool.credentials.webhookUrl ? "Valid" : "Invalid",
+            };
+            break;
+        }
+
+        return testResults;
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to test tool",
+          cause: error,
+        });
       }
-
-      // Mock testing tool connection
-      const testResults = {
-        success: true,
-        message: `${tool.type} connection test successful`,
-        details: {
-          toolType: tool.type,
-          toolName: tool.name,
-          testDuration: Math.floor(Math.random() * 1000) + 100, // 100-1100ms
-          timestamp: new Date().toISOString(),
-        } as {
-          toolType: ToolType;
-          toolName: string;
-          testDuration: number;
-          timestamp: string;
-          [key: string]: unknown; // Allow additional properties
-        },
-      };
-
-      // Add type-specific test details
-      switch (tool.type) {
-        case ToolType.SLACK:
-          testResults.details = {
-            ...testResults.details,
-            webhookUrl: tool.credentials.webhookUrl ? "Valid" : "Invalid",
-            channel: tool.credentials.channel ?? "Default",
-          };
-          break;
-        case ToolType.EMAIL:
-          testResults.details = {
-            ...testResults.details,
-            smtpHost: tool.credentials.smtpHost,
-            smtpPort: tool.credentials.smtpPort,
-            authenticationTest: "Passed",
-          };
-          break;
-        case ToolType.DISCORD:
-          testResults.details = {
-            ...testResults.details,
-            webhookUrl: tool.credentials.webhookUrl ? "Valid" : "Invalid",
-          };
-          break;
-      }
-
-      return testResults;
-    } catch (error) {
-      if (error instanceof TRPCError) throw error;
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to test tool",
-        cause: error,
-      });
-    }
-  }),
+    }),
 
   // Validate tool credentials
-  validateCredentials: toolProcedure
+  validateCredentials: protectedProcedure
     .input(validateToolCredentialsSchema)
     .mutation(async ({ input }) => {
       try {
@@ -983,11 +953,11 @@ export const toolsRouter = createTRPCRouter({
     }),
 
   // Get tool usage in events and workflows
-  getUsage: toolProcedure
+  getUsage: protectedProcedure
     .input(toolUsageSchema)
     .query(async ({ ctx, input }) => {
       try {
-        const tools = await getUserTools(ctx.userId);
+        const tools = await getUserTools(ctx.session.user.id);
         const tool = tools.find((t) => t.id === input.toolId);
 
         if (!tool) {
@@ -1032,12 +1002,12 @@ export const toolsRouter = createTRPCRouter({
     }),
 
   // Bulk operations on tools
-  bulkOperation: toolProcedure
+  bulkOperation: protectedProcedure
     .input(bulkToolOperationSchema)
     .mutation(async ({ ctx, input }) => {
       try {
         const results = [];
-        const tools = await getUserTools(ctx.userId);
+        const tools = await getUserTools(ctx.session.user.id);
 
         for (const toolId of input.toolIds) {
           try {
@@ -1091,11 +1061,11 @@ export const toolsRouter = createTRPCRouter({
     }),
 
   // Export tools
-  export: toolProcedure
+  export: protectedProcedure
     .input(toolExportSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const tools = await getUserTools(ctx.userId);
+        const tools = await getUserTools(ctx.session.user.id);
         const toolsToExport = tools.filter((t) => input.toolIds.includes(t.id));
 
         if (toolsToExport.length === 0) {
@@ -1152,11 +1122,11 @@ export const toolsRouter = createTRPCRouter({
     }),
 
   // Get tool statistics
-  getStats: toolProcedure
+  getStats: protectedProcedure
     .input(toolStatsSchema)
     .query(async ({ ctx, input }) => {
       try {
-        const tools = await getUserTools(ctx.userId);
+        const tools = await getUserTools(ctx.session.user.id);
         let targetTools = tools;
 
         if (input.toolId) {
@@ -1259,7 +1229,7 @@ export const toolsRouter = createTRPCRouter({
     }),
 
   // Get available actions for a tool type
-  getAvailableActions: toolProcedure
+  getAvailableActions: protectedProcedure
     .input(z.object({ toolType: z.string().optional() }))
     .query(async ({ input }) => {
       try {
@@ -1293,7 +1263,7 @@ export const toolsRouter = createTRPCRouter({
     }),
 
   // Get tool action health status
-  getToolActionHealth: toolProcedure
+  getToolActionHealth: protectedProcedure
     .input(
       z
         .object({
@@ -1374,7 +1344,7 @@ export const toolsRouter = createTRPCRouter({
     }),
 
   // Validate action parameters
-  validateActionParams: toolProcedure
+  validateActionParams: protectedProcedure
     .input(
       z.object({
         actionId: z.string(),
@@ -1425,7 +1395,7 @@ export const toolsRouter = createTRPCRouter({
     }),
 
   // Execute tool action
-  executeAction: toolProcedure
+  executeAction: protectedProcedure
     .input(
       z.object({
         toolId: z.number(),
@@ -1437,7 +1407,7 @@ export const toolsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       try {
         // Get tool credentials
-        const tools = await getUserTools(ctx.userId);
+        const tools = await getUserTools(ctx.session.user.id);
         const tool = tools.find((t) => t.id === input.toolId);
 
         if (!tool) {
@@ -1527,7 +1497,7 @@ export const toolsRouter = createTRPCRouter({
     }),
 
   // Check OAuth status for a tool
-  checkOAuthStatus: toolProcedure
+  checkOAuthStatus: protectedProcedure
     .input(
       z.object({
         toolId: z.number(),
@@ -1596,7 +1566,7 @@ export const toolsRouter = createTRPCRouter({
 
         const tokenManager = new TokenManager(provider);
         const hasTokens = await tokenManager.hasValidTokens(
-          ctx.userId,
+          ctx.session.user.id,
           input.toolId,
         );
 
@@ -1616,7 +1586,7 @@ export const toolsRouter = createTRPCRouter({
     }),
 
   // Revoke OAuth tokens
-  revokeOAuthTokens: toolProcedure
+  revokeOAuthTokens: protectedProcedure
     .input(
       z.object({
         toolId: z.number(),
@@ -1683,7 +1653,7 @@ export const toolsRouter = createTRPCRouter({
         }
 
         const tokenManager = new TokenManager(provider);
-        await tokenManager.deleteTokens(ctx.userId, input.toolId);
+        await tokenManager.deleteTokens(ctx.session.user.id, input.toolId);
 
         return { success: true };
       } catch (error) {

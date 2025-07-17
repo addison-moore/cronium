@@ -136,7 +136,8 @@ export function isValidUrl(url: string): boolean {
   try {
     new URL(url);
     return true;
-  } catch {
+  } catch (error) {
+    console.error("Invalid URL format:", error);
     return false;
   }
 }

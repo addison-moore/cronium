@@ -45,7 +45,7 @@ export class CacheService {
   private async _connect(): Promise<void> {
     try {
       // Use VALKEY_URL if available, otherwise fallback to REDIS_URL
-      const redisUrl = env.VALKEY_URL || env.REDIS_URL;
+      const redisUrl = env.VALKEY_URL ?? env.REDIS_URL;
 
       if (!redisUrl) {
         console.warn("No VALKEY_URL or REDIS_URL configured, caching disabled");
@@ -108,7 +108,7 @@ export class CacheService {
       }
 
       // Use superjson for proper serialization/deserialization
-      return superjson.parse(value) as T;
+      return superjson.parse(value);
     } catch (error) {
       console.error(`Cache get error for key ${key}:`, error);
       // Return null on any error to prevent app crashes
@@ -130,7 +130,7 @@ export class CacheService {
       }
 
       const serialized = superjson.stringify(value);
-      const ttl = options.ttl || CACHE_TTL.STATIC;
+      const ttl = options.ttl ?? CACHE_TTL.STATIC;
 
       if (ttl > 0) {
         await this.client.setex(key, ttl, serialized);
@@ -262,8 +262,8 @@ export class CacheService {
         {} as Record<string, string>,
       );
 
-      const hits = parseInt(stats.keyspace_hits || "0", 10);
-      const misses = parseInt(stats.keyspace_misses || "0", 10);
+      const hits = parseInt(stats.keyspace_hits ?? "0", 10);
+      const misses = parseInt(stats.keyspace_misses ?? "0", 10);
       const total = hits + misses;
       const hitRate = total > 0 ? hits / total : 0;
 

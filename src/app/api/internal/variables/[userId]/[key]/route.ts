@@ -38,6 +38,12 @@ export async function GET(
     }
 
     const varData = variable[0];
+    if (!varData) {
+      return NextResponse.json(
+        { error: "Variable not found" },
+        { status: 404 },
+      );
+    }
 
     return NextResponse.json({
       key: varData.key,
@@ -67,7 +73,7 @@ export async function PUT(
     }
 
     const { userId, key } = await params;
-    const body = (await request.json()) as { value: unknown };
+    const body = (await request.json()) as { value: string };
 
     // Insert or update variable
     await db

@@ -116,9 +116,10 @@ export function WebhookForm({
 
   const generateKeyMutation = trpc.webhooks.generateUrl.useMutation({
     onSuccess: (result) => {
-      setGeneratedKey(result.key);
-      form.setValue("key", result.key);
-      setPreviewUrl(result.url);
+      const data = result.data as { key: string; url: string };
+      setGeneratedKey(data.key);
+      form.setValue("key", data.key);
+      setPreviewUrl(data.url);
       toast({
         title: "Key Generated",
         description: "A new webhook key has been generated",

@@ -42,6 +42,12 @@ export async function GET(
     }
 
     const jobData = job[0];
+    if (!jobData) {
+      return NextResponse.json(
+        { error: "Job data not found" },
+        { status: 404 },
+      );
+    }
 
     // Get event details if available
     let eventData = null;
@@ -75,14 +81,21 @@ export async function GET(
         .select({
           id: users.id,
           email: users.email,
-          name: users.name,
+          firstName: users.firstName,
+          lastName: users.lastName,
         })
         .from(users)
         .where(eq(users.id, jobData.userId))
         .limit(1);
 
       if (user && user.length > 0) {
-        userData = user[0];
+        userData = {
+          id: user[0]?.id ?? "",
+          email: user[0]?.email ?? null,
+          name:
+            `${user[0]?.firstName ?? ""} ${user[0]?.lastName ?? ""}`.trim() ||
+            null,
+        };
       }
     }
 

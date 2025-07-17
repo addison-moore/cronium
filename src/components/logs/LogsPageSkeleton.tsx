@@ -1,6 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Tabs, TabsList, Tab, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
 
 export function LogsPageSkeleton() {
@@ -15,8 +15,8 @@ export function LogsPageSkeleton() {
 
         <Tabs defaultValue="events" className="space-y-4">
           <TabsList>
-            <Tab value="events">Events</Tab>
-            <Tab value="workflows">Workflows</Tab>
+            <TabsTrigger value="events">Events</TabsTrigger>
+            <TabsTrigger value="workflows">Workflows</TabsTrigger>
           </TabsList>
 
           <TabsContent value="events" className="space-y-4">

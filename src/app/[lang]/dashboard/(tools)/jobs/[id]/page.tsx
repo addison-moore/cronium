@@ -1,29 +1,32 @@
 import { api } from "@/trpc/server";
 import { notFound } from "next/navigation";
-import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { JobStatusCard } from "@/components/jobs/JobStatusCard";
 import { JobExecutionLogs } from "@/components/jobs/JobExecutionLogs";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface JobDetailsPageProps {
-  params: {
+  params: Promise<{
     id: string;
     lang: string;
-  };
+  }>;
 }
 
 export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
-  const job = await api.jobs.get({ jobId: params.id }).catch(() => null);
+  const { id } = await params;
+  const response = await api.jobs.get({ jobId: id }).catch(() => null);
 
-  if (!job) {
+  if (!response?.data) {
     notFound();
   }
+
+  const job = response.data;
 
   return (
     <div className="flex-1 space-y-4 p-4 pt-6 md:p-8">
       <DashboardHeader
-        heading={`Job ${params.id}`}
+        heading={`Job ${id}`}
         text="View job execution details and logs"
       />
 
@@ -37,7 +40,7 @@ export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
 
             <TabsContent value="logs" className="space-y-4">
               <Card>
-                <JobExecutionLogs jobId={params.id} />
+                <JobExecutionLogs jobId={id} />
               </Card>
             </TabsContent>
 
@@ -49,14 +52,18 @@ export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
                 </pre>
               </Card>
 
-              {job.result && (
+              {job.metadata &&
+              typeof job.metadata === "object" &&
+              job.metadata !== null &&
+              Object.keys(job.metadata as Record<string, unknown>).length >
+                0 ? (
                 <Card className="p-6">
-                  <h3 className="mb-4 text-lg font-medium">Execution Result</h3>
+                  <h3 className="mb-4 text-lg font-medium">Job Metadata</h3>
                   <pre className="bg-muted overflow-auto rounded-md p-4">
-                    {JSON.stringify(job.result, null, 2)}
+                    {JSON.stringify(job.metadata, null, 2)}
                   </pre>
                 </Card>
-              )}
+              ) : null}
             </TabsContent>
           </Tabs>
         </div>

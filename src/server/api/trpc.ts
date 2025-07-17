@@ -136,23 +136,6 @@ const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
 });
 
 /**
- * Protected procedure (require user to be logged in)
- */
-export const protectedProcedure = t.procedure.use(enforceUserIsAuthed);
-
-/**
- * Admin procedure (require user to be logged in and have admin role)
- */
-export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.session.user.role !== UserRole.ADMIN) {
-    throw new TRPCError({ code: "FORBIDDEN" });
-  }
-  return next({
-    ctx,
-  });
-});
-
-/**
  * Create a server-side caller.
  *
  * @see https://trpc.io/docs/server/server-side-calls
@@ -238,3 +221,81 @@ export const withRateLimit = createRateLimitMiddleware;
 
 // withCache middleware has been removed as part of caching simplification
 // All CRUD operations now return fresh data directly from the database
+
+/**
+ * Development-only middleware that auto-authenticates as first admin user
+ * This should ONLY be used in development environments
+ */
+const devAutoAuth = t.middleware(async ({ ctx, next }) => {
+  // Only apply in development when there's no session
+  if (process.env.NODE_ENV === "development" && !ctx.session?.user) {
+    try {
+      // Import storage dynamically to avoid circular dependencies
+      const { storage } = await import("../storage");
+
+      // Get all users and find the first admin
+      const allUsers = await storage.getAllUsers();
+      const adminUser = allUsers.find((u) => u.role === UserRole.ADMIN);
+
+      if (adminUser) {
+        console.log(
+          `[DEV] Auto-authenticating as admin user: ${String(adminUser.email ?? "")}`,
+        );
+        return next({
+          ctx: {
+            ...ctx,
+            session: {
+              user: {
+                id: adminUser.id,
+                email: adminUser.email!,
+                name:
+                  adminUser.firstName || adminUser.lastName
+                    ? `${adminUser.firstName ?? ""} ${adminUser.lastName ?? ""}`.trim()
+                    : (adminUser.email ?? "User"),
+                role: adminUser.role,
+                image: null,
+              },
+              expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            },
+          },
+        });
+      }
+    } catch (error) {
+      console.error("[DEV] Failed to auto-authenticate:", error);
+    }
+  }
+
+  return next();
+});
+
+/**
+ * Protected procedure (require user to be logged in)
+ */
+export const protectedProcedure =
+  process.env.NODE_ENV !== "development"
+    ? t.procedure.use(enforceUserIsAuthed)
+    : t.procedure.use(devAutoAuth).use(enforceUserIsAuthed);
+
+/**
+ * Admin procedure (require user to be logged in and have admin role)
+ */
+export const adminProcedure =
+  process.env.NODE_ENV !== "development"
+    ? protectedProcedure.use(({ ctx, next }) => {
+        if (ctx.session.user.role !== UserRole.ADMIN) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+
+        return next({
+          ctx,
+        });
+      })
+    : t.procedure
+        .use(devAutoAuth)
+        .use(enforceUserIsAuthed)
+        .use(({ ctx, next }) => {
+          if (ctx.session.user.role !== UserRole.ADMIN) {
+            throw new TRPCError({ code: "FORBIDDEN" });
+          }
+          return next({ ctx });
+        });

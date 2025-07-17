@@ -1,7 +1,6 @@
 import { cacheService, CACHE_PREFIXES, CACHE_TTL } from "./cache/cache-service";
 import { storage } from "@/server/storage";
 import { UserStatus } from "@/shared/schema";
-import type { User } from "@/shared/schema";
 
 export interface CachedSession {
   user: {
@@ -109,7 +108,7 @@ export class SessionCache {
       user: {
         id: user.id,
         email: user.email ?? null,
-        username: user.username,
+        username: user.username ?? "",
         firstName: user.firstName ?? null,
         lastName: user.lastName ?? null,
         profileImageUrl: user.profileImageUrl ?? null,
@@ -162,22 +161,50 @@ export class SessionCache {
 /**
  * NextAuth session callback enhancement with caching
  */
-export async function enhancedSessionCallback({ session, token }: any) {
-  if (token && session.user) {
+interface SessionToken {
+  id?: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+  profileImageUrl?: string | null;
+  role?: string;
+  status?: string;
+}
+
+interface SessionWithUser {
+  user?: {
+    id?: string;
+    username?: string;
+    firstName?: string;
+    lastName?: string;
+    profileImageUrl?: string | null;
+    role?: string;
+    status?: string;
+  };
+}
+
+export async function enhancedSessionCallback({
+  session,
+  token,
+}: {
+  session: SessionWithUser;
+  token: SessionToken;
+}) {
+  if (token && session?.user) {
     // Try to get cached session first
-    const cachedSession = await SessionCache.getOrFetchSession(token.id);
+    const cachedSession = await SessionCache.getOrFetchSession(token.id!);
 
     if (cachedSession) {
-      session.user = cachedSession.user;
+      session.user = cachedSession.user as any;
     } else {
       // Fallback to token data
-      session.user.id = token.id;
-      session.user.username = token.username!;
-      session.user.firstName = token.firstName!;
-      session.user.lastName = token.lastName!;
-      session.user.profileImageUrl = token.profileImageUrl!;
-      session.user.role = token.role;
-      session.user.status = token.status;
+      session.user.id = token.id ?? "";
+      session.user.username = token.username ?? "";
+      session.user.firstName = token.firstName ?? "";
+      session.user.lastName = token.lastName ?? "";
+      session.user.profileImageUrl = token.profileImageUrl ?? null;
+      session.user.role = token.role ?? "";
+      session.user.status = token.status ?? "";
     }
   }
   return session;

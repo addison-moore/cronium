@@ -1,5 +1,4 @@
 import React, { Suspense, type ReactNode } from "react";
-import { ErrorBoundaryCard } from "@/components/error/error-boundary-card";
 import { SuspenseErrorBoundary } from "@/components/error/suspense-error-boundary";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle } from "lucide-react";
@@ -78,15 +77,16 @@ export function RSCStreamBoundary({
   return (
     <SuspenseErrorBoundary
       maxRetries={maxRetries}
-      fallback={({ error, reset, retryCount }) => (
-        <StreamErrorFallback
-          error={error}
-          reset={reset}
-          retryCount={retryCount}
-          title={errorTitle}
-          description={errorDescription}
-        />
-      )}
+      fallback={({ error, reset, retryCount }) => {
+        const props: any = {
+          error,
+          reset,
+          retryCount,
+        };
+        if (errorTitle) props.title = errorTitle;
+        if (errorDescription) props.description = errorDescription;
+        return <StreamErrorFallback {...props} />;
+      }}
       onError={(error, errorInfo) => {
         console.error("RSC Stream Error:", error, errorInfo);
       }}

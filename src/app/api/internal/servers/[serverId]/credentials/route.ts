@@ -55,6 +55,9 @@ export async function GET(
     }
 
     const serverData = server[0];
+    if (!serverData) {
+      return NextResponse.json({ error: "Server not found" }, { status: 404 });
+    }
 
     // Log credential access
     console.log(
@@ -79,7 +82,11 @@ export async function GET(
     if (serverData.sshKey) {
       try {
         credentials.privateKey = encryptionService.decrypt(serverData.sshKey);
-      } catch {
+      } catch (error) {
+        console.error(
+          `Failed to decrypt SSH key for server ${serverId}:`,
+          error,
+        );
         // If decryption fails, assume key is not encrypted
         credentials.privateKey = serverData.sshKey;
       }

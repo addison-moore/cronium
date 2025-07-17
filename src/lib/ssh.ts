@@ -31,7 +31,11 @@ export class SSHService {
       if (now - connection.lastUsed > this.connectionTimeout) {
         try {
           connection.ssh.end();
-        } catch {
+        } catch (error) {
+          console.error(
+            `Failed to close SSH connection for key ${key}:`,
+            error,
+          );
           // Ignore cleanup errors
         }
         keysToDelete.push(key);
@@ -91,7 +95,11 @@ export class SSHService {
           // Connection is dead, remove it
           try {
             connection.ssh.end();
-          } catch {
+          } catch (error) {
+            console.error(
+              `Failed to dispose dead SSH connection for ${connectionKey}:`,
+              error,
+            );
             // Ignore disposal errors
           }
           this.connectionPool.delete(connectionKey);

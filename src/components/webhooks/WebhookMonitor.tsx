@@ -94,7 +94,7 @@ interface WebhookMonitorProps {
 export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
   const [timeRange, setTimeRange] = useState("24h");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [showPayload, setShowPayload] = useState<number | null>(null);
+  const [showPayload, setShowPayload] = useState<string | number | null>(null);
   const { toast } = useToast();
 
   // tRPC queries
@@ -196,7 +196,7 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
   };
 
   const exportData = () => {
-    if (!executionHistory?.executions) return;
+    if (!executionHistory?.items) return;
 
     const csvContent = [
       [
@@ -207,7 +207,7 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
         "Response Time (ms)",
         "Response Code",
       ].join(","),
-      ...executionHistory.executions.map((exec) =>
+      ...executions.map((exec) =>
         [
           formatDateTime(exec.timestamp),
           exec.status,
@@ -244,31 +244,61 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
     );
   }
 
-  const monitoring: WebhookMonitoringData = monitoringData ?? {
-    webhookKey: webhookKey || "",
-    metricsWindow: timeRange,
-    realtime: true,
-    metrics: {
-      totalRequests: 0,
-      successRate: 0,
-      errorRate: 0,
-      averageResponseTime: 0,
-      rateLimitHits: 0,
-      uniqueIps: 0,
-    },
-    alerts: [] as WebhookAlert[],
-    recentActivity: [] as WebhookActivity[],
-  };
+  const monitoring: WebhookMonitoringData =
+    (monitoringData as WebhookMonitoringData) ?? {
+      webhookKey: webhookKey || "",
+      metricsWindow: timeRange,
+      realtime: true,
+      metrics: {
+        totalRequests: 0,
+        successRate: 0,
+        errorRate: 0,
+        averageResponseTime: 0,
+        rateLimitHits: 0,
+        uniqueIps: 0,
+      },
+      alerts: [] as WebhookAlert[],
+      recentActivity: [] as WebhookActivity[],
+    };
 
-  const stats: WebhookStats = statsData ?? {
-    totalExecutions: 0,
-    successfulExecutions: 0,
-    failedExecutions: 0,
-    byStatus: {},
-    byMethod: {},
-  };
+  const stats: WebhookStats = statsData?.metrics
+    ? {
+        totalExecutions: (statsData.metrics.totalExecutions as number) ?? 0,
+        successfulExecutions:
+          (statsData.metrics.successfulExecutions as number) ?? 0,
+        failedExecutions: (statsData.metrics.failedExecutions as number) ?? 0,
+        byStatus:
+          statsData.breakdown?.status?.reduce(
+            (acc, item) => ({ ...acc, [item.label]: item.value }),
+            {},
+          ) ?? {},
+        byMethod:
+          statsData.breakdown?.method?.reduce(
+            (acc, item) => ({ ...acc, [item.label]: item.value }),
+            {},
+          ) ?? {},
+      }
+    : {
+        totalExecutions: 0,
+        successfulExecutions: 0,
+        failedExecutions: 0,
+        byStatus: {},
+        byMethod: {},
+      };
 
-  const executions = executionHistory?.executions ?? [];
+  interface WebhookExecution {
+    id: string | number;
+    timestamp: string | Date;
+    status: string;
+    method: string;
+    sourceIp: string;
+    responseTime: number;
+    responseCode?: number;
+    payload?: unknown;
+    headers?: unknown;
+  }
+
+  const executions = (executionHistory?.items ?? []) as WebhookExecution[];
 
   return (
     <div className="space-y-6">
@@ -493,7 +523,7 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
                   </TableHeader>
                   <TableBody>
                     {executions.map((execution) => (
-                      <TableRow key={execution.id}>
+                      <TableRow key={execution.id as string}>
                         <TableCell>
                           <div className="flex items-center space-x-2">
                             {getStatusIcon(execution.status ?? "unknown")}
@@ -578,13 +608,13 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
                         <div>
                           <Label>Request Payload</Label>
                           <pre className="bg-muted max-h-40 overflow-auto rounded p-3 text-xs">
-                            {JSON.stringify(execution.payload || {}, null, 2)}
+                            {JSON.stringify(execution.payload ?? {}, null, 2)}
                           </pre>
                         </div>
                         <div>
                           <Label>Request Headers</Label>
                           <pre className="bg-muted max-h-40 overflow-auto rounded p-3 text-xs">
-                            {JSON.stringify(execution.headers || {}, null, 2)}
+                            {JSON.stringify(execution.headers ?? {}, null, 2)}
                           </pre>
                         </div>
                       </div>

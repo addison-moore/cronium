@@ -8,15 +8,15 @@ import dynamic from "next/dynamic";
 import type { Metadata } from "next";
 
 // Dynamic import the client component
-const LogsClient = dynamic(() => import("./page-original"), {
+const LogsClient = dynamic(() => import("./page-client"), {
   ssr: false,
   loading: () => <LogsPageSkeleton />,
 });
 
 interface LogsPageParams {
-  params: {
+  params: Promise<{
     lang: string;
-  };
+  }>;
 }
 
 export async function generateMetadata({
@@ -33,7 +33,7 @@ export async function generateMetadata({
 export default async function LogsPage({ params }: LogsPageParams) {
   // Check authentication
   const session = await getServerSession(authOptions);
-  const { lang } = await Promise.resolve(params);
+  const { lang } = await params;
 
   if (!session) {
     redirect(`/${lang}/auth/signin`);

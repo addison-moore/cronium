@@ -1,7 +1,7 @@
 import { db } from "@server/db";
 import {
   type Job,
-  type JobStatus,
+  JobStatus,
   type JobType,
   type ScriptType,
   JobPriority,
@@ -94,7 +94,7 @@ export class JobService {
         eventId: input.eventId,
         userId: input.userId,
         type: input.type,
-        status: "queued",
+        status: JobStatus.QUEUED,
         priority: input.priority ?? JobPriority.NORMAL,
         payload: input.payload,
         scheduledFor: input.scheduledFor ?? new Date(),
@@ -187,7 +187,8 @@ export class JobService {
       countQuery.where(and(...conditions));
     }
 
-    const [{ count }] = await countQuery;
+    const countResult = await countQuery;
+    const count = countResult[0]?.count ?? "0";
 
     return {
       jobs,
@@ -221,13 +222,18 @@ export class JobService {
   ): Promise<Job[]> {
     // Find unclaimed jobs that are scheduled to run
     const conditions = [
-      eq(jobsTable.status, "queued"),
+      eq(jobsTable.status, JobStatus.QUEUED),
       isNull(jobsTable.orchestratorId),
       lte(jobsTable.scheduledFor, new Date()),
     ];
 
     if (jobTypes && jobTypes.length > 0) {
-      conditions.push(or(...jobTypes.map((type) => eq(jobsTable.type, type))));
+      const typeCondition = or(
+        ...jobTypes.map((type) => eq(jobsTable.type, type)),
+      );
+      if (typeCondition) {
+        conditions.push(typeCondition);
+      }
     }
 
     // Get eligible jobs
@@ -248,13 +254,13 @@ export class JobService {
       .update(jobsTable)
       .set({
         orchestratorId,
-        status: "claimed",
+        status: JobStatus.CLAIMED,
         updatedAt: new Date(),
       })
       .where(
         and(
           or(...jobIds.map((id) => eq(jobsTable.id, id))),
-          eq(jobsTable.status, "queued"),
+          eq(jobsTable.status, JobStatus.QUEUED),
           isNull(jobsTable.orchestratorId),
         ),
       );
@@ -276,7 +282,7 @@ export class JobService {
    */
   async startJob(jobId: string): Promise<Job | null> {
     return this.updateJob(jobId, {
-      status: "running",
+      status: JobStatus.RUNNING,
       startedAt: new Date(),
     });
   }
@@ -297,7 +303,7 @@ export class JobService {
     };
 
     return this.updateJob(jobId, {
-      status: isSuccess ? "completed" : "failed",
+      status: isSuccess ? JobStatus.COMPLETED : JobStatus.FAILED,
       completedAt: new Date(),
       result: updatedResult,
     });
@@ -311,7 +317,7 @@ export class JobService {
     if (!job) return null;
 
     return this.updateJob(jobId, {
-      status: "failed",
+      status: JobStatus.FAILED,
       completedAt: new Date(),
       lastError: error,
       attempts: (job.attempts || 0) + 1,
@@ -327,7 +333,7 @@ export class JobService {
    */
   async cancelJob(jobId: string): Promise<Job | null> {
     return this.updateJob(jobId, {
-      status: "cancelled",
+      status: JobStatus.CANCELLED,
       completedAt: new Date(),
     });
   }
@@ -353,7 +359,7 @@ export class JobService {
       this.db
         .select({ count: jobsTable.id })
         .from(jobsTable)
-        .where(and(baseCondition, eq(jobsTable.status, "queued"))),
+        .where(and(baseCondition, eq(jobsTable.status, JobStatus.QUEUED))),
       this.db
         .select({ count: jobsTable.id })
         .from(jobsTable)
@@ -361,23 +367,23 @@ export class JobService {
           and(
             baseCondition,
             or(
-              eq(jobsTable.status, "running"),
-              eq(jobsTable.status, "claimed"),
+              eq(jobsTable.status, JobStatus.RUNNING),
+              eq(jobsTable.status, JobStatus.CLAIMED),
             ),
           ),
         ),
       this.db
         .select({ count: jobsTable.id })
         .from(jobsTable)
-        .where(and(baseCondition, eq(jobsTable.status, "completed"))),
+        .where(and(baseCondition, eq(jobsTable.status, JobStatus.COMPLETED))),
       this.db
         .select({ count: jobsTable.id })
         .from(jobsTable)
-        .where(and(baseCondition, eq(jobsTable.status, "failed"))),
+        .where(and(baseCondition, eq(jobsTable.status, JobStatus.FAILED))),
       this.db
         .select({ count: jobsTable.id })
         .from(jobsTable)
-        .where(and(baseCondition, eq(jobsTable.status, "cancelled"))),
+        .where(and(baseCondition, eq(jobsTable.status, JobStatus.CANCELLED))),
     ]);
 
     return {
@@ -403,9 +409,9 @@ export class JobService {
         and(
           lte(jobsTable.completedAt, cutoffDate),
           or(
-            eq(jobsTable.status, "completed"),
-            eq(jobsTable.status, "failed"),
-            eq(jobsTable.status, "cancelled"),
+            eq(jobsTable.status, JobStatus.COMPLETED),
+            eq(jobsTable.status, JobStatus.FAILED),
+            eq(jobsTable.status, JobStatus.CANCELLED),
           ),
         ),
       );

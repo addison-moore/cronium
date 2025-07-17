@@ -10,7 +10,7 @@ import { redirect } from "next/navigation";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
-  params: { lang: string };
+  params: Promise<{ lang: string }>;
 }
 
 export default async function DashboardLayout({
@@ -19,7 +19,7 @@ export default async function DashboardLayout({
 }: DashboardLayoutProps) {
   // Check authentication on the server
   const session = await getServerSession(authOptions);
-  const { lang } = await Promise.resolve(params);
+  const { lang } = await params;
 
   if (!session) {
     redirect(`/${lang}/auth/signin`);

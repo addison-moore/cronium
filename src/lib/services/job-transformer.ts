@@ -1,5 +1,5 @@
 import type { Job } from "@/shared/schema";
-import { JobType } from "@/shared/schema";
+import { JobType, JobPriority } from "@/shared/schema";
 
 /**
  * Transform a job from the database format to the format expected by the orchestrator
@@ -103,12 +103,15 @@ export function transformJobForOrchestrator(job: Job): OrchestratorJob {
 
   // Set HTTP configuration if present
   if (payload.httpRequest) {
-    execution.http = {
+    const http: any = {
       method: payload.httpRequest.method,
       url: payload.httpRequest.url,
       headers: payload.httpRequest.headers ?? {},
-      body: payload.httpRequest.body,
     };
+    if (payload.httpRequest.body !== undefined) {
+      http.body = payload.httpRequest.body;
+    }
+    execution.http = http;
   }
 
   // Set resources if specified
@@ -131,7 +134,7 @@ export function transformJobForOrchestrator(job: Job): OrchestratorJob {
   }
 
   // Map job type - convert SCRIPT to container, keep others
-  let orchestratorJobType = job.type;
+  let orchestratorJobType: string = job.type;
   if (job.type === JobType.SCRIPT) {
     // Determine execution type based on target
     orchestratorJobType = payload.target?.serverId ? "ssh" : "container";
@@ -145,7 +148,12 @@ export function transformJobForOrchestrator(job: Job): OrchestratorJob {
   return {
     id: job.id,
     type: orchestratorJobType,
-    priority: job.priority === "high" ? 10 : job.priority === "low" ? 1 : 5,
+    priority:
+      job.priority === JobPriority.HIGH
+        ? 10
+        : job.priority === JobPriority.LOW
+          ? 1
+          : 5,
     createdAt: job.createdAt,
     scheduledFor: job.scheduledFor,
     attempts: job.attempts || 0,

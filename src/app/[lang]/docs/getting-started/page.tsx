@@ -55,11 +55,12 @@ export const dynamic = "force-static";
 export default async function GettingStartedPage({
   params,
 }: {
-  params: { lang: string };
+  params: Promise<{ lang: string }>;
 }) {
+  const { lang } = await params;
   return (
     <div className="flex min-h-screen flex-col">
-      <Navbar lang={params.lang} />
+      <Navbar lang={lang} />
 
       <main className="flex-grow">
         {/* Header Section */}

@@ -3,8 +3,17 @@ import { promisify } from "util";
 import { appRouter } from "@/server/api/root";
 import { createCallerFactory } from "@/server/api/trpc";
 import { db } from "@/server/db";
-import { auth } from "@/lib/auth";
-import { users, jobs } from "@/shared/schema";
+import { authOptions } from "@/lib/auth";
+import {
+  users,
+  jobs,
+  UserRole,
+  UserStatus,
+  EventType,
+  EventStatus,
+  RunLocation,
+  JobStatus,
+} from "@/shared/schema";
 import { eq } from "drizzle-orm";
 import { hash } from "bcrypt";
 import { randomUUID } from "crypto";
@@ -30,7 +39,7 @@ async function testSidecarSimple() {
           id: randomUUID(),
           email: testEmail,
           password: hashedPassword,
-          role: "admin",
+          role: UserRole.ADMIN,
         })
         .returning();
       testUser = newUser;
@@ -38,10 +47,11 @@ async function testSidecarSimple() {
 
     const session = {
       user: {
-        id: testUser.id,
-        email: testUser.email,
-        name: testUser.firstName || "Test User",
-        role: testUser.role,
+        id: testUser!.id,
+        email: testUser!.email,
+        name: testUser!.firstName || "Test User",
+        role: testUser!.role,
+        status: UserStatus.ACTIVE,
       },
       expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     };
@@ -50,14 +60,13 @@ async function testSidecarSimple() {
       session,
       headers: new Headers(),
       db,
-      auth: auth as any,
     });
 
     // Create a simple test event
     console.log("📝 Creating test event...");
     const event = await caller.events.create({
       name: "Simple Sidecar Test",
-      type: "BASH",
+      type: EventType.BASH,
       content: `#!/bin/bash
 echo "Testing runtime API..."
 # Check if runtime-api is reachable
@@ -67,14 +76,14 @@ else
   echo "❌ Runtime API is NOT accessible"
 fi
 echo "Test complete."`,
-      status: "ACTIVE",
-      runLocation: "LOCAL",
+      status: EventStatus.ACTIVE,
+      runLocation: RunLocation.LOCAL,
     });
-    console.log(`✅ Created event ${event.id}\n`);
+    console.log(`✅ Created event ${event!.id}\n`);
 
     // Execute
     console.log("🚀 Executing...");
-    const execution = await caller.events.execute({ id: event.id });
+    const execution = await caller.events.execute({ id: event!.id });
     const jobId = execution.jobId;
     console.log(`✅ Job ID: ${jobId}\n`);
 
@@ -98,12 +107,17 @@ echo "Test complete."`,
       }
 
       // Check job
-      const job = await caller.jobs.get({ jobId });
+      const jobResponse = await caller.jobs.get({ jobId });
+      const job = jobResponse.data;
       console.log(`   Status: ${job.status}`);
 
-      if (job.status === "completed" || job.status === "failed") {
+      if (
+        job.status === JobStatus.COMPLETED ||
+        job.status === JobStatus.FAILED
+      ) {
         completed = true;
-        console.log(`\n📋 Job Logs:\n${job.logs || "No logs"}\n`);
+        const output = (job.result as any)?.output || "No logs";
+        console.log(`\n📋 Job Logs:\n${output}\n`);
         break;
       }
     }
@@ -148,8 +162,8 @@ echo "Test complete."`,
     // Cleanup
     console.log("\n🧹 Cleaning up...");
     await db.delete(jobs).where(eq(jobs.id, jobId));
-    await caller.events.delete({ id: event.id });
-    await db.delete(users).where(eq(users.id, testUser.id));
+    await caller.events.delete({ id: event!.id });
+    await db.delete(users).where(eq(users.id, testUser!.id));
   } catch (error) {
     console.error("❌ Error:", error);
   }

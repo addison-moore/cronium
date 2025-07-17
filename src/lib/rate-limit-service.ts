@@ -1,4 +1,4 @@
-import { cacheService, CACHE_PREFIXES, CACHE_TTL } from "./cache/cache-service";
+import { cacheService, CACHE_PREFIXES } from "./cache/cache-service";
 import { TRPCError } from "@trpc/server";
 
 export interface RateLimitConfig {

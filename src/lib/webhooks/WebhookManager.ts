@@ -341,7 +341,7 @@ export class WebhookManager extends EventEmitter {
       throw new Error("Delivery not found");
     }
 
-    const { delivery, webhook, event } = result;
+    const { webhook, event } = result;
 
     // Re-queue the delivery
     const retryConfig = webhook.retryConfig as

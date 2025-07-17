@@ -53,6 +53,14 @@ interface ExecutionWithEvents {
   events: WorkflowExecutionEvent[];
 }
 
+interface WorkflowExecutionsResponse {
+  executions: {
+    executions: WorkflowExecution[];
+    total: number;
+  };
+  hasMore: boolean;
+}
+
 export default function WorkflowExecutionHistory({
   workflowId,
   refreshTrigger,
@@ -92,16 +100,21 @@ export default function WorkflowExecutionHistory({
       staleTime: 30000, // 30 seconds
       refetchInterval: (query) => {
         // Poll every 8 seconds if there are running executions
-        const hasRunning = query.state.data?.executions?.executions?.some(
-          (exec: WorkflowExecution) => exec.status === LogStatus.RUNNING,
+        const data = query.state.data as WorkflowExecutionsResponse | undefined;
+        if (!data?.executions?.executions) return false;
+
+        const hasRunning = data.executions.executions.some(
+          (exec) => exec.status === LogStatus.RUNNING,
         );
         return hasRunning ? 8000 : false;
       },
     },
   );
 
-  // Extract executions from tRPC response
-  const executions = executionsData?.executions?.executions ?? [];
+  // Extract executions from tRPC response with proper type safety
+  const typedData = executionsData as WorkflowExecutionsResponse | undefined;
+  const executions: WorkflowExecution[] =
+    typedData?.executions?.executions ?? [];
 
   // Handle manual refresh
   const handleManualRefresh = async () => {
@@ -135,9 +148,7 @@ export default function WorkflowExecutionHistory({
       setIsLoadingDetails(true);
 
       // Find the execution to get workflow ID
-      const execution = executions.find(
-        (exec: WorkflowExecution) => exec.id === executionId,
-      );
+      const execution = executions.find((exec) => exec.id === executionId);
       const targetWorkflowId = workflowId ?? execution?.workflowId;
 
       if (!targetWorkflowId) {
@@ -153,9 +164,16 @@ export default function WorkflowExecutionHistory({
       });
 
       // Transform the data to match the expected format
+      const executionWithEvents = executionDetails as WorkflowExecution & {
+        events: WorkflowExecutionEvent[];
+        totalEvents: number;
+        successfulEvents: number;
+        failedEvents: number;
+      };
+
       setSelectedExecution({
-        execution: executionDetails,
-        events: executionDetails.events,
+        execution: executionWithEvents,
+        events: executionWithEvents.events,
       });
     } catch (error) {
       console.error("Error fetching execution details:", error);
@@ -190,23 +208,21 @@ export default function WorkflowExecutionHistory({
   ];
 
   // Apply filters to executions
-  const filteredExecutions = executions.filter(
-    (execution: WorkflowExecution) => {
-      const matchesSearch =
-        `Workflow ${String(execution.workflowId)}`
-          ?.toLowerCase()
-          .includes(searchTerm.toLowerCase()) ?? true;
+  const filteredExecutions = executions.filter((execution) => {
+    const matchesSearch =
+      `Workflow ${String(execution.workflowId)}`
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase()) ?? true;
 
-      const matchesStatus =
-        statusFilter === "all" ||
-        String(execution.status) === String(statusFilter);
+    const matchesStatus =
+      statusFilter === "all" ||
+      String(execution.status) === String(statusFilter);
 
-      // Tags filtering disabled until workflows have tags in schema
-      const matchesTag = tagFilter === "all";
+    // Tags filtering disabled until workflows have tags in schema
+    const matchesTag = tagFilter === "all";
 
-      return matchesSearch && matchesStatus && matchesTag;
-    },
-  );
+    return matchesSearch && matchesStatus && matchesTag;
+  });
 
   // Apply sorting to filtered executions
   const sortedExecutions = [...filteredExecutions].sort((a, b) => {
@@ -218,8 +234,8 @@ export default function WorkflowExecutionHistory({
         break;
       case "startedAt":
         comparison =
-          new Date(a.startedAt || 0).getTime() -
-          new Date(b.startedAt || 0).getTime();
+          new Date(a.startedAt ?? 0).getTime() -
+          new Date(b.startedAt ?? 0).getTime();
         break;
       case "completedAt":
         // If we're on a workflow detail page (workflowId exists), sort by duration
@@ -572,7 +588,7 @@ export default function WorkflowExecutionHistory({
                           <DialogHeader>
                             <DialogTitle>
                               Execution Details -{" "}
-                              {`Workflow ${execution.workflowId}`} -{" "}
+                              {`Workflow ${String(execution.workflowId)}`} -{" "}
                               {formatDate(execution.startedAt)}
                             </DialogTitle>
                           </DialogHeader>

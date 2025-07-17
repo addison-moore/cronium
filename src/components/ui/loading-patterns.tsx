@@ -5,18 +5,48 @@
 
 import { Suspense } from "react";
 import {
-  LoadingBoundary,
   PageLoadingBoundary,
   SectionLoadingBoundary,
 } from "./loading-boundary";
 import {
   CardSkeleton,
-  TableSkeleton,
-  FormSkeleton,
   PageHeaderSkeleton,
   DashboardSkeleton,
   DetailPageSkeleton,
 } from "./skeleton-library";
+
+// Define missing skeleton components
+const TableSkeleton = ({
+  rows = 5,
+  columns = 3,
+}: {
+  rows?: number;
+  columns?: number;
+}) => (
+  <div className="w-full">
+    {Array.from({ length: rows }).map((_, i) => (
+      <div key={i} className="flex gap-4 border-b p-4">
+        {Array.from({ length: columns }).map((_, j) => (
+          <div
+            key={j}
+            className="h-4 flex-1 animate-pulse rounded bg-gray-200"
+          />
+        ))}
+      </div>
+    ))}
+  </div>
+);
+
+const FormSkeleton = () => (
+  <div className="space-y-4">
+    {Array.from({ length: 4 }).map((_, i) => (
+      <div key={i} className="space-y-2">
+        <div className="h-4 w-24 animate-pulse rounded bg-gray-200" />
+        <div className="h-10 animate-pulse rounded bg-gray-200" />
+      </div>
+    ))}
+  </div>
+);
 
 // ============================================
 // Pattern 1: Page-Level Loading
@@ -27,7 +57,9 @@ import {
  */
 export function PageLoadingPattern() {
   return (
-    <PageLoadingBoundary>{/* Your async page content */}</PageLoadingBoundary>
+    <PageLoadingBoundary>
+      <div>{/* Your async page content */}</div>
+    </PageLoadingBoundary>
   );
 }
 
@@ -59,11 +91,11 @@ export function SectionLoadingPattern() {
       {/* Each section loads independently */}
       <div className="grid gap-6 md:grid-cols-2">
         <SectionLoadingBoundary fallback={<CardSkeleton />}>
-          {/* Section 1 async content */}
+          <div>{/* Section 1 async content */}</div>
         </SectionLoadingBoundary>
 
         <SectionLoadingBoundary fallback={<CardSkeleton />}>
-          {/* Section 2 async content */}
+          <div>{/* Section 2 async content */}</div>
         </SectionLoadingBoundary>
       </div>
     </>

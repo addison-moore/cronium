@@ -37,7 +37,7 @@ export async function POST(
     }
 
     // Merge condition into existing result
-    const existingResult = (job[0].result as Record<string, unknown>) || {};
+    const existingResult = (job[0]?.result as Record<string, unknown>) || {};
     const updatedResult = {
       ...existingResult,
       condition: body.condition,

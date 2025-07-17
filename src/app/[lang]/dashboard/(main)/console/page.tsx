@@ -26,6 +26,18 @@ interface ServerData {
   online?: boolean | null;
 }
 
+interface ServersResponse {
+  items: ServerData[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+  filters?: {
+    search?: string;
+    [key: string]: unknown;
+  };
+}
+
 export default function ConsolePage() {
   const t = useTranslations("Console");
   const params = useParams<{ lang: string }>();
@@ -46,7 +58,9 @@ export default function ConsolePage() {
     QUERY_OPTIONS.dynamic,
   );
 
-  const servers = serversData?.servers ?? [];
+  // Type the response correctly
+  const typedData = serversData as ServersResponse | undefined;
+  const servers: ServerData[] = typedData?.items ?? [];
 
   // Auto-select server based on permissions
   useEffect(() => {

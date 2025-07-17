@@ -8,7 +8,7 @@ import { z } from "zod";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -18,7 +18,7 @@ export async function GET(
     }
 
     const userId = session.user.id;
-    const { id } = params;
+    const { id } = await params;
     const serverId = parseInt(id, 10);
 
     if (isNaN(serverId)) {
@@ -60,7 +60,7 @@ const updateServerSchema = z.object({
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -70,9 +70,8 @@ export async function PUT(
     }
 
     const userId = session.user.id;
-    // Access params directly (not a Promise in this context)
-    const paramsObj = params;
-    const serverId = parseInt(paramsObj.id, 10);
+    const { id } = await params;
+    const serverId = parseInt(id, 10);
 
     if (isNaN(serverId)) {
       return NextResponse.json({ error: "Invalid server ID" }, { status: 400 });
@@ -175,7 +174,7 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -185,9 +184,8 @@ export async function DELETE(
     }
 
     const userId = session.user.id;
-    // Access params directly (not a Promise in this context)
-    const paramsObj = params;
-    const serverId = parseInt(paramsObj.id, 10);
+    const { id } = await params;
+    const serverId = parseInt(id, 10);
 
     if (isNaN(serverId)) {
       return NextResponse.json({ error: "Invalid server ID" }, { status: 400 });

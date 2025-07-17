@@ -60,6 +60,10 @@ const statusConfig = {
 };
 
 const priorityConfig = {
+  0: { label: "Low", color: "secondary" },
+  1: { label: "Normal", color: "default" },
+  2: { label: "High", color: "warning" },
+  3: { label: "Critical", color: "destructive" },
   low: { label: "Low", color: "secondary" },
   normal: { label: "Normal", color: "default" },
   high: { label: "High", color: "warning" },

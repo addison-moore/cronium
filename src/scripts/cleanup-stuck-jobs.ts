@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 
 import { db } from "@/server/db";
-import { jobs } from "@/shared/schema";
+import { jobs, JobStatus } from "@/shared/schema";
 import { sql, or, eq, and, lt } from "drizzle-orm";
 
 async function cleanupStuckJobs() {
@@ -13,11 +13,13 @@ async function cleanupStuckJobs() {
   const queuedResult = await db
     .update(jobs)
     .set({
-      status: "failed",
+      status: JobStatus.FAILED,
       completedAt: new Date(),
       result: { error: "Job abandoned - orchestrator was not running" },
     })
-    .where(and(eq(jobs.status, "queued"), lt(jobs.createdAt, tenMinutesAgo)));
+    .where(
+      and(eq(jobs.status, JobStatus.QUEUED), lt(jobs.createdAt, tenMinutesAgo)),
+    );
 
   console.log(`✅ Marked old queued jobs as failed`);
 
@@ -27,12 +29,15 @@ async function cleanupStuckJobs() {
   const runningResult = await db
     .update(jobs)
     .set({
-      status: "failed",
+      status: JobStatus.FAILED,
       completedAt: new Date(),
       result: { error: "Job timeout - stuck in running state" },
     })
     .where(
-      and(eq(jobs.status, "running"), sql`${jobs.startedAt} < ${oneHourAgo}`),
+      and(
+        eq(jobs.status, JobStatus.RUNNING),
+        sql`${jobs.startedAt} < ${oneHourAgo}`,
+      ),
     );
 
   console.log(`✅ Marked stuck running jobs as failed`);
@@ -41,11 +46,16 @@ async function cleanupStuckJobs() {
   const claimedResult = await db
     .update(jobs)
     .set({
-      status: "failed",
+      status: JobStatus.FAILED,
       completedAt: new Date(),
       result: { error: "Job abandoned - never started after claim" },
     })
-    .where(and(eq(jobs.status, "claimed"), lt(jobs.createdAt, tenMinutesAgo)));
+    .where(
+      and(
+        eq(jobs.status, JobStatus.CLAIMED),
+        lt(jobs.createdAt, tenMinutesAgo),
+      ),
+    );
 
   console.log(`✅ Marked old claimed jobs as failed`);
 

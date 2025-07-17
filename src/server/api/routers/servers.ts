@@ -1,5 +1,10 @@
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
+import {
+  normalizePagination,
+  createPaginatedResult,
+} from "@/server/utils/db-patterns";
+import { withErrorHandling } from "@/server/utils/error-utils";
 import {
   serverQuerySchema,
   createServerSchema,
@@ -12,112 +17,74 @@ import {
   serverUsageStatsSchema,
   serverLogsSchema,
 } from "@shared/schemas/servers";
-import { type InsertServer, UserRole } from "@shared/schema";
+import { type InsertServer } from "@shared/schema";
 import { storage } from "@/server/storage";
 import { type Log } from "@shared/schema";
 
-// Custom procedure that handles auth for tRPC fetch adapter
-const serverProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  // Try to get session from headers/cookies
-  let session = null;
-  let userId = null;
-
-  try {
-    // If session exists in context, use it
-    if (ctx.session?.user?.id) {
-      session = ctx.session;
-      userId = ctx.session.user.id;
-    } else {
-      // For development, get first admin user
-      if (process.env.NODE_ENV === "development") {
-        const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter(
-          (user) => user.role === UserRole.ADMIN,
-        );
-        if (adminUsers.length > 0) {
-          userId = adminUsers[0]!.id;
-          session = { user: { id: adminUsers[0]!.id } };
-        }
-      }
-    }
-
-    if (!userId) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "Authentication required",
-      });
-    }
-
-    return next({
-      ctx: {
-        ...ctx,
-        session,
-        userId,
-      },
-    });
-  } catch (error: unknown) {
-    console.error("Auth error in serverProcedure:", error);
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Authentication failed",
-    });
-  }
-});
+// Use centralized authentication from trpc.ts
 
 export const serversRouter = createTRPCRouter({
   // Get all servers for user
-  getAll: serverProcedure
+  getAll: protectedProcedure
     .input(serverQuerySchema)
     .query(async ({ ctx, input }) => {
-      try {
-        const servers = await storage.getAllServers(ctx.userId);
+      return withErrorHandling(
+        async () => {
+          const pagination = normalizePagination(input);
+          const servers = await storage.getAllServers(ctx.session.user.id);
 
-        // Apply filters
-        let filteredServers = servers;
+          // Apply filters
+          let filteredServers = servers;
 
-        if (input.search) {
-          const searchLower = input.search.toLowerCase();
-          filteredServers = filteredServers.filter(
-            (server) =>
-              server.name.toLowerCase().includes(searchLower) ||
-              server.address.toLowerCase().includes(searchLower),
+          if (input.search) {
+            const searchLower = input.search.toLowerCase();
+            filteredServers = filteredServers.filter(
+              (server) =>
+                server.name.toLowerCase().includes(searchLower) ||
+                server.address.toLowerCase().includes(searchLower),
+            );
+          }
+
+          if (input.online !== undefined) {
+            filteredServers = filteredServers.filter(
+              (server) => server.online === input.online,
+            );
+          }
+
+          if (input.shared !== undefined) {
+            filteredServers = filteredServers.filter(
+              (server) => server.shared === input.shared,
+            );
+          }
+
+          // Apply pagination
+          const paginatedServers = filteredServers.slice(
+            pagination.offset,
+            pagination.offset + pagination.limit,
           );
-        }
-
-        if (input.online !== undefined) {
-          filteredServers = filteredServers.filter(
-            (server) => server.online === input.online,
+          const result = createPaginatedResult(
+            paginatedServers,
+            filteredServers.length,
+            pagination,
           );
-        }
 
-        if (input.shared !== undefined) {
-          filteredServers = filteredServers.filter(
-            (server) => server.shared === input.shared,
-          );
-        }
-
-        // Apply pagination
-        const paginatedServers = filteredServers.slice(
-          input.offset,
-          input.offset + input.limit,
-        );
-
-        return {
-          servers: paginatedServers,
-          total: filteredServers.length,
-          hasMore: input.offset + input.limit < filteredServers.length,
-        };
-      } catch (error: unknown) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to fetch servers",
-          cause: error,
-        });
-      }
+          // Return in the format the frontend expects
+          return {
+            servers: result.items,
+            total: result.total,
+            hasMore: result.hasMore,
+          };
+        },
+        {
+          component: "serversRouter",
+          operationName: "getAll",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 
   // Get single server by ID
-  getById: serverProcedure
+  getById: protectedProcedure
     .input(serverIdSchema)
     .query(async ({ ctx, input }) => {
       try {
@@ -132,7 +99,7 @@ export const serversRouter = createTRPCRouter({
         // Check if user can access this server
         const canAccess = await storage.canUserAccessServer(
           input.id,
-          ctx.userId,
+          ctx.session.user.id,
         );
         if (!canAccess) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
@@ -150,7 +117,7 @@ export const serversRouter = createTRPCRouter({
     }),
 
   // Create new server
-  create: serverProcedure
+  create: protectedProcedure
     .input(createServerSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -178,7 +145,7 @@ export const serversRouter = createTRPCRouter({
         // Create the server
         const server = await storage.createServer({
           ...input,
-          userId: ctx.userId,
+          userId: ctx.session.user.id,
         });
 
         return server;
@@ -210,7 +177,7 @@ export const serversRouter = createTRPCRouter({
     }),
 
   // Update existing server
-  update: serverProcedure
+  update: protectedProcedure
     .input(updateServerSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -224,7 +191,7 @@ export const serversRouter = createTRPCRouter({
             message: "Server not found",
           });
         }
-        if (existingServer.userId !== ctx.userId) {
+        if (existingServer.userId !== ctx.session.user.id) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "Not authorized to edit this server",
@@ -273,7 +240,7 @@ export const serversRouter = createTRPCRouter({
     }),
 
   // Delete server
-  delete: serverProcedure
+  delete: protectedProcedure
     .input(serverIdSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -285,7 +252,7 @@ export const serversRouter = createTRPCRouter({
             message: "Server not found",
           });
         }
-        if (server.userId !== ctx.userId) {
+        if (server.userId !== ctx.session.user.id) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "Not authorized to delete this server",
@@ -305,7 +272,7 @@ export const serversRouter = createTRPCRouter({
     }),
 
   // Check server health/status
-  checkHealth: serverProcedure
+  checkHealth: protectedProcedure
     .input(serverHealthCheckSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -317,7 +284,7 @@ export const serversRouter = createTRPCRouter({
             message: "Server not found",
           });
         }
-        if (server.userId !== ctx.userId) {
+        if (server.userId !== ctx.session.user.id) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "Not authorized to check this server",
@@ -358,7 +325,7 @@ export const serversRouter = createTRPCRouter({
     }),
 
   // Test server connection (without saving)
-  testConnection: serverProcedure
+  testConnection: protectedProcedure
     .input(testServerConnectionSchema)
     .mutation(async ({ input }) => {
       try {
@@ -399,21 +366,24 @@ export const serversRouter = createTRPCRouter({
     }),
 
   // Get events associated with a server
-  getEvents: serverProcedure
+  getEvents: protectedProcedure
     .input(serverEventsSchema)
     .query(async ({ ctx, input }) => {
       try {
         // Check if user can access the server
         const canAccess = await storage.canUserAccessServer(
           input.id,
-          ctx.userId,
+          ctx.session.user.id,
         );
         if (!canAccess) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
         }
 
         // Get events for this server using existing method
-        const events = await storage.getEventsByServerId(input.id, ctx.userId);
+        const events = await storage.getEventsByServerId(
+          input.id,
+          ctx.session.user.id,
+        );
 
         // Apply filters
         let filteredEvents = events;
@@ -424,15 +394,16 @@ export const serversRouter = createTRPCRouter({
         }
 
         // Apply pagination
+        const pagination = normalizePagination(input);
         const paginatedEvents = filteredEvents.slice(
-          input.offset,
-          input.offset + input.limit,
+          pagination.offset,
+          pagination.offset + pagination.limit,
         );
 
         return {
           events: paginatedEvents,
           total: filteredEvents.length,
-          hasMore: input.offset + input.limit < filteredEvents.length,
+          hasMore: pagination.offset + pagination.limit < filteredEvents.length,
         };
       } catch (error: unknown) {
         if (error instanceof TRPCError) throw error;
@@ -445,7 +416,7 @@ export const serversRouter = createTRPCRouter({
     }),
 
   // Bulk operations on servers
-  bulkOperation: serverProcedure
+  bulkOperation: protectedProcedure
     .input(bulkServerOperationSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -455,7 +426,7 @@ export const serversRouter = createTRPCRouter({
           try {
             // Check if user owns the server
             const server = await storage.getServer(serverId);
-            if (!server || server.userId !== ctx.userId) {
+            if (!server || server.userId !== ctx.session.user.id) {
               results.push({
                 id: serverId,
                 success: false,
@@ -512,14 +483,14 @@ export const serversRouter = createTRPCRouter({
     }),
 
   // Get server usage statistics
-  getUsageStats: serverProcedure
+  getUsageStats: protectedProcedure
     .input(serverUsageStatsSchema)
     .query(async ({ ctx, input }) => {
       try {
         // Check if user can access the server
         const canAccess = await storage.canUserAccessServer(
           input.id,
-          ctx.userId,
+          ctx.session.user.id,
         );
         if (!canAccess) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
@@ -548,14 +519,14 @@ export const serversRouter = createTRPCRouter({
     }),
 
   // Get server logs
-  getLogs: serverProcedure
+  getLogs: protectedProcedure
     .input(serverLogsSchema)
     .query(async ({ ctx, input }) => {
       try {
         // Check if user can access the server
         const canAccess = await storage.canUserAccessServer(
           input.id,
-          ctx.userId,
+          ctx.session.user.id,
         );
         if (!canAccess) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });

@@ -44,8 +44,12 @@ export async function PUT(
         break;
       case JobStatus.COMPLETED:
         updatedJob = await jobService.completeJob(jobId, {
-          exitCode: body.details?.exitCode,
-          output: body.details?.message,
+          ...(body.details?.exitCode !== undefined && {
+            exitCode: body.details.exitCode,
+          }),
+          ...(body.details?.message !== undefined && {
+            output: body.details.message,
+          }),
         });
         break;
       case JobStatus.FAILED:

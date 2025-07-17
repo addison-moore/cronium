@@ -17,13 +17,13 @@
 import { TRPCError } from "@trpc/server";
 import {
   createTRPCRouter,
-  publicProcedure,
+  protectedProcedure,
   withTiming,
   withRateLimit,
   withTransaction,
 } from "../trpc";
-import { EventStatus, LogStatus, UserRole, RunLocation } from "@/shared/schema";
-import type { ConditionalActionType } from "@/shared/schema";
+import { EventStatus, LogStatus, RunLocation } from "@/shared/schema";
+import type { ConditionalActionType, ScriptType } from "@/shared/schema";
 import { validateConditionalActions } from "@/server/utils/event-validation";
 import {
   createEventSchema,
@@ -38,82 +38,19 @@ import {
 import { storage } from "@/server/storage";
 import { scheduler } from "@/lib/scheduler";
 
-// Type for authenticated event context
-interface EventContext {
-  userId: string;
-}
-
-// Type guard for checking if user id exists in session
-function hasUserId(
-  session: { user?: { id?: string | null } } | null,
-): session is { user: { id: string } } {
-  return (
-    session?.user?.id !== null &&
-    session?.user?.id !== undefined &&
-    typeof session.user.id === "string" &&
-    session.user.id.length > 0
-  );
-}
-
-// Custom procedure that handles auth for tRPC fetch adapter
-const eventProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  // Try to get session from headers/cookies
-  let session: { user: { id: string } } | null = null;
-  let userId: string | null = null;
-
-  try {
-    // If session exists in context, use it
-    if (hasUserId(ctx.session as { user?: { id?: string | null } } | null)) {
-      session = ctx.session as unknown as { user: { id: string } };
-      userId = session.user.id;
-    } else {
-      // For development, get first admin user
-      if (process.env.NODE_ENV === "development") {
-        const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter(
-          (user) => user.role === UserRole.ADMIN,
-        );
-        const firstAdmin = adminUsers[0];
-        if (firstAdmin) {
-          userId = firstAdmin.id;
-          session = { user: { id: firstAdmin.id } };
-        }
-      }
-    }
-
-    if (!userId) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "Authentication required",
-      });
-    }
-
-    return next({
-      ctx: {
-        ...ctx,
-        session: session as typeof ctx.session,
-        userId,
-      },
-    });
-  } catch (error) {
-    console.error("Auth error in eventProcedure:", error);
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Authentication failed",
-    });
-  }
-});
+// Use the centralized development-friendly protected procedure
+// This handles authentication and auto-login in development mode
 
 export const eventsRouter = createTRPCRouter({
   // Get all events for user
-  getAll: eventProcedure
+  getAll: protectedProcedure
     .use(withTiming)
     .input(eventQuerySchema)
     .query(async ({ ctx, input }) => {
-      const eventCtx = ctx as EventContext;
+      const userId = ctx.session.user.id;
       try {
         // Direct storage call without caching
-        const events = await storage.getAllEvents(eventCtx.userId);
+        const events = await storage.getAllEvents(userId);
 
         // Apply filters
         let filteredEvents = events;
@@ -166,53 +103,61 @@ export const eventsRouter = createTRPCRouter({
     }),
 
   // Get single event by ID
-  getById: eventProcedure.input(eventIdSchema).query(async ({ ctx, input }) => {
-    const eventCtx = ctx as EventContext;
-    try {
-      // Check permissions first (not cached)
-      const canView = await storage.canViewEvent(input.id, eventCtx.userId);
-      if (!canView) {
+  getById: protectedProcedure
+    .input(eventIdSchema)
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      try {
+        // Check permissions first (not cached)
+        const canView = await storage.canViewEvent(input.id, userId);
+        if (!canView) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Event not found",
+          });
+        }
+
+        // Direct storage call without caching
+        const event = await storage.getEventWithRelations(input.id);
+        if (!event) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Event not found",
+          });
+        }
+        return event;
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+
+        console.error("Error in events.getById:", error);
+
         throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Event not found",
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch event",
+          cause: error,
         });
       }
-
-      // Direct storage call without caching
-      const event = await storage.getEventWithRelations(input.id);
-      if (!event) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Event not found",
-        });
-      }
-      return event;
-    } catch (error) {
-      if (error instanceof TRPCError) throw error;
-
-      console.error("Error in events.getById:", error);
-
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to fetch event",
-        cause: error,
-      });
-    }
-  }),
+    }),
 
   // Create new event
-  create: eventProcedure
+  create: protectedProcedure
     .use(withTiming)
     .use(withRateLimit(50, 60000)) // 50 creates per minute
     .use(withTransaction)
     .input(createEventSchema)
     .mutation(async ({ ctx, input }) => {
-      const eventCtx = ctx as EventContext;
+      if (!ctx.session?.user?.id) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Not authenticated",
+        });
+      }
+      const userId = ctx.session.user.id;
       try {
         // Add user ID to event data
         const eventData = {
           ...input,
-          userId: eventCtx.userId,
+          userId: userId,
           startTime: input.startTime ? new Date(input.startTime) : null,
         };
 
@@ -246,7 +191,23 @@ export const eventsRouter = createTRPCRouter({
 
         const validationErrors = await validateConditionalActions(
           event.id,
-          allConditionalActions,
+          allConditionalActions.map((action) => {
+            const mappedAction: {
+              action: string;
+              details?: { targetEventId?: number };
+            } = {
+              action: action.action,
+            };
+            if (
+              action.details?.targetEventId !== undefined &&
+              action.details.targetEventId !== null
+            ) {
+              mappedAction.details = {
+                targetEventId: action.details.targetEventId,
+              };
+            }
+            return mappedAction;
+          }),
         );
 
         if (validationErrors.length > 0) {
@@ -301,16 +262,22 @@ export const eventsRouter = createTRPCRouter({
     }),
 
   // Update existing event
-  update: eventProcedure
+  update: protectedProcedure
     .use(withTiming)
     .use(withRateLimit(100, 60000)) // 100 updates per minute
     .use(withTransaction)
     .input(updateEventSchema)
     .mutation(async ({ ctx, input }) => {
-      const eventCtx = ctx as EventContext;
+      if (!ctx.session?.user?.id) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Not authenticated",
+        });
+      }
+      const userId = ctx.session.user.id;
       try {
         // Check permissions
-        const canEdit = await storage.canEditEvent(input.id, eventCtx.userId);
+        const canEdit = await storage.canEditEvent(input.id, userId);
         if (!canEdit) {
           throw new TRPCError({
             code: "FORBIDDEN",
@@ -377,7 +344,23 @@ export const eventsRouter = createTRPCRouter({
 
           const validationErrors = await validateConditionalActions(
             id,
-            allConditionalActions,
+            allConditionalActions.map((action) => {
+              const mappedAction: {
+                action: string;
+                details?: { targetEventId?: number };
+              } = {
+                action: action.action,
+              };
+              if (
+                action.details?.targetEventId !== undefined &&
+                action.details.targetEventId !== null
+              ) {
+                mappedAction.details = {
+                  targetEventId: action.details.targetEventId,
+                };
+              }
+              return mappedAction;
+            }),
           );
 
           if (validationErrors.length > 0) {
@@ -436,13 +419,13 @@ export const eventsRouter = createTRPCRouter({
     }),
 
   // Delete event
-  delete: eventProcedure
+  delete: protectedProcedure
     .input(eventIdSchema)
     .mutation(async ({ ctx, input }) => {
-      const eventCtx = ctx as EventContext;
+      const userId = ctx.session.user.id;
       try {
         // Check permissions
-        const canEdit = await storage.canEditEvent(input.id, eventCtx.userId);
+        const canEdit = await storage.canEditEvent(input.id, userId);
         if (!canEdit) {
           throw new TRPCError({
             code: "FORBIDDEN",
@@ -464,13 +447,13 @@ export const eventsRouter = createTRPCRouter({
     }),
 
   // Activate event
-  activate: eventProcedure
+  activate: protectedProcedure
     .input(eventActivationSchema)
     .mutation(async ({ ctx, input }) => {
-      const eventCtx = ctx as EventContext;
+      const userId = ctx.session.user.id;
       try {
         // Check permissions
-        const canEdit = await storage.canEditEvent(input.id, eventCtx.userId);
+        const canEdit = await storage.canEditEvent(input.id, userId);
         if (!canEdit) {
           throw new TRPCError({
             code: "FORBIDDEN",
@@ -509,13 +492,13 @@ export const eventsRouter = createTRPCRouter({
     }),
 
   // Deactivate event
-  deactivate: eventProcedure
+  deactivate: protectedProcedure
     .input(eventIdSchema)
     .mutation(async ({ ctx, input }) => {
-      const eventCtx = ctx as EventContext;
+      const userId = ctx.session.user.id;
       try {
         // Check permissions
-        const canEdit = await storage.canEditEvent(input.id, eventCtx.userId);
+        const canEdit = await storage.canEditEvent(input.id, userId);
         if (!canEdit) {
           throw new TRPCError({
             code: "FORBIDDEN",
@@ -541,15 +524,21 @@ export const eventsRouter = createTRPCRouter({
     }),
 
   // Execute event
-  execute: eventProcedure
+  execute: protectedProcedure
     .use(withTiming)
     .use(withRateLimit(50, 60000)) // 50 executions per minute
     .input(executeEventSchema)
     .mutation(async ({ ctx, input }) => {
-      const eventCtx = ctx as EventContext;
+      if (!ctx.session?.user?.id) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Not authenticated",
+        });
+      }
+      const userId = ctx.session.user.id;
       try {
         // Check permissions
-        const canView = await storage.canViewEvent(input.id, eventCtx.userId);
+        const canView = await storage.canViewEvent(input.id, userId);
         if (!canView) {
           throw new TRPCError({
             code: "NOT_FOUND",
@@ -586,7 +575,7 @@ export const eventsRouter = createTRPCRouter({
           startTime: new Date(),
           eventName: event.name ?? "Unknown",
           eventType: event.type,
-          userId: eventCtx.userId as number,
+          userId: userId,
         });
 
         // Import job payload builder
@@ -598,7 +587,7 @@ export const eventsRouter = createTRPCRouter({
         const jobPayload = buildJobPayload(
           event,
           log.id,
-          input.input as Record<string, unknown> | undefined,
+          (input as { input?: Record<string, unknown> }).input,
         ) as {
           script?: {
             type: ScriptType;
@@ -632,7 +621,7 @@ export const eventsRouter = createTRPCRouter({
         // Create job in the queue
         const job = await jobService.createJob({
           eventId: input.id,
-          userId: String(eventCtx.userId),
+          userId: String(userId),
           type: jobType,
           payload: jobPayload,
           metadata: {
@@ -660,13 +649,13 @@ export const eventsRouter = createTRPCRouter({
     }),
 
   // Get event logs
-  getLogs: eventProcedure
+  getLogs: protectedProcedure
     .input(eventLogsSchema)
     .query(async ({ ctx, input }) => {
-      const eventCtx = ctx as EventContext;
+      const userId = ctx.session.user.id;
       try {
         // Check permissions
-        const canView = await storage.canViewEvent(input.id, eventCtx.userId);
+        const canView = await storage.canViewEvent(input.id, userId);
         if (!canView) {
           throw new TRPCError({
             code: "NOT_FOUND",
@@ -699,13 +688,13 @@ export const eventsRouter = createTRPCRouter({
     }),
 
   // Reset execution counter
-  resetCounter: eventProcedure
+  resetCounter: protectedProcedure
     .input(eventIdSchema)
     .mutation(async ({ ctx, input }) => {
-      const eventCtx = ctx as EventContext;
+      const userId = ctx.session.user.id;
       try {
         // Check permissions
-        const canEdit = await storage.canEditEvent(input.id, eventCtx.userId);
+        const canEdit = await storage.canEditEvent(input.id, userId);
         if (!canEdit) {
           throw new TRPCError({
             code: "FORBIDDEN",
@@ -726,13 +715,13 @@ export const eventsRouter = createTRPCRouter({
     }),
 
   // Get workflows containing this event
-  getWorkflows: eventProcedure
+  getWorkflows: protectedProcedure
     .input(eventIdSchema)
     .query(async ({ ctx, input }) => {
-      const eventCtx = ctx as EventContext;
+      const userId = ctx.session.user.id;
       try {
         // Check permissions
-        const canView = await storage.canViewEvent(input.id, eventCtx.userId);
+        const canView = await storage.canViewEvent(input.id, userId);
         if (!canView) {
           throw new TRPCError({
             code: "NOT_FOUND",
@@ -742,7 +731,7 @@ export const eventsRouter = createTRPCRouter({
 
         const workflows = await storage.getWorkflowsUsingEvent(
           input.id,
-          eventCtx.userId,
+          userId,
         );
         return workflows;
       } catch (error) {
@@ -756,13 +745,13 @@ export const eventsRouter = createTRPCRouter({
     }),
 
   // Download events (JSON or ZIP)
-  download: eventProcedure
+  download: protectedProcedure
     .input(eventDownloadSchema)
     .mutation(async ({ ctx, input }) => {
-      const eventCtx = ctx as EventContext;
+      const userId = ctx.session.user.id;
       try {
         // Check permissions for all events
-        const userEvents = await storage.getAllEvents(eventCtx.userId);
+        const userEvents = await storage.getAllEvents(userId);
         const userEventIds = userEvents.map((e) => e.id);
         const allowedEventIds = input.eventIds.filter((id) =>
           userEventIds.includes(id),

@@ -18,10 +18,7 @@ export async function updateLog(
 ) {
   const [updated] = await db
     .update(logs)
-    .set({
-      ...updates,
-      updatedAt: new Date(),
-    })
+    .set(updates)
     .where(eq(logs.id, logId))
     .returning();
   return updated;

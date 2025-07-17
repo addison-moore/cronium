@@ -43,9 +43,9 @@ export async function POST(
     }
 
     const updatedJob = await jobService.completeJob(jobId, {
-      output,
+      ...(output !== undefined && { output }),
       exitCode: body.exitCode ?? 0,
-      metrics: body.metrics,
+      ...(body.metrics !== undefined && { metrics: body.metrics }),
     });
 
     if (!updatedJob) {

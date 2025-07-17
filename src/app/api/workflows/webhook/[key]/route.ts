@@ -8,10 +8,10 @@ import { workflowExecutor } from "@/lib/workflow-executor";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { key: string } },
+  { params }: { params: Promise<{ key: string }> },
 ) {
-  // Get params - they are already unwrapped in Next.js 15
-  const webhookKey = params.key;
+  // Get params
+  const { key: webhookKey } = await params;
 
   try {
     // Find the workflow associated with this webhook key
