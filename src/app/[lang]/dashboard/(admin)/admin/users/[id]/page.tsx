@@ -44,6 +44,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
+import type { RouterOutputs } from "@/server/api/root";
+
+type UserResponse = RouterOutputs["admin"]["getUser"];
+type User = UserResponse["data"];
 
 export default function UserDetailsPage() {
   const router = useRouter();
@@ -148,24 +152,28 @@ export default function UserDetailsPage() {
   });
 
   function updateUserRole(newRole: UserRole): void {
-    if (!user) return;
-    updateUserMutation.mutate({ id: user.id, role: newRole });
+    if (!user?.data?.id) return;
+    const userId = user.data.id;
+    updateUserMutation.mutate({ id: userId, role: newRole });
   }
 
   function updateUserStatus(newStatus: UserStatus): void {
-    if (!user) return;
-    toggleUserStatusMutation.mutate({ id: user.id, status: newStatus });
+    if (!user?.data?.id) return;
+    const userId = user.data.id;
+    toggleUserStatusMutation.mutate({ id: userId, status: newStatus });
   }
 
   function resendInvitation(): void {
-    if (!user) return;
-    resendInvitationMutation.mutate({ id: user.id });
+    if (!user?.data?.id) return;
+    const userId = user.data.id;
+    resendInvitationMutation.mutate({ id: userId });
   }
 
   function deleteUser(): void {
-    if (!user) return;
+    if (!user?.data?.id) return;
+    const userId = user.data.id;
     deleteUserMutation.mutate({
-      userIds: [user.id],
+      userIds: [userId],
       operation: "delete",
     });
     setIsDeleteDialogOpen(false);
@@ -185,13 +193,15 @@ export default function UserDetailsPage() {
     );
   }
 
-  if (!user) {
+  if (!user?.data) {
     return (
       <div className="container mx-auto py-8">
         <div className="text-center">User not found.</div>
       </div>
     );
   }
+
+  const userData = user.data;
 
   return (
     <div className="container mx-auto space-y-6 py-8">
@@ -216,23 +226,23 @@ export default function UserDetailsPage() {
               <User className="h-6 w-6 text-gray-500" />
               <div>
                 <CardTitle className="text-xl">
-                  {user.email ?? "No email"}
+                  {userData.email ?? "No email"}
                 </CardTitle>
                 <CardDescription>
-                  {user.firstName || user.lastName
-                    ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim()
+                  {userData.firstName || userData.lastName
+                    ? `${String(userData.firstName ?? "")} ${String(userData.lastName ?? "")}`.trim()
                     : "No name provided"}
                 </CardDescription>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <StatusBadge status={user.status} />
+              <StatusBadge status={userData.status} />
               <Badge
                 variant={
-                  user.role === UserRole.ADMIN ? "destructive" : "default"
+                  userData.role === UserRole.ADMIN ? "destructive" : "default"
                 }
               >
-                {user.role}
+                {userData.role}
               </Badge>
             </div>
           </div>
@@ -242,12 +252,12 @@ export default function UserDetailsPage() {
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <Mail className="h-4 w-4" />
-                <span>Email: {user.email ?? "No email"}</span>
+                <span>Email: {userData.email ?? "No email"}</span>
               </div>
-              {user.username && (
+              {userData.username && (
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <User className="h-4 w-4" />
-                  <span>Username: @{user.username}</span>
+                  <span>Username: @{userData.username}</span>
                 </div>
               )}
             </div>
@@ -255,15 +265,22 @@ export default function UserDetailsPage() {
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <Calendar className="h-4 w-4" />
                 <span>
-                  Created: {new Date(user.createdAt).toLocaleDateString()}
+                  Created:{" "}
+                  {userData.createdAt
+                    ? new Date(
+                        userData.createdAt as string | number | Date,
+                      ).toLocaleDateString()
+                    : "Unknown"}
                 </span>
               </div>
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <Calendar className="h-4 w-4" />
                 <span>
                   Last Login:{" "}
-                  {user.lastLogin
-                    ? new Date(user.lastLogin).toLocaleDateString()
+                  {userData.lastLogin
+                    ? new Date(
+                        userData.lastLogin as string | number | Date,
+                      ).toLocaleDateString()
                     : "Never"}
                 </span>
               </div>
@@ -288,7 +305,7 @@ export default function UserDetailsPage() {
           <div className="space-y-2">
             <label className="text-sm font-medium">Role</label>
             <Select
-              value={user.role}
+              value={userData.role}
               onValueChange={(value) => updateUserRole(value as UserRole)}
               disabled={isUpdating}
             >
@@ -306,7 +323,7 @@ export default function UserDetailsPage() {
           <div className="space-y-3">
             <label className="text-sm font-medium">Status Actions</label>
             <div className="flex flex-wrap gap-2">
-              {user.status === UserStatus.INVITED && (
+              {userData.status === UserStatus.INVITED && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -319,7 +336,7 @@ export default function UserDetailsPage() {
                 </Button>
               )}
 
-              {user.status === UserStatus.ACTIVE ? (
+              {userData.status === UserStatus.ACTIVE ? (
                 <Button
                   variant="outline"
                   size="sm"
@@ -330,7 +347,7 @@ export default function UserDetailsPage() {
                   <UserX className="h-4 w-4" />
                   Disable User
                 </Button>
-              ) : user.status === UserStatus.DISABLED ? (
+              ) : userData.status === UserStatus.DISABLED ? (
                 <Button
                   variant="outline"
                   size="sm"

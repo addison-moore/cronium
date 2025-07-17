@@ -101,7 +101,7 @@ export function VariablesTab() {
     },
   });
 
-  const variables = variablesData?.variables ?? [];
+  const variables = (variablesData?.items ?? []) as UserVariable[];
 
   const handleSaveVariable = async () => {
     if (!formData.key.trim() || !formData.value.trim()) {
@@ -274,7 +274,9 @@ export function VariablesTab() {
                     {variable.description ?? "-"}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {new Date(variable.updatedAt).toLocaleDateString()}
+                    {new Date(
+                      variable.updatedAt as string | number | Date,
+                    ).toLocaleDateString()}
                   </TableCell>
                   <TableCell>
                     <div className="flex space-x-2">

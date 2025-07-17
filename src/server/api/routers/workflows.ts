@@ -1,16 +1,21 @@
 /**
  * Workflows Router
  *
- * Note: This router does NOT use caching for any operations.
- * Previously used cachedQueries but had no cache invalidation implemented.
- * All workflow data is now fetched fresh to ensure consistency.
- *
- * See /docs/CACHING_STRATEGY.md for details on the caching strategy.
  */
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
+import {
+  normalizePagination,
+  createPaginatedResult,
+  checkResourceAccess,
+} from "@/server/utils/db-patterns";
+import { withErrorHandling } from "@/server/utils/error-utils";
+import {
+  mutationResponse,
+  resourceResponse,
+} from "@/server/utils/api-patterns";
 import type { InsertWorkflow } from "../../../shared/schema";
 import {
   createWorkflowSchema,
@@ -23,211 +28,169 @@ import {
   bulkWorkflowOperationSchema,
   workflowDownloadSchema,
 } from "@shared/schemas/workflows";
-import {
-  storage,
-  type WorkflowWithRelations,
-  type WorkflowExecution,
-} from "@/server/storage";
-import { EventStatus, LogStatus, UserRole } from "@shared/schema";
+import { storage, type WorkflowWithRelations } from "@/server/storage";
+import { EventStatus, LogStatus } from "@shared/schema";
 
-// Custom procedure that handles auth for tRPC fetch adapter
-const workflowProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  // Try to get session from headers/cookies
-  let session = null;
-  let userId = null;
-
-  try {
-    // If session exists in context, use it
-    if (ctx.session?.user?.id) {
-      session = ctx.session;
-      userId = ctx.session.user.id;
-    } else {
-      if (process.env.NODE_ENV === "development") {
-        const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter(
-          (user) => user.role === UserRole.ADMIN,
-        );
-        if (adminUsers.length > 0) {
-          userId = adminUsers[0]!.id;
-          session = { user: { id: adminUsers[0]!.id } };
-        }
-      }
-    }
-
-    if (!userId) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "Authentication required",
-      });
-    }
-
-    return next({
-      ctx: {
-        ...ctx,
-        session,
-        userId,
-      },
-    });
-  } catch (error: unknown) {
-    console.error("Auth error in workflowProcedure:", error);
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Authentication failed",
-    });
-  }
-});
+// Use centralized authentication from trpc.ts
 
 export const workflowsRouter = createTRPCRouter({
   // Get all workflows for user
-  getAll: workflowProcedure
+  getAll: protectedProcedure
     .input(workflowQuerySchema)
     .query(async ({ ctx, input }) => {
-      try {
-        // Direct storage call without caching
-        const workflows = await storage.getAllWorkflows(ctx.userId);
+      return withErrorHandling(
+        async () => {
+          const userId = ctx.session.user.id;
+          const pagination = normalizePagination(input);
 
-        // Apply filters
-        let filteredWorkflows = workflows;
+          // Direct storage call without caching
+          const workflows = await storage.getAllWorkflows(userId);
 
-        if (input.search) {
-          const searchLower = input.search.toLowerCase();
-          filteredWorkflows = filteredWorkflows.filter(
-            (workflow) =>
-              workflow.name.toLowerCase().includes(searchLower) ||
-              workflow.description?.toLowerCase().includes(searchLower),
+          // Apply filters
+          let filteredWorkflows = workflows;
+
+          if (input.search) {
+            const searchLower = input.search.toLowerCase();
+            filteredWorkflows = filteredWorkflows.filter(
+              (workflow) =>
+                workflow.name.toLowerCase().includes(searchLower) ||
+                workflow.description?.toLowerCase().includes(searchLower),
+            );
+          }
+
+          if (input.status) {
+            filteredWorkflows = filteredWorkflows.filter(
+              (workflow) => workflow.status === input.status,
+            );
+          }
+
+          if (input.triggerType) {
+            filteredWorkflows = filteredWorkflows.filter(
+              (workflow) => workflow.triggerType === input.triggerType,
+            );
+          }
+
+          if (input.shared !== undefined) {
+            filteredWorkflows = filteredWorkflows.filter(
+              (workflow) => workflow.shared === input.shared,
+            );
+          }
+
+          // Apply pagination in memory (should be moved to database level)
+          const paginatedWorkflows = filteredWorkflows.slice(
+            pagination.offset,
+            pagination.offset + pagination.limit,
           );
-        }
 
-        if (input.status) {
-          filteredWorkflows = filteredWorkflows.filter(
-            (workflow) => workflow.status === input.status,
+          const result = createPaginatedResult(
+            paginatedWorkflows,
+            filteredWorkflows.length,
+            pagination,
           );
-        }
 
-        if (input.triggerType) {
-          filteredWorkflows = filteredWorkflows.filter(
-            (workflow) => workflow.triggerType === input.triggerType,
-          );
-        }
-
-        if (input.shared !== undefined) {
-          filteredWorkflows = filteredWorkflows.filter(
-            (workflow) => workflow.shared === input.shared,
-          );
-        }
-
-        // Apply pagination
-        const paginatedWorkflows = filteredWorkflows.slice(
-          input.offset,
-          input.offset + input.limit,
-        );
-
-        return {
-          workflows: paginatedWorkflows,
-          total: filteredWorkflows.length,
-          hasMore: input.offset + input.limit < filteredWorkflows.length,
-        };
-      } catch (error: unknown) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to fetch workflows",
-          cause: error,
-        });
-      }
+          // Return in the format the frontend expects
+          return {
+            workflows: result.items,
+            total: result.total,
+            hasMore: result.hasMore,
+          };
+        },
+        {
+          component: "workflowsRouter",
+          operationName: "getAll",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 
   // Get single workflow by ID with relations
-  getById: workflowProcedure
+  getById: protectedProcedure
     .input(workflowIdSchema)
     .query(async ({ ctx, input }) => {
-      try {
-        // Direct storage call without caching
-        const workflow = await storage.getWorkflowWithRelations(input.id);
-        if (!workflow) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Workflow not found",
-          });
-        }
+      return withErrorHandling(
+        async () => {
+          const workflow = await storage.getWorkflowWithRelations(input.id);
+          const accessibleWorkflow = await checkResourceAccess(
+            workflow ?? undefined,
+            ctx.session.user.id,
+            "workflow",
+          );
 
-        // Check if user owns the workflow or it's shared
-        if (workflow.userId !== ctx.userId && !workflow.shared) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Access denied",
-          });
-        }
-
-        return workflow;
-      } catch (error: unknown) {
-        if (error instanceof TRPCError) throw error;
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to fetch workflow",
-          cause: error,
-        });
-      }
+          return resourceResponse(accessibleWorkflow);
+        },
+        {
+          component: "workflowsRouter",
+          operationName: "getById",
+          userId: ctx.session.user.id,
+          metadata: { workflowId: input.id },
+        },
+      );
     }),
 
   // Create new workflow
-  create: workflowProcedure
+  create: protectedProcedure
     .input(createWorkflowSchema)
     .mutation(async ({ ctx, input }) => {
-      try {
-        const { nodes, edges, ...workflowData } = input;
+      return withErrorHandling(
+        async () => {
+          const { nodes, edges, ...workflowData } = input;
 
-        // Add user ID to workflow data
-        const workflowToCreate = {
-          ...workflowData,
-          userId: ctx.userId,
-        };
+          // Add user ID to workflow data
+          const workflowToCreate = {
+            ...workflowData,
+            userId: ctx.session.user.id,
+          };
 
-        // Create the workflow
-        const workflow = await storage.createWorkflow(workflowToCreate);
+          // Create the workflow
+          const workflow = await storage.createWorkflow(workflowToCreate);
 
-        // Create workflow nodes
-        const nodeIdMap = new Map<string, number>(); // ReactFlow ID -> DB ID
-        for (const node of nodes) {
-          const dbNode = await storage.createWorkflowNode({
-            workflowId: workflow.id,
-            eventId: node.data.eventId,
-            position_x: node.position.x,
-            position_y: node.position.y,
-          });
-          nodeIdMap.set(node.id, dbNode.id);
-        }
-
-        // Create workflow connections
-        for (const edge of edges) {
-          const sourceNodeDbId = nodeIdMap.get(edge.source);
-          const targetNodeDbId = nodeIdMap.get(edge.target);
-
-          if (sourceNodeDbId && targetNodeDbId) {
-            await storage.createWorkflowConnection({
+          // Create workflow nodes
+          const nodeIdMap = new Map<string, number>(); // ReactFlow ID -> DB ID
+          for (const node of nodes) {
+            const dbNode = await storage.createWorkflowNode({
               workflowId: workflow.id,
-              sourceNodeId: sourceNodeDbId,
-              targetNodeId: targetNodeDbId,
-              connectionType: edge.data.connectionType,
+              eventId: node.data.eventId,
+              position_x: node.position.x,
+              position_y: node.position.y,
             });
+            nodeIdMap.set(node.id, dbNode.id);
           }
-        }
 
-        // Get the complete workflow with relations
-        const completeWorkflow = await storage.getWorkflowWithRelations(
-          workflow.id,
-        );
-        return completeWorkflow;
-      } catch (error: unknown) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to create workflow",
-          cause: error,
-        });
-      }
+          // Create workflow connections
+          for (const edge of edges) {
+            const sourceNodeDbId = nodeIdMap.get(edge.source);
+            const targetNodeDbId = nodeIdMap.get(edge.target);
+
+            if (sourceNodeDbId && targetNodeDbId) {
+              await storage.createWorkflowConnection({
+                workflowId: workflow.id,
+                sourceNodeId: sourceNodeDbId,
+                targetNodeId: targetNodeDbId,
+                connectionType: edge.data.connectionType,
+              });
+            }
+          }
+
+          // Get the complete workflow with relations
+          const completeWorkflow = await storage.getWorkflowWithRelations(
+            workflow.id,
+          );
+
+          return mutationResponse(
+            completeWorkflow,
+            "Workflow created successfully",
+          );
+        },
+        {
+          component: "workflowsRouter",
+          operationName: "create",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 
   // Update existing workflow
-  update: workflowProcedure
+  update: protectedProcedure
     .input(updateWorkflowSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -241,7 +204,7 @@ export const workflowsRouter = createTRPCRouter({
             message: "Workflow not found",
           });
         }
-        if (existingWorkflow.userId !== ctx.userId) {
+        if (existingWorkflow.userId !== ctx.session.user.id) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "Not authorized to edit this workflow",
@@ -317,7 +280,7 @@ export const workflowsRouter = createTRPCRouter({
     }),
 
   // Delete workflow
-  delete: workflowProcedure
+  delete: protectedProcedure
     .input(workflowIdSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -329,7 +292,7 @@ export const workflowsRouter = createTRPCRouter({
             message: "Workflow not found",
           });
         }
-        if (workflow.userId !== ctx.userId) {
+        if (workflow.userId !== ctx.session.user.id) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "Not authorized to delete this workflow",
@@ -349,7 +312,7 @@ export const workflowsRouter = createTRPCRouter({
     }),
 
   // Execute workflow
-  execute: workflowProcedure
+  execute: protectedProcedure
     .input(executeWorkflowSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -361,14 +324,14 @@ export const workflowsRouter = createTRPCRouter({
             message: "Workflow not found",
           });
         }
-        if (workflow.userId !== ctx.userId && !workflow.shared) {
+        if (workflow.userId !== ctx.session.user.id && !workflow.shared) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
         }
 
         // Create workflow execution record
         const _execution = await storage.createWorkflowExecution({
           workflowId: input.id,
-          userId: ctx.userId,
+          userId: ctx.session.user.id,
           status: LogStatus.RUNNING,
           triggerType: input.manual ? "MANUAL" : "API",
           startedAt: new Date(),
@@ -381,7 +344,7 @@ export const workflowsRouter = createTRPCRouter({
         // Execute the workflow
         const result = await workflowExecutor.executeWorkflow(
           input.id,
-          ctx.userId,
+          ctx.session.user.id,
           input.payload,
         );
 
@@ -397,7 +360,7 @@ export const workflowsRouter = createTRPCRouter({
     }),
 
   // Get workflow executions
-  getExecutions: workflowProcedure
+  getExecutions: protectedProcedure
     .input(workflowExecutionsSchema)
     .query(async ({ ctx, input }) => {
       try {
@@ -410,7 +373,7 @@ export const workflowsRouter = createTRPCRouter({
               message: "Workflow not found",
             });
           }
-          if (workflow.userId !== ctx.userId && !workflow.shared) {
+          if (workflow.userId !== ctx.session.user.id && !workflow.shared) {
             throw new TRPCError({
               code: "FORBIDDEN",
               message: "Access denied",
@@ -429,7 +392,9 @@ export const workflowsRouter = createTRPCRouter({
           };
         } else {
           // Get all workflows for the user first
-          const userWorkflows = await storage.getAllWorkflows(ctx.userId);
+          const userWorkflows = await storage.getAllWorkflows(
+            ctx.session.user.id,
+          );
 
           if (userWorkflows.length === 0) {
             return {
@@ -438,12 +403,28 @@ export const workflowsRouter = createTRPCRouter({
             };
           }
 
-          // Use optimized method to get all user workflow executions in a single query
-          const userExecutions = await storage.getUserWorkflowExecutions(
-            ctx.userId,
-            input.limit,
-            input.offset,
+          // Use a different approach - get executions for all user workflows
+          const executionPromises = userWorkflows.map((workflow) =>
+            storage.getWorkflowExecutions(
+              workflow.id,
+              input.limit,
+              Math.floor(input.offset / input.limit) + 1,
+            ),
           );
+
+          const allExecutions = await Promise.all(executionPromises);
+          const combinedExecutions = allExecutions.flatMap(
+            (result) => result.executions,
+          );
+          const totalExecutions = allExecutions.reduce(
+            (sum, result) => sum + result.total,
+            0,
+          );
+
+          const userExecutions = {
+            executions: combinedExecutions.slice(0, input.limit),
+            total: totalExecutions,
+          };
 
           return {
             executions: userExecutions,
@@ -461,7 +442,7 @@ export const workflowsRouter = createTRPCRouter({
     }),
 
   // Get workflow logs
-  getLogs: workflowProcedure
+  getLogs: protectedProcedure
     .input(workflowLogsSchema)
     .query(async ({ ctx, input }) => {
       try {
@@ -473,7 +454,7 @@ export const workflowsRouter = createTRPCRouter({
             message: "Workflow not found",
           });
         }
-        if (workflow.userId !== ctx.userId && !workflow.shared) {
+        if (workflow.userId !== ctx.session.user.id && !workflow.shared) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
         }
 
@@ -498,7 +479,7 @@ export const workflowsRouter = createTRPCRouter({
     }),
 
   // Archive workflow
-  archive: workflowProcedure
+  archive: protectedProcedure
     .input(workflowIdSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -510,7 +491,7 @@ export const workflowsRouter = createTRPCRouter({
             message: "Workflow not found",
           });
         }
-        if (workflow.userId !== ctx.userId) {
+        if (workflow.userId !== ctx.session.user.id) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "Not authorized to archive this workflow",
@@ -535,7 +516,7 @@ export const workflowsRouter = createTRPCRouter({
     }),
 
   // Bulk operations on workflows
-  bulkOperation: workflowProcedure
+  bulkOperation: protectedProcedure
     .input(bulkWorkflowOperationSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -549,7 +530,7 @@ export const workflowsRouter = createTRPCRouter({
           try {
             // Check if user owns the workflow
             const workflow = await storage.getWorkflow(workflowId);
-            if (!workflow || workflow.userId !== ctx.userId) {
+            if (!workflow || workflow.userId !== ctx.session.user.id) {
               results.push({
                 id: workflowId,
                 success: false,
@@ -606,7 +587,7 @@ export const workflowsRouter = createTRPCRouter({
     }),
 
   // Get workflow execution details
-  getExecution: workflowProcedure
+  getExecution: protectedProcedure
     .input(
       z.object({
         workflowId: z.number(),
@@ -625,7 +606,7 @@ export const workflowsRouter = createTRPCRouter({
         }
 
         // Check access permissions
-        if (workflow.userId !== ctx.userId && !workflow.shared) {
+        if (workflow.userId !== ctx.session.user.id && !workflow.shared) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
         }
 
@@ -673,12 +654,14 @@ export const workflowsRouter = createTRPCRouter({
     }),
 
   // Download workflows
-  download: workflowProcedure
+  download: protectedProcedure
     .input(workflowDownloadSchema)
     .mutation(async ({ ctx, input }) => {
       try {
         // Check permissions for all workflows
-        const userWorkflows = await storage.getAllWorkflows(ctx.userId);
+        const userWorkflows = await storage.getAllWorkflows(
+          ctx.session.user.id,
+        );
         const userWorkflowIds = userWorkflows.map((w) => w.id);
         const allowedWorkflowIds = input.workflowIds.filter((id) =>
           userWorkflowIds.includes(id),

@@ -1,4 +1,4 @@
-import { db } from "../server/db";
+import { db } from "@server/db";
 import {
   events,
   workflows,
@@ -10,7 +10,7 @@ import {
   WorkflowTriggerType,
   RunLocation,
   TimeUnit,
-} from "../shared/schema";
+} from "@shared/schema";
 import { nanoid } from "nanoid";
 
 /**

@@ -22,8 +22,12 @@ export const experimental_ppr = true;
 export const revalidate = 21600; // 6 hours
 export const dynamic = "force-static";
 
-export default async function Home({ params }: { params: { lang: string } }) {
-  const { lang } = await Promise.resolve(params);
+export default async function Home({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}) {
+  const { lang } = await params;
 
   // Get translations function for server component
   type MessageModule = { default: TranslationMessages };

@@ -217,7 +217,9 @@ export function TemplateActionParameterForm({
               language={language}
               height="200px"
               editorSettings={
-                editorSettings ?? {
+                (editorSettings && "data" in editorSettings
+                  ? editorSettings.data
+                  : editorSettings) ?? {
                   fontSize: 14,
                   theme: "vs-dark",
                   wordWrap: true,

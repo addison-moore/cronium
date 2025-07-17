@@ -5,462 +5,520 @@
 
  ⚠ The Next.js plugin was not detected in your ESLint configuration. See https://nextjs.org/docs/app/api-reference/config/eslint#migrating-existing-config
 
-./src/app/[lang]/dashboard/(main)/events/[id]/page.tsx
-35:12  Warning: '_error' is defined but never used.  @typescript-eslint/no-unused-vars
-73:12  Warning: '_error' is defined but never used.  @typescript-eslint/no-unused-vars
+./src/app/[lang]/dashboard/(admin)/admin/page.tsx
+162:44  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+162:57  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+162:62  Error: Unsafe member access .email on an `any` value.  @typescript-eslint/no-unsafe-member-access
 
-./src/app/[lang]/dashboard/(main)/events/page.tsx
-48:9  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
-60:9  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
-73:13  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
-89:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
-89:34  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-89:39  Error: Unsafe member access .eventServers on an `any` value.  @typescript-eslint/no-unsafe-member-access
+./src/app/[lang]/dashboard/(main)/logs/page-client.tsx
+30:27  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+31:29  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
 
-./src/app/[lang]/dashboard/(main)/logs/[id]/page.tsx
-13:52  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
-13:65  Error: Unsafe member access .default on an `any` value.  @typescript-eslint/no-unsafe-member-access
-45:12  Warning: '_error' is defined but never used.  @typescript-eslint/no-unused-vars
-70:12  Warning: '_error' is defined but never used.  @typescript-eslint/no-unused-vars
+./src/app/[lang]/dashboard/(main)/monitoring/page-client.tsx
+30:35  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+30:41  Error: Unsafe member access .cpu on an `any` value.  @typescript-eslint/no-unsafe-member-access
+30:45  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+33:22  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+33:41  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+33:47  Error: Unsafe member access .cpu on an `any` value.  @typescript-eslint/no-unsafe-member-access
+33:51  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+46:35  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+46:41  Error: Unsafe member access .memory on an `any` value.  @typescript-eslint/no-unsafe-member-access
+46:48  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+49:22  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+49:41  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+49:47  Error: Unsafe member access .memory on an `any` value.  @typescript-eslint/no-unsafe-member-access
+49:54  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+62:35  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+62:41  Error: Unsafe member access .activeJobs on an `any` value.  @typescript-eslint/no-unsafe-member-access
+62:52  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+79:35  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+79:41  Error: Unsafe member access .connectedServers on an `any` value.  @typescript-eslint/no-unsafe-member-access
+79:58  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+
+./src/app/[lang]/dashboard/(main)/workflows/[id]/edit/page.tsx
+162:13  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+162:33  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+162:54  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+163:45  Error: Unsafe member access .nodes on an `any` value.  @typescript-eslint/no-unsafe-member-access
+178:51  Error: Unsafe member access .connections on an `any` value.  @typescript-eslint/no-unsafe-member-access
+307:13  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+307:33  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+307:54  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+309:33  Error: Unsafe member access .name on an `any` value.  @typescript-eslint/no-unsafe-member-access
+310:41  Error: Unsafe member access .description on an `any` value.  @typescript-eslint/no-unsafe-member-access
+311:34  Error: Unsafe member access .tags on an `any` value.  @typescript-eslint/no-unsafe-member-access
+312:40  Error: Unsafe member access .triggerType on an `any` value.  @typescript-eslint/no-unsafe-member-access
+313:40  Error: Unsafe member access .runLocation on an `any` value.  @typescript-eslint/no-unsafe-member-access
+314:35  Error: Unsafe member access .status on an `any` value.  @typescript-eslint/no-unsafe-member-access
+315:43  Error: Unsafe member access .scheduleNumber on an `any` value.  @typescript-eslint/no-unsafe-member-access
+316:41  Error: Unsafe member access .scheduleUnit on an `any` value.  @typescript-eslint/no-unsafe-member-access
+317:43  Error: Unsafe member access .customSchedule on an `any` value.  @typescript-eslint/no-unsafe-member-access
+318:48  Error: Unsafe member access .customSchedule on an `any` value.  @typescript-eslint/no-unsafe-member-access
+319:36  Error: Unsafe member access .shared on an `any` value.  @typescript-eslint/no-unsafe-member-access
+320:50  Error: Unsafe member access .overrideEventServers on an `any` value.  @typescript-eslint/no-unsafe-member-access
+322:47  Error: Unsafe member access .overrideServerIds on an `any` value.  @typescript-eslint/no-unsafe-member-access
 
 ./src/app/[lang]/dashboard/(main)/workflows/[id]/page.tsx
-268:13  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-268:52  Error: Unsafe member access .executions on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-268:63  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
-271:9  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-271:37  Error: Unsafe member access .length on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-272:9  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-272:23  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-272:34  Error: Unsafe member access .filter on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-277:12  Error: Unsafe member access .length on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-278:9  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-278:23  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-278:34  Error: Unsafe member access .filter on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-283:12  Error: Unsafe member access .length on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-288:13  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-288:32  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-288:43  Error: Unsafe member access .find on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-297:11  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-297:32  Error: Unsafe member access .id on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-298:11  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-298:40  Error: Unsafe member access .workflowId on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-299:11  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-299:36  Error: Unsafe member access .status on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-300:11  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-301:30  Error: Unsafe member access .startedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-302:17  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-302:34  Error: Unsafe member access .startedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-303:34  Error: Unsafe member access .startedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-304:11  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-304:41  Error: Unsafe member access .completedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-305:32  Error: Unsafe member access .completedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-306:17  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-306:34  Error: Unsafe member access .completedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-307:34  Error: Unsafe member access .completedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-309:11  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-309:43  Error: Unsafe member access .totalDuration on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
+185:19  Warning: Unsafe argument of type `any` assigned to a parameter of type `SetStateAction<{ description: string | null; shared: boolean; id: number; name: string; createdAt: Date; updatedAt: Date; status: EventStatus; userId: string; triggerType: WorkflowTriggerType; ... 7 more ...; overrideServerIds: unknown; } | null>`.  @typescript-eslint/no-unsafe-argument
+185:19  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+185:40  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+212:13  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+212:33  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+212:54  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+213:45  Error: Unsafe member access .nodes on an `any` value.  @typescript-eslint/no-unsafe-member-access
+232:51  Error: Unsafe member access .connections on an `any` value.  @typescript-eslint/no-unsafe-member-access
 
-./src/app/[lang]/dashboard/(main)/workflows/page.tsx
-64:5  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-64:16  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-64:36  Error: Unsafe member access .toISOString on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
+./src/components/dashboard/AIScriptAssistant.tsx
+41:24  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+72:21  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
 
-./src/app/api/internal/executions/[executionId]/context/route.ts
-78:11  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
+./src/components/dashboard/DashboardStats.tsx
+87:23  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+99:28  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+217:11  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+217:24  Error: Unsafe member access .id on an `any` value.  @typescript-eslint/no-unsafe-member-access
+218:11  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+218:29  Error: Unsafe member access .eventId on an `any` value.  @typescript-eslint/no-unsafe-member-access
+219:11  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+219:31  Error: Unsafe member access .eventName on an `any` value.  @typescript-eslint/no-unsafe-member-access
+220:28  Error: Unsafe member access .status on an `any` value.  @typescript-eslint/no-unsafe-member-access
+221:11  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+221:31  Error: Unsafe member access .startTime on an `any` value.  @typescript-eslint/no-unsafe-member-access
+223:11  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+223:30  Error: Unsafe member access .duration on an `any` value.  @typescript-eslint/no-unsafe-member-access
+224:11  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+224:32  Error: Unsafe member access .workflowId on an `any` value.  @typescript-eslint/no-unsafe-member-access
+225:11  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+225:34  Error: Unsafe member access .workflowName on an `any` value.  @typescript-eslint/no-unsafe-member-access
 
-./src/components/auth/SignUpForm.tsx
-76:33  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
-82:40  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
-
-./src/components/dashboard/ServerEventsList.tsx
-190:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-190:24  Error: Unsafe member access .id on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-190:48  Error: Unsafe member access .id on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-191:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-191:26  Error: Unsafe member access .name on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-191:52  Error: Unsafe member access .name on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-192:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-193:22  Error: Unsafe member access .description on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-193:55  Error: Unsafe member access .description on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-194:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-194:28  Error: Unsafe member access .shared on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-194:57  Error: Unsafe member access .shared on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-195:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-195:19  Error: Unsafe member access .type on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-196:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-196:21  Error: Unsafe member access .status on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-197:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-197:29  Error: Unsafe member access .content on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-197:58  Error: Unsafe member access .content on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-198:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-199:22  Error: Unsafe member access .scheduleNumber on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-199:58  Error: Unsafe member access .scheduleNumber on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-201:22  Error: Unsafe member access .scheduleUnit on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-202:20  Error: Unsafe member access .scheduleUnit on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-204:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-205:22  Error: Unsafe member access .customSchedule on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-205:58  Error: Unsafe member access .customSchedule on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-206:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-206:28  Error: Unsafe member access .userId on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-206:56  Error: Unsafe member access .userId on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-207:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-208:15  Error: Unsafe member access .createdAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-209:13  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-209:19  Error: Unsafe member access .createdAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-211:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-212:15  Error: Unsafe member access .updatedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-213:13  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-213:19  Error: Unsafe member access .updatedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-215:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-216:15  Error: Unsafe member access .lastRunAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-216:43  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-216:49  Error: Unsafe member access .lastRunAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-217:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-218:15  Error: Unsafe member access .nextRunAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-218:43  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-218:49  Error: Unsafe member access .nextRunAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-219:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-219:33  Error: Unsafe member access .tags on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-220:11  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-220:17  Error: Unsafe member access .tags on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-222:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-222:30  Error: Unsafe member access .serverId on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-222:60  Error: Unsafe member access .serverId on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-224:22  Error: Unsafe member access .timeoutUnit on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-225:20  Error: Unsafe member access .timeoutUnit on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-230:22  Error: Unsafe member access .successCount on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-231:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-231:40  Error: Unsafe member access .successCount on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-233:22  Error: Unsafe member access .failureCount on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-234:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-234:40  Error: Unsafe member access .failureCount on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-236:22  Error: Unsafe member access .httpMethod on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-237:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-237:38  Error: Unsafe member access .httpMethod on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-239:22  Error: Unsafe member access .httpUrl on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-240:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-240:35  Error: Unsafe member access .httpUrl on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-242:29  Error: Unsafe member access .httpHeaders on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-243:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-243:33  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-243:39  Error: Unsafe member access .httpHeaders on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-251:22  Error: Unsafe member access .httpBody on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-252:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-252:36  Error: Unsafe member access .httpBody on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-254:22  Error: Unsafe member access .runLocation on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-255:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-255:39  Error: Unsafe member access .runLocation on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-257:22  Error: Unsafe member access .timeoutValue on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-258:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-258:40  Error: Unsafe member access .timeoutValue on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-260:22  Error: Unsafe member access .retries on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-261:7  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-261:35  Error: Unsafe member access .retries on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-
-./src/components/error/graceful-degradation.tsx
-353:13  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
-353:40  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-353:45  Error: Unsafe member access .connection on an `any` value.  @typescript-eslint/no-unsafe-member-access
-355:15  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
-355:42  Error: Unsafe member access .effectiveType on an `any` value.  @typescript-eslint/no-unsafe-member-access
-359:40  Warning: Unsafe argument of type `any` assigned to a parameter of type `string | undefined`.  @typescript-eslint/no-unsafe-argument
-362:7  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
-362:18  Error: Unsafe member access .addEventListener on an `any` value.  @typescript-eslint/no-unsafe-member-access
-
-./src/components/event-details/EventDetailsTab.tsx
-344:43  Warning: Replace `⏎················{formatDate(event.createdAt)}⏎··············` with `{formatDate(event.createdAt)}`  prettier/prettier
-351:43  Warning: Replace `⏎················{formatDate(event.updatedAt)}⏎··············` with `{formatDate(event.updatedAt)}`  prettier/prettier
+./src/components/event-form/EventForm.tsx
+330:27  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
 
 ./src/components/event-list/EventsListClient.tsx
-5:23  Warning: 'ConditionalActionType' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
-6:15  Warning: 'TimeUnit' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
-6:25  Warning: 'RunLocation' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
-6:38  Warning: 'EventType' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
-107:11  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-107:15  Error: Unsafe member access .includes on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-108:27  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-120:11  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-120:15  Error: Unsafe member access .includes on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-121:27  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-137:39  Error: The two values in this comparison do not have a shared enum type.  @typescript-eslint/no-unsafe-enum-comparison
-140:41  Error: The two values in this comparison do not have a shared enum type.  @typescript-eslint/no-unsafe-enum-comparison
+5:1  Warning: Imports "EventType" are only used as type.  @typescript-eslint/consistent-type-imports
 
 ./src/components/streaming/rsc-stream-boundary.tsx
-2:10  Warning: 'ErrorBoundaryCard' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
+81:22  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+86:31  Error: Unsafe member access .title on an `any` value.  @typescript-eslint/no-unsafe-member-access
+87:37  Error: Unsafe member access .description on an `any` value.  @typescript-eslint/no-unsafe-member-access
 
 ./src/components/ui/code-viewer.tsx
-48:61  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+78:66  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
 
 ./src/components/ui/loading-boundary.tsx
-65:18  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-213:17  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-251:41  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+161:17  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+161:43  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+162:16  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+162:27  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+313:36  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
 
-./src/components/ui/loading-patterns.tsx
-8:3  Warning: 'LoadingBoundary' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
-
-./src/components/workflows/WorkflowCanvas-refactored.tsx
-22:3  Warning: 'EdgeChange' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
-71:3  Warning: 'workflowId' is defined but never used. Allowed unused args must match /^_/u.  @typescript-eslint/no-unused-vars
-87:22  Warning: 'setIsDragging' is assigned a value but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
-214:13  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-214:24  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-222:9  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-
-./src/components/workflows/WorkflowExecutionHistory.tsx
-95:15  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-95:28  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-95:58  Error: Unsafe member access .executions on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-104:9  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-104:50  Error: Unsafe member access .executions on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-138:13  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-138:25  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-138:36  Error: Unsafe member access .find on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-141:13  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-141:57  Error: Unsafe member access .workflowId on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-151:9  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-193:9  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-193:30  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-193:41  Error: Unsafe member access .filter on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-212:29  Error: Unsafe spread of an error typed value in an array.  @typescript-eslint/no-unsafe-assignment
-217:24  Error: Unsafe member access .workflowId on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-217:39  Error: Unsafe member access .workflowId on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-221:20  Warning: Unsafe argument of type error typed assigned to a parameter of type `string | number | Date`.  @typescript-eslint/no-unsafe-argument
-221:22  Error: Unsafe member access .startedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-221:32  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
-222:20  Warning: Unsafe argument of type error typed assigned to a parameter of type `string | number | Date`.  @typescript-eslint/no-unsafe-argument
-222:22  Error: Unsafe member access .startedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-222:32  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
-230:15  Error: Unsafe member access .completedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-230:32  Error: Unsafe member access .startedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-231:26  Warning: Unsafe argument of type error typed assigned to a parameter of type `string | number | Date`.  @typescript-eslint/no-unsafe-argument
-231:28  Error: Unsafe member access .completedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-232:26  Warning: Unsafe argument of type error typed assigned to a parameter of type `string | number | Date`.  @typescript-eslint/no-unsafe-argument
-232:28  Error: Unsafe member access .startedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-235:15  Error: Unsafe member access .completedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-235:32  Error: Unsafe member access .startedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-236:26  Warning: Unsafe argument of type error typed assigned to a parameter of type `string | number | Date`.  @typescript-eslint/no-unsafe-argument
-236:28  Error: Unsafe member access .completedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-237:26  Warning: Unsafe argument of type error typed assigned to a parameter of type `string | number | Date`.  @typescript-eslint/no-unsafe-argument
-237:28  Error: Unsafe member access .startedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-242:32  Error: Unsafe member access .completedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-243:24  Warning: Unsafe argument of type error typed assigned to a parameter of type `string | number | Date`.  @typescript-eslint/no-unsafe-argument
-243:26  Error: Unsafe member access .completedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-245:32  Error: Unsafe member access .completedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-246:24  Warning: Unsafe argument of type error typed assigned to a parameter of type `string | number | Date`.  @typescript-eslint/no-unsafe-argument
-246:26  Error: Unsafe member access .completedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-502:25  Error: Unsafe member access .length on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-524:34  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-524:44  Error: Unsafe member access .id on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-528:97  Error: Unsafe member access .workflowId on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-532:59  Error: Unsafe member access .workflowId on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-537:44  Warning: Unsafe argument of type error typed assigned to a parameter of type `string | Date | null | undefined`.  @typescript-eslint/no-unsafe-argument
-537:54  Error: Unsafe member access .startedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-538:48  Warning: Unsafe argument of type error typed assigned to a parameter of type `LogStatus`.  @typescript-eslint/no-unsafe-argument
-538:58  Error: Unsafe member access .status on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-540:59  Error: Unsafe member access .triggerType on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-543:39  Warning: Unsafe argument of type error typed assigned to a parameter of type `number | null`.  @typescript-eslint/no-unsafe-argument
-543:49  Error: Unsafe member access .totalDuration on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-548:38  Error: Unsafe member access .successfulEvents on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-552:38  Error: Unsafe member access .failedEvents on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-556:38  Error: Unsafe member access .totalEvents on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-566:66  Warning: Unsafe argument of type error typed assigned to a parameter of type `number`.  @typescript-eslint/no-unsafe-argument
-566:76  Error: Unsafe member access .id on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-575:44  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
-575:54  Error: Unsafe member access .workflowId on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
-576:43  Warning: Unsafe argument of type error typed assigned to a parameter of type `string | Date | null | undefined`.  @typescript-eslint/no-unsafe-argument
-576:53  Error: Unsafe member access .startedAt on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
+./src/components/webhooks/WebhookDashboard.tsx
+324:31  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
 
 ./src/components/workflows/WorkflowListClient.tsx
-174:23  Error: The two values in this comparison do not have a shared enum type.  @typescript-eslint/no-unsafe-enum-comparison
-202:11  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-207:44  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-209:46  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-231:42  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-242:42  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-478:32  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-479:32  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-
-./src/lib/cache/cache-service.ts
-7:18  Warning: Delete `·`  prettier/prettier
-48:39  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
-111:14  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
-133:31  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
-265:49  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
-266:53  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+25:3  Warning: 'Workflow' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
+201:9  Warning: 'handleToggleStatus' is assigned a value but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
 
 ./src/lib/rate-limit-service.ts
-1:40  Warning: 'CACHE_TTL' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
-18:3  Warning: Delete `·`  prettier/prettier
-34:28  Warning: Insert `,`  prettier/prettier
-36:12  Warning: Replace `·maxRequests,·windowMs,·keyPrefix·=·CACHE_PREFIXES.RATE_LIMIT` with `⏎······maxRequests,⏎······windowMs,⏎······keyPrefix·=·CACHE_PREFIXES.RATE_LIMIT,⏎···`  prettier/prettier
-53:47  Warning: Replace `·count:·number;·windowStart:·number` with `⏎········count:·number;⏎········windowStart:·number;⏎·····`  prettier/prettier
-61:49  Warning: Replace `·ttl:·Math.ceil(windowMs·/·1000)` with `⏎··········ttl:·Math.ceil(windowMs·/·1000),⏎·······`  prettier/prettier
-81:45  Warning: Delete `·`  prettier/prettier
-82:70  Warning: Replace `·` with `,`  prettier/prettier
-116:25  Warning: Delete `·`  prettier/prettier
-133:28  Warning: Insert `,`  prettier/prettier
-135:12  Warning: Replace `·maxRequests,·windowMs,·keyPrefix·=·CACHE_PREFIXES.RATE_LIMIT` with `⏎······maxRequests,⏎······windowMs,⏎······keyPrefix·=·CACHE_PREFIXES.RATE_LIMIT,⏎···`  prettier/prettier
-148:45  Warning: Replace `·count:·number;·windowStart:·number` with `⏎······count:·number;⏎······windowStart:·number;⏎···`  prettier/prettier
-173:38  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-174:11  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
-174:23  Warning: Replace `·ctx.session?.user?.id·??·` with `⏎······ctx.session?.user?.id·??`  prettier/prettier
-174:28  Error: Unsafe member access .session on an `any` value.  @typescript-eslint/no-unsafe-member-access
-175:7  Warning: Replace `················ctx.headers?.get("x-forwarded-for")·??·` with `ctx.headers?.get("x-forwarded-for")·??`  prettier/prettier
-175:23  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
-175:27  Error: Unsafe member access .headers on an `any` value.  @typescript-eslint/no-unsafe-member-access
-176:1  Warning: Delete `················`  prettier/prettier
-178:39  Warning: Unsafe argument of type `any` assigned to a parameter of type `string`.  @typescript-eslint/no-unsafe-argument
-178:51  Warning: Unsafe argument of type `any` assigned to a parameter of type `string`.  @typescript-eslint/no-unsafe-argument
-178:58  Warning: Replace `·maxRequests,·windowMs` with `⏎······maxRequests,⏎······windowMs,⏎···`  prettier/prettier
-180:5  Error: Unsafe return of a value of type `any`.  @typescript-eslint/no-unsafe-return
-180:12  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
-182:2  Warning: Insert `⏎`  prettier/prettier
+189:38  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+190:11  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+191:11  Error: Unsafe member access .session on an `any` value.  @typescript-eslint/no-unsafe-member-access
+192:7  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
+192:11  Error: Unsafe member access .headers on an `any` value.  @typescript-eslint/no-unsafe-member-access
+195:39  Warning: Unsafe argument of type `any` assigned to a parameter of type `string`.  @typescript-eslint/no-unsafe-argument
+195:51  Warning: Unsafe argument of type `any` assigned to a parameter of type `string`.  @typescript-eslint/no-unsafe-argument
+200:5  Error: Unsafe return of a value of type `any`.  @typescript-eslint/no-unsafe-return
+200:12  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
 
-./src/lib/services/dashboard-service.ts
-44:5  Error: Type number trivially inferred from a number literal, remove type annotation.  @typescript-eslint/no-inferrable-types
-45:5  Error: Type number trivially inferred from a number literal, remove type annotation.  @typescript-eslint/no-inferrable-types
-203:5  Error: Type number trivially inferred from a number literal, remove type annotation.  @typescript-eslint/no-inferrable-types
+./src/lib/scheduler/job-payload-builder.ts
+64:28  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+69:23  Error: Unsafe member access .headers on an `any` value.  @typescript-eslint/no-unsafe-member-access
+72:23  Error: Unsafe member access .body on an `any` value.  @typescript-eslint/no-unsafe-member-access
+74:9  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+
+./src/lib/scheduler/job-scheduling-utils.ts
+151:5  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+151:28  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/lib/scheduler/scheduler.ts
+651:9  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+651:32  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+776:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+776:30  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/lib/services/job-transformer.ts
+106:17  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+112:12  Error: Unsafe member access .body on an `any` value.  @typescript-eslint/no-unsafe-member-access
+114:5  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
 
 ./src/lib/session-cache.ts
-4:15  Warning: 'User' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
-23:3  Warning: Delete `·`  prettier/prettier
-49:20  Warning: Delete `·`  prettier/prettier
-50:28  Warning: Delete `·`  prettier/prettier
-51:33  Warning: Insert `,`  prettier/prettier
-79:34  Warning: Replace `userId:·string` with `⏎····userId:·string,⏎··`  prettier/prettier
-97:9  Warning: Replace `user.status·===·UserStatus.DISABLED·||·user.status·===·UserStatus.INVITED` with `⏎······user.status·===·UserStatus.DISABLED·||⏎······user.status·===·UserStatus.INVITED⏎····`  prettier/prettier
-129:20  Warning: Delete `·`  prettier/prettier
-130:36  Warning: Replace `'user']>` with `"user"]>,`  prettier/prettier
-160:67  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-161:24  Error: Unsafe member access .user on an `any` value.  @typescript-eslint/no-unsafe-member-access
-163:64  Warning: Unsafe argument of type `any` assigned to a parameter of type `string`.  @typescript-eslint/no-unsafe-argument
-163:70  Error: Unsafe member access .id on an `any` value.  @typescript-eslint/no-unsafe-member-access
-164:1  Warning: Delete `····`  prettier/prettier
-166:15  Error: Unsafe member access .user on an `any` value.  @typescript-eslint/no-unsafe-member-access
-169:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
-169:15  Error: Unsafe member access .user on an `any` value.  @typescript-eslint/no-unsafe-member-access
-169:31  Error: Unsafe member access .id on an `any` value.  @typescript-eslint/no-unsafe-member-access
-170:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
-170:15  Error: Unsafe member access .user on an `any` value.  @typescript-eslint/no-unsafe-member-access
-170:37  Error: Unsafe member access .username on an `any` value.  @typescript-eslint/no-unsafe-member-access
-171:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
-171:15  Error: Unsafe member access .user on an `any` value.  @typescript-eslint/no-unsafe-member-access
-171:38  Error: Unsafe member access .firstName on an `any` value.  @typescript-eslint/no-unsafe-member-access
-172:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
-172:15  Error: Unsafe member access .user on an `any` value.  @typescript-eslint/no-unsafe-member-access
-172:37  Error: Unsafe member access .lastName on an `any` value.  @typescript-eslint/no-unsafe-member-access
-173:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
-173:15  Error: Unsafe member access .user on an `any` value.  @typescript-eslint/no-unsafe-member-access
-173:44  Error: Unsafe member access .profileImageUrl on an `any` value.  @typescript-eslint/no-unsafe-member-access
-174:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
-174:15  Error: Unsafe member access .user on an `any` value.  @typescript-eslint/no-unsafe-member-access
-174:33  Error: Unsafe member access .role on an `any` value.  @typescript-eslint/no-unsafe-member-access
-175:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
-175:15  Error: Unsafe member access .user on an `any` value.  @typescript-eslint/no-unsafe-member-access
-175:35  Error: Unsafe member access .status on an `any` value.  @typescript-eslint/no-unsafe-member-access
-178:3  Error: Unsafe return of a value of type `any`.  @typescript-eslint/no-unsafe-return
-193:2  Warning: Insert `⏎`  prettier/prettier
+198:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+198:44  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
 
-./src/lib/webhooks/WebhookManager.ts
-344:13  Warning: 'delivery' is assigned a value but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
+./src/scripts/auto-migrate-routers.ts
+76:32  Warning: 'returnObj' is defined but never used. Allowed unused args must match /^_/u.  @typescript-eslint/no-unused-vars
+141:32  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+152:45  Warning: Unsafe argument of type `any` assigned to a parameter of type `string`.  @typescript-eslint/no-unsafe-argument
+152:65  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
 
-./src/server/api/middleware/cache.ts
-3:3  Warning: 'cacheHelpers' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
-5:3  Warning: 'CACHE_PREFIXES' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
-7:8  Warning: 'crypto' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
-52:28  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
-53:30  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+./src/scripts/check-configured-tools.ts
+54:34  Error: Invalid type "Date" of template literal expression.  @typescript-eslint/restrict-template-expressions
+59:15  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+60:19  Error: Unsafe member access .webhookUrl on an `any` value.  @typescript-eslint/no-unsafe-member-access
+60:39  Error: Unsafe member access .url on an `any` value.  @typescript-eslint/no-unsafe-member-access
+61:17  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+61:29  Error: Unsafe member access .webhookUrl on an `any` value.  @typescript-eslint/no-unsafe-member-access
+61:40  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+61:49  Error: Unsafe member access .url on an `any` value.  @typescript-eslint/no-unsafe-member-access
+62:31  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
+62:35  Error: Unsafe member access .substring on an `any` value.  @typescript-eslint/no-unsafe-member-access
+65:16  Warning: 'e' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/scripts/check-job-logs.ts
+16:29  Error: Invalid type "Date" of template literal expression.  @typescript-eslint/restrict-template-expressions
+19:11  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+19:33  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+19:39  Error: Unsafe member access .logs on an `any` value.  @typescript-eslint/no-unsafe-member-access
+19:44  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+19:62  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+19:68  Error: Unsafe member access .output on an `any` value.  @typescript-eslint/no-unsafe-member-access
+20:27  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+20:32  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+32:1  Error: Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.  @typescript-eslint/no-floating-promises
+
+./src/scripts/check-test-jobs.ts
+30:13  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+30:36  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+31:19  Error: Unsafe member access .logs on an `any` value.  @typescript-eslint/no-unsafe-member-access
+33:15  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+33:26  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
+33:26  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
+33:33  Error: Unsafe member access .logs on an `any` value.  @typescript-eslint/no-unsafe-member-access
+33:50  Error: Unsafe member access .slice on an `any` value.  @typescript-eslint/no-unsafe-member-access
+34:9  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
+34:18  Error: Unsafe member access .forEach on an `any` value.  @typescript-eslint/no-unsafe-member-access
+35:13  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
+35:20  Error: Unsafe member access .logs on an `any` value.  @typescript-eslint/no-unsafe-member-access
+35:37  Error: Unsafe member access .length on an `any` value.  @typescript-eslint/no-unsafe-member-access
+47:1  Error: Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.  @typescript-eslint/no-floating-promises
+
+./src/scripts/cleanup-stuck-jobs.ts
+5:15  Warning: 'or' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
+13:9  Warning: 'queuedResult' is assigned a value but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
+29:9  Warning: 'runningResult' is assigned a value but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
+46:9  Warning: 'claimedResult' is assigned a value but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
+
+./src/scripts/clear-all-logs.ts
+41:64  Error: Invalid type "unknown" of template literal expression.  @typescript-eslint/restrict-template-expressions
+55:52  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+69:53  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+88:64  Error: Invalid type "unknown" of template literal expression.  @typescript-eslint/restrict-template-expressions
+127:64  Error: Invalid type "unknown" of template literal expression.  @typescript-eslint/restrict-template-expressions
+216:1  Error: Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.  @typescript-eslint/no-floating-promises
+
+./src/scripts/debug-sidecar.ts
+13:37  Error: Promise returned in function argument where a void return was expected.  @typescript-eslint/no-misused-promises
+48:22  Warning: 'e' is defined but never used.  @typescript-eslint/no-unused-vars
+57:21  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+57:54  Error: Unsafe member access [0] on an `any` value.  @typescript-eslint/no-unsafe-member-access
+58:44  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+58:52  Error: Unsafe member access .State on an `any` value.  @typescript-eslint/no-unsafe-member-access
+60:21  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+60:39  Error: Unsafe member access .Config on an `any` value.  @typescript-eslint/no-unsafe-member-access
+60:50  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+63:19  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
+63:23  Error: Unsafe member access .includes on an `any` value.  @typescript-eslint/no-unsafe-member-access
+64:19  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
+64:23  Error: Unsafe member access .includes on an `any` value.  @typescript-eslint/no-unsafe-member-access
+65:19  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
+65:23  Error: Unsafe member access .includes on an `any` value.  @typescript-eslint/no-unsafe-member-access
+67:25  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+67:48  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
+67:52  Error: Unsafe member access .split on an `any` value.  @typescript-eslint/no-unsafe-member-access
+68:25  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+68:33  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
+68:44  Error: Unsafe member access .join on an `any` value.  @typescript-eslint/no-unsafe-member-access
+70:30  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+70:37  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+70:37  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
+70:41  Error: Unsafe member access .includes on an `any` value.  @typescript-eslint/no-unsafe-member-access
+74:22  Warning: 'e' is defined but never used.  @typescript-eslint/no-unused-vars
+100:1  Error: Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.  @typescript-eslint/no-floating-promises
+
+./src/scripts/migrations/archived/add-event-relations-indexes-standalone.ts
+8:28  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+71:34  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+72:24  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+72:30  Error: Unsafe member access .tablename on an `any` value.  @typescript-eslint/no-unsafe-member-access
+72:44  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+72:50  Error: Unsafe member access .indexname on an `any` value.  @typescript-eslint/no-unsafe-member-access
+89:38  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+90:26  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+90:31  Error: Unsafe member access .tablename on an `any` value.  @typescript-eslint/no-unsafe-member-access
+90:45  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+90:50  Error: Unsafe member access .row_count on an `any` value.  @typescript-eslint/no-unsafe-member-access
+92:14  Warning: 'statsError' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/scripts/migrations/archived/add-event-relations-indexes.ts
+50:34  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+51:24  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+51:30  Error: Unsafe member access .tablename on an `any` value.  @typescript-eslint/no-unsafe-member-access
+51:44  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+51:50  Error: Unsafe member access .indexname on an `any` value.  @typescript-eslint/no-unsafe-member-access
+
+./src/scripts/purge-logs.ts
+4:1  Error: Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.  @typescript-eslint/no-floating-promises
+9:28  Error: Invalid type "number | null" of template literal expression.  @typescript-eslint/restrict-template-expressions
+
+./src/scripts/quick-test-execution.ts
+45:14  Error: Promise returned in function argument where a void return was expected.  @typescript-eslint/no-misused-promises
+
+./src/scripts/seed-all.ts
+28:1  Error: Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.  @typescript-eslint/no-floating-promises
+
+./src/scripts/seed-db.ts
+53:54  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+92:1  Error: Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.  @typescript-eslint/no-floating-promises
+
+./src/scripts/seed-events.ts
+632:35  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+635:13  Warning: Unsafe argument of type `any` assigned to a parameter of type `{ type: SQL<unknown> | EventType | Placeholder<string, any>; name: string | SQL<unknown> | Placeholder<string, any>; userId: string | SQL<unknown> | Placeholder<...>; ... 29 more ...; tags?: unknown; }`.  @typescript-eslint/no-unsafe-argument
+
+./src/scripts/seed-roles.ts
+51:24  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+67:1  Error: Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.  @typescript-eslint/no-floating-promises
+
+./src/scripts/seed-workflows.ts
+86:9  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+91:9  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+96:9  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+106:19  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+107:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+107:29  Error: Unsafe member access .id on an `any` value.  @typescript-eslint/no-unsafe-member-access
+113:19  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+114:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+114:29  Error: Unsafe member access .id on an `any` value.  @typescript-eslint/no-unsafe-member-access
+120:19  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+121:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+121:28  Error: Unsafe member access .id on an `any` value.  @typescript-eslint/no-unsafe-member-access
+133:19  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+140:19  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+176:9  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+181:9  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+186:9  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+196:19  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+197:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+197:31  Error: Unsafe member access .id on an `any` value.  @typescript-eslint/no-unsafe-member-access
+203:19  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+204:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+204:29  Error: Unsafe member access .id on an `any` value.  @typescript-eslint/no-unsafe-member-access
+210:19  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+211:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+211:26  Error: Unsafe member access .id on an `any` value.  @typescript-eslint/no-unsafe-member-access
+223:19  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+230:19  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+261:9  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+266:9  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+271:9  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+282:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+282:33  Error: Unsafe member access .id on an `any` value.  @typescript-eslint/no-unsafe-member-access
+289:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+289:39  Error: Unsafe member access .id on an `any` value.  @typescript-eslint/no-unsafe-member-access
+296:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+296:35  Error: Unsafe member access .id on an `any` value.  @typescript-eslint/no-unsafe-member-access
+329:37  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+332:13  Warning: Unsafe argument of type `any` assigned to a parameter of type `{ name: string | SQL<unknown> | Placeholder<string, any>; userId: string | SQL<unknown> | Placeholder<string, any>; shared?: boolean | SQL<unknown> | Placeholder<string, any> | undefined; ... 13 more ...; overrideServerIds?: unknown; }`.  @typescript-eslint/no-unsafe-argument
+344:41  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+347:13  Warning: Unsafe argument of type `any` assigned to a parameter of type `{ eventId: number | SQL<unknown> | Placeholder<string, any>; workflowId: number | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<...> | undefined; createdAt?: SQL<...> | ... 2 more ... | undefined; updatedAt?: SQL<...> | ... 2 more ... | undefined; position_x?: number | ... 2 more ...`.  @typescript-eslint/no-unsafe-argument
+358:47  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+361:13  Warning: Unsafe argument of type `any` assigned to a parameter of type `{ workflowId: number | SQL<unknown> | Placeholder<string, any>; sourceNodeId: number | SQL<unknown> | Placeholder<string, any>; targetNodeId: number | SQL<...> | Placeholder<...>; id?: number | ... 2 more ... | undefined; createdAt?: SQL<...> | ... 2 more ... | undefined; updatedAt?: SQL<...> | ... 2 more ... | unde...`.  @typescript-eslint/no-unsafe-argument
+373:16  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+377:3  Error: Unsafe return of a value of type `any`.  @typescript-eslint/no-unsafe-return
+379:14  Error: Unsafe member access .type on an `any` value.  @typescript-eslint/no-unsafe-member-access
+380:7  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
+380:7  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
+380:14  Error: Unsafe member access .name on an `any` value.  @typescript-eslint/no-unsafe-member-access
+380:33  Error: Unsafe member access .includes on an `any` value.  @typescript-eslint/no-unsafe-member-access
+
+./src/scripts/test-container-execution.ts
+55:34  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+79:11  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
+80:37  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+80:43  Error: Unsafe member access .name on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
+80:56  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+80:62  Error: Unsafe member access .id on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
+84:61  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
+84:71  Error: Unsafe member access .id on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
+85:11  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
+86:57  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+86:67  Error: Unsafe member access .jobId on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
+96:51  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
+96:68  Error: Unsafe member access .jobId on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
+103:34  Error: Unsafe member access .COMPLETED on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
+104:34  Error: Unsafe member access .FAILED on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
+122:74  Error: Unsafe member access .jobId on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
+125:40  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+125:57  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+126:38  Error: Invalid type "Date | "N/A"" of template literal expression.  @typescript-eslint/restrict-template-expressions
+126:55  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+127:40  Error: Invalid type "Date | "N/A"" of template literal expression.  @typescript-eslint/restrict-template-expressions
+127:59  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+142:34  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
+142:44  Error: Unsafe member access .id on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
+146:47  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+159:1  Error: Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.  @typescript-eslint/no-floating-promises
+
+./src/scripts/test-event-query-optimization.ts
+22:11  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+24:11  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+24:32  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
+24:45  Error: Unsafe member access .getEventWithRelationsOptimized on an `any` value.  @typescript-eslint/no-unsafe-member-access
+31:32  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+31:46  Error: Unsafe member access .envVars on an `any` value.  @typescript-eslint/no-unsafe-member-access
+31:73  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+31:87  Error: Unsafe member access .servers on an `any` value.  @typescript-eslint/no-unsafe-member-access
+34:42  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+34:56  Error: Unsafe member access .successEvents on an `any` value.  @typescript-eslint/no-unsafe-member-access
+34:86  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+34:100  Error: Unsafe member access .failEvents on an `any` value.  @typescript-eslint/no-unsafe-member-access
+34:129  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+34:143  Error: Unsafe member access .alwaysEvents on an `any` value.  @typescript-eslint/no-unsafe-member-access
+40:11  Warning: 'cachedMissResult' is assigned a value but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
+47:11  Warning: 'cachedHitResult' is assigned a value but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
+77:36  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+78:26  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+78:32  Error: Unsafe member access .tablename on an `any` value.  @typescript-eslint/no-unsafe-member-access
+78:46  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+78:52  Error: Unsafe member access .indexname on an `any` value.  @typescript-eslint/no-unsafe-member-access
+
+./src/scripts/test-sidecar-api-access.ts
+17:10  Warning: 'randomUUID' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
+56:34  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+67:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+67:21  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+146:9  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
+149:11  Error: The two values in this comparison do not have a shared enum type.  @typescript-eslint/no-unsafe-enum-comparison
+149:41  Error: The two values in this comparison do not have a shared enum type.  @typescript-eslint/no-unsafe-enum-comparison
+169:34  Error: Invalid type "string | undefined" of template literal expression.  @typescript-eslint/restrict-template-expressions
+170:33  Error: Invalid type "string | undefined" of template literal expression.  @typescript-eslint/restrict-template-expressions
+174:24  Error: Invalid type "string | undefined" of template literal expression.  @typescript-eslint/restrict-template-expressions
+203:14  Warning: 'e' is defined but never used.  @typescript-eslint/no-unused-vars
+206:47  Warning: This assertion is unnecessary since it does not change the type of the expression.  @typescript-eslint/no-unnecessary-type-assertion
+215:1  Error: Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.  @typescript-eslint/no-floating-promises
+
+./src/scripts/test-sidecar-health.ts
+16:10  Warning: 'randomUUID' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
+53:34  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+64:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+64:37  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+102:36  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+102:47  Error: Unsafe member access .id on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
+106:53  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
+106:68  Error: Unsafe member access .id on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
+146:1  Error: Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.  @typescript-eslint/no-floating-promises
+
+./src/scripts/test-sidecar-simple.ts
+52:35  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+63:7  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+63:28  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+115:11  Warning: Replace `job.status·===·JobStatus.COMPLETED·||·job.status·===·JobStatus.FAILED` with `⏎········job.status·===·JobStatus.COMPLETED·||⏎········job.status·===·JobStatus.FAILED⏎······`  prettier/prettier
+116:9  Warning: 'completed' is assigned a value but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
+117:40  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+117:59  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+131:15  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+131:45  Error: Unsafe member access [0] on an `any` value.  @typescript-eslint/no-unsafe-member-access
+132:34  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+132:42  Error: Unsafe member access .State on an `any` value.  @typescript-eslint/no-unsafe-member-access
+134:25  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+134:33  Error: Unsafe member access .State on an `any` value.  @typescript-eslint/no-unsafe-member-access
+134:54  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+138:15  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+138:33  Error: Unsafe member access .Config on an `any` value.  @typescript-eslint/no-unsafe-member-access
+138:44  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+139:15  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+139:26  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
+139:34  Error: Unsafe member access .some on an `any` value.  @typescript-eslint/no-unsafe-member-access
+171:1  Error: Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.  @typescript-eslint/no-floating-promises
+
+./src/scripts/test-tool-registry.ts
+46:15  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+58:21  Warning: 'key' is defined but never used. Allowed unused args must match /^_/u.  @typescript-eslint/no-unused-vars
+59:21  Warning: 'key' is defined but never used. Allowed unused args must match /^_/u.  @typescript-eslint/no-unused-vars
+59:34  Warning: 'value' is defined but never used. Allowed unused args must match /^_/u.  @typescript-eslint/no-unused-vars
+59:53  Error: Unexpected empty method 'set'.  @typescript-eslint/no-empty-function
+71:34  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+71:41  Error: Unsafe member access .status on an `any` value.  @typescript-eslint/no-unsafe-member-access
+71:51  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+71:58  Error: Unsafe member access .statusText on an `any` value.  @typescript-eslint/no-unsafe-member-access
+74:33  Error: Unsafe member access .data on an `any` value.  @typescript-eslint/no-unsafe-member-access
+
+./src/scripts/test-workflow-job-chain.ts
+15:14  Warning: 'and' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
+15:19  Warning: 'desc' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
+18:3  Warning: 'EventType' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
+20:3  Warning: 'LogStatus' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
+64:45  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+97:15  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+97:41  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+97:47  Error: Unsafe member access .workflowExecutionId on an `any` value.  @typescript-eslint/no-unsafe-member-access
+99:36  Warning: Unsafe argument of type `any` assigned to a parameter of type `string`.  @typescript-eslint/no-unsafe-argument
+100:33  Warning: Unsafe argument of type `any` assigned to a parameter of type `string`.  @typescript-eslint/no-unsafe-argument
+102:31  Warning: Unsafe argument of type `any` assigned to a parameter of type `string`.  @typescript-eslint/no-unsafe-argument
+128:17  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+128:44  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+129:41  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+129:51  Error: Unsafe member access .eventName on an `any` value.  @typescript-eslint/no-unsafe-member-access
+129:61  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+141:15  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+141:42  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+143:21  Error: Unsafe member access .connectionType on an `any` value.  @typescript-eslint/no-unsafe-member-access
+144:20  Error: Unsafe member access .connectionType on an `any` value.  @typescript-eslint/no-unsafe-member-access
+146:54  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+146:63  Error: Unsafe member access .connectionType on an `any` value.  @typescript-eslint/no-unsafe-member-access
+148:44  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+148:53  Error: Unsafe member access .previousSuccess on an `any` value.  @typescript-eslint/no-unsafe-member-access
+148:69  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+150:47  Error: Invalid type "any" of template literal expression.  @typescript-eslint/restrict-template-expressions
+150:56  Error: Unsafe member access .conditionMet on an `any` value.  @typescript-eslint/no-unsafe-member-access
+150:69  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+160:15  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+160:40  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+161:22  Error: Unsafe member access .input on an `any` value.  @typescript-eslint/no-unsafe-member-access
+161:43  Warning: Unsafe argument of type `any` assigned to a parameter of type `{}`.  @typescript-eslint/no-unsafe-argument
+161:51  Error: Unsafe member access .input on an `any` value.  @typescript-eslint/no-unsafe-member-access
+164:43  Error: Unsafe member access .input on an `any` value.  @typescript-eslint/no-unsafe-member-access
+168:42  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+168:47  Error: Unsafe member access .output on an `any` value.  @typescript-eslint/no-unsafe-member-access
+171:50  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+171:55  Error: Unsafe member access .output on an `any` value.  @typescript-eslint/no-unsafe-member-access
+
+./src/server/api/routers/admin.ts
+828:68  Warning: 'input' is defined but never used. Allowed unused args must match /^_/u.  @typescript-eslint/no-unused-vars
+1016:26  Warning: 'input' is defined but never used. Allowed unused args must match /^_/u.  @typescript-eslint/no-unused-vars
 
 ./src/server/api/routers/events.ts
-110:73  Warning: Delete `⏎···············`  prettier/prettier
+202:15  Warning: Prefer using an optional chain expression instead, as it's more concise and easier to read.  @typescript-eslint/prefer-optional-chain
+356:17  Warning: Prefer using an optional chain expression instead, as it's more concise and easier to read.  @typescript-eslint/prefer-optional-chain
 
-./src/server/api/routers/jobs.ts
-3:9  Warning: Replace `⏎··createTRPCRouter,⏎··publicProcedure,⏎··withTiming,⏎` with `·createTRPCRouter,·publicProcedure,·withTiming·`  prettier/prettier
-119:22  Warning: Replace `⏎····.use(withTiming)⏎····` with `.use(withTiming)`  prettier/prettier
-122:1  Warning: Delete `··`  prettier/prettier
-124:5  Warning: Delete `··`  prettier/prettier
-125:1  Warning: Delete `··`  prettier/prettier
+./src/server/api/routers/monitoring.ts
+251:17  Warning: 'monitoringData' is assigned a value but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
+382:17  Warning: 'dashboardData' is assigned a value but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
 
-./src/server/api/routers/static-resources.ts
-4:9  Warning: Replace `·getDefaultScriptContent,·getDefaultHttpRequest·` with `⏎··getDefaultScriptContent,⏎··getDefaultHttpRequest,⏎`  prettier/prettier
-11:3  Warning: Delete `·`  prettier/prettier
-21:12  Warning: Insert `⏎······`  prettier/prettier
-22:1  Warning: Insert `··`  prettier/prettier
-23:5  Warning: Replace `})` with `··}),⏎····`  prettier/prettier
-41:10  Warning: Insert `,`  prettier/prettier
-46:41  Warning: Delete `⏎····`  prettier/prettier
-48:5  Warning: Delete `··`  prettier/prettier
-49:1  Warning: Replace `········` with `······`  prettier/prettier
-50:1  Warning: Delete `··`  prettier/prettier
-51:1  Warning: Replace `··········` with `········`  prettier/prettier
-52:1  Warning: Delete `··`  prettier/prettier
-53:1  Warning: Replace `········` with `······`  prettier/prettier
-54:1  Warning: Delete `··`  prettier/prettier
-55:1  Warning: Delete `··`  prettier/prettier
-56:1  Warning: Replace `··········return·types.map(type` with `········return·types.map((type)`  prettier/prettier
-57:1  Warning: Delete `··`  prettier/prettier
-58:11  Warning: Delete `··`  prettier/prettier
-59:1  Warning: Delete `··`  prettier/prettier
-60:1  Warning: Replace `··············` with `············`  prettier/prettier
-61:11  Warning: Delete `··`  prettier/prettier
-62:1  Warning: Delete `··`  prettier/prettier
-63:7  Warning: Replace `··}` with `},`  prettier/prettier
-64:1  Warning: Replace `······` with `····`  prettier/prettier
-65:1  Warning: Delete `··`  prettier/prettier
-69:12  Warning: Replace `z` with `⏎······z⏎········`  prettier/prettier
-70:1  Warning: Insert `····`  prettier/prettier
-71:1  Warning: Replace `····}).optional()` with `········})⏎········.optional(),⏎····`  prettier/prettier
-73:39  Warning: Delete `·`  prettier/prettier
-85:1  Warning: Delete `··········`  prettier/prettier
-87:42  Warning: Replace `t` with `(t)`  prettier/prettier
-91:10  Warning: Insert `,`  prettier/prettier
-96:38  Warning: Delete `⏎····`  prettier/prettier
-98:5  Warning: Delete `··`  prettier/prettier
-99:1  Warning: Replace `········` with `······`  prettier/prettier
-100:1  Warning: Delete `··`  prettier/prettier
-101:1  Warning: Delete `··`  prettier/prettier
-102:9  Warning: Delete `··`  prettier/prettier
-103:7  Warning: Delete `··`  prettier/prettier
-104:1  Warning: Replace `········` with `······`  prettier/prettier
-105:9  Warning: Delete `··`  prettier/prettier
-106:1  Warning: Delete `··`  prettier/prettier
-107:11  Warning: Delete `··`  prettier/prettier
-108:11  Warning: Delete `··`  prettier/prettier
-109:1  Warning: Replace `············` with `··········`  prettier/prettier
-110:11  Warning: Delete `··`  prettier/prettier
-111:1  Warning: Delete `··`  prettier/prettier
-112:9  Warning: Delete `··`  prettier/prettier
-113:7  Warning: Replace `··}` with `},`  prettier/prettier
-114:5  Warning: Delete `··`  prettier/prettier
-115:1  Warning: Delete `··`  prettier/prettier
-116:4  Warning: Insert `⏎`  prettier/prettier
+./src/server/api/routers/webhook-system.ts
+314:13  Warning: Unsafe argument of type `any` assigned to a parameter of type `Record<string, string | number>`.  @typescript-eslint/no-unsafe-argument
+317:18  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/server/api/routers/webhooks.ts
+706:13  Warning: Unsafe argument of type `any` assigned to a parameter of type `Record<string, string | number>`.  @typescript-eslint/no-unsafe-argument
+706:22  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
 
 ./src/server/api/routers/workflows.ts
-19:8  Warning: 'WorkflowExecution' is defined but never used. Allowed unused vars must match /^_/u.  @typescript-eslint/no-unused-vars
-432:17  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-432:40  Error: Unsafe call of a(n) `error` type typed value.  @typescript-eslint/no-unsafe-call
-439:13  Error: Unsafe assignment of an error typed value.  @typescript-eslint/no-unsafe-assignment
-440:37  Error: Unsafe member access .total on an `error` typed value.  @typescript-eslint/no-unsafe-member-access
+118:17  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
+119:25  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
 
-./src/server/storage.ts
-672:29  Error: Unsafe member access .eventId on an `any` value.  @typescript-eslint/no-unsafe-member-access
-676:34  Error: Unsafe member access .eventId on an `any` value.  @typescript-eslint/no-unsafe-member-access
-686:9  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
-686:26  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
-692:9  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
-692:36  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
-693:9  Error: Unsafe assignment of an `any` value.  @typescript-eslint/no-unsafe-assignment
-694:11  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
-694:11  Error: Unsafe call of a(n) `any` typed value.  @typescript-eslint/no-unsafe-call
-694:25  Error: Unsafe member access .map on an `any` value.  @typescript-eslint/no-unsafe-member-access
-694:34  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-694:42  Error: Unsafe return of a value of type `any`.  @typescript-eslint/no-unsafe-return
-694:45  Error: Unsafe member access .server on an `any` value.  @typescript-eslint/no-unsafe-member-access
-694:53  Error: Unsafe member access .filter on an `any` value.  @typescript-eslint/no-unsafe-member-access
-694:69  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
-790:11  Error: Prefer using nullish coalescing operator (`??=`) instead of an assignment expression, as it is simpler to read.  @typescript-eslint/prefer-nullish-coalescing
-812:30  Error: Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.  @typescript-eslint/prefer-nullish-coalescing
+./src/server/logs-websocket.ts
+6:1  Warning: All imports in the declaration are only used as types. Use `import type`.  @typescript-eslint/consistent-type-imports
 
 info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
  ELIFECYCLE  Command failed with exit code 1.

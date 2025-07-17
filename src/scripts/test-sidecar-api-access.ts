@@ -3,11 +3,19 @@ import { promisify } from "util";
 import { appRouter } from "@/server/api/root";
 import { createCallerFactory } from "@/server/api/trpc";
 import { db } from "@/server/db";
-import { auth } from "@/lib/auth";
-import { users, jobs } from "@/shared/schema";
+import {
+  users,
+  jobs,
+  UserRole,
+  EventType,
+  EventStatus,
+  RunLocation,
+  UserStatus,
+} from "@/shared/schema";
 import { eq } from "drizzle-orm";
 import { hash } from "bcrypt";
 import { randomUUID } from "crypto";
+import type { Session } from "next-auth";
 
 const execAsync = promisify(exec);
 const createCaller = createCallerFactory(appRouter);
@@ -30,19 +38,25 @@ async function testSidecarAPIAccess() {
           id: randomUUID(),
           email: testEmail,
           password: hashedPassword,
-          role: "admin",
+          role: UserRole.ADMIN,
+          status: UserStatus.ACTIVE,
         })
         .returning();
       testUser = newUser;
     }
 
     // Create session and caller
-    const session = {
+    if (!testUser) {
+      throw new Error("Failed to create or find test user");
+    }
+
+    const session: Session = {
       user: {
         id: testUser.id,
         email: testUser.email,
         name: testUser.firstName || "Test User",
         role: testUser.role,
+        status: testUser.status || UserStatus.ACTIVE,
       },
       expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     };
@@ -51,7 +65,6 @@ async function testSidecarAPIAccess() {
       session,
       headers: new Headers(),
       db,
-      auth: auth as any,
     });
 
     // Create test event that will test the sidecar
@@ -59,7 +72,7 @@ async function testSidecarAPIAccess() {
     const event = await caller.events.create({
       name: "Sidecar API Access Test",
       description: "Test accessing the runtime API from within container",
-      type: "BASH",
+      type: EventType.BASH,
       content: `#!/bin/bash
 echo "=== Testing Runtime API Access ==="
 echo ""
@@ -91,9 +104,14 @@ echo ""
 
 echo "=== Tests Complete ==="
 `,
-      status: "ACTIVE",
-      runLocation: "LOCAL",
+      status: EventStatus.ACTIVE,
+      runLocation: RunLocation.LOCAL,
     });
+
+    if (!event) {
+      throw new Error("Failed to create event");
+    }
+
     console.log(`✅ Created event: ${event.name} (ID: ${event.id})\n`);
 
     // Execute the event
@@ -110,7 +128,8 @@ echo "=== Tests Complete ==="
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Check job status
-      const job = await caller.jobs.get({ jobId: execution.jobId });
+      const jobResponse = await caller.jobs.get({ jobId: execution.jobId });
+      const job = jobResponse.data;
 
       // Check for sidecar
       if (!sidecarFound) {
@@ -123,8 +142,13 @@ echo "=== Tests Complete ==="
         }
       }
 
-      if (job.logs) {
-        jobLogs = job.logs;
+      // Check for output in different possible locations following TYPE_SAFETY.md
+      const output =
+        (job as any).output ||
+        (job.result as any)?.output ||
+        (job.metadata as any)?.output;
+      if (output) {
+        jobLogs = String(output);
       }
 
       if (job.status === "completed" || job.status === "failed") {
@@ -178,7 +202,9 @@ echo "=== Tests Complete ==="
       // Clean up job first
       await db.delete(jobs).where(eq(jobs.id, execution.jobId));
       // Then event
-      await caller.events.delete({ id: event.id });
+      if (event) {
+        await caller.events.delete({ id: event.id });
+      }
     } catch (e) {
       // Ignore cleanup errors
     }

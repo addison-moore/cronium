@@ -1,5 +1,11 @@
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import {
+  createTRPCRouter,
+  publicProcedure,
+  protectedProcedure,
+  withTiming,
+  withRateLimit,
+} from "../trpc";
 import {
   webhookQuerySchema,
   createWebhookSchema,
@@ -16,67 +22,51 @@ import {
   webhookPayloadValidationSchema,
   webhookResponseSchema,
 } from "@shared/schemas/webhooks";
-import { storage } from "@/server/storage";
-import { UserRole } from "@/shared/schema";
+import { withErrorHandling, notFoundError } from "@/server/utils/error-utils";
+import {
+  listResponse,
+  resourceResponse,
+  mutationResponse,
+  statsResponse,
+} from "@/server/utils/api-patterns";
+import {
+  normalizePagination,
+  createPaginatedResult,
+} from "@/server/utils/db-patterns";
 
-// Custom procedure that handles auth for tRPC fetch adapter
-const webhookProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  let session: { user: { id: string } } | null = null;
-  let userId: string | null = null;
-
-  try {
-    if (
-      ctx.session &&
-      typeof ctx.session === "object" &&
-      "user" in ctx.session &&
-      ctx.session.user &&
-      typeof ctx.session.user === "object" &&
-      "id" in ctx.session.user
-    ) {
-      const typedSession = ctx.session as { user: { id: string } };
-      session = typedSession;
-      userId = typedSession.user.id;
-    } else {
-      if (process.env.NODE_ENV === "development") {
-        const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter(
-          (user) => user.role === UserRole.ADMIN,
-        );
-        if (adminUsers.length > 0) {
-          userId = adminUsers[0]!.id;
-          session = { user: { id: adminUsers[0]!.id } };
-        }
-      }
-    }
-
-    if (!userId) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "Authentication required",
-      });
-    }
-
-    return next({
-      ctx: {
-        ...ctx,
-        session,
-        userId: userId,
-      },
-    });
-  } catch (error) {
-    console.error("Auth error in webhookProcedure:", error);
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Authentication failed",
-    });
-  }
-});
+// Use standardized procedure with timing and rate limiting
+const webhookProcedure = protectedProcedure
+  .use(withTiming)
+  .use(withRateLimit(100, 60000)); // 100 webhook operations per minute
 
 // Public procedure for webhook execution (no auth required)
-const publicWebhookProcedure = publicProcedure;
+const publicWebhookProcedure = publicProcedure
+  .use(withTiming)
+  .use(withRateLimit(200, 60000)); // 200 webhook executions per minute
 
 // Helper function to get user webhooks (mock implementation)
-async function getUserWebhooks(userId: string) {
+async function getUserWebhooks(userId: string): Promise<
+  Array<{
+    id: number;
+    userId: string;
+    workflowId: number;
+    key: string;
+    url: string;
+    description: string;
+    isActive: boolean;
+    allowedMethods: string[];
+    allowedIps: string[];
+    rateLimitPerMinute: number;
+    requireAuth: boolean;
+    authToken: string | null;
+    customHeaders: Record<string, string>;
+    responseFormat: "json" | "text" | "xml";
+    triggerCount: number;
+    lastTriggered: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }>
+> {
   // Mock webhook data - in real implementation, this would query the database
   const mockWebhooks = [
     {
@@ -170,585 +160,629 @@ export const webhooksRouter = createTRPCRouter({
   getAll: webhookProcedure
     .input(webhookQuerySchema)
     .query(async ({ ctx, input }) => {
-      try {
-        const webhooks = await getUserWebhooks(ctx.userId);
+      return withErrorHandling(
+        async () => {
+          const webhooks = await getUserWebhooks(ctx.session.user.id);
 
-        // Apply filters
-        let filteredWebhooks = webhooks;
+          // Apply filters
+          let filteredWebhooks = webhooks;
 
-        if (input.workflowId) {
-          filteredWebhooks = filteredWebhooks.filter(
-            (w) => w.workflowId === input.workflowId,
-          );
-        }
-
-        if (!input.includeInactive) {
-          filteredWebhooks = filteredWebhooks.filter((w) => w.isActive);
-        }
-
-        if (input.search) {
-          const searchLower = input.search.toLowerCase();
-          filteredWebhooks = filteredWebhooks.filter(
-            (webhook) =>
-              webhook.key.toLowerCase().includes(searchLower) ||
-              webhook.description?.toLowerCase().includes(searchLower),
-          );
-        }
-
-        // Apply sorting
-        filteredWebhooks.sort((a, b) => {
-          let aValue: string | Date | number, bValue: string | Date | number;
-
-          switch (input.sortBy) {
-            case "name":
-              aValue = a.key;
-              bValue = b.key;
-              break;
-            case "createdAt":
-              aValue = a.createdAt;
-              bValue = b.createdAt;
-              break;
-            case "lastTriggered":
-              aValue = a.lastTriggered ?? new Date(0);
-              bValue = b.lastTriggered ?? new Date(0);
-              break;
-            case "triggerCount":
-              aValue = a.triggerCount;
-              bValue = b.triggerCount;
-              break;
-            default:
-              aValue = a.key;
-              bValue = b.key;
+          if (input.workflowId) {
+            filteredWebhooks = filteredWebhooks.filter(
+              (w) => w.workflowId === input.workflowId,
+            );
           }
 
-          if (input.sortOrder === "desc") {
-            return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
-          } else {
-            return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+          if (!input.includeInactive) {
+            filteredWebhooks = filteredWebhooks.filter((w) => w.isActive);
           }
-        });
 
-        // Apply pagination
-        const paginatedWebhooks = filteredWebhooks.slice(
-          input.offset,
-          input.offset + input.limit,
-        );
+          if (input.search) {
+            const searchLower = input.search.toLowerCase();
+            filteredWebhooks = filteredWebhooks.filter(
+              (webhook) =>
+                webhook.key.toLowerCase().includes(searchLower) ||
+                webhook.description?.toLowerCase().includes(searchLower),
+            );
+          }
 
-        return {
-          webhooks: paginatedWebhooks,
-          total: filteredWebhooks.length,
-          hasMore: input.offset + input.limit < filteredWebhooks.length,
-        };
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to fetch webhooks",
-          cause: error,
-        });
-      }
+          // Apply sorting
+          filteredWebhooks.sort((a, b) => {
+            let aValue: string | Date | number, bValue: string | Date | number;
+
+            switch (input.sortBy) {
+              case "name":
+                aValue = a.key;
+                bValue = b.key;
+                break;
+              case "createdAt":
+                aValue = a.createdAt;
+                bValue = b.createdAt;
+                break;
+              case "lastTriggered":
+                aValue = a.lastTriggered ?? new Date(0);
+                bValue = b.lastTriggered ?? new Date(0);
+                break;
+              case "triggerCount":
+                aValue = a.triggerCount;
+                bValue = b.triggerCount;
+                break;
+              default:
+                aValue = a.key;
+                bValue = b.key;
+            }
+
+            if (input.sortOrder === "desc") {
+              return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+            } else {
+              return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+            }
+          });
+
+          // Apply pagination
+          const pagination = normalizePagination(input);
+          const paginatedWebhooks = filteredWebhooks.slice(
+            pagination.offset,
+            pagination.offset + pagination.limit,
+          );
+
+          const result = createPaginatedResult(
+            paginatedWebhooks,
+            filteredWebhooks.length,
+            pagination,
+          );
+          const filters: {
+            [key: string]: unknown;
+            search?: string;
+            status?: string;
+            type?: string;
+          } = {};
+          if (input.workflowId !== undefined) {
+            filters.workflowId = input.workflowId;
+          }
+          if (input.search !== undefined) {
+            filters.search = input.search;
+          }
+          return listResponse(result, filters);
+        },
+        {
+          component: "webhooksRouter",
+          operationName: "getAll",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 
   // Get single webhook by key
   getByKey: webhookProcedure
     .input(webhookKeySchema)
     .query(async ({ ctx, input }) => {
-      try {
-        const webhooks = await getUserWebhooks(ctx.userId);
-        const webhook = webhooks.find((w) => w.key === input.key);
+      return withErrorHandling(
+        async () => {
+          const webhooks = await getUserWebhooks(ctx.session.user.id);
+          const webhook = webhooks.find((w) => w.key === input.key);
 
-        if (!webhook) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Webhook not found",
-          });
-        }
+          if (!webhook) {
+            throw notFoundError("Webhook");
+          }
 
-        return webhook;
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to fetch webhook",
-          cause: error,
-        });
-      }
+          return resourceResponse(webhook);
+        },
+        {
+          component: "webhooksRouter",
+          operationName: "getByKey",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 
   // Create new webhook
   create: webhookProcedure
     .input(createWebhookSchema)
     .mutation(async ({ ctx, input }) => {
-      try {
-        const existingWebhooks = await getUserWebhooks(ctx.userId);
+      return withErrorHandling(
+        async () => {
+          const existingWebhooks = await getUserWebhooks(ctx.session.user.id);
 
-        // Generate key if not provided
-        const key =
-          input.key ??
-          `webhook-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          // Generate key if not provided
+          const key =
+            input.key ??
+            `webhook-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-        // Check if key already exists
-        if (existingWebhooks.some((w) => w.key === key)) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: "A webhook with this key already exists",
-          });
-        }
+          // Check if key already exists
+          if (existingWebhooks.some((w) => w.key === key)) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "A webhook with this key already exists",
+            });
+          }
 
-        // Mock creating webhook
-        const newWebhook = {
-          id: Math.max(...existingWebhooks.map((w) => w.id), 0) + 1,
-          userId: ctx.userId,
-          workflowId: input.workflowId,
-          key,
-          url: `/api/workflows/webhook/${key}`,
-          description: input.description,
-          isActive: input.isActive,
-          allowedMethods: input.allowedMethods,
-          allowedIps: input.allowedIps ?? [],
-          rateLimitPerMinute: input.rateLimitPerMinute,
-          requireAuth: input.requireAuth,
-          authToken: input.authToken,
-          customHeaders: input.customHeaders ?? {},
-          responseFormat: input.responseFormat,
-          triggerCount: 0,
-          lastTriggered: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
+          // Mock creating webhook
+          const newWebhook = {
+            id: Math.max(...existingWebhooks.map((w) => w.id), 0) + 1,
+            userId: ctx.session.user.id,
+            workflowId: input.workflowId,
+            key,
+            url: `/api/workflows/webhook/${key}`,
+            description: input.description,
+            isActive: input.isActive,
+            allowedMethods: input.allowedMethods,
+            allowedIps: input.allowedIps ?? [],
+            rateLimitPerMinute: input.rateLimitPerMinute,
+            requireAuth: input.requireAuth,
+            authToken: input.authToken,
+            customHeaders: input.customHeaders ?? {},
+            responseFormat: input.responseFormat,
+            triggerCount: 0,
+            lastTriggered: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
 
-        console.log(
-          `Created webhook "${key}" for workflow ${String(input.workflowId)} by user ${ctx.userId}`,
-        );
+          console.log(
+            `Created webhook "${key}" for workflow ${String(input.workflowId)} by user ${ctx.session.user.id}`,
+          );
 
-        return newWebhook;
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to create webhook",
-          cause: error,
-        });
-      }
+          return mutationResponse(newWebhook, "Webhook created successfully");
+        },
+        {
+          component: "webhooksRouter",
+          operationName: "create",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 
   // Update existing webhook
   update: webhookProcedure
     .input(updateWebhookSchema)
     .mutation(async ({ ctx, input }) => {
-      try {
-        const { key, ...updateData } = input;
+      return withErrorHandling(
+        async () => {
+          const { key, ...updateData } = input;
 
-        const webhooks = await getUserWebhooks(ctx.userId);
-        const existingWebhook = webhooks.find((w) => w.key === key);
+          const webhooks = await getUserWebhooks(ctx.session.user.id);
+          const existingWebhook = webhooks.find((w) => w.key === key);
 
-        if (!existingWebhook) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Webhook not found",
-          });
-        }
+          if (!existingWebhook) {
+            throw notFoundError("Webhook");
+          }
 
-        // Mock updating webhook
-        const updatedWebhook = {
-          ...existingWebhook,
-          ...updateData,
-          updatedAt: new Date(),
-        };
+          // Mock updating webhook
+          const updatedWebhook = {
+            ...existingWebhook,
+            ...updateData,
+            updatedAt: new Date(),
+          };
 
-        console.log(`Updated webhook ${key} for user ${ctx.userId}`);
+          console.log(`Updated webhook ${key} for user ${ctx.session.user.id}`);
 
-        return updatedWebhook;
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to update webhook",
-          cause: error,
-        });
-      }
+          return mutationResponse(
+            updatedWebhook,
+            "Webhook updated successfully",
+          );
+        },
+        {
+          component: "webhooksRouter",
+          operationName: "update",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 
   // Delete webhook
   delete: webhookProcedure
     .input(webhookKeySchema)
     .mutation(async ({ ctx, input }) => {
-      try {
-        const webhooks = await getUserWebhooks(ctx.userId);
-        const webhook = webhooks.find((w) => w.key === input.key);
+      return withErrorHandling(
+        async () => {
+          const webhooks = await getUserWebhooks(ctx.session.user.id);
+          const webhook = webhooks.find((w) => w.key === input.key);
 
-        if (!webhook) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Webhook not found",
-          });
-        }
+          if (!webhook) {
+            throw notFoundError("Webhook");
+          }
 
-        // Mock deleting webhook
-        console.log(`Deleted webhook ${input.key} for user ${ctx.userId}`);
+          // Mock deleting webhook
+          console.log(
+            `Deleted webhook ${input.key} for user ${ctx.session.user.id}`,
+          );
 
-        return { success: true };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to delete webhook",
-          cause: error,
-        });
-      }
+          return mutationResponse(
+            { key: input.key },
+            "Webhook deleted successfully",
+          );
+        },
+        {
+          component: "webhooksRouter",
+          operationName: "delete",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 
   // Execute webhook (public endpoint)
   execute: publicWebhookProcedure
     .input(executeWebhookSchema)
     .mutation(async ({ input }) => {
-      try {
-        const webhook = await getWebhookByKey(input.key);
+      return withErrorHandling(
+        async () => {
+          const webhook = await getWebhookByKey(input.key);
 
-        if (!webhook) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Webhook not found",
-          });
-        }
+          if (!webhook) {
+            throw notFoundError("Webhook");
+          }
 
-        if (!webhook.isActive) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Webhook is inactive",
-          });
-        }
-
-        // Check allowed methods
-        if (!webhook.allowedMethods.includes(input.method)) {
-          throw new TRPCError({
-            code: "METHOD_NOT_SUPPORTED",
-            message: `Method ${input.method} not allowed for this webhook`,
-          });
-        }
-
-        // Check IP whitelist if configured
-        if (webhook.allowedIps.length > 0 && input.sourceIp) {
-          const isAllowed = webhook.allowedIps.some((allowedIp) => {
-            // Simple IP matching - in real implementation, would handle CIDR notation
-            return input.sourceIp === allowedIp || allowedIp.includes("/");
-          });
-
-          if (!isAllowed) {
+          if (!webhook.isActive) {
             throw new TRPCError({
-              code: "FORBIDDEN",
-              message: "IP address not allowed",
+              code: "BAD_REQUEST",
+              message: "Webhook is inactive",
             });
           }
-        }
 
-        // Check authentication if required
-        if (webhook.requireAuth && webhook.authToken) {
-          const authHeader =
-            input.headers?.authorization ?? input.headers?.Authorization;
-          if (!authHeader?.includes(webhook.authToken)) {
+          // Check allowed methods
+          if (!webhook.allowedMethods.includes(input.method)) {
             throw new TRPCError({
-              code: "UNAUTHORIZED",
-              message: "Invalid authentication",
+              code: "METHOD_NOT_SUPPORTED",
+              message: `Method ${input.method} not allowed for this webhook`,
             });
           }
-        }
 
-        // Check custom headers if required
-        if (webhook.customHeaders) {
-          for (const [headerName, expectedValue] of Object.entries(
-            webhook.customHeaders,
-          )) {
-            const actualValue =
-              input.headers?.[headerName] ??
-              input.headers?.[headerName.toLowerCase()];
-            if (actualValue !== expectedValue) {
+          // Check IP whitelist if configured
+          if (webhook.allowedIps.length > 0 && input.sourceIp) {
+            const isAllowed = webhook.allowedIps.some((allowedIp) => {
+              // Simple IP matching - in real implementation, would handle CIDR notation
+              return input.sourceIp === allowedIp || allowedIp.includes("/");
+            });
+
+            if (!isAllowed) {
               throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: `Missing or invalid header: ${headerName}`,
+                code: "FORBIDDEN",
+                message: "IP address not allowed",
               });
             }
           }
-        }
 
-        // Mock webhook execution
-        const executionId = `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          // Check authentication if required
+          if (webhook.requireAuth && webhook.authToken) {
+            const authHeader =
+              input.headers?.authorization ?? input.headers?.Authorization;
+            if (!authHeader?.includes(webhook.authToken)) {
+              throw new TRPCError({
+                code: "UNAUTHORIZED",
+                message: "Invalid authentication",
+              });
+            }
+          }
 
-        console.log(
-          `Executing webhook ${input.key} for workflow ${webhook.workflowId}:`,
-          {
-            method: input.method,
-            payload: input.payload,
-            sourceIp: input.sourceIp,
+          // Check custom headers if required
+          if (webhook.customHeaders) {
+            for (const [headerName, expectedValue] of Object.entries(
+              webhook.customHeaders,
+            )) {
+              const actualValue =
+                input.headers?.[headerName] ??
+                input.headers?.[headerName.toLowerCase()];
+              if (actualValue !== expectedValue) {
+                throw new TRPCError({
+                  code: "BAD_REQUEST",
+                  message: `Missing or invalid header: ${headerName}`,
+                });
+              }
+            }
+          }
+
+          // Mock webhook execution
+          const executionId = `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+          console.log(
+            `Executing webhook ${input.key} for workflow ${webhook.workflowId}:`,
+            {
+              method: input.method,
+              payload: input.payload,
+              sourceIp: input.sourceIp,
+              executionId,
+            },
+          );
+
+          // Simulate processing delay
+          await new Promise((resolve) =>
+            setTimeout(resolve, Math.random() * 1000 + 100),
+          );
+
+          const response = {
+            success: true,
             executionId,
-          },
-        );
+            message: "Webhook executed successfully",
+            timestamp: new Date().toISOString(),
+          };
 
-        // Simulate processing delay
-        await new Promise((resolve) =>
-          setTimeout(resolve, Math.random() * 1000 + 100),
-        );
-
-        const response = {
-          success: true,
-          executionId,
-          message: "Webhook executed successfully",
-          timestamp: new Date().toISOString(),
-        };
-
-        // Format response based on webhook configuration
-        switch (webhook.responseFormat as "json" | "text" | "xml") {
-          case "json":
-            return response;
-          case "text":
-            return {
-              text: `Webhook executed successfully. Execution ID: ${executionId}`,
-            };
-          case "xml":
-            return {
-              xml: `<?xml version="1.0"?><response><success>true</success><executionId>${executionId}</executionId></response>`,
-            };
-          default:
-            return response;
-        }
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to execute webhook",
-          cause: error,
-        });
-      }
+          // Format response based on webhook configuration
+          switch (webhook.responseFormat) {
+            case "json":
+              return mutationResponse(
+                response,
+                "Webhook executed successfully",
+              );
+            case "text":
+              return {
+                text: `Webhook executed successfully. Execution ID: ${executionId}`,
+              };
+            case "xml":
+              return {
+                xml: `<?xml version="1.0"?><response><success>true</success><executionId>${executionId}</executionId></response>`,
+              };
+            default:
+              return mutationResponse(
+                response,
+                "Webhook executed successfully",
+              );
+          }
+        },
+        {
+          component: "webhooksRouter",
+          operationName: "execute",
+        },
+      );
     }),
 
   // Test webhook
   test: webhookProcedure
     .input(testWebhookSchema)
     .mutation(async ({ ctx, input }) => {
-      try {
-        const webhooks = await getUserWebhooks(ctx.userId);
-        const webhook = webhooks.find((w) => w.key === input.key);
+      return withErrorHandling(
+        async () => {
+          const webhooks = await getUserWebhooks(ctx.session.user.id);
+          const webhook = webhooks.find((w) => w.key === input.key);
 
-        if (!webhook) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Webhook not found",
-          });
-        }
+          if (!webhook) {
+            throw notFoundError("Webhook");
+          }
 
-        // Mock webhook test
-        console.log(`Testing webhook ${input.key}:`, {
-          method: input.method,
-          payload: input.payload,
-          headers: input.headers,
-        });
-
-        // Simulate test delay
-        await new Promise((resolve) =>
-          setTimeout(resolve, Math.random() * 500 + 100),
-        );
-
-        return {
-          success: true,
-          message: "Webhook test completed successfully",
-          details: {
-            webhookKey: input.key,
-            workflowId: webhook.workflowId,
+          // Mock webhook test
+          console.log(`Testing webhook ${input.key}:`, {
             method: input.method,
-            responseTime: Math.floor(Math.random() * 500) + 100,
-            timestamp: new Date().toISOString(),
-          },
-        };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to test webhook",
-          cause: error,
-        });
-      }
+            payload: input.payload,
+            headers: input.headers,
+          });
+
+          // Simulate test delay
+          await new Promise((resolve) =>
+            setTimeout(resolve, Math.random() * 500 + 100),
+          );
+
+          return mutationResponse(
+            {
+              webhookKey: input.key,
+              workflowId: webhook.workflowId,
+              method: input.method,
+              responseTime: Math.floor(Math.random() * 500) + 100,
+              timestamp: new Date().toISOString(),
+            },
+            "Webhook test completed successfully",
+          );
+        },
+        {
+          component: "webhooksRouter",
+          operationName: "test",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 
   // Get webhook execution history
   getExecutionHistory: webhookProcedure
     .input(webhookExecutionHistorySchema)
-    .query(async ({ input }) => {
-      try {
-        const executions = await getWebhookExecutions(input.key, input);
+    .query(async ({ ctx, input }) => {
+      return withErrorHandling(
+        async () => {
+          const executions = await getWebhookExecutions(input.key, input);
 
-        // Apply filters
-        let filteredExecutions = executions;
+          // Apply filters
+          let filteredExecutions = executions;
 
-        if (input.status) {
-          filteredExecutions = filteredExecutions.filter(
-            (e) => e.status === input.status,
-          );
-        }
-
-        if (input.sourceIp) {
-          filteredExecutions = filteredExecutions.filter(
-            (e) => e.sourceIp === input.sourceIp,
-          );
-        }
-
-        if (input.startDate) {
-          const startDate = new Date(input.startDate);
-          filteredExecutions = filteredExecutions.filter(
-            (e) => e.timestamp >= startDate,
-          );
-        }
-
-        if (input.endDate) {
-          const endDate = new Date(input.endDate);
-          filteredExecutions = filteredExecutions.filter(
-            (e) => e.timestamp <= endDate,
-          );
-        }
-
-        // Apply sorting
-        filteredExecutions.sort((a, b) => {
-          let aValue: string | Date | number, bValue: string | Date | number;
-
-          switch (input.sortBy) {
-            case "timestamp":
-              aValue = a.timestamp;
-              bValue = b.timestamp;
-              break;
-            case "duration":
-              aValue = a.responseTime;
-              bValue = b.responseTime;
-              break;
-            case "status":
-              aValue = a.status ?? "";
-              bValue = b.status ?? "";
-              break;
-            default:
-              aValue = a.timestamp;
-              bValue = b.timestamp;
+          if (input.status) {
+            filteredExecutions = filteredExecutions.filter(
+              (e) => e.status === input.status,
+            );
           }
 
-          if (input.sortOrder === "desc") {
-            return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
-          } else {
-            return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+          if (input.sourceIp) {
+            filteredExecutions = filteredExecutions.filter(
+              (e) => e.sourceIp === input.sourceIp,
+            );
           }
-        });
 
-        // Apply pagination
-        const paginatedExecutions = filteredExecutions.slice(
-          input.offset,
-          input.offset + input.limit,
-        );
+          if (input.startDate) {
+            const startDate = new Date(input.startDate);
+            filteredExecutions = filteredExecutions.filter(
+              (e) => e.timestamp >= startDate,
+            );
+          }
 
-        return {
-          executions: paginatedExecutions,
-          total: filteredExecutions.length,
-          hasMore: input.offset + input.limit < filteredExecutions.length,
-        };
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to fetch webhook execution history",
-          cause: error,
-        });
-      }
+          if (input.endDate) {
+            const endDate = new Date(input.endDate);
+            filteredExecutions = filteredExecutions.filter(
+              (e) => e.timestamp <= endDate,
+            );
+          }
+
+          // Apply sorting
+          filteredExecutions.sort((a, b) => {
+            let aValue: string | Date | number, bValue: string | Date | number;
+
+            switch (input.sortBy) {
+              case "timestamp":
+                aValue = a.timestamp;
+                bValue = b.timestamp;
+                break;
+              case "duration":
+                aValue = a.responseTime;
+                bValue = b.responseTime;
+                break;
+              case "status":
+                aValue = a.status ?? "";
+                bValue = b.status ?? "";
+                break;
+              default:
+                aValue = a.timestamp;
+                bValue = b.timestamp;
+            }
+
+            if (input.sortOrder === "desc") {
+              return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+            } else {
+              return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+            }
+          });
+
+          // Apply pagination
+          const pagination = normalizePagination(input);
+          const paginatedExecutions = filteredExecutions.slice(
+            pagination.offset,
+            pagination.offset + pagination.limit,
+          );
+
+          const result = createPaginatedResult(
+            paginatedExecutions,
+            filteredExecutions.length,
+            pagination,
+          );
+          return listResponse(result);
+        },
+        {
+          component: "webhooksRouter",
+          operationName: "getExecutionHistory",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 
   // Get webhook statistics
   getStats: webhookProcedure
     .input(webhookStatsSchema)
-    .query(async ({ input }) => {
-      try {
-        // Mock webhook statistics
-        const stats = {
-          period: input.period,
-          groupBy: input.groupBy,
-          totalExecutions: Math.floor(Math.random() * 1000) + 100,
-          successfulExecutions: Math.floor(Math.random() * 900) + 90,
-          failedExecutions: Math.floor(Math.random() * 50) + 5,
-          timeoutExecutions: Math.floor(Math.random() * 20) + 2,
-          rateLimitedExecutions: Math.floor(Math.random() * 10) + 1,
-          averageResponseTime: Math.floor(Math.random() * 1000) + 200,
-          byStatus: {
-            success: Math.floor(Math.random() * 800) + 80,
-            failure: Math.floor(Math.random() * 50) + 5,
-            timeout: Math.floor(Math.random() * 20) + 2,
-            rate_limited: Math.floor(Math.random() * 10) + 1,
-          },
-          byMethod: {
-            GET: Math.floor(Math.random() * 200) + 20,
-            POST: Math.floor(Math.random() * 600) + 60,
-            PUT: Math.floor(Math.random() * 100) + 10,
-            PATCH: Math.floor(Math.random() * 50) + 5,
-          },
-          topSourceIps: [
-            {
-              ip: "192.168.1.100",
-              count: Math.floor(Math.random() * 100) + 10,
+    .query(async ({ ctx, input }) => {
+      return withErrorHandling(
+        async () => {
+          // Mock webhook statistics
+          const stats = {
+            period: input.period,
+            groupBy: input.groupBy,
+            totalExecutions: Math.floor(Math.random() * 1000) + 100,
+            successfulExecutions: Math.floor(Math.random() * 900) + 90,
+            failedExecutions: Math.floor(Math.random() * 50) + 5,
+            timeoutExecutions: Math.floor(Math.random() * 20) + 2,
+            rateLimitedExecutions: Math.floor(Math.random() * 10) + 1,
+            averageResponseTime: Math.floor(Math.random() * 1000) + 200,
+            byStatus: {
+              success: Math.floor(Math.random() * 800) + 80,
+              failure: Math.floor(Math.random() * 50) + 5,
+              timeout: Math.floor(Math.random() * 20) + 2,
+              rate_limited: Math.floor(Math.random() * 10) + 1,
             },
-            { ip: "10.0.0.50", count: Math.floor(Math.random() * 80) + 8 },
-            { ip: "172.16.0.25", count: Math.floor(Math.random() * 60) + 6 },
-          ],
-        };
+            byMethod: {
+              GET: Math.floor(Math.random() * 200) + 20,
+              POST: Math.floor(Math.random() * 600) + 60,
+              PUT: Math.floor(Math.random() * 100) + 10,
+              PATCH: Math.floor(Math.random() * 50) + 5,
+            },
+            topSourceIps: [
+              {
+                ip: "192.168.1.100",
+                count: Math.floor(Math.random() * 100) + 10,
+              },
+              { ip: "10.0.0.50", count: Math.floor(Math.random() * 80) + 8 },
+              { ip: "172.16.0.25", count: Math.floor(Math.random() * 60) + 6 },
+            ],
+          };
 
-        return stats;
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to fetch webhook statistics",
-          cause: error,
-        });
-      }
+          // Following TYPE_SAFETY.md - properly type the metrics
+          const metrics: Record<string, string | number> = {
+            period: stats.period,
+            groupBy: stats.groupBy,
+            totalExecutions: stats.totalExecutions,
+            successfulExecutions: stats.successfulExecutions,
+            failedExecutions: stats.failedExecutions,
+            timeoutExecutions: stats.timeoutExecutions,
+            rateLimitedExecutions: stats.rateLimitedExecutions,
+            averageResponseTime: stats.averageResponseTime,
+          };
+
+          return statsResponse(
+            {
+              start: new Date(
+                Date.now() - 30 * 24 * 60 * 60 * 1000,
+              ).toISOString(),
+              end: new Date().toISOString(),
+            },
+            metrics,
+          );
+        },
+        {
+          component: "webhooksRouter",
+          operationName: "getStats",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 
   // Bulk webhook operations
   bulkOperation: webhookProcedure
     .input(bulkWebhookOperationSchema)
     .mutation(async ({ ctx, input }) => {
-      try {
-        const results = [];
-        const webhooks = await getUserWebhooks(ctx.userId);
+      return withErrorHandling(
+        async () => {
+          const results = [];
+          const webhooks = await getUserWebhooks(ctx.session.user.id);
 
-        for (const key of input.keys) {
-          try {
-            const webhook = webhooks.find((w) => w.key === key);
-            if (!webhook) {
-              results.push({ key, success: false, error: "Webhook not found" });
-              continue;
-            }
+          for (const key of input.keys) {
+            try {
+              const webhook = webhooks.find((w) => w.key === key);
+              if (!webhook) {
+                results.push({
+                  key,
+                  success: false,
+                  error: "Webhook not found",
+                });
+                continue;
+              }
 
-            switch (input.operation) {
-              case "delete":
-                results.push({ key, success: true });
-                break;
-              case "activate":
-                results.push({ key, success: true });
-                break;
-              case "deactivate":
-                results.push({ key, success: true });
-                break;
-              case "regenerate_key":
-                const newKey = `webhook-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                results.push({ key, success: true, newKey });
-                break;
-              case "reset_stats":
-                results.push({ key, success: true });
-                break;
+              switch (input.operation) {
+                case "delete":
+                  results.push({ key, success: true });
+                  break;
+                case "activate":
+                  results.push({ key, success: true });
+                  break;
+                case "deactivate":
+                  results.push({ key, success: true });
+                  break;
+                case "regenerate_key":
+                  const newKey = `webhook-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                  results.push({ key, success: true, newKey });
+                  break;
+                case "reset_stats":
+                  results.push({ key, success: true });
+                  break;
+              }
+            } catch (error) {
+              const errorMessage =
+                error instanceof Error ? error.message : String(error);
+              results.push({ key, success: false, error: errorMessage });
             }
-          } catch (error) {
-            const errorMessage =
-              error instanceof Error ? error.message : String(error);
-            results.push({ key, success: false, error: errorMessage });
           }
-        }
 
-        return { results };
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to perform bulk operation",
-          cause: error,
-        });
-      }
+          return mutationResponse(
+            { results },
+            `Bulk ${input.operation} completed for ${input.keys.length} webhooks`,
+          );
+        },
+        {
+          component: "webhooksRouter",
+          operationName: "bulkOperation",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 
   // Configure webhook security
@@ -756,7 +790,7 @@ export const webhooksRouter = createTRPCRouter({
     .input(webhookSecuritySchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const webhooks = await getUserWebhooks(ctx.userId);
+        const webhooks = await getUserWebhooks(ctx.session.user.id);
         const webhook = webhooks.find((w) => w.key === input.key);
 
         if (!webhook) {
@@ -805,37 +839,44 @@ export const webhooksRouter = createTRPCRouter({
   // Generate webhook URL
   generateUrl: webhookProcedure
     .input(generateWebhookUrlSchema)
-    .mutation(async ({ input }) => {
-      try {
-        const baseUrl = process.env.PUBLIC_APP_URL ?? "http://localhost:5001";
-        const key =
-          input.customKey ??
-          `webhook-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    .mutation(async ({ ctx, input }) => {
+      return withErrorHandling(
+        async () => {
+          const baseUrl = process.env.PUBLIC_APP_URL ?? "http://localhost:5001";
+          const key =
+            input.customKey ??
+            `webhook-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-        let url = `${baseUrl}/api/workflows/webhook/${key}`;
+          let url = `${baseUrl}/api/workflows/webhook/${key}`;
 
-        // Add query parameters if specified
-        if (input.includeQuery && Object.keys(input.includeQuery).length > 0) {
-          const queryString = new URLSearchParams(
-            input.includeQuery,
-          ).toString();
-          url += `?${queryString}`;
-        }
+          // Add query parameters if specified
+          if (
+            input.includeQuery &&
+            Object.keys(input.includeQuery).length > 0
+          ) {
+            const queryString = new URLSearchParams(
+              input.includeQuery,
+            ).toString();
+            url += `?${queryString}`;
+          }
 
-        return {
-          key,
-          url,
-          workflowId: input.workflowId,
-          includeAuth: input.includeAuth,
-          generatedAt: new Date().toISOString(),
-        };
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to generate webhook URL",
-          cause: error,
-        });
-      }
+          return mutationResponse(
+            {
+              key,
+              url,
+              workflowId: input.workflowId,
+              includeAuth: input.includeAuth,
+              generatedAt: new Date().toISOString(),
+            },
+            "Webhook URL generated successfully",
+          );
+        },
+        {
+          component: "webhooksRouter",
+          operationName: "generateUrl",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 
   // Get webhook monitoring data
@@ -897,7 +938,7 @@ export const webhooksRouter = createTRPCRouter({
     .input(webhookPayloadValidationSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const webhooks = await getUserWebhooks(ctx.userId);
+        const webhooks = await getUserWebhooks(ctx.session.user.id);
         const webhook = webhooks.find((w) => w.key === input.key);
 
         if (!webhook) {
@@ -939,7 +980,7 @@ export const webhooksRouter = createTRPCRouter({
     .input(webhookResponseSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const webhooks = await getUserWebhooks(ctx.userId);
+        const webhooks = await getUserWebhooks(ctx.session.user.id);
         const webhook = webhooks.find((w) => w.key === input.key);
 
         if (!webhook) {

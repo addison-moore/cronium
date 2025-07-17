@@ -18,39 +18,9 @@ import {
 // ===== UTILITY TYPES =====
 
 /**
- * Extract keys from an object type that have values of specific type
- */
-export type KeysOfType<T, U> = {
-  [K in keyof T]: T[K] extends U ? K : never;
-}[keyof T];
-
-/**
  * Make certain properties optional while keeping others required
  */
 export type PartialBy<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
-
-/**
- * Make certain properties required while keeping others optional
- */
-export type RequiredBy<T, K extends keyof T> = T & Required<Pick<T, K>>;
-
-/**
- * Deep readonly type for immutable data structures
- */
-export type DeepReadonly<T> = {
-  readonly [P in keyof T]: T[P] extends (infer U)[]
-    ? ReadonlyArray<DeepReadonly<U>>
-    : T[P] extends Record<string, unknown>
-      ? DeepReadonly<T[P]>
-      : T[P];
-};
-
-/**
- * Extract non-nullable properties from a type
- */
-export type NonNullableKeys<T> = {
-  [K in keyof T]: T[K] extends null | undefined ? never : K;
-}[keyof T];
 
 // ===== TEMPLATE LITERAL TYPES =====
 
@@ -197,29 +167,6 @@ export type EventFormState<T extends Record<string, unknown>> = {
   [K in keyof T]: FormFieldState;
 };
 
-/**
- * Make all properties of a type nullable
- */
-export type Nullable<T> = {
-  [P in keyof T]: T[P] | null;
-};
-
-/**
- * Transform enum to form option type
- */
-export type EnumToOptions<T extends Record<string, string>> = {
-  [K in keyof T]: {
-    value: T[K];
-    label: string;
-    disabled?: boolean;
-  };
-}[keyof T][];
-
-/**
- * Extract valid transitions between states
- */
-export type StateTransitions<T extends string> = Record<T, T[]>;
-
 // ===== COMPLEX UTILITY TYPES =====
 
 /**
@@ -291,14 +238,6 @@ export type UserId = string & { readonly __brand: "UserId" };
 export type EventId = number & { readonly __brand: "EventId" };
 export type ServerId = number & { readonly __brand: "ServerId" };
 export type ToolId = number & { readonly __brand: "ToolId" };
-
-/**
- * Create branded type instances
- */
-export const createUserId = (id: string): UserId => id as UserId;
-export const createEventId = (id: number): EventId => id as EventId;
-export const createServerId = (id: number): ServerId => id as ServerId;
-export const createToolId = (id: number): ToolId => id as ToolId;
 
 // ===== TYPE PREDICATES AND GUARDS =====
 
@@ -388,45 +327,6 @@ export function assertValidUserRole(value: unknown): asserts value is UserRole {
   }
 }
 
-// ===== TRANSFORMATION UTILITIES =====
-
-/**
- * Transform enum to select options
- */
-export function enumToSelectOptions<T extends Record<string, string>>(
-  enumObject: T,
-  labelTransform?: (value: T[keyof T]) => string,
-): Array<{ value: T[keyof T]; label: string }> {
-  return Object.values(enumObject).map((value) => ({
-    value: value as T[keyof T],
-    label: labelTransform
-      ? labelTransform(value as T[keyof T])
-      : value.toLowerCase().replace(/_/g, " "),
-  }));
-}
-
-/**
- * Type-safe object property picker
- */
-export function pick<T, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {
-  const result = {} as Pick<T, K>;
-  keys.forEach((key) => {
-    result[key] = obj[key];
-  });
-  return result;
-}
-
-/**
- * Type-safe object property omitter
- */
-export function omit<T, K extends keyof T>(obj: T, keys: K[]): Omit<T, K> {
-  const result = { ...obj };
-  keys.forEach((key) => {
-    delete result[key];
-  });
-  return result;
-}
-
 // ===== ERROR TYPES =====
 
 /**
@@ -468,38 +368,6 @@ export class ResourceNotFoundError extends Error {
 export type DatabaseQueryResult<T> = T[] | undefined;
 
 /**
- * Extract first result from database query with type safety
- */
-export function getFirstResult<T>(
-  result: DatabaseQueryResult<T>,
-): T | undefined {
-  return result?.[0];
-}
-
-/**
- * Assert that database query returned a result
- */
-export function assertQueryResult<T>(
-  result: DatabaseQueryResult<T>,
-  errorMessage?: string,
-): asserts result is NonNullable<T[]> {
-  if (!result || result.length === 0) {
-    throw new ResourceNotFoundError("Query result", errorMessage ?? "unknown");
-  }
-}
-
-/**
- * Safe database update operations with exactOptionalPropertyTypes
- */
-export function createUpdateData<T extends Record<string, unknown>>(
-  data: T,
-): Partial<T> {
-  return Object.fromEntries(
-    Object.entries(data).filter(([_, value]) => value !== undefined),
-  ) as Partial<T>;
-}
-
-/**
  * Type-safe tRPC handler wrapper
  */
 export type SafeTRPCHandler<TInput, TOutput> = (
@@ -529,33 +397,3 @@ export function createErrorResponse(
 ): ApiResponse<never> {
   return code ? { success: false, error, code } : { success: false, error };
 }
-
-/**
- * Type-safe database transaction helper
- */
-export type TransactionCallback<T> = () => Promise<T> | T;
-
-/**
- * Advanced conditional type for form validation
- */
-export type FormFieldValidation<T> = {
-  [K in keyof T]: {
-    required?: boolean;
-    minLength?: number;
-    maxLength?: number;
-    pattern?: RegExp;
-    custom?: (value: T[K]) => boolean | string;
-  };
-};
-
-/**
- * Type-safe environment variable validation
- */
-export type EnvConfig<T extends Record<string, string | number | boolean>> = {
-  [K in keyof T]: {
-    value: T[K];
-    required: boolean;
-    defaultValue?: T[K];
-    validation?: (value: T[K]) => boolean;
-  };
-};

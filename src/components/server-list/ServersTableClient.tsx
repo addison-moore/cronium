@@ -73,7 +73,7 @@ export function ServersTableClient({
 
   // Mutations for health check and delete
   const checkHealthMutation = trpc.servers.checkHealth.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       toast({
         title: data.online ? t("ServerOnline") : t("ServerOffline"),
         description: `Health check completed at ${new Date(data.lastChecked).toLocaleString()}`,
@@ -82,7 +82,7 @@ export function ServersTableClient({
       // Update local state
       setServers((prev) =>
         prev.map((server) =>
-          server.id === data.id
+          server.id === variables.id
             ? {
                 ...server,
                 online: data.online,

@@ -60,8 +60,8 @@ const workflowFormSchema = z.object({
 export default function NewWorkflowPage() {
   const router = useRouter();
   const params = useParams<{ lang: string }>();
-  const t = useTranslations("Workflows");
   const lang = params.lang;
+  const t = useTranslations("Workflows");
   const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<WorkflowFormData>({
@@ -92,8 +92,8 @@ export default function NewWorkflowPage() {
         variant: "success",
       });
       // Redirect to the newly created workflow
-      if (data?.id) {
-        router.push(`/${lang}/dashboard/workflows/${data.id}`);
+      if (data?.data?.id) {
+        router.push(`/${lang}/dashboard/workflows/${String(data.data.id)}`);
       } else {
         router.push(`/${lang}/dashboard/workflows`);
       }

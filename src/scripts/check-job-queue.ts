@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 
 import { db } from "@/server/db";
-import { jobs } from "@/shared/schema";
+import { jobs, JobStatus } from "@/shared/schema";
 import { sql, eq, inArray } from "drizzle-orm";
 
 async function checkJobQueue() {
@@ -28,7 +28,7 @@ async function checkJobQueue() {
       createdAt: jobs.createdAt,
     })
     .from(jobs)
-    .where(eq(jobs.status, "queued"))
+    .where(eq(jobs.status, JobStatus.QUEUED))
     .orderBy(jobs.createdAt)
     .limit(10);
 
@@ -65,7 +65,7 @@ async function checkJobQueue() {
       await db
         .update(jobs)
         .set({
-          status: "failed",
+          status: JobStatus.FAILED,
           completedAt: new Date(),
           result: { error: "Job abandoned - orchestrator was not running" },
         })
@@ -86,7 +86,7 @@ async function checkJobQueue() {
       startedAt: jobs.startedAt,
     })
     .from(jobs)
-    .where(eq(jobs.status, "running"))
+    .where(eq(jobs.status, JobStatus.RUNNING))
     .limit(10);
 
   if (runningJobs.length > 0) {

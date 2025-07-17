@@ -171,7 +171,7 @@ export function WorkflowListClient({
     // Apply status filter
     if (statusFilter !== "all") {
       filtered = filtered.filter(
-        (workflow) => workflow.status === statusFilter,
+        (workflow) => workflow.status === (statusFilter as EventStatus),
       );
     }
 
@@ -200,9 +200,9 @@ export function WorkflowListClient({
 
   const handleToggleStatus = async (id: number, currentStatus: EventStatus) => {
     const newStatus =
-      currentStatus === EventStatus.Active
-        ? EventStatus.Inactive
-        : EventStatus.Active;
+      currentStatus === EventStatus.ACTIVE
+        ? EventStatus.PAUSED
+        : EventStatus.ACTIVE;
 
     await updateMutation.mutateAsync({ id, status: newStatus });
     setWorkflows((prev) =>
@@ -223,29 +223,29 @@ export function WorkflowListClient({
     switch (action) {
       case "activate":
         await bulkMutation.mutateAsync({
-          ids,
+          workflowIds: ids,
           operation: "activate",
         });
         setWorkflows((prev) =>
           prev.map((w) =>
-            ids.includes(w.id) ? { ...w, status: EventStatus.Active } : w,
+            ids.includes(w.id) ? { ...w, status: EventStatus.ACTIVE } : w,
           ),
         );
         break;
       case "deactivate":
         await bulkMutation.mutateAsync({
-          ids,
-          operation: "deactivate",
+          workflowIds: ids,
+          operation: "pause",
         });
         setWorkflows((prev) =>
           prev.map((w) =>
-            ids.includes(w.id) ? { ...w, status: EventStatus.Inactive } : w,
+            ids.includes(w.id) ? { ...w, status: EventStatus.PAUSED } : w,
           ),
         );
         break;
       case "delete":
         await bulkMutation.mutateAsync({
-          ids,
+          workflowIds: ids,
           operation: "delete",
         });
         setWorkflows((prev) => prev.filter((w) => !ids.includes(w.id)));
@@ -273,13 +273,13 @@ export function WorkflowListClient({
 
   const getTriggerIcon = (triggerType: WorkflowTriggerType) => {
     switch (triggerType) {
-      case WorkflowTriggerType.Scheduled:
+      case WorkflowTriggerType.SCHEDULE:
         return <Calendar className="h-4 w-4" />;
-      case WorkflowTriggerType.Webhook:
+      case WorkflowTriggerType.WEBHOOK:
         return <Globe className="h-4 w-4" />;
-      case WorkflowTriggerType.Manual:
+      case WorkflowTriggerType.MANUAL:
         return <Hand className="h-4 w-4" />;
-      case WorkflowTriggerType.Event:
+      default:
         return <RefreshCw className="h-4 w-4" />;
     }
   };
@@ -338,8 +338,18 @@ export function WorkflowListClient({
       header: t("Status"),
       cell: (workflow) => (
         <ClickableStatusBadge
-          status={workflow.status}
-          onClick={() => handleToggleStatus(workflow.id, workflow.status)}
+          currentStatus={workflow.status}
+          onStatusChange={async (newStatus) => {
+            await updateMutation.mutateAsync({
+              id: workflow.id,
+              status: newStatus,
+            });
+            setWorkflows((prev) =>
+              prev.map((w) =>
+                w.id === workflow.id ? { ...w, status: newStatus } : w,
+              ),
+            );
+          }}
         />
       ),
     },
@@ -475,10 +485,8 @@ export function WorkflowListClient({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("AllStatuses")}</SelectItem>
-            <SelectItem value={EventStatus.Active}>{t("Active")}</SelectItem>
-            <SelectItem value={EventStatus.Inactive}>
-              {t("Inactive")}
-            </SelectItem>
+            <SelectItem value={EventStatus.ACTIVE}>{t("Active")}</SelectItem>
+            <SelectItem value={EventStatus.PAUSED}>{t("Inactive")}</SelectItem>
           </SelectContent>
         </Select>
         {allTags.length > 0 && (
@@ -505,15 +513,9 @@ export function WorkflowListClient({
         actions={getWorkflowActions}
         isLoading={false}
         emptyMessage={
-          <div className="flex flex-col items-center py-8">
-            <Workflow className="text-muted-foreground mb-4 h-12 w-12" />
-            <p className="text-lg font-medium">{t("NoWorkflowsFound")}</p>
-            <p className="text-muted-foreground text-sm">
-              {searchTerm || statusFilter !== "all" || tagFilter !== "all"
-                ? t("NoWorkflowsMatchingFilters")
-                : t("CreateYourFirstWorkflow")}
-            </p>
-          </div>
+          searchTerm || statusFilter !== "all" || tagFilter !== "all"
+            ? t("NoWorkflowsMatchingFilters")
+            : t("NoWorkflowsFound")
         }
       />
 

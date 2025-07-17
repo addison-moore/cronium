@@ -73,13 +73,13 @@ export default function SignUpForm() {
       if (!result.success) {
         setError("root.serverError", {
           type: "manual",
-          message: result.error || t("Auth.RegistrationFailed"),
+          message: result.error ?? t("Auth.RegistrationFailed"),
         });
         return;
       }
 
       // Registration successful
-      setSuccessMessage(result.message || t("Auth.RegistrationSuccessful"));
+      setSuccessMessage(result.message ?? t("Auth.RegistrationSuccessful"));
       setRegistrationComplete(true);
 
       // After a delay, redirect to sign in page

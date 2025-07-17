@@ -10,9 +10,9 @@ import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 
 const LogDetailsClient = dynamic(
-  () => import("./page-original").then((mod) => ({ default: mod.default })),
+  () => import("./page-client"),
   {
-    ssr: true,
+    ssr: false,
     loading: () => <LogDetailsSkeleton />,
   },
 );
@@ -42,7 +42,7 @@ export async function generateMetadata({
       title: `Log #${log.id} - ${log.eventName}`,
       description: `Execution log for ${log.eventName}`,
     };
-  } catch (_error) {
+  } catch {
     return {
       title: "Log Not Found",
     };
@@ -67,13 +67,13 @@ export default async function LogDetailsPage({ params }: LogDetailsPageProps) {
   // Pre-validate log exists to show 404 early
   try {
     await api.logs.getById({ id: parsedId });
-  } catch (_error) {
+  } catch {
     notFound();
   }
 
   return (
     <Suspense fallback={<LogDetailsSkeleton />}>
-      <LogDetailsClient params={Promise.resolve({ id, lang })} />
+      <LogDetailsClient />
     </Suspense>
   );
 }

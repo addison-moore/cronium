@@ -27,7 +27,6 @@ module.exports = [
       "**/*.js",
       "**/deprecated/*",
       "scripts/*",
-      "src/scripts/*",
       "**/*.mjs",
       "**/*.cjs",
       "**/__tests__/*",

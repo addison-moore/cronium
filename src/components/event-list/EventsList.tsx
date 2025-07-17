@@ -24,6 +24,7 @@ import type {
   WorkflowData,
   EventListFilters,
   EventListState,
+  ServerData,
 } from "@/components/event-list";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
@@ -218,28 +219,25 @@ export default function EventsList() {
     return event;
   });
 
-  const servers = serversData?.servers ?? [];
+  const servers = (serversData?.servers ?? []) as ServerData[];
 
   // Transform workflow data to match the WorkflowData interface
-  const rawWorkflows = workflowsData?.workflows ?? [];
-  const workflows: WorkflowData[] = rawWorkflows.map(
-    (workflow: { id: number; name: string; description?: unknown }) => {
-      const workflowData: WorkflowData = {
-        id: workflow.id,
-        name: workflow.name,
-      };
-      if (workflow.description !== null) {
-        workflowData.description =
-          typeof workflow.description === "string"
-            ? workflow.description
-            : typeof workflow.description === "number" ||
-                typeof workflow.description === "boolean"
-              ? String(workflow.description)
-              : "";
-      }
-      return workflowData;
-    },
-  );
+  const rawWorkflows = (workflowsData?.workflows ?? []) as Array<{
+    id: number;
+    name: string;
+    description?: string | null;
+  }>;
+  const workflows: WorkflowData[] = rawWorkflows.map((workflow) => {
+    const workflowData: WorkflowData = {
+      id: workflow.id,
+      name: workflow.name,
+      eventIds: [], // Initialize empty eventIds array
+    };
+    if (workflow.description) {
+      workflowData.description = workflow.description;
+    }
+    return workflowData;
+  });
 
   // For workflow-event relationships, we'll need to extract from events or implement a separate endpoint
   const workflowEvents: { workflowId: number; eventId: number }[] = [];

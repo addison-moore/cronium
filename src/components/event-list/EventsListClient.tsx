@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { EventStatus, ConditionalActionType } from "@/shared/schema";
-import type { TimeUnit, RunLocation, EventType } from "@/shared/schema";
+import { EventStatus, EventType } from "@/shared/schema";
 import { useToast } from "@/components/ui/use-toast";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Pagination } from "@/components/ui/pagination";
@@ -100,12 +99,14 @@ export function EventsListClient({
   });
 
   const activateMutation = trpc.events.activate.useMutation({
-    onSuccess: (_, { ids }) => {
+    onSuccess: (_, variables) => {
       toast({ title: t("ActivateSuccess") });
+      // Since activate accepts a single ID, create array from single value
+      const activatedIds = [variables.id];
       setEvents((prev) =>
         prev.map((event) =>
-          ids.includes(event.id)
-            ? { ...event, status: EventStatus.Active }
+          activatedIds.includes(event.id)
+            ? { ...event, status: EventStatus.ACTIVE }
             : event,
         ),
       );
@@ -113,12 +114,14 @@ export function EventsListClient({
   });
 
   const deactivateMutation = trpc.events.deactivate.useMutation({
-    onSuccess: (_, { ids }) => {
+    onSuccess: (_, variables) => {
       toast({ title: t("DeactivateSuccess") });
+      // Since deactivate accepts a single ID, create array from single value
+      const deactivatedIds = [variables.id];
       setEvents((prev) =>
         prev.map((event) =>
-          ids.includes(event.id)
-            ? { ...event, status: EventStatus.Inactive }
+          deactivatedIds.includes(event.id)
+            ? { ...event, status: EventStatus.PAUSED }
             : event,
         ),
       );
@@ -134,21 +137,23 @@ export function EventsListClient({
         .includes(filters.searchTerm.toLowerCase());
 
     const matchesType =
-      filters.typeFilter === "all" || event.type === filters.typeFilter;
+      filters.typeFilter === "all" ||
+      event.type === (filters.typeFilter as EventType);
 
     const matchesStatus =
-      filters.statusFilter === "all" || event.status === filters.statusFilter;
+      filters.statusFilter === "all" ||
+      event.status === (filters.statusFilter as EventStatus);
 
     const matchesServer =
       filters.serverFilter === "all" ||
-      event.serverId?.toString() === filters.serverFilter;
+      String(event.serverId) === filters.serverFilter;
 
     const matchesWorkflow =
       filters.workflowFilter === "all" ||
       workflows.some(
         (wf) =>
-          wf.id.toString() === filters.workflowFilter &&
-          wf.eventIds.includes(event.id),
+          String(wf.id) === filters.workflowFilter &&
+          wf.eventIds?.includes(event.id),
       );
 
     const matchesTag =
@@ -176,7 +181,7 @@ export function EventsListClient({
         comparison =
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         break;
-      case "nextRun":
+      case "lastRunAt":
         if (!a.nextRunAt && !b.nextRunAt) comparison = 0;
         else if (!a.nextRunAt) comparison = 1;
         else if (!b.nextRunAt) comparison = -1;
@@ -203,7 +208,7 @@ export function EventsListClient({
     await executeMutation.mutateAsync({ id: eventId });
   };
 
-  const handleEditEvent = (eventId: number) => {
+  const _handleEditEvent = (eventId: number) => {
     window.location.href = `events/${eventId}/edit`;
   };
 
@@ -226,10 +231,16 @@ export function EventsListClient({
     try {
       switch (action) {
         case "activate":
-          await activateMutation.mutateAsync({ ids: selectedIds });
+          // Activate events one by one since API expects single ID
+          for (const id of selectedIds) {
+            await activateMutation.mutateAsync({ id });
+          }
           break;
         case "deactivate":
-          await deactivateMutation.mutateAsync({ ids: selectedIds });
+          // Deactivate events one by one since API expects single ID
+          for (const id of selectedIds) {
+            await deactivateMutation.mutateAsync({ id });
+          }
           break;
         case "delete":
           for (const id of selectedIds) {
@@ -267,7 +278,7 @@ export function EventsListClient({
     setState((prev) => ({ ...prev, currentPage: 1 }));
   };
 
-  const handleSelectAll = () => {
+  const _handleSelectAll = () => {
     if (state.selectedEvents.size === paginatedEvents.length) {
       setState((prev) => ({ ...prev, selectedEvents: new Set() }));
     } else {
@@ -278,7 +289,7 @@ export function EventsListClient({
     }
   };
 
-  const handleSelectEvent = (eventId: number) => {
+  const _handleSelectEvent = (eventId: number) => {
     const newSelection = new Set(state.selectedEvents);
     if (newSelection.has(eventId)) {
       newSelection.delete(eventId);
@@ -305,8 +316,15 @@ export function EventsListClient({
       {state.selectedEvents.size > 0 && (
         <BulkActionsToolbar
           selectedCount={state.selectedEvents.size}
-          onBulkAction={handleBulkAction}
-          isLoading={state.bulkActionLoading}
+          bulkActionLoading={state.bulkActionLoading}
+          onBulkActivate={() => handleBulkAction("activate")}
+          onBulkPause={() => handleBulkAction("deactivate")}
+          onBulkDownload={() => handleBulkAction("download")}
+          onBulkArchive={() => handleBulkAction("archive")}
+          onBulkDelete={() => handleBulkAction("delete")}
+          onClearSelection={() =>
+            setState((prev) => ({ ...prev, selectedEvents: new Set() }))
+          }
         />
       )}
 
@@ -315,22 +333,45 @@ export function EventsListClient({
           filters={filters}
           onFiltersChange={updateFilters}
           onClearFilters={handleClearFilters}
-          servers={servers}
+          servers={servers.map((s) => ({
+            id: s.id,
+            name: s.name,
+            address: "",
+            username: "",
+            port: 22,
+          }))}
           workflows={workflows}
           events={events}
         />
 
         <EventsTable
           events={paginatedEvents}
+          servers={servers.map((s) => ({
+            id: s.id,
+            name: s.name,
+            address: "",
+            username: "",
+            port: 22,
+          }))}
           selectedEvents={state.selectedEvents}
+          onSelectedEventsChange={(selected) =>
+            setState((prev) => ({ ...prev, selectedEvents: selected }))
+          }
+          onEventRun={handleRunEvent}
+          onEventDuplicate={(id) =>
+            (window.location.href = `events/${id}/duplicate`)
+          }
+          onEventStatusChange={(id, status) => {
+            if (status === EventStatus.ACTIVE) {
+              activateMutation.mutate({ id });
+            } else {
+              deactivateMutation.mutate({ id });
+            }
+          }}
+          onEventDelete={handleDeleteEvent}
           isRunning={state.isRunning}
-          onSelectAll={handleSelectAll}
-          onSelectEvent={handleSelectEvent}
-          onRunEvent={handleRunEvent}
-          onEditEvent={handleEditEvent}
-          onDeleteEvent={handleDeleteEvent}
-          servers={servers}
-          workflows={workflows}
+          isLoading={false}
+          searchTerm={filters.searchTerm}
         />
 
         {totalItems > 0 && (

@@ -1,12 +1,20 @@
 import { appRouter } from "@/server/api/root";
 import { createCallerFactory } from "@/server/api/trpc";
 import { db } from "@/server/db";
-import { auth } from "@/lib/auth";
 import { TRPCError } from "@trpc/server";
-import { users } from "@/shared/schema";
+import {
+  users,
+  UserRole,
+  UserStatus,
+  EventType,
+  EventStatus,
+  RunLocation,
+  JobStatus,
+} from "@/shared/schema";
 import { eq } from "drizzle-orm";
 import { hash } from "bcrypt";
 import { randomUUID } from "crypto";
+import type { Session } from "next-auth";
 
 const createCaller = createCallerFactory(appRouter);
 
@@ -29,20 +37,25 @@ async function testContainerExecution() {
           id: randomUUID(),
           email: testEmail,
           password: hashedPassword,
-          role: "admin",
+          role: UserRole.ADMIN,
         })
         .returning();
       testUser = newUser;
       console.log("✅ Test user created\n");
     }
 
+    if (!testUser) {
+      throw new Error("Failed to create or find test user");
+    }
+
     // Create a test user session
-    const session = {
+    const session: Session = {
       user: {
         id: testUser.id,
         email: testUser.email,
         name: testUser.firstName || "Test User",
         role: testUser.role,
+        status: testUser.status || UserStatus.ACTIVE,
       },
       expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     };
@@ -52,7 +65,6 @@ async function testContainerExecution() {
       session,
       headers: new Headers(),
       db,
-      auth: auth as any,
     });
 
     // Step 1: Create a simple test event
@@ -60,11 +72,16 @@ async function testContainerExecution() {
     const event = await caller.events.create({
       name: "Test Container Execution",
       description: "Simple test to verify container execution",
-      type: "BASH",
+      type: EventType.BASH,
       content: 'echo "Hello from container!"',
-      status: "ACTIVE",
-      runLocation: "LOCAL",
+      status: EventStatus.ACTIVE,
+      runLocation: RunLocation.LOCAL,
     });
+
+    if (!event) {
+      throw new Error("Failed to create test event");
+    }
+
     console.log(`✅ Created event: ${event.name} (ID: ${event.id})\n`);
 
     // Step 2: Execute the event
@@ -80,32 +97,40 @@ async function testContainerExecution() {
     while (attempts < maxAttempts) {
       await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait 1 second
 
-      const job = await caller.jobs.get({ jobId: execution.jobId });
+      const jobResponse = await caller.jobs.get({ jobId: execution.jobId });
+      const job = jobResponse.data;
       console.log(
         `   Status: ${job.status} (Attempt ${attempts + 1}/${maxAttempts})`,
       );
 
-      if (job.status === "completed" || job.status === "failed") {
+      if (
+        job.status === JobStatus.COMPLETED ||
+        job.status === JobStatus.FAILED
+      ) {
         console.log(`\n✅ Job finished with status: ${job.status}`);
 
-        if (job.logs) {
-          console.log("\n📋 Job logs:");
+        if (
+          job.result &&
+          typeof job.result === "object" &&
+          "output" in job.result
+        ) {
+          console.log("\n📋 Job output:");
           console.log("---");
-          console.log(job.logs);
+          console.log((job.result as any).output);
           console.log("---");
         }
 
-        if (job.error) {
-          console.log("\n❌ Job error:", job.error);
+        if (job.lastError) {
+          console.log("\n❌ Job error:", job.lastError);
         }
 
         // Step 4: Check if job appears in queue history
         console.log("\n📊 Checking job queue history...");
-        const jobs = await caller.jobs.list({ limit: 5 });
-        const ourJob = jobs.jobs.find((j) => j.id === execution.jobId);
+        const jobsResponse = await caller.jobs.list({ limit: 5 });
+        const ourJob = jobsResponse.items.find((j) => j.id === execution.jobId);
         if (ourJob) {
           console.log("✅ Job found in queue history");
-          console.log(`   Container: ${ourJob.container || "N/A"}`);
+          console.log(`   Orchestrator: ${ourJob.orchestratorId || "N/A"}`);
           console.log(`   Started: ${ourJob.startedAt || "N/A"}`);
           console.log(`   Completed: ${ourJob.completedAt || "N/A"}`);
         }

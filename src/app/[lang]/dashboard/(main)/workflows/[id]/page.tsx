@@ -10,6 +10,12 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
 import { trpc } from "@/lib/trpc";
+import type { RouterOutputs } from "@/server/api/root";
+
+type WorkflowExecutions = RouterOutputs["workflows"]["getExecutions"];
+type WorkflowExecution = NonNullable<
+  WorkflowExecutions["executions"]["executions"][number]
+>;
 import WorkflowExecutionHistory from "@/components/workflows/WorkflowExecutionHistory";
 import WorkflowExecutionGraph from "@/components/workflows/WorkflowExecutionGraph";
 import WorkflowCanvas from "@/components/workflows/WorkflowCanvas-lazy";
@@ -176,7 +182,7 @@ export default function WorkflowDetailsPage({
   // Handle workflow data
   useEffect(() => {
     if (workflowData) {
-      setWorkflow(workflowData);
+      setWorkflow(workflowData.data as any);
       // Define proper types for workflow data from tRPC
       interface WorkflowNode {
         id: number;
@@ -203,7 +209,8 @@ export default function WorkflowDetailsPage({
       }
 
       // Convert workflow nodes and connections to local format
-      const typedNodes = workflowData.nodes as WorkflowNode[] | undefined;
+      const workflowDataTyped = workflowData.data as any;
+      const typedNodes = workflowDataTyped?.nodes as WorkflowNode[] | undefined;
       const nodes: LocalWorkflowNode[] = (typedNodes ?? []).map((node) => ({
         id: `node-${String(node.id)}`,
         type: "workflowNode",
@@ -222,7 +229,7 @@ export default function WorkflowDetailsPage({
       }));
       setWorkflowNodes(nodes);
 
-      const typedConnections = workflowData.connections as
+      const typedConnections = workflowDataTyped?.connections as
         | WorkflowConnection[]
         | undefined;
       const edges: WorkflowEdge[] = (typedConnections ?? []).map((conn) => ({
@@ -265,48 +272,49 @@ export default function WorkflowDetailsPage({
   // Handle executions data
   useEffect(() => {
     if (executionsData?.executions) {
-      const executions = executionsData.executions.executions || [];
+      const executionsResponse = executionsData.executions as {
+        executions: WorkflowExecution[];
+        total: number;
+      };
+      const executions = executionsResponse.executions;
 
       const stats: ExecutionStats = {
         totalExecutions: executions.length,
-        successCount: executions.filter((e: unknown) => {
-          if (typeof e === "object" && e !== null && "status" in e) {
-            return (e as { status: string }).status === "completed";
-          }
-          return false;
-        }).length,
-        failureCount: executions.filter((e: unknown) => {
-          if (typeof e === "object" && e !== null && "status" in e) {
-            return (e as { status: string }).status === "failed";
-          }
-          return false;
-        }).length,
+        successCount: executions.filter((e) => e.status === LogStatus.SUCCESS)
+          .length,
+        failureCount: executions.filter((e) => e.status === LogStatus.FAILURE)
+          .length,
       };
       setExecutionStats(stats);
 
       // Set current execution if there's a running one
-      const runningExecution = executions.find((e: unknown) => {
-        if (typeof e === "object" && e !== null && "status" in e) {
-          return (e as { status: string }).status === "running";
-        }
-        return false;
-      });
+      const runningExecution = executions.find(
+        (e) => e.status === LogStatus.RUNNING,
+      );
       if (runningExecution) {
         // Convert the execution data to match WorkflowExecutionDetailed interface
+        const typedExecution = runningExecution as {
+          id: number;
+          workflowId: number;
+          status: string;
+          startedAt: Date | string;
+          completedAt?: Date | string | null;
+          totalDuration?: number | null;
+        };
         const execution: WorkflowExecutionDetailed = {
-          id: runningExecution.id,
-          workflowId: runningExecution.workflowId,
-          status: runningExecution.status,
+          id: typedExecution.id,
+          workflowId: typedExecution.workflowId,
+          status: typedExecution.status,
           startedAt:
-            runningExecution.startedAt instanceof Date
-              ? runningExecution.startedAt.toISOString()
-              : runningExecution.startedAt,
-          completedAt: runningExecution.completedAt
-            ? runningExecution.completedAt instanceof Date
-              ? runningExecution.completedAt.toISOString()
-              : runningExecution.completedAt
+            typedExecution.startedAt instanceof Date
+              ? typedExecution.startedAt.toISOString()
+              : typedExecution.startedAt,
+          completedAt: typedExecution.completedAt
+            ? typedExecution.completedAt instanceof Date
+              ? typedExecution.completedAt.toISOString()
+              : typedExecution.completedAt
             : null,
-          totalDuration: runningExecution.totalDuration ?? null,
+          totalDuration: typedExecution.totalDuration ?? null,
           totalEvents: 0,
           successfulEvents: 0,
           failedEvents: 0,

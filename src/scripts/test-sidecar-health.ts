@@ -1,11 +1,20 @@
 import { appRouter } from "@/server/api/root";
 import { createCallerFactory } from "@/server/api/trpc";
 import { db } from "@/server/db";
-import { auth } from "@/lib/auth";
-import { users } from "@/shared/schema";
+import { authOptions } from "@/lib/auth";
+import {
+  users,
+  UserRole,
+  EventType,
+  EventStatus,
+  RunLocation,
+  UserStatus,
+  JobStatus,
+} from "@/shared/schema";
 import { eq } from "drizzle-orm";
 import { hash } from "bcrypt";
 import { randomUUID } from "crypto";
+import type { Session } from "next-auth";
 
 const createCaller = createCallerFactory(appRouter);
 
@@ -27,18 +36,24 @@ async function testSidecarHealth() {
           id: randomUUID(),
           email: testEmail,
           password: hashedPassword,
-          role: "admin",
+          role: UserRole.ADMIN,
+          status: UserStatus.ACTIVE,
         })
         .returning();
       testUser = newUser;
     }
 
-    const session = {
+    if (!testUser) {
+      throw new Error("Failed to create or find test user");
+    }
+
+    const session: Session = {
       user: {
         id: testUser.id,
         email: testUser.email,
         name: testUser.firstName || "Test User",
         role: testUser.role,
+        status: testUser.status,
       },
       expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     };
@@ -47,14 +62,13 @@ async function testSidecarHealth() {
       session,
       headers: new Headers(),
       db,
-      auth: auth as any,
     });
 
     // Create test event
     console.log("📝 Creating test event...");
     const event = await caller.events.create({
       name: "Sidecar Health Check",
-      type: "BASH",
+      type: EventType.BASH,
       content: `#!/bin/bash
 echo "=== Testing Sidecar Health ==="
 echo ""
@@ -82,9 +96,14 @@ echo ""
 
 echo "=== Test Complete ==="
 `,
-      status: "ACTIVE",
-      runLocation: "LOCAL",
+      status: EventStatus.ACTIVE,
+      runLocation: RunLocation.LOCAL,
     });
+
+    if (!event) {
+      throw new Error("Failed to create event");
+    }
+
     console.log(`✅ Created event ${event.id}\n`);
 
     // Execute
@@ -99,20 +118,33 @@ echo "=== Test Complete ==="
     for (let i = 0; i < 15; i++) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      const job = await caller.jobs.get({ jobId: execution.jobId });
+      const jobResponse = await caller.jobs.get({ jobId: execution.jobId });
+      const job = jobResponse.data;
 
-      if (job.status === "completed" || job.status === "failed") {
+      if (
+        job.status === JobStatus.COMPLETED ||
+        job.status === JobStatus.FAILED
+      ) {
         jobResult = job;
         console.log(`✅ Job ${job.status}\n`);
         break;
       }
     }
 
-    if (jobResult?.logs) {
-      console.log("📋 Output:");
-      console.log("---");
-      console.log(jobResult.logs);
-      console.log("---\n");
+    // Following TYPE_SAFETY.md - check job result safely
+    if (
+      jobResult &&
+      jobResult.result &&
+      typeof jobResult.result === "object" &&
+      "output" in jobResult.result
+    ) {
+      const output = (jobResult.result as { output?: string }).output;
+      if (output) {
+        console.log("📋 Output:");
+        console.log("---");
+        console.log(output);
+        console.log("---\n");
+      }
     }
 
     // Cleanup

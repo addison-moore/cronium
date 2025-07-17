@@ -44,6 +44,7 @@ import {
   type Tool,
 } from "@/shared/schema";
 import type { ToolActionConfig } from "./ToolActionSection";
+import type { ServerData } from "@/components/event-list/types";
 
 // Extended Event type that includes relation properties
 interface EventFormInitialData extends Partial<Event> {
@@ -312,7 +313,7 @@ export default function EventForm({
     { limit: 100, offset: 0 },
     QUERY_OPTIONS.dynamic,
   );
-  const servers = serversData?.servers ?? [];
+  const servers = (serversData?.servers ?? []) as ServerData[];
 
   // Fetch available tools
   const { data: toolsData } = trpc.tools.getAll.useQuery(
@@ -326,7 +327,7 @@ export default function EventForm({
     { limit: 1000, offset: 0 },
     QUERY_OPTIONS.dynamic,
   );
-  const availableEvents = eventsData?.events ?? [];
+  const availableEvents = (eventsData?.events ?? []) as Event[];
 
   // tRPC mutations
   const createEventMutation = trpc.events.create.useMutation();
@@ -340,8 +341,8 @@ export default function EventForm({
 
   // Update editor settings when data is available
   useEffect(() => {
-    if (editorSettingsData) {
-      setEditorSettings(editorSettingsData);
+    if (editorSettingsData?.data) {
+      setEditorSettings(editorSettingsData.data);
     }
   }, [editorSettingsData]);
 
@@ -1272,13 +1273,18 @@ export default function EventForm({
                         >
                           <Checkbox
                             id={`server-${server.id}`}
-                            checked={field.value.includes(server.id)}
+                            checked={field.value?.includes(server.id) ?? false}
                             onCheckedChange={(checked) => {
                               if (checked) {
-                                field.onChange([...field.value, server.id]);
+                                field.onChange([
+                                  ...(field.value ?? []),
+                                  server.id,
+                                ]);
                               } else {
                                 field.onChange(
-                                  field.value.filter((id) => id !== server.id),
+                                  (field.value ?? []).filter(
+                                    (id: number) => id !== server.id,
+                                  ),
                                 );
                               }
                             }}

@@ -149,9 +149,9 @@ export function SuspenseWithErrorBoundary({
 }: SuspenseWithErrorBoundaryProps) {
   return (
     <SuspenseErrorBoundary
-      fallback={errorFallback}
-      maxRetries={maxRetries}
-      onError={onError}
+      {...(errorFallback && { fallback: errorFallback })}
+      {...(maxRetries !== undefined && { maxRetries })}
+      {...(onError && { onError })}
     >
       <Suspense fallback={fallback}>{children}</Suspense>
     </SuspenseErrorBoundary>

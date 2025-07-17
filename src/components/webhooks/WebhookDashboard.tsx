@@ -150,13 +150,22 @@ export function WebhookDashboard({ workflowId }: WebhookDashboardProps) {
     },
   });
 
-  const webhooks = (webhooksData?.webhooks ?? []) as Webhook[];
-  const stats = statsData ?? {
-    totalExecutions: 0,
-    successfulExecutions: 0,
-    failedExecutions: 0,
-    averageResponseTime: 0,
-  };
+  const webhooks = (webhooksData?.items ?? []) as Webhook[];
+  const stats = statsData?.metrics
+    ? {
+        totalExecutions: (statsData.metrics.totalExecutions as number) ?? 0,
+        successfulExecutions:
+          (statsData.metrics.successfulExecutions as number) ?? 0,
+        failedExecutions: (statsData.metrics.failedExecutions as number) ?? 0,
+        averageResponseTime:
+          (statsData.metrics.averageResponseTime as number) ?? 0,
+      }
+    : {
+        totalExecutions: 0,
+        successfulExecutions: 0,
+        failedExecutions: 0,
+        averageResponseTime: 0,
+      };
 
   const filteredWebhooks = webhooks.filter((webhook) => {
     if (statusFilter === "active" && !webhook.isActive) return false;
@@ -312,7 +321,7 @@ export function WebhookDashboard({ workflowId }: WebhookDashboardProps) {
               </p>
             </div>
             <p className="text-2xl font-bold">
-              {formatDuration(stats.averageResponseTime)}
+              {formatDuration(stats.averageResponseTime as number)}
             </p>
           </CardContent>
         </Card>

@@ -11,9 +11,9 @@ import { api } from "@/trpc/server";
 import type { Metadata } from "next";
 
 interface ServerPageParams {
-  params: {
+  params: Promise<{
     lang: string;
-  };
+  }>;
 }
 
 export async function generateMetadata({
@@ -50,7 +50,7 @@ async function ServersList() {
 export default async function ServersPage({ params }: ServerPageParams) {
   // Check authentication
   const session = await getServerSession(authOptions);
-  const { lang } = await Promise.resolve(params);
+  const { lang } = await params;
 
   if (!session) {
     redirect(`/${lang}/auth/signin`);

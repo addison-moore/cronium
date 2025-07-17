@@ -53,6 +53,7 @@
     "**/__tests__/*",
     "**/_backup/**",
     "**/*.backup.ts",
-    "**/*.backup.tsx"
+    "**/*.backup.tsx",
+    "**/deprecated/*"
   ]
 }

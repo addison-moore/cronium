@@ -25,6 +25,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { trpc } from "@/lib/trpc";
 import type { WorkflowNode, WorkflowEdge } from "@/shared/schemas/workflows";
 
+// type WorkflowData = RouterOutputs["workflows"]["getById"]; // Removed unused type
+
 // Define a more explicit type for the form that handles exact optional properties
 interface WorkflowFormData {
   name: string;
@@ -157,7 +159,8 @@ export default function EditWorkflowPage() {
       }
 
       // Convert workflow nodes to canvas format
-      const typedNodes = workflowData.nodes as WorkflowNode[] | undefined;
+      const workflowDataTyped = workflowData.data as any;
+      const typedNodes = workflowDataTyped?.nodes as WorkflowNode[] | undefined;
       const nodes: Node[] = (typedNodes ?? []).map((node) => ({
         id: `node-${String(node.id)}`,
         type: "workflowNode",
@@ -172,7 +175,7 @@ export default function EditWorkflowPage() {
       setWorkflowNodes(nodes);
 
       // Convert workflow connections to canvas format
-      const typedConnections = workflowData.connections as
+      const typedConnections = workflowDataTyped?.connections as
         | WorkflowConnection[]
         | undefined;
       const edges: Edge[] = (typedConnections ?? []).map((conn) => ({
@@ -301,20 +304,23 @@ export default function EditWorkflowPage() {
   // Update form when workflow data is loaded
   useEffect(() => {
     if (workflowData && !loadingWorkflow) {
-      const formData = {
-        name: workflowData.name,
-        description: workflowData.description ?? "",
-        tags: (workflowData.tags ?? []) as string[],
-        triggerType: workflowData.triggerType,
-        runLocation: workflowData.runLocation,
-        status: workflowData.status,
-        scheduleNumber: workflowData.scheduleNumber,
-        scheduleUnit: workflowData.scheduleUnit,
-        customSchedule: workflowData.customSchedule,
-        useCronScheduling: !!workflowData.customSchedule,
-        shared: workflowData.shared,
-        overrideEventServers: workflowData.overrideEventServers ?? false,
-        overrideServerIds: (workflowData.overrideServerIds ?? []) as number[],
+      const workflowDataTyped = workflowData.data as any;
+      const formData: WorkflowFormData = {
+        name: workflowDataTyped.name as string,
+        description: (workflowDataTyped.description ?? "") as string,
+        tags: (workflowDataTyped.tags ?? []) as string[],
+        triggerType: workflowDataTyped.triggerType as WorkflowTriggerType,
+        runLocation: workflowDataTyped.runLocation as RunLocation,
+        status: workflowDataTyped.status as EventStatus,
+        scheduleNumber: workflowDataTyped.scheduleNumber as number | null,
+        scheduleUnit: workflowDataTyped.scheduleUnit as string | null,
+        customSchedule: workflowDataTyped.customSchedule as string | null,
+        useCronScheduling: !!workflowDataTyped.customSchedule,
+        shared: (workflowDataTyped.shared ?? false) as boolean,
+        overrideEventServers: (workflowDataTyped.overrideEventServers ??
+          false) as boolean,
+        overrideServerIds: (workflowDataTyped.overrideServerIds ??
+          []) as number[],
       };
       form.reset(formData);
     }

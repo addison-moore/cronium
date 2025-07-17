@@ -1,32 +1,28 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure, withTiming } from "../trpc";
+import { createTRPCRouter, protectedProcedure, withTiming } from "../trpc";
+import {
+  withErrorHandling,
+  notFoundError,
+  permissionError,
+} from "@/server/utils/error-utils";
+import {
+  listResponse,
+  resourceResponse,
+  mutationResponse,
+  statsResponse,
+} from "@/server/utils/api-patterns";
+import {
+  normalizePagination,
+  createPaginatedResult,
+} from "@/server/utils/db-patterns";
 import { jobService } from "@/lib/services/job-service";
 import { JobStatus, logs } from "@/shared/schema";
 import { db } from "@/server/db";
 import { eq } from "drizzle-orm";
 
-// Type for authenticated job context
-interface JobContext {
-  userId: string;
-}
-
-// Custom procedure that handles auth
-const jobProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  if (!ctx.session?.user?.id) {
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Authentication required",
-    });
-  }
-
-  return next({
-    ctx: {
-      ...ctx,
-      userId: ctx.session.user.id,
-    },
-  });
-});
+// Use standardized procedure with timing
+const jobProcedure = protectedProcedure.use(withTiming);
 
 // Schema definitions
 const getJobSchema = z.object({
@@ -61,162 +57,194 @@ const getJobLogsSchema = z.object({
 
 export const jobsRouter = createTRPCRouter({
   // Get a specific job
-  get: jobProcedure
-    .use(withTiming)
-    .input(getJobSchema)
-    .query(async ({ ctx, input }) => {
-      const jobCtx = ctx as JobContext;
+  get: jobProcedure.input(getJobSchema).query(async ({ ctx, input }) => {
+    return withErrorHandling(
+      async () => {
+        const job = await jobService.getJob(input.jobId);
 
-      const job = await jobService.getJob(input.jobId);
+        if (!job) {
+          throw notFoundError("Job");
+        }
 
-      if (!job) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Job not found",
-        });
-      }
+        // Ensure user can only see their own jobs
+        if (job.userId !== ctx.session.user.id) {
+          throw permissionError("view this job");
+        }
 
-      // Ensure user can only see their own jobs
-      if (job.userId !== jobCtx.userId) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
-        });
-      }
-
-      return job;
-    }),
+        return resourceResponse(job);
+      },
+      {
+        component: "jobsRouter",
+        operationName: "get",
+        userId: ctx.session.user.id,
+      },
+    );
+  }),
 
   // List jobs for the current user
-  list: jobProcedure
-    .use(withTiming)
-    .input(listJobsSchema)
-    .query(async ({ ctx, input }) => {
-      const jobCtx = ctx as JobContext;
+  list: jobProcedure.input(listJobsSchema).query(async ({ ctx, input }) => {
+    return withErrorHandling(
+      async () => {
+        const pagination = normalizePagination(input);
 
-      const { jobs, total } = await jobService.listJobs(
-        {
-          userId: jobCtx.userId,
-          status: input.status,
-          eventId: input.eventId,
-        },
-        input.limit,
-        input.offset,
-      );
+        const filter: Parameters<typeof jobService.listJobs>[0] = {
+          userId: ctx.session.user.id,
+        };
+        if (input.status !== undefined) {
+          filter.status = input.status;
+        }
+        if (input.eventId !== undefined) {
+          filter.eventId = input.eventId;
+        }
 
-      return {
-        jobs,
-        total,
-        hasMore: input.offset + jobs.length < total,
-      };
-    }),
+        const { jobs, total } = await jobService.listJobs(
+          filter,
+          pagination.limit,
+          pagination.offset,
+        );
+
+        const result = createPaginatedResult(jobs, total, pagination);
+        const filters: {
+          search?: string;
+          status?: string;
+          type?: string;
+          [key: string]: unknown;
+        } = {};
+        if (input.status !== undefined) {
+          filters.status = String(input.status);
+        }
+        if (input.eventId !== undefined) {
+          filters.eventId = input.eventId;
+        }
+        return listResponse(result, filters);
+      },
+      {
+        component: "jobsRouter",
+        operationName: "list",
+        userId: ctx.session.user.id,
+      },
+    );
+  }),
 
   // Get job statistics
-  stats: jobProcedure.use(withTiming).query(async ({ ctx }) => {
-    const jobCtx = ctx as JobContext;
-
-    return await jobService.getJobStats(jobCtx.userId);
+  stats: jobProcedure.query(async ({ ctx }) => {
+    return withErrorHandling(
+      async () => {
+        const stats = await jobService.getJobStats(ctx.session.user.id);
+        return statsResponse(
+          {
+            start: new Date(
+              Date.now() - 30 * 24 * 60 * 60 * 1000,
+            ).toISOString(),
+            end: new Date().toISOString(),
+          },
+          stats,
+        );
+      },
+      {
+        component: "jobsRouter",
+        operationName: "stats",
+        userId: ctx.session.user.id,
+      },
+    );
   }),
 
   // Cancel a job
   cancel: jobProcedure
-    .use(withTiming)
     .input(cancelJobSchema)
     .mutation(async ({ ctx, input }) => {
-      const jobCtx = ctx as JobContext;
+      return withErrorHandling(
+        async () => {
+          const job = await jobService.getJob(input.jobId);
 
-      const job = await jobService.getJob(input.jobId);
+          if (!job) {
+            throw notFoundError("Job");
+          }
 
-      if (!job) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Job not found",
-        });
-      }
+          // Ensure user can only cancel their own jobs
+          if (job.userId !== ctx.session.user.id) {
+            throw permissionError("cancel this job");
+          }
 
-      // Ensure user can only cancel their own jobs
-      if (job.userId !== jobCtx.userId) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
-        });
-      }
+          // Can only cancel queued or running jobs
+          if (
+            ![JobStatus.QUEUED, JobStatus.CLAIMED, JobStatus.RUNNING].includes(
+              job.status,
+            )
+          ) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Job cannot be cancelled in its current state",
+            });
+          }
 
-      // Can only cancel queued or running jobs
-      if (
-        ![JobStatus.QUEUED, JobStatus.CLAIMED, JobStatus.RUNNING].includes(
-          job.status,
-        )
-      ) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Job cannot be cancelled in its current state",
-        });
-      }
+          const cancelledJob = await jobService.cancelJob(input.jobId);
 
-      const cancelledJob = await jobService.cancelJob(input.jobId);
+          if (!cancelledJob) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Failed to cancel job",
+            });
+          }
 
-      if (!cancelledJob) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to cancel job",
-        });
-      }
-
-      return cancelledJob;
+          return mutationResponse(cancelledJob, "Job cancelled successfully");
+        },
+        {
+          component: "jobsRouter",
+          operationName: "cancel",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 
   // Get job logs
-  logs: jobProcedure
-    .use(withTiming)
-    .input(getJobLogsSchema)
-    .query(async ({ ctx, input }) => {
-      const jobCtx = ctx as JobContext;
+  logs: jobProcedure.input(getJobLogsSchema).query(async ({ ctx, input }) => {
+    return withErrorHandling(
+      async () => {
+        // First verify the job exists and belongs to the user
+        const job = await jobService.getJob(input.jobId);
 
-      // First verify the job exists and belongs to the user
-      const job = await jobService.getJob(input.jobId);
+        if (!job) {
+          throw notFoundError("Job");
+        }
 
-      if (!job) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Job not found",
-        });
-      }
+        // Ensure user can only see logs for their own jobs
+        if (job.userId !== ctx.session.user.id) {
+          throw permissionError("view logs for this job");
+        }
 
-      // Ensure user can only see logs for their own jobs
-      if (job.userId !== jobCtx.userId) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
-        });
-      }
+        const pagination = normalizePagination(input);
 
-      // Get logs for this job
-      const jobLogs = await db
-        .select({
-          id: logs.id,
-          output: logs.output,
-          error: logs.error,
-          timestamp: logs.startTime,
-        })
-        .from(logs)
-        .where(eq(logs.jobId, input.jobId))
-        .orderBy(logs.startTime)
-        .limit(input.limit)
-        .offset(input.offset);
+        // Get logs for this job
+        const jobLogs = await db
+          .select({
+            id: logs.id,
+            output: logs.output,
+            error: logs.error,
+            timestamp: logs.startTime,
+          })
+          .from(logs)
+          .where(eq(logs.jobId, input.jobId))
+          .orderBy(logs.startTime)
+          .limit(pagination.limit)
+          .offset(pagination.offset);
 
-      // Get total count for pagination
-      const countResult = await db
-        .select({ count: logs.id })
-        .from(logs)
-        .where(eq(logs.jobId, input.jobId));
+        // Get total count for pagination
+        const countResult = await db
+          .select({ count: logs.id })
+          .from(logs)
+          .where(eq(logs.jobId, input.jobId));
 
-      const total = countResult.length;
+        const total = countResult.length;
 
-      return {
-        logs: jobLogs,
-        total,
-        hasMore: input.offset + jobLogs.length < total,
-      };
-    }),
+        const result = createPaginatedResult(jobLogs, total, pagination);
+        return listResponse(result);
+      },
+      {
+        component: "jobsRouter",
+        operationName: "logs",
+        userId: ctx.session.user.id,
+      },
+    );
+  }),
 });

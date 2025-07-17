@@ -80,15 +80,6 @@ export function JobStatusCard({ job }: JobStatusCardProps) {
             <span>{formatDistanceToNow(new Date(job.createdAt))} ago</span>
           </div>
 
-          {job.claimedAt && (
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Claimed</span>
-              <span>
-                {formatDistanceToNow(new Date(job.claimedAt as string))} ago
-              </span>
-            </div>
-          )}
-
           {job.startedAt && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Started</span>
@@ -104,9 +95,9 @@ export function JobStatusCard({ job }: JobStatusCardProps) {
           )}
         </div>
 
-        {job.error && (
+        {job.lastError && (
           <div className="bg-destructive/10 rounded-md p-3">
-            <p className="text-destructive text-sm">{job.error}</p>
+            <p className="text-destructive text-sm">{job.lastError}</p>
           </div>
         )}
 

@@ -1,6 +1,10 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
-import { TRPCError } from "@trpc/server";
+import { createTRPCRouter, protectedProcedure, withTiming } from "../trpc";
+import { withErrorHandling } from "@/server/utils/error-utils";
+import {
+  resourceResponse,
+  mutationResponse,
+} from "@/server/utils/api-patterns";
 import { storage } from "@/server/storage";
 import { db } from "@/server/db";
 import { userSettings } from "@/shared/schema";
@@ -55,138 +59,107 @@ const DEFAULT_EDITOR_SETTINGS: EditorSettings = {
 
 export const settingsRouter = createTRPCRouter({
   // Get user editor settings
-  getEditorSettings: protectedProcedure.query(async ({ ctx }) => {
-    try {
-      // Type-safe access to user email
-      const userEmail = ctx.session?.user?.email;
-      if (!userEmail) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "User email not found in session",
-        });
-      }
+  getEditorSettings: protectedProcedure
+    .use(withTiming)
+    .query(async ({ ctx }) => {
+      return withErrorHandling(
+        async () => {
+          // Get user settings
+          const settings = await db
+            .select()
+            .from(userSettings)
+            .where(eq(userSettings.userId, ctx.session.user.id))
+            .limit(1);
 
-      const user = await storage.getUserByEmail(userEmail);
-      if (!user) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "User not found",
-        });
-      }
+          const userSetting = settings[0];
+          let editorSettings: EditorSettings = DEFAULT_EDITOR_SETTINGS;
 
-      // Get user settings
-      const settings = await db
-        .select()
-        .from(userSettings)
-        .where(eq(userSettings.userId, user.id))
-        .limit(1);
-
-      const userSetting = settings[0];
-      let editorSettings: EditorSettings = DEFAULT_EDITOR_SETTINGS;
-
-      if (userSetting?.editorSettings) {
-        try {
-          const parsed: unknown = JSON.parse(userSetting.editorSettings);
-          if (isValidEditorSettings(parsed)) {
-            editorSettings = parsed;
-          } else {
-            console.warn("Invalid editor settings format, using defaults");
+          if (userSetting?.editorSettings) {
+            try {
+              const parsed: unknown = JSON.parse(userSetting.editorSettings);
+              if (isValidEditorSettings(parsed)) {
+                editorSettings = parsed;
+              } else {
+                console.warn("Invalid editor settings format, using defaults");
+              }
+            } catch (error) {
+              console.error("Failed to parse editor settings:", error);
+            }
           }
-        } catch (error) {
-          console.error("Failed to parse editor settings:", error);
-        }
-      }
 
-      return editorSettings;
-    } catch (error) {
-      if (error instanceof TRPCError) {
-        throw error;
-      }
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to fetch editor settings",
-        cause: error instanceof Error ? error : new Error(String(error)),
-      });
-    }
-  }),
+          return resourceResponse(editorSettings);
+        },
+        {
+          component: "settingsRouter",
+          operationName: "getEditorSettings",
+          userId: ctx.session.user.id,
+        },
+      );
+    }),
 
   // Update user editor settings
   updateEditorSettings: protectedProcedure
+    .use(withTiming)
     .input(editorSettingsSchema)
     .mutation(async ({ ctx, input }) => {
-      try {
-        // Type-safe access to user email
-        const userEmail = ctx.session?.user?.email;
-        if (!userEmail) {
-          throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: "User email not found in session",
-          });
-        }
+      return withErrorHandling(
+        async () => {
+          // Check if user settings exist
+          const existingSettings = await db
+            .select()
+            .from(userSettings)
+            .where(eq(userSettings.userId, ctx.session.user.id))
+            .limit(1);
 
-        const user = await storage.getUserByEmail(userEmail);
-        if (!user) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "User not found",
-          });
-        }
+          const settingsJson = JSON.stringify(input);
 
-        // Check if user settings exist
-        const existingSettings = await db
-          .select()
-          .from(userSettings)
-          .where(eq(userSettings.userId, user.id))
-          .limit(1);
-
-        const settingsJson = JSON.stringify(input);
-
-        if (existingSettings.length > 0) {
-          // Update existing settings
-          await db
-            .update(userSettings)
-            .set({
+          if (existingSettings.length > 0) {
+            // Update existing settings
+            await db
+              .update(userSettings)
+              .set({
+                editorSettings: settingsJson,
+                updatedAt: new Date(),
+              })
+              .where(eq(userSettings.userId, ctx.session.user.id));
+          } else {
+            // Create new settings
+            await db.insert(userSettings).values({
+              userId: ctx.session.user.id,
               editorSettings: settingsJson,
+              createdAt: new Date(),
               updatedAt: new Date(),
-            })
-            .where(eq(userSettings.userId, user.id));
-        } else {
-          // Create new settings
-          await db.insert(userSettings).values({
-            userId: user.id,
-            editorSettings: settingsJson,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          });
-        }
+            });
+          }
 
-        return { success: true, settings: input };
-      } catch (error) {
-        if (error instanceof TRPCError) {
-          throw error;
-        }
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to update editor settings",
-          cause: error instanceof Error ? error : new Error(String(error)),
-        });
-      }
+          return mutationResponse(
+            { settings: input },
+            "Editor settings updated successfully",
+          );
+        },
+        {
+          component: "settingsRouter",
+          operationName: "updateEditorSettings",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 
   // Get AI status
-  getAIStatus: protectedProcedure.query(async () => {
-    try {
-      // Get AI settings from the database
-      const aiEnabledSetting = await storage.getSetting("aiEnabled");
-      const isEnabled = aiEnabledSetting?.value === "true";
+  getAIStatus: protectedProcedure.use(withTiming).query(async ({ ctx }) => {
+    return withErrorHandling(
+      async () => {
+        // Get AI settings from the database
+        const aiEnabledSetting = await storage.getSetting("aiEnabled");
+        const isEnabled = aiEnabledSetting?.value === "true";
 
-      return { enabled: isEnabled };
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to check AI status",
-        cause: error instanceof Error ? error : new Error(String(error)),
-      });
-    }
+        return resourceResponse({ enabled: isEnabled });
+      },
+      {
+        component: "settingsRouter",
+        operationName: "getAIStatus",
+        userId: ctx.session.user.id,
+      },
+    );
   }),
 });

@@ -5,10 +5,10 @@ const webhookRouter = WebhookRouter.getInstance();
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { key: string } },
+  { params }: { params: Promise<{ key: string }> },
 ) {
   try {
-    const { key } = params;
+    const { key } = await params;
 
     if (!key) {
       return NextResponse.json(
@@ -30,9 +30,9 @@ export async function POST(
 // Support other methods for webhook testing
 export async function GET(
   request: NextRequest,
-  { params }: { params: { key: string } },
+  { params }: { params: Promise<{ key: string }> },
 ) {
-  const { key } = params;
+  const { key } = await params;
 
   // Generate webhook documentation
   const docs = webhookRouter.generateDocumentation(key);

@@ -20,7 +20,12 @@ async function monitorSidecarContainers() {
       if (stdout.trim()) {
         const lines = stdout.trim().split("\n");
         for (const line of lines) {
-          const [id, name, status, created] = line.split("|");
+          const [id, name, status, created] = line.split("|") as [
+            string,
+            string,
+            string,
+            string,
+          ];
 
           if (id !== lastContainerId) {
             console.log(`📦 New sidecar detected:`);

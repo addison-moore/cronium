@@ -1,6 +1,6 @@
 import { api } from "@/trpc/server";
 import { Card } from "@/components/ui/card";
-import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { JobsTable } from "@/components/jobs/JobsTable";
 import { JobFilters } from "@/components/jobs/JobFilters";
 import { Suspense } from "react";
@@ -19,7 +19,7 @@ export default async function JobsPage() {
 }
 
 async function JobsContent() {
-  const jobs = await api.jobs.list({
+  const response = await api.jobs.list({
     limit: 50,
     offset: 0,
   });
@@ -28,7 +28,7 @@ async function JobsContent() {
     <div className="space-y-4">
       <JobFilters />
       <Card>
-        <JobsTable jobs={jobs} />
+        <JobsTable jobs={response.items} />
       </Card>
     </div>
   );

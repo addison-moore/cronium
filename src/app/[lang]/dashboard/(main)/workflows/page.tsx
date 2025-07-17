@@ -13,9 +13,9 @@ import type { WorkflowTriggerType, EventStatus } from "@/shared/schema";
 import type { Metadata } from "next";
 
 interface WorkflowsPageParams {
-  params: {
+  params: Promise<{
     lang: string;
-  };
+  }>;
 }
 
 export async function generateMetadata({
@@ -56,12 +56,12 @@ async function WorkflowsList() {
     id: workflow.id,
     name: workflow.name,
     description: workflow.description,
-    tags: workflow.tags ?? undefined,
+    tags: Array.isArray(workflow.tags) ? workflow.tags : [],
     status: workflow.status,
     triggerType: workflow.triggerType,
-    createdAt: workflow.createdAt.toISOString(),
-    updatedAt: workflow.updatedAt.toISOString(),
-    lastRunAt: workflow.lastRunAt?.toISOString() ?? null,
+    createdAt: new Date(workflow.createdAt).toISOString(),
+    updatedAt: new Date(workflow.updatedAt).toISOString(),
+    lastRunAt: null, // Workflow doesn't have lastRunAt field
     shared: workflow.shared,
     userId: workflow.userId,
   }));
@@ -72,7 +72,7 @@ async function WorkflowsList() {
 export default async function WorkflowsPage({ params }: WorkflowsPageParams) {
   // Check authentication
   const session = await getServerSession(authOptions);
-  const { lang } = await Promise.resolve(params);
+  const { lang } = await params;
 
   if (!session) {
     redirect(`/${lang}/auth/signin`);

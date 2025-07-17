@@ -86,6 +86,7 @@ export function StreamRetryWrapper({
 
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [
     state.hasError,
     state.retryCount,

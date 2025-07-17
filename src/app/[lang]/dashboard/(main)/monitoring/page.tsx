@@ -8,15 +8,15 @@ import { UserRole } from "@/shared/schema";
 import dynamic from "next/dynamic";
 
 // Dynamic import the client component
-const MonitoringClient = dynamic(() => import("./page-original"), {
+const MonitoringClient = dynamic(() => import("./page-client"), {
   ssr: false,
   loading: () => <MonitoringPageSkeleton />,
 });
 
 interface MonitoringPageParams {
-  params: {
+  params: Promise<{
     lang: string;
-  };
+  }>;
 }
 
 export async function generateMetadata({
@@ -33,7 +33,7 @@ export async function generateMetadata({
 export default async function MonitoringPage({ params }: MonitoringPageParams) {
   // Check authentication
   const session = await getServerSession(authOptions);
-  const { lang } = await Promise.resolve(params);
+  const { lang } = await params;
 
   if (!session) {
     redirect(`/${lang}/auth/signin`);

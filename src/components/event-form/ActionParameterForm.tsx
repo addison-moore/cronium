@@ -191,7 +191,7 @@ export default function ActionParameterForm({
               language={language}
               height="200px"
               editorSettings={
-                editorSettings ?? {
+                editorSettings?.data ?? {
                   fontSize: 14,
                   theme: "vs-dark",
                   wordWrap: true,

@@ -86,7 +86,7 @@ type Script = Event;
 // Type definitions for complex return types
 export interface EventWithRelations extends Script {
   envVars: EnvVar[];
-  server?: Server;
+  server?: Server | null;
   servers: Server[];
   successEvents: ConditionalAction[];
   failEvents: ConditionalAction[];
@@ -634,10 +634,6 @@ class DatabaseStorage implements IStorage {
         failEvents: failEvents || [],
         alwaysEvents: alwaysEvents || [],
         conditionEvents: conditionEvents || [],
-        // For backward compatibility
-        onSuccessEvents: successEvents || [],
-        onFailEvents: failEvents || [],
-        onAlwaysEvents: alwaysEvents || [],
       };
 
       return result;
@@ -666,7 +662,7 @@ class DatabaseStorage implements IStorage {
       }
 
       // Fetch only essential related data in parallel
-      const [envVars, eventServers] = await Promise.all([
+      const [envVarsData, eventServersData] = await Promise.all([
         // Get env vars
         db.query.envVars.findMany({
           where: eq(envVars.eventId, id),
@@ -680,27 +676,29 @@ class DatabaseStorage implements IStorage {
         }),
       ]);
 
+      // Get the server if serverId exists
+      const serverData = event.serverId
+        ? await db.query.servers.findFirst({
+            where: eq(servers.id, event.serverId),
+          })
+        : null;
+
       // Return simplified structure
       const result: EventWithRelations = {
         ...event,
-        envVars: envVars || [],
-        server: event.serverId
-          ? await db.query.servers.findFirst({
-              where: eq(servers.id, event.serverId),
-            })
-          : undefined,
-        eventServers: eventServers || [],
-        servers:
-          eventServers?.map((es: any) => es.server).filter(Boolean) || [],
+        envVars: envVarsData ?? [],
+        servers: eventServersData?.map((es) => es.server).filter(Boolean) ?? [],
         // Empty arrays for conditional actions to avoid timeout
         successEvents: [],
         failEvents: [],
         alwaysEvents: [],
         conditionEvents: [],
-        onSuccessEvents: [],
-        onFailEvents: [],
-        onAlwaysEvents: [],
       };
+
+      // Only add server property if we have a server (optional property)
+      if (serverData !== undefined) {
+        result.server = serverData;
+      }
 
       return result;
     } catch (error) {
@@ -720,16 +718,12 @@ class DatabaseStorage implements IStorage {
       return {
         ...event,
         envVars: [],
-        server: undefined,
-        eventServers: [],
+        server: null,
         servers: [],
         successEvents: [],
         failEvents: [],
         alwaysEvents: [],
         conditionEvents: [],
-        onSuccessEvents: [],
-        onFailEvents: [],
-        onAlwaysEvents: [],
       } as EventWithRelations;
     }
   }
@@ -787,9 +781,7 @@ class DatabaseStorage implements IStorage {
       (acc, ce) => {
         const conditionEventId = ce.conditionEventId;
         if (conditionEventId) {
-          if (!acc[conditionEventId]) {
-            acc[conditionEventId] = [];
-          }
+          acc[conditionEventId] ??= [];
           acc[conditionEventId].push(ce);
         }
         return acc;
@@ -809,12 +801,14 @@ class DatabaseStorage implements IStorage {
       const transformed: EventWithRelations = {
         ...eventData,
         envVars: event.envVars ?? [],
-        server: event.server || null,
-        eventServers: event.eventServers ?? [],
+        server: event.server ?? null,
+        servers:
+          event.eventServers?.map((es) => es.server).filter(Boolean) ?? [],
         // Map conditional actions from the related events
-        onSuccessActions: onSuccessEvents.map((se) => ({
+        successEvents: onSuccessEvents.map((se) => ({
           id: se.id,
           type: se.type,
+          value: se.value,
           successEventId: se.successEventId,
           failEventId: se.failEventId,
           alwaysEventId: se.alwaysEventId,
@@ -828,9 +822,10 @@ class DatabaseStorage implements IStorage {
           updatedAt: se.updatedAt,
           targetEvent: se.targetEvent ?? undefined,
         })),
-        onFailActions: onFailEvents.map((fe) => ({
+        failEvents: onFailEvents.map((fe) => ({
           id: fe.id,
           type: fe.type,
+          value: fe.value,
           successEventId: fe.successEventId,
           failEventId: fe.failEventId,
           alwaysEventId: fe.alwaysEventId,
@@ -844,9 +839,10 @@ class DatabaseStorage implements IStorage {
           updatedAt: fe.updatedAt,
           targetEvent: fe.targetEvent ?? undefined,
         })),
-        onAlwaysActions: onAlwaysEvents.map((ae) => ({
+        alwaysEvents: onAlwaysEvents.map((ae) => ({
           id: ae.id,
           type: ae.type,
+          value: ae.value,
           successEventId: ae.successEventId,
           failEventId: ae.failEventId,
           alwaysEventId: ae.alwaysEventId,
@@ -860,7 +856,7 @@ class DatabaseStorage implements IStorage {
           updatedAt: ae.updatedAt,
           targetEvent: ae.targetEvent ?? undefined,
         })),
-        conditionActions: conditionEventsByEventId[event.id] ?? [],
+        conditionEvents: conditionEventsByEventId[event.id] ?? [],
       };
 
       return transformed;
@@ -1378,6 +1374,7 @@ class DatabaseStorage implements IStorage {
       retries: logs.retries,
       error: logs.error,
       userId: logs.userId,
+      jobId: logs.jobId,
       workflowName: workflows.name,
     };
 
@@ -1830,32 +1827,41 @@ class DatabaseStorage implements IStorage {
     if (!workflowWithRelations) return null;
 
     // Transform nodes to include properly structured event relations
-    const nodesWithEvents = workflowWithRelations.nodes.map((node) => {
-      if (node.event) {
-        // Transform event data to match EventWithRelations structure
-        const servers =
-          node.event.eventServers
-            ?.map((es) => es.server)
-            .filter((s): s is Server => s !== null) || [];
-        const successEvents = node.event.onSuccessEvents || [];
-        const failEvents = node.event.onFailEvents || [];
-        const alwaysEvents = node.event.onAlwaysEvents || [];
-        const conditionEvents: ConditionalAction[] = [];
+    const nodesWithEvents: WorkflowNodeWithEvent[] =
+      workflowWithRelations.nodes.map((node): WorkflowNodeWithEvent => {
+        if (node.event) {
+          // Transform event data to match EventWithRelations structure
+          const servers =
+            node.event.eventServers
+              ?.map((es) => es.server)
+              .filter((s): s is Server => s !== null) || [];
+          const successEvents = node.event.onSuccessEvents || [];
+          const failEvents = node.event.onFailEvents || [];
+          const alwaysEvents = node.event.onAlwaysEvents || [];
+          const conditionEvents: ConditionalAction[] = [];
 
-        return {
-          ...node,
-          event: {
+          const eventWithRelations: EventWithRelations = {
             ...node.event,
+            envVars: node.event.envVars ?? [],
+            server: node.event.server ?? null,
             servers,
             successEvents,
             failEvents,
             alwaysEvents,
             conditionEvents,
-          },
+          };
+
+          return {
+            ...node,
+            event: eventWithRelations,
+          };
+        }
+        // Return node without event property when event is not present
+        return {
+          ...node,
+          event: undefined,
         };
-      }
-      return node;
-    });
+      });
 
     return {
       ...workflowWithRelations,

@@ -58,7 +58,7 @@ export async function handleExecutionCount(eventId: number) {
           successful: false, // Not a successful execution
           eventName: String(event.name ?? "Unknown"),
           eventType: event.type,
-          userId: event.userId as number,
+          userId: event.userId,
         });
       }
     } else {

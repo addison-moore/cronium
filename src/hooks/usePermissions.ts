@@ -59,7 +59,8 @@ export function usePermissions() {
       };
     } else if (roles) {
       // Find the role that matches the user's role
-      const matchingRole = roles.find(
+      const rolesList = roles.items ?? [];
+      const matchingRole = rolesList.find(
         (role) => role.name.toLowerCase() === user.role.toLowerCase(),
       );
 
@@ -68,7 +69,7 @@ export function usePermissions() {
         permissions = matchingRole.permissions;
       } else {
         // Fallback to default user role if no match found
-        const defaultRole = roles.find(
+        const defaultRole = rolesList.find(
           (role) => role.isDefault && role.name === "User",
         );
         if (defaultRole) {

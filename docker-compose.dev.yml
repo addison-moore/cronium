@@ -1,5 +1,6 @@
-# Development environment - for use with external Postgres, Grafana, and Prometheus
-# Usage: pnpm dev:docker
+# Alternative development environment using host directories instead of Docker volumes
+# This prevents creating new volumes on each run
+# Usage: docker-compose -f docker-compose.dev.host-volumes.yml up
 
 services:
   # Valkey (Redis-compatible) for caching and queue
@@ -10,7 +11,7 @@ services:
     ports:
       - "${VALKEY_PORT:-6379}:6379"
     volumes:
-      - valkey_dev_data:/data
+      - ./data/valkey:/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
@@ -67,7 +68,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./orchestrator/cronium-orchestrator:/app
       - ./orchestrator/cronium-orchestrator/configs:/app/config:ro
-      - orchestrator_dev_data:/app/data
+      - ./data/orchestrator:/app/data
     command: air -c .air.toml
     restart: unless-stopped
     healthcheck:
@@ -154,12 +155,6 @@ services:
       retries: 3
     networks:
       - cronium-dev-network
-
-volumes:
-  valkey_dev_data:
-    driver: local
-  orchestrator_dev_data:
-    driver: local
 
 networks:
   cronium-dev-network:

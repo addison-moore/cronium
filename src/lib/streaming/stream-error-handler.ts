@@ -17,7 +17,9 @@ export class StreamErrorHandler {
   constructor(options: StreamErrorOptions = {}) {
     this.maxRetries = options.maxRetries ?? 3;
     this.retryDelay = options.retryDelay ?? 1000;
-    this.onError = options.onError;
+    if (options.onError) {
+      this.onError = options.onError;
+    }
     this.fallbackData = options.fallbackData;
   }
 
@@ -43,7 +45,7 @@ export class StreamErrorHandler {
 
         if (this.retryCount >= this.maxRetries) {
           if (this.fallbackData !== undefined) {
-            return this.fallbackData;
+            return this.fallbackData as T;
           }
           throw new Error(
             `Stream failed after ${this.maxRetries} attempts: ${err.message}`,

@@ -24,9 +24,9 @@ export function EventDetailsSkeleton() {
       {/* Tabs skeleton */}
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList className="grid w-full grid-cols-3">
-          <Tab value="overview">Overview</Tab>
-          <Tab value="edit">Edit</Tab>
-          <Tab value="logs">Logs</Tab>
+          <Tab value="overview" label="Overview" />
+          <Tab value="edit" label="Edit" />
+          <Tab value="logs" label="Logs" />
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">

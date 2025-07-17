@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, adminProcedure } from "../trpc";
+import { normalizePagination } from "@/server/utils/db-patterns";
 import {
   logsQuerySchema,
   adminLogsQuerySchema,
@@ -12,220 +13,124 @@ import {
   workflowLogsSchema,
 } from "@shared/schemas/logs";
 import { storage, type LogFilters } from "@/server/storage";
-import { UserRole, LogStatus } from "@shared/schema";
+import { LogStatus } from "@shared/schema";
 
-// Custom procedure that handles auth for tRPC fetch adapter
-const logProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  let session = null;
-  let userId = null;
-
-  try {
-    // If session exists in context, use it
-    if (ctx.session?.user?.id) {
-      session = ctx.session;
-      userId = ctx.session.user.id;
-    } else {
-      // For development, get first admin user
-      if (process.env.NODE_ENV === "development") {
-        const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter(
-          (user) => user.role === UserRole.ADMIN,
-        );
-        const firstAdmin = adminUsers[0];
-        if (firstAdmin) {
-          userId = firstAdmin.id;
-          session = { user: { id: firstAdmin.id } };
-        }
-      }
-    }
-
-    if (!userId) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "Authentication required",
-      });
-    }
-
-    return next({
-      ctx: {
-        ...ctx,
-        session,
-        userId,
-      },
-    });
-  } catch (error) {
-    console.error("Auth error in logProcedure:", error);
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Authentication failed",
-    });
-  }
-});
-
-// Admin-only procedure
-const adminLogProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  let session = null;
-  let userId = null;
-  let userRole = null;
-
-  try {
-    // If session exists in context, use it
-    if (ctx.session?.user?.id) {
-      session = ctx.session;
-      userId = ctx.session.user.id;
-      userRole = ctx.session.user.role;
-    } else {
-      // For development, get first admin user
-      if (process.env.NODE_ENV === "development") {
-        const allUsers = await storage.getAllUsers();
-        const adminUsers = allUsers.filter(
-          (user) => user.role === UserRole.ADMIN,
-        );
-        const firstAdmin = adminUsers[0];
-        if (firstAdmin) {
-          userId = firstAdmin.id;
-          userRole = firstAdmin.role;
-          session = { user: { id: firstAdmin.id, role: firstAdmin.role } };
-        }
-      }
-    }
-
-    if (!userId) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "Authentication required",
-      });
-    }
-
-    if (userRole !== UserRole.ADMIN) {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Admin access required",
-      });
-    }
-
-    return next({
-      ctx: {
-        ...ctx,
-        session,
-        userId,
-        userRole,
-      },
-    });
-  } catch (error) {
-    console.error("Auth error in adminLogProcedure:", error);
-    if (error instanceof TRPCError) throw error;
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Authentication failed",
-    });
-  }
-});
+// Use centralized authentication from trpc.ts
 
 export const logsRouter = createTRPCRouter({
   // Get logs for current user
-  getAll: logProcedure.input(logsQuerySchema).query(async ({ ctx, input }) => {
-    try {
-      // Build filter object for database query
-      const filters: LogFilters = {
-        userId: ctx.userId,
-        ownEventsOnly: input.ownEventsOnly,
-        sharedOnly: input.sharedOnly,
-      };
+  getAll: protectedProcedure
+    .input(logsQuerySchema)
+    .query(async ({ ctx, input }) => {
+      try {
+        // Build filter object for database query
+        const filters: LogFilters = {
+          userId: ctx.session.user.id,
+          ownEventsOnly: input.ownEventsOnly,
+          sharedOnly: input.sharedOnly,
+        };
 
-      // Add filters
-      if (input.eventId) {
-        // Check if user has access to this event
-        const event = await storage.getEvent(input.eventId);
+        // Add filters
+        if (input.eventId) {
+          // Check if user has access to this event
+          const event = await storage.getEvent(input.eventId);
+          if (!event) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Event not found",
+            });
+          }
+          if (event.userId !== ctx.session.user.id) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Unauthorized access to event",
+            });
+          }
+          filters.eventId = String(input.eventId);
+        }
+
+        if (input.status) filters.status = input.status;
+        if (input.date) filters.date = input.date;
+        if (input.workflowId) {
+          if (input.workflowId === -1) {
+            filters.workflowId = null; // No workflow
+          } else {
+            filters.workflowId = input.workflowId;
+          }
+        }
+
+        // Normalize pagination
+        const pagination = normalizePagination(input);
+
+        // Use page/pageSize if provided, otherwise use limit/offset
+        const limit = input.pageSize ?? pagination.limit;
+        const page = input.page ?? Math.floor(pagination.offset / limit) + 1;
+
+        const { logs, total } = await storage.getFilteredLogs(
+          filters,
+          limit,
+          page,
+        );
+
+        return {
+          logs,
+          total,
+          page,
+          pageSize: limit,
+          totalPages: Math.ceil(total / limit),
+          hasMore: page * limit < total,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch logs",
+          cause: error,
+        });
+      }
+    }),
+
+  // Get single log by ID
+  getById: protectedProcedure
+    .input(logIdSchema)
+    .query(async ({ ctx, input }) => {
+      try {
+        const log = await storage.getLog(input.id);
+        if (!log) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Log not found" });
+        }
+
+        // Check if user has access to the event this log belongs to
+        const event = await storage.getEvent(log.eventId);
         if (!event) {
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "Event not found",
           });
         }
-        if (event.userId !== ctx.userId) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Unauthorized access to event",
-          });
+        if (event.userId !== ctx.session.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
         }
-        filters.eventId = String(input.eventId);
+
+        // Return log with additional event info
+        return {
+          ...log,
+          eventName: event.name ?? "Unknown",
+          scriptContent: event.content ?? "",
+          eventType: event.type,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch log",
+          cause: error,
+        });
       }
-
-      if (input.status) filters.status = input.status;
-      if (input.date) filters.date = input.date;
-      if (input.workflowId) {
-        if (input.workflowId === -1) {
-          filters.workflowId = null; // No workflow
-        } else {
-          filters.workflowId = input.workflowId;
-        }
-      }
-
-      // Use page/pageSize if provided, otherwise use limit/offset
-      const limit = input.pageSize ?? input.limit;
-      const page = input.page ?? Math.floor(input.offset / limit) + 1;
-
-      const { logs, total } = await storage.getFilteredLogs(
-        filters,
-        limit,
-        page,
-      );
-
-      return {
-        logs,
-        total,
-        page,
-        pageSize: limit,
-        totalPages: Math.ceil(total / limit),
-        hasMore: page * limit < total,
-      };
-    } catch (error) {
-      if (error instanceof TRPCError) throw error;
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to fetch logs",
-        cause: error,
-      });
-    }
-  }),
-
-  // Get single log by ID
-  getById: logProcedure.input(logIdSchema).query(async ({ ctx, input }) => {
-    try {
-      const log = await storage.getLog(input.id);
-      if (!log) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Log not found" });
-      }
-
-      // Check if user has access to the event this log belongs to
-      const event = await storage.getEvent(log.eventId);
-      if (!event) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
-      }
-      if (event.userId !== ctx.userId) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
-
-      // Return log with additional event info
-      return {
-        ...log,
-        eventName: event.name ?? "Unknown",
-        scriptContent: event.content ?? "",
-        eventType: event.type,
-      };
-    } catch (error) {
-      if (error instanceof TRPCError) throw error;
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to fetch log",
-        cause: error,
-      });
-    }
-  }),
+    }),
 
   // Create new log entry
-  create: logProcedure
+  create: protectedProcedure
     .input(createLogSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -237,7 +142,7 @@ export const logsRouter = createTRPCRouter({
             message: "Event not found",
           });
         }
-        if (event.userId !== ctx.userId) {
+        if (event.userId !== ctx.session.user.id) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "Unauthorized access to event",
@@ -262,7 +167,7 @@ export const logsRouter = createTRPCRouter({
     }),
 
   // Update existing log
-  update: logProcedure
+  update: protectedProcedure
     .input(updateLogSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -275,7 +180,7 @@ export const logsRouter = createTRPCRouter({
 
         // Check if user has access to the event this log belongs to
         const event = await storage.getEvent(existingLog.eventId);
-        if (!event || event.userId !== ctx.userId) {
+        if (!event || event.userId !== ctx.session.user.id) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
         }
 
@@ -298,81 +203,86 @@ export const logsRouter = createTRPCRouter({
     }),
 
   // Delete log
-  delete: logProcedure.input(logIdSchema).mutation(async ({ ctx, input }) => {
-    try {
-      const log = await storage.getLog(input.id);
-      if (!log) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Log not found" });
-      }
+  delete: protectedProcedure
+    .input(logIdSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const log = await storage.getLog(input.id);
+        if (!log) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Log not found" });
+        }
 
-      // Check if user has access to the event this log belongs to
-      const event = await storage.getEvent(log.eventId);
-      if (!event || event.userId !== ctx.userId) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
+        // Check if user has access to the event this log belongs to
+        const event = await storage.getEvent(log.eventId);
+        if (!event || event.userId !== ctx.session.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+        }
 
-      await storage.deleteLog(input.id);
-      return { success: true };
-    } catch (error) {
-      if (error instanceof TRPCError) throw error;
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to delete log",
-        cause: error,
-      });
-    }
-  }),
+        await storage.deleteLog(input.id);
+        return { success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to delete log",
+          cause: error,
+        });
+      }
+    }),
 
   // Search logs by content
-  search: logProcedure.input(logSearchSchema).query(async ({ ctx, input }) => {
-    try {
-      // Build search filters
-      const filters: LogFilters & {
-        search?: string;
-        searchFields?: string[];
-        caseSensitive?: boolean;
-        regex?: boolean;
-      } = {
-        userId: ctx.userId,
-      };
+  search: protectedProcedure
+    .input(logSearchSchema)
+    .query(async ({ ctx, input }) => {
+      try {
+        // Build search filters
+        const filters: LogFilters & {
+          search?: string;
+          searchFields?: string[];
+          caseSensitive?: boolean;
+          regex?: boolean;
+        } = {
+          userId: ctx.session.user.id,
+        };
 
-      if (input.eventId) filters.eventId = String(input.eventId);
-      if (input.workflowId) filters.workflowId = input.workflowId;
-      if (input.status) filters.status = input.status;
+        if (input.eventId) filters.eventId = String(input.eventId);
+        if (input.workflowId) filters.workflowId = input.workflowId;
+        if (input.status) filters.status = input.status;
 
-      // Note: search functionality is not yet implemented in storage
-      // These fields are included for future implementation
-      if (input.query) {
-        filters.search = input.query;
-        filters.searchFields = input.searchFields;
-        filters.caseSensitive = input.caseSensitive;
-        filters.regex = input.regex;
+        // Note: search functionality is not yet implemented in storage
+        // These fields are included for future implementation
+        if (input.query) {
+          filters.search = input.query;
+          filters.searchFields = input.searchFields;
+          filters.caseSensitive = input.caseSensitive;
+          filters.regex = input.regex;
+        }
+
+        // For now, use the existing filtered logs method with search
+        const pagination = normalizePagination(input);
+        const page = Math.floor(pagination.offset / pagination.limit) + 1;
+        const { logs, total } = await storage.getFilteredLogs(
+          filters,
+          pagination.limit,
+          page,
+        );
+
+        return {
+          logs,
+          total,
+          hasMore: pagination.offset + pagination.limit < total,
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to search logs",
+          cause: error,
+        });
       }
-
-      // For now, use the existing filtered logs method with search
-      const page = Math.floor(input.offset / input.limit) + 1;
-      const { logs, total } = await storage.getFilteredLogs(
-        filters,
-        input.limit,
-        page,
-      );
-
-      return {
-        logs,
-        total,
-        hasMore: input.offset + input.limit < total,
-      };
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to search logs",
-        cause: error,
-      });
-    }
-  }),
+    }),
 
   // Get logs for a specific workflow
-  getWorkflowLogs: logProcedure
+  getWorkflowLogs: protectedProcedure
     .input(workflowLogsSchema)
     .query(async ({ ctx, input }) => {
       try {
@@ -407,15 +317,16 @@ export const logsRouter = createTRPCRouter({
             message: "Workflow not found",
           });
         }
-        if (workflow.userId !== ctx.userId && !workflow.shared) {
+        if (workflow.userId !== ctx.session.user.id && !workflow.shared) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
         }
 
         // Get workflow logs
+        const pagination = normalizePagination(input);
         const { logs } = await storage.getWorkflowLogs(
           workflowId,
-          input.limit,
-          Math.floor(input.offset / input.limit) + 1,
+          pagination.limit,
+          Math.floor(pagination.offset / pagination.limit) + 1,
         );
 
         // Filter by status if provided
@@ -426,7 +337,7 @@ export const logsRouter = createTRPCRouter({
         return {
           logs: filteredLogs,
           total: filteredLogs.length,
-          hasMore: input.offset + input.limit < filteredLogs.length,
+          hasMore: pagination.offset + pagination.limit < filteredLogs.length,
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -439,63 +350,68 @@ export const logsRouter = createTRPCRouter({
     }),
 
   // Get log statistics
-  getStats: logProcedure.input(logStatsSchema).query(async ({ ctx, input }) => {
-    try {
-      // Build filters for user's logs
-      const filters: LogFilters & {
-        startDate?: string;
-        endDate?: string;
-      } = { userId: ctx.userId };
-      if (input.eventId) filters.eventId = String(input.eventId);
-      if (input.workflowId) filters.workflowId = input.workflowId;
-      // Note: startDate/endDate filtering is not yet implemented in storage
-      if (input.startDate) filters.startDate = input.startDate;
-      if (input.endDate) filters.endDate = input.endDate;
+  getStats: protectedProcedure
+    .input(logStatsSchema)
+    .query(async ({ ctx, input }) => {
+      try {
+        // Build filters for user's logs
+        const filters: LogFilters & {
+          startDate?: string;
+          endDate?: string;
+        } = { userId: ctx.session.user.id };
+        if (input.eventId) filters.eventId = String(input.eventId);
+        if (input.workflowId) filters.workflowId = input.workflowId;
+        // Note: startDate/endDate filtering is not yet implemented in storage
+        if (input.startDate) filters.startDate = input.startDate;
+        if (input.endDate) filters.endDate = input.endDate;
 
-      // For now, get all logs and calculate stats
-      const { logs } = await storage.getFilteredLogs(filters, 1000, 1);
+        // For now, get all logs and calculate stats
+        const { logs } = await storage.getFilteredLogs(filters, 1000, 1);
 
-      const stats = {
-        total: logs.length,
-        success: logs.filter((log) => log.status === LogStatus.SUCCESS).length,
-        failure: logs.filter((log) => log.status === LogStatus.FAILURE).length,
-        running: logs.filter((log) => log.status === LogStatus.RUNNING).length,
-        successRate: 0,
-        failureRate: 0,
-        averageDuration: 0,
-      };
+        const stats = {
+          total: logs.length,
+          success: logs.filter((log) => log.status === LogStatus.SUCCESS)
+            .length,
+          failure: logs.filter((log) => log.status === LogStatus.FAILURE)
+            .length,
+          running: logs.filter((log) => log.status === LogStatus.RUNNING)
+            .length,
+          successRate: 0,
+          failureRate: 0,
+          averageDuration: 0,
+        };
 
-      if (stats.total > 0) {
-        stats.successRate = Math.round((stats.success / stats.total) * 100);
-        stats.failureRate = Math.round((stats.failure / stats.total) * 100);
+        if (stats.total > 0) {
+          stats.successRate = Math.round((stats.success / stats.total) * 100);
+          stats.failureRate = Math.round((stats.failure / stats.total) * 100);
 
-        const completedLogs = logs.filter(
-          (log) => log.duration && log.duration > 0,
-        );
-        if (completedLogs.length > 0) {
-          const totalDuration = completedLogs.reduce(
-            (sum, log) => sum + (log.duration ?? 0),
-            0,
+          const completedLogs = logs.filter(
+            (log) => log.duration && log.duration > 0,
           );
-          stats.averageDuration = Math.round(
-            totalDuration / completedLogs.length,
-          );
+          if (completedLogs.length > 0) {
+            const totalDuration = completedLogs.reduce(
+              (sum, log) => sum + (log.duration ?? 0),
+              0,
+            );
+            stats.averageDuration = Math.round(
+              totalDuration / completedLogs.length,
+            );
+          }
         }
-      }
 
-      return stats;
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to get log statistics",
-        cause: error,
-      });
-    }
-  }),
+        return stats;
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to get log statistics",
+          cause: error,
+        });
+      }
+    }),
 
   // Admin-only endpoints
   // Get all logs (admin)
-  getAllAdmin: adminLogProcedure
+  getAllAdmin: adminProcedure
     .input(adminLogsQuerySchema)
     .query(async ({ input }) => {
       try {
@@ -518,16 +434,21 @@ export const logsRouter = createTRPCRouter({
         if (input.startDate) filters.startDate = input.startDate;
         if (input.endDate) filters.endDate = input.endDate;
 
-        const page = input.page ?? Math.floor(input.offset / input.limit) + 1;
-        const { logs, total } = await storage.getAllLogs(input.limit, page);
+        const pagination = normalizePagination(input);
+        const page =
+          input.page ?? Math.floor(pagination.offset / pagination.limit) + 1;
+        const { logs, total } = await storage.getAllLogs(
+          pagination.limit,
+          page,
+        );
 
         return {
           logs,
           total,
           page,
-          pageSize: input.limit,
-          totalPages: Math.ceil(total / input.limit),
-          hasMore: page * input.limit < total,
+          pageSize: pagination.limit,
+          totalPages: Math.ceil(total / pagination.limit),
+          hasMore: page * pagination.limit < total,
         };
       } catch (error) {
         throw new TRPCError({
@@ -539,7 +460,7 @@ export const logsRouter = createTRPCRouter({
     }),
 
   // Bulk operations on logs
-  bulkOperation: logProcedure
+  bulkOperation: protectedProcedure
     .input(bulkLogOperationSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -559,7 +480,7 @@ export const logsRouter = createTRPCRouter({
 
             // Check if user has access to the event this log belongs to
             const event = await storage.getEvent(log.eventId);
-            if (!event || event.userId !== ctx.userId) {
+            if (!event || event.userId !== ctx.session.user.id) {
               results.push({
                 id: logId,
                 success: false,

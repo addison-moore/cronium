@@ -42,7 +42,7 @@ export function buildJobPayload(
 
   // Determine job type
   let jobType: JobType;
-  if (event.type === EventType.HTTP) {
+  if (event.type === EventType.HTTP_REQUEST) {
     jobType = JobType.HTTP_REQUEST;
   } else if (event.toolActionConfig) {
     jobType = JobType.TOOL_ACTION;
@@ -61,12 +61,17 @@ export function buildJobPayload(
 
     case JobType.HTTP_REQUEST:
       if (event.httpMethod && event.httpUrl) {
-        jobPayload.httpRequest = {
+        const httpRequest: any = {
           method: event.httpMethod,
           url: event.httpUrl,
-          headers: event.httpHeaders as Record<string, string> | undefined,
-          body: event.httpBody ?? undefined,
         };
+        if (event.httpHeaders) {
+          httpRequest.headers = event.httpHeaders as Record<string, string>;
+        }
+        if (event.httpBody) {
+          httpRequest.body = event.httpBody;
+        }
+        jobPayload.httpRequest = httpRequest;
       }
       break;
 

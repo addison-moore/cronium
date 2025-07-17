@@ -6,7 +6,7 @@ import {
   EventStatus,
   TimeUnit,
   RunLocation,
-  type Script as DbEvent,
+  type Event as DbEvent,
 } from "@shared/schema";
 import { useToast } from "@/components/ui/use-toast";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -186,61 +186,69 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
       throw new Error("Invalid event data");
     }
 
+    const dbEvent = event as Record<string, unknown>;
+
     const mappedEvent: Event = {
-      id: typeof event.id === "number" ? event.id : 0,
-      name: typeof event.name === "string" ? event.name : "",
+      id: typeof dbEvent.id === "number" ? dbEvent.id : 0,
+      name: typeof dbEvent.name === "string" ? dbEvent.name : "",
       description:
-        typeof event.description === "string" ? event.description : null,
-      shared: typeof event.shared === "boolean" ? event.shared : false,
-      type: event.type,
-      status: event.status,
-      content: typeof event.content === "string" ? event.content : null,
+        typeof dbEvent.description === "string" ? dbEvent.description : null,
+      shared: typeof dbEvent.shared === "boolean" ? dbEvent.shared : false,
+      type: dbEvent.type as Event["type"],
+      status: dbEvent.status as Event["status"],
+      content: typeof dbEvent.content === "string" ? dbEvent.content : null,
       scheduleNumber:
-        typeof event.scheduleNumber === "number" ? event.scheduleNumber : 1,
+        typeof dbEvent.scheduleNumber === "number" ? dbEvent.scheduleNumber : 1,
       scheduleUnit:
-        typeof event.scheduleUnit === "string"
-          ? (event.scheduleUnit as TimeUnit)
+        typeof dbEvent.scheduleUnit === "string"
+          ? (dbEvent.scheduleUnit as TimeUnit)
           : TimeUnit.MINUTES,
       customSchedule:
-        typeof event.customSchedule === "string" ? event.customSchedule : null,
-      userId: typeof event.userId === "string" ? event.userId : "",
+        typeof dbEvent.customSchedule === "string"
+          ? dbEvent.customSchedule
+          : null,
+      userId: typeof dbEvent.userId === "string" ? dbEvent.userId : "",
       createdAt:
-        event.createdAt instanceof Date
-          ? event.createdAt.toISOString()
+        dbEvent.createdAt instanceof Date
+          ? dbEvent.createdAt.toISOString()
           : new Date().toISOString(),
       updatedAt:
-        event.updatedAt instanceof Date
-          ? event.updatedAt.toISOString()
+        dbEvent.updatedAt instanceof Date
+          ? dbEvent.updatedAt.toISOString()
           : new Date().toISOString(),
       lastRunAt:
-        event.lastRunAt instanceof Date ? event.lastRunAt.toISOString() : null,
+        dbEvent.lastRunAt instanceof Date
+          ? dbEvent.lastRunAt.toISOString()
+          : null,
       nextRunAt:
-        event.nextRunAt instanceof Date ? event.nextRunAt.toISOString() : null,
-      tags: Array.isArray(event.tags)
-        ? event.tags.filter((tag): tag is string => typeof tag === "string")
+        dbEvent.nextRunAt instanceof Date
+          ? dbEvent.nextRunAt.toISOString()
+          : null,
+      tags: Array.isArray(dbEvent.tags)
+        ? dbEvent.tags.filter((tag): tag is string => typeof tag === "string")
         : [],
-      serverId: typeof event.serverId === "number" ? event.serverId : null,
+      serverId: typeof dbEvent.serverId === "number" ? dbEvent.serverId : null,
       timeoutUnit:
-        typeof event.timeoutUnit === "string"
-          ? (event.timeoutUnit as TimeUnit)
+        typeof dbEvent.timeoutUnit === "string"
+          ? (dbEvent.timeoutUnit as TimeUnit)
           : TimeUnit.SECONDS,
     };
 
     // Add optional properties if they exist and are valid
-    if (typeof event.successCount === "number") {
-      mappedEvent.successCount = event.successCount;
+    if (typeof dbEvent.successCount === "number") {
+      mappedEvent.successCount = dbEvent.successCount;
     }
-    if (typeof event.failureCount === "number") {
-      mappedEvent.failureCount = event.failureCount;
+    if (typeof dbEvent.failureCount === "number") {
+      mappedEvent.failureCount = dbEvent.failureCount;
     }
-    if (typeof event.httpMethod === "string") {
-      mappedEvent.httpMethod = event.httpMethod;
+    if (typeof dbEvent.httpMethod === "string") {
+      mappedEvent.httpMethod = dbEvent.httpMethod;
     }
-    if (typeof event.httpUrl === "string") {
-      mappedEvent.httpUrl = event.httpUrl;
+    if (typeof dbEvent.httpUrl === "string") {
+      mappedEvent.httpUrl = dbEvent.httpUrl;
     }
-    if (Array.isArray(event.httpHeaders)) {
-      mappedEvent.httpHeaders = event.httpHeaders.filter(
+    if (Array.isArray(dbEvent.httpHeaders)) {
+      mappedEvent.httpHeaders = dbEvent.httpHeaders.filter(
         (header): header is { key: string; value: string } =>
           typeof header === "object" &&
           header !== null &&
@@ -248,17 +256,17 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
           typeof (header as { value?: unknown }).value === "string",
       );
     }
-    if (typeof event.httpBody === "string") {
-      mappedEvent.httpBody = event.httpBody;
+    if (typeof dbEvent.httpBody === "string") {
+      mappedEvent.httpBody = dbEvent.httpBody;
     }
-    if (typeof event.runLocation === "string") {
-      mappedEvent.runLocation = event.runLocation;
+    if (typeof dbEvent.runLocation === "string") {
+      mappedEvent.runLocation = dbEvent.runLocation;
     }
-    if (typeof event.timeoutValue === "number") {
-      mappedEvent.timeoutValue = event.timeoutValue;
+    if (typeof dbEvent.timeoutValue === "number") {
+      mappedEvent.timeoutValue = dbEvent.timeoutValue;
     }
-    if (typeof event.retries === "number") {
-      mappedEvent.retries = event.retries;
+    if (typeof dbEvent.retries === "number") {
+      mappedEvent.retries = dbEvent.retries;
     }
 
     return mappedEvent;
