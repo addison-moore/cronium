@@ -21,7 +21,7 @@ interface ErrorBoundaryState {
 interface ErrorBoundaryProps {
   children: ReactNode;
   fallback: (props: FallbackProps) => ReactNode;
-  onError?: (error: Error, errorInfo: ErrorInfo) => void;
+  onError?: (error: Error, errorInfo: { componentStack: string }) => void;
 }
 
 interface FallbackProps {
@@ -40,7 +40,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    this.props.onError?.(error, errorInfo);
+    this.props.onError?.(error, {
+      componentStack: errorInfo.componentStack ?? "",
+    });
   }
 
   resetErrorBoundary = () => {
@@ -149,17 +151,23 @@ export function LoadingBoundary({
     />
   );
 
-  const ErrorFallbackComponent =
-    typeof errorFallback === "function"
-      ? errorFallback
-      : errorFallback
-        ? () => <>{errorFallback}</>
-        : DefaultErrorFallback;
+  const ErrorFallbackComponent = React.useCallback(
+    (props: FallbackProps) => {
+      if (typeof errorFallback === "function") {
+        return React.createElement(errorFallback, props);
+      }
+      if (errorFallback) {
+        return <>{errorFallback}</>;
+      }
+      return <DefaultErrorFallback {...props} />;
+    },
+    [errorFallback],
+  );
 
   return (
     <ErrorBoundary
-      fallback={ErrorFallbackComponent as any}
-      onError={onError as any}
+      fallback={ErrorFallbackComponent}
+      {...(onError && { onError })}
     >
       <Suspense fallback={loadingFallback} key={suspenseKey}>
         {children}
@@ -310,7 +318,8 @@ export function LazyLoadingBoundary<T = unknown>({
 
   return (
     <LoadingBoundary {...boundaryProps}>
-      <LazyComponent {...(props as any)} />
+      {/* @ts-expect-error - Generic component props */}
+      <LazyComponent {...(props ?? {})} />
     </LoadingBoundary>
   );
 }

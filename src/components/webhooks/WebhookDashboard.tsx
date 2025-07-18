@@ -321,7 +321,7 @@ export function WebhookDashboard({ workflowId }: WebhookDashboardProps) {
               </p>
             </div>
             <p className="text-2xl font-bold">
-              {formatDuration(stats.averageResponseTime as number)}
+              {formatDuration(stats.averageResponseTime)}
             </p>
           </CardContent>
         </Card>

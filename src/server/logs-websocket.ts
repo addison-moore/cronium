@@ -2,7 +2,7 @@ import type { Server, Socket } from "socket.io";
 import { storage } from "@/server/storage";
 import { getLogsByJobId } from "@/server/storage-extensions";
 import { jobService } from "@/lib/services/job-service";
-import { LogStatus, type Job, type Log } from "@/shared/schema";
+import type { LogStatus, Job, Log } from "@/shared/schema";
 
 interface LogStreamAuth {
   userId: string;

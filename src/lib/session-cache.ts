@@ -174,9 +174,10 @@ interface SessionToken {
 interface SessionWithUser {
   user?: {
     id?: string;
+    email?: string | null;
     username?: string;
-    firstName?: string;
-    lastName?: string;
+    firstName?: string | null;
+    lastName?: string | null;
     profileImageUrl?: string | null;
     role?: string;
     status?: string;
@@ -195,16 +196,18 @@ export async function enhancedSessionCallback({
     const cachedSession = await SessionCache.getOrFetchSession(token.id!);
 
     if (cachedSession) {
-      session.user = cachedSession.user as any;
+      session.user = cachedSession.user;
     } else {
       // Fallback to token data
-      session.user.id = token.id ?? "";
-      session.user.username = token.username ?? "";
-      session.user.firstName = token.firstName ?? "";
-      session.user.lastName = token.lastName ?? "";
-      session.user.profileImageUrl = token.profileImageUrl ?? null;
-      session.user.role = token.role ?? "";
-      session.user.status = token.status ?? "";
+      session.user = {
+        id: token.id ?? "",
+        username: token.username ?? "",
+        firstName: token.firstName ?? null,
+        lastName: token.lastName ?? null,
+        profileImageUrl: token.profileImageUrl ?? null,
+        role: token.role ?? "",
+        status: token.status ?? "",
+      };
     }
   }
   return session;

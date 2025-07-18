@@ -131,10 +131,8 @@ echo "=== Test Complete ==="
       }
     }
 
-    // Following TYPE_SAFETY.md - check job result safely
     if (
-      jobResult &&
-      jobResult.result &&
+      jobResult?.result &&
       typeof jobResult.result === "object" &&
       "output" in jobResult.result
     ) {

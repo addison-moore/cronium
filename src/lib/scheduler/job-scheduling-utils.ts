@@ -148,7 +148,7 @@ export async function createNextRecurringJob(
     eventId: event.id,
     userId: String(event.userId),
     type: jobType,
-    payload: jobPayload as any,
+    payload: jobPayload,
     scheduledFor: nextExecutionTime,
     isRecurring: true,
     metadata: {

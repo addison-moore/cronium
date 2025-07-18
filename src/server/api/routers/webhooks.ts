@@ -696,7 +696,6 @@ export const webhooksRouter = createTRPCRouter({
             ],
           };
 
-          // Following TYPE_SAFETY.md - properly type the metrics
           const metrics: Record<string, string | number> = {
             period: stats.period,
             groupBy: stats.groupBy,

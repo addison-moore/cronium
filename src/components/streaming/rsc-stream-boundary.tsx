@@ -78,14 +78,17 @@ export function RSCStreamBoundary({
     <SuspenseErrorBoundary
       maxRetries={maxRetries}
       fallback={({ error, reset, retryCount }) => {
-        const props: any = {
-          error,
-          reset,
-          retryCount,
-        };
-        if (errorTitle) props.title = errorTitle;
-        if (errorDescription) props.description = errorDescription;
-        return <StreamErrorFallback {...props} />;
+        return (
+          <StreamErrorFallback
+            error={error}
+            reset={reset}
+            retryCount={retryCount}
+            {...(errorTitle !== undefined && { title: errorTitle })}
+            {...(errorDescription !== undefined && {
+              description: errorDescription,
+            })}
+          />
+        );
       }}
       onError={(error, errorInfo) => {
         console.error("RSC Stream Error:", error, errorInfo);

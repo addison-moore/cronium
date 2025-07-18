@@ -648,7 +648,7 @@ export class ScriptScheduler {
         eventId: event.id,
         userId: String(event.userId),
         type: jobType,
-        payload: jobPayload as any,
+        payload: jobPayload,
         metadata: {
           eventName: event.name,
           triggeredBy: "schedule",

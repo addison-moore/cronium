@@ -327,7 +327,7 @@ export default function EventForm({
     { limit: 1000, offset: 0 },
     QUERY_OPTIONS.dynamic,
   );
-  const availableEvents = (eventsData?.events ?? []) as Event[];
+  const availableEvents = eventsData?.events ?? [];
 
   // tRPC mutations
   const createEventMutation = trpc.events.create.useMutation();

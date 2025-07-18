@@ -29,6 +29,23 @@ Change types include: Feature, Bug Fix, Refactor, Documentation, Testing, etc.
 - Document complex logic and non-obvious code paths
 - Use meaningful error messages and logging
 
+## IMPORTANT: UI/UX Guidelines
+
+**DO NOT make any of the following changes without explicit approval:**
+
+- **DO NOT remove pages or components** - All existing pages and components should remain unless explicitly asked to remove them
+- **DO NOT change the styling or layout of pages** - Maintain the existing visual design and layout structure
+- **DO NOT remove features or functionality** - All existing features must be preserved unless removal is explicitly requested
+- **DO NOT remove tabs, filters, or navigation elements** - Keep all UI elements that users rely on
+- **DO NOT replace tables with lists or change data presentation formats** - Maintain the existing data display patterns
+- **DO NOT remove bulk actions, sorting, or pagination** - These are essential features for data management
+
+When converting components (e.g., for SSR/CSR split), ensure:
+- The new component has **identical functionality** to the original
+- The new component uses the **same styling and layout** as the original
+- All features are preserved including filters, sorting, pagination, bulk actions, etc.
+- Data is presented in the same format (tables remain tables, lists remain lists)
+
 ## 📚 Documentation
 
 - [GETTING_STARTED.md](docs/GETTING_STARTED.md) - Quick start guide for development setup

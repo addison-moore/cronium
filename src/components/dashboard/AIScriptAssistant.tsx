@@ -38,7 +38,7 @@ export default function AIScriptAssistant({
 
   const generateCodeMutation = trpc.ai.generateScript.useMutation({
     onSuccess: (data) => {
-      setGeneratedCode(data.data.code as string);
+      setGeneratedCode(data.data.code);
       toast({
         title: "Code Generated",
         description: "AI has generated code based on your prompt",
@@ -69,7 +69,7 @@ export default function AIScriptAssistant({
     },
   });
 
-  const isEnabled = (aiStatus?.data?.enabled ?? false) as boolean;
+  const isEnabled = aiStatus?.data?.enabled ?? false;
 
   const generateCode = async () => {
     if (!prompt.trim()) {

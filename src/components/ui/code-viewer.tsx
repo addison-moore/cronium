@@ -75,7 +75,7 @@ export default function CodeViewer({
         // Add line numbers plugin
         if (showLineNumbers) {
           await import(
-            "prismjs/plugins/line-numbers/prism-line-numbers" as any
+            "prismjs/plugins/line-numbers/prism-line-numbers" as string
           );
           // CSS import removed as it causes TypeScript errors
           // await import("prismjs/plugins/line-numbers/prism-line-numbers.css");

@@ -142,7 +142,6 @@ echo "=== Tests Complete ==="
         }
       }
 
-      // Check for output in different possible locations following TYPE_SAFETY.md
       const output =
         (job as any).output ||
         (job.result as any)?.output ||
@@ -208,7 +207,7 @@ echo "=== Tests Complete ==="
     } catch (e) {
       // Ignore cleanup errors
     }
-    await db.delete(users).where(eq(users.id, testUser!.id));
+    await db.delete(users).where(eq(users.id, testUser.id));
     console.log("✅ Cleanup complete");
   } catch (error) {
     console.error("❌ Test failed:", error);

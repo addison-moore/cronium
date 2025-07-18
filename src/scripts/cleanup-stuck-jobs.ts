@@ -2,7 +2,7 @@
 
 import { db } from "@/server/db";
 import { jobs, JobStatus } from "@/shared/schema";
-import { sql, or, eq, and, lt } from "drizzle-orm";
+import { sql, eq, and, lt } from "drizzle-orm";
 
 async function cleanupStuckJobs() {
   console.log("🧹 Cleaning up stuck jobs...\n");
@@ -10,7 +10,7 @@ async function cleanupStuckJobs() {
   // Mark old queued jobs as failed
   const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
 
-  const queuedResult = await db
+  await db
     .update(jobs)
     .set({
       status: JobStatus.FAILED,
@@ -26,7 +26,7 @@ async function cleanupStuckJobs() {
   // Mark old "running" jobs as failed (anything running for more than 1 hour is definitely stuck)
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
-  const runningResult = await db
+  await db
     .update(jobs)
     .set({
       status: JobStatus.FAILED,
@@ -43,7 +43,7 @@ async function cleanupStuckJobs() {
   console.log(`✅ Marked stuck running jobs as failed`);
 
   // Mark claimed jobs older than 10 minutes as failed
-  const claimedResult = await db
+  await db
     .update(jobs)
     .set({
       status: JobStatus.FAILED,

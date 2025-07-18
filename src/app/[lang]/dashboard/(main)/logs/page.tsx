@@ -4,14 +4,8 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { LogsPageSkeleton } from "@/components/logs/LogsPageSkeleton";
-import dynamic from "next/dynamic";
+import LogsPageClient from "@/components/logs/LogsPageClient";
 import type { Metadata } from "next";
-
-// Dynamic import the client component
-const LogsClient = dynamic(() => import("./page-client"), {
-  ssr: false,
-  loading: () => <LogsPageSkeleton />,
-});
 
 interface LogsPageParams {
   params: Promise<{
@@ -41,7 +35,7 @@ export default async function LogsPage({ params }: LogsPageParams) {
 
   return (
     <Suspense fallback={<LogsPageSkeleton />}>
-      <LogsClient />
+      <LogsPageClient />
     </Suspense>
   );
 }

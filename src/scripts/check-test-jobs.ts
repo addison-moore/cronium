@@ -27,11 +27,12 @@ async function checkTestJobs() {
     for (const job of eventJobs) {
       console.log(`\nJob ${job.id} - Status: ${job.status}`);
 
-      const result = job.result as any;
+      // Following TYPE_SAFETY.md - properly type the result
+      const result = job.result as { logs?: string; output?: string } | null;
       if (result?.logs) {
         console.log("Logs:");
         const logLines = result.logs.split("\n").slice(0, 20);
-        logLines.forEach((line: string) => console.log(`  ${line}`));
+        logLines.forEach((line) => console.log(`  ${line}`));
         if (result.logs.split("\n").length > 20) {
           console.log("  ... (truncated)");
         }
@@ -44,4 +45,4 @@ async function checkTestJobs() {
   process.exit(0);
 }
 
-checkTestJobs();
+void checkTestJobs();

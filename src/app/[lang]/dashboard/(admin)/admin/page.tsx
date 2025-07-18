@@ -159,7 +159,7 @@ export default function AdminPage() {
     onSuccess: (response) => {
       toast({
         title: "Success",
-        description: `Invitation sent to ${(response as any).email ?? "user"}`,
+        description: `Invitation sent to ${response.email ?? "user"}`,
       });
       void refetchUsers();
     },

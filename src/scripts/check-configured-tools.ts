@@ -51,18 +51,21 @@ async function checkConfiguredTools() {
     tools.forEach((tool, index) => {
       console.log(`${index + 1}. ${tool.name} (${tool.type})`);
       console.log(`   ID: ${tool.id}`);
-      console.log(`   Created: ${tool.createdAt}`);
+      console.log(`   Created: ${tool.createdAt.toISOString()}`);
       console.log(`   Status: ${tool.isActive ? "✅ Active" : "❌ Inactive"}`);
 
       // Parse and display webhook URL (redacted)
       try {
-        const creds = JSON.parse(tool.credentials);
-        if (creds.webhookUrl || creds.url) {
-          const url = creds.webhookUrl || creds.url;
+        const creds = JSON.parse(tool.credentials) as {
+          webhookUrl?: string;
+          url?: string;
+        };
+        if (creds.webhookUrl ?? creds.url) {
+          const url = creds.webhookUrl ?? creds.url ?? "";
           const redactedUrl = url.substring(0, 30) + "...";
           console.log(`   Webhook: ${redactedUrl}`);
         }
-      } catch (e) {
+      } catch (_e) {
         console.log(`   Webhook: [Unable to parse]`);
       }
       console.log();
