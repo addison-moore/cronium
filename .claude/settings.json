@@ -1,5 +1,4 @@
 {
-  "description": "Claude Code configuration for Cronium project",
   "permissions": {
     "disabled": [],
     "allowed": [
