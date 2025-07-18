@@ -148,7 +148,17 @@ async function getUserTools(
         } else {
           // Not encrypted, try to parse as JSON
           try {
-            credentials = JSON.parse(rawCredentials) as Record<string, unknown>;
+            // Check if this might be encrypted data that wasn't properly marked
+            // Encrypted strings typically don't start with { or [ and contain base64-like characters
+            const trimmed = rawCredentials.trim();
+            if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+              console.warn(
+                `Tool ${tool.id} credentials appear to be encrypted but tool.encrypted is false. Treating as empty credentials.`,
+              );
+              credentials = {};
+            } else {
+              credentials = JSON.parse(rawCredentials) as Record<string, unknown>;
+            }
           } catch (error) {
             console.error(
               `Failed to parse tool credentials as JSON for tool ${tool.id}:`,
