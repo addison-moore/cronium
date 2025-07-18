@@ -184,7 +184,7 @@ export function TemplateActionParameterForm({
             {!isOptional && <span className="ml-1 text-red-500">*</span>}
           </Label>
           <div
-            className="rounded-md border"
+            className="border-border rounded-md border"
             onFocus={() => handleFieldFocus(key)}
             onBlur={() => handleFieldBlur(key)}
           >

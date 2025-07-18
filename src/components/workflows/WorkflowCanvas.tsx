@@ -817,7 +817,7 @@ export default function WorkflowCanvas({
             nodeStrokeWidth={3}
             zoomable
             pannable
-            className="bg-background rounded-md border"
+            className="border-border bg-background rounded-md border"
           />
           {/* Instructions overlay for empty canvas */}
           {nodes.length === 0 && !readOnly && (

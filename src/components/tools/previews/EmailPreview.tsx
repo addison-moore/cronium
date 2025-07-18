@@ -38,7 +38,7 @@ export function EmailPreview({
     if (isHtml) {
       // For HTML emails, render in an iframe for safety
       return (
-        <div className="relative h-64 w-full overflow-hidden rounded border">
+        <div className="border-border relative h-64 w-full overflow-hidden rounded border">
           <iframe
             srcDoc={body}
             className="h-full w-full"
@@ -51,7 +51,7 @@ export function EmailPreview({
 
     // For plain text, convert line breaks and preserve formatting
     return (
-      <div className="rounded border bg-gray-50 p-4 font-mono text-sm whitespace-pre-wrap dark:bg-gray-900">
+      <div className="border-border rounded border bg-gray-50 p-4 font-mono text-sm whitespace-pre-wrap dark:bg-gray-900">
         {body}
       </div>
     );

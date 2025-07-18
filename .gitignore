@@ -3,6 +3,7 @@ _scratch/
 _backups/
 _packages/
 _duplicates/
+logs/
 .next/
 .config/
 .cache/

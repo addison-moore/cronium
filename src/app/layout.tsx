@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import React from "react";
 import { Inter } from "next/font/google";
 
+export const runtime = "nodejs";
+
 const inter = Inter({
   subsets: ["latin"],
   display: "swap",

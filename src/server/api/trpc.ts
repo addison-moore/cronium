@@ -215,9 +215,23 @@ export const withTiming = t.middleware(async ({ path, type, next }) => {
  * Rate limiting middleware using Redis/Valkey
  * Provides distributed rate limiting across all server instances
  */
-import { createRateLimitMiddleware } from "@/lib/rate-limit-service";
+import { RateLimitService } from "@/lib/rate-limit-service";
 
-export const withRateLimit = createRateLimitMiddleware;
+export const withRateLimit = (maxRequests = 100, windowMs = 60000) => {
+  return t.middleware(async ({ ctx, path, next }) => {
+    const identifier =
+      ctx.session?.user?.id ??
+      ctx.headers?.get?.("x-forwarded-for") ??
+      "anonymous";
+
+    await RateLimitService.checkLimit(identifier, path, {
+      maxRequests,
+      windowMs,
+    });
+
+    return next();
+  });
+};
 
 // withCache middleware has been removed as part of caching simplification
 // All CRUD operations now return fresh data directly from the database

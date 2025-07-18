@@ -353,7 +353,7 @@ export function ModularToolsManager() {
                           {pluginTools.some((t) => t.isActive) && (
                             <Badge
                               variant="outline"
-                              className="border-green-200 bg-green-50 text-xs text-green-700"
+                              className="border border-green-200 bg-green-50 text-xs text-green-700"
                             >
                               Active
                             </Badge>

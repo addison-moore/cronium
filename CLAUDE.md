@@ -33,18 +33,22 @@ Change types include: Feature, Bug Fix, Refactor, Documentation, Testing, etc.
 
 **DO NOT make any of the following changes without explicit approval:**
 
-- **DO NOT remove pages or components** - All existing pages and components should remain unless explicitly asked to remove them
-- **DO NOT change the styling or layout of pages** - Maintain the existing visual design and layout structure
+- **DO NOT remove pages or components** - All existing pages and components should remain unless explicitly asked to remove them. You can rename unused pages and components (e.g., component-old.tsx).
+- **DO NOT change the styling or layout of pages** - Maintain the existing visual design and layout structure unless asked to change it
 - **DO NOT remove features or functionality** - All existing features must be preserved unless removal is explicitly requested
-- **DO NOT remove tabs, filters, or navigation elements** - Keep all UI elements that users rely on
-- **DO NOT replace tables with lists or change data presentation formats** - Maintain the existing data display patterns
-- **DO NOT remove bulk actions, sorting, or pagination** - These are essential features for data management
+- **DO NOT remove tabs, filters, or navigation elements** - Keep all UI elements that users rely on unless asked to remove them
+- **DO NOT change data presentation formats** - Maintain the existing data display patterns unless asked to change it
+
+If you believe one of these changes is necessary, ask for approval.
 
 When converting components (e.g., for SSR/CSR split), ensure:
+
 - The new component has **identical functionality** to the original
 - The new component uses the **same styling and layout** as the original
 - All features are preserved including filters, sorting, pagination, bulk actions, etc.
 - Data is presented in the same format (tables remain tables, lists remain lists)
+
+When changing functionality or fixing errors, consider the side-effects that your changes might have. For example, if your updating a component and need to update the API route that the component uses ensure that you don't break other components that may use the same API route.
 
 ## 📚 Documentation
 

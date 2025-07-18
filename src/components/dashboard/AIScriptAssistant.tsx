@@ -179,7 +179,7 @@ export default function AIScriptAssistant({
           {generatedCode && (
             <div className="space-y-2">
               <Label>Generated Code</Label>
-              <div className="overflow-hidden rounded-lg border">
+              <div className="border-border overflow-hidden rounded-lg border">
                 <MonacoEditor
                   height="300px"
                   language={getLanguageForEditor()}

@@ -318,7 +318,7 @@ function HealthOverview() {
               return (
                 <div
                   key={tool.id}
-                  className="flex items-center justify-between rounded-lg border p-3"
+                  className="border-border flex items-center justify-between rounded-lg border p-3"
                 >
                   <div className="flex items-center gap-2">
                     <Icon className="text-primary h-5 w-5" />

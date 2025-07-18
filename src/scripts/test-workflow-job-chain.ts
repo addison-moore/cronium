@@ -12,13 +12,8 @@ import {
   workflowConnections,
   events,
 } from "@/shared/schema";
-import { eq, and, desc } from "drizzle-orm";
-import {
-  ConnectionType,
-  EventType,
-  EventStatus,
-  LogStatus,
-} from "@/shared/schema";
+import { eq } from "drizzle-orm";
+import { ConnectionType, EventStatus } from "@/shared/schema";
 
 interface WorkflowJobChainTest {
   workflowId: number;
@@ -61,7 +56,7 @@ async function analyzeWorkflowJobChain(test: WorkflowJobChainTest) {
         .where(eq(events.id, node.eventId))
         .limit(1);
       console.log(
-        `  - Node ${node.id}: ${event?.name || "Unknown"} (Event ${node.eventId})`,
+        `  - Node ${node.id}: ${event?.name ?? "Unknown"} (Event ${node.eventId})`,
       );
     }
 
@@ -94,12 +89,13 @@ async function analyzeWorkflowJobChain(test: WorkflowJobChainTest) {
       const executionGroups = new Map<string, typeof workflowJobs>();
 
       for (const job of workflowJobs) {
-        const execId = (job.metadata as any)?.workflowExecutionId;
+        const execId = (job.metadata as { workflowExecutionId?: string })
+          ?.workflowExecutionId;
         if (execId) {
           if (!executionGroups.has(execId)) {
             executionGroups.set(execId, []);
           }
-          executionGroups.get(execId)!.push(job);
+          executionGroups.get(execId)?.push(job);
         }
       }
 
@@ -125,8 +121,8 @@ async function analyzeWorkflowJobChain(test: WorkflowJobChainTest) {
             prevCompleted = job.completedAt;
           }
 
-          const metadata = job.metadata as any;
-          console.log(`      - Event: ${metadata?.eventName || "Unknown"}`);
+          const metadata = job.metadata as { eventName?: string };
+          console.log(`      - Event: ${metadata?.eventName ?? "Unknown"}`);
         }
 
         console.log(`    Sequential: ${isSequential ? "✅" : "❌"}`);
@@ -138,16 +134,20 @@ async function analyzeWorkflowJobChain(test: WorkflowJobChainTest) {
 
       // Look for jobs that were created based on conditions
       for (const job of workflowJobs) {
-        const metadata = job.metadata as any;
+        const metadata = job.metadata as {
+          connectionType?: ConnectionType;
+          previousSuccess?: boolean;
+          conditionMet?: boolean;
+        };
         if (
           metadata?.connectionType &&
           metadata.connectionType !== ConnectionType.ALWAYS
         ) {
           console.log(`  Job ${job.id} created via ${metadata.connectionType}`);
           console.log(
-            `    - Previous job success: ${metadata.previousSuccess || "N/A"}`,
+            `    - Previous job success: ${metadata.previousSuccess ?? "N/A"}`,
           );
-          console.log(`    - Condition met: ${metadata.conditionMet || "N/A"}`);
+          console.log(`    - Condition met: ${metadata.conditionMet ?? "N/A"}`);
         }
       }
     }
@@ -157,7 +157,7 @@ async function analyzeWorkflowJobChain(test: WorkflowJobChainTest) {
 
       // Check if jobs have input data from previous jobs
       for (const job of workflowJobs) {
-        const payload = job.payload as any;
+        const payload = job.payload as { input?: Record<string, unknown> };
         if (payload?.input && Object.keys(payload.input).length > 0) {
           console.log(`  Job ${job.id} has input data:`);
           console.log(
@@ -165,10 +165,14 @@ async function analyzeWorkflowJobChain(test: WorkflowJobChainTest) {
           );
         }
 
-        if (job.result && (job.result as any).output) {
+        if (job.result && (job.result as { output?: unknown }).output) {
           console.log(`  Job ${job.id} produced output:`);
           console.log(
-            `    ${JSON.stringify((job.result as any).output, null, 2)
+            `    ${JSON.stringify(
+              (job.result as { output?: unknown }).output,
+              null,
+              2,
+            )
               .split("\n")
               .join("\n    ")}`,
           );

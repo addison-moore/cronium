@@ -1,7 +1,7 @@
 import { appRouter } from "@/server/api/root";
 import { createCallerFactory } from "@/server/api/trpc";
 import { db } from "@/server/db";
-import { authOptions } from "@/lib/auth";
+// import { authOptions } from "@/lib/auth";
 import {
   users,
   UserRole,
@@ -51,7 +51,7 @@ async function testSidecarHealth() {
       user: {
         id: testUser.id,
         email: testUser.email,
-        name: testUser.firstName || "Test User",
+        name: testUser.firstName ?? "Test User",
         role: testUser.role,
         status: testUser.status,
       },
@@ -156,4 +156,4 @@ echo "=== Test Complete ==="
   process.exit(0);
 }
 
-testSidecarHealth();
+void testSidecarHealth();

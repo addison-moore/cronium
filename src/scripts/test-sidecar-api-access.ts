@@ -11,6 +11,7 @@ import {
   EventStatus,
   RunLocation,
   UserStatus,
+  JobStatus,
 } from "@/shared/schema";
 import { eq } from "drizzle-orm";
 import { hash } from "bcrypt";
@@ -54,7 +55,7 @@ async function testSidecarAPIAccess() {
       user: {
         id: testUser.id,
         email: testUser.email,
-        name: testUser.firstName || "Test User",
+        name: testUser.firstName ?? "Test User",
         role: testUser.role,
         status: testUser.status || UserStatus.ACTIVE,
       },
@@ -143,14 +144,16 @@ echo "=== Tests Complete ==="
       }
 
       const output =
-        (job as any).output ||
-        (job.result as any)?.output ||
-        (job.metadata as any)?.output;
+        (job.result as { output?: string })?.output ??
+        (job.metadata as { output?: string })?.output;
       if (output) {
         jobLogs = String(output);
       }
 
-      if (job.status === "completed" || job.status === "failed") {
+      if (
+        job.status === JobStatus.COMPLETED ||
+        job.status === JobStatus.FAILED
+      ) {
         console.log(`\n✅ Job ${job.status} after ${i} seconds\n`);
         break;
       }
@@ -170,12 +173,12 @@ echo "=== Tests Complete ==="
 
     if (sidecarInfo.trim()) {
       const [name, status] = sidecarInfo.trim().split("|");
-      console.log(`   Sidecar: ${name}`);
-      console.log(`   Status: ${status}`);
+      console.log(`   Sidecar: ${name ?? ""}`);
+      console.log(`   Status: ${status ?? ""}`);
 
       // Get sidecar logs
       const { stdout: sidecarLogs } = await execAsync(
-        `docker logs ${name} 2>&1 | tail -20`,
+        `docker logs ${name ?? ""} 2>&1 | tail -20`,
       );
       console.log("\n📋 Sidecar Logs:");
       console.log("---");
@@ -204,7 +207,7 @@ echo "=== Tests Complete ==="
       if (event) {
         await caller.events.delete({ id: event.id });
       }
-    } catch (e) {
+    } catch {
       // Ignore cleanup errors
     }
     await db.delete(users).where(eq(users.id, testUser.id));
@@ -216,4 +219,4 @@ echo "=== Tests Complete ==="
   process.exit(0);
 }
 
-testSidecarAPIAccess();
+void testSidecarAPIAccess();

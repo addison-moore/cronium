@@ -304,6 +304,14 @@ export const webhookExecutionSchema = z.object({
   payload: z.record(z.any()).optional(),
 });
 
+// Workflow filter schema - for lightweight data used in dropdowns/filters
+export const workflowFilterSchema = z.object({
+  limit: z.number().min(1).max(200).default(100),
+  offset: z.number().min(0).default(0),
+  search: z.string().optional(),
+  status: z.nativeEnum(EventStatus).optional(),
+});
+
 // Type definitions inferred from schemas
 export type CreateWorkflowInput = z.infer<typeof createWorkflowSchema>;
 export type UpdateWorkflowInput = z.infer<typeof updateWorkflowSchema>;
@@ -316,5 +324,6 @@ export type BulkWorkflowOperationInput = z.infer<
 >;
 export type WorkflowDownloadInput = z.infer<typeof workflowDownloadSchema>;
 export type WebhookExecutionInput = z.infer<typeof webhookExecutionSchema>;
+export type WorkflowFilterInput = z.infer<typeof workflowFilterSchema>;
 export type WorkflowNode = z.infer<typeof workflowNodeSchema>;
 export type WorkflowEdge = z.infer<typeof workflowEdgeSchema>;

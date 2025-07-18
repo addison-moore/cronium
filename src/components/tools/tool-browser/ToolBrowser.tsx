@@ -349,7 +349,7 @@ export function ToolBrowser({
             <Filter className="mr-1 h-4 w-4" />
             Available Only
           </Button>
-          <div className="flex gap-1 rounded-lg border p-1">
+          <div className="border-border flex gap-1 rounded-lg border p-1">
             <Button
               variant={viewMode === "grid" ? "secondary" : "ghost"}
               size="sm"

@@ -403,7 +403,7 @@ export default function ToolCredentialManager({
                     </Badge>
                   </div>
 
-                  <div className="rounded-lg border">
+                  <div className="border-border rounded-lg border">
                     <Table>
                       <TableHeader>
                         <TableRow>

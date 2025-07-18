@@ -233,7 +233,7 @@ export function WebhookSecurityForm({
                     {(watchedAllowedIps ?? []).map((ip, index) => (
                       <div
                         key={index}
-                        className="flex items-center justify-between rounded border p-2"
+                        className="border-border flex items-center justify-between rounded border p-2"
                       >
                         <code className="text-sm">{ip}</code>
                         <Button

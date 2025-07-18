@@ -11,7 +11,7 @@ export default function DashboardMainLoading() {
 
       {/* Content skeleton */}
       <div className="space-y-4">
-        <div className="rounded-lg border p-6">
+        <div className="border-border rounded-lg border p-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <Skeleton className="h-5 w-32" />

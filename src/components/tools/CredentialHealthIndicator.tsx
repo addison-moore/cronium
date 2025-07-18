@@ -594,7 +594,7 @@ export default function CredentialHealthIndicator({
 
                     <div className="space-y-3">
                       <h4 className="text-sm font-medium">Health Checks</h4>
-                      <ScrollArea className="h-[300px] rounded-lg border p-4">
+                      <ScrollArea className="border-border h-[300px] rounded-lg border p-4">
                         <div className="space-y-3">
                           {status.checks.map((check, idx) => (
                             <div

@@ -34,6 +34,7 @@ import {
   eventLogsSchema,
   eventActivationSchema,
   eventDownloadSchema,
+  eventFilterSchema,
 } from "@/shared/schemas/events";
 import { storage } from "@/server/storage";
 import { scheduler } from "@/lib/scheduler";
@@ -809,6 +810,58 @@ export const eventsRouter = createTRPCRouter({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to download events",
+          cause: error,
+        });
+      }
+    }),
+
+  // Get lightweight event data for filters/dropdowns
+  getForFilters: protectedProcedure
+    .use(withTiming)
+    .input(eventFilterSchema)
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      try {
+        // Get all events for the user with minimal data
+        const events = await storage.getAllEvents(userId);
+
+        // Apply filters if provided
+        let filteredEvents = events;
+
+        if (input.search) {
+          const searchLower = input.search.toLowerCase();
+          filteredEvents = filteredEvents.filter((event) =>
+            event.name.toLowerCase().includes(searchLower),
+          );
+        }
+
+        if (input.status) {
+          filteredEvents = filteredEvents.filter(
+            (event) => event.status === input.status,
+          );
+        }
+
+        // Apply pagination
+        const start = input.offset;
+        const end = start + input.limit;
+        const paginatedEvents = filteredEvents.slice(start, end);
+
+        // Return only id and name for each event
+        const lightweightEvents = paginatedEvents.map((event) => ({
+          id: event.id,
+          name: event.name,
+        }));
+
+        return {
+          events: lightweightEvents,
+          total: filteredEvents.length,
+          hasMore: end < filteredEvents.length,
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch events for filters",
           cause: error,
         });
       }

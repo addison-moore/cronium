@@ -128,7 +128,7 @@ export function ActionBuilder({ initialFlow, onSave }: ActionBuilderProps) {
     <ReactFlowProvider>
       <div className="flex h-screen">
         {/* Left Panel - Node Library */}
-        <div className="bg-background border-r">
+        <div className="border-border bg-background border-r">
           <NodeLibrary />
         </div>
 
@@ -177,7 +177,7 @@ export function ActionBuilder({ initialFlow, onSave }: ActionBuilderProps) {
         </div>
 
         {/* Right Panel - Configuration */}
-        <div className="bg-background w-96 border-l">
+        <div className="border-border bg-background w-96 border-l">
           <Tabs defaultValue="node" className="h-full">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="node">Node</TabsTrigger>

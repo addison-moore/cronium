@@ -13,29 +13,24 @@ import {
   type Event,
   type InsertEvent,
   type EnvVar,
-  type InsertEnvVar,
   type ConditionalAction,
   type InsertConditionalAction,
   type Server,
 } from "../../../shared/schema";
-import {
-  eq,
-  and,
-  or,
-  desc,
-  sql,
-  inArray,
-} from "drizzle-orm";
-import {
-  encryptSensitiveData,
-  decryptSensitiveData,
-} from "../../../lib/encryption-service";
+import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
 import type { EventWithRelations } from "../types";
+import { VariablesStorage } from "./variables";
 
 // Type alias for backward compatibility
 type Script = Event;
 
 export class EventStorage {
+  private variables: VariablesStorage;
+
+  constructor() {
+    this.variables = new VariablesStorage();
+  }
+
   // Event CRUD methods
   async getEvent(id: number): Promise<Script | undefined> {
     const [script] = await db.select().from(events).where(eq(events.id, id));
@@ -58,7 +53,6 @@ export class EventStorage {
       const eventPromise = db.query.events.findFirst({
         where: eq(events.id, id),
         with: {
-          envVars: true,
           server: true,
           eventServers: {
             with: {
@@ -104,8 +98,12 @@ export class EventStorage {
           ?.map((es) => es.server)
           .filter((s): s is Server => s !== null) || [];
 
+      // Fetch decrypted environment variables
+      const envVars = await this.variables.getEnvVars(event.id);
+
       const result: EventWithRelations = {
         ...event,
+        envVars,
         servers,
         successEvents: successEvents || [],
         failEvents: failEvents || [],
@@ -140,10 +138,8 @@ export class EventStorage {
 
       // Fetch only essential related data in parallel
       const [envVarsData, eventServersData] = await Promise.all([
-        // Get env vars
-        db.query.envVars.findMany({
-          where: eq(envVars.eventId, id),
-        }),
+        // Get decrypted env vars
+        this.variables.getEnvVars(id),
         // Get event servers with server data
         db.query.eventServers.findMany({
           where: eq(eventServers.eventId, id),
@@ -210,7 +206,6 @@ export class EventStorage {
     const activeEvents = await db.query.events.findMany({
       where: eq(events.status, EventStatus.ACTIVE),
       with: {
-        envVars: true,
         server: true,
         eventServers: {
           with: {
@@ -266,6 +261,21 @@ export class EventStorage {
       {} as Record<number, typeof conditionEvents>,
     );
 
+    // Fetch decrypted environment variables for all active events
+    const envVarsPromises = activeEvents.map((event) =>
+      this.variables.getEnvVars(event.id),
+    );
+    const allEnvVars = await Promise.all(envVarsPromises);
+
+    // Create a map for quick lookup
+    const envVarsByEventId = activeEvents.reduce(
+      (acc, event, index) => {
+        acc[event.id] = allEnvVars[index] ?? [];
+        return acc;
+      },
+      {} as Record<number, EnvVar[]>,
+    );
+
     // Transform the results
     return activeEvents.map((event) => {
       const {
@@ -277,7 +287,7 @@ export class EventStorage {
 
       const transformed: EventWithRelations = {
         ...eventData,
-        envVars: event.envVars ?? [],
+        envVars: envVarsByEventId[event.id] ?? [],
         server: event.server ?? null,
         servers:
           event.eventServers?.map((es) => es.server).filter(Boolean) ?? [],

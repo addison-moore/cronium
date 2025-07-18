@@ -497,7 +497,7 @@ export default function CredentialTroubleshooter({
                       {step.solutions.map((solution, idx) => (
                         <div
                           key={idx}
-                          className="space-y-3 rounded-lg border p-4"
+                          className="border-border space-y-3 rounded-lg border p-4"
                         >
                           <h5 className="font-medium">{solution.title}</h5>
 
@@ -558,7 +558,7 @@ export default function CredentialTroubleshooter({
           )}
 
           {/* Additional Resources */}
-          <div className="bg-muted/50 rounded-lg border p-4">
+          <div className="border-border bg-muted/50 rounded-lg border p-4">
             <h4 className="mb-3 flex items-center gap-2 font-medium">
               <FileText className="h-4 w-4" />
               Additional Resources

@@ -42,7 +42,7 @@ export function JobFilters() {
   };
 
   return (
-    <div className="space-y-4 rounded-lg border p-4">
+    <div className="border-border space-y-4 rounded-lg border p-4">
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-lg font-medium">
           <Filter className="h-5 w-5" />

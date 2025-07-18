@@ -1,5 +1,6 @@
 import type { EventWithRelations } from "@/server/storage";
-import { JobType, EventType, RunLocation, ScriptType } from "@/shared/schema";
+import { JobType, EventType, RunLocation } from "@/shared/schema";
+import type { ScriptType } from "@/shared/schema";
 
 export interface JobPayload {
   executionLogId: number;

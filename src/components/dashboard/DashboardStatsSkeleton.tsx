@@ -90,7 +90,7 @@ export function DashboardStatsSkeleton() {
         <CardContent>
           <div className="space-y-4">
             {/* Table headers */}
-            <div className="grid grid-cols-5 gap-4 border-b pb-2">
+            <div className="border-border grid grid-cols-5 gap-4 border-b pb-2">
               <Skeleton className="h-4 w-20" />
               <Skeleton className="h-4 w-16" />
               <Skeleton className="h-4 w-24" />

@@ -493,7 +493,7 @@ export default function RetryManager({
             )}
 
             {/* Delay Preview */}
-            <div className="bg-muted/50 rounded-lg border p-4">
+            <div className="bg-muted/50 border-border rounded-lg border p-4">
               <h4 className="mb-3 text-sm font-medium">Delay Preview</h4>
               <div className="space-y-2">
                 {getExampleDelays().map((delay, idx) => (

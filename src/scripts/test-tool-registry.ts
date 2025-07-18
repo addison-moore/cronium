@@ -43,7 +43,7 @@ async function testRegistry() {
 
       try {
         // Test with httpbin
-        const result = await sendAction.execute(
+        const result: unknown = await sendAction.execute(
           {
             url: "https://httpbin.org/post",
             headers: { "X-Test": "Registry-Test" },
@@ -55,8 +55,10 @@ async function testRegistry() {
           },
           {
             variables: {
-              get: (key: string) => undefined,
-              set: (key: string, value: unknown) => {},
+              get: (_key: string) => undefined,
+              set: (_key: string, _value: unknown) => {
+                /* no-op */
+              },
             },
             logger: {
               info: (msg: string) => console.log(`  [INFO] ${msg}`),
@@ -68,10 +70,18 @@ async function testRegistry() {
         );
 
         console.log("✅ Webhook execution successful!");
-        console.log(`  Status: ${result.status} ${result.statusText}`);
+        const typedResult = result as {
+          status: number;
+          statusText: string;
+          data: unknown;
+          headers: Record<string, string>;
+        };
+        console.log(
+          `  Status: ${typedResult.status} ${typedResult.statusText}`,
+        );
         console.log(
           `  Response data:`,
-          JSON.stringify(result.data, null, 2).substring(0, 200) + "...",
+          JSON.stringify(typedResult.data, null, 2).substring(0, 200) + "...",
         );
       } catch (error) {
         console.error("❌ Webhook execution failed:", error);

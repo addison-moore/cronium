@@ -10,7 +10,7 @@ export default function ToolsLoading() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="rounded-lg border p-4">
+          <div key={i} className="border-border rounded-lg border p-4">
             <div className="mb-3 flex items-center justify-between">
               <Skeleton className="h-6 w-6" />
               <Skeleton className="h-4 w-4 rounded-full" />

@@ -75,8 +75,41 @@ async function getUserTools(
           // Handle encrypted credentials
           if (credentialEncryption.isAvailable()) {
             try {
-              // Parse the stored encrypted data structure
-              const encryptedData = JSON.parse(rawCredentials) as EncryptedData;
+              // First, try to parse as JSON to get the EncryptedData structure
+              let encryptedData: EncryptedData;
+              try {
+                encryptedData = JSON.parse(rawCredentials) as EncryptedData;
+              } catch {
+                // If parsing fails, it might be a legacy encrypted string
+                // Skip this tool with empty credentials
+                console.error(
+                  `Tool ${tool.id} has invalid encrypted credentials format. Expected JSON-encoded EncryptedData but got raw string. Please re-save the tool credentials.`,
+                );
+                credentials = {};
+                // Return early to avoid further processing
+                // Handle encryptionMetadata - check if it's a valid object
+                let encMetadata: ToolWithParsedCredentials["encryptionMetadata"] =
+                  null;
+                if (
+                  tool.encryptionMetadata &&
+                  typeof tool.encryptionMetadata === "object" &&
+                  "algorithm" in tool.encryptionMetadata &&
+                  "keyDerivation" in tool.encryptionMetadata
+                ) {
+                  encMetadata =
+                    tool.encryptionMetadata as ToolWithParsedCredentials["encryptionMetadata"];
+                }
+
+                const result: ToolWithParsedCredentials = {
+                  ...tool,
+                  credentials,
+                  encrypted: tool.encrypted ?? false,
+                  encryptionMetadata: encMetadata,
+                  tags: [],
+                };
+                return result;
+              }
+
               // Decrypt the credentials
               const decrypted = credentialEncryption.decrypt(encryptedData);
 
@@ -138,7 +171,7 @@ async function getUserTools(
         } | null;
         description?: string;
         tags?: string[];
-      };
+      } & Record<string, unknown>;
 
       // Parse encryptionMetadata keyDerivation if it's a JSON string
       let parsedEncryptionMetadata = toolWithDefaults.encryptionMetadata;
@@ -172,15 +205,18 @@ async function getUserTools(
         // Add default values for new columns if they don't exist
         encrypted: toolWithDefaults.encrypted ?? false,
         encryptionMetadata: parsedEncryptionMetadata ?? null,
-        tags: toolWithDefaults.tags ?? [],
+        tags: ("tags" in tool && Array.isArray(tool.tags)
+          ? tool.tags
+          : []) as string[],
       };
 
       // Only add description if it exists
       if (
-        toolWithDefaults.description !== undefined &&
-        toolWithDefaults.description !== null
+        "description" in tool &&
+        tool.description !== undefined &&
+        tool.description !== null
       ) {
-        result.description = toolWithDefaults.description;
+        result.description = tool.description as string;
       }
 
       return result;

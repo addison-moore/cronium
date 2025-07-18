@@ -1,4 +1,0 @@
-Get next file from continuous processing queue
-
-!echo "🔍 Getting next file from processing queue..."
-!python3 scripts/claude-continuous-processor.py --next-file

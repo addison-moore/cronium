@@ -85,7 +85,7 @@ export function SlackMessagePreview({
         <CardTitle className="text-base">Slack Message Preview</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="rounded-lg border bg-slate-900 p-4 text-slate-100">
+        <div className="border-border rounded-lg border bg-slate-900 p-4 text-slate-100">
           {/* Channel header */}
           <div className="mb-3 border-b border-slate-700 pb-3">
             {renderChannel()}
@@ -124,7 +124,7 @@ export function SlackMessagePreview({
                       >
                         {block.type === "section" && block.text?.text}
                         {block.type === "divider" && (
-                          <hr className="border-slate-600" />
+                          <hr className="border border-slate-600" />
                         )}
                       </div>
                     ),

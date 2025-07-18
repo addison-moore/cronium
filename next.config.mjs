@@ -142,7 +142,7 @@ const nextConfig = {
   experimental: {
     // Enable Partial Prerendering (PPR)
     // Note: PPR requires Next.js canary version
-    // Uncomment when using canary: ppr: true,
+    ppr: true,
     // PPR works best with these additional settings
     optimizePackageImports: [
       "@radix-ui/react-*",

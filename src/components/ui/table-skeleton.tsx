@@ -39,9 +39,9 @@ export function TableSkeleton({
 
   return (
     <div className="w-full">
-      <div className="rounded-md border">
+      <div className="border-border rounded-md border">
         {showHeader && (
-          <div className="bg-muted/50 border-b">
+          <div className="border-border bg-muted/50 border-b">
             <div className="flex items-center p-4">
               {showCheckbox && (
                 <div className="mr-4">
@@ -194,8 +194,8 @@ export function ServersTableSkeleton() {
 
 export function JobsTableSkeleton() {
   return (
-    <div className="bg-card rounded-lg border">
-      <div className="border-b p-4">
+    <div className="bg-card border-border rounded-lg border">
+      <div className="border-border border-b p-4">
         <div className="flex items-center justify-between">
           <Skeleton className="h-6 w-32" />
           <Skeleton className="h-9 w-24" />

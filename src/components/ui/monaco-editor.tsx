@@ -301,7 +301,7 @@ export function MonacoEditor({
     return (
       <div className="bg-background fixed inset-0 z-50">
         {/* Header with controls */}
-        <div className="bg-background flex items-center justify-between border-b p-4">
+        <div className="border-border bg-background flex items-center justify-between border-b p-4">
           <div className="flex items-center gap-2">
             <h3 className="font-medium">Code Editor</h3>
             <Badge variant="secondary">{language.toUpperCase()}</Badge>

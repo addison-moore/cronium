@@ -118,7 +118,7 @@ echo "Script execution completed!"`;
   };
 
   return (
-    <div className="overflow-hidden rounded-md border">
+    <div className="border-border overflow-hidden rounded-md border">
       {isLoading && (
         <div className="flex h-[500px] items-center justify-center bg-gray-50">
           <Spinner size="lg" variant="primary" />

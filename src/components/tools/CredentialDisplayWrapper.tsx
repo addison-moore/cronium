@@ -20,7 +20,7 @@ export function CredentialDisplayWrapper({
   onDelete,
 }: CredentialDisplayWrapperProps) {
   return (
-    <div className="space-y-3 rounded-lg border p-4">
+    <div className="border-border space-y-3 rounded-lg border p-4">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="mb-2 flex items-center justify-between">
@@ -62,7 +62,7 @@ export function createEnhancedCredentialDisplay(
     return (
       <div className="space-y-3">
         {props.tools.map((tool) => (
-          <div key={tool.id} className="rounded-lg border p-4">
+          <div key={tool.id} className="border-border rounded-lg border p-4">
             <div className="mb-2 flex items-center justify-between">
               <h4 className="font-medium">{tool.name}</h4>
               <ToolHealthIndicator

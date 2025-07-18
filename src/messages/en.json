@@ -18,9 +18,9 @@
     "selectServer": "Select Server"
   },
   "Monitoring": {
-    "title": "Monitoring",
-    "description": "Monitor system performance and track application metrics",
-    "systemMonitoring": "System Monitoring"
+    "Title": "Monitoring",
+    "Description": "Monitor system performance and track application metrics",
+    "SystemMonitoring": "System Monitoring"
   },
   "Common": {
     "Error": "Error",
@@ -37,9 +37,7 @@
     "Submit": "Submit",
     "Refresh": "Refresh",
     "Close": "Close",
-    "Back": "Back",
-    "Loading": "Loading...",
-    "Refresh": "Refresh"
+    "Back": "Back"
   },
   "Nav": {
     "Home": "Home",
