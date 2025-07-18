@@ -129,6 +129,9 @@ async function EventsList({ lang: _lang }: { lang: string }) {
   const servers = serversData.servers.map((server) => ({
     id: server.id,
     name: server.name,
+    address: server.address,
+    username: server.username,
+    port: server.port,
   }));
 
   // Transform workflow data

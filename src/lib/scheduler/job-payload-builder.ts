@@ -1,11 +1,11 @@
 import type { EventWithRelations } from "@/server/storage";
-import { JobType, EventType, RunLocation } from "@/shared/schema";
+import { JobType, EventType, RunLocation, ScriptType } from "@/shared/schema";
 
 export interface JobPayload {
   executionLogId: number;
   input: Record<string, unknown>;
   script?: {
-    type: string;
+    type: ScriptType;
     content: string;
   };
   httpRequest?: {
@@ -54,14 +54,20 @@ export function buildJobPayload(
   switch (jobType) {
     case JobType.SCRIPT:
       jobPayload.script = {
-        type: event.type,
+        type: event.type as ScriptType,
         content: event.content ?? "",
       };
       break;
 
     case JobType.HTTP_REQUEST:
       if (event.httpMethod && event.httpUrl) {
-        const httpRequest: any = {
+        interface HttpRequest {
+          method: string;
+          url: string;
+          headers?: Record<string, string>;
+          body?: string;
+        }
+        const httpRequest: HttpRequest = {
           method: event.httpMethod,
           url: event.httpUrl,
         };

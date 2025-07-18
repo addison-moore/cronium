@@ -924,6 +924,7 @@
     "UnarchiveWorkflow": "Unarchive",
     "WorkflowName": "Workflow Name",
     "TriggerType": "Trigger Type",
+    "Trigger": "Trigger",
     "TriggerSchedule": "Schedule",
     "TriggerWebhook": "Webhook",
     "TriggerManual": "Manual",

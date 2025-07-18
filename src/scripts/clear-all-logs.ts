@@ -38,7 +38,10 @@ async function clearAllLogs() {
     };
   } catch (error) {
     console.error("Error clearing logs:", error);
-    return { success: false, message: `Failed to clear logs: ${error}` };
+    return {
+      success: false,
+      message: `Failed to clear logs: ${String(error)}`,
+    };
   }
 }
 
@@ -52,7 +55,7 @@ async function clearEventLogs(eventId: number) {
       sql`SELECT COUNT(*) FROM events WHERE id = ${eventId}`,
     );
     const countResult = eventExists.rows?.[0] as { count?: string } | undefined;
-    const eventCount = parseInt(countResult?.count || "0", 10);
+    const eventCount = parseInt(countResult?.count ?? "0", 10);
 
     if (eventCount === 0) {
       console.warn(`Warning: Event ${eventId} does not exist in the database.`);
@@ -66,7 +69,7 @@ async function clearEventLogs(eventId: number) {
     const logCountResult = logCountQuery.rows?.[0] as
       | { count?: string }
       | undefined;
-    const logCount = parseInt(logCountResult?.count || "0", 10);
+    const logCount = parseInt(logCountResult?.count ?? "0", 10);
 
     if (logCount === 0) {
       console.log(`No logs found for event/script ID ${eventId}.`);
@@ -85,7 +88,10 @@ async function clearEventLogs(eventId: number) {
     };
   } catch (error) {
     console.error(`Error clearing logs for event ${eventId}:`, error);
-    return { success: false, message: `Failed to clear logs: ${error}` };
+    return {
+      success: false,
+      message: `Failed to clear logs: ${String(error)}`,
+    };
   }
 }
 
@@ -124,7 +130,10 @@ async function clearOldLogs(daysAgo: number) {
     };
   } catch (error) {
     console.error(`Error clearing logs older than ${daysAgo} days:`, error);
-    return { success: false, message: `Failed to clear logs: ${error}` };
+    return {
+      success: false,
+      message: `Failed to clear logs: ${String(error)}`,
+    };
   }
 }
 
@@ -213,4 +222,4 @@ async function main() {
 import { sql } from "drizzle-orm";
 
 // Run the script
-main();
+void main();

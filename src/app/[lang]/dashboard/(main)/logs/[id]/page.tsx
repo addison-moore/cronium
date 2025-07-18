@@ -6,16 +6,7 @@ import { api } from "@/trpc/server";
 import { LogDetailsSkeleton } from "@/components/logs/LogDetailsSkeleton";
 import type { Metadata } from "next";
 
-// Dynamic import the client component
-import dynamic from "next/dynamic";
-
-const LogDetailsClient = dynamic(
-  () => import("./page-client"),
-  {
-    ssr: false,
-    loading: () => <LogDetailsSkeleton />,
-  },
-);
+import LogDetailsClient from "@/components/logs/LogDetailsClient";
 
 interface LogDetailsPageProps {
   params: Promise<{

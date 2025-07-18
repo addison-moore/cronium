@@ -198,7 +198,7 @@ export const monitoringRouter = createTRPCRouter({
           }
 
           // Activity statistics (last 24h, week, month)
-          const periodLogs = {
+          const _periodLogs = {
             last24Hours: logs.filter(
               (log) => new Date(log.startTime) >= periods.day,
             ).length,
@@ -211,7 +211,7 @@ export const monitoringRouter = createTRPCRouter({
           };
 
           // Recent activity (last 10 logs)
-          const recentActivity = logs
+          const _recentActivity = logs
             .sort(
               (a, b) =>
                 new Date(b.startTime).getTime() -
@@ -228,7 +228,7 @@ export const monitoringRouter = createTRPCRouter({
             }));
 
           // System information
-          const systemInfo = input.includeSystemMetrics
+          const _systemInfo = input.includeSystemMetrics
             ? await getSystemInformation()
             : null;
 
@@ -236,7 +236,7 @@ export const monitoringRouter = createTRPCRouter({
           const systemSettings = input.includeSettings
             ? await storage.getAllSettings()
             : [];
-          const settingsObj = systemSettings.reduce(
+          const _settingsObj = systemSettings.reduce(
             (acc, setting) => {
               try {
                 acc[setting.key] = JSON.parse(setting.value) as unknown;

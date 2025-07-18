@@ -84,7 +84,17 @@ export default function DashboardStats() {
 
   // Query for recent activity data
   // Activity endpoint doesn't exist in current trpc setup
-  const activityData: any[] = [];
+  interface ActivityItem {
+    id: string;
+    eventId: number;
+    eventName: string;
+    status: string;
+    startTime: Date;
+    duration: number;
+    workflowId?: number | null;
+    workflowName?: string | null;
+  }
+  const activityData: ActivityItem[] = [];
   const isLoadingActivity = false;
 
   const refreshData = useCallback(async () => {
@@ -96,7 +106,7 @@ export default function DashboardStats() {
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const _endIndex = startIndex + itemsPerPage;
-  const paginatedActivity: any[] = activityData ?? [];
+  const paginatedActivity = activityData ?? [];
 
   // Handle page change
   const handlePageChange = (newPage: number) => {
@@ -214,17 +224,17 @@ export default function DashboardStats() {
           "Recent event and workflow executions"
         }
         data={paginatedActivity.map((activity) => ({
-          id: activity.id,
+          id: Number(activity.id),
           eventId: activity.eventId,
           eventName: activity.eventName,
           status: activity.status as LogStatus,
-          startTime: activity.startTime,
+          startTime: new Date(activity.startTime).toISOString(),
           endTime: null,
           duration: activity.duration,
           workflowId: activity.workflowId ?? null,
           workflowName: activity.workflowName ?? null,
         }))}
-        isLoading={isLoading || (isLoadingActivity as boolean)}
+        isLoading={isLoading || isLoadingActivity}
         onRefresh={refreshData}
         emptyStateMessage={
           t("Dashboard.RecentActivity.EmptyState") ?? "No recent activity"

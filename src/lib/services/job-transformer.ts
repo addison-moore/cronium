@@ -103,7 +103,13 @@ export function transformJobForOrchestrator(job: Job): OrchestratorJob {
 
   // Set HTTP configuration if present
   if (payload.httpRequest) {
-    const http: any = {
+    interface HttpConfig {
+      method: string;
+      url: string;
+      headers: Record<string, string>;
+      body?: string;
+    }
+    const http: HttpConfig = {
       method: payload.httpRequest.method,
       url: payload.httpRequest.url,
       headers: payload.httpRequest.headers ?? {},

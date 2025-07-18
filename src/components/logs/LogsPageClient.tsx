@@ -12,7 +12,7 @@ import { useParams } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { LogStatus } from "@/shared/schema";
 
-export default function LogsClient() {
+export default function LogsPageClient() {
   const params = useParams();
   const lang = params.lang as string;
   const [page, setPage] = useState(1);
@@ -27,8 +27,8 @@ export default function LogsClient() {
     return <LogsPageSkeleton />;
   }
 
-  const logs = data?.logs || [];
-  const total = data?.total || 0;
+  const logs = data?.logs ?? [];
+  const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / limit);
 
   return (

@@ -13,11 +13,11 @@ async function checkJobLogs() {
     console.log(`Status: ${job.status}`);
     console.log(`Type: ${job.type}`);
     console.log(`Event: ${job.eventId}`);
-    console.log(`Created: ${job.createdAt}`);
+    console.log(`Created: ${job.createdAt.toISOString()}`);
 
-    // Check for logs in result field
-    const logs = (job.result as any)?.logs || (job.result as any)?.output;
-    console.log(`Logs:\n${logs || "No logs"}`);
+    const result = job.result as { logs?: string; output?: string } | null;
+    const logs = result?.logs ?? result?.output;
+    console.log(`Logs:\n${logs ?? "No logs"}`);
 
     // Also show the full result for debugging
     if (job.result) {
@@ -29,4 +29,4 @@ async function checkJobLogs() {
   process.exit(0);
 }
 
-checkJobLogs();
+void checkJobLogs();

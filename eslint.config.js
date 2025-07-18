@@ -26,6 +26,7 @@ module.exports = [
       "_scratch/*",
       "**/*.js",
       "**/deprecated/*",
+      "**/archived/*",
       "scripts/*",
       "**/*.mjs",
       "**/*.cjs",

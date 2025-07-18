@@ -5,13 +5,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { MonitoringPageSkeleton } from "@/components/dashboard/DashboardStatsSkeleton";
 import { UserRole } from "@/shared/schema";
-import dynamic from "next/dynamic";
-
-// Dynamic import the client component
-const MonitoringClient = dynamic(() => import("./page-client"), {
-  ssr: false,
-  loading: () => <MonitoringPageSkeleton />,
-});
+import MonitoringClient from "@/components/monitoring/MonitoringClient";
 
 interface MonitoringPageParams {
   params: Promise<{

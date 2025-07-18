@@ -70,46 +70,57 @@ async function getUserTools(
 
       // Handle credentials based on type
       if (typeof rawCredentials === "string") {
-        // First, check if it's a JSON string (unencrypted)
-        try {
-          credentials = JSON.parse(rawCredentials) as Record<string, unknown>;
-        } catch (error) {
-          console.error("Failed to parse tool credentials as JSON:", error);
-          // Not valid JSON, might be encrypted
-          if (tool.encrypted && credentialEncryption.isAvailable()) {
+        // Check if the tool has encrypted credentials first
+        if (tool.encrypted) {
+          // Handle encrypted credentials
+          if (credentialEncryption.isAvailable()) {
             try {
-              // Try to decrypt
-              const decrypted = credentialEncryption.decrypt(
-                rawCredentials as unknown as EncryptedData,
-              );
-              // Try to parse the decrypted value
-              try {
-                credentials = JSON.parse(decrypted as string) as Record<
-                  string,
-                  unknown
-                >;
-              } catch (parseError2) {
-                console.error(
-                  `Failed to parse decrypted credentials for tool ${tool.id}:`,
-                  parseError2,
-                );
-                credentials = {};
+              // Parse the stored encrypted data structure
+              const encryptedData = JSON.parse(rawCredentials) as EncryptedData;
+              // Decrypt the credentials
+              const decrypted = credentialEncryption.decrypt(encryptedData);
+
+              // The decrypted value should already be parsed by credentialEncryption.decrypt
+              // which tries to parse as JSON
+              if (typeof decrypted === "object" && decrypted !== null) {
+                credentials = decrypted as Record<string, unknown>;
+              } else {
+                // If it's a string, try to parse it
+                try {
+                  credentials = JSON.parse(String(decrypted)) as Record<
+                    string,
+                    unknown
+                  >;
+                } catch (parseError) {
+                  console.error(
+                    `Failed to parse decrypted credentials for tool ${tool.id}:`,
+                    parseError,
+                  );
+                  credentials = {};
+                }
               }
-            } catch (decryptError) {
+            } catch (error) {
               console.error(
                 `Failed to decrypt credentials for tool ${tool.id}:`,
-                decryptError,
+                error,
               );
               credentials = {};
             }
-          } else if (tool.encrypted && !credentialEncryption.isAvailable()) {
+          } else {
             console.error(
               `Tool ${tool.id} has encrypted credentials but encryption is not available`,
             );
             credentials = {};
-          } else {
-            // Not encrypted and not valid JSON
-            console.error(`Invalid credentials format for tool ${tool.id}`);
+          }
+        } else {
+          // Not encrypted, try to parse as JSON
+          try {
+            credentials = JSON.parse(rawCredentials) as Record<string, unknown>;
+          } catch (error) {
+            console.error(
+              `Failed to parse tool credentials as JSON for tool ${tool.id}:`,
+              error,
+            );
             credentials = {};
           }
         }

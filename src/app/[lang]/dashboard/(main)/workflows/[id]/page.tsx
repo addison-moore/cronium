@@ -181,8 +181,8 @@ export default function WorkflowDetailsPage({
 
   // Handle workflow data
   useEffect(() => {
-    if (workflowData) {
-      setWorkflow(workflowData.data as any);
+    if (workflowData?.data) {
+      setWorkflow(workflowData.data);
       // Define proper types for workflow data from tRPC
       interface WorkflowNode {
         id: number;
@@ -209,8 +209,8 @@ export default function WorkflowDetailsPage({
       }
 
       // Convert workflow nodes and connections to local format
-      const workflowDataTyped = workflowData.data as any;
-      const typedNodes = workflowDataTyped?.nodes as WorkflowNode[] | undefined;
+      const workflowDetails = workflowData.data;
+      const typedNodes = workflowDetails?.nodes as WorkflowNode[] | undefined;
       const nodes: LocalWorkflowNode[] = (typedNodes ?? []).map((node) => ({
         id: `node-${String(node.id)}`,
         type: "workflowNode",
@@ -229,7 +229,7 @@ export default function WorkflowDetailsPage({
       }));
       setWorkflowNodes(nodes);
 
-      const typedConnections = workflowDataTyped?.connections as
+      const typedConnections = workflowDetails?.connections as
         | WorkflowConnection[]
         | undefined;
       const edges: WorkflowEdge[] = (typedConnections ?? []).map((conn) => ({
