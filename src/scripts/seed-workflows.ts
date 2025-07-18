@@ -87,37 +87,37 @@ async function seedWorkflows() {
     existingScripts,
     EventType.BASH,
     "Backup",
-  );
+  ) as (typeof existingScripts)[0] | undefined;
   const reportScript = findScriptByTypeAndName(
     existingScripts,
     EventType.PYTHON,
     "Generate Report",
-  );
+  ) as (typeof existingScripts)[0] | undefined;
   const emailScript = findScriptByTypeAndName(
     existingScripts,
     EventType.NODEJS,
     "Send Email",
-  );
+  ) as (typeof existingScripts)[0] | undefined;
 
   // If we have the scripts, create the nodes and connections
   if (backupScript && reportScript && emailScript) {
     // Create nodes
     const backupNode = await createWorkflowNode({
-      workflowId: dailyReportWorkflow!.id,
+      workflowId: dailyReportWorkflow.id,
       eventId: backupScript.id,
       position_x: 100,
       position_y: 100,
     });
 
     const reportNode = await createWorkflowNode({
-      workflowId: dailyReportWorkflow!.id,
+      workflowId: dailyReportWorkflow.id,
       eventId: reportScript.id,
       position_x: 400,
       position_y: 100,
     });
 
     const emailNode = await createWorkflowNode({
-      workflowId: dailyReportWorkflow!.id,
+      workflowId: dailyReportWorkflow.id,
       eventId: emailScript.id,
       position_x: 700,
       position_y: 100,
@@ -130,14 +130,14 @@ async function seedWorkflows() {
 
     // Create connections
     await createWorkflowConnection({
-      workflowId: dailyReportWorkflow!.id,
+      workflowId: dailyReportWorkflow.id,
       sourceNodeId: backupNode.id,
       targetNodeId: reportNode.id,
       connectionType: ConnectionType.ON_SUCCESS,
     });
 
     await createWorkflowConnection({
-      workflowId: dailyReportWorkflow!.id,
+      workflowId: dailyReportWorkflow.id,
       sourceNodeId: reportNode.id,
       targetNodeId: emailNode.id,
       connectionType: ConnectionType.ALWAYS,
@@ -177,37 +177,37 @@ async function seedWorkflows() {
     existingScripts,
     EventType.HTTP_REQUEST,
     "API Check",
-  );
+  ) as (typeof existingScripts)[0] | undefined;
   const notifyScript = findScriptByTypeAndName(
     existingScripts,
     EventType.NODEJS,
     "Send Notification",
-  );
+  ) as (typeof existingScripts)[0] | undefined;
   const logScript = findScriptByTypeAndName(
     existingScripts,
     EventType.BASH,
     "Log Event",
-  );
+  ) as (typeof existingScripts)[0] | undefined;
 
   // If we have the scripts, create the nodes and connections
   if (apiCheckScript && notifyScript && logScript) {
     // Create nodes
     const apiNode = await createWorkflowNode({
-      workflowId: healthCheckWorkflow!.id,
+      workflowId: healthCheckWorkflow.id,
       eventId: apiCheckScript.id,
       position_x: 100,
       position_y: 100,
     });
 
     const notifyNode = await createWorkflowNode({
-      workflowId: healthCheckWorkflow!.id,
+      workflowId: healthCheckWorkflow.id,
       eventId: notifyScript.id,
       position_x: 400,
       position_y: 50,
     });
 
     const logNode = await createWorkflowNode({
-      workflowId: healthCheckWorkflow!.id,
+      workflowId: healthCheckWorkflow.id,
       eventId: logScript.id,
       position_x: 400,
       position_y: 200,
@@ -220,14 +220,14 @@ async function seedWorkflows() {
 
     // Create connections
     await createWorkflowConnection({
-      workflowId: healthCheckWorkflow!.id,
+      workflowId: healthCheckWorkflow.id,
       sourceNodeId: apiNode.id,
       targetNodeId: notifyNode.id,
       connectionType: ConnectionType.ON_FAILURE,
     });
 
     await createWorkflowConnection({
-      workflowId: healthCheckWorkflow!.id,
+      workflowId: healthCheckWorkflow.id,
       sourceNodeId: apiNode.id,
       targetNodeId: logNode.id,
       connectionType: ConnectionType.ALWAYS,
@@ -262,17 +262,17 @@ async function seedWorkflows() {
     existingScripts,
     EventType.PYTHON,
     "Create User",
-  );
+  ) as (typeof existingScripts)[0] | undefined;
   const setupPermissionsScript = findScriptByTypeAndName(
     existingScripts,
     EventType.BASH,
     "Set Permissions",
-  );
+  ) as (typeof existingScripts)[0] | undefined;
   const welcomeEmailScript = findScriptByTypeAndName(
     existingScripts,
     EventType.NODEJS,
     "Welcome Email",
-  );
+  ) as (typeof existingScripts)[0] | undefined;
 
   // If we have the scripts, create the nodes and connections
   if (createUserScript && setupPermissionsScript && welcomeEmailScript) {
@@ -326,7 +326,12 @@ async function seedWorkflows() {
 }
 
 // Helper function to create a workflow
-async function createWorkflow(data: any) {
+async function createWorkflow(
+  data: Omit<
+    typeof workflows.$inferInsert,
+    "runLocation" | "createdAt" | "updatedAt"
+  >,
+) {
   const [workflow] = await db
     .insert(workflows)
     .values({
@@ -341,7 +346,9 @@ async function createWorkflow(data: any) {
 }
 
 // Helper function to create a workflow node
-async function createWorkflowNode(data: any) {
+async function createWorkflowNode(
+  data: Omit<typeof workflowNodes.$inferInsert, "createdAt" | "updatedAt">,
+) {
   const [node] = await db
     .insert(workflowNodes)
     .values({
@@ -355,7 +362,12 @@ async function createWorkflowNode(data: any) {
 }
 
 // Helper function to create a workflow connection
-async function createWorkflowConnection(data: any) {
+async function createWorkflowConnection(
+  data: Omit<
+    typeof workflowConnections.$inferInsert,
+    "createdAt" | "updatedAt"
+  >,
+) {
   const [connection] = await db
     .insert(workflowConnections)
     .values({
@@ -370,7 +382,7 @@ async function createWorkflowConnection(data: any) {
 
 // Helper function to find a script by type and partial name
 function findScriptByTypeAndName(
-  scriptsList: any[],
+  scriptsList: Array<typeof events.$inferSelect>,
   type: EventType,
   partialName: string,
 ) {

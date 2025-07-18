@@ -28,7 +28,7 @@ export function MonacoEditorFallback({
   readOnly?: boolean;
 }) {
   return (
-    <div className="bg-muted/50 rounded-md border p-4">
+    <div className="border-border bg-muted/50 rounded-md border p-4">
       <div className="mb-2 flex items-center justify-between">
         <div className="text-muted-foreground flex items-center gap-2 text-sm">
           <Code className="h-4 w-4" />
@@ -44,7 +44,7 @@ export function MonacoEditorFallback({
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
         readOnly={readOnly}
-        className="bg-background min-h-[300px] w-full resize-y rounded border p-3 font-mono text-sm"
+        className="border-border bg-background min-h-[300px] w-full resize-y rounded border p-3 font-mono text-sm"
         placeholder={readOnly ? "" : "Enter your code here..."}
       />
     </div>
@@ -73,7 +73,7 @@ export function TerminalFallback({
   };
 
   return (
-    <div className="rounded-md border bg-black p-4 text-green-400">
+    <div className="border-border rounded-md border bg-black p-4 text-green-400">
       <div className="mb-3 flex items-center gap-2 text-xs">
         <Terminal className="h-4 w-4" />
         <span>Terminal (Basic Mode)</span>
@@ -113,7 +113,7 @@ export function WorkflowCanvasFallback({
   onNodeClick?: (nodeId: string) => void;
 }) {
   return (
-    <div className="min-h-[400px] rounded-md border p-4">
+    <div className="border-border min-h-[400px] rounded-md border p-4">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Workflow className="h-5 w-5" />
@@ -221,7 +221,7 @@ export function FeatureFallback({
   customMessage?: string;
 }) {
   return (
-    <Card className="border-dashed">
+    <Card className="border-border border-dashed">
       <CardContent className="pt-6">
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <div className="bg-muted mb-4 rounded-full p-3">

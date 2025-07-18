@@ -1,5 +1,0 @@
-Show continuous processing status and progress
-
-!echo "📊 Continuous Lint Fix Progress"
-!echo "================================"
-!python3 scripts/claude-continuous-processor.py --status

@@ -637,7 +637,7 @@ export function WebhookMonitor({ webhookKey, onClose }: WebhookMonitorProps) {
                   (activity: WebhookActivity, index: number) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between rounded border p-3"
+                      className="border-border flex items-center justify-between rounded border p-3"
                     >
                       <div className="flex items-center space-x-3">
                         {getStatusIcon(activity.status)}

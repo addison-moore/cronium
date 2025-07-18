@@ -389,7 +389,7 @@ export default function WorkflowForm({
                         control={form.control}
                         name="useCronScheduling"
                         render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                          <FormItem className="border-border flex flex-row items-center justify-between rounded-lg border p-4">
                             <div className="space-y-0.5">
                               <FormLabel className="text-base">
                                 Use Cron Expression
@@ -514,7 +514,7 @@ export default function WorkflowForm({
                   control={form.control}
                   name="shared"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <FormItem className="border-border flex flex-row items-center justify-between rounded-lg border p-4">
                       <div className="space-y-0.5">
                         <FormLabel className="text-base">
                           Make workflow publicly shareable
@@ -537,7 +537,7 @@ export default function WorkflowForm({
                   control={form.control}
                   name="overrideEventServers"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <FormItem className="border-border flex flex-row items-center justify-between rounded-lg border p-4">
                       <div className="space-y-0.5">
                         <FormLabel className="text-base">
                           Override Event Server Settings

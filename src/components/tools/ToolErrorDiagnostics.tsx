@@ -210,7 +210,10 @@ function DiagnosticsContent({
     <ScrollArea className="h-[400px] pr-4">
       <div className="space-y-4">
         {issues.map((issue) => (
-          <div key={issue.id} className="space-y-3 rounded-lg border p-4">
+          <div
+            key={issue.id}
+            className="border-border space-y-3 rounded-lg border p-4"
+          >
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3">
                 {getSeverityIcon(issue.severity)}

@@ -228,7 +228,7 @@ export function ToolActionTemplateForm({
         </div>
 
         {/* Show selected tool and action (read-only) */}
-        <div className="bg-muted/50 rounded-lg border p-4">
+        <div className="border-border bg-muted/50 rounded-lg border p-4">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <Label className="text-muted-foreground text-sm">Tool:</Label>
@@ -290,7 +290,7 @@ export function ToolActionTemplateForm({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <div className="rounded-lg border p-4">
+            <div className="border-border rounded-lg border p-4">
               <TemplateActionParameterForm
                 action={currentAction}
                 value={parameters}

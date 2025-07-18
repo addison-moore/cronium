@@ -764,7 +764,7 @@ export default function ErrorRecoverySuggestions({
         )}
 
         {/* Additional Help */}
-        <div className="bg-muted/50 rounded-lg border p-4">
+        <div className="border-border bg-muted/50 rounded-lg border p-4">
           <h4 className="mb-3 flex items-center gap-2 text-sm font-medium">
             <HelpCircle className="h-4 w-4" />
             Need More Help?

@@ -1,20 +1,7 @@
 // Logging operations module
 import { db } from "../../db";
-import {
-  logs,
-  events,
-  workflows,
-} from "../../../shared/schema";
-import {
-  eq,
-  and,
-  or,
-  desc,
-  sql,
-  count,
-  gte,
-  lte,
-} from "drizzle-orm";
+import { logs, events, workflows } from "../../../shared/schema";
+import { eq, and, desc, sql, count, gte, lte } from "drizzle-orm";
 import type { Log, InsertLog, LogFilters } from "../types";
 
 export class LogStorage {

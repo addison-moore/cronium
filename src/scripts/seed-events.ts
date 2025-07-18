@@ -629,7 +629,9 @@ if __name__ == "__main__":
 }
 
 // Helper function to create a script
-async function createScript(data: any) {
+async function createScript(
+  data: Omit<typeof events.$inferInsert, "createdAt" | "updatedAt">,
+) {
   const [script] = await db
     .insert(events)
     .values({

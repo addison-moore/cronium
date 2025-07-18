@@ -10,7 +10,7 @@ import {
   type ConditionalAction,
 } from "../../../shared/schema";
 import { db } from "../../db";
-import { eq, and, inArray, desc } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import type {
   Workflow,
   InsertWorkflow,

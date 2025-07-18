@@ -65,7 +65,7 @@ export function LogsPageSkeleton() {
               <CardContent>
                 <div className="space-y-4">
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="rounded-lg border p-4">
+                    <div key={i} className="rounded-lg border border-border p-4">
                       <div className="mb-2 flex items-center justify-between">
                         <Skeleton className="h-5 w-48" />
                         <Skeleton className="h-6 w-20" />

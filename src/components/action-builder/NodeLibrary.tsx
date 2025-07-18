@@ -91,7 +91,7 @@ export function NodeLibrary() {
                       key={type}
                       draggable
                       onDragStart={(e) => handleDragStart(e, type as NodeType)}
-                      className="hover:bg-accent cursor-move rounded-lg border p-3 transition-colors"
+                      className="border-border hover:bg-accent cursor-move rounded-lg border p-3 transition-colors"
                     >
                       <div className="flex items-center gap-3">
                         <Icon className="h-5 w-5" />
@@ -110,7 +110,7 @@ export function NodeLibrary() {
           </TabsContent>
 
           <TabsContent value="actions" className="mt-0 h-full">
-            <div className="border-b p-4">
+            <div className="border-border border-b p-4">
               <div className="relative">
                 <Search className="text-muted-foreground absolute top-2.5 left-2 h-4 w-4" />
                 <Input
@@ -124,7 +124,7 @@ export function NodeLibrary() {
 
             <div className="flex h-[calc(100vh-280px)]">
               {/* Tool list */}
-              <div className="w-24 border-r">
+              <div className="border-border w-24 border-r">
                 <ScrollArea className="h-full">
                   <div className="p-2">
                     {tools.map((tool: (typeof tools)[0]) => {
@@ -165,7 +165,7 @@ export function NodeLibrary() {
                                 action,
                               })
                             }
-                            className="hover:bg-accent cursor-move rounded-lg border p-3 transition-colors"
+                            className="border-border hover:bg-accent cursor-move rounded-lg border p-3 transition-colors"
                           >
                             <div className="mb-1 flex items-center justify-between">
                               <div className="font-medium">{action.name}</div>

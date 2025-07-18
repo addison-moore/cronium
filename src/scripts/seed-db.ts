@@ -50,7 +50,7 @@ async function seedDefaultSettings() {
   const aiSettings = [
     { key: "aiEnabled", value: "false" },
     { key: "aiModel", value: "gpt-4o" },
-    { key: "openaiApiKey", value: env.OPENAI_API_KEY || "" },
+    { key: "openaiApiKey", value: env.OPENAI_API_KEY ?? "" },
   ];
 
   // Check and insert each AI setting if it doesn't exist
@@ -89,4 +89,4 @@ async function main() {
   }
 }
 
-main();
+void main();

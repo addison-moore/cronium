@@ -469,7 +469,7 @@ export default function TestDataGenerator({
                     </p>
                   </div>
 
-                  <div className="bg-muted/30 rounded-lg border p-4">
+                  <div className="border-border bg-muted/30 rounded-lg border p-4">
                     <div className="mb-2 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <FileJson className="text-muted-foreground h-4 w-4" />

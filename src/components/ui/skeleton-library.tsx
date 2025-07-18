@@ -38,7 +38,7 @@ export function CardSkeleton({
         </div>
       </CardContent>
       {showFooter && (
-        <div className="border-t px-6 py-4">
+        <div className="border-border border-t px-6 py-4">
           <Skeleton className="h-4 w-24" />
         </div>
       )}
@@ -107,7 +107,7 @@ export function ListSkeleton({
       {Array.from({ length: items }).map((_, i) => (
         <div
           key={i}
-          className="flex items-center justify-between rounded-lg border p-4"
+          className="border-border flex items-center justify-between rounded-lg border p-4"
         >
           <div className="flex items-center space-x-3">
             {showIcon && <Skeleton className="h-8 w-8 rounded" />}
@@ -289,7 +289,7 @@ export function EmptyStateSkeleton() {
 
 export function SidebarSkeleton() {
   return (
-    <div className="bg-background h-full w-64 space-y-4 border-r p-4">
+    <div className="border-border bg-background h-full w-64 space-y-4 border-r p-4">
       <Skeleton className="mb-6 h-8 w-32" />
       <div className="space-y-2">
         {Array.from({ length: 8 }).map((_, i) => (
@@ -318,7 +318,7 @@ export function TabsSkeleton({
 }: TabsSkeletonProps) {
   return (
     <div className="space-y-4">
-      <div className="flex space-x-4 border-b">
+      <div className="border-border flex space-x-4 border-b">
         {Array.from({ length: tabCount }).map((_, i) => (
           <Skeleton key={i} className="h-10 w-24" />
         ))}
@@ -338,7 +338,7 @@ export function TabsSkeleton({
 
 export function NotificationSkeleton() {
   return (
-    <div className="flex items-start space-x-3 rounded-lg border p-4">
+    <div className="border-border flex items-start space-x-3 rounded-lg border p-4">
       <Skeleton className="mt-0.5 h-5 w-5" />
       <div className="flex-1 space-y-2">
         <Skeleton className="h-4 w-32" />

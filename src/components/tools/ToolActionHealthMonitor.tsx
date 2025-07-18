@@ -239,7 +239,7 @@ export default function ToolActionHealthMonitor({
             <div className="space-y-6">
               {/* Overall Health Summary */}
               {healthData.summary && (
-                <div className="rounded-lg border p-4">
+                <div className="border-border rounded-lg border p-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="text-sm font-medium">
                       Overall Health Score

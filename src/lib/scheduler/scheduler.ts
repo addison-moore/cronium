@@ -764,8 +764,8 @@ export class ScriptScheduler {
     const basePayload = buildJobPayload(event, log.id, input);
     const jobPayload = {
       ...basePayload,
-      workflowId: workflowId,
-      workflowExecutionId: workflowExecutionId,
+      ...(workflowId !== undefined && { workflowId }),
+      ...(workflowExecutionId !== undefined && { workflowExecutionId }),
     };
 
     // Create job in the queue
@@ -773,7 +773,7 @@ export class ScriptScheduler {
       eventId: event.id,
       userId: String(event.userId),
       type: jobType,
-      payload: jobPayload as any,
+      payload: jobPayload,
       metadata: {
         eventName: event.name,
         triggeredBy: "workflow",

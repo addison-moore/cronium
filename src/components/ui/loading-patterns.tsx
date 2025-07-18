@@ -25,7 +25,7 @@ const TableSkeleton = ({
 }) => (
   <div className="w-full">
     {Array.from({ length: rows }).map((_, i) => (
-      <div key={i} className="flex gap-4 border-b p-4">
+      <div key={i} className="border-border flex gap-4 border-b p-4">
         {Array.from({ length: columns }).map((_, j) => (
           <div
             key={j}
@@ -209,7 +209,9 @@ export function TabbedDetailPattern() {
 
       {/* Tab content loads on demand */}
       <div className="space-y-4">
-        <div className="border-b">{/* Tab buttons render immediately */}</div>
+        <div className="border-border border-b">
+          {/* Tab buttons render immediately */}
+        </div>
 
         <Suspense fallback={<DetailPageSkeleton />}>
           {/* Active tab content */}

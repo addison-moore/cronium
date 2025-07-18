@@ -2,7 +2,7 @@
 
 import { ErrorBoundaryCard } from "@/components/error/error-boundary-card";
 
-export default function GlobalError({
+export default function Error({
   error,
   reset,
 }: {
@@ -10,17 +10,13 @@ export default function GlobalError({
   reset: () => void;
 }) {
   return (
-    <html>
-      <body>
-        <ErrorBoundaryCard
-          error={error}
-          reset={reset}
-          title="Application Error"
-          description="An unexpected error occurred. Please refresh the page or try again later."
-          showHomeButton={true}
-          lang="en"
-        />
-      </body>
-    </html>
+    <ErrorBoundaryCard
+      error={error}
+      reset={reset}
+      title="Application Error"
+      description="An unexpected error occurred. Please refresh the page or try again later."
+      showHomeButton={true}
+      lang="en"
+    />
   );
 }

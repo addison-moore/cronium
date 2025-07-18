@@ -477,7 +477,7 @@ export function ExecutionLogsViewer({
             {/* Logs List */}
             <ScrollArea
               ref={scrollAreaRef}
-              className="h-[500px] rounded-lg border"
+              className="border-border h-[500px] rounded-lg border"
             >
               <div className="space-y-2 p-4">
                 {filteredLogs.length === 0 ? (

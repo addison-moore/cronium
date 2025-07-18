@@ -115,7 +115,7 @@ export default function DashboardLayoutClient({
       icon: <Settings className="h-5 w-5" />,
     },
     {
-      name: t("Monitoring.title"),
+      name: t("Monitoring.Title"),
       href: `/${locale}/dashboard/monitoring`,
       icon: <SquareActivity className="h-5 w-5" />,
       permission: "monitoring",

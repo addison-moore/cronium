@@ -434,7 +434,7 @@ export default function ErrorHandler({
 
           {/* Context Information */}
           {error.context && Object.keys(error.context).length > 0 && (
-            <div className="bg-muted/50 rounded-lg border p-3">
+            <div className="border-border bg-muted/50 rounded-lg border p-3">
               <h4 className="mb-2 text-sm font-medium">Context</h4>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 {error.context.toolName && (
@@ -563,7 +563,7 @@ export default function ErrorHandler({
                     </TabsList>
 
                     <TabsContent value="details" className="mt-4">
-                      <ScrollArea className="bg-muted/50 h-[200px] rounded-lg border p-3">
+                      <ScrollArea className="border-border bg-muted/50 h-[200px] rounded-lg border p-3">
                         <pre className="text-xs">
                           {JSON.stringify(error.details ?? {}, null, 2)}
                         </pre>
@@ -571,7 +571,7 @@ export default function ErrorHandler({
                     </TabsContent>
 
                     <TabsContent value="stack" className="mt-4">
-                      <ScrollArea className="bg-muted/50 h-[200px] rounded-lg border p-3">
+                      <ScrollArea className="border-border bg-muted/50 h-[200px] rounded-lg border p-3">
                         <pre className="font-mono text-xs">
                           {error.stack ?? "No stack trace available"}
                         </pre>
@@ -579,7 +579,7 @@ export default function ErrorHandler({
                     </TabsContent>
 
                     <TabsContent value="raw" className="mt-4">
-                      <ScrollArea className="bg-muted/50 h-[200px] rounded-lg border p-3">
+                      <ScrollArea className="border-border bg-muted/50 h-[200px] rounded-lg border p-3">
                         <pre className="text-xs">
                           {JSON.stringify(
                             {

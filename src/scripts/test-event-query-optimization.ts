@@ -19,32 +19,43 @@ async function testEventQueryOptimization() {
     // Test 1: Direct query test (no cache)
     console.log("1. Testing direct optimized query (no cache):");
     // Access private method via prototype
-    const storageProto = Object.getPrototypeOf(storage);
+    const storageProto = Object.getPrototypeOf(storage) as {
+      getEventWithRelationsOptimized?: (eventId: number) => Promise<unknown>;
+    };
     const directStart = Date.now();
-    const directResult = await storageProto.getEventWithRelationsOptimized.call(
-      storage,
-      eventId,
-    );
+    const directResult =
+      (await storageProto.getEventWithRelationsOptimized?.call(
+        storage,
+        eventId,
+      )) as
+        | {
+            envVars: unknown[];
+            servers: unknown[];
+            successEvents: unknown[];
+            failEvents: unknown[];
+            alwaysEvents: unknown[];
+          }
+        | undefined;
     const directTime = Date.now() - directStart;
     console.log(`   Time: ${directTime}ms`);
     console.log(
-      `   Relations: envVars=${directResult?.envVars.length}, servers=${directResult?.servers.length}`,
+      `   Relations: envVars=${directResult?.envVars.length ?? 0}, servers=${directResult?.servers.length ?? 0}`,
     );
     console.log(
-      `   Conditional actions: success=${directResult?.successEvents.length}, fail=${directResult?.failEvents.length}, always=${directResult?.alwaysEvents.length}`,
+      `   Conditional actions: success=${directResult?.successEvents.length ?? 0}, fail=${directResult?.failEvents.length ?? 0}, always=${directResult?.alwaysEvents.length ?? 0}`,
     );
 
     // Test 3: Cached version (first call - cache miss)
     console.log("\n3. Testing cached version (cache miss):");
     const cachedMissStart = Date.now();
-    const cachedMissResult = await storage.getEventWithRelations(eventId);
+    const _cachedMissResult = await storage.getEventWithRelations(eventId);
     const cachedMissTime = Date.now() - cachedMissStart;
     console.log(`   Time: ${cachedMissTime}ms`);
 
     // Test 4: Cached version (second call - cache hit)
     console.log("\n4. Testing cached version (cache hit):");
     const cachedHitStart = Date.now();
-    const cachedHitResult = await storage.getEventWithRelations(eventId);
+    const _cachedHitResult = await storage.getEventWithRelations(eventId);
     const cachedHitTime = Date.now() - cachedHitStart;
     console.log(`   Time: ${cachedHitTime}ms`);
 
@@ -74,8 +85,9 @@ async function testEventQueryOptimization() {
 
     if (indexes.rows.length > 0) {
       console.log("Indexes found:");
-      indexes.rows.forEach((index: any) => {
-        console.log(`- ${index.tablename}: ${index.indexname}`);
+      indexes.rows.forEach((index: unknown) => {
+        const idx = index as { tablename: string; indexname: string };
+        console.log(`- ${idx.tablename}: ${idx.indexname}`);
       });
     } else {
       console.log(

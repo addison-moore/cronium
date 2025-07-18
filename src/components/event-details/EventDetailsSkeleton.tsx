@@ -92,7 +92,7 @@ export function EventDetailsSkeleton() {
             <CardContent>
               <div className="space-y-4">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="rounded-lg border p-4">
+                  <div key={i} className="border-border rounded-lg border p-4">
                     <div className="mb-2 flex items-center justify-between">
                       <Skeleton className="h-4 w-48" />
                       <Skeleton className="h-4 w-24" />

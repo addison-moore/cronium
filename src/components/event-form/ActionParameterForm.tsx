@@ -170,7 +170,7 @@ export default function ActionParameterForm({
             {formatFieldName(key)}
             {!isOptional && <span className="ml-1 text-red-500">*</span>}
           </Label>
-          <div className="rounded-md border">
+          <div className="border-border rounded-md border">
             <MonacoEditor
               value={
                 typeof fieldValue === "string"

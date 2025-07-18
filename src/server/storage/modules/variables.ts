@@ -2,10 +2,10 @@ import { db } from "../../db";
 import {
   envVars,
   userVariables,
-  EnvVar,
-  InsertEnvVar,
-  UserVariable,
-  InsertUserVariable,
+  type EnvVar,
+  type InsertEnvVar,
+  type UserVariable,
+  type InsertUserVariable,
 } from "../../../shared/schema";
 import { eq, and, asc } from "drizzle-orm";
 import {

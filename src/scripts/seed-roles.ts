@@ -48,7 +48,7 @@ async function seedRoles() {
     if (usersWithoutRoles.length > 0) {
       await db
         .update(users)
-        .set({ roleId: defaultRole!.id })
+        .set({ roleId: defaultRole.id })
         .where(isNull(users.roleId));
 
       console.log(
@@ -64,4 +64,4 @@ async function seedRoles() {
 }
 
 // Run the seeding function
-seedRoles();
+void seedRoles();

@@ -178,33 +178,3 @@ export class RateLimitService {
     };
   }
 }
-
-/**
- * Create rate limiting middleware for tRPC
- * @param maxRequests - Maximum requests allowed
- * @param windowMs - Time window in milliseconds
- * @returns Rate limiting middleware
- */
-export function createRateLimitMiddleware(maxRequests = 100, windowMs = 60000) {
-  return async ({
-    ctx,
-    path,
-    next,
-  }: {
-    ctx: { session?: { user?: { id: string } } | null; headers?: Headers };
-    path: string;
-    next: () => Promise<unknown>;
-  }) => {
-    const identifier =
-      ctx.session?.user?.id ??
-      ctx.headers?.get?.("x-forwarded-for") ??
-      "anonymous";
-
-    await RateLimitService.checkLimit(identifier, path, {
-      maxRequests,
-      windowMs,
-    });
-
-    return next();
-  };
-}

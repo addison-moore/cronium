@@ -15,7 +15,7 @@ export function CodeEditorSkeleton() {
 export function TerminalSkeleton() {
   return (
     <div className="w-full space-y-2">
-      <div className="bg-background flex items-center space-x-2 rounded-t-lg border p-2">
+      <div className="bg-background border-border flex items-center space-x-2 rounded-t-lg border p-2">
         <Skeleton className="h-3 w-3 rounded-full" />
         <Skeleton className="h-3 w-3 rounded-full" />
         <Skeleton className="h-3 w-3 rounded-full" />
@@ -27,7 +27,7 @@ export function TerminalSkeleton() {
 
 export function WorkflowCanvasSkeleton() {
   return (
-    <div className="bg-muted/10 flex h-[600px] w-full items-center justify-center rounded-lg border">
+    <div className="border-border bg-muted/10 flex h-[600px] w-full items-center justify-center rounded-lg border">
       <div className="space-y-4 text-center">
         <Skeleton className="mx-auto h-12 w-12 rounded-full" />
         <Skeleton className="h-4 w-48" />
@@ -79,7 +79,7 @@ export function FormSkeleton() {
 
 export function ActionBuilderSkeleton() {
   return (
-    <div className="bg-muted/10 flex h-[500px] w-full items-center justify-center rounded-lg border">
+    <div className="border-border bg-muted/10 flex h-[500px] w-full items-center justify-center rounded-lg border">
       <div className="space-y-4 text-center">
         <Skeleton className="mx-auto h-16 w-16 rounded-lg" />
         <Skeleton className="h-4 w-48" />

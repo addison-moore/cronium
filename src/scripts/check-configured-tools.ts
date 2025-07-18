@@ -65,7 +65,7 @@ async function checkConfiguredTools() {
           const redactedUrl = url.substring(0, 30) + "...";
           console.log(`   Webhook: ${redactedUrl}`);
         }
-      } catch (_e) {
+      } catch {
         console.log(`   Webhook: [Unable to parse]`);
       }
       console.log();

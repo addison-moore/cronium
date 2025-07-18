@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function NavigationSkeleton() {
   return (
-    <div className="bg-background fixed inset-y-0 left-0 hidden w-64 flex-col border-r md:flex">
+    <div className="border-border bg-background fixed inset-y-0 left-0 hidden w-64 flex-col border-r md:flex">
       <div className="flex h-full flex-col">
         {/* Logo section */}
         <div className="flex items-center justify-between border-b p-4">
@@ -52,7 +52,7 @@ export function NavigationSkeleton() {
 
 export function MobileNavigationSkeleton() {
   return (
-    <div className="bg-background fixed top-0 right-0 left-0 z-30 flex h-16 items-center justify-between border-b px-4 shadow-sm md:hidden">
+    <div className="border-border bg-background fixed top-0 right-0 left-0 z-30 flex h-16 items-center justify-between border-b px-4 shadow-sm md:hidden">
       <Skeleton className="h-8 w-28" />
       <div className="flex items-center gap-2">
         <Skeleton className="h-8 w-8 rounded-md" />

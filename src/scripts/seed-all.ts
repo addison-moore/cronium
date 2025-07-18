@@ -25,4 +25,4 @@ async function seedAll() {
 }
 
 // Run the function
-seedAll();
+void seedAll();

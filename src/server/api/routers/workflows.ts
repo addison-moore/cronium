@@ -27,6 +27,7 @@ import {
   workflowLogsSchema,
   bulkWorkflowOperationSchema,
   workflowDownloadSchema,
+  workflowFilterSchema,
 } from "@shared/schemas/workflows";
 import { storage, type WorkflowWithRelations } from "@/server/storage";
 import { EventStatus, LogStatus } from "@shared/schema";
@@ -729,5 +730,57 @@ export const workflowsRouter = createTRPCRouter({
           cause: error,
         });
       }
+    }),
+
+  // Get lightweight workflow data for filters/dropdowns
+  getForFilters: protectedProcedure
+    .input(workflowFilterSchema)
+    .query(async ({ ctx, input }) => {
+      return withErrorHandling(
+        async () => {
+          const userId = ctx.session.user.id;
+
+          // Get all workflows for the user
+          const workflows = await storage.getAllWorkflows(userId);
+
+          // Apply filters if provided
+          let filteredWorkflows = workflows;
+
+          if (input.search) {
+            const searchLower = input.search.toLowerCase();
+            filteredWorkflows = filteredWorkflows.filter((workflow) =>
+              workflow.name.toLowerCase().includes(searchLower),
+            );
+          }
+
+          if (input.status) {
+            filteredWorkflows = filteredWorkflows.filter(
+              (workflow) => workflow.status === input.status,
+            );
+          }
+
+          // Apply pagination
+          const start = input.offset;
+          const end = start + input.limit;
+          const paginatedWorkflows = filteredWorkflows.slice(start, end);
+
+          // Return only id and name for each workflow
+          const lightweightWorkflows = paginatedWorkflows.map((workflow) => ({
+            id: workflow.id,
+            name: workflow.name,
+          }));
+
+          return {
+            workflows: lightweightWorkflows,
+            total: filteredWorkflows.length,
+            hasMore: end < filteredWorkflows.length,
+          };
+        },
+        {
+          component: "workflowsRouter",
+          operationName: "getForFilters",
+          userId: ctx.session.user.id,
+        },
+      );
     }),
 });

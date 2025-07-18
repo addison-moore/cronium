@@ -59,11 +59,13 @@ async function quickTest() {
   console.log("Job should be picked up by orchestrator...");
 
   // Don't clean up immediately so we can debug
-  setTimeout(async () => {
-    await db.delete(jobs).where(eq(jobs.id, jobId));
-    await db.delete(events).where(eq(events.id, event.id));
-    console.log("Cleaned up test data");
-    process.exit(0);
+  setTimeout(() => {
+    void (async () => {
+      await db.delete(jobs).where(eq(jobs.id, jobId));
+      await db.delete(events).where(eq(events.id, event.id));
+      console.log("Cleaned up test data");
+      process.exit(0);
+    })();
   }, 30000);
 }
 

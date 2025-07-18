@@ -13,7 +13,7 @@ import {
   UserRole,
 } from "../../../shared/schema";
 import type { User, InsertUser } from "../types";
-import { eq, or, inArray, sql } from "drizzle-orm";
+import { eq, or, inArray } from "drizzle-orm";
 import {
   encryptSensitiveData,
   encryptionService,

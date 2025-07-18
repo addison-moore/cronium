@@ -3,7 +3,7 @@ import { promisify } from "util";
 import { appRouter } from "@/server/api/root";
 import { createCallerFactory } from "@/server/api/trpc";
 import { db } from "@/server/db";
-import { authOptions } from "@/lib/auth";
+// import { authOptions } from "@/lib/auth";
 import {
   users,
   jobs,
@@ -49,7 +49,7 @@ async function testSidecarSimple() {
       user: {
         id: testUser!.id,
         email: testUser!.email,
-        name: testUser!.firstName || "Test User",
+        name: testUser!.firstName ?? "Test User",
         role: testUser!.role,
         status: UserStatus.ACTIVE,
       },
@@ -89,7 +89,6 @@ echo "Test complete."`,
 
     // Monitor
     console.log("⏳ Monitoring...\n");
-    let completed = false;
     let sidecarId = "";
 
     for (let i = 0; i < 15; i++) {
@@ -115,9 +114,9 @@ echo "Test complete."`,
         job.status === JobStatus.COMPLETED ||
         job.status === JobStatus.FAILED
       ) {
-        completed = true;
-        const output = (job.result as any)?.output || "No logs";
-        console.log(`\n📋 Job Logs:\n${output}\n`);
+        // Job completed
+        const output = (job.result as { output?: string })?.output ?? "No logs";
+        console.log(`\n📋 Job Logs:\n${String(output)}\n`);
         break;
       }
     }
@@ -131,14 +130,22 @@ echo "Test complete."`,
         `docker inspect ${sidecarId} 2>/dev/null || echo '{}'`,
       );
       if (inspect && inspect !== "{}") {
-        const details = JSON.parse(inspect)[0];
-        console.log(`   State: ${details.State.Status}`);
+        const inspectArray = JSON.parse(inspect) as Array<{
+          State: { Status: string; Health?: { Status: string } };
+          Config: { Env?: string[] };
+        }>;
+        const details = inspectArray[0];
+        if (!details) {
+          console.log("   No container details available");
+          return;
+        }
+        console.log(`   State: ${String(details.State.Status)}`);
         console.log(
-          `   Health: ${details.State.Health?.Status || "No health check"}`,
+          `   Health: ${details.State.Health?.Status ?? "No health check"}`,
         );
 
         // Check if token was injected
-        const envVars = details.Config.Env || [];
+        const envVars = details.Config.Env ?? [];
         const hasToken = envVars.some((e: string) =>
           e.startsWith("RUNTIME_API_TOKEN="),
         );
@@ -171,4 +178,4 @@ echo "Test complete."`,
   process.exit(0);
 }
 
-testSidecarSimple();
+void testSidecarSimple();

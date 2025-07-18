@@ -8,7 +8,7 @@ export default function AdminLoading() {
         <Skeleton className="h-4 w-80" />
       </div>
 
-      <div className="rounded-lg border p-6">
+      <div className="border-border rounded-lg border p-6">
         <div className="space-y-4">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="flex items-center space-x-4">

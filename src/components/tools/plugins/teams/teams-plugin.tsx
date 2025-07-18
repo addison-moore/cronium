@@ -112,7 +112,7 @@ function TeamsCredentialForm({
         </p>
       </div>
 
-      <div className="space-y-4 border-t pt-4">
+      <div className="border-border space-y-4 border-t pt-4">
         <h4 className="text-sm font-medium">
           OAuth Settings (for advanced features)
         </h4>

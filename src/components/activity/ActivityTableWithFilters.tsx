@@ -126,6 +126,9 @@ export function ActivityTableWithFilters({
       const response = await getLogs(queryParams);
       const { logs, total } = response;
 
+      console.log("ActivityTableWithFilters - Received logs:", logs);
+      console.log("ActivityTableWithFilters - Total items:", total);
+
       setLogs(logs);
       setTotalItems(total);
       setTotalPages(Math.ceil(total / itemsPerPage));
@@ -299,8 +302,15 @@ export function ActivityTableWithFilters({
           eventName: log.eventName ?? "Unknown Event",
           status: log.status,
           ...(log.output ? { output: log.output } : {}),
-          startTime: log.startTime.toISOString(),
-          endTime: log.endTime?.toISOString() ?? null,
+          startTime:
+            typeof log.startTime === "string"
+              ? log.startTime
+              : log.startTime.toISOString(),
+          endTime: log.endTime
+            ? typeof log.endTime === "string"
+              ? log.endTime
+              : log.endTime.toISOString()
+            : null,
           duration: log.duration,
           ...(log.workflowId ? { workflowId: log.workflowId } : {}),
         }))}

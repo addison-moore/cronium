@@ -53,7 +53,7 @@ async function testContainerExecution() {
       user: {
         id: testUser.id,
         email: testUser.email,
-        name: testUser.firstName || "Test User",
+        name: testUser.firstName ?? "Test User",
         role: testUser.role,
         status: testUser.status || UserStatus.ACTIVE,
       },
@@ -116,7 +116,7 @@ async function testContainerExecution() {
         ) {
           console.log("\n📋 Job output:");
           console.log("---");
-          console.log((job.result as any).output);
+          console.log((job.result as { output: string }).output);
           console.log("---");
         }
 
@@ -130,9 +130,13 @@ async function testContainerExecution() {
         const ourJob = jobsResponse.items.find((j) => j.id === execution.jobId);
         if (ourJob) {
           console.log("✅ Job found in queue history");
-          console.log(`   Orchestrator: ${ourJob.orchestratorId || "N/A"}`);
-          console.log(`   Started: ${ourJob.startedAt || "N/A"}`);
-          console.log(`   Completed: ${ourJob.completedAt || "N/A"}`);
+          console.log(`   Orchestrator: ${ourJob.orchestratorId ?? "N/A"}`);
+          console.log(
+            `   Started: ${ourJob.startedAt?.toISOString() ?? "N/A"}`,
+          );
+          console.log(
+            `   Completed: ${ourJob.completedAt?.toISOString() ?? "N/A"}`,
+          );
         }
 
         break;
@@ -151,7 +155,7 @@ async function testContainerExecution() {
     console.log("✅ Test event deleted");
 
     // Delete the test user
-    await db.delete(users).where(eq(users.id, testUser!.id));
+    await db.delete(users).where(eq(users.id, testUser.id));
     console.log("✅ Test user deleted");
   } catch (error) {
     console.error("❌ Test failed:", error);
@@ -164,4 +168,4 @@ async function testContainerExecution() {
 }
 
 // Run the test
-testContainerExecution();
+void testContainerExecution();
