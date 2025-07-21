@@ -1,9 +1,8 @@
 import { LRUCache } from "lru-cache";
-import type { ToolType } from "@/shared/schema";
 
 interface PooledConnection {
   toolId: number;
-  toolType: ToolType;
+  toolType: string;
   lastUsed: Date;
   useCount: number;
   // Connection-specific data (headers, auth tokens, etc.)
@@ -23,7 +22,7 @@ interface ConnectionPoolOptions {
  */
 export class ConnectionPoolManager {
   private static instance: ConnectionPoolManager;
-  private pools: Map<ToolType, LRUCache<string, PooledConnection>>;
+  private pools: Map<string, LRUCache<string, PooledConnection>>;
   private defaultOptions: Required<ConnectionPoolOptions> = {
     maxSize: 100,
     ttl: 1000 * 60 * 30, // 30 minutes
@@ -45,7 +44,7 @@ export class ConnectionPoolManager {
   /**
    * Get or create a connection pool for a specific tool type
    */
-  private getPool(toolType: ToolType): LRUCache<string, PooledConnection> {
+  private getPool(toolType: string): LRUCache<string, PooledConnection> {
     if (!this.pools.has(toolType)) {
       const pool = new LRUCache<string, PooledConnection>({
         max: this.defaultOptions.maxSize,
@@ -66,7 +65,7 @@ export class ConnectionPoolManager {
    */
   getConnection(
     toolId: number,
-    toolType: ToolType,
+    toolType: string,
     userId: string,
   ): PooledConnection | undefined {
     const pool = this.getPool(toolType);
@@ -88,7 +87,7 @@ export class ConnectionPoolManager {
    */
   setConnection(
     toolId: number,
-    toolType: ToolType,
+    toolType: string,
     userId: string,
     connectionData: Record<string, unknown>,
   ): void {
@@ -109,7 +108,7 @@ export class ConnectionPoolManager {
   /**
    * Remove a connection from the pool
    */
-  removeConnection(toolId: number, toolType: ToolType, userId: string): void {
+  removeConnection(toolId: number, toolType: string, userId: string): void {
     const pool = this.getPool(toolType);
     const key = `${toolId}-${userId}`;
     pool.delete(key);
@@ -118,7 +117,7 @@ export class ConnectionPoolManager {
   /**
    * Clear all connections for a specific tool
    */
-  clearToolConnections(toolType: ToolType): void {
+  clearToolConnections(toolType: string): void {
     const pool = this.pools.get(toolType);
     if (pool) {
       pool.clear();
@@ -128,7 +127,7 @@ export class ConnectionPoolManager {
   /**
    * Get pool statistics
    */
-  getStats(toolType?: ToolType): Record<string, unknown> {
+  getStats(toolType?: string): Record<string, unknown> {
     if (toolType) {
       const pool = this.pools.get(toolType);
       if (!pool) return { size: 0, connections: [] };

@@ -6,7 +6,7 @@ import { api } from "@/trpc/server";
 import { LogDetailsSkeleton } from "@/components/logs/LogDetailsSkeleton";
 import type { Metadata } from "next";
 
-import LogDetailsClient from "@/components/logs/LogDetailsClient";
+import LogDetails from "@/components/logs/LogDetails";
 
 interface LogDetailsPageProps {
   params: Promise<{
@@ -64,7 +64,7 @@ export default async function LogDetailsPage({ params }: LogDetailsPageProps) {
 
   return (
     <Suspense fallback={<LogDetailsSkeleton />}>
-      <LogDetailsClient />
+      <LogDetails />
     </Suspense>
   );
 }

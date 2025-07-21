@@ -541,6 +541,7 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
         }
         onEventRun={handleRunEvent}
         onEventDuplicate={handleDuplicateEvent}
+        onEventFork={handleDuplicateEvent} // Fork uses same logic as duplicate
         onEventStatusChange={handleStatusChange}
         onEventDelete={confirmDelete}
         isRunning={state.isRunning}

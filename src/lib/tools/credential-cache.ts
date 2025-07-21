@@ -1,5 +1,4 @@
 import { LRUCache } from "lru-cache";
-import type { ToolType } from "@/shared/schema";
 import { db } from "@/server/db";
 import { toolCredentials } from "@/shared/schema";
 import { eq } from "drizzle-orm";
@@ -8,7 +7,7 @@ interface CachedCredential {
   id: number;
   userId: string;
   name: string;
-  type: ToolType;
+  type: string;
   credentials: unknown;
   isActive: boolean;
   tags?: string[];

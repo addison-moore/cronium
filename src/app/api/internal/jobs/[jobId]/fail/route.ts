@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { jobService } from "@/lib/services/job-service";
+import { JobStatus } from "@shared/schema";
 
 // Mark job as failed
 export async function POST(
@@ -34,7 +35,15 @@ export async function POST(
       );
     }
 
-    const updatedJob = await jobService.failJob(jobId, body.error);
+    const updatedJob = await jobService.updateJobStatus(
+      jobId,
+      JobStatus.FAILED,
+      {
+        completedAt: new Date(),
+        error: body.error,
+        exitCode: body.exitCode ?? 1,
+      },
+    );
 
     if (!updatedJob) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });

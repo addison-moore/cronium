@@ -36,27 +36,42 @@ export async function PUT(
       return NextResponse.json({ error: "Status required" }, { status: 400 });
     }
 
-    // Update job status based on the provided status
+    // Update job status and log status using the new method
     let updatedJob;
     switch (body.status) {
       case JobStatus.RUNNING:
-        updatedJob = await jobService.startJob(jobId);
-        break;
-      case JobStatus.COMPLETED:
-        updatedJob = await jobService.completeJob(jobId, {
-          ...(body.details?.exitCode !== undefined && {
-            exitCode: body.details.exitCode,
-          }),
-          ...(body.details?.message !== undefined && {
-            output: body.details.message,
-          }),
-        });
-        break;
-      case JobStatus.FAILED:
-        updatedJob = await jobService.failJob(
+        updatedJob = await jobService.updateJobStatus(
           jobId,
-          body.details?.error ?? body.details?.message ?? "Unknown error",
+          JobStatus.RUNNING,
+          {
+            startedAt: new Date(),
+          },
         );
+        break;
+      case JobStatus.COMPLETED: {
+        const updateData: Parameters<typeof jobService.updateJobStatus>[2] = {
+          completedAt: new Date(),
+          exitCode: body.details?.exitCode ?? 0,
+        };
+
+        if (body.details?.message !== undefined) {
+          updateData.output = body.details.message;
+        }
+
+        updatedJob = await jobService.updateJobStatus(
+          jobId,
+          JobStatus.COMPLETED,
+          updateData,
+        );
+        break;
+      }
+      case JobStatus.FAILED:
+        updatedJob = await jobService.updateJobStatus(jobId, JobStatus.FAILED, {
+          completedAt: new Date(),
+          error:
+            body.details?.error ?? body.details?.message ?? "Unknown error",
+          exitCode: body.details?.exitCode ?? 1,
+        });
         break;
       default:
         return NextResponse.json(

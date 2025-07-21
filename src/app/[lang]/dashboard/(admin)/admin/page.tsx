@@ -30,7 +30,6 @@ interface SystemSettings {
   aiEnabled?: boolean;
   aiModel?: string;
   openaiApiKey?: string;
-  inviteOnly?: boolean;
   maxUsers?: number;
   maxEventsPerUser?: number;
   maxWorkflowsPerUser?: number;
@@ -44,12 +43,12 @@ interface SystemSettings {
 
 // Validation schemas
 const smtpSettingsSchema = z.object({
-  smtpHost: z.string().min(1, "SMTP host is required"),
-  smtpPort: z.string().regex(/^\d+$/, "Port must be a number"),
-  smtpUser: z.string().min(1, "SMTP user is required"),
-  smtpPassword: z.string().min(1, "SMTP password is required"),
-  smtpFromEmail: z.string().email("Invalid email address"),
-  smtpFromName: z.string().min(1, "From name is required"),
+  smtpHost: z.string().optional(),
+  smtpPort: z.string().regex(/^\d+$/, "Port must be a number").optional(),
+  smtpUser: z.string().optional(),
+  smtpPassword: z.string().optional(),
+  smtpFromEmail: z.string().email("Invalid email address").or(z.literal("")),
+  smtpFromName: z.string().optional(),
   smtpEnabled: z.boolean().optional(),
 });
 type SmtpSettingsData = z.infer<typeof smtpSettingsSchema>;
@@ -57,14 +56,13 @@ type SmtpSettingsData = z.infer<typeof smtpSettingsSchema>;
 const registrationSettingsSchema = z.object({
   allowRegistration: z.boolean().optional(),
   requireAdminApproval: z.boolean().optional(),
-  inviteOnly: z.boolean().optional(),
 });
 type RegistrationSettingsData = z.infer<typeof registrationSettingsSchema>;
 
 const aiSettingsSchema = z.object({
   aiEnabled: z.boolean().optional(),
-  aiModel: z.string().min(1, "AI model selection is required"),
-  openaiApiKey: z.string().min(1, "OpenAI API key is required"),
+  aiModel: z.string().optional(),
+  openaiApiKey: z.string().optional(),
 });
 type AiSettingsData = z.infer<typeof aiSettingsSchema>;
 
@@ -173,7 +171,9 @@ export default function AdminPage() {
   });
 
   const users = usersData?.users ?? [];
-  const settings = (systemSettings as SystemSettings) ?? ({} as SystemSettings);
+  // Extract settings from the response wrapper
+  const settings =
+    (systemSettings?.data as SystemSettings) ?? ({} as SystemSettings);
 
   // Fetch roles using tRPC
   const {
@@ -204,16 +204,7 @@ export default function AdminPage() {
     // Validate the data using the schema
     const validatedData = smtpSettingsSchema.parse(data);
     updateSystemSettingsMutation.mutate({
-      maxUsers: settings.maxUsers,
-      maxEventsPerUser: settings.maxEventsPerUser,
-      maxWorkflowsPerUser: settings.maxWorkflowsPerUser,
-      maxServersPerUser: settings.maxServersPerUser,
-      enableRegistration: settings.enableRegistration,
-      enableGuestAccess: settings.enableGuestAccess,
-      defaultUserRole: settings.defaultUserRole,
-      sessionTimeout: settings.sessionTimeout,
-      logRetentionDays: settings.logRetentionDays,
-      // Add SMTP settings (these would need to be added to the schema)
+      ...settings,
       ...validatedData,
     });
   }

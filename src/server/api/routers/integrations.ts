@@ -6,16 +6,54 @@ import {
   withRateLimit,
 } from "../trpc";
 import {
-  slackSendSchema,
-  discordSendSchema,
-  emailSendSchema,
-  webhookSendSchema,
-  httpRequestSchema,
   bulkSendSchema,
   messageHistorySchema,
   messageStatsSchema,
   testMessageSchema,
 } from "@shared/schemas/integrations";
+import { z } from "zod";
+
+// Temporary schemas - these will be removed when integrations router is deprecated
+const baseSendMessageSchema = z.object({
+  toolId: z.number().int().positive("Tool ID must be a positive integer"),
+  message: z.string().min(1, "Message content is required"),
+  templateId: z.number().int().positive().optional(),
+  variables: z.record(z.string()).optional(),
+});
+
+const slackSendSchema = baseSendMessageSchema.extend({
+  channel: z.string().optional(),
+  username: z.string().optional(),
+  iconEmoji: z.string().optional(),
+  iconUrl: z.string().url().optional(),
+  threadTs: z.string().optional(),
+  unfurlLinks: z.boolean().default(true),
+  unfurlMedia: z.boolean().default(true),
+  blocks: z.array(z.any()).optional(),
+  attachments: z.array(z.any()).optional(),
+});
+
+const discordSendSchema = baseSendMessageSchema.extend({
+  username: z.string().optional(),
+  avatarUrl: z.string().url().optional(),
+  tts: z.boolean().default(false),
+  embeds: z.array(z.any()).optional(),
+  components: z.array(z.any()).optional(),
+});
+
+const emailSendSchema = baseSendMessageSchema.extend({
+  recipients: z.string().min(1, "Recipients are required"),
+  subject: z.string().min(1, "Subject is required"),
+  cc: z.string().optional(),
+  bcc: z.string().optional(),
+  replyTo: z.string().email().optional(),
+  priority: z.enum(["low", "normal", "high"]).default("normal"),
+  isHtml: z.boolean().default(false),
+  attachments: z.array(z.any()).optional(),
+  trackOpens: z.boolean().default(false),
+  trackClicks: z.boolean().default(false),
+});
+
 import { withErrorHandling, notFoundError } from "@/server/utils/error-utils";
 import {
   listResponse,
@@ -26,7 +64,7 @@ import {
   normalizePagination,
   createPaginatedResult,
 } from "@/server/utils/db-patterns";
-import { ToolType } from "@shared/schema";
+// ToolType import removed - using strings directly
 
 // Use standardized procedure with timing and rate limiting
 const integrationProcedure = protectedProcedure
@@ -42,7 +80,7 @@ async function getUserTool(
       id: number;
       userId: string;
       name: string;
-      type: ToolType;
+      type: string;
       credentials: Record<string, unknown>;
       isActive: boolean;
     }
@@ -54,7 +92,7 @@ async function getUserTool(
       id: 1,
       userId,
       name: "Default Slack",
-      type: ToolType.SLACK,
+      type: "slack" as const,
       credentials: {
         webhookUrl:
           "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX",
@@ -67,7 +105,7 @@ async function getUserTool(
       id: 2,
       userId,
       name: "Email SMTP",
-      type: ToolType.EMAIL,
+      type: "email" as const,
       credentials: {
         smtpHost: "smtp.gmail.com",
         smtpPort: 587,
@@ -84,12 +122,24 @@ async function getUserTool(
   return mockTools.find((tool) => tool.id === toolId && tool.userId === userId);
 }
 
+/**
+ * @deprecated This router is deprecated. Use the new plugin-based routes at tools.plugins.[pluginId].[routeName]
+ * Migration examples:
+ * - integrations.slack.send -> tools.plugins.slack.send
+ * - integrations.discord.send -> tools.plugins.discord.send
+ * - integrations.email.send -> tools.plugins.email.send
+ *
+ * The integrations router will be removed in a future version.
+ */
 export const integrationsRouter = createTRPCRouter({
   // Slack integration
   slack: createTRPCRouter({
     send: integrationProcedure
       .input(slackSendSchema)
       .mutation(async ({ ctx, input }) => {
+        console.warn(
+          "DEPRECATED: integrations.slack.send is deprecated. Use tools.plugins.slack.send instead.",
+        );
         return withErrorHandling(
           async () => {
             const tool = await getUserTool(ctx.session.user.id, input.toolId);
@@ -97,7 +147,7 @@ export const integrationsRouter = createTRPCRouter({
               throw notFoundError("Slack tool");
             }
 
-            if (tool.type !== ToolType.SLACK) {
+            if (tool.type !== "slack") {
               throw new TRPCError({
                 code: "BAD_REQUEST",
                 message: "Tool is not a Slack tool",
@@ -146,6 +196,9 @@ export const integrationsRouter = createTRPCRouter({
     send: integrationProcedure
       .input(discordSendSchema)
       .mutation(async ({ ctx, input }) => {
+        console.warn(
+          "DEPRECATED: integrations.discord.send is deprecated. Use tools.plugins.discord.send instead.",
+        );
         return withErrorHandling(
           async () => {
             const tool = await getUserTool(ctx.session.user.id, input.toolId);
@@ -153,7 +206,7 @@ export const integrationsRouter = createTRPCRouter({
               throw notFoundError("Discord tool");
             }
 
-            if (tool.type !== ToolType.DISCORD) {
+            if (tool.type !== "discord") {
               throw new TRPCError({
                 code: "BAD_REQUEST",
                 message: "Tool is not a Discord tool",
@@ -202,6 +255,9 @@ export const integrationsRouter = createTRPCRouter({
     send: integrationProcedure
       .input(emailSendSchema)
       .mutation(async ({ ctx, input }) => {
+        console.warn(
+          "DEPRECATED: integrations.email.send is deprecated. Use tools.plugins.email.send instead.",
+        );
         return withErrorHandling(
           async () => {
             const tool = await getUserTool(ctx.session.user.id, input.toolId);
@@ -209,7 +265,7 @@ export const integrationsRouter = createTRPCRouter({
               throw notFoundError("Email tool");
             }
 
-            if (tool.type !== ToolType.EMAIL) {
+            if (tool.type !== "email") {
               throw new TRPCError({
                 code: "BAD_REQUEST",
                 message: "Tool is not an email tool",
@@ -263,122 +319,6 @@ export const integrationsRouter = createTRPCRouter({
           {
             component: "integrationsRouter",
             operationName: "email.send",
-            userId: ctx.session.user.id,
-          },
-        );
-      }),
-  }),
-
-  // Webhook integration
-  webhook: createTRPCRouter({
-    send: integrationProcedure
-      .input(webhookSendSchema)
-      .mutation(async ({ ctx, input }) => {
-        return withErrorHandling(
-          async () => {
-            const tool = await getUserTool(ctx.session.user.id, input.toolId);
-            if (!tool) {
-              throw notFoundError("Webhook tool");
-            }
-
-            if (tool.type !== ToolType.WEBHOOK) {
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: "Tool is not a webhook tool",
-              });
-            }
-
-            if (!tool.isActive) {
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: "Tool is inactive",
-              });
-            }
-
-            // Mock sending webhook
-            console.log(`Sending webhook to tool ${input.toolId}:`, {
-              method: input.method,
-              payload: input.payload,
-              headers: input.headers,
-            });
-
-            // Simulate API call delay
-            await new Promise((resolve) =>
-              setTimeout(resolve, Math.random() * 2000 + 100),
-            );
-
-            return mutationResponse(
-              {
-                method: input.method,
-                statusCode: 200,
-                responseTime: Math.floor(Math.random() * 1000) + 100,
-                timestamp: new Date().toISOString(),
-              },
-              "Webhook sent successfully",
-            );
-          },
-          {
-            component: "integrationsRouter",
-            operationName: "webhook.send",
-            userId: ctx.session.user.id,
-          },
-        );
-      }),
-  }),
-
-  // HTTP request integration
-  http: createTRPCRouter({
-    request: integrationProcedure
-      .input(httpRequestSchema)
-      .mutation(async ({ ctx, input }) => {
-        return withErrorHandling(
-          async () => {
-            const tool = await getUserTool(ctx.session.user.id, input.toolId);
-            if (!tool) {
-              throw notFoundError("HTTP tool");
-            }
-
-            if (tool.type !== ToolType.HTTP) {
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: "Tool is not an HTTP tool",
-              });
-            }
-
-            if (!tool.isActive) {
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: "Tool is inactive",
-              });
-            }
-
-            // Mock HTTP request
-            console.log(`Making HTTP request to tool ${input.toolId}:`, {
-              path: input.path,
-              method: input.method,
-              body: input.body,
-            });
-
-            // Simulate API call delay
-            await new Promise((resolve) =>
-              setTimeout(resolve, Math.random() * 2000 + 100),
-            );
-
-            return mutationResponse(
-              {
-                url: `${String(tool.credentials.webhookUrl) || ""}${input.path ?? ""}`,
-                method: input.method,
-                statusCode: 200,
-                responseTime: Math.floor(Math.random() * 1000) + 100,
-                responseSize: Math.floor(Math.random() * 10000) + 100,
-                timestamp: new Date().toISOString(),
-              },
-              "HTTP request completed successfully",
-            );
-          },
-          {
-            component: "integrationsRouter",
-            operationName: "http.request",
             userId: ctx.session.user.id,
           },
         );
@@ -514,7 +454,7 @@ export const integrationsRouter = createTRPCRouter({
               toolId: input.toolId ?? Math.floor(Math.random() * 3) + 1,
               type:
                 input.type ??
-                (["EMAIL", "SLACK", "DISCORD"] as const)[
+                (["email", "slack", "discord"] as const)[
                   Math.floor(Math.random() * 3)
                 ],
               recipient: input.recipient ?? `recipient${i + 1}@example.com`,
@@ -603,6 +543,9 @@ export const integrationsRouter = createTRPCRouter({
   testMessage: integrationProcedure
     .input(testMessageSchema)
     .mutation(async ({ ctx, input }) => {
+      console.warn(
+        "DEPRECATED: integrations.testMessage is deprecated. Use tools.plugins.[pluginId].testConnection instead.",
+      );
       return withErrorHandling(
         async () => {
           const tool = await getUserTool(ctx.session.user.id, input.toolId);

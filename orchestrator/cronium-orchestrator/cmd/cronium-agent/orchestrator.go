@@ -14,18 +14,22 @@ import (
 	"github.com/addison-more/cronium/orchestrator/internal/executors/ssh"
 	"github.com/addison-more/cronium/orchestrator/internal/logger"
 	"github.com/addison-more/cronium/orchestrator/internal/metrics"
+	"github.com/addison-more/cronium/orchestrator/internal/orchestrator"
 	"github.com/addison-more/cronium/orchestrator/pkg/types"
 	"github.com/sirupsen/logrus"
 )
 
 // SimpleOrchestrator is a minimal orchestrator for testing
 type SimpleOrchestrator struct {
-	config      *config.Config
-	log         *logrus.Logger
-	apiClient   *api.Client
-	executorMgr *executors.Manager
-	logStreamer *logger.Streamer
-	metrics     *metrics.Collector
+	config          *config.Config
+	log             *logrus.Logger
+	apiClient       *api.Client
+	executorMgr     *executors.Manager
+	logStreamer     *logger.Streamer
+	metrics         *metrics.Collector
+	recovery        *orchestrator.RecoveryManager
+	containerExec   *container.Executor
+	orchestratorID  string
 	
 	// Control channels
 	shutdown chan struct{}
@@ -44,6 +48,9 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 	if err != nil {
 		return nil, fmt.Errorf("failed to create API client: %w", err)
 	}
+	
+	// Generate orchestrator ID
+	orchestratorID := fmt.Sprintf("orchestrator-%s", cfg.Orchestrator.ID)
 	
 	// Create executor manager
 	executorMgr := executors.NewManager()
@@ -71,16 +78,27 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 	// Connect metrics to API client
 	apiClient.WithMetrics(metricsCollector)
 	
+	// Create recovery manager (use container executor's cleanup manager if available)
+	var cleanupMgr *container.CleanupManager
+	if containerExec != nil {
+		// Access the cleanup manager through a getter or make it public
+		cleanupMgr = container.NewCleanupManager(containerExec, log)
+	}
+	recovery := orchestrator.NewRecoveryManager(apiClient, cleanupMgr, log)
+	
 	return &SimpleOrchestrator{
-		config:      cfg,
-		log:         log,
-		apiClient:   apiClient,
-		executorMgr: executorMgr,
-		logStreamer: logStreamer,
-		metrics:     metricsCollector,
-		shutdown:    make(chan struct{}),
-		done:        make(chan struct{}),
-		activeJobs:  make(map[string]*types.Job),
+		config:         cfg,
+		log:            log,
+		apiClient:      apiClient,
+		executorMgr:    executorMgr,
+		logStreamer:    logStreamer,
+		metrics:        metricsCollector,
+		recovery:       recovery,
+		containerExec:  containerExec,
+		orchestratorID: orchestratorID,
+		shutdown:       make(chan struct{}),
+		done:           make(chan struct{}),
+		activeJobs:     make(map[string]*types.Job),
 	}, nil
 }
 
@@ -88,6 +106,20 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 func (o *SimpleOrchestrator) Run(ctx context.Context) error {
 	o.log.Info("Starting orchestrator")
 	defer close(o.done)
+	
+	// Perform recovery on startup
+	if err := o.recovery.RecoverOnStartup(ctx, o.orchestratorID); err != nil {
+		o.log.WithError(err).Error("Recovery failed on startup")
+		// Continue anyway - recovery errors shouldn't prevent startup
+	}
+	
+	// Start periodic cleanup if we have a container executor
+	if o.containerExec != nil {
+		cleanupMgr := o.containerExec.GetCleanupManager()
+		if cleanupMgr != nil {
+			cleanupMgr.StartPeriodicCleanup(ctx, 30*time.Minute)
+		}
+	}
 	
 	// Start log streamer
 	if err := o.logStreamer.Start(ctx); err != nil {
@@ -135,7 +167,7 @@ func (o *SimpleOrchestrator) pollAndProcessJobs(ctx context.Context) error {
 	// Calculate how many jobs we can accept
 	limit := min(o.config.Jobs.MaxConcurrent - activeCount, o.config.Jobs.PollBatchSize)
 	
-	// Poll for jobs
+	// Poll for jobs (pass orchestrator ID)
 	jobs, err := o.apiClient.PollJobs(ctx, limit)
 	if err != nil {
 		return fmt.Errorf("failed to poll jobs: %w", err)

@@ -8,109 +8,8 @@ export const baseSendMessageSchema = z.object({
   variables: z.record(z.string()).optional(), // For template variable substitution
 });
 
-// Slack-specific message schema
-export const slackSendSchema = baseSendMessageSchema.extend({
-  channel: z.string().optional(), // Override default channel
-  username: z.string().optional(), // Override default username
-  iconEmoji: z.string().optional(), // Override default emoji
-  iconUrl: z.string().url().optional(), // Override default icon URL
-  threadTs: z.string().optional(), // For replying to threads
-  unfurlLinks: z.boolean().default(true),
-  unfurlMedia: z.boolean().default(true),
-  blocks: z.array(z.any()).optional(), // Slack Block Kit blocks
-  attachments: z.array(z.any()).optional(), // Legacy attachments
-});
-
-// Discord-specific message schema
-export const discordSendSchema = baseSendMessageSchema.extend({
-  username: z.string().optional(), // Override webhook username
-  avatarUrl: z.string().url().optional(), // Override webhook avatar
-  tts: z.boolean().default(false), // Text-to-speech
-  embeds: z
-    .array(
-      z.object({
-        title: z.string().optional(),
-        description: z.string().optional(),
-        url: z.string().url().optional(),
-        timestamp: z.string().datetime().optional(),
-        color: z.number().int().min(0).max(16777215).optional(), // 0x000000 to 0xFFFFFF
-        footer: z
-          .object({
-            text: z.string(),
-            iconUrl: z.string().url().optional(),
-          })
-          .optional(),
-        image: z
-          .object({
-            url: z.string().url(),
-          })
-          .optional(),
-        thumbnail: z
-          .object({
-            url: z.string().url(),
-          })
-          .optional(),
-        author: z
-          .object({
-            name: z.string(),
-            url: z.string().url().optional(),
-            iconUrl: z.string().url().optional(),
-          })
-          .optional(),
-        fields: z
-          .array(
-            z.object({
-              name: z.string(),
-              value: z.string(),
-              inline: z.boolean().default(false),
-            }),
-          )
-          .optional(),
-      }),
-    )
-    .max(10)
-    .optional(), // Discord allows max 10 embeds
-  components: z.array(z.any()).optional(), // Discord components (buttons, etc.)
-});
-
-// Email-specific message schema
-export const emailSendSchema = baseSendMessageSchema.extend({
-  recipients: z.string().min(1, "Recipients are required"), // Comma-separated emails
-  subject: z.string().min(1, "Subject is required"),
-  cc: z.string().optional(), // Comma-separated emails
-  bcc: z.string().optional(), // Comma-separated emails
-  replyTo: z.string().email().optional(),
-  priority: z.enum(["low", "normal", "high"]).default("normal"),
-  isHtml: z.boolean().default(false),
-  attachments: z
-    .array(
-      z.object({
-        filename: z.string(),
-        content: z.string(), // Base64 encoded content
-        contentType: z.string().optional(),
-        size: z.number().int().min(0).optional(),
-      }),
-    )
-    .optional(),
-  trackOpens: z.boolean().default(false),
-  trackClicks: z.boolean().default(false),
-});
-
-// Webhook message schema (for custom webhooks)
-export const webhookSendSchema = baseSendMessageSchema.extend({
-  method: z.enum(["GET", "POST", "PUT", "PATCH"]).default("POST"),
-  headers: z.record(z.string()).optional(),
-  queryParams: z.record(z.string()).optional(),
-  payload: z.record(z.any()).optional(), // Custom payload structure
-  contentType: z
-    .enum([
-      "application/json",
-      "application/x-www-form-urlencoded",
-      "text/plain",
-    ])
-    .default("application/json"),
-  timeout: z.number().int().min(1).max(300).default(30),
-});
+// Tool-specific message schemas have been moved to their respective plugin directories
+// See src/tools/plugins/[tool-name]/schemas.ts
 
 // HTTP request schema (for HTTP tools)
 export const httpRequestSchema = z.object({
@@ -151,7 +50,7 @@ export const messageHistorySchema = z.object({
   limit: z.number().min(1).max(100).default(20),
   offset: z.number().min(0).default(0),
   toolId: z.number().int().positive().optional(),
-  type: z.enum(["EMAIL", "SLACK", "DISCORD", "WEBHOOK", "HTTP"]).optional(),
+  type: z.enum(["email", "slack", "discord", "webhook", "http"]).optional(),
   status: z
     .enum(["sent", "failed", "pending", "delivered", "bounced"])
     .optional(),
@@ -163,7 +62,7 @@ export const messageHistorySchema = z.object({
 export const messageStatsSchema = z.object({
   period: z.enum(["day", "week", "month", "year"]).default("week"),
   toolId: z.number().int().positive().optional(),
-  type: z.enum(["EMAIL", "SLACK", "DISCORD", "WEBHOOK", "HTTP"]).optional(),
+  type: z.enum(["email", "slack", "discord", "webhook", "http"]).optional(),
   groupBy: z.enum(["tool", "type", "status", "day", "hour"]).default("type"),
 });
 
@@ -185,10 +84,6 @@ export const deliveryOptionsSchema = z.object({
 });
 
 // Type definitions inferred from schemas
-export type SlackSendInput = z.infer<typeof slackSendSchema>;
-export type DiscordSendInput = z.infer<typeof discordSendSchema>;
-export type EmailSendInput = z.infer<typeof emailSendSchema>;
-export type WebhookSendInput = z.infer<typeof webhookSendSchema>;
 export type HttpRequestInput = z.infer<typeof httpRequestSchema>;
 export type BulkSendInput = z.infer<typeof bulkSendSchema>;
 export type MessageHistoryInput = z.infer<typeof messageHistorySchema>;

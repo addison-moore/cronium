@@ -14,7 +14,7 @@ export function useSocket() {
         process.env.NEXT_PUBLIC_SOCKET_URL ?? `http://localhost:${socketPort}`;
 
       socket = io(socketUrl, {
-        path: "/socket.io/",
+        path: "/api/socketio",
         transports: ["websocket", "polling"],
         autoConnect: true,
       });

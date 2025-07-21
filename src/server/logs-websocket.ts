@@ -215,6 +215,8 @@ export class LogsWebSocketHandler {
   }
 
   private mapJobStatusToLogStatus(jobStatus: string): string {
+    // This method is deprecated - job service now handles status mapping
+    // with proper TIMEOUT and PARTIAL support
     switch (jobStatus) {
       case "queued":
       case "claimed":

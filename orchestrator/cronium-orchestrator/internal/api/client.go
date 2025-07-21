@@ -363,3 +363,22 @@ func convertServerDetails(sd *ServerDetails) *types.ServerDetails {
 		Passphrase: sd.Passphrase,
 	}
 }
+
+// GetOrphanedJobs gets jobs that were claimed by a specific orchestrator
+func (c *Client) GetOrphanedJobs(ctx context.Context, orchestratorID string) ([]*types.Job, error) {
+	params := url.Values{}
+	params.Set("orchestratorId", orchestratorID)
+	
+	var jobs []*types.Job
+	if err := c.get(ctx, "/jobs/orphaned", params, &jobs); err != nil {
+		return nil, fmt.Errorf("failed to get orphaned jobs: %w", err)
+	}
+	
+	return jobs, nil
+}
+
+// ReleaseJob releases a job back to the queue
+func (c *Client) ReleaseJob(ctx context.Context, jobID string, status *types.StatusUpdate) error {
+	var response interface{}
+	return c.post(ctx, fmt.Sprintf("/jobs/%s/release", jobID), status, &response)
+}

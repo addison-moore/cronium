@@ -17,7 +17,7 @@ import {
   type ToolAction,
   type ActionType,
   ToolPluginRegistry,
-} from "@/components/tools/types/tool-plugin";
+} from "@/tools/types/tool-plugin";
 
 interface ActionSelectorProps {
   toolType: string;

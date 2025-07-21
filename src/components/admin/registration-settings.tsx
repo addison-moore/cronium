@@ -14,13 +14,11 @@ import { SettingsSection } from "./settings-section";
 const registrationSettingsSchema = z.object({
   allowRegistration: z.boolean().optional(),
   requireAdminApproval: z.boolean().optional(),
-  inviteOnly: z.boolean().optional(),
 });
 
 interface SystemSettings {
   allowRegistration?: boolean;
   requireAdminApproval?: boolean;
-  inviteOnly?: boolean;
 }
 
 interface RegistrationSettingsProps {
@@ -38,49 +36,18 @@ export function RegistrationSettings({
   const form = useForm<z.infer<typeof registrationSettingsSchema>>({
     resolver: zodResolver(registrationSettingsSchema),
     defaultValues: {
-      allowRegistration: settings.allowRegistration ?? true,
-      requireAdminApproval: settings.requireAdminApproval ?? false,
-      inviteOnly: settings.inviteOnly ?? false,
+      allowRegistration: settings.allowRegistration ?? false,
+      requireAdminApproval: settings.requireAdminApproval ?? true,
     },
   });
 
   // Update form when settings change
   React.useEffect(() => {
     form.reset({
-      allowRegistration: settings.allowRegistration ?? true,
-      requireAdminApproval: settings.requireAdminApproval ?? false,
-      inviteOnly: settings.inviteOnly ?? false,
+      allowRegistration: settings.allowRegistration ?? false,
+      requireAdminApproval: settings.requireAdminApproval ?? true,
     });
   }, [settings, form]);
-
-  // Handle mutual exclusivity logic for registration settings
-  const handleAllowRegistrationChange = (checked: boolean) => {
-    form.setValue("allowRegistration", checked);
-    if (checked) {
-      // If "Allow public registration" is toggled on, "Invite-only registration" should be toggled off
-      form.setValue("inviteOnly", false);
-    }
-  };
-
-  const handleRequireAdminApprovalChange = (checked: boolean) => {
-    form.setValue("requireAdminApproval", checked);
-    if (checked && form.watch("inviteOnly")) {
-      // If "Invite-only registration" is on and user toggles "Require admin approval" on,
-      // "Invite-only registration" should toggle off, and "Allow public registration" should toggle on
-      form.setValue("inviteOnly", false);
-      form.setValue("allowRegistration", true);
-    }
-  };
-
-  const handleInviteOnlyChange = (checked: boolean) => {
-    form.setValue("inviteOnly", checked);
-    if (checked) {
-      // If "Invite-only registration" is toggled on,
-      // "Allow public registration" and "Require admin approval" should be toggled off
-      form.setValue("allowRegistration", false);
-      form.setValue("requireAdminApproval", false);
-    }
-  };
 
   return (
     <SettingsSection
@@ -98,9 +65,7 @@ export function RegistrationSettings({
                 <Switch
                   id="allowRegistration"
                   checked={field.value ?? false}
-                  onCheckedChange={(checked) => {
-                    handleAllowRegistrationChange(checked);
-                  }}
+                  onCheckedChange={field.onChange}
                 />
               )}
             />
@@ -117,33 +82,12 @@ export function RegistrationSettings({
                 <Switch
                   id="requireAdminApproval"
                   checked={field.value ?? false}
-                  onCheckedChange={(checked) => {
-                    handleRequireAdminApprovalChange(checked);
-                  }}
+                  onCheckedChange={field.onChange}
                 />
               )}
             />
             <Label htmlFor="requireAdminApproval">
               {t("RegistrationSettings.RequireAdminApproval")}
-            </Label>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Controller
-              name="inviteOnly"
-              control={form.control}
-              render={({ field }) => (
-                <Switch
-                  id="inviteOnly"
-                  checked={field.value ?? false}
-                  onCheckedChange={(checked) => {
-                    handleInviteOnlyChange(checked);
-                  }}
-                />
-              )}
-            />
-            <Label htmlFor="inviteOnly">
-              {t("RegistrationSettings.InviteOnly")}
             </Label>
           </div>
         </div>

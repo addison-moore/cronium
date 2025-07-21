@@ -4,12 +4,7 @@ import {
   createTemplateContext,
 } from "@/lib/template-processor";
 import type { ConditionalAction } from "@/shared/schema";
-import {
-  ConditionalActionType,
-  EventType,
-  ToolType,
-  type Event,
-} from "@/shared/schema";
+import { ConditionalActionType, EventType, type Event } from "@/shared/schema";
 import {
   executeToolAction,
   type ToolActionConfig,
@@ -256,7 +251,7 @@ export async function processEvent(
 
         // Import the tool plugin registry to find the appropriate action
         const { ToolPluginRegistry } = await import(
-          "@/components/tools/types/tool-plugin"
+          "@/tools/types/tool-plugin"
         );
 
         // Get the conditional action for this tool type
@@ -319,38 +314,38 @@ export async function processEvent(
           templateContext,
         );
 
-        // Prepare parameters based on tool type
-        let actionParameters: Record<string, unknown> = {};
+        // Prepare parameters based on tool type and conditional action fields
+        const actionParameters: Record<string, unknown> = {};
 
-        if (tool.type === ToolType.EMAIL) {
-          const subject =
-            conditional_event.emailSubject ??
-            `Event ${isSuccess ? "Success" : "Failure"}: ${event.name ?? ""}`;
+        // Map conditional action fields to tool action parameters
+        // The ConditionalActionsSection stores emailAddresses and emailSubject
+        // We need to map these to the tool's expected parameter names
 
+        if (conditional_event.emailAddresses) {
+          // Map to 'to' or 'recipients' based on tool expectations
+          actionParameters.to = conditional_event.emailAddresses;
+          actionParameters.recipients = conditional_event.emailAddresses;
+        }
+
+        if (conditional_event.emailSubject) {
           const processedSubject = templateProcessor.processTemplate(
-            subject,
+            conditional_event.emailSubject,
             templateContext,
           );
+          actionParameters.subject = processedSubject;
+        } else if (tool.type === "email") {
+          // Default subject for email if not provided
+          actionParameters.subject = `Event ${isSuccess ? "Success" : "Failure"}: ${event.name ?? ""}`;
+        }
 
-          actionParameters = {
-            recipients: conditional_event.emailAddresses ?? "",
-            subject: processedSubject,
-            message: processedMessage,
-            isHtml: true,
-          };
-        } else if (
-          tool.type === ToolType.SLACK ||
-          tool.type === ToolType.DISCORD
-        ) {
-          // For Slack and Discord, just pass the message
-          actionParameters = {
-            message: processedMessage,
-          };
+        // Add the message content
+        if (tool.type === "email") {
+          actionParameters.message = processedMessage;
+          actionParameters.body = processedMessage;
+          actionParameters.isHtml = true;
         } else {
-          // For other tool types, use a generic message parameter
-          actionParameters = {
-            message: processedMessage,
-          };
+          // For non-email tools, just pass the message
+          actionParameters.message = processedMessage;
         }
 
         console.log(

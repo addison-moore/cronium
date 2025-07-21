@@ -43,6 +43,7 @@ export function ActivityTableWithFilters({
   className = "",
 }: ActivityWithFiltersProps) {
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [logs, setLogs] = useState<Log[]>([]);
   const [scripts, setScripts] = useState<Event[]>([]);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
@@ -98,9 +99,13 @@ export function ActivityTableWithFilters({
     }
   };
 
-  const loadLogs = async (): Promise<void> => {
+  const loadLogs = async (isRefresh = false): Promise<void> => {
     try {
-      setIsLoading(true);
+      if (isRefresh) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
 
       // Build query string
       const queryParams = new URLSearchParams();
@@ -136,11 +141,12 @@ export function ActivityTableWithFilters({
       console.error("Error loading logs:", error);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
   const handleRefresh = async (): Promise<void> => {
-    await loadLogs();
+    await loadLogs(true);
   };
 
   const handleFilterChange = (
@@ -215,7 +221,6 @@ export function ActivityTableWithFilters({
                   <SelectItem value={LogStatus.SUCCESS}>Success</SelectItem>
                   <SelectItem value={LogStatus.FAILURE}>Failure</SelectItem>
                   <SelectItem value={LogStatus.RUNNING}>Running</SelectItem>
-                  <SelectItem value={LogStatus.PAUSED}>Paused</SelectItem>
                   <SelectItem value={LogStatus.TIMEOUT}>Timeout</SelectItem>
                   <SelectItem value={LogStatus.PARTIAL}>Partial</SelectItem>
                   <SelectItem value={LogStatus.PENDING}>Pending</SelectItem>
@@ -315,6 +320,7 @@ export function ActivityTableWithFilters({
           ...(log.workflowId ? { workflowId: log.workflowId } : {}),
         }))}
         isLoading={isLoading}
+        isRefreshing={isRefreshing}
         onRefresh={handleRefresh}
         emptyStateMessage={
           filterEventId ||

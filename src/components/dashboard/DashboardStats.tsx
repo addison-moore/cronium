@@ -75,27 +75,27 @@ export default function DashboardStats() {
     eventsCount: (dashboardData?.metrics?.eventsCount as number) ?? 0,
     workflowsCount: (dashboardData?.metrics?.workflowsCount as number) ?? 0,
     serversCount: (dashboardData?.metrics?.serversCount as number) ?? 0,
-    recentActivity: [],
+    recentActivity: Array.isArray(dashboardData?.metrics?.recentActivity)
+      ? (dashboardData.metrics.recentActivity as Array<{
+          id: number;
+          eventId: number;
+          eventName: string;
+          status: string;
+          duration: number;
+          startTime: string;
+          workflowId?: number | null;
+          workflowName?: string | null;
+        }>)
+      : [],
   };
 
   // Use the total activity count from the API if available
   const _totalActivityCount =
     (dashboardData?.metrics?.totalActivityCount as number) ?? 0;
 
-  // Query for recent activity data
-  // Activity endpoint doesn't exist in current trpc setup
-  interface ActivityItem {
-    id: string;
-    eventId: number;
-    eventName: string;
-    status: string;
-    startTime: Date;
-    duration: number;
-    workflowId?: number | null;
-    workflowName?: string | null;
-  }
-  const activityData: ActivityItem[] = [];
-  const isLoadingActivity = false;
+  // Use recent activity data from stats
+  const activityData = stats.recentActivity;
+  const isLoadingActivity = isLoading;
 
   const refreshData = useCallback(async () => {
     await refetchDashboard();
@@ -105,8 +105,8 @@ export default function DashboardStats() {
   const totalItems = activityData?.length ?? 0;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const _endIndex = startIndex + itemsPerPage;
-  const paginatedActivity = activityData ?? [];
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedActivity = activityData.slice(startIndex, endIndex);
 
   // Handle page change
   const handlePageChange = (newPage: number) => {
@@ -224,11 +224,11 @@ export default function DashboardStats() {
           "Recent event and workflow executions"
         }
         data={paginatedActivity.map((activity) => ({
-          id: Number(activity.id),
+          id: activity.id,
           eventId: activity.eventId,
           eventName: activity.eventName,
           status: activity.status as LogStatus,
-          startTime: new Date(activity.startTime).toISOString(),
+          startTime: activity.startTime || new Date().toISOString(),
           endTime: null,
           duration: activity.duration,
           workflowId: activity.workflowId ?? null,

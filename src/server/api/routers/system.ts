@@ -1,11 +1,6 @@
-import { createTRPCRouter, protectedProcedure, adminProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { withErrorHandling } from "@/server/utils/error-utils";
-import {
-  resourceResponse,
-  mutationResponse,
-  healthResponse,
-} from "@/server/utils/api-patterns";
-import { scheduler } from "@/lib/scheduler";
+import { resourceResponse, healthResponse } from "@/server/utils/api-patterns";
 import { UserRole } from "@/shared/schema";
 
 export const systemRouter = createTRPCRouter({
@@ -41,40 +36,6 @@ export const systemRouter = createTRPCRouter({
       {
         component: "systemRouter",
         operationName: "healthCheck",
-        userId: ctx.session.user.id,
-      },
-    );
-  }),
-
-  // Initialize system services (admin only)
-  startServices: adminProcedure.mutation(async ({ ctx }) => {
-    return withErrorHandling(
-      async () => {
-        const results = [];
-
-        // OLD TEMPLATE SYSTEM REMOVED - Now using tool action templates
-
-        // Initialize the scheduler
-        try {
-          await scheduler.initialize();
-          results.push("Scheduler initialized successfully");
-        } catch (error) {
-          console.warn("Scheduler initialization failed:", error);
-          results.push("Scheduler initialization failed");
-        }
-
-        return mutationResponse(
-          {
-            success: true,
-            message: "Services initialization completed",
-            details: results,
-          },
-          "Services initialization completed",
-        );
-      },
-      {
-        component: "systemRouter",
-        operationName: "startServices",
         userId: ctx.session.user.id,
       },
     );

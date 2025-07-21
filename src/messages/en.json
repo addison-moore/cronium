@@ -634,6 +634,8 @@
     "LoadingEvent": "Loading event details...",
     "eventNotFound": "Event Not Found",
     "eventNotFoundDescription": "The event you are looking for does not exist or has been deleted.",
+    "CannotEditSharedEvent": "Cannot Edit Shared Event",
+    "SharedEventEditDescription": "You don't have permission to edit this event because it's shared with you.",
     "duration": "Duration",
     "started": "Started",
     "ended": "Ended",
@@ -651,6 +653,9 @@
     "eventType": "Event Type",
     "ExecutionSettings": "Execution Settings",
     "ScheduleSettings": "Schedule Settings",
+    "Duplicate": "Duplicate Event",
+    "Fork": "Fork Event",
+    "SharedEvent": "Shared Event",
     "Location": {
       "Local": "Local execution",
       "Remote": "Remote server"

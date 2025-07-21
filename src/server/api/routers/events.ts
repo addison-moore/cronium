@@ -1,17 +1,5 @@
 /**
  * Events Router
- *
- * Note: This router does NOT use caching for any operations.
- * As a CRUD-heavy application with real-time monitoring requirements,
- * caching was removed to ensure users always see the latest data.
- *
- * Previous issues with cache invalidation:
- * - Users saw stale event names after updates
- * - Event status changes weren't reflected immediately
- * - Only 9.5% of routers had proper cache invalidation
- *
- * Current approach: All queries fetch fresh data directly from storage.
- * For more details, see /docs/CACHING_STRATEGY.md
  */
 
 import { TRPCError } from "@trpc/server";
@@ -810,6 +798,121 @@ export const eventsRouter = createTRPCRouter({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to download events",
+          cause: error,
+        });
+      }
+    }),
+
+  // Fork event (duplicate shared event without conditional actions)
+  fork: protectedProcedure
+    .use(withTiming)
+    .use(withRateLimit(50, 60000)) // 50 forks per minute
+    .use(withTransaction)
+    .input(eventIdSchema)
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.session?.user?.id) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Not authenticated",
+        });
+      }
+      const userId = ctx.session.user.id;
+
+      try {
+        // Check if the user can view the event (includes shared events)
+        const canView = await storage.canViewEvent(input.id, userId);
+        if (!canView) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Event not found",
+          });
+        }
+
+        // Get the original event with all its data
+        const originalEvent = await storage.getEventWithRelations(input.id);
+        if (!originalEvent) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Event not found",
+          });
+        }
+
+        // Create forked event data
+        const forkedEventData = {
+          name: `${originalEvent.name} (fork)`,
+          type: originalEvent.type,
+          description: originalEvent.description,
+          content: originalEvent.content,
+          status: EventStatus.DRAFT,
+          shared: false, // Forked events are not shared by default
+          tags: (originalEvent.tags as string[]) ?? [],
+          httpMethod: originalEvent.httpMethod,
+          httpUrl: originalEvent.httpUrl,
+          httpHeaders:
+            (originalEvent.httpHeaders as Array<{
+              key: string;
+              value: string;
+            }>) ?? [],
+          httpBody: originalEvent.httpBody,
+          scheduleNumber: originalEvent.scheduleNumber,
+          scheduleUnit: originalEvent.scheduleUnit,
+          customSchedule: originalEvent.customSchedule,
+          runLocation: originalEvent.runLocation,
+          serverId: originalEvent.serverId,
+          timeoutValue: originalEvent.timeoutValue,
+          timeoutUnit: originalEvent.timeoutUnit,
+          retries: originalEvent.retries,
+          userId: userId, // Set the current user as the owner
+          startTime: originalEvent.startTime,
+        };
+
+        // Create the forked event
+        const forkedEvent = await storage.createScript(forkedEventData);
+
+        // Copy environment variables
+        if (originalEvent.envVars && originalEvent.envVars.length > 0) {
+          for (const envVar of originalEvent.envVars) {
+            await storage.createEnvVar({
+              eventId: forkedEvent.id,
+              key: envVar.key,
+              value: envVar.value,
+            });
+          }
+        }
+
+        // Copy server associations
+        const servers = originalEvent.servers;
+        if (servers && Array.isArray(servers) && servers.length > 0) {
+          const serverIds: number[] = [];
+          for (const server of servers) {
+            if (
+              server &&
+              typeof server === "object" &&
+              "id" in server &&
+              typeof server.id === "number"
+            ) {
+              serverIds.push(server.id);
+            }
+          }
+          if (serverIds.length > 0) {
+            await storage.setEventServers(forkedEvent.id, serverIds);
+          }
+        }
+
+        // Note: We intentionally do NOT copy conditional actions (successEvents, failEvents, etc.)
+        // as per the requirement
+
+        // Get the complete forked event with relations
+        const completeForkedEvent = await storage.getEventWithRelations(
+          forkedEvent.id,
+        );
+
+        return completeForkedEvent;
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fork event",
           cause: error,
         });
       }

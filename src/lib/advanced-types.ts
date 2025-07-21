@@ -12,7 +12,6 @@ import {
   type ConditionalActionType,
   type EventTriggerType,
   UserRole,
-  type ToolType,
 } from "@/shared/schema";
 
 // ===== UTILITY TYPES =====
@@ -194,10 +193,10 @@ export type ScheduleConfig<T extends EventTriggerType> =
 /**
  * Tool configuration based on tool type
  */
-export type ToolConfig<T extends ToolType> = {
+export type ToolConfig<T extends string> = {
   type: T;
   name: string;
-  credentials: T extends ToolType.EMAIL
+  credentials: T extends "email"
     ? {
         smtpHost: string;
         smtpPort: number;
@@ -207,26 +206,19 @@ export type ToolConfig<T extends ToolType> = {
         fromName?: string;
         enableTLS?: boolean;
       }
-    : T extends ToolType.SLACK
+    : T extends "slack"
       ? {
           webhookUrl: string;
           channel?: string;
           username?: string;
         }
-      : T extends ToolType.DISCORD
+      : T extends "discord"
         ? {
             webhookUrl: string;
             username?: string;
             avatarUrl?: string;
           }
-        : T extends ToolType.WEBHOOK
-          ? {
-              url: string;
-              method?: "GET" | "POST" | "PUT" | "DELETE";
-              headers?: Record<string, string>;
-              authToken?: string;
-            }
-          : Record<string, unknown>;
+        : Record<string, unknown>;
 };
 
 // ===== BRANDED TYPES =====

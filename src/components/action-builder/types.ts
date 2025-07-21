@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ToolAction } from "@/components/tools/types/tool-plugin";
+import type { ToolAction } from "@/tools/types/tool-plugin";
 import type { Node, Edge } from "@xyflow/react";
 
 // Node types for the visual builder

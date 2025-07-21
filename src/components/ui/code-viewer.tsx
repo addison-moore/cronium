@@ -62,14 +62,17 @@ export default function CodeViewer({
         // }
 
         // Try to load the specific language component
-        try {
-          await import(`prismjs/components/prism-${prismLanguage}`);
-        } catch (error) {
-          console.error(
-            `Failed to load Prism language component for ${prismLanguage}:`,
-            error,
-          );
-          // Language component might not exist or already be loaded
+        // Skip loading for 'text' as it's built-in
+        if (prismLanguage !== "text" && prismLanguage !== "plain") {
+          try {
+            await import(`prismjs/components/prism-${prismLanguage}`);
+          } catch (error) {
+            console.error(
+              `Failed to load Prism language component for ${prismLanguage}:`,
+              error,
+            );
+            // Language component might not exist or already be loaded
+          }
         }
 
         // Add line numbers plugin
@@ -132,8 +135,9 @@ export default function CodeViewer({
     <div className={cn("group relative", className)}>
       <div
         className={cn(
-          "overflow-auto rounded-lg border",
+          "border-border overflow-auto rounded-lg border",
           theme === "dark" ? "bg-stone-900" : "bg-gray-50",
+          className?.includes("border-0") ? "" : "p-4",
         )}
         style={{ height, maxHeight: height }}
       >

@@ -321,28 +321,16 @@ export class ErrorCategorizer {
         break;
     }
 
-    // Add tool-specific suggestions
-    if (toolType) {
-      switch (toolType) {
-        case "slack":
-          if (error.category === "authentication") {
-            suggestions.push("Reinstall the Slack app in your workspace");
-          }
-          break;
-        case "discord":
-          if (error.category === "configuration") {
-            suggestions.push("Regenerate your Discord webhook URL");
-          }
-          break;
-        case "email":
-          if (error.category === "server_error") {
-            suggestions.push(
-              "Check SMTP server settings",
-              "Verify port and security settings",
-            );
-          }
-          break;
-      }
+    // Tool-specific suggestions should be provided by plugins
+    // This is a temporary fallback for common issues
+    if (toolType && error.category === "authentication") {
+      suggestions.push("Check your tool credentials and permissions");
+    }
+    if (toolType && error.category === "configuration") {
+      suggestions.push("Verify your tool configuration settings");
+    }
+    if (toolType && error.category === "server_error") {
+      suggestions.push("Check the tool's server settings and connectivity");
     }
 
     return [...new Set(suggestions)]; // Remove duplicates

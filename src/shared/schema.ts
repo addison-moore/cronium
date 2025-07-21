@@ -49,7 +49,6 @@ export enum LogStatus {
   SUCCESS = "SUCCESS",
   FAILURE = "FAILURE",
   RUNNING = "RUNNING",
-  PAUSED = "PAUSED", // Added for max execution events
   TIMEOUT = "TIMEOUT", // Added for timeout handling
   PARTIAL = "PARTIAL", // Added for partial multi-server success
 }
@@ -98,13 +97,7 @@ export enum TokenStatus {
   REVOKED = "REVOKED",
 }
 
-export enum ToolType {
-  EMAIL = "EMAIL",
-  SLACK = "SLACK",
-  DISCORD = "DISCORD",
-  WEBHOOK = "WEBHOOK",
-  HTTP = "HTTP",
-}
+// ToolType enum removed - now using string type for flexibility
 
 // Job Queue Enums
 export enum JobType {
@@ -421,7 +414,7 @@ export const toolCredentials = pgTable("tool_credentials", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 255 }).notNull(),
-  type: varchar("type", { length: 50 }).$type<ToolType>().notNull(),
+  type: varchar("type", { length: 50 }).notNull(), // Now accepts any string value
   credentials: text("credentials").notNull(), // Encrypted JSON
   isActive: boolean("is_active").default(true).notNull(),
   encrypted: boolean("encrypted").default(false).notNull(),

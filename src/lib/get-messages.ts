@@ -40,13 +40,13 @@ export async function getMessages(locale: string): Promise<Messages> {
     if (safeLocale !== defaultLocale) {
       try {
         const defaultMessagesModule: { default: Messages } = (await import(
-          `../messages/${defaultLocale}.json`
+          `../messages/${String(defaultLocale)}.json`
         )) as { default: Messages };
         const defaultMessages = defaultMessagesModule.default;
         return defaultMessages;
       } catch (defaultError) {
         console.error(
-          `Failed to load default messages for locale: ${defaultLocale}`,
+          `Failed to load default messages for locale: ${String(defaultLocale)}`,
           defaultError,
         );
       }
