@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Activity, AlertCircle, Edit, Logs } from "lucide-react";
+import { Activity, AlertCircle, Edit, Logs, Lock } from "lucide-react";
 import { Tabs, TabsContent, TabsList, Tab } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
@@ -9,8 +9,10 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
+import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { LogStatus } from "@/shared/schema";
+import { useLogsSocket } from "@/hooks/use-logs-socket";
 
 import {
   EventDetailsHeader,
@@ -45,6 +47,14 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
   const [isResettingCounter, setIsResettingCounter] = useState(false);
   const [logPollingInterval, setLogPollingInterval] =
     useState<NodeJS.Timeout | null>(null);
+  const subscribedLogsRef = useRef<Set<number>>(new Set());
+
+  // Get current user
+  const { user } = useAuth();
+
+  // WebSocket connection for real-time log updates
+  const { subscribeToLog, unsubscribeFromLog, subscribeToLogUpdates } =
+    useLogsSocket();
 
   // Hash-based tab navigation
   const { activeTab, changeTab } = useHashTabNavigation({
@@ -155,14 +165,37 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
         // Use type assertion to tell TypeScript this is a valid logs object
         const typedLogsData = logsData as { logs?: Log[] };
         const logsList = typedLogsData.logs ?? [];
+
         setLogs(logsList);
         setTotalLogs(logsList.length);
         setTotalLogPages(Math.ceil(logsList.length / logsItemsPerPage));
+
+        // Unsubscribe from logs no longer in the list
+        subscribedLogsRef.current.forEach((logId) => {
+          if (!logsList.find((log) => log.id === logId)) {
+            unsubscribeFromLog(logId);
+            subscribedLogsRef.current.delete(logId);
+          }
+        });
+
+        // Subscribe to WebSocket updates for each log
+        logsList.forEach((log) => {
+          if (!subscribedLogsRef.current.has(log.id)) {
+            subscribeToLog(log.id);
+            subscribedLogsRef.current.add(log.id);
+          }
+        });
       } else {
         // Handle case when logs are not available
         setLogs([]);
         setTotalLogs(0);
         setTotalLogPages(1);
+
+        // Unsubscribe from all logs
+        subscribedLogsRef.current.forEach((logId) => {
+          unsubscribeFromLog(logId);
+        });
+        subscribedLogsRef.current.clear();
       }
     } catch (error) {
       // Handle any unexpected errors
@@ -171,7 +204,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
       setTotalLogs(0);
       setTotalLogPages(1);
     }
-  }, [logsData, logsItemsPerPage]);
+  }, [logsData, logsItemsPerPage, subscribeToLog, unsubscribeFromLog]);
 
   // Check for running logs and update their status
   const checkRunningLogsStatus = useCallback(async () => {
@@ -217,6 +250,48 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
       }
     };
   }, []);
+
+  // Subscribe to WebSocket log updates
+  useEffect(() => {
+    const unsubscribe = subscribeToLogUpdates((update) => {
+      // Update the specific log in the logs array
+      setLogs((prevLogs) => {
+        const updatedLogs = prevLogs.map((log) => {
+          if (log.id === update.logId) {
+            return {
+              ...log,
+              status: update.status ?? log.status,
+              output: update.output !== undefined ? update.output : log.output,
+              error: update.error !== undefined ? update.error : log.error,
+              endTime:
+                update.endTime !== undefined ? update.endTime : log.endTime,
+              duration:
+                update.duration !== undefined ? update.duration : log.duration,
+            };
+          }
+          return log;
+        });
+        return updatedLogs;
+      });
+    });
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [subscribeToLogUpdates]);
+
+  // Cleanup WebSocket subscriptions on unmount
+  useEffect(() => {
+    return () => {
+      // Unsubscribe from all logs when component unmounts
+      subscribedLogsRef.current.forEach((logId) => {
+        unsubscribeFromLog(logId);
+      });
+      subscribedLogsRef.current.clear();
+    };
+  }, [unsubscribeFromLog]);
 
   // Handle page change for logs
   const handleLogPageChange = (page: number) => {
@@ -433,21 +508,25 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
         />
       )}
 
-      {/* Tabs */}
+      {/* Tabs - conditionally show edit tab based on ownership */}
       <Tabs value={activeTab} onValueChange={changeTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList
+          className={`grid w-full ${event.userId === user?.id ? "grid-cols-3" : "grid-cols-2"}`}
+        >
           <Tab
             value="overview"
             icon={Activity}
             label={t("Overview")}
             className="flex items-center gap-2"
           />
-          <Tab
-            value="edit"
-            icon={Edit}
-            label={t("Edit")}
-            className="flex items-center gap-2"
-          />
+          {event.userId === user?.id && (
+            <Tab
+              value="edit"
+              icon={Edit}
+              label={t("Edit")}
+              className="flex items-center gap-2"
+            />
+          )}
           <Tab
             value="logs"
             icon={Logs}
@@ -471,7 +550,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
         </TabsContent>
 
         <TabsContent value="edit" className="mt-6">
-          {transformedEvent && (
+          {transformedEvent && event.userId === user?.id ? (
             <EventEditTab
               event={transformedEvent}
               langParam={langParam}
@@ -480,6 +559,16 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
                 void refetchEvent();
               }}
             />
+          ) : (
+            <div className="bg-muted/50 rounded-lg p-8 text-center">
+              <Lock className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
+              <h3 className="mb-2 text-lg font-semibold">
+                {t("CannotEditSharedEvent")}
+              </h3>
+              <p className="text-muted-foreground">
+                {t("SharedEventEditDescription")}
+              </p>
+            </div>
           )}
         </TabsContent>
 

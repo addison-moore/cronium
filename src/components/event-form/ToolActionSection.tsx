@@ -36,14 +36,14 @@ import {
   type ToolAction,
   type ToolPlugin,
   ToolPluginRegistry,
-} from "@/components/tools/types/tool-plugin";
+} from "@/tools/types/tool-plugin";
 import ActionParameterForm from "./ActionParameterForm";
 import { cn } from "@/lib/utils";
 import {
   SlackMessagePreview,
   EmailPreview,
   ApiRequestPreview,
-} from "@/components/tools/previews";
+} from "@/tools/previews";
 import Link from "next/link";
 
 // Tool Action Configuration Interface

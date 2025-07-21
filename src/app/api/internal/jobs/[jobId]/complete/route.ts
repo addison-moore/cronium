@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { jobService } from "@/lib/services/job-service";
+import { JobStatus } from "@shared/schema";
 
 // Mark job as completed
 export async function POST(
@@ -42,11 +43,24 @@ export async function POST(
       }
     }
 
-    const updatedJob = await jobService.completeJob(jobId, {
-      ...(output !== undefined && { output }),
+    const updateData: Parameters<typeof jobService.updateJobStatus>[2] = {
+      completedAt: new Date(),
       exitCode: body.exitCode ?? 0,
-      ...(body.metrics !== undefined && { metrics: body.metrics }),
-    });
+    };
+
+    if (output !== undefined) {
+      updateData.output = output;
+    }
+
+    if (body.metrics !== undefined) {
+      updateData.metrics = body.metrics;
+    }
+
+    const updatedJob = await jobService.updateJobStatus(
+      jobId,
+      JobStatus.COMPLETED,
+      updateData,
+    );
 
     if (!updatedJob) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });

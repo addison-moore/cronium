@@ -17,7 +17,7 @@ export const defaultToolActionTemplates: DefaultToolActionTemplate[] = [
   {
     name: "Event Success Notification",
     description: "Send a success notification when an event completes",
-    toolType: "DISCORD",
+    toolType: "discord",
     actionId: "send-message",
     parameters: {
       content:
@@ -27,7 +27,7 @@ export const defaultToolActionTemplates: DefaultToolActionTemplate[] = [
   {
     name: "Event Failure Alert",
     description: "Send an alert when an event fails",
-    toolType: "DISCORD",
+    toolType: "discord",
     actionId: "send-message",
     parameters: {
       content:
@@ -37,7 +37,7 @@ export const defaultToolActionTemplates: DefaultToolActionTemplate[] = [
   {
     name: "Daily Summary",
     description: "Send a daily summary message",
-    toolType: "DISCORD",
+    toolType: "discord",
     actionId: "send-message",
     parameters: {
       content:
@@ -49,7 +49,7 @@ export const defaultToolActionTemplates: DefaultToolActionTemplate[] = [
   {
     name: "Event Success Notification",
     description: "Send a success notification when an event completes",
-    toolType: "SLACK",
+    toolType: "slack",
     actionId: "send-message",
     parameters: {
       text: "✅ Event `{{cronium.event.name}}` completed successfully in {{formatDuration cronium.event.duration}}",
@@ -58,7 +58,7 @@ export const defaultToolActionTemplates: DefaultToolActionTemplate[] = [
   {
     name: "Event Failure Alert",
     description: "Send an alert when an event fails",
-    toolType: "SLACK",
+    toolType: "slack",
     actionId: "send-message",
     parameters: {
       text: "❌ Event `{{cronium.event.name}}` failed with error:\n```{{cronium.event.error}}```",
@@ -68,7 +68,7 @@ export const defaultToolActionTemplates: DefaultToolActionTemplate[] = [
   {
     name: "Deployment Notification",
     description: "Notify team about deployment status",
-    toolType: "SLACK",
+    toolType: "slack",
     actionId: "send-message",
     parameters: {
       text: "🚀 Deployment of `{{cronium.getVariables.appName}}` to `{{cronium.getVariables.environment}}` {{cronium.event.status}}!",
@@ -80,7 +80,7 @@ export const defaultToolActionTemplates: DefaultToolActionTemplate[] = [
   {
     name: "Event Success Report",
     description: "Send a detailed success report via email",
-    toolType: "EMAIL",
+    toolType: "email",
     actionId: "send-email",
     parameters: {
       to: "{{cronium.getVariables.adminEmail}}",
@@ -108,7 +108,7 @@ Cronium Automation Platform`,
   {
     name: "Event Failure Alert",
     description: "Send an urgent failure alert via email",
-    toolType: "EMAIL",
+    toolType: "email",
     actionId: "send-email",
     parameters: {
       to: "{{cronium.getVariables.adminEmail}}",
@@ -135,7 +135,7 @@ Cronium Automation Platform`,
   {
     name: "Weekly Summary Report",
     description: "Send a weekly summary of all events",
-    toolType: "EMAIL",
+    toolType: "email",
     actionId: "send-email",
     parameters: {
       to: "{{cronium.getVariables.reportEmail}}",

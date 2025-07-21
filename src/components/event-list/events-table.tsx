@@ -14,6 +14,12 @@ import {
 import { EventTypeIcon } from "@/components/ui/event-type-icon";
 import { ClickableStatusBadge } from "@/components/ui/clickable-status-badge";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Eye,
   Edit,
   Copy,
@@ -21,9 +27,12 @@ import {
   Archive,
   Trash2,
   Play,
+  GitBranch,
+  Share2,
 } from "lucide-react";
 import { type Event, type ServerData } from "./types";
 import { formatDate } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 
 interface EventsTableProps {
   events: Event[];
@@ -32,6 +41,7 @@ interface EventsTableProps {
   onSelectedEventsChange: (selected: Set<number>) => void;
   onEventRun: (id: number) => void;
   onEventDuplicate: (id: number) => void;
+  onEventFork: (id: number) => void;
   onEventStatusChange: (id: number, status: EventStatus) => void;
   onEventDelete: (id: number) => void;
   isRunning: Record<number, boolean>;
@@ -46,6 +56,7 @@ export function EventsTable({
   onSelectedEventsChange,
   onEventRun,
   onEventDuplicate,
+  onEventFork,
   onEventStatusChange,
   onEventDelete,
   isRunning,
@@ -55,6 +66,7 @@ export function EventsTable({
   const params = useParams<{ lang: string }>();
   const router = useRouter();
   const t = useTranslations("Events");
+  const { user } = useAuth();
 
   const formatNextRunTime = (nextRunAt: string | null): string => {
     if (!nextRunAt) return t("NotScheduled");
@@ -161,18 +173,33 @@ export function EventsTable({
     {
       key: "name",
       header: t("EventName"),
-      cell: (event) => (
-        <div className="flex items-center">
-          <div className="mr-2">
-            <EventTypeIcon type={event.type} size={16} />
+      cell: (event) => {
+        const isSharedEvent = event.userId !== user?.id;
+        return (
+          <div className="flex items-center">
+            <div className="mr-2">
+              <EventTypeIcon type={event.type} size={16} />
+            </div>
+            <StandardizedTableLink
+              href={`/${params.lang}/dashboard/events/${event.id}`}
+            >
+              {event.name}
+            </StandardizedTableLink>
+            {isSharedEvent && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Share2 className="text-muted-foreground ml-2 h-4 w-4" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{t("SharedEvent")}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
-          <StandardizedTableLink
-            href={`/${params.lang}/dashboard/events/${event.id}`}
-          >
-            {event.name}
-          </StandardizedTableLink>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: "server",
@@ -234,49 +261,73 @@ export function EventsTable({
       <StandardizedTable
         data={events}
         columns={columns}
-        actions={(event) => [
-          {
-            label: t("ViewDetails"),
-            icon: <Eye className="h-4 w-4" />,
-            onClick: () =>
-              router.push(`/${params.lang}/dashboard/events/${event.id}`),
-          },
-          {
-            label: t("EditEvent"),
-            icon: <Edit className="h-4 w-4" />,
-            onClick: () =>
-              router.push(`/${params.lang}/dashboard/events/${event.id}#edit`),
-          },
-          {
-            label: "Duplicate Event",
-            icon: <Copy className="h-4 w-4" />,
-            onClick: () => onEventDuplicate(event.id),
-          },
-          ...(event.status === EventStatus.ARCHIVED
-            ? [
-                {
-                  label: t("UnarchiveEvent"),
-                  icon: <RefreshCw className="h-4 w-4" />,
-                  onClick: () =>
-                    onEventStatusChange(event.id, EventStatus.ACTIVE),
-                } as StandardizedTableAction,
-              ]
-            : [
-                {
-                  label: t("ArchiveEvent"),
-                  icon: <Archive className="h-4 w-4" />,
-                  onClick: () =>
-                    onEventStatusChange(event.id, EventStatus.ARCHIVED),
-                } as StandardizedTableAction,
-              ]),
-          {
-            label: t("DeleteEvent"),
-            icon: <Trash2 className="h-4 w-4" />,
-            onClick: () => onEventDelete(event.id),
-            variant: "destructive" as const,
-            separator: true,
-          },
-        ]}
+        actions={(event) => {
+          const isSharedEvent = event.userId !== user?.id;
+
+          if (isSharedEvent) {
+            // Limited actions for shared events
+            return [
+              {
+                label: t("ViewDetails"),
+                icon: <Eye className="h-4 w-4" />,
+                onClick: () =>
+                  router.push(`/${params.lang}/dashboard/events/${event.id}`),
+              },
+              {
+                label: t("Fork"),
+                icon: <GitBranch className="h-4 w-4" />,
+                onClick: () => onEventFork(event.id),
+              },
+            ];
+          }
+
+          // Full actions for owned events
+          return [
+            {
+              label: t("ViewDetails"),
+              icon: <Eye className="h-4 w-4" />,
+              onClick: () =>
+                router.push(`/${params.lang}/dashboard/events/${event.id}`),
+            },
+            {
+              label: t("EditEvent"),
+              icon: <Edit className="h-4 w-4" />,
+              onClick: () =>
+                router.push(
+                  `/${params.lang}/dashboard/events/${event.id}#edit`,
+                ),
+            },
+            {
+              label: t("Duplicate"),
+              icon: <Copy className="h-4 w-4" />,
+              onClick: () => onEventDuplicate(event.id),
+            },
+            ...(event.status === EventStatus.ARCHIVED
+              ? [
+                  {
+                    label: t("UnarchiveEvent"),
+                    icon: <RefreshCw className="h-4 w-4" />,
+                    onClick: () =>
+                      onEventStatusChange(event.id, EventStatus.ACTIVE),
+                  } as StandardizedTableAction,
+                ]
+              : [
+                  {
+                    label: t("ArchiveEvent"),
+                    icon: <Archive className="h-4 w-4" />,
+                    onClick: () =>
+                      onEventStatusChange(event.id, EventStatus.ARCHIVED),
+                  } as StandardizedTableAction,
+                ]),
+            {
+              label: t("DeleteEvent"),
+              icon: <Trash2 className="h-4 w-4" />,
+              onClick: () => onEventDelete(event.id),
+              variant: "destructive" as const,
+              separator: true,
+            },
+          ];
+        }}
         isLoading={isLoading}
         emptyMessage={
           searchTerm ? t("NoEventsFound") : t("NoEventsDescription")

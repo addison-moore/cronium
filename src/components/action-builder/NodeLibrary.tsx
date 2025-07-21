@@ -11,7 +11,7 @@ import {
   ToolPluginRegistry,
   type ToolPlugin,
   type ToolAction,
-} from "@/components/tools/types/tool-plugin";
+} from "@/tools/types/tool-plugin";
 import { Input } from "@/components/ui/input";
 
 const NODE_ICONS: Record<

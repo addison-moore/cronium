@@ -17,6 +17,8 @@ attached_assets/
 .claude/
 .pnpm-store
 .swc
+src/scripts/migrations/archived/
+src/scripts/deprecated/
 
 # Docker development data directories
 data/valkey/

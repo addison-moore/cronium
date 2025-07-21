@@ -12,15 +12,36 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { SettingsSection } from "./settings-section";
 
-const smtpSettingsSchema = z.object({
-  smtpHost: z.string().min(1, "SMTP host is required"),
-  smtpPort: z.string().regex(/^\d+$/, "Port must be a number"),
-  smtpUser: z.string().min(1, "SMTP user is required"),
-  smtpPassword: z.string().min(1, "SMTP password is required"),
-  smtpFromEmail: z.string().email("Invalid email address"),
-  smtpFromName: z.string().min(1, "From name is required"),
-  smtpEnabled: z.boolean().optional(),
-});
+const smtpSettingsSchema = z
+  .object({
+    smtpHost: z.string().optional(),
+    smtpPort: z.string().regex(/^\d+$/, "Port must be a number").optional(),
+    smtpUser: z.string().optional(),
+    smtpPassword: z.string().optional(),
+    smtpFromEmail: z.string().email("Invalid email address").or(z.literal("")),
+    smtpFromName: z.string().optional(),
+    smtpEnabled: z.boolean().optional(),
+  })
+  .refine(
+    (data) => {
+      // If SMTP is enabled, all fields are required
+      if (data.smtpEnabled) {
+        return (
+          data.smtpHost &&
+          data.smtpPort &&
+          data.smtpUser &&
+          data.smtpPassword &&
+          data.smtpFromEmail &&
+          data.smtpFromName
+        );
+      }
+      return true;
+    },
+    {
+      message: "All SMTP fields are required when email is enabled",
+      path: ["smtpEnabled"],
+    },
+  );
 
 interface SystemSettings {
   smtpHost?: string;
@@ -56,17 +77,15 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
 
   // Update form when settings change
   React.useEffect(() => {
-    if (settings.smtpHost) {
-      form.reset({
-        smtpHost: settings.smtpHost,
-        smtpPort: settings.smtpPort ?? "25",
-        smtpUser: settings.smtpUser ?? "",
-        smtpPassword: settings.smtpPassword ?? "",
-        smtpFromEmail: settings.smtpFromEmail ?? "",
-        smtpFromName: settings.smtpFromName ?? "",
-        smtpEnabled: settings.smtpEnabled ?? false,
-      });
-    }
+    form.reset({
+      smtpHost: settings.smtpHost ?? "",
+      smtpPort: settings.smtpPort ?? "587",
+      smtpUser: settings.smtpUser ?? "",
+      smtpPassword: settings.smtpPassword ?? "",
+      smtpFromEmail: settings.smtpFromEmail ?? "",
+      smtpFromName: settings.smtpFromName ?? "Cronium",
+      smtpEnabled: settings.smtpEnabled ?? false,
+    });
   }, [settings, form]);
 
   return (

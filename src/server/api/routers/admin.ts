@@ -20,10 +20,6 @@ import {
   userIdSchema,
   toggleUserStatusSchema,
   bulkUserOperationSchema,
-  createVariableSchema,
-  updateVariableSchema,
-  variableIdSchema,
-  variableQuerySchema,
   systemSettingsSchema,
   adminLogsSchema,
   logIdSchema,
@@ -31,6 +27,7 @@ import {
 } from "@/shared/schemas/admin";
 import { storage } from "@/server/storage";
 import { UserRole, UserStatus } from "@/shared/schema";
+import { sendInvitationEmail } from "@/lib/email";
 
 // Define Log interface for proper typing
 interface Log {
@@ -161,10 +158,17 @@ export const adminRouter = createTRPCRouter({
             updatedAt: new Date(),
           });
 
-          // TODO: Send invitation email
-          console.log(
-            `Invitation created for ${input.email} with token ${inviteToken}`,
-          );
+          // Send invitation email
+          try {
+            await sendInvitationEmail(input.email, inviteToken);
+            console.log(
+              `Invitation email sent to ${input.email} with token ${inviteToken}`,
+            );
+          } catch (emailError) {
+            console.error("Failed to send invitation email:", emailError);
+            // Note: We still return success since the user was created
+            // The admin can resend the invitation if needed
+          }
 
           return mutationResponse(newUser, "Invitation sent successfully");
         },
@@ -295,10 +299,36 @@ export const adminRouter = createTRPCRouter({
                   break;
                 case "resend_invite":
                   if (user.status === UserStatus.INVITED) {
-                    // TODO: Resend invitation email
-                    console.log(
-                      `Resending invitation to ${user.email ?? "unknown email"}`,
-                    );
+                    // Generate new invite token for security
+                    const { nanoid } = await import("nanoid");
+                    const newInviteToken = nanoid(32);
+                    const newInviteExpiry = new Date();
+                    newInviteExpiry.setHours(newInviteExpiry.getHours() + 48);
+
+                    await storage.updateUser(userId, {
+                      inviteToken: newInviteToken,
+                      inviteExpiry: newInviteExpiry,
+                      updatedAt: new Date(),
+                    });
+
+                    // Send invitation email
+                    try {
+                      if (user.email) {
+                        await sendInvitationEmail(user.email, newInviteToken);
+                        console.log(`Invitation email resent to ${user.email}`);
+                      }
+                    } catch (emailError) {
+                      console.error(
+                        "Failed to resend invitation email:",
+                        emailError,
+                      );
+                      results.push({
+                        id: userId,
+                        success: false,
+                        error: "Failed to send invitation email",
+                      });
+                      continue;
+                    }
                   } else {
                     results.push({
                       id: userId,
@@ -503,154 +533,6 @@ export const adminRouter = createTRPCRouter({
       );
     }),
 
-  // Variable Management
-  // Get all variables (using user variables for now)
-  getVariables: adminProcedure
-    .input(variableQuerySchema)
-    .query(async ({ ctx, input }) => {
-      return withErrorHandling(
-        async () => {
-          // For now, use user variables. In the future, implement global variables
-          const targetUserId = input.userId ?? ctx.session.user.id;
-          const variables = await storage.getUserVariables(targetUserId);
-
-          // Apply filters
-          let filteredVariables = variables;
-
-          if (input.search) {
-            const searchLower = input.search.toLowerCase();
-            filteredVariables = filteredVariables.filter(
-              (variable) =>
-                variable.key.toLowerCase().includes(searchLower) ||
-                variable.description?.toLowerCase().includes(searchLower),
-            );
-          }
-
-          // Use standardized pagination
-          const pagination = normalizePagination(input);
-          const paginatedVariables = filteredVariables.slice(
-            pagination.offset,
-            pagination.offset + pagination.limit,
-          );
-
-          const result = createPaginatedResult(
-            paginatedVariables,
-            filteredVariables.length,
-            pagination,
-          );
-
-          return listResponse(result, {
-            ...(input.search !== undefined && { search: input.search }),
-            userId: targetUserId,
-          });
-        },
-        {
-          component: "adminRouter",
-          operationName: "getVariables",
-          userId: ctx.session.user.id,
-        },
-      );
-    }),
-
-  // Create variable (using user variables for now)
-  createVariable: adminProcedure
-    .input(createVariableSchema)
-    .mutation(async ({ ctx, input }) => {
-      return withErrorHandling(
-        async () => {
-          // Check if variable with this key already exists for this user
-          const existingVariable = await storage.getUserVariable(
-            ctx.session.user.id,
-            input.key,
-          );
-          if (existingVariable) {
-            throw new TRPCError({
-              code: "CONFLICT",
-              message: "A variable with this key already exists",
-            });
-          }
-
-          const variable = await storage.createUserVariable({
-            userId: ctx.session.user.id,
-            key: input.key,
-            value: input.value,
-            description: input.description,
-          });
-
-          return mutationResponse(variable, "Variable created successfully");
-        },
-        {
-          component: "adminRouter",
-          operationName: "createVariable",
-          userId: ctx.session.user.id,
-        },
-      );
-    }),
-
-  // Update variable (using user variables for now)
-  updateVariable: adminProcedure
-    .input(updateVariableSchema)
-    .mutation(async ({ ctx, input }) => {
-      return withErrorHandling(
-        async () => {
-          const { id, ...rawUpdateData } = input;
-
-          // Filter out undefined values to satisfy exactOptionalPropertyTypes
-          const updateData = Object.fromEntries(
-            Object.entries(rawUpdateData).filter(
-              ([, value]) => value !== undefined,
-            ),
-          );
-
-          const updatedVariable = await storage.updateUserVariable(
-            id,
-            ctx.session.user.id,
-            updateData,
-          );
-          if (!updatedVariable) {
-            throw notFoundError("Variable");
-          }
-
-          return mutationResponse(
-            updatedVariable,
-            "Variable updated successfully",
-          );
-        },
-        {
-          component: "adminRouter",
-          operationName: "updateVariable",
-          userId: ctx.session.user.id,
-        },
-      );
-    }),
-
-  // Delete variable (using user variables for now)
-  deleteVariable: adminProcedure
-    .input(variableIdSchema)
-    .mutation(async ({ ctx, input }) => {
-      return withErrorHandling(
-        async () => {
-          const success = await storage.deleteUserVariable(
-            input.id,
-            ctx.session.user.id,
-          );
-          if (!success) {
-            throw notFoundError("Variable");
-          }
-
-          return mutationResponse(
-            { id: input.id },
-            "Variable deleted successfully",
-          );
-        },
-        {
-          component: "adminRouter",
-          operationName: "deleteVariable",
-          userId: ctx.session.user.id,
-        },
-      );
-    }),
-
   // System Management
   // Get system settings
   getSystemSettings: adminProcedure.query(async ({ ctx }) => {
@@ -695,10 +577,12 @@ export const adminRouter = createTRPCRouter({
           smtpFromName: settingsObject.smtpFromName ?? "Cronium",
           smtpEnabled: settingsObject.smtpEnabled ?? false,
 
-          // Registration settings
-          allowRegistration: settingsObject.allowRegistration ?? false,
+          // Registration settings (handle legacy openRegistration field)
+          allowRegistration:
+            settingsObject.allowRegistration ??
+            settingsObject.openRegistration ??
+            false,
           requireAdminApproval: settingsObject.requireAdminApproval ?? true,
-          inviteOnly: settingsObject.inviteOnly ?? true,
 
           // AI settings
           aiEnabled: settingsObject.aiEnabled ?? false,
@@ -965,10 +849,19 @@ export const adminRouter = createTRPCRouter({
             updatedAt: new Date(),
           });
 
-          // TODO: Send invitation email
-          console.log(
-            `Resending invitation to ${user.email ?? "unknown email"} with token ${inviteToken}`,
-          );
+          // Send invitation email
+          try {
+            if (user.email) {
+              await sendInvitationEmail(user.email, inviteToken);
+              console.log(`Invitation email resent to ${user.email}`);
+            }
+          } catch (emailError) {
+            console.error("Failed to resend invitation email:", emailError);
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Failed to send invitation email",
+            });
+          }
 
           // Return in the format the frontend expects
           return {

@@ -191,9 +191,7 @@ export async function executeToolAction(
     );
 
     // Import tool plugin registry
-    const { ToolPluginRegistry } = await import(
-      "@/components/tools/types/tool-plugin"
-    );
+    const { ToolPluginRegistry } = await import("@/tools/types/tool-plugin");
 
     // Get the action definition
     console.log(

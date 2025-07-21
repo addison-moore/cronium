@@ -53,7 +53,7 @@ Pain points: no sandboxing, helpers unavailable, difficult variable isolation, a
 | **Build trigger** | _Per event version change._ When a user saves/updates an event, orchestrator compiles a new Runner‑payload pair.                           |
 | **Binary reuse**  | The **Runner binary** is architecture‑specific and **cached per host** (checksum checked). Only copied again if version/hash differs.      |
 | **Payload reuse** | Rebuilt **when the script or manifest changes**; otherwise reused across multiple job executions.                                          |
-| **Storage**       | Store artefacts in `s3://cronium‑runner‑cache/<eventId>/<version>/` (or local FS). Clean up via TTL policy (e.g., 90 days since last run). |
+| **Storage**       | Store artefacts. Clean up via TTL policy (e.g., 90 days since last run). |
 
 ---
 

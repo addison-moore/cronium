@@ -103,8 +103,6 @@ export function EventLogsTab({
         return <StatusBadge status={LogStatus.TIMEOUT} size="sm" />;
       case "PARTIAL":
         return <StatusBadge status={LogStatus.PARTIAL} size="sm" />;
-      case "PAUSED":
-        return <StatusBadge status={LogStatus.PAUSED} size="sm" />;
       case "PENDING":
         return <StatusBadge status={LogStatus.PENDING} size="sm" />;
       default:

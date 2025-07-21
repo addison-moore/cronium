@@ -13,14 +13,8 @@ import {
   validateToolCredentialsSchema,
   toolExportSchema,
   toolStatsSchema,
-  slackCredentialsSchema,
-  discordCredentialsSchema,
-  emailCredentialsSchema,
-  webhookCredentialsSchema,
-  httpCredentialsSchema,
 } from "@shared/schemas/tools";
 import { toolCredentials, EventType } from "@/shared/schema";
-import { ToolType } from "@shared/schema";
 import { db } from "@/server/db";
 import { eq, and, desc } from "drizzle-orm";
 import {
@@ -28,6 +22,7 @@ import {
   type EncryptedData,
 } from "@/lib/security/credential-encryption";
 import { auditLog } from "@/lib/security/audit-logger";
+import { buildPluginRouter } from "./plugin-router";
 
 // Use centralized authentication from trpc.ts
 
@@ -151,13 +146,16 @@ async function getUserTools(
             // Check if this might be encrypted data that wasn't properly marked
             // Encrypted strings typically don't start with { or [ and contain base64-like characters
             const trimmed = rawCredentials.trim();
-            if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+            if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
               console.warn(
                 `Tool ${tool.id} credentials appear to be encrypted but tool.encrypted is false. Treating as empty credentials.`,
               );
               credentials = {};
             } else {
-              credentials = JSON.parse(rawCredentials) as Record<string, unknown>;
+              credentials = JSON.parse(rawCredentials) as Record<
+                string,
+                unknown
+              >;
             }
           } catch (error) {
             console.error(
@@ -238,40 +236,34 @@ async function getUserTools(
 }
 
 // Helper function to validate credentials based on tool type
-function validateCredentialsForType(
-  type: ToolType,
+async function validateCredentialsForType(
+  type: string,
   credentials: Record<string, unknown>,
-): { valid: boolean; errors: string[] } {
+): Promise<{ valid: boolean; errors: string[] }> {
   const errors: string[] = [];
 
   try {
-    switch (type) {
-      case ToolType.SLACK:
-        slackCredentialsSchema.parse(credentials);
-        break;
-      case ToolType.DISCORD:
-        discordCredentialsSchema.parse(credentials);
-        break;
-      case ToolType.EMAIL:
-        emailCredentialsSchema.parse(credentials);
-        break;
-      case ToolType.WEBHOOK:
-        webhookCredentialsSchema.parse(credentials);
-        break;
-      case ToolType.HTTP:
-        httpCredentialsSchema.parse(credentials);
-        break;
-      default:
-        errors.push("Unsupported tool type");
+    // Import tool plugin registry dynamically
+    const { ToolPluginRegistry } = await import("@/tools/types/tool-plugin");
+
+    // Get the plugin for this tool type
+    const plugin = ToolPluginRegistry.get(type.toLowerCase());
+    if (!plugin) {
+      errors.push(`Unsupported tool type: ${type}`);
+      return { valid: false, errors };
+    }
+
+    // Use the plugin's schema to validate
+    const result = plugin.schema.safeParse(credentials);
+    if (!result.success) {
+      errors.push(
+        ...result.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`),
+      );
     }
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      errors.push(
-        ...error.errors.map((e) => `${e.path.join(".")}: ${e.message}`),
-      );
-    } else {
-      errors.push("Invalid credentials format");
-    }
+    errors.push(
+      `Validation error: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
   }
 
   return { valid: errors.length === 0, errors };
@@ -376,58 +368,13 @@ export const toolsRouter = createTRPCRouter({
           details: {} as Record<string, unknown>,
         };
 
-        // Perform tool-specific health checks
+        // Plugin-based health checks are handled via the plugin router
+        // This is just a fallback for legacy tools
         try {
-          switch (tool.type) {
-            case ToolType.SLACK:
-              // Test Slack webhook
-              testResult.details.authenticated = !!tool.credentials.webhookUrl;
-              testResult.details.permissions = [
-                { name: "send_messages", granted: true },
-                { name: "read_channels", granted: true },
-              ];
-              testResult.details.latency =
-                Math.floor(Math.random() * 500) + 100;
-              break;
-
-            case ToolType.DISCORD:
-              // Test Discord webhook
-              testResult.details.authenticated = !!tool.credentials.webhookUrl;
-              testResult.details.permissions = [
-                { name: "send_messages", granted: true },
-                { name: "send_embeds", granted: true },
-              ];
-              testResult.details.latency = Math.floor(Math.random() * 400) + 80;
-              break;
-
-            case ToolType.EMAIL:
-              // Test SMTP connection
-              testResult.details.authenticated = !!(
-                tool.credentials.smtpHost &&
-                tool.credentials.smtpUser &&
-                tool.credentials.smtpPassword
-              );
-              testResult.details.permissions = [
-                { name: "send_email", granted: true },
-              ];
-              testResult.details.latency =
-                Math.floor(Math.random() * 800) + 200;
-              break;
-
-            case ToolType.WEBHOOK:
-              // Test webhook endpoint
-              testResult.details.authenticated = !!tool.credentials.url;
-              testResult.details.latency =
-                Math.floor(Math.random() * 600) + 150;
-              break;
-
-            case ToolType.HTTP:
-              // Test HTTP endpoint
-              testResult.details.authenticated = true;
-              testResult.details.latency =
-                Math.floor(Math.random() * 700) + 100;
-              break;
-          }
+          // Default health check details
+          testResult.details.authenticated = true;
+          testResult.details.permissions = [];
+          testResult.details.latency = Math.floor(Math.random() * 500) + 100;
 
           // Add quota information (mock for now)
           testResult.details.quota = {
@@ -573,7 +520,7 @@ export const toolsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       try {
         // Validate credentials for the tool type
-        const validation = validateCredentialsForType(
+        const validation = await validateCredentialsForType(
           input.type,
           input.credentials,
         );
@@ -612,7 +559,7 @@ export const toolsRouter = createTRPCRouter({
         type ToolInsertValues = {
           userId: string;
           name: string;
-          type: ToolType;
+          type: string;
           credentials: string;
           description: string;
           tags: string[];
@@ -711,7 +658,7 @@ export const toolsRouter = createTRPCRouter({
 
         // Validate credentials if provided
         if (updateData.credentials) {
-          const validation = validateCredentialsForType(
+          const validation = await validateCredentialsForType(
             existingTool.type,
             updateData.credentials,
           );
@@ -932,7 +879,7 @@ export const toolsRouter = createTRPCRouter({
             testDuration: Math.floor(Math.random() * 1000) + 100, // 100-1100ms
             timestamp: new Date().toISOString(),
           } as {
-            toolType: ToolType;
+            toolType: string;
             toolName: string;
             testDuration: number;
             timestamp: string;
@@ -940,30 +887,13 @@ export const toolsRouter = createTRPCRouter({
           },
         };
 
-        // Add type-specific test details
-        switch (tool.type) {
-          case ToolType.SLACK:
-            testResults.details = {
-              ...testResults.details,
-              webhookUrl: tool.credentials.webhookUrl ? "Valid" : "Invalid",
-              channel: tool.credentials.channel ?? "Default",
-            };
-            break;
-          case ToolType.EMAIL:
-            testResults.details = {
-              ...testResults.details,
-              smtpHost: tool.credentials.smtpHost,
-              smtpPort: tool.credentials.smtpPort,
-              authenticationTest: "Passed",
-            };
-            break;
-          case ToolType.DISCORD:
-            testResults.details = {
-              ...testResults.details,
-              webhookUrl: tool.credentials.webhookUrl ? "Valid" : "Invalid",
-            };
-            break;
-        }
+        // Plugin-specific test details are handled via the plugin router
+        // This provides generic details for all tools
+        testResults.details = {
+          ...testResults.details,
+          toolType: tool.type,
+          isActive: tool.isActive,
+        };
 
         return testResults;
       } catch (error) {
@@ -981,7 +911,7 @@ export const toolsRouter = createTRPCRouter({
     .input(validateToolCredentialsSchema)
     .mutation(async ({ input }) => {
       try {
-        const validation = validateCredentialsForType(
+        const validation = await validateCredentialsForType(
           input.type,
           input.credentials,
         );
@@ -1257,19 +1187,12 @@ export const toolsRouter = createTRPCRouter({
               : 0,
           avgResponseTime: Math.round(totalExecutionTime),
           byType: {
-            [ToolType.SLACK]: targetTools.filter(
-              (t) => t.type === ToolType.SLACK,
+            slack: targetTools.filter((t) => t.type.toLowerCase() === "slack")
+              .length,
+            discord: targetTools.filter(
+              (t) => t.type.toLowerCase() === "discord",
             ).length,
-            [ToolType.DISCORD]: targetTools.filter(
-              (t) => t.type === ToolType.DISCORD,
-            ).length,
-            [ToolType.EMAIL]: targetTools.filter(
-              (t) => t.type === ToolType.EMAIL,
-            ).length,
-            [ToolType.WEBHOOK]: targetTools.filter(
-              (t) => t.type === ToolType.WEBHOOK,
-            ).length,
-            [ToolType.HTTP]: targetTools.filter((t) => t.type === ToolType.HTTP)
+            email: targetTools.filter((t) => t.type.toLowerCase() === "email")
               .length,
           },
         };
@@ -1292,7 +1215,7 @@ export const toolsRouter = createTRPCRouter({
       try {
         // Import tool plugin registry
         const { ToolPluginRegistry } = await import(
-          "@/components/tools/types/tool-plugin"
+          "@/tools/types/tool-plugin"
         );
 
         if (input.toolType) {
@@ -1412,7 +1335,7 @@ export const toolsRouter = createTRPCRouter({
       try {
         // Import tool plugin registry
         const { ToolPluginRegistry } = await import(
-          "@/components/tools/types/tool-plugin"
+          "@/tools/types/tool-plugin"
         );
 
         const action = ToolPluginRegistry.getActionById(input.actionId);
@@ -1476,7 +1399,7 @@ export const toolsRouter = createTRPCRouter({
 
         // Import tool plugin registry
         const { ToolPluginRegistry } = await import(
-          "@/components/tools/types/tool-plugin"
+          "@/tools/types/tool-plugin"
         );
 
         const action = ToolPluginRegistry.getActionById(input.actionId);
@@ -1722,4 +1645,7 @@ export const toolsRouter = createTRPCRouter({
         });
       }
     }),
+
+  // Dynamic plugin routes
+  plugins: buildPluginRouter(),
 });

@@ -34,7 +34,6 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { WorkflowTriggerType, EventStatus } from "@/shared/schema";
-import { Spinner } from "@/components/ui/spinner";
 import {
   StandardizedTable,
   StandardizedTableLink,
@@ -588,14 +587,14 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
     },
   ];
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <Spinner size="lg" />
-        <span className="ml-2">{t("Loading")}</span>
-      </div>
-    );
-  }
+  // if (isLoading) {
+  //   return (
+  //     <div className="flex items-center justify-center p-8">
+  //       <Spinner size="lg" />
+  //       <span className="ml-2">{t("Loading")}</span>
+  //     </div>
+  //   );
+  // }
 
   return (
     <div className="space-y-4">

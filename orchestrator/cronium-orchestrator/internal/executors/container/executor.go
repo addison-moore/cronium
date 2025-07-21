@@ -25,6 +25,7 @@ type Executor struct {
 	dockerClient *client.Client
 	log          *logrus.Logger
 	sidecar      *SidecarManager
+	cleanup      *CleanupManager
 	
 	// Track active containers and resources
 	mu         sync.RWMutex
@@ -66,6 +67,9 @@ func NewExecutor(cfg config.ContainerConfig, log *logrus.Logger) (*Executor, err
 	// Create sidecar manager
 	executor.sidecar = NewSidecarManager(executor, log)
 	
+	// Create cleanup manager
+	executor.cleanup = NewCleanupManager(executor, log)
+	
 	return executor, nil
 }
 
@@ -98,6 +102,13 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 	go func() {
 		defer close(updates)
 		
+		// Ensure cleanup happens no matter what
+		defer func() {
+			if err := e.cleanup.CleanupJobResources(ctx, job.ID); err != nil {
+				e.log.WithError(err).Error("Failed to cleanup job resources")
+			}
+		}()
+		
 		// Send initial status
 		e.sendUpdate(updates, types.UpdateTypeStatus, &types.StatusUpdate{
 			Status:  types.JobStatusRunning,
@@ -108,6 +119,10 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 		networkID, err := e.sidecar.CreateJobNetwork(ctx, job.ID)
 		if err != nil {
 			e.sendError(updates, fmt.Errorf("failed to create job network: %w", err), true)
+			e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
+				Status:   types.JobStatusFailed,
+				Message:  fmt.Sprintf("Failed to create network: %v", err),
+			})
 			return
 		}
 		
@@ -131,6 +146,10 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 		sidecarID, err := e.sidecar.CreateRuntimeSidecar(ctx, job, networkID)
 		if err != nil {
 			e.sendError(updates, fmt.Errorf("failed to create runtime sidecar: %w", err), true)
+			e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
+				Status:   types.JobStatusFailed,
+				Message:  fmt.Sprintf("Failed to create sidecar: %v", err),
+			})
 			return
 		}
 		
@@ -154,6 +173,10 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 		containerID, err := e.createContainer(ctx, job, networkID)
 		if err != nil {
 			e.sendError(updates, err, true)
+			e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
+				Status:   types.JobStatusFailed,
+				Message:  fmt.Sprintf("Failed to create container: %v", err),
+			})
 			return
 		}
 		
@@ -176,6 +199,10 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 		// Start container
 		if err := e.dockerClient.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
 			e.sendError(updates, fmt.Errorf("failed to start container: %w", err), true)
+			e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
+				Status:   types.JobStatusFailed,
+				Message:  fmt.Sprintf("Failed to start container: %v", err),
+			})
 			return
 		}
 		
@@ -222,6 +249,11 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 // Cleanup performs cleanup after execution
 func (e *Executor) Cleanup(ctx context.Context, job *types.Job) error {
 	var errs []error
+	
+	// If job is nil, we can't clean up specific resources
+	if job == nil {
+		return nil
+	}
 	
 	// Clean up main container
 	e.mu.RLock()
@@ -631,4 +663,9 @@ func parseMemory(mem string) (int64, error) {
 	}
 	
 	return value, nil
+}
+
+// GetCleanupManager returns the cleanup manager for this executor
+func (e *Executor) GetCleanupManager() *CleanupManager {
+	return e.cleanup
 }

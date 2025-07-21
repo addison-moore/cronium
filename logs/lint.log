@@ -4,13 +4,4 @@
 
 
  ⚠ The Next.js plugin was not detected in your ESLint configuration. See https://nextjs.org/docs/app/api-reference/config/eslint#migrating-existing-config
-
-./src/components/ui/skeleton-library.tsx
-41:32  Warning: Replace `t·border-border` with `border·border-t`  prettier/prettier
-
-./src/lib/get-messages.ts
-43:26  Error: Invalid type "never" of template literal expression.  @typescript-eslint/restrict-template-expressions
-49:58  Error: Invalid type "never" of template literal expression.  @typescript-eslint/restrict-template-expressions
-
-info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
- ELIFECYCLE  Command failed with exit code 1.
+✔ No ESLint warnings or errors

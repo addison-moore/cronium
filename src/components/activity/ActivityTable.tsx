@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { FileText, RefreshCw } from "lucide-react";
+import { FileText, RefreshCw, Eye } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -31,8 +31,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { type LogStatus } from "@/shared/schema";
 import { Spinner } from "@/components/ui/spinner";
+import { format } from "date-fns";
 
 interface ActivityEntry {
   id: number;
@@ -40,6 +50,7 @@ interface ActivityEntry {
   eventName: string;
   status: LogStatus;
   output?: string;
+  error?: string;
   startTime: string;
   endTime?: string | null;
   duration: number | null;
@@ -199,14 +210,109 @@ export function ActivityTable({
                     <TableCell>{formatDate(activity.startTime)}</TableCell>
                     <TableCell>{formatDuration(activity.duration)}</TableCell>
                     <TableCell>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link
-                          href={`/${params.lang}/dashboard/logs/${activity.id}`}
-                          className="hover:text-primary transition-colors"
-                        >
-                          View Details
-                        </Link>
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              <Eye className="mr-2 h-3 w-3" />
+                              Quick View
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-h-[80vh] max-w-4xl">
+                            <DialogHeader>
+                              <DialogTitle>
+                                Log Details -{" "}
+                                {format(
+                                  new Date(activity.startTime),
+                                  "MMM d, yyyy HH:mm:ss",
+                                )}
+                              </DialogTitle>
+                              <DialogDescription>
+                                {activity.eventName} - Log #{activity.id}
+                              </DialogDescription>
+                            </DialogHeader>
+                            <ScrollArea className="mt-4 max-h-[60vh]">
+                              <div className="space-y-4">
+                                {/* Metadata */}
+                                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                                  <div>
+                                    <p className="text-muted-foreground text-sm">
+                                      Status
+                                    </p>
+                                    <StatusBadge status={activity.status} />
+                                  </div>
+                                  <div>
+                                    <p className="text-muted-foreground text-sm">
+                                      Start Time
+                                    </p>
+                                    <p className="text-sm font-medium">
+                                      {format(
+                                        new Date(activity.startTime),
+                                        "HH:mm:ss",
+                                      )}
+                                    </p>
+                                  </div>
+                                  {activity.endTime && (
+                                    <div>
+                                      <p className="text-muted-foreground text-sm">
+                                        End Time
+                                      </p>
+                                      <p className="text-sm font-medium">
+                                        {format(
+                                          new Date(activity.endTime),
+                                          "HH:mm:ss",
+                                        )}
+                                      </p>
+                                    </div>
+                                  )}
+                                  {activity.duration && (
+                                    <div>
+                                      <p className="text-muted-foreground text-sm">
+                                        Duration
+                                      </p>
+                                      <p className="text-sm font-medium">
+                                        {formatDuration(activity.duration)}
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Output */}
+                                {activity.output && (
+                                  <div>
+                                    <h4 className="mb-2 text-sm font-medium">
+                                      Output
+                                    </h4>
+                                    <pre className="bg-muted max-h-[300px] overflow-x-auto overflow-y-auto rounded-md p-3 font-mono text-xs">
+                                      {activity.output}
+                                    </pre>
+                                  </div>
+                                )}
+
+                                {/* Error */}
+                                {activity.error && (
+                                  <div>
+                                    <h4 className="text-destructive mb-2 text-sm font-medium">
+                                      Error
+                                    </h4>
+                                    <pre className="bg-destructive/10 border-destructive/50 text-destructive max-h-[300px] overflow-x-auto overflow-y-auto rounded-md border p-3 font-mono text-xs">
+                                      {activity.error}
+                                    </pre>
+                                  </div>
+                                )}
+                              </div>
+                            </ScrollArea>
+                          </DialogContent>
+                        </Dialog>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link
+                            href={`/${params.lang}/dashboard/logs/${activity.id}`}
+                            className="hover:text-primary transition-colors"
+                          >
+                            View Details
+                          </Link>
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

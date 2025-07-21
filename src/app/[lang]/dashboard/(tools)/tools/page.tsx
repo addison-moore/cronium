@@ -1,6 +1,6 @@
 "use client";
 
-import ToolsDashboard from "@/components/tools/ToolsDashboard";
+import ToolsDashboard from "@/tools/ToolsDashboard";
 import { PageHeader } from "@/components/ui/page-header";
 import { useTranslations } from "next-intl";
 

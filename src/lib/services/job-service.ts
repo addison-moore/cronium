@@ -6,9 +6,11 @@ import {
   type ScriptType,
   JobPriority,
   jobs as jobsTable,
+  LogStatus,
 } from "@shared/schema";
 import { eq, desc, and, or, isNull, lte, gte } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { storage } from "@server/storage";
 
 // Job queue management service
 export interface CreateJobInput {
@@ -51,9 +53,9 @@ export interface CreateJobInput {
 
 export interface UpdateJobInput {
   status?: JobStatus;
-  orchestratorId?: string;
-  startedAt?: Date;
-  completedAt?: Date;
+  orchestratorId?: string | undefined;
+  startedAt?: Date | undefined;
+  completedAt?: Date | undefined;
   result?: {
     exitCode?: number;
     output?: string;
@@ -200,12 +202,25 @@ export class JobService {
    * Update a job
    */
   async updateJob(jobId: string, update: UpdateJobInput): Promise<Job | null> {
+    // Build update object, handling explicit undefined values
+    const updateData: Partial<Job> & { updatedAt: Date } = {
+      updatedAt: new Date(),
+    };
+
+    // Handle fields that can be explicitly set to undefined/null
+    if ("status" in update) updateData.status = update.status;
+    if ("orchestratorId" in update)
+      updateData.orchestratorId = update.orchestratorId ?? null;
+    if ("startedAt" in update) updateData.startedAt = update.startedAt ?? null;
+    if ("completedAt" in update)
+      updateData.completedAt = update.completedAt ?? null;
+    if ("result" in update) updateData.result = update.result;
+    if ("attempts" in update) updateData.attempts = update.attempts;
+    if ("lastError" in update) updateData.lastError = update.lastError;
+
     const [updated] = await this.db
       .update(jobsTable)
-      .set({
-        ...update,
-        updatedAt: new Date(),
-      })
+      .set(updateData)
       .where(eq(jobsTable.id, jobId))
       .returning();
 
@@ -417,6 +432,168 @@ export class JobService {
       );
 
     return result.rowCount ?? 0;
+  }
+
+  /**
+   * Update job status and associated log status
+   */
+  async updateJobStatus(
+    jobId: string,
+    status: JobStatus,
+    data?: {
+      output?: string;
+      error?: string;
+      exitCode?: number;
+      startedAt?: Date;
+      completedAt?: Date;
+      metrics?: Record<string, unknown>;
+    },
+  ): Promise<Job | null> {
+    // Update the job
+    const updateInput: UpdateJobInput = {
+      status,
+    };
+
+    if (data?.startedAt !== undefined) {
+      updateInput.startedAt = data.startedAt;
+    }
+    if (data?.completedAt !== undefined) {
+      updateInput.completedAt = data.completedAt;
+    }
+    if (data) {
+      const result: UpdateJobInput["result"] = {};
+      if (data.output !== undefined) result.output = data.output;
+      if (data.error !== undefined) result.error = data.error;
+      if (data.exitCode !== undefined) result.exitCode = data.exitCode;
+      if (data.metrics !== undefined) result.metrics = data.metrics;
+
+      if (Object.keys(result).length > 0) {
+        updateInput.result = result;
+      }
+    }
+
+    const job = await this.updateJob(jobId, updateInput);
+
+    if (!job) return null;
+
+    // Extract executionLogId from job payload or metadata
+    const payload = job.payload as { executionLogId?: number } | undefined;
+    const metadata = job.metadata as { executionLogId?: number } | undefined;
+    const executionLogId = payload?.executionLogId ?? metadata?.executionLogId;
+
+    if (executionLogId) {
+      // Map job status to log status
+      const logStatus = this.mapJobStatusToLogStatus(status, data);
+
+      // Get the existing log to calculate duration
+      const existingLog = await storage.getLog(executionLogId);
+
+      // Calculate duration if job is completing
+      let duration: number | undefined;
+      const isCompleting =
+        status === JobStatus.COMPLETED ||
+        status === JobStatus.FAILED ||
+        status === JobStatus.CANCELLED;
+
+      if (isCompleting && existingLog?.startTime) {
+        const endTime = new Date();
+        duration =
+          endTime.getTime() - new Date(existingLog.startTime).getTime();
+      }
+
+      // Update the associated log
+      const logUpdateData: Parameters<typeof storage.updateLog>[1] = {
+        status: logStatus,
+        endTime: isCompleting ? new Date() : undefined,
+        duration,
+      };
+
+      // Only include output/error if they are defined (not undefined)
+      if (data?.output !== undefined) {
+        logUpdateData.output = data.output;
+      }
+      if (data?.error !== undefined) {
+        logUpdateData.error = data.error;
+      }
+
+      const updatedLog = await storage.updateLog(executionLogId, logUpdateData);
+
+      // Broadcast the update via HTTP to WebSocket server
+      try {
+        const socketPort = process.env.SOCKET_PORT ?? "5002";
+        const broadcastUrl = `http://localhost:${socketPort}/broadcast/log-update`;
+
+        const response = await fetch(broadcastUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            logId: executionLogId,
+            update: {
+              status: updatedLog.status,
+              output: updatedLog.output,
+              error: updatedLog.error,
+              endTime: updatedLog.endTime,
+              duration: updatedLog.duration,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          console.error(
+            `[JobService] Broadcast request failed: ${response.status} ${response.statusText}`,
+          );
+        }
+      } catch (error) {
+        console.error("[JobService] Error sending broadcast:", error);
+      }
+    }
+
+    return job;
+  }
+
+  /**
+   * Map job status to log status
+   */
+  private mapJobStatusToLogStatus(
+    jobStatus: JobStatus,
+    data?: { error?: string; serverResults?: Array<{ status: string }> },
+  ): LogStatus {
+    // Check for timeout error
+    if (
+      jobStatus === JobStatus.FAILED &&
+      data?.error &&
+      (data.error.toLowerCase().includes("timeout") ||
+        data.error.toLowerCase().includes("timed out"))
+    ) {
+      return LogStatus.TIMEOUT;
+    }
+
+    // Handle multi-server partial success (for future use)
+    if (jobStatus === JobStatus.COMPLETED && data?.serverResults) {
+      const hasFailures = data.serverResults.some(
+        (r) => r.status !== "SUCCESS",
+      );
+      if (hasFailures) return LogStatus.PARTIAL;
+    }
+
+    // Map job status to log status
+    switch (jobStatus) {
+      case JobStatus.QUEUED:
+      case JobStatus.CLAIMED:
+        return LogStatus.PENDING;
+      case JobStatus.RUNNING:
+        return LogStatus.RUNNING;
+      case JobStatus.COMPLETED:
+        return LogStatus.SUCCESS;
+      case JobStatus.FAILED:
+        return LogStatus.FAILURE;
+      case JobStatus.CANCELLED:
+        return LogStatus.FAILURE;
+      default:
+        return LogStatus.RUNNING;
+    }
   }
 }
 

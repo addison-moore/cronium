@@ -19,11 +19,30 @@ import {
 } from "@/components/ui/select";
 import { SettingsSection } from "./settings-section";
 
-const aiSettingsSchema = z.object({
-  aiEnabled: z.boolean().optional(),
-  aiModel: z.string().min(1, "AI model selection is required"),
-  openaiApiKey: z.string().min(1, "OpenAI API key is required"),
-});
+const aiSettingsSchema = z
+  .object({
+    aiEnabled: z.boolean().optional(),
+    aiModel: z.string().optional(),
+    openaiApiKey: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      // If AI is enabled, model and API key are required
+      if (data.aiEnabled) {
+        return (
+          data.aiModel &&
+          data.aiModel.length > 0 &&
+          data.openaiApiKey &&
+          data.openaiApiKey.length > 0
+        );
+      }
+      return true;
+    },
+    {
+      message: "AI model and API key are required when AI is enabled",
+      path: ["aiEnabled"],
+    },
+  );
 
 interface SystemSettings {
   aiEnabled?: boolean;
@@ -89,7 +108,7 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
                 <div className="space-y-2">
                   <Label htmlFor="aiModel">{t("AiSettings.Model")}</Label>
                   <Select
-                    value={field.value}
+                    value={field.value ?? ""}
                     onValueChange={field.onChange}
                     aria-describedby={
                       fieldState.error ? "aiModel-error" : undefined

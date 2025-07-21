@@ -107,7 +107,6 @@ export const getStatusConfig = (
         border: "border-red-300 dark:border-red-600",
       };
     case EventStatus.PAUSED:
-    case LogStatus.PAUSED:
       return {
         label: "Paused",
         color: "text-yellow-600 dark:text-yellow-400",

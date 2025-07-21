@@ -106,6 +106,17 @@ export function EventsListClient({
     },
   });
 
+  const forkEventMutation = trpc.events.fork.useMutation({
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Event forked successfully",
+        variant: "success",
+      });
+      if (onRefresh) onRefresh();
+    },
+  });
+
   const updateEventMutation = trpc.events.update.useMutation({
     onSuccess: (_, variables) => {
       const statusText = variables.status?.toLowerCase() ?? "updated";
@@ -448,6 +459,20 @@ export function EventsListClient({
     }
   };
 
+  // Handle fork event (for shared events)
+  const handleForkEvent = async (eventId: number) => {
+    try {
+      await forkEventMutation.mutateAsync({ id: eventId });
+
+      // Update local state to include the new event
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch {
+      // Error handling is done in the mutation onError callback
+    }
+  };
+
   // Handle status change from dropdown
   const handleStatusChange = async (id: number, newStatus: EventStatus) => {
     try {
@@ -754,6 +779,7 @@ export function EventsListClient({
         }
         onEventRun={handleRunEvent}
         onEventDuplicate={handleDuplicateEvent}
+        onEventFork={handleForkEvent}
         onEventStatusChange={handleStatusChange}
         onEventDelete={confirmDelete}
         isRunning={state.isRunning}

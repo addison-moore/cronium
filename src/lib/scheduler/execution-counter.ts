@@ -48,14 +48,14 @@ export async function handleExecutionCount(eventId: number) {
         }
 
         // Log a message about why it was paused
-        // Use PAUSED status instead of SUCCESS for clarity
+        // Use SUCCESS status to indicate the pause was executed successfully
         await storage.createLog({
           eventId: eventId,
           output: `Automatically paused after reaching max executions (${String(event.maxExecutions)})`,
-          status: LogStatus.PAUSED,
+          status: LogStatus.SUCCESS,
           startTime: new Date(),
           endTime: new Date(),
-          successful: false, // Not a successful execution
+          successful: true,
           eventName: String(event.name ?? "Unknown"),
           eventType: event.type,
           userId: event.userId,

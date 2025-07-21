@@ -2,8 +2,8 @@
  * Test Tool Plugin Registry without database
  */
 
-import { ToolPluginRegistry } from "@/components/tools/types/tool-plugin";
-import { initializePlugins } from "@/components/tools/plugins";
+import { ToolPluginRegistry } from "@/tools/types/tool-plugin";
+import { initializePlugins } from "@/tools/plugins";
 
 async function testRegistry() {
   console.log("=== Tool Plugin Registry Test ===\n");

@@ -95,11 +95,6 @@ export function StatusBadgeRenderer({
         displayLabel = "Running";
         icon = showIcon ? <RefreshCw className="h-3 w-3 animate-spin" /> : null;
         break;
-      case String(LogStatus.PAUSED):
-        statusType = "warning";
-        displayLabel = "Paused";
-        icon = showIcon ? <Clock className="h-3 w-3" /> : null;
-        break;
       case String(LogStatus.TIMEOUT):
         statusType = "warning";
         displayLabel = "Timeout";

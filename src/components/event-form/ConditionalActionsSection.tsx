@@ -35,8 +35,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ConditionalActionType, type ToolType } from "@/shared/schema";
-import { ToolPluginRegistry } from "@/components/tools/plugins";
+import { ConditionalActionType } from "@/shared/schema";
+import { ToolPluginRegistry } from "@/tools/plugins";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/use-toast";
 import { QUERY_OPTIONS } from "@/trpc/shared";
@@ -251,9 +251,7 @@ export default function ConditionalActionsSection({
     if (!selectedToolType || allTools.length === 0) {
       return [];
     }
-    return allTools.filter(
-      (tool) => tool.type === (selectedToolType as ToolType),
-    );
+    return allTools.filter((tool) => tool.type === selectedToolType);
   }, [selectedToolType, allTools]);
 
   // All available message types based on tools with conditional actions
@@ -283,7 +281,7 @@ export default function ConditionalActionsSection({
       try {
         await createToolMutation.mutateAsync({
           name: data.name,
-          type: selectedToolType as ToolType,
+          type: selectedToolType!,
           credentials: data.credentials,
         });
       } catch {
@@ -327,7 +325,7 @@ export default function ConditionalActionsSection({
                   ? content
                   : "";
             setNewMessage(message);
-          } else if (template.toolType === "EMAIL") {
+          } else if (template.toolType === "email") {
             const body = params.body;
             const subject = params.subject;
             const to = params.to;
@@ -617,31 +615,91 @@ export default function ConditionalActionsSection({
       console.warn(`Plugin not found for message type: ${toolType}`);
     }
 
-    // Fallback icons if plugin not found
-    switch (toolType) {
-      case "EMAIL":
-        return <Mail className="h-4 w-4" />;
-      case "SLACK":
-        return <MessageSquare className="h-4 w-4" />;
-      case "DISCORD":
-        return <MessageSquare className="h-4 w-4" />;
-      default:
-        return <MessageSquare className="h-4 w-4" />;
-    }
+    // Default fallback icon
+    return <MessageSquare className="h-4 w-4" />;
   }, []);
 
   const getToolTypeName = useCallback((toolType: string) => {
-    switch (toolType) {
-      case "EMAIL":
-        return "Email";
-      case "SLACK":
-        return "Slack";
-      case "DISCORD":
-        return "Discord";
-      default:
-        return toolType;
+    try {
+      const plugin = ToolPluginRegistry.get(toolType.toLowerCase());
+      if (plugin?.name) {
+        return plugin.name;
+      }
+    } catch {
+      console.warn(`Plugin not found for tool type: ${toolType}`);
+    }
+
+    // Fallback to the tool type itself
+    return toolType;
+  }, []);
+
+  // Get the conditional action configuration for a tool type
+  const getConditionalActionConfig = useCallback((toolType: string) => {
+    try {
+      const action = ToolPluginRegistry.getConditionalActionForTool(
+        toolType.toLowerCase(),
+      );
+      return action;
+    } catch {
+      return null;
     }
   }, []);
+
+  // Check if the conditional action has a specific parameter
+  const hasActionParameter = useCallback(
+    (toolType: string, paramName: string) => {
+      const action = getConditionalActionConfig(toolType);
+      if (!action) return false;
+
+      return action.parameters.some((param) => param.name === paramName);
+    },
+    [getConditionalActionConfig],
+  );
+
+  // Get the language mode for the message editor
+  const getMessageEditorLanguage = useCallback(
+    (toolType: string) => {
+      const action = getConditionalActionConfig(toolType);
+      if (!action) return "text";
+
+      // Check if any parameter expects JSON format
+      const hasJsonParam = action.parameters.some(
+        (param) => param.type === "object" || param.type === "array",
+      );
+
+      return hasJsonParam ? "json" : "html";
+    },
+    [getConditionalActionConfig],
+  );
+
+  // Get help text for message field
+  const getMessageHelpText = useCallback(
+    (toolType: string) => {
+      const action = getConditionalActionConfig(toolType);
+      if (!action)
+        return "This message will be sent using the selected communication tool";
+
+      // Check for specific parameter help text
+      const messageParam = action.parameters.find(
+        (param) => param.name === "message" || param.name === "body",
+      );
+
+      if (messageParam?.description) {
+        return messageParam.description;
+      }
+
+      // Return generic help text based on editor language
+      const language = getMessageEditorLanguage(toolType);
+      if (language === "json") {
+        return "Use JSON format for advanced message formatting";
+      } else if (hasActionParameter(toolType, "body")) {
+        return "This will be the body content of your message";
+      }
+
+      return "This message will be sent using the selected communication tool";
+    },
+    [getConditionalActionConfig, getMessageEditorLanguage, hasActionParameter],
+  );
 
   const getTargetEventName = useCallback(
     (targetEventId: number) => {
@@ -804,7 +862,7 @@ export default function ConditionalActionsSection({
                     disabled={!selectedToolType}
                     value={(() => {
                       if (
-                        selectedToolType === "EMAIL" &&
+                        selectedToolType === "email" &&
                         systemSmtpEnabled &&
                         newToolId === null
                       ) {
@@ -844,7 +902,7 @@ export default function ConditionalActionsSection({
                     </SelectTrigger>
                     <SelectContent>
                       {/* System SMTP option for EMAIL tools when enabled */}
-                      {selectedToolType === "EMAIL" && systemSmtpEnabled && (
+                      {selectedToolType === "email" && systemSmtpEnabled && (
                         <>
                           <SelectItem value="system">
                             <div className="flex items-center gap-2">
@@ -872,7 +930,7 @@ export default function ConditionalActionsSection({
                       {selectedToolType && (
                         <>
                           {(credentialsForSelectedTool.length > 0 ||
-                            (selectedToolType === "EMAIL" &&
+                            (selectedToolType === "email" &&
                               systemSmtpEnabled)) && (
                             <div className="border-border my-1 border-t" />
                           )}
@@ -967,38 +1025,43 @@ export default function ConditionalActionsSection({
                   </div>
                 )}
 
-              {/* Email-specific fields */}
-              {selectedToolType === "EMAIL" && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="emailRecipients">Recipients</Label>
-                    <Input
-                      id="emailRecipients"
-                      value={newEmailAddresses}
-                      onChange={(e) => setNewEmailAddresses(e.target.value)}
-                      placeholder="user1@example.com, user2@example.com"
-                    />
-                    <p className="text-muted-foreground text-xs">
-                      Enter multiple email addresses separated by commas
-                    </p>
+              {/* Tool-specific fields for recipients/to */}
+              {selectedToolType &&
+                hasActionParameter(selectedToolType, "to") && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="emailRecipients">Recipients</Label>
+                      <Input
+                        id="emailRecipients"
+                        value={newEmailAddresses}
+                        onChange={(e) => setNewEmailAddresses(e.target.value)}
+                        placeholder="user1@example.com, user2@example.com"
+                      />
+                      <p className="text-muted-foreground text-xs">
+                        Enter multiple email addresses separated by commas
+                      </p>
+                    </div>
+                    {hasActionParameter(selectedToolType, "subject") && (
+                      <div className="space-y-2">
+                        <Label htmlFor="emailSubject">Subject</Label>
+                        <Input
+                          id="emailSubject"
+                          value={newEmailSubject}
+                          onChange={(e) => setNewEmailSubject(e.target.value)}
+                          placeholder="Enter email subject..."
+                        />
+                      </div>
+                    )}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="emailSubject">Subject</Label>
-                    <Input
-                      id="emailSubject"
-                      value={newEmailSubject}
-                      onChange={(e) => setNewEmailSubject(e.target.value)}
-                      placeholder="Enter email subject..."
-                    />
-                  </div>
-                </div>
-              )}
+                )}
 
               {/* Message Content */}
               {selectedToolType && (
                 <div className="space-y-2">
                   <Label htmlFor="messageContent">
-                    {selectedToolType === "EMAIL" ? "Message Body" : "Message"}
+                    {hasActionParameter(selectedToolType, "body")
+                      ? "Message Body"
+                      : "Message"}
                   </Label>
                   <MonacoEditor
                     value={newMessage}
@@ -1017,24 +1080,13 @@ export default function ConditionalActionsSection({
                         setSelectedTemplate("");
                       }
                     }}
-                    language={
-                      selectedToolType === "SLACK" ||
-                      selectedToolType === "DISCORD"
-                        ? "json"
-                        : "html"
-                    }
+                    language={getMessageEditorLanguage(selectedToolType)}
                     height="200px"
                     editorSettings={editorSettings}
                     className="border-0"
                   />
                   <p className="text-muted-foreground text-xs">
-                    {selectedToolType === "EMAIL"
-                      ? "This will be the body content of your email"
-                      : selectedToolType === "SLACK"
-                        ? "Use JSON format for Slack message blocks and attachments"
-                        : selectedToolType === "DISCORD"
-                          ? "Use JSON format for Discord embeds and message components"
-                          : "This message will be sent using the selected communication tool"}
+                    {getMessageHelpText(selectedToolType)}
                   </p>
                 </div>
               )}

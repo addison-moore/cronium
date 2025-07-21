@@ -204,7 +204,6 @@ export default function WorkflowExecutionHistory({
     { label: "Success", value: LogStatus.SUCCESS },
     { label: "Failed", value: LogStatus.FAILURE },
     { label: "Pending", value: LogStatus.PENDING },
-    { label: "Paused", value: LogStatus.PAUSED },
   ];
 
   // Apply filters to executions

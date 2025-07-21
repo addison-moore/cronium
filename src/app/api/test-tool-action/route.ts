@@ -5,7 +5,6 @@ import {
   EventType,
   EventStatus,
   EventTriggerType,
-  ToolType,
   RunLocation,
   TimeUnit,
 } from "@/shared/schema";
@@ -84,7 +83,7 @@ export async function GET(request: NextRequest) {
 
     // Configure based on tool type
     interface ToolActionConfig {
-      toolType: ToolType;
+      toolType: string;
       toolId: number;
       actionId: string;
       parameters: Record<string, unknown>;
@@ -97,39 +96,50 @@ export async function GET(request: NextRequest) {
       parameters: {},
     };
 
-    switch (testTool.type) {
-      case ToolType.SLACK:
-        toolActionConfig.actionId = "slack.send-message";
-        toolActionConfig.parameters = {
-          channel: "#test",
-          message: "Test message from Cronium Tool Action test API",
-        };
-        break;
+    // Get the first available action from the plugin
+    const plugin = await import("@/tools/types/tool-plugin").then((m) =>
+      m.ToolPluginRegistry.get(testTool.type.toLowerCase()),
+    );
 
-      case ToolType.DISCORD:
-        toolActionConfig.actionId = "discord.send-message";
-        toolActionConfig.parameters = {
-          content: "Test message from Cronium Tool Action test API",
-        };
-        break;
+    if (plugin?.actions && plugin.actions.length > 0) {
+      const firstAction = plugin.actions[0];
+      if (firstAction) {
+        toolActionConfig.actionId = `${plugin.id}.${firstAction.id}`;
 
-      case ToolType.EMAIL:
-        toolActionConfig.actionId = "email.send";
-        toolActionConfig.parameters = {
-          to: "test@example.com",
-          subject: "Test from Cronium",
-          body: "This is a test email from the Tool Action test API",
-        };
-        break;
-
-      default:
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Unsupported tool type: ${testTool.type}`,
-          },
-          { status: 400 },
-        );
+        // Generate test parameters based on action definition
+        toolActionConfig.parameters = {};
+        if (firstAction.parameters) {
+          for (const param of firstAction.parameters) {
+            if (param.required) {
+              // Provide default test values based on parameter type
+              switch (param.type) {
+                case "string":
+                  toolActionConfig.parameters[param.name] =
+                    param.default ?? "Test value";
+                  break;
+                case "boolean":
+                  toolActionConfig.parameters[param.name] =
+                    param.default ?? false;
+                  break;
+                case "number":
+                  toolActionConfig.parameters[param.name] = param.default ?? 0;
+                  break;
+                default:
+                  toolActionConfig.parameters[param.name] =
+                    param.default ?? null;
+              }
+            }
+          }
+        }
+      }
+    } else {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Unsupported tool type: ${testTool.type}`,
+        },
+        { status: 400 },
+      );
     }
 
     mockEvent.toolActionConfig = JSON.stringify(toolActionConfig);
