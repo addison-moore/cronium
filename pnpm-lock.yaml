@@ -37,7 +37,7 @@ importers:
 
   apps/runtime: {}
 
-  apps/web:
+  apps/cronium-app:
     dependencies:
       '@cronium/ui':
         specifier: workspace:*

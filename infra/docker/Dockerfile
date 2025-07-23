@@ -20,7 +20,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # Copy workspace files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/web/package.json ./apps/web/
+COPY apps/cronium-app/package.json ./apps/cronium-app/
 COPY packages/ui/package.json ./packages/ui/
 COPY packages/config-typescript/package.json ./packages/config-typescript/
 COPY packages/config-eslint/package.json ./packages/config-eslint/

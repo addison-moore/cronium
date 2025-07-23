@@ -4,7 +4,7 @@
 
 This plan outlines the steps to improve tool modularity in Cronium by moving tool-specific logic into plugins, removing hardcoded tool types, and creating a dynamic API route system. The goal is to make tools completely self-contained modules that can be added without modifying core application files.
 
-**Note**: The project has been restructured into a monorepo. The Next.js application is now located in `apps/web/`. All paths in this document should be prefixed with `apps/web/` when referencing web application files.
+**Note**: The project has been restructured into a monorepo. The Next.js application is now located in `apps/cronium-app/`. All paths in this document should be prefixed with `apps/cronium-app/` when referencing web application files.
 
 ## Goals
 
@@ -128,11 +128,11 @@ Enable any tool to provide conditional actions without hardcoding specific tools
 
 #### 4.2 UI Updates (No Visual Changes)
 
-- [ ] Update ConditionalActionsSection to dynamically render fields
-- [ ] Use plugin-provided configurations for field display
-- [ ] Remove hardcoded email subject/recipients fields
-- [ ] Make form fields dynamic based on action requirements
-- [ ] Ensure UI remains visually identical
+- [x] Update ConditionalActionsSection to dynamically render fields
+- [x] Use plugin-provided configurations for field display
+- [x] Remove hardcoded email subject/recipients fields
+- [x] Make form fields dynamic based on action requirements
+- [x] Ensure UI remains visually identical
 
 #### 4.3 Execution Updates
 

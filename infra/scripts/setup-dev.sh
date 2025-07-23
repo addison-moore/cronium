@@ -90,12 +90,12 @@ echo " Ready!"
 
 # Run database migrations
 echo "🗄️ Running database migrations..."
-cd apps/web && pnpm db:push && cd ../..
+cd apps/cronium-app && pnpm db:push && cd ../..
 
 # Apply migration scripts if they exist
 echo "📊 Checking for migration scripts..."
-if [ -d "apps/web/src/scripts/migrations" ]; then
-    for migration in apps/web/src/scripts/migrations/*.sql; do
+if [ -d "apps/cronium-app/src/scripts/migrations" ]; then
+    for migration in apps/cronium-app/src/scripts/migrations/*.sql; do
         if [ -f "$migration" ] && [[ ! "$migration" == *"rollback"* ]]; then
             echo "Applying $(basename $migration)..."
             docker exec -i cronium-postgres psql -U cronium -d cronium <"$migration" || true
@@ -120,7 +120,7 @@ read -p "Do you want to seed the database with sample data? (y/N) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "🌱 Seeding database..."
-    cd apps/web && pnpm seed && cd ../..
+    cd apps/cronium-app && pnpm seed && cd ../..
 fi
 
 # Start all services
@@ -148,12 +148,12 @@ echo "
 1. Start all services: pnpm dev
 2. Or start individually:
    - Next.js: pnpm dev:web
-   - WebSocket: cd apps/web && pnpm dev:socket
+   - WebSocket: cd apps/cronium-app && pnpm dev:socket
 3. View logs: docker-compose -f infra/docker/docker-compose.stack.yml logs -f
 
 🛠️ Useful Commands:
 - Stop services: docker-compose -f infra/docker/docker-compose.stack.yml down
 - View logs: docker-compose -f infra/docker/docker-compose.stack.yml logs [service-name]
 - Restart service: docker-compose -f infra/docker/docker-compose.stack.yml restart [service-name]
-- Database studio: cd apps/web && pnpm db:studio
+- Database studio: cd apps/cronium-app && pnpm db:studio
 "
