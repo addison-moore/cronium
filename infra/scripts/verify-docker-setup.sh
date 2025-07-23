@@ -35,7 +35,7 @@ echo "📁 Checking required files..."
 files=(
     "infra/docker/docker-compose.dev.yml"
     "infra/docker/docker-compose.stack.yml"
-    "apps/web/Dockerfile"
+    "apps/cronium-app/Dockerfile"
     "apps/orchestrator/Dockerfile"
     "apps/orchestrator/Dockerfile.dev"
     "apps/orchestrator/.air.toml"
@@ -92,7 +92,7 @@ echo ""
 echo "📂 Checking monorepo structure..."
 
 dirs=(
-    "apps/web"
+    "apps/cronium-app"
     "apps/orchestrator"
     "apps/runtime/cronium-runtime"
     "packages/ui"

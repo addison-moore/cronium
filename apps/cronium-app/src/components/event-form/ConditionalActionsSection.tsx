@@ -275,6 +275,18 @@ export default function ConditionalActionsSection({
     [isInitialized],
   );
 
+  // Get the conditional action configuration for a tool type
+  const getConditionalActionConfig = useCallback((toolType: string) => {
+    try {
+      const action = ToolPluginRegistry.getConditionalActionForTool(
+        toolType.toLowerCase(),
+      );
+      return action;
+    } catch {
+      return null;
+    }
+  }, []);
+
   // Handle credential creation with stable callback
   const handleCredentialSubmit = useCallback(
     async (data: { name: string; credentials: Record<string, unknown> }) => {
@@ -308,52 +320,56 @@ export default function ConditionalActionsSection({
         // Extract content based on the action's parameter structure
         const params = template.parameters as Record<string, unknown>;
 
-        // Get the action to know which field contains the message
-        const action = ToolPluginRegistry.getActionById(template.actionId);
-        if (action) {
-          // For Discord and Slack, use 'content' or 'text' field
-          if (template.toolType === "DISCORD") {
-            const content = params.content;
-            setNewMessage(typeof content === "string" ? content : "");
-          } else if (template.toolType === "SLACK") {
-            const text = params.text;
-            const content = params.content;
-            const message =
-              typeof text === "string"
-                ? text
-                : typeof content === "string"
-                  ? content
-                  : "";
-            setNewMessage(message);
-          } else if (template.toolType === "email") {
-            const body = params.body;
-            const subject = params.subject;
-            const to = params.to;
-            setNewMessage(typeof body === "string" ? body : "");
-            setNewEmailSubject(typeof subject === "string" ? subject : "");
-            setNewEmailAddresses(typeof to === "string" ? to : "");
-          } else {
-            // For other tools, try common field names
-            const message = params.message;
-            const content = params.content;
-            const text = params.text;
-            const body = params.body;
-            const finalMessage =
-              typeof message === "string"
-                ? message
-                : typeof content === "string"
-                  ? content
-                  : typeof text === "string"
-                    ? text
-                    : typeof body === "string"
-                      ? body
-                      : "";
-            setNewMessage(finalMessage);
+        // Get the conditional action configuration to know parameter mapping
+        const conditionalConfig = getConditionalActionConfig(
+          template.toolType,
+        )?.conditionalActionConfig;
+        if (conditionalConfig) {
+          const { parameterMapping } = conditionalConfig;
+
+          // Set message field
+          if (parameterMapping.message) {
+            const messageValue = params[parameterMapping.message];
+            setNewMessage(typeof messageValue === "string" ? messageValue : "");
           }
+
+          // Set recipients field
+          if (parameterMapping.recipients) {
+            const recipientsValue = params[parameterMapping.recipients];
+            setNewEmailAddresses(
+              typeof recipientsValue === "string" ? recipientsValue : "",
+            );
+          }
+
+          // Set subject field
+          if (parameterMapping.subject) {
+            const subjectValue = params[parameterMapping.subject];
+            setNewEmailSubject(
+              typeof subjectValue === "string" ? subjectValue : "",
+            );
+          }
+        } else {
+          // Fallback for tools without conditional action config
+          // Try common field names
+          const message = params.message;
+          const content = params.content;
+          const text = params.text;
+          const body = params.body;
+          const finalMessage =
+            typeof message === "string"
+              ? message
+              : typeof content === "string"
+                ? content
+                : typeof text === "string"
+                  ? text
+                  : typeof body === "string"
+                    ? body
+                    : "";
+          setNewMessage(finalMessage);
         }
       }
     },
-    [userTemplates, systemTemplates],
+    [userTemplates, systemTemplates, getConditionalActionConfig],
   );
 
   // Update system SMTP settings when data loads
@@ -471,16 +487,54 @@ export default function ConditionalActionsSection({
       return;
     }
 
-    if (
-      newEventAction === ConditionalActionType.SEND_MESSAGE &&
-      (!newToolId || !newMessage.trim())
-    ) {
+    if (newEventAction === ConditionalActionType.SEND_MESSAGE && !newToolId) {
       toast({
         title: "Error",
-        description: "Tool and message are required for message actions",
+        description: "Please select a credential for message actions",
         variant: "destructive",
       });
       return;
+    }
+
+    // Use plugin validation if available
+    if (
+      newEventAction === ConditionalActionType.SEND_MESSAGE &&
+      selectedToolType
+    ) {
+      const conditionalConfig =
+        getConditionalActionConfig(selectedToolType)?.conditionalActionConfig;
+      if (conditionalConfig?.validate) {
+        // Build parameters object based on parameter mapping
+        const params: Record<string, unknown> = {};
+        if (conditionalConfig.parameterMapping.recipients) {
+          params[conditionalConfig.parameterMapping.recipients] =
+            newEmailAddresses;
+        }
+        if (conditionalConfig.parameterMapping.message) {
+          params[conditionalConfig.parameterMapping.message] = newMessage;
+        }
+        if (conditionalConfig.parameterMapping.subject) {
+          params[conditionalConfig.parameterMapping.subject] = newEmailSubject;
+        }
+
+        const validation = conditionalConfig.validate(params);
+        if (!validation.isValid && validation.errors?.length) {
+          toast({
+            title: "Validation Error",
+            description: validation.errors.join(", "),
+            variant: "destructive",
+          });
+          return;
+        }
+      } else if (!newMessage.trim()) {
+        // Fallback validation if plugin doesn't provide one
+        toast({
+          title: "Error",
+          description: "Message content is required",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     const newAction: ConditionalAction = {
@@ -534,6 +588,7 @@ export default function ConditionalActionsSection({
     conditionalActions,
     notifyParentOfChanges,
     toast,
+    getConditionalActionConfig,
   ]);
 
   const removeConditionalAction = useCallback(
@@ -631,18 +686,6 @@ export default function ConditionalActionsSection({
 
     // Fallback to the tool type itself
     return toolType;
-  }, []);
-
-  // Get the conditional action configuration for a tool type
-  const getConditionalActionConfig = useCallback((toolType: string) => {
-    try {
-      const action = ToolPluginRegistry.getConditionalActionForTool(
-        toolType.toLowerCase(),
-      );
-      return action;
-    } catch {
-      return null;
-    }
   }, []);
 
   // Check if the conditional action has a specific parameter
@@ -1025,71 +1068,111 @@ export default function ConditionalActionsSection({
                   </div>
                 )}
 
-              {/* Tool-specific fields for recipients/to */}
+              {/* Dynamic fields based on conditional action configuration */}
               {selectedToolType &&
-                hasActionParameter(selectedToolType, "to") && (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="emailRecipients">Recipients</Label>
-                      <Input
-                        id="emailRecipients"
-                        value={newEmailAddresses}
-                        onChange={(e) => setNewEmailAddresses(e.target.value)}
-                        placeholder="user1@example.com, user2@example.com"
-                      />
-                      <p className="text-muted-foreground text-xs">
-                        Enter multiple email addresses separated by commas
-                      </p>
+                (() => {
+                  const conditionalConfig =
+                    getConditionalActionConfig(
+                      selectedToolType,
+                    )?.conditionalActionConfig;
+                  if (!conditionalConfig) return null;
+
+                  const { parameterMapping, displayConfig } = conditionalConfig;
+                  const showRecipients = parameterMapping.recipients;
+                  const showSubject =
+                    parameterMapping.subject && displayConfig?.showSubject;
+
+                  return (
+                    <div className="space-y-4">
+                      {showRecipients && (
+                        <div className="space-y-2">
+                          <Label htmlFor="recipients">
+                            {displayConfig?.recipientLabel ?? "Recipients"}
+                          </Label>
+                          <Input
+                            id="recipients"
+                            value={newEmailAddresses}
+                            onChange={(e) =>
+                              setNewEmailAddresses(e.target.value)
+                            }
+                            placeholder={
+                              selectedToolType === "email"
+                                ? "user1@example.com, user2@example.com"
+                                : selectedToolType === "slack"
+                                  ? "#channel or @user"
+                                  : "Enter recipients..."
+                            }
+                          />
+                          <p className="text-muted-foreground text-xs">
+                            {selectedToolType === "email"
+                              ? "Enter multiple email addresses separated by commas"
+                              : selectedToolType === "slack"
+                                ? "Enter channel name or user handle"
+                                : "Enter recipient information"}
+                          </p>
+                        </div>
+                      )}
+                      {showSubject && (
+                        <div className="space-y-2">
+                          <Label htmlFor="subject">Subject</Label>
+                          <Input
+                            id="subject"
+                            value={newEmailSubject}
+                            onChange={(e) => setNewEmailSubject(e.target.value)}
+                            placeholder="Enter subject..."
+                          />
+                        </div>
+                      )}
                     </div>
-                    {hasActionParameter(selectedToolType, "subject") && (
-                      <div className="space-y-2">
-                        <Label htmlFor="emailSubject">Subject</Label>
-                        <Input
-                          id="emailSubject"
-                          value={newEmailSubject}
-                          onChange={(e) => setNewEmailSubject(e.target.value)}
-                          placeholder="Enter email subject..."
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
+                  );
+                })()}
 
               {/* Message Content */}
-              {selectedToolType && (
-                <div className="space-y-2">
-                  <Label htmlFor="messageContent">
-                    {hasActionParameter(selectedToolType, "body")
-                      ? "Message Body"
-                      : "Message"}
-                  </Label>
-                  <MonacoEditor
-                    value={newMessage}
-                    onChange={(value) => {
-                      setNewMessage(value);
-                      // Clear template selection if user manually edits message
-                      if (
-                        selectedTemplate &&
-                        value !==
-                          (
-                            ([...userTemplates, ...systemTemplates].find(
-                              (t) => t.id.toString() === selectedTemplate,
-                            )?.parameters as Record<string, unknown>) ?? {}
-                          )?.message
-                      ) {
-                        setSelectedTemplate("");
-                      }
-                    }}
-                    language={getMessageEditorLanguage(selectedToolType)}
-                    height="200px"
-                    editorSettings={editorSettings}
-                    className="border-0"
-                  />
-                  <p className="text-muted-foreground text-xs">
-                    {getMessageHelpText(selectedToolType)}
-                  </p>
-                </div>
-              )}
+              {selectedToolType &&
+                (() => {
+                  const conditionalConfig =
+                    getConditionalActionConfig(
+                      selectedToolType,
+                    )?.conditionalActionConfig;
+                  if (!conditionalConfig) return null;
+
+                  const { parameterMapping, displayConfig } = conditionalConfig;
+                  const messageParamName = parameterMapping.message;
+                  if (!messageParamName) return null;
+
+                  return (
+                    <div className="space-y-2">
+                      <Label htmlFor="messageContent">
+                        {displayConfig?.messageLabel ?? "Message"}
+                      </Label>
+                      <MonacoEditor
+                        value={newMessage}
+                        onChange={(value) => {
+                          setNewMessage(value);
+                          // Clear template selection if user manually edits message
+                          if (
+                            selectedTemplate &&
+                            value !==
+                              (
+                                ([...userTemplates, ...systemTemplates].find(
+                                  (t) => t.id.toString() === selectedTemplate,
+                                )?.parameters as Record<string, unknown>) ?? {}
+                              )?.message
+                          ) {
+                            setSelectedTemplate("");
+                          }
+                        }}
+                        language={getMessageEditorLanguage(selectedToolType)}
+                        height="200px"
+                        editorSettings={editorSettings}
+                        className="border-0"
+                      />
+                      <p className="text-muted-foreground text-xs">
+                        {getMessageHelpText(selectedToolType)}
+                      </p>
+                    </div>
+                  );
+                })()}
             </div>
           )}
 
@@ -1132,7 +1215,7 @@ export default function ConditionalActionsSection({
                 (newEventAction === ConditionalActionType.SCRIPT &&
                   !newTargetEventId) ||
                 (newEventAction === ConditionalActionType.SEND_MESSAGE &&
-                  (!selectedToolType || !newMessage))
+                  (!selectedToolType || !newToolId))
               }
               className="flex-1"
             >

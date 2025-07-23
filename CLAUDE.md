@@ -86,12 +86,12 @@ pnpm lint             # Lint all packages and apps
 pnpm format           # Format all code
 pnpm typecheck        # Type check all TypeScript packages
 
-# Database Operations - From apps/web
-cd apps/web && pnpm db:push      # Push Drizzle schema to database
-cd apps/web && pnpm db:studio    # Open Drizzle Kit studio
-cd apps/web && pnpm db:generate  # Generate Drizzle migrations
-cd apps/web && pnpm seed         # Seed all database tables
-cd apps/web && pnpm seed:db      # Seed only core tables
+# Database Operations - From apps/cronium-app
+cd apps/cronium-app && pnpm db:push      # Push Drizzle schema to database
+cd apps/cronium-app && pnpm db:studio    # Open Drizzle Kit studio
+cd apps/cronium-app && pnpm db:generate  # Generate Drizzle migrations
+cd apps/cronium-app && pnpm seed         # Seed all database tables
+cd apps/cronium-app && pnpm seed:db      # Seed only core tables
 
 # Docker & Deployment
 pnpm docker:up        # Start all services with Docker Compose
@@ -158,7 +158,7 @@ cronium-dev/
 - `plans/` - Project planning documents
 - `changelog/` - Daily change logs
 
-**Web Application (apps/web):**
+**Web Application (apps/cronium-app):**
 
 - `src/app/` - Next.js App Router pages and API routes
 - `src/components/` - React components organized by feature
@@ -193,15 +193,15 @@ cronium-dev/
 
 ## Path Aliases
 
-**Web Application (apps/web):**
+**Web Application (apps/cronium-app):**
 
 ```typescript
-@/*              // apps/web/src/*
-@shared/*        // apps/web/src/shared/*
-@components/*    // apps/web/src/components/*
-@server/*        // apps/web/src/server/*
-@lib/*           // apps/web/src/lib/*
-@scripts/*       // apps/web/src/scripts/*
+@/*              // apps/cronium-app/src/*
+@shared/*        // apps/cronium-app/src/shared/*
+@components/*    // apps/cronium-app/src/components/*
+@server/*        // apps/cronium-app/src/server/*
+@lib/*           // apps/cronium-app/src/lib/*
+@scripts/*       // apps/cronium-app/src/scripts/*
 ```
 
 **Shared Packages:**
@@ -215,16 +215,16 @@ cronium-dev/
 
 ## Database Schema
 
-Located in `apps/web/src/shared/schema.ts` using Drizzle ORM.
+Located in `apps/cronium-app/src/shared/schema.ts` using Drizzle ORM.
 
 ## Database Migrations
 
 **Completed Migration (2025-07-15)**: The database has been migrated to support containerized execution with 17 new tables for job queuing, OAuth, webhooks, and rate limiting.
 
-**Migration Scripts**: All migration scripts have been archived to `apps/web/src/scripts/migrations/archived/`. For future migrations:
+**Migration Scripts**: All migration scripts have been archived to `apps/cronium-app/src/scripts/migrations/archived/`. For future migrations:
 
-1. Use Drizzle Kit for schema changes: `cd apps/web && npx drizzle-kit generate` and `pnpm db:push`
-2. Create new migration scripts in `apps/web/src/scripts/migrations/` if data transformation is needed
+1. Use Drizzle Kit for schema changes: `cd apps/cronium-app && npx drizzle-kit generate` and `pnpm db:push`
+2. Create new migration scripts in `apps/cronium-app/src/scripts/migrations/` if data transformation is needed
 3. Document all migrations in the changelog
 
 ## Security Considerations
