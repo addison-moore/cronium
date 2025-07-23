@@ -69,6 +69,48 @@ export interface ToolAction {
 
   // Flag to indicate if this action can be used as a conditional action
   isConditionalAction?: boolean;
+
+  // Configuration for conditional action usage
+  conditionalActionConfig?: ConditionalActionConfig;
+}
+
+// Conditional Action Configuration
+export interface ConditionalActionConfig {
+  // Mapping of conditional action fields to tool action parameters
+  parameterMapping: {
+    // Standard conditional fields mapped to action parameters
+    recipients?: string; // Maps to parameter name for recipients (e.g., "to", "channel", "webhook_url")
+    message?: string; // Maps to parameter name for message content (e.g., "text", "body", "content")
+    subject?: string; // Maps to parameter name for subject (e.g., "subject", "title")
+    [key: string]: string | undefined; // Allow custom mappings
+  };
+
+  // Optional custom field configuration
+  customFields?: Array<{
+    name: string;
+    label: string;
+    type: "text" | "textarea" | "select" | "array";
+    required?: boolean;
+    placeholder?: string;
+    helpText?: string;
+    options?: Array<{ value: string; label: string }>;
+  }>;
+
+  // Display configuration
+  displayConfig?: {
+    recipientLabel?: string; // Custom label for recipient field (e.g., "Email Addresses", "Channel", "Webhook URL")
+    messageLabel?: string; // Custom label for message field
+    showSubject?: boolean; // Whether to show subject field
+    icon?:
+      | LucideIcon
+      | React.ComponentType<{ size?: number; className?: string }>; // Icon to display in conditional actions UI
+  };
+
+  // Validation for conditional action parameters
+  validate?: (params: Record<string, unknown>) => {
+    isValid: boolean;
+    errors?: string[];
+  };
 }
 
 // Execution Context
@@ -200,6 +242,7 @@ export interface ToolPlugin {
   actions: ToolAction[];
   getActionById: (id: string) => ToolAction | undefined;
   getActionsByType: (type: ActionType) => ToolAction[];
+  getConditionalAction?: () => ToolAction | undefined;
 
   // API Routes (new)
   apiRoutes?: PluginApiRoutes;

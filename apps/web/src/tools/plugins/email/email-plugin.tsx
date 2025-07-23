@@ -283,6 +283,39 @@ const emailActions: ToolAction[] = [
     actionType: "create",
     developmentMode: "visual",
     isConditionalAction: true,
+    conditionalActionConfig: {
+      parameterMapping: {
+        recipients: "to",
+        message: "body",
+        subject: "subject",
+      },
+      displayConfig: {
+        recipientLabel: "Email Addresses",
+        messageLabel: "Email Body",
+        showSubject: true,
+        icon: EmailIcon,
+      },
+      validate: (params) => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const errors: string[] = [];
+
+        if (!params.to || typeof params.to !== "string") {
+          errors.push("Email address is required");
+        } else if (!emailRegex.test(params.to)) {
+          errors.push("Invalid email address format");
+        }
+
+        if (!params.subject || typeof params.subject !== "string") {
+          errors.push("Subject is required");
+        }
+
+        if (!params.body || typeof params.body !== "string") {
+          errors.push("Email body is required");
+        }
+
+        return { isValid: errors.length === 0, errors };
+      },
+    },
     inputSchema: sendEmailSchema,
     parameters: zodToParameters(sendEmailSchema),
     outputSchema: z.object({
@@ -438,6 +471,8 @@ export const EmailPlugin: ToolPlugin = {
     emailActions.find((action) => action.id === id),
   getActionsByType: (type: ActionType) =>
     emailActions.filter((action) => action.actionType === type),
+  getConditionalAction: () =>
+    emailActions.find((action) => action.isConditionalAction),
 
   // API Routes
   apiRoutes: emailApiRoutes,

@@ -38,6 +38,27 @@ export const sendMessageAction: ToolAction = {
   actionType: "create",
   developmentMode: "visual",
   isConditionalAction: true,
+  conditionalActionConfig: {
+    parameterMapping: {
+      message: "content",
+    },
+    displayConfig: {
+      recipientLabel: "Webhook URL",
+      messageLabel: "Message Content",
+      showSubject: false,
+    },
+    validate: (params) => {
+      const errors: string[] = [];
+
+      if (!params.content || typeof params.content !== "string") {
+        errors.push("Message content is required");
+      } else if (params.content.length > 2000) {
+        errors.push("Message content must be 2000 characters or less");
+      }
+
+      return { isValid: errors.length === 0, errors };
+    },
+  },
   inputSchema: sendMessageSchema,
   parameters: zodToParameters(sendMessageSchema),
   outputSchema: z.object({
