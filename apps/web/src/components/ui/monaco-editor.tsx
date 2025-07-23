@@ -330,7 +330,7 @@ export function MonacoEditor({
 
   return (
     <div
-      className={`monaco-editor-container ${className} border-border group relative overflow-hidden rounded-md border`}
+      className={`monaco-editor-container ${className} group relative overflow-hidden rounded-md`}
     >
       {/* Expand button */}
       <Button

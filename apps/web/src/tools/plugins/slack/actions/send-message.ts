@@ -32,6 +32,39 @@ export const sendMessageAction: ToolAction = {
   actionType: "create",
   developmentMode: "visual",
   isConditionalAction: true,
+  conditionalActionConfig: {
+    parameterMapping: {
+      recipients: "channel",
+      message: "text",
+    },
+    displayConfig: {
+      recipientLabel: "Channel or User",
+      messageLabel: "Message Text",
+      showSubject: false,
+    },
+    validate: (params) => {
+      const errors: string[] = [];
+
+      if (!params.text || typeof params.text !== "string") {
+        errors.push("Message text is required");
+      }
+
+      // Channel is optional for Slack webhooks
+      if (params.channel && typeof params.channel === "string") {
+        // Basic validation for channel format
+        if (
+          !/^[#@].+/.exec(params.channel) &&
+          !/^[CG][A-Z0-9]+$/.exec(params.channel)
+        ) {
+          errors.push(
+            "Channel should start with # or @ or be a valid channel ID",
+          );
+        }
+      }
+
+      return { isValid: errors.length === 0, errors };
+    },
+  },
   inputSchema: sendMessageSchema,
   parameters: zodToParameters(sendMessageSchema),
   outputSchema: z.object({

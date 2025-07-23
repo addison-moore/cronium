@@ -176,6 +176,8 @@ export const DiscordPlugin: ToolPlugin = {
     Object.values(discordActions).filter(
       (action) => action.actionType === type,
     ),
+  getConditionalAction: () =>
+    Object.values(discordActions).find((action) => action.isConditionalAction),
 
   // API Routes
   apiRoutes: discordApiRoutes,
