@@ -1,0 +1,13 @@
+{
+  "name": "@cronium/tailwind-config",
+  "version": "1.0.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "main": "index.ts",
+  "files": [
+    "index.ts"
+  ],
+  "devDependencies": {
+    "tailwindcss": "^4.1.11"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@cronium/orchestrator",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "go build -o orchestrator ./cmd/cronium-agent",
+    "build:go": "go build -o orchestrator ./cmd/cronium-agent",
+    "dev": "air -c .air.toml",
+    "test": "go test ./...",
+    "test:go": "go test ./...",
+    "lint": "../../infra/scripts/lint-go.sh",
+    "lint:go": "../../infra/scripts/lint-go.sh"
+  }
+}

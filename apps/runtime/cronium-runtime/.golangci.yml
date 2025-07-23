@@ -1,0 +1,101 @@
+# golangci-lint configuration for Cronium Runtime
+# yaml-language-server: $schema=https://golangci-lint.run/jsonschema/golangci.jsonschema.json
+
+# This is the top level configuration
+run:
+  # Timeout for analysis
+  timeout: 5m
+  # Include test files
+  tests: true
+
+linters:
+  enable:
+    - bodyclose
+    - dogsled
+    - dupl
+    - errcheck
+    - goconst
+    - gocritic
+    - gocyclo
+    - gofmt
+    - goimports
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - prealloc
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+
+  disable:
+    - gochecknoglobals
+    - gochecknoinits
+    - godox
+    - funlen
+    - lll
+    - wsl
+    - typecheck # Disabled due to false positives with import aliases
+
+linters-settings:
+  dupl:
+    threshold: 100
+  goconst:
+    min-len: 2
+    min-occurrences: 2
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - dupImport
+      - ifElseChain
+      - octalLiteral
+      - whyNoLint
+      - wrapperFunc
+  gocyclo:
+    min-complexity: 15
+  goimports:
+    local-prefixes: github.com/addison-moore/cronium
+  gosec:
+    excludes:
+      - G104 # Audit errors not checked
+  govet:
+    enable:
+      - shadow
+  misspell:
+    locale: US
+
+issues:
+  # Exclude directories from analysis
+  exclude-dirs:
+    - vendor
+    - third_party
+    - testdata
+    - examples
+
+  exclude-rules:
+    # Exclude some linters from running on tests files.
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+        - goconst
+
+    # Exclude typecheck errors for import aliases
+    - linters:
+        - typecheck
+      text: "undefined:"
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false

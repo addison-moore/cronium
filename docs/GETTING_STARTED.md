@@ -1,11 +1,17 @@
 # Getting Started with Cronium Development
 
-This guide will help you set up a minimal development environment for Cronium and run the development Docker containers.
+This guide will help you set up a minimal development environment for Cronium monorepo and run the development containers.
 
 ## Prerequisites
 
 Before you begin, ensure you have the following installed:
 
+- **Node.js** (version 18.x or higher)
+- **PNPM** (version 8.x or higher)
+  ```bash
+  npm install -g pnpm
+  ```
+- **Go** (version 1.23 or higher) for Go services
 - **Docker Desktop** (version 20.10 or higher)
   - [Download for Mac](https://www.docker.com/products/docker-desktop/)
   - [Download for Windows](https://www.docker.com/products/docker-desktop/)
@@ -29,7 +35,17 @@ git clone https://github.com/your-org/cronium.git
 cd cronium
 ```
 
-### 2. Set Up Your Development Environment
+### 2. Install Dependencies
+
+```bash
+# Install all dependencies for the monorepo
+pnpm install
+
+# Build shared packages
+pnpm build --filter @cronium/ui --filter @cronium/config-*
+```
+
+### 3. Set Up Your Development Environment
 
 #### Create the development environment file:
 
@@ -56,7 +72,7 @@ echo "INTERNAL_API_KEY=$(openssl rand -base64 32)" >> .env.dev
 echo "JWT_SECRET=$(openssl rand -base64 32)" >> .env.dev
 ```
 
-### 3. Configure Your Database
+### 4. Configure Your Database
 
 The development environment expects an external PostgreSQL database. You have two options:
 
@@ -78,7 +94,7 @@ For services like Neon, Supabase, or AWS RDS, use the provided connection string
 DATABASE_URL=postgresql://user:password@host.neon.tech:5432/cronium_dev?sslmode=require
 ```
 
-### 4. Configure Optional Services
+### 5. Configure Optional Services
 
 Edit `.env.dev` to configure optional services:
 
@@ -94,14 +110,30 @@ SMTP_FROM_EMAIL=noreply@your-domain.com
 OPENAI_API_KEY=sk-your-openai-api-key
 ```
 
-### 5. Start the Development Environment
+### 6. Start the Development Environment
+
+#### Option A: Run Everything Locally (Recommended)
 
 ```bash
-# Start all services in development mode
-docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d
+# Start all services concurrently
+pnpm dev
+```
 
-# Or use the npm script (if available)
-npm run dev:docker
+This will start:
+
+- Next.js web app on http://localhost:5001
+- WebSocket server on ws://localhost:5002
+- Orchestrator service on http://localhost:8080
+- Runtime service on http://localhost:8081
+
+#### Option B: Run with Docker
+
+```bash
+# Start all services with Docker Compose
+pnpm docker:up
+
+# Or manually:
+docker-compose -f infra/docker/docker-compose.dev.yml --env-file .env.dev up -d
 ```
 
 This will start:
@@ -110,17 +142,21 @@ This will start:
 - **cronium-agent-dev**: Orchestrator service with Air (Go hot reloading)
 - **valkey**: Redis-compatible cache/queue service
 
-### 6. Verify Services are Running
+### 7. Verify Services are Running
 
-Check that all services are healthy:
+For local development:
+
+- Check terminal output from `pnpm dev`
+
+For Docker:
 
 ```bash
-docker-compose -f docker-compose.dev.yml ps
+docker-compose -f infra/docker/docker-compose.dev.yml ps
 ```
 
 You should see all services with "Up" status.
 
-### 7. Access the Application
+### 8. Access the Application
 
 - **Web Application**: http://localhost:5001
 - **WebSocket Server**: http://localhost:5002
@@ -128,32 +164,56 @@ You should see all services with "Up" status.
 
 ## Development Workflow
 
+### Monorepo Structure
+
+```
+cronium/
+├── apps/
+│   ├── web/              # Next.js application
+│   ├── orchestrator/     # Go orchestrator service
+│   └── runtime/          # Go runtime service
+├── packages/
+│   ├── ui/               # Shared UI components
+│   └── config-*/         # Shared configurations
+└── infra/                # Infrastructure files
+```
+
 ### Hot Reloading
 
-Both the Next.js app and Go orchestrator support hot reloading:
+All services support hot reloading:
 
-- **Next.js**: Changes to files in `/src` automatically trigger rebuilds
-- **Go Orchestrator**: Air watches for changes in `/orchestrator` and restarts the service
+- **Next.js**: Changes to files in `apps/web/src` automatically trigger rebuilds
+- **Go Services**: Air watches for changes and restarts services automatically
 
 ### Viewing Logs
 
+For local development, logs appear in your terminal.
+
+For Docker:
+
 ```bash
 # View all logs
-docker-compose -f docker-compose.dev.yml logs -f
+pnpm docker:logs
 
 # View specific service logs
-docker-compose -f docker-compose.dev.yml logs -f cronium-app-dev
-docker-compose -f docker-compose.dev.yml logs -f cronium-agent-dev
+docker-compose -f infra/docker/docker-compose.dev.yml logs -f cronium-app-dev
+docker-compose -f infra/docker/docker-compose.dev.yml logs -f cronium-agent-dev
 ```
 
 ### Stopping Services
 
+For local development:
+
+- Press `Ctrl+C` in the terminal running `pnpm dev`
+
+For Docker:
+
 ```bash
 # Stop all services
-docker-compose -f docker-compose.dev.yml down
+pnpm docker:down
 
 # Stop and remove volumes (clean slate)
-docker-compose -f docker-compose.dev.yml down -v
+docker-compose -f infra/docker/docker-compose.dev.yml down -v
 ```
 
 ## Common Development Tasks
@@ -161,32 +221,50 @@ docker-compose -f docker-compose.dev.yml down -v
 ### Running Database Migrations
 
 ```bash
-# Execute in the app container
-docker-compose -f docker-compose.dev.yml exec cronium-app-dev npm run db:push
+# From project root
+cd apps/web && pnpm db:push
+
+# Or in Docker
+docker-compose -f infra/docker/docker-compose.dev.yml exec cronium-app-dev pnpm db:push
 ```
 
 ### Accessing the Database Studio
 
 ```bash
-# Open Drizzle Studio
-docker-compose -f docker-compose.dev.yml exec cronium-app-dev npm run db:studio
+# From project root
+cd apps/web && pnpm db:studio
+
+# Or in Docker
+docker-compose -f infra/docker/docker-compose.dev.yml exec cronium-app-dev pnpm db:studio
 ```
 
 ### Running Tests
 
 ```bash
-# Run tests in the container
-docker-compose -f docker-compose.dev.yml exec cronium-app-dev npm test
+# Run all tests across monorepo
+pnpm test
+
+# Run tests for specific app
+pnpm test --filter @cronium/web
+
+# Or in Docker
+docker-compose -f infra/docker/docker-compose.dev.yml exec cronium-app-dev pnpm test
 ```
 
 ### Installing New Dependencies
 
 ```bash
-# Install npm packages
-docker-compose -f docker-compose.dev.yml exec cronium-app-dev npm install package-name
+# Install package to specific app
+pnpm add package-name --filter @cronium/web
+
+# Install package to shared UI library
+pnpm add package-name --filter @cronium/ui
+
+# Install dev dependency to root
+pnpm add -D package-name -w
 
 # Install Go modules
-docker-compose -f docker-compose.dev.yml exec cronium-agent-dev go get package-name
+cd apps/orchestrator && go get package-name
 ```
 
 ## Troubleshooting

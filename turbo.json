@@ -1,0 +1,81 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/env/.env.*local", "tsconfig.json"],
+  "globalEnv": [
+    "NODE_ENV",
+    "DATABASE_URL",
+    "NEXT_PUBLIC_APP_URL",
+    "NEXTAUTH_URL",
+    "NEXTAUTH_SECRET",
+    "ANALYZE",
+    "VERCEL_URL",
+    "CI"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "env": ["NODE_ENV"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"],
+      "env": ["NODE_ENV"]
+    },
+    "lint": {
+      "outputs": []
+    },
+    "lint:log": {
+      "outputs": []
+    },
+    "tsc:log": {
+      "outputs": []
+    },
+    "format": {
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "db:push": {
+      "cache": false,
+      "env": ["DATABASE_URL"]
+    },
+    "db:generate": {
+      "cache": false,
+      "env": ["DATABASE_URL"]
+    },
+    "build:go": {
+      "cache": true,
+      "outputs": ["orchestrator", "runtime", "**/*.exe"],
+      "env": ["GOOS", "GOARCH", "CGO_ENABLED"]
+    },
+    "test:go": {
+      "cache": true,
+      "outputs": ["coverage.out"],
+      "env": ["GO_ENV"]
+    },
+    "lint:go": {
+      "cache": true,
+      "outputs": []
+    },
+    "clean": {
+      "cache": false
+    },
+    "dev:socket": {
+      "cache": false,
+      "persistent": true,
+      "env": ["SOCKET_PORT", "DATABASE_URL"]
+    },
+    "seed": {
+      "cache": false,
+      "dependsOn": ["db:push"],
+      "env": ["DATABASE_URL"]
+    }
+  }
+}
