@@ -23,3 +23,10 @@ src/scripts/deprecated/
 # Docker development data directories
 data/valkey/
 data/orchestrator/
+
+# Turborepo
+.turbo/
+
+# Build outputs
+dist/
+build/

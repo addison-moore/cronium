@@ -1,0 +1,14 @@
+{
+  "name": "@cronium/runtime",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "cd cronium-runtime && go build -o ../runtime ./cmd/runtime",
+    "build:go": "cd cronium-runtime && go build -o ../runtime ./cmd/runtime",
+    "dev": "cd cronium-runtime && air -c .air.toml",
+    "test": "cd cronium-runtime && go test ./...",
+    "test:go": "cd cronium-runtime && go test ./...",
+    "lint": "cd cronium-runtime && ../../../scripts/lint-go.sh",
+    "lint:go": "cd cronium-runtime && ../../../scripts/lint-go.sh"
+  }
+}

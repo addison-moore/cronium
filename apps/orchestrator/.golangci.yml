@@ -1,0 +1,120 @@
+# golangci-lint configuration for Cronium Orchestrator
+# yaml-language-server: $schema=https://golangci-lint.run/jsonschema/golangci.jsonschema.json
+
+# Configuration version
+version: "2"
+
+# This is the top level configuration
+run:
+  # Timeout for analysis
+  timeout: 5m
+  # Include test files
+  tests: true
+
+linters:
+  enable:
+    - bodyclose
+    - dogsled
+    - dupl
+    - errcheck
+    - goconst
+    - gocritic
+    - gocyclo
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - prealloc
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+
+  disable:
+    - gochecknoglobals
+    - gochecknoinits
+    - godox
+    - funlen
+    - lll
+    - wsl
+    - typecheck # Disabled due to false positives with import aliases
+
+  exclusions:
+    rules:
+      # Exclude some linters from running on tests files.
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - errcheck
+          - dupl
+          - gosec
+          - goconst
+
+      # Exclude directories from analysis
+      - path: vendor/
+        linters:
+          - all
+      - path: third_party/
+        linters:
+          - all
+      - path: testdata/
+        linters:
+          - all
+      - path: examples/
+        linters:
+          - all
+      - path: runtime/
+        linters:
+          - all
+
+      # Exclude typecheck errors for import aliases
+      - linters:
+          - typecheck
+        text: "undefined:"
+
+  settings:
+    dupl:
+      threshold: 100
+    goconst:
+      min-len: 2
+      min-occurrences: 2
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+      disabled-checks:
+        - dupImport
+        - ifElseChain
+        - octalLiteral
+        - whyNoLint
+        - wrapperFunc
+    gocyclo:
+      min-complexity: 15
+    gosec:
+      excludes:
+        - G104 # Audit errors not checked
+    govet:
+      enable:
+        - shadow
+    misspell:
+      locale: US
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/addison-moore/cronium
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false

@@ -1,0 +1,3 @@
+{
+  "extends": "@cronium/typescript-config/base.json"
+}

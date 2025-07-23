@@ -71,23 +71,59 @@ IMPORTANT: Cronium is meant to be an open-source, self-hosted application. This 
 ## Common Commands
 
 ```bash
-# Development
-pnpm dev              # Start Next.js dev server on port 5001
-pnpm dev:socket       # Start WebSocket server (server.ts)
+# Development - Monorepo Root
+pnpm dev              # Start all services concurrently
+pnpm dev:web          # Start Next.js dev server only
+pnpm dev:socket       # Start WebSocket server only
+pnpm dev:services     # Start Go services (orchestrator + runtime)
 
-# Building & Testing
-pnpm build            # Build Next.js application
-pnpm start            # Start production server on port 5001
-pnpm test             # Run Jest tests (src/tests/)
-pnpm lint             # Run Next.js linter
+# Building & Testing - Monorepo Root
+pnpm build            # Build all packages and apps
+pnpm build:web        # Build Next.js application only
+pnpm build:go         # Build Go services
+pnpm test             # Run all tests across monorepo
+pnpm lint             # Lint all packages and apps
+pnpm format           # Format all code
+pnpm typecheck        # Type check all TypeScript packages
 
-# Database Operations
-pnpm db:push          # Push Drizzle schema to database
-pnpm db:studio        # Open Drizzle Kit studio
-pnpm db:generate      # Generate Drizzle migrations
+# Database Operations - From apps/web
+cd apps/web && pnpm db:push      # Push Drizzle schema to database
+cd apps/web && pnpm db:studio    # Open Drizzle Kit studio
+cd apps/web && pnpm db:generate  # Generate Drizzle migrations
+cd apps/web && pnpm seed         # Seed all database tables
+cd apps/web && pnpm seed:db      # Seed only core tables
+
+# Docker & Deployment
+pnpm docker:up        # Start all services with Docker Compose
+pnpm docker:down      # Stop all Docker services
+pnpm docker:build     # Build Docker images
+./infra/scripts/deploy.sh    # Full deployment script
 
 # Utilities
-pnpm clear            # Remove .next build directory
+pnpm clean            # Clean all build outputs
+```
+
+## Monorepo Structure
+
+The project is organized as a monorepo using Turborepo and PNPM workspaces:
+
+```
+cronium-dev/
+├── apps/
+│   ├── web/              # Next.js application
+│   ├── orchestrator/     # Go orchestrator service
+│   └── runtime/          # Go runtime service
+├── packages/
+│   ├── ui/               # Shared UI components
+│   ├── config-typescript/# Shared TypeScript configs
+│   ├── config-eslint/    # Shared ESLint configs
+│   └── config-tailwind/  # Shared Tailwind configs
+├── infra/
+│   ├── docker/           # Docker configurations
+│   └── scripts/          # Deployment scripts
+├── turbo.json            # Turborepo configuration
+├── pnpm-workspace.yaml   # PNPM workspace config
+└── go.work               # Go workspace config
 ```
 
 ## Architecture Overview
@@ -101,6 +137,8 @@ pnpm clear            # Remove .next build directory
 - tRPC for type-safe APIs
 - Socket.IO/WebSockets for real-time features
 - React Hook Form + Zod for forms
+- Turborepo for monorepo orchestration
+- PNPM for package management
 
 **Core Concepts:**
 
@@ -112,11 +150,26 @@ pnpm clear            # Remove .next build directory
 
 ## Key Directories
 
+**Monorepo Root:**
+
+- `apps/` - All applications (web, orchestrator, runtime)
+- `packages/` - Shared packages and configurations
+- `infra/` - Infrastructure and deployment files
+- `plans/` - Project planning documents
+- `changelog/` - Daily change logs
+
+**Web Application (apps/web):**
+
 - `src/app/` - Next.js App Router pages and API routes
 - `src/components/` - React components organized by feature
 - `src/lib/` - Core business logic and utilities
 - `src/server/` - tRPC setup and server-side code
 - `src/shared/` - Database schema and shared types
+
+**Go Services:**
+
+- `apps/orchestrator/` - Orchestrator service for job management
+- `apps/runtime/cronium-runtime/` - Runtime service for script execution
 
 ## Important Implementation Notes
 
@@ -140,27 +193,38 @@ pnpm clear            # Remove .next build directory
 
 ## Path Aliases
 
+**Web Application (apps/web):**
+
 ```typescript
-@/*              // src/*
-@shared/*        // src/shared/*
-@components/*    // src/components/*
-@server/*        // src/server/*
-@lib/*           // src/lib/*
-@scripts/*       // src/scripts/*
+@/*              // apps/web/src/*
+@shared/*        // apps/web/src/shared/*
+@components/*    // apps/web/src/components/*
+@server/*        // apps/web/src/server/*
+@lib/*           // apps/web/src/lib/*
+@scripts/*       // apps/web/src/scripts/*
+```
+
+**Shared Packages:**
+
+```typescript
+@cronium/ui          // packages/ui
+@cronium/config-typescript  // packages/config-typescript
+@cronium/config-eslint      // packages/config-eslint
+@cronium/config-tailwind    // packages/config-tailwind
 ```
 
 ## Database Schema
 
-Located in `src/shared/schema.ts` using Drizzle ORM.
+Located in `apps/web/src/shared/schema.ts` using Drizzle ORM.
 
 ## Database Migrations
 
 **Completed Migration (2025-07-15)**: The database has been migrated to support containerized execution with 17 new tables for job queuing, OAuth, webhooks, and rate limiting.
 
-**Migration Scripts**: All migration scripts have been archived to `src/scripts/migrations/archived/`. For future migrations:
+**Migration Scripts**: All migration scripts have been archived to `apps/web/src/scripts/migrations/archived/`. For future migrations:
 
-1. Use Drizzle Kit for schema changes: `npx drizzle-kit generate` and `pnpm db:push`
-2. Create new migration scripts in `src/scripts/migrations/` if data transformation is needed
+1. Use Drizzle Kit for schema changes: `cd apps/web && npx drizzle-kit generate` and `pnpm db:push`
+2. Create new migration scripts in `apps/web/src/scripts/migrations/` if data transformation is needed
 3. Document all migrations in the changelog
 
 ## Security Considerations
@@ -172,4 +236,37 @@ Located in `src/shared/schema.ts` using Drizzle ORM.
 
 ## Package Management
 
-- Use pnpm for package management
+- Use pnpm for all package management
+- Install dependencies from root: `pnpm install`
+- Add workspace dependencies: `pnpm add <package> --workspace`
+- Add app-specific dependencies: `pnpm add <package> --filter @cronium/web`
+
+## Development Workflow
+
+1. **Starting Development:**
+
+   ```bash
+   # From project root
+   pnpm install        # Install all dependencies
+   pnpm dev           # Start all services
+   ```
+
+2. **Working on Specific Apps:**
+
+   ```bash
+   pnpm dev:web       # Web app only
+   pnpm dev:services  # Go services only
+   ```
+
+3. **Building for Production:**
+
+   ```bash
+   pnpm build         # Build everything
+   ./infra/scripts/deploy.sh  # Deploy with Docker
+   ```
+
+4. **Adding New Shared Components:**
+   - Add to `packages/ui/src/`
+   - Export from `packages/ui/src/index.ts`
+   - Run `pnpm build --filter @cronium/ui`
+   - Import in apps as `import { Component } from '@cronium/ui'`
