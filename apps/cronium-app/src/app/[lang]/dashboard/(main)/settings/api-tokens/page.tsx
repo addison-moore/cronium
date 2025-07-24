@@ -12,7 +12,6 @@ import {
 } from "@cronium/ui";
 import { ScrollArea } from "@cronium/ui";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
-import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "API Tokens | Settings | Cronium",

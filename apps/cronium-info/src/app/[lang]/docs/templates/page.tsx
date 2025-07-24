@@ -21,7 +21,6 @@ import {
   Save,
 } from "lucide-react";
 import { SimpleCodeBlock } from "@/components/docs/api-code-examples";
-import Link from "next/link";
 
 const tableOfContents = [
   { title: "Overview", href: "#overview", level: 2 },

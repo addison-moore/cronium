@@ -8,30 +8,32 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "lint:log": "next lint > ../../logs/info-lint.log 2>&1",
+    "lint:log": "SKIP_ENV_VALIDATION=1 next lint > ../../logs/info-lint.log 2>&1",
     "tsc:log": "tsc --noEmit > ../../logs/info-tsc.log 2>&1"
   },
   "dependencies": {
-    "next": "15.1.6",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "next-intl": "^4.1.1",
-    "@cronium/ui": "workspace:*",
     "@cronium/tailwind-config": "workspace:*",
+    "@cronium/ui": "workspace:*",
+    "@types/prismjs": "^1.26.5",
     "clsx": "^2.1.1",
-    "lucide-react": "^0.467.0"
+    "lucide-react": "^0.467.0",
+    "next": "15.1.6",
+    "next-intl": "^4.1.1",
+    "prismjs": "^1.30.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.7.3",
+    "@cronium/eslint-config": "workspace:*",
+    "@cronium/typescript-config": "workspace:*",
+    "@tailwindcss/postcss": "^4.0.0-beta.10",
     "@types/node": "^22.7.9",
     "@types/react": "^19.0.5",
     "@types/react-dom": "^19.0.2",
-    "@cronium/typescript-config": "workspace:*",
-    "@cronium/eslint-config": "workspace:*",
-    "tailwindcss": "^4.0.0-beta.12",
-    "postcss": "^8.5.5",
-    "@tailwindcss/postcss": "^4.0.0-beta.10",
     "eslint": "^9.17.0",
-    "eslint-config-next": "15.1.6"
+    "eslint-config-next": "15.1.6",
+    "postcss": "^8.5.5",
+    "tailwindcss": "^4.0.0-beta.12",
+    "typescript": "^5.7.3"
   }
 }

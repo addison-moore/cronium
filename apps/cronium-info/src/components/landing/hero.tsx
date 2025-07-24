@@ -2,8 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Button } from "@cronium/ui";
-import { ArrowRight, Terminal, CheckCircle } from "lucide-react";
+import { Terminal, CheckCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 export default function Hero({ lang = "en" }: { lang?: string }) {
