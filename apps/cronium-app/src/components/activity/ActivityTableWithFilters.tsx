@@ -2,18 +2,18 @@
 
 import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@cronium/ui";
+import { Label } from "@cronium/ui";
+import { Input } from "@cronium/ui";
+import { Button } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { ComboBox } from "@/components/ui/combo-box";
+} from "@cronium/ui";
+import { ComboBox } from "@cronium/ui";
 import {
   LogStatus,
   type Event,

@@ -1,0 +1,448 @@
+@import "tailwindcss";
+
+/**
+ * Global Styles using Tailwind 4 theme variables
+ * Light/dark mode theme configuration
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Root theme variables for light mode */
+:root {
+  /* Core colors */
+  --background-color: #feffff;
+  --foreground-color: #1f2937;
+  --secondary-bg-color: #f8fafc;
+  --tertiary-bg-color: #f1f5f9;
+
+  /* UI element colors */
+  --card-color: var(--secondary-bg-color);
+  --card-foreground-color: #1f2937;
+
+  --popover-color: #ffffff;
+  --popover-foreground-color: #1f2937;
+
+  --primary-color: #7c3aed;
+  --primary-foreground-color: #ffffff;
+
+  --accent-color: #6c28eb;
+  --accent-foreground-color: #1f2937;
+
+  --secondary-color: #06b6d4;
+  --secondary-foreground-color: #ffffff;
+
+  --muted-color: #f3f4f6;
+  --muted-foreground-color: #6b7280;
+
+  /* Status colors */
+  --destructive-color: #ef4444;
+  --destructive-foreground-color: #ffffff;
+
+  --success-color: #10b981;
+  --success-foreground-color: #ffffff;
+
+  --warning-color: #f59e0b;
+  --warning-foreground-color: #ffffff;
+
+  --info-color: #3b82f6;
+  --info-foreground-color: #ffffff;
+
+  /* UI elements */
+  --border-color: #e5e7eb;
+  --input-color: #ffffff;
+  --ring-color: #6c28eb;
+
+  /* React Flow Variables for light mode */
+  --xy-controls-button-background-color-default: #ffffff;
+  --xy-controls-button-background-color-hover-default: #f9fafb;
+  --xy-controls-button-color-default: #1f2937;
+  --xy-controls-button-border-color-default: #e5e7eb;
+  --xy-controls-box-shadow-default: 0 0 2px 1px rgba(0, 0, 0, 0.08);
+
+  /* Border radius */
+  --radius: 0.375rem;
+
+  /* Shadow variables */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg:
+    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl:
+    0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+  /* Solarized Color Scheme */
+  --color-solarized-base03: #002b36;
+  --color-solarized-base02: #073642;
+  --color-solarized-base01: #586e75;
+  --color-solarized-base00: #657b83;
+  --color-solarized-base0: #839496;
+  --color-solarized-base1: #93a1a1;
+  --color-solarized-base2: #eee8d5;
+  --color-solarized-base3: #fdf6e3;
+  --color-solarized-yellow: #b58900;
+  --color-solarized-orange: #cb4b16;
+  --color-solarized-red: #dc322f;
+  --color-solarized-magenta: #d33682;
+  --color-solarized-violet: #6c71c4;
+  --color-solarized-blue: #268bd2;
+  --color-solarized-cyan: #2aa198;
+  --color-solarized-green: #859900;
+
+  /* Terminal specific variables */
+  --terminal-text-shadow: 0 0 2px rgba(131, 148, 150, 0.3);
+  --terminal-border-radius: var(--radius);
+  --terminal-shadow: var(--shadow-md);
+  /* Terminal specific colors (for console feature) */
+  --terminal-background: var(--color-solarized-base03);
+  --terminal-text: var(--color-solarized-base0);
+  --terminal-cursor: var(--color-solarized-base1);
+  --terminal-selection: rgba(147, 161, 161, 0.3);
+  --terminal-border: var(--color-solarized-base02);
+}
+
+/* Dark mode theme variables */
+.dark {
+  --background-color: #1f2937;
+  --foreground-color: #f9fafb;
+  --secondary-bg-color: #111827;
+  --tertiary-bg-color: #1c253b;
+
+  --card-color: var(--secondary-bg-color);
+  --card-foreground-color: #f9fafb;
+
+  --popover-color: #1f2937;
+  --popover-foreground-color: #f9fafb;
+
+  --primary-color: #7c3aed;
+  --primary-foreground-color: #ffffff;
+
+  --secondary-color: #06b6d4;
+  --secondary-foreground-color: #ffffff;
+
+  --muted-color: #374151;
+  --muted-foreground-color: #9ca3af;
+
+  --accent-color: #342255;
+  --accent-foreground-color: #f9fafb;
+
+  --destructive-color: #b91c1c;
+  --destructive-foreground-color: #fef2f2;
+
+  --success-color: #10b981;
+  --success-foreground-color: #ffffff;
+
+  --warning-color: #d97706;
+  --warning-foreground-color: #ffffff;
+
+  --info-color: #2563eb;
+  --info-foreground-color: #ffffff;
+
+  --border-color: #374151;
+  --input-color: #1f2937;
+  --ring-color: #6c28eb;
+
+  /* React Flow Variables for dark mode */
+  --xy-controls-button-background-color-default: #1f2937;
+  --xy-controls-button-background-color-hover-default: #111827;
+  --xy-controls-button-color-default: #f9fafb;
+  --xy-controls-button-border-color-default: #374151;
+  --xy-controls-box-shadow-default: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+}
+
+/**
+ * Theme tokens for Tailwind CSS v4
+ * These generate corresponding utility classes
+ */
+@theme {
+  --color-primary: var(--primary-color);
+  --color-secondary: var(--secondary-color);
+  --color-primary-foreground: var(--primary-foreground-color);
+  --color-secondary-foreground: var(--secondary-foreground-color);
+
+  --color-background: var(--background-color);
+  --color-secondary-bg: var(--secondary-bg-color);
+  --color-tertiary-bg: var(--tertiary-bg-color);
+  --color-foreground: var(--foreground-color);
+
+  --color-card: var(--card-color);
+  --color-card-foreground: var(--card-foreground-color);
+
+  --color-border: var(--border-color);
+  --color-ring: var(--ring-color);
+  --color-input: var(--input-color);
+
+  --color-popover: var(--popover-color);
+  --color-popover-foreground: var(--popover-foreground-color);
+
+  --color-muted: var(--muted-color);
+  --color-muted-foreground: var(--muted-foreground-color);
+
+  --color-accent: var(--accent-color);
+  --color-accent-foreground: var(--accent-foreground-color);
+
+  --color-destructive: var(--destructive-color);
+  --color-destructive-foreground: var(--destructive-foreground-color);
+
+  --color-success: var(--success-color);
+  --color-success-foreground: var(--success-foreground-color);
+
+  --color-warning: var(--warning-color);
+  --color-warning-foreground: var(--warning-foreground-color);
+
+  --color-info: var(--info-color);
+  --color-info-foreground: var(--info-foreground-color);
+
+  /* Typography */
+  --font-sans:
+    ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+
+  /* Border Radius */
+  --radius-sm: 0.125rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-full: 9999px;
+
+  /* Animations */
+  --animate-spin: spin 1s linear infinite;
+  --animate-ping: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+  --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-bounce: bounce 1s infinite;
+  --animate-fade-in: fadeIn 0.3s ease-out;
+
+  @keyframes fadeIn {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+}
+
+/* Base styles using Tailwind 4 layers */
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  /* Use simple CSS properties instead of utility classes */
+  body {
+    background-color: var(--background-color);
+    color: var(--foreground-color);
+    font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+  }
+
+  /* React Flow specific styles to ensure theme compatibility */
+  .react-flow__controls {
+    background-color: var(--background-color);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .react-flow__controls-button {
+    background-color: var(--background-color) !important;
+    color: var(--foreground-color) !important;
+    border-color: var(--border-color) !important;
+    fill: var(--foreground-color) !important;
+  }
+
+  .react-flow__controls-button:hover {
+    background-color: var(--muted-color) !important;
+  }
+
+  /* MiniMap styling */
+  .react-flow__minimap {
+    background-color: var(--background-color) !important;
+    border: 1px solid var(--border-color) !important;
+  }
+
+  .react-flow__minimap-mask {
+    fill: var(--muted-color) !important;
+  }
+
+  .react-flow__minimap-node {
+    fill: var(--foreground-color) !important;
+    stroke: var(--background-color) !important;
+    stroke-width: 1px;
+  }
+
+  /* Ensure focus styles to improve accessibility */
+  :focus-visible {
+    outline-width: 2px;
+    outline-color: var(--primary-color);
+    outline-offset: 2px;
+  }
+
+  /* Base heading styles */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    scroll-margin-top: 100px;
+    font-weight: 600;
+    color: var(--foreground-color);
+  }
+
+  /* Monaco Editor specific styles */
+  .monaco-editor .suggest-widget {
+    z-index: 1000 !important;
+  }
+
+  .monaco-editor .suggest-widget .monaco-list .monaco-list-row {
+    height: auto !important;
+    min-height: 22px !important;
+    line-height: 22px !important;
+    padding: 2px 8px !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  .monaco-editor
+    .suggest-widget
+    .monaco-list
+    .monaco-list-row
+    .monaco-icon-label {
+    line-height: 18px !important;
+    height: 18px !important;
+  }
+
+  .monaco-editor
+    .suggest-widget
+    .monaco-list
+    .monaco-list-row
+    .monaco-icon-label
+    .monaco-icon-label-container {
+    line-height: 18px !important;
+    height: 18px !important;
+  }
+
+  .monaco-editor .suggest-widget .monaco-list .monaco-list-row .suggest-icon {
+    width: 16px !important;
+    height: 16px !important;
+    margin-right: 6px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .monaco-editor .suggest-widget .monaco-list .monaco-list-row .contents {
+    line-height: 18px !important;
+    height: 18px !important;
+    overflow: hidden !important;
+  }
+
+  .monaco-editor .suggest-widget .monaco-list .monaco-list-row .contents .main {
+    line-height: 18px !important;
+    height: 18px !important;
+  }
+
+  .monaco-editor
+    .suggest-widget
+    .monaco-list
+    .monaco-list-row
+    .contents
+    .main
+    .type-label {
+    line-height: 18px !important;
+    height: 18px !important;
+    font-size: 12px !important;
+  }
+
+  .monaco-editor
+    .suggest-widget
+    .monaco-list
+    .monaco-list-row
+    .contents
+    .main
+    .signature-label {
+    line-height: 18px !important;
+    height: 18px !important;
+    font-size: 11px !important;
+  }
+
+  /* Solarized color utility classes */
+  .bg-solarized-base03 {
+    background-color: var(--color-solarized-base03);
+  }
+  .bg-solarized-base02 {
+    background-color: var(--color-solarized-base02);
+  }
+  .bg-solarized-base01 {
+    background-color: var(--color-solarized-base01);
+  }
+  .bg-solarized-base00 {
+    background-color: var(--color-solarized-base00);
+  }
+  .bg-solarized-base0 {
+    background-color: var(--color-solarized-base0);
+  }
+  .bg-solarized-base1 {
+    background-color: var(--color-solarized-base1);
+  }
+  .bg-solarized-base2 {
+    background-color: var(--color-solarized-base2);
+  }
+  .bg-solarized-base3 {
+    background-color: var(--color-solarized-base3);
+  }
+
+  .text-solarized-base03 {
+    color: var(--color-solarized-base03);
+  }
+  .text-solarized-base02 {
+    color: var(--color-solarized-base02);
+  }
+  .text-solarized-base01 {
+    color: var(--color-solarized-base01);
+  }
+  .text-solarized-base00 {
+    color: var(--color-solarized-base00);
+  }
+  .text-solarized-base0 {
+    color: var(--color-solarized-base0);
+  }
+  .text-solarized-base1 {
+    color: var(--color-solarized-base1);
+  }
+  .text-solarized-base2 {
+    color: var(--color-solarized-base2);
+  }
+  .text-solarized-base3 {
+    color: var(--color-solarized-base3);
+  }
+
+  .text-solarized-yellow {
+    color: var(--color-solarized-yellow);
+  }
+  .text-solarized-orange {
+    color: var(--color-solarized-orange);
+  }
+  .text-solarized-red {
+    color: var(--color-solarized-red);
+  }
+  .text-solarized-magenta {
+    color: var(--color-solarized-magenta);
+  }
+  .text-solarized-violet {
+    color: var(--color-solarized-violet);
+  }
+  .text-solarized-blue {
+    color: var(--color-solarized-blue);
+  }
+  .text-solarized-cyan {
+    color: var(--color-solarized-cyan);
+  }
+  .text-solarized-green {
+    color: var(--color-solarized-green);
+  }
+}

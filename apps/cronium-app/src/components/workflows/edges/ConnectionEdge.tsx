@@ -9,13 +9,9 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import { ConnectionType } from "@/shared/schema";
-import { Badge } from "@/components/ui/badge";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@cronium/ui";
+import { Popover, PopoverContent, PopoverTrigger } from "@cronium/ui";
+import { Button } from "@cronium/ui";
 import { useTheme } from "next-themes";
 
 // Style definitions for different connection types

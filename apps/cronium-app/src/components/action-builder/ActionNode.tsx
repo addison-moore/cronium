@@ -2,8 +2,8 @@
 
 import React from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
 import { Settings, AlertCircle, CheckCircle } from "lucide-react";
 import { NodeType } from "./types";
 import { cn } from "@/lib/utils";

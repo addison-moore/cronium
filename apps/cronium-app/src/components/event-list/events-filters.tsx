@@ -2,16 +2,16 @@
 
 import { useTranslations } from "next-intl";
 import { EventStatus, EventType } from "@/shared/schema";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@cronium/ui";
+import { Input } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { ComboBox } from "@/components/ui/combo-box";
+} from "@cronium/ui";
+import { ComboBox } from "@cronium/ui";
 import { Search, X, ArrowUp, ArrowDown } from "lucide-react";
 import { EventTypeIcon } from "@/components/ui/event-type-icon";
 import {

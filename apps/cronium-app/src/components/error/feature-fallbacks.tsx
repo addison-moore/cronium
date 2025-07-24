@@ -1,7 +1,7 @@
 import React, { type ReactNode } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import { Alert, AlertDescription } from "@cronium/ui";
+import { Button } from "@cronium/ui";
 import {
   FileText,
   Terminal,

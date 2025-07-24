@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Button } from "@/components/ui/button";
+import { Button } from "@cronium/ui";
 import {
   Table,
   TableBody,
@@ -12,25 +12,25 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@cronium/ui";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
+} from "@cronium/ui";
+import { ScrollArea } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Pagination } from "@/components/ui/pagination";
-import { Input } from "@/components/ui/input";
-import { ComboBox } from "@/components/ui/combo-box";
+} from "@cronium/ui";
+import { Pagination } from "@cronium/ui";
+import { Input } from "@cronium/ui";
+import { ComboBox } from "@cronium/ui";
 import { formatDate } from "@/lib/utils";
 import { Play, Search, X, ArrowUp, ArrowDown, RefreshCw } from "lucide-react";
 import Link from "next/link";
@@ -41,7 +41,7 @@ import type {
   WorkflowExecutionEvent,
 } from "@/shared/schema";
 import { trpc } from "@/lib/trpc";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@cronium/ui";
 
 interface WorkflowExecutionHistoryProps {
   workflowId?: number; // Optional - if not provided, shows all workflows

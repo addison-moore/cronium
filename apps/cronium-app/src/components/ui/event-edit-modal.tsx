@@ -2,10 +2,10 @@
 
 import React from "react";
 import { Lock } from "lucide-react";
-import { Modal } from "@/components/ui/modal";
-import { toast } from "@/components/ui/use-toast";
-import { Spinner } from "@/components/ui/spinner";
-import { Button } from "@/components/ui/button";
+import { Modal } from "@cronium/ui";
+import { toast } from "@cronium/ui";
+import { Spinner } from "@cronium/ui";
+import { Button } from "@cronium/ui";
 import EventForm from "@/components/event-form/EventForm-lazy";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/lib/trpc";

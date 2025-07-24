@@ -4,7 +4,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@cronium/ui";
 import ServerForm from "@/components/dashboard/ServerForm";
 
 export default function NewServerPage() {

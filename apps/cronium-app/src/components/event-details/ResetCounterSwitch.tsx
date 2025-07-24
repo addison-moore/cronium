@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { toast } from "@/components/ui/use-toast";
+import { Button } from "@cronium/ui";
+import { Switch } from "@cronium/ui";
+import { Label } from "@cronium/ui";
+import { toast } from "@cronium/ui";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 

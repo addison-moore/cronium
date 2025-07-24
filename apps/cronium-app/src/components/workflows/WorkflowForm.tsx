@@ -2,15 +2,15 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Calendar, Globe, Hand, GitFork } from "lucide-react";
-import { toast } from "@/components/ui/use-toast";
-import { Button } from "@/components/ui/button";
+import { toast } from "@cronium/ui";
+import { Button } from "@cronium/ui";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
   CardDescription,
-} from "@/components/ui/card";
+} from "@cronium/ui";
 import {
   Form,
   FormControl,
@@ -19,19 +19,19 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Tabs, TabsContent, TabsList, Tab } from "@/components/ui/tabs";
+} from "@cronium/ui";
+import { Tabs, TabsContent, TabsList, Tab } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { TagsInput } from "@/components/ui/tags-input";
+} from "@cronium/ui";
+import { Input } from "@cronium/ui";
+import { Textarea } from "@cronium/ui";
+import { Switch } from "@cronium/ui";
+import { TagsInput } from "@cronium/ui";
 import type { UseFormReturn } from "react-hook-form";
 import { EventStatus, WorkflowTriggerType } from "@/shared/schema";
 import type { EventType, RunLocation } from "@/shared/schema";

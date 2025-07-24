@@ -4,16 +4,16 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { EventStatus } from "@/shared/schema";
 import type { TimeUnit, RunLocation, EventType } from "@/shared/schema";
-import { useToast } from "@/components/ui/use-toast";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { Pagination } from "@/components/ui/pagination";
+import { useToast } from "@cronium/ui";
+import { ConfirmationDialog } from "@cronium/ui";
+import { Pagination } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@cronium/ui";
 import {
   EventsFilters,
   EventsTable,

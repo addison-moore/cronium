@@ -1,15 +1,15 @@
 "use client";
 
 import { Search, ArrowUp, ArrowDown } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Input } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
+} from "@cronium/ui";
+import { Button } from "@cronium/ui";
 
 interface ServerFilters {
   searchTerm: string;

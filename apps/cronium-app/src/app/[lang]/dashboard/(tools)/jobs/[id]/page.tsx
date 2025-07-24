@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { JobStatusCard } from "@/components/jobs/JobStatusCard";
 import { JobExecutionLogs } from "@/components/jobs/JobExecutionLogs";
-import { Card } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card } from "@cronium/ui";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cronium/ui";
 
 interface JobDetailsPageProps {
   params: Promise<{

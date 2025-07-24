@@ -2,8 +2,8 @@
 
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { Card, CardHeader } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardHeader } from "@cronium/ui";
+import { Button } from "@cronium/ui";
 import { Info } from "lucide-react";
 import { EventType } from "@/shared/schema";
 import { EventTypeIcon } from "@/components/ui/event-type-icon";

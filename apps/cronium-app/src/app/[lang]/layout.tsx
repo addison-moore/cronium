@@ -3,7 +3,7 @@ import type { SupportedLocale } from "@shared/i18n";
 import { redirect } from "next/navigation";
 import React from "react";
 import { Providers } from "@/components/providers/Providers";
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "@cronium/ui";
 import "../styles/global.css";
 import { NextIntlProvider } from "@/components/providers/next-intl-provider";
 

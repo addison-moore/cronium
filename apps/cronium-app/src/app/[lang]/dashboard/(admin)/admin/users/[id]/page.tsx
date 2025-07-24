@@ -14,17 +14,17 @@ import {
   Trash,
   SendHorizontal,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@cronium/ui";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+} from "@cronium/ui";
+import { Badge } from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@cronium/ui";
 import { UserRole, UserStatus } from "@/shared/schema";
 import {
   Select,
@@ -32,7 +32,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@cronium/ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,7 +42,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
 import type { RouterOutputs } from "@/server/api/root";
 

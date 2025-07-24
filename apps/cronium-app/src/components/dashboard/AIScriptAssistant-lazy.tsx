@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { FormSkeleton } from "@/components/ui/loading-skeletons";
+import { FormSkeleton } from "@cronium/ui";
 
 const AIScriptAssistant = dynamic(() => import("./AIScriptAssistant"), {
   ssr: false,

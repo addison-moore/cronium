@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { TerminalSkeleton } from "@/components/ui/loading-skeletons";
+import { TerminalSkeleton } from "@cronium/ui";
 
 const Terminal = dynamic(
   () =>

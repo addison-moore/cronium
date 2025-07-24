@@ -2,12 +2,12 @@
 
 import { useState, useEffect, use, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Tab, Tabs, TabsContent, TabsList } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/components/ui/use-toast";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
+import { Tab, Tabs, TabsContent, TabsList } from "@cronium/ui";
+import { Separator } from "@cronium/ui";
+import { useToast } from "@cronium/ui";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
 import { trpc } from "@/lib/trpc";
 import type { RouterOutputs } from "@/server/api/root";

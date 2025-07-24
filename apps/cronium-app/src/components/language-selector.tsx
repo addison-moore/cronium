@@ -8,13 +8,13 @@ import {
   localeNames,
   type SupportedLocale,
 } from "@shared/i18n";
-import { Button } from "@/components/ui/button";
+import { Button } from "@cronium/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@cronium/ui";
 import { Globe } from "lucide-react";
 
 export default function LanguageSelector() {

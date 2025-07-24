@@ -2,8 +2,8 @@
 
 import React, { Component, type ReactNode, Suspense } from "react";
 import { AlertCircle, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@cronium/ui";
+import { Alert, AlertDescription, AlertTitle } from "@cronium/ui";
 
 interface ErrorBoundaryState {
   hasError: boolean;

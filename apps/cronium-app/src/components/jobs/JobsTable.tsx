@@ -8,9 +8,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+} from "@cronium/ui";
+import { Badge } from "@cronium/ui";
+import { Button } from "@cronium/ui";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import {

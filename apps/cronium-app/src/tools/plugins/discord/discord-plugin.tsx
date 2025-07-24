@@ -5,9 +5,9 @@ import { z } from "zod";
 import { DiscordIcon } from "./discord-icon";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@cronium/ui";
+import { Input } from "@cronium/ui";
+import { Label } from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Edit, Trash2, Eye, EyeOff } from "lucide-react";
 import {

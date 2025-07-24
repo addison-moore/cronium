@@ -4,8 +4,8 @@ import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@cronium/ui";
+import { Input } from "@cronium/ui";
 import {
   Card,
   CardContent,
@@ -13,8 +13,8 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+} from "@cronium/ui";
+import { Alert, AlertDescription, AlertTitle } from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Loader2,
@@ -33,16 +33,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@cronium/ui";
 import {
   Form,
   FormControl,
   FormField,
   FormItem,
   FormMessage,
-} from "@/components/ui/form";
+} from "@cronium/ui";
 import { formatDate } from "@/lib/utils";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
 import { TokenStatus } from "@/shared/schema";
 import { QUERY_OPTIONS } from "@/trpc/shared";

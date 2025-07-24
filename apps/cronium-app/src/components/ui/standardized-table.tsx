@@ -9,9 +9,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { ActionMenu } from "@/components/ui/action-menu";
-import { cn } from "@/lib/utils";
+} from "./table";
+import { ActionMenu } from "./action-menu";
+import { cn } from "@cronium/ui";
 
 export interface StandardizedTableAction {
   label: string;

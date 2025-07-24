@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { ArrowLeft, Trash2, Play, RefreshCw } from "lucide-react";
 import { type EventStatus } from "@/shared/schema";
-import { Button } from "@/components/ui/button";
+import { Button } from "@cronium/ui";
 import { ClickableStatusBadge } from "@/components/ui/clickable-status-badge";
 import { useTranslations } from "next-intl";
 import { type Event } from "./types";

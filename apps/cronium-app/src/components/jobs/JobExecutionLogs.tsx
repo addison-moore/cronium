@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import { ScrollArea } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
+import { Button } from "@cronium/ui";
 import { Terminal, Download, Maximize2, Minimize2 } from "lucide-react";
 import { useSocket } from "@/hooks/use-socket";
 import { cn } from "@/lib/utils";

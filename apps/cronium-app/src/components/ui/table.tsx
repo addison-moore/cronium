@@ -1,12 +1,12 @@
 import * as React from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@cronium/ui";
 
 const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
 >(({ className, ...props }, ref) => (
-  <div className="bg-tertiary-bg border-border w-full overflow-auto overflow-hidden rounded-md border">
+  <div className="bg-tertiary-bg border-border w-full overflow-auto rounded-md border">
     <table
       ref={ref}
       className={cn("w-full caption-bottom text-sm", className)}
@@ -55,7 +55,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-border data-[state=selected]:bg-background/30 odd:bg-secondary-bg/40 hover:bg-background/50 border-b transition transition-colors",
+      "border-border data-[state=selected]:bg-background/30 odd:bg-secondary-bg/40 hover:bg-background/50 border-b transition-colors",
       className,
     )}
     {...props}

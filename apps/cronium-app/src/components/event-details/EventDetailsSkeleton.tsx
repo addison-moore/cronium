@@ -1,6 +1,6 @@
-import { Skeleton } from "@/components/ui/skeleton";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Tabs, TabsList, Tab, TabsContent } from "@/components/ui/tabs";
+import { Skeleton } from "@cronium/ui";
+import { Card, CardContent, CardHeader } from "@cronium/ui";
+import { Tabs, TabsList, Tab, TabsContent } from "@cronium/ui";
 
 export function EventDetailsSkeleton() {
   return (

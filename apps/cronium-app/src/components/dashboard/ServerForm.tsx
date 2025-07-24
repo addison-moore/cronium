@@ -20,12 +20,12 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+} from "@cronium/ui";
+import { Input } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Textarea } from "@cronium/ui";
+import { Checkbox } from "@cronium/ui";
+import { Alert, AlertDescription, AlertTitle } from "@cronium/ui";
 import { type UpdateServerInput } from "@shared/schemas/servers";
 import { z } from "zod";
 
@@ -44,9 +44,9 @@ const serverFormSchema = z.object({
 
 // Create form type from the schema
 type ServerFormInput = z.infer<typeof serverFormSchema>;
-import { Spinner } from "../ui/spinner";
+import { Spinner } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@cronium/ui";
 
 interface ServerFormProps {
   initialServer?: Partial<UpdateServerInput>;

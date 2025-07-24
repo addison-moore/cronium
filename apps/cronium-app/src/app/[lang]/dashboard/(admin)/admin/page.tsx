@@ -1,6 +1,6 @@
 "use client";
 import { useTranslations } from "next-intl";
-import { Tabs, TabsContent, TabsList, Tab } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, Tab } from "@cronium/ui";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
 import { Mail, Users, Sparkles, UserCog, Shield } from "lucide-react";
 import { z } from "zod";
@@ -15,7 +15,7 @@ import {
 } from "@/components/admin";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@cronium/ui";
 
 interface SystemSettings {
   smtpHost?: string;

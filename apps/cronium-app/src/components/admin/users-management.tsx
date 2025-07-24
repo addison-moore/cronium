@@ -16,14 +16,14 @@ import {
   RefreshCw,
   MoreVertical,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/components/ui/use-toast";
+import { Button } from "@cronium/ui";
+import { Input } from "@cronium/ui";
+import { Label } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
+import { useToast } from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { StandardizedTableLink } from "@/components/ui/standardized-table";
-import { Pagination } from "@/components/ui/pagination";
+import { StandardizedTableLink } from "@cronium/ui";
+import { Pagination } from "@cronium/ui";
 import {
   Table,
   TableBody,
@@ -31,7 +31,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@cronium/ui";
 import {
   Dialog,
   DialogContent,
@@ -40,7 +40,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@cronium/ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,21 +50,21 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@cronium/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@cronium/ui";
 import { SettingsSection } from "./settings-section";
 
 interface User {

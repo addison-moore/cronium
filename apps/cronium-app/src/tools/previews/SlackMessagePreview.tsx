@@ -2,7 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { MessageSquare, Hash, AtSign } from "lucide-react";
 import { format } from "date-fns";
 

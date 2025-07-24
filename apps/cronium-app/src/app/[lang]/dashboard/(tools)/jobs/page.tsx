@@ -1,10 +1,10 @@
 import { api } from "@/trpc/server";
-import { Card } from "@/components/ui/card";
+import { Card } from "@cronium/ui";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { JobsTable } from "@/components/jobs/JobsTable";
 import { JobFilters } from "@/components/jobs/JobFilters";
 import { Suspense } from "react";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@cronium/ui";
 
 export default async function JobsPage() {
   return (

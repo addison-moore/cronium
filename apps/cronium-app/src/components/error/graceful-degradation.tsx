@@ -1,8 +1,8 @@
 "use client";
 
 import React, { Component, type ReactNode, useState, useEffect } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@cronium/ui";
+import { Button } from "@cronium/ui";
 import { AlertCircle, Info, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 

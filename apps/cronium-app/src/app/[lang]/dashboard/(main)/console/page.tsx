@@ -10,7 +10,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@cronium/ui";
 import { Server, ServerOff, Plus } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
 import Link from "next/link";

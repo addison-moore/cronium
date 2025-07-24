@@ -5,26 +5,23 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Server, Plus, Eye, Edit, CheckCircle, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { toast } from "@/components/ui/use-toast";
+import { Button } from "@cronium/ui";
+import { Card, CardContent } from "@cronium/ui";
+import { toast } from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Pagination } from "@/components/ui/pagination";
+import { Pagination } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import {
-  StandardizedTable,
-  StandardizedTableLink,
-} from "@/components/ui/standardized-table";
+} from "@cronium/ui";
+import { StandardizedTable, StandardizedTableLink } from "@cronium/ui";
 import type {
   StandardizedTableColumn,
   StandardizedTableAction,
-} from "@/components/ui/standardized-table";
+} from "@cronium/ui";
 import { ServerFilters } from "@/components/server-list/ServerFilters";
 import { trpc } from "@/lib/trpc";
 

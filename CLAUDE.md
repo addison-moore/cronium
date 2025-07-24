@@ -73,13 +73,15 @@ IMPORTANT: Cronium is meant to be an open-source, self-hosted application. This 
 ```bash
 # Development - Monorepo Root
 pnpm dev              # Start all services concurrently
-pnpm dev:web          # Start Next.js dev server only
+pnpm dev:web          # Start Cronium app (port 3000)
+pnpm dev:info         # Start Cronium info site (port 3001)
 pnpm dev:socket       # Start WebSocket server only
 pnpm dev:services     # Start Go services (orchestrator + runtime)
 
 # Building & Testing - Monorepo Root
 pnpm build            # Build all packages and apps
-pnpm build:web        # Build Next.js application only
+pnpm build:web        # Build Cronium app only
+pnpm build:info       # Build Cronium info site only
 pnpm build:go         # Build Go services
 pnpm test             # Run all tests across monorepo
 pnpm lint             # Lint all packages and apps
@@ -110,7 +112,8 @@ The project is organized as a monorepo using Turborepo and PNPM workspaces:
 ```
 cronium-dev/
 ├── apps/
-│   ├── web/              # Next.js application
+│   ├── cronium-app/      # Main Cronium application (self-hosted)
+│   ├── cronium-info/     # Marketing/docs site (static export)
 │   ├── orchestrator/     # Go orchestrator service
 │   └── runtime/          # Go runtime service
 ├── packages/
@@ -140,6 +143,18 @@ cronium-dev/
 - Turborepo for monorepo orchestration
 - PNPM for package management
 
+**Applications:**
+
+- **cronium-app**: The main self-hosted Cronium application
+  - Full-featured automation platform
+  - Requires database, authentication, and backend services
+  - Runs on port 3000 in development
+- **cronium-info**: Public marketing and documentation site
+  - Static export for easy hosting (Vercel, Netlify, etc.)
+  - No authentication required
+  - Runs on port 3001 in development
+  - Contains landing page and documentation
+
 **Core Concepts:**
 
 - **Events**: Scheduled scripts (bash, Node.js, Python) or HTTP requests
@@ -158,13 +173,21 @@ cronium-dev/
 - `plans/` - Project planning documents
 - `changelog/` - Daily change logs
 
-**Web Application (apps/cronium-app):**
+**Cronium App (apps/cronium-app):**
 
 - `src/app/` - Next.js App Router pages and API routes
 - `src/components/` - React components organized by feature
 - `src/lib/` - Core business logic and utilities
 - `src/server/` - tRPC setup and server-side code
 - `src/shared/` - Database schema and shared types
+
+**Cronium Info Site (apps/cronium-info):**
+
+- `app/` - Next.js App Router pages (landing, docs)
+- `components/` - React components (landing, docs, error)
+- `public/` - Static assets (logos, icons)
+- `messages/` - Internationalization files
+- `lib/` - Utility functions
 
 **Go Services:**
 
@@ -193,7 +216,7 @@ cronium-dev/
 
 ## Path Aliases
 
-**Web Application (apps/cronium-app):**
+**Cronium App (apps/cronium-app):**
 
 ```typescript
 @/*              // apps/cronium-app/src/*
@@ -202,6 +225,12 @@ cronium-dev/
 @server/*        // apps/cronium-app/src/server/*
 @lib/*           // apps/cronium-app/src/lib/*
 @scripts/*       // apps/cronium-app/src/scripts/*
+```
+
+**Cronium Info Site (apps/cronium-info):**
+
+```typescript
+@/*              // apps/cronium-info/*
 ```
 
 **Shared Packages:**
@@ -254,7 +283,8 @@ Located in `apps/cronium-app/src/shared/schema.ts` using Drizzle ORM.
 2. **Working on Specific Apps:**
 
    ```bash
-   pnpm dev:web       # Web app only
+   pnpm dev:web       # Cronium app only (port 3000)
+   pnpm dev:info      # Info site only (port 3001)
    pnpm dev:services  # Go services only
    ```
 

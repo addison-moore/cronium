@@ -7,19 +7,19 @@ import React, {
   useRef,
   useMemo,
 } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Card, CardHeader, CardTitle, CardContent } from "@cronium/ui";
+import { Label } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Input } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { MonacoEditor } from "@/components/ui/monaco-editor-lazy";
+} from "@cronium/ui";
+import { Badge } from "@cronium/ui";
+import { MonacoEditor } from "@cronium/ui";
 import {
   Trash2,
   Plus,
@@ -29,16 +29,11 @@ import {
   Mail,
   Info,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@cronium/ui";
 import { ConditionalActionType } from "@/shared/schema";
 import { ToolPluginRegistry } from "@/tools/plugins";
 import { trpc } from "@/lib/trpc";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@cronium/ui";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 import Link from "next/link";
 import { usePathname } from "next/navigation";

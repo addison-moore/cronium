@@ -23,7 +23,7 @@ import { ActionNode } from "./ActionNode";
 import { ActionEdge } from "./ActionEdge";
 import { useActionBuilder } from "./useActionBuilder";
 import { CANVAS_CONFIG, type NodeType } from "./types";
-import { Button } from "@/components/ui/button";
+import { Button } from "@cronium/ui";
 import { Save, Play, RotateCcw, Download, Upload } from "lucide-react";
 
 const nodeTypes: NodeTypes = {

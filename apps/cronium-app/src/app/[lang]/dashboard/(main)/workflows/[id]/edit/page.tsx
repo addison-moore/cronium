@@ -5,8 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Button } from "@/components/ui/button";
-import { toast } from "@/components/ui/use-toast";
+import { Button } from "@cronium/ui";
+import { toast } from "@cronium/ui";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -21,7 +21,7 @@ import WorkflowForm, {
   type WorkflowFormValues,
 } from "@/components/workflows/WorkflowForm";
 import type { Node, Edge } from "@xyflow/react";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
 import type { WorkflowNode, WorkflowEdge } from "@/shared/schemas/workflows";
 

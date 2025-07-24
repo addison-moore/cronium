@@ -8,10 +8,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/components/ui/use-toast";
+} from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Textarea } from "@cronium/ui";
+import { useToast } from "@cronium/ui";
 import { useAuth } from "@/hooks/useAuth";
 import {
   EventType,

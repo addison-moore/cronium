@@ -1,20 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import { MonacoEditor } from "@/components/ui/monaco-editor-lazy";
-import dynamic from "next/dynamic";
-
-// Lazy load CodeViewer for read-only code display
-const CodeViewer = dynamic(() => import("@/components/ui/code-viewer"), {
-  ssr: false,
-  loading: () => (
-    <div className="bg-muted/50 h-[200px] animate-pulse rounded-lg" />
-  ),
-});
+import { MonacoEditor, CodeViewer } from "@cronium/ui";
 import { EventType } from "@/shared/schema";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
+import { Button } from "@cronium/ui";
 import {
   Table,
   TableBody,
@@ -22,18 +13,18 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@cronium/ui";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from "@/components/ui/accordion";
+} from "@cronium/ui";
 import { useTranslations } from "next-intl";
 import type { Event } from "./types";
 import { Save, Edit, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@cronium/ui";
 import { formatDate } from "@/lib/utils";
 
 interface EventDetailsTabProps {

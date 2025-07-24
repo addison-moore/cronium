@@ -5,7 +5,7 @@ import Editor from "@monaco-editor/react";
 import type { OnMount } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { EventType } from "@/shared/schema";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@cronium/ui";
 
 export interface CodeEditorProps {
   value: string;

@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useToast } from "@/components/ui/use-toast";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import {
   Settings,
   ChevronRight,
@@ -14,7 +14,7 @@ import {
   Trash2,
   FileText,
 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cronium/ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,14 +24,14 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@cronium/ui";
 // ToolType import removed - using strings directly
 import { type ToolWithParsedCredentials } from "./types/tool-plugin";
 import { ToolPluginRegistry } from "./plugins";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
+import { Input } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@cronium/ui";
 import { ToolErrorDiagnostics } from "./ToolErrorDiagnostics";
 import Link from "next/link";
 import {
@@ -40,7 +40,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@cronium/ui";
 import {
   Table,
   TableBody,
@@ -48,7 +48,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@cronium/ui";
 import { ToolActionTemplateForm } from "./templates/ToolActionTemplateForm";
 
 export function ModularToolsManager() {

@@ -2,8 +2,8 @@
 
 import dynamic from "next/dynamic";
 import { Suspense } from "react";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Skeleton } from "@cronium/ui";
+import { Card, CardContent, CardHeader } from "@cronium/ui";
 import { RefreshCw } from "lucide-react";
 
 // Loading skeletons for each component

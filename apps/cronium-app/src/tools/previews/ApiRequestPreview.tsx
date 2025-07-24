@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { Globe, Key, Clock, Code } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@cronium/ui";
 
 interface ApiRequestPreviewProps {
   method: string;

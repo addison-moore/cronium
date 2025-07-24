@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Activity, AlertCircle, Edit, Logs, Lock } from "lucide-react";
-import { Tabs, TabsContent, TabsList, Tab } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { toast } from "@/components/ui/use-toast";
+import { Tabs, TabsContent, TabsList, Tab } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { toast } from "@cronium/ui";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -23,7 +23,7 @@ import {
 } from "./index";
 import { EventStatus, type Log } from "@/shared/schema";
 import type { Event } from "./types";
-import { Spinner } from "../ui/spinner";
+import { Spinner } from "@cronium/ui";
 
 interface EventDetailsProps {
   eventId: string;

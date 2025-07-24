@@ -3,20 +3,20 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@cronium/ui";
+import { Input } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
+import { Checkbox } from "@cronium/ui";
 import { ClickableStatusBadge } from "@/components/ui/clickable-status-badge";
-import { toast } from "@/components/ui/use-toast";
-import { Pagination } from "@/components/ui/pagination";
+import { toast } from "@cronium/ui";
+import { Pagination } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@cronium/ui";
 import {
   Search,
   Play,
@@ -39,7 +39,7 @@ import {
   StandardizedTableLink,
   type StandardizedTableColumn,
   type StandardizedTableAction,
-} from "@/components/ui/standardized-table";
+} from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
 
 interface WorkflowItem {

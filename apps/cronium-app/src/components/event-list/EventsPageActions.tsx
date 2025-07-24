@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { MoreVertical } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@cronium/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@cronium/ui";
 import { JsonImportModal } from "@/components/dashboard/JsonImportModal";
 
 export function EventsPageActions() {

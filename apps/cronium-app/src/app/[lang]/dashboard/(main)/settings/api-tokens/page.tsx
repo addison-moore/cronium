@@ -2,15 +2,15 @@ import React from "react";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import ApiTokensManager from "@/components/dashboard/ApiTokensManager";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cronium/ui";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
+} from "@cronium/ui";
+import { ScrollArea } from "@cronium/ui";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import Link from "next/link";
 
@@ -102,9 +102,14 @@ export default async function ApiTokensPage() {
                   <h3 className="text-lg font-medium">Documentation</h3>
                   <p className="text-muted-foreground text-sm">
                     For complete API documentation, visit the{" "}
-                    <Link href="/docs/api" className="text-primary underline">
+                    <a
+                      href="https://docs.cronium.dev/docs/api"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline"
+                    >
                       API Reference
-                    </Link>
+                    </a>
                     .
                   </p>
                 </div>

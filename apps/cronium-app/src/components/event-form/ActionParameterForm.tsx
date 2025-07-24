@@ -2,21 +2,21 @@
 
 import React from "react";
 import { z } from "zod";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import { Input } from "@cronium/ui";
+import { Label } from "@cronium/ui";
+import { Textarea } from "@cronium/ui";
+import { Switch } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+} from "@cronium/ui";
+import { Alert, AlertDescription } from "@cronium/ui";
 import { AlertTriangle } from "lucide-react";
 import { type ToolAction } from "@/tools/types/tool-plugin";
-import { MonacoEditor } from "@/components/ui/monaco-editor-lazy";
+import { MonacoEditor } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 

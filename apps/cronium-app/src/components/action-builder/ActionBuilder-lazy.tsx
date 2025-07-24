@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { ActionBuilderSkeleton } from "@/components/ui/loading-skeletons";
+import { ActionBuilderSkeleton } from "@cronium/ui";
 
 const ActionBuilder = dynamic(
   () =>

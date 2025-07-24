@@ -10,7 +10,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@cronium/ui";
 import {
   Table,
   TableBody,
@@ -18,19 +18,19 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
+} from "@cronium/ui";
+import { Button } from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { StandardizedTableLink } from "@/components/ui/standardized-table";
-import { Badge } from "@/components/ui/badge";
-import { Pagination } from "@/components/ui/pagination";
+import { StandardizedTableLink } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
+import { Pagination } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@cronium/ui";
 import {
   Dialog,
   DialogContent,
@@ -38,10 +38,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
+} from "@cronium/ui";
+import { ScrollArea } from "@cronium/ui";
 import { type LogStatus } from "@/shared/schema";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@cronium/ui";
 import { format } from "date-fns";
 
 interface ActivityEntry {

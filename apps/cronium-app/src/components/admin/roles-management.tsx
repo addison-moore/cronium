@@ -7,18 +7,18 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+} from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Switch } from "@cronium/ui";
+import { Label } from "@cronium/ui";
 import { Shield, Plus, ChevronDown } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@cronium/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@cronium/ui";
 
 interface Role {
   id: number;

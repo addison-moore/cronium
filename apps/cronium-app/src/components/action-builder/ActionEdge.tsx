@@ -7,7 +7,7 @@ import {
   EdgeLabelRenderer,
   BaseEdge,
 } from "@xyflow/react";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@cronium/ui";
 
 export function ActionEdge({
   id: _id,

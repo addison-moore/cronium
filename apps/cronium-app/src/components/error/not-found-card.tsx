@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FileQuestion, Home, ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@cronium/ui";
 import {
   Card,
   CardContent,
@@ -10,7 +10,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@cronium/ui";
 
 interface NotFoundCardProps {
   title?: string;

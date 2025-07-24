@@ -17,13 +17,13 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
-import { Form } from "@/components/ui/form";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, Tab } from "@/components/ui/tabs";
+import { Form } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Tabs, TabsContent, TabsList, Tab } from "@cronium/ui";
 import { SettingsCard, FormFieldWrapper } from "@/components/dashboard";
-import { Spinner } from "@/components/ui/spinner";
-import { toast } from "@/components/ui/use-toast";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { Spinner } from "@cronium/ui";
+import { toast } from "@cronium/ui";
+import { ThemeToggle } from "@cronium/ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,7 +33,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@cronium/ui";
 import ApiTokensManager from "@/components/dashboard/ApiTokensManager";
 import { UserVariablesManager } from "@/components/dashboard/UserVariablesManager";
 

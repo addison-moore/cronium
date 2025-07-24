@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations, useLocale } from "next-intl";
-import { StatCard } from "@/components/ui/stat-card";
+import { StatCard } from "@cronium/ui";
 import { ActivityTable } from "@/components/activity";
 import { type LogStatus } from "@/shared/schema";
 import {

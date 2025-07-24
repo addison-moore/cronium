@@ -1,4 +1,4 @@
-import { Skeleton } from "./skeleton";
+import { Skeleton } from "@cronium/ui";
 
 export interface TableSkeletonProps {
   /**
