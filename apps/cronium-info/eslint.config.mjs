@@ -1,17 +1,17 @@
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
+// @ts-check
+import eslintConfig from "@cronium/eslint-config/next.mjs";
 
-const nextConfig = require("@cronium/eslint-config/next.mjs");
-
-/** @type {import('eslint').Linter.Config[]} */
 export default [
-  ...nextConfig,
+  ...eslintConfig,
   {
-    languageOptions: {
-      parserOptions: {
-        project: "./tsconfig.json",
-        tsconfigRootDir: import.meta.dirname,
-      },
-    },
+    ignores: [
+      "**/deprecated/**",
+      "**/_backup/**",
+      "**/*.backup.ts",
+      "**/*.backup.tsx",
+      "scripts/**",
+      "src/scripts/deprecated/**",
+      "src/scripts/migrations/archived/**",
+    ],
   },
 ];

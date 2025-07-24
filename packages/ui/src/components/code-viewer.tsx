@@ -55,11 +55,6 @@ export function CodeViewer({
 
         // Import theme based on prop - removed as it causes TypeScript errors
         // CSS imports are handled separately in the build process
-        // if (theme === "dark") {
-        //   await import("prismjs/themes/prism-tomorrow.css");
-        // } else {
-        //   await import("prismjs/themes/prism.css");
-        // }
 
         // Try to load the specific language component
         // Skip loading for 'text' as it's built-in
@@ -80,8 +75,6 @@ export function CodeViewer({
           await import(
             "prismjs/plugins/line-numbers/prism-line-numbers" as string
           );
-          // CSS import removed as it causes TypeScript errors
-          // await import("prismjs/plugins/line-numbers/prism-line-numbers.css");
         }
 
         if (Prism.languages[prismLanguage]) {

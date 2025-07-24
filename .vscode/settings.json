@@ -1,0 +1,7 @@
+{
+  "eslint.workingDirectories": [
+    { "directory": "apps/cronium-app", "changeProcessCWD": true },
+    { "directory": "apps/cronium-info", "changeProcessCWD": true },
+    { "directory": "packages/ui", "changeProcessCWD": true }
+  ]
+}

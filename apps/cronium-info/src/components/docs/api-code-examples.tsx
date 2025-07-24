@@ -3,6 +3,9 @@
 import React, { useState, useEffect, createContext, useContext } from "react";
 import { Button } from "@cronium/ui";
 import { Copy } from "lucide-react";
+import Prism from "prismjs";
+import loadLanguages from "prismjs/components/";
+loadLanguages(["bash", "python", "javascript", "json"]);
 
 type Language = "python" | "nodejs" | "curl";
 
@@ -58,15 +61,6 @@ export function CodeBlock({
   useEffect(() => {
     // Dynamic import of Prism.js for client-side only
     const loadPrism = async () => {
-      const Prism = (await import("prismjs")).default;
-      // CSS imports are handled in the build process
-      // @ts-ignore - Prism component imports
-      await import("prismjs/components/prism-python");
-      // @ts-ignore - Prism component imports
-      await import("prismjs/components/prism-javascript");
-      // @ts-ignore - Prism component imports
-      await import("prismjs/components/prism-bash");
-
       const syntaxLanguage = getSyntaxLanguage(selectedLanguage);
       if (Prism.languages[syntaxLanguage]) {
         const highlighted = Prism.highlight(
@@ -143,13 +137,6 @@ export function SimpleCodeBlock({
   useEffect(() => {
     const loadPrism = async () => {
       try {
-        const Prism = (await import("prismjs")).default;
-        // CSS imports are handled in the build process
-        // @ts-ignore - Prism component imports
-        await import("prismjs/components/prism-json");
-        // @ts-ignore - Prism component imports
-        await import("prismjs/components/prism-bash");
-
         if (Prism.languages[language]) {
           const highlighted = Prism.highlight(
             children,
