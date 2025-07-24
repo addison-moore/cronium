@@ -2,14 +2,14 @@
 
 import { type ReactNode } from "react";
 import { MoreVertical, Copy, Trash, Edit, Play, Pause } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@cronium/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+} from "@cronium/ui";
 
 export interface ActionMenuItem {
   label: string;

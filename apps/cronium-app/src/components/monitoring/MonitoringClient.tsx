@@ -3,8 +3,8 @@
 import React from "react";
 import { api } from "@/trpc/react";
 import { MonitoringPageSkeleton } from "@/components/dashboard/DashboardStatsSkeleton";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
 import { Activity, Server, Database, Cpu } from "lucide-react";
 
 export default function MonitoringClient() {

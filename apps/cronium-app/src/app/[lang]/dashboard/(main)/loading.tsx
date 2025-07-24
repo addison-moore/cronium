@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@cronium/ui";
 
 export default function DashboardMainLoading() {
   return (

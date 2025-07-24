@@ -1,11 +1,11 @@
 "use client";
 
 import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Separator } from "@cronium/ui";
+import { Alert, AlertDescription } from "@cronium/ui";
 import {
   Check,
   AlertCircle,

@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
+import { Label } from "@cronium/ui";
+import { Textarea } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Alert, AlertDescription } from "@cronium/ui";
 import { Copy, Eye } from "lucide-react";
 import { type ToolAction } from "@/tools/types/tool-plugin";
 import {
@@ -15,7 +15,7 @@ import {
 } from "@/lib/tool-action-template-processor";
 import { type TemplateContext } from "@/lib/template-processor";
 import { createTemplateContext } from "@/lib/template-processor";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@cronium/ui";
 
 interface TemplatePreviewProps {
   action: ToolAction;

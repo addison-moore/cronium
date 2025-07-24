@@ -3,14 +3,14 @@
 import { useRouter, useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { EventStatus } from "@/shared/schema";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@cronium/ui";
+import { Checkbox } from "@cronium/ui";
 import {
   StandardizedTable,
   type StandardizedTableColumn,
   StandardizedTableLink,
   type StandardizedTableAction,
-} from "@/components/ui/standardized-table";
+} from "@cronium/ui";
 import { EventTypeIcon } from "@/components/ui/event-type-icon";
 import { ClickableStatusBadge } from "@/components/ui/clickable-status-badge";
 import {
@@ -18,7 +18,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@cronium/ui";
 import {
   Eye,
   Edit,

@@ -5,9 +5,9 @@ import { z } from "zod";
 import { SlackIcon } from "./slack-icon";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@cronium/ui";
+import { Input } from "@cronium/ui";
+import { Label } from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Edit, Trash2, Eye, EyeOff, TestTube } from "lucide-react";
 import {
@@ -16,7 +16,7 @@ import {
   type CredentialDisplayProps,
 } from "../../types/tool-plugin";
 import { trpc } from "@/lib/trpc";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@cronium/ui";
 import { slackActions } from "./actions";
 import { ToolHealthBadge } from "@/tools/ToolHealthIndicator";
 import { slackCredentialsSchema, type SlackCredentials } from "./schemas";

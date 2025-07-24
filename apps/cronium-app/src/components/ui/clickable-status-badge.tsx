@@ -11,7 +11,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@cronium/ui";
 import { EventStatus } from "@/shared/schema";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { getStatusConfig, sizeClasses, iconSizeClasses } from "./status-badge";

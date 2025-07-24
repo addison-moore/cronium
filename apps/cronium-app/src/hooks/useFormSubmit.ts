@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@cronium/ui";
 
 interface UseFormSubmitOptions<T> {
   endpoint: string;

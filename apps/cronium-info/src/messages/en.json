@@ -1,0 +1,212 @@
+{
+  "Nav": {
+    "Home": "Home",
+    "Dashboard": "Dashboard",
+    "Features": "Features",
+    "Resources": "Resources",
+    "Documentation": "Documentation",
+    "APIReference": "API Reference",
+    "Examples": "Examples",
+    "FAQ": "FAQ",
+    "Community": "Community",
+    "About": "About",
+    "Contact": "Contact",
+    "PrivacyPolicy": "Privacy Policy",
+    "TermsOfService": "Terms of Service",
+    "Changelog": "Changelog",
+    "Roadmap": "Roadmap"
+  },
+  "Footer": {
+    "Copyright": "All rights reserved.",
+    "MadeWith": "Made with ❤️ by the Cronium Team",
+    "Company": "Company",
+    "About": "About",
+    "Careers": "Careers",
+    "Blog": "Blog",
+    "Pricing": "Pricing",
+    "Support": "Support",
+    "Help": "Help Center",
+    "Documentation": "Documentation",
+    "Status": "System Status",
+    "Contact": "Contact Us",
+    "ContactUs": "Contact Us",
+    "Legal": "Legal",
+    "PrivacyPolicy": "Privacy Policy",
+    "TermsOfService": "Terms of Service",
+    "CookiePolicy": "Cookie Policy",
+    "Security": "Security",
+    "SocialLinks": "Social Links",
+    "Connect": "Connect",
+    "GitHub": "GitHub",
+    "Twitter": "Twitter",
+    "Discord": "Discord",
+    "LinkedIn": "LinkedIn",
+    "YouTube": "YouTube",
+    "AllRightsReserved": "All rights reserved",
+    "Community": "Community",
+    "FAQ": "FAQ",
+    "Privacy": "Privacy Policy",
+    "Terms": "Terms of Service",
+    "Roadmap": "Roadmap",
+    "GettingStarted": "Getting Started",
+    "APIReference": "API Reference",
+    "Examples": "Examples",
+    "Product": "Product",
+    "Features": "Features",
+    "Changelog": "Changelog"
+  },
+  "Home": {
+    "Hero": {
+      "Title": "Schedule and Automate with Confidence",
+      "Subtitle": "Powerful scheduling and automation platform for developers and businesses",
+      "ButtonPrimary": "Get Started",
+      "ButtonSecondary": "Learn More"
+    },
+    "HowItWorks": {
+      "Title": "How It Works",
+      "Subtitle": "Get started with Cronium in three simple steps",
+      "Step1": {
+        "Title": "Create Your Events",
+        "Description": "Write your code or set up HTTP requests to perform tasks. Use any supported programming language."
+      },
+      "Step2": {
+        "Title": "Set Up Schedules",
+        "Description": "Choose when and how often your events should run using flexible scheduling options."
+      },
+      "Step3": {
+        "Title": "Monitor Execution",
+        "Description": "Track performance with detailed logs and receive notifications for success or failure."
+      }
+    },
+    "Features": {
+      "Title": "Powerful Features",
+      "Subtitle": "Everything you need to automate and manage your scripts in one place",
+      "ImageAlt": "Script automation interface",
+      "Overlay": {
+        "Title": "Intuitive Script Management",
+        "Description": "Create, edit, and monitor your scripts with our powerful yet easy-to-use interface"
+      },
+      "Cards": {
+        "Scheduling": {
+          "Title": "Advanced Scheduling",
+          "Description": "Schedule scripts to run at specific intervals or use custom cron expressions for complex timing needs."
+        },
+        "EventTypes": {
+          "Title": "Multiple Script Types",
+          "Description": "Support for Python, Node.js, and Bash scripts with a built-in code editor."
+        },
+        "GitHub": {
+          "Title": "GitHub Integration",
+          "Description": "Store your scripts as GitHub Gists for version control and easy management."
+        },
+        "RemoteExecution": {
+          "Title": "Remote Execution",
+          "Description": "Run scripts locally or on remote servers via SSH connections."
+        },
+        "Authentication": {
+          "Title": "Secure Authentication",
+          "Description": "Sign in with email, Google, or GitHub accounts with role-based permissions."
+        },
+        "Notifications": {
+          "Title": "Custom Notifications",
+          "Description": "Configure webhooks and email notifications for script success or failure."
+        },
+        "Logging": {
+          "Title": "Detailed Logging",
+          "Description": "View comprehensive execution logs with timestamps and output details."
+        },
+        "Retry": {
+          "Title": "Retry Mechanism",
+          "Description": "Set automatic retries and timeout durations to ensure script reliability."
+        }
+      },
+      "Feature1": {
+        "Title": "Powerful Scheduling",
+        "Description": "Schedule scripts and tasks using familiar cron expressions or simple intervals"
+      },
+      "Feature2": {
+        "Title": "Multiple Languages",
+        "Description": "Write scripts in Node.js, Python, or Bash - use the best tool for the job"
+      },
+      "Feature3": {
+        "Title": "Webhook Triggers",
+        "Description": "Trigger workflows via webhooks to integrate with external services"
+      },
+      "Feature4": {
+        "Title": "Comprehensive Logs",
+        "Description": "Detailed execution logs for all your scripts and workflows"
+      },
+      "MultiLanguage": {
+        "Title": "Multiple Languages",
+        "Description": "Write scripts in Node.js, Python, or Bash - use the best tool for each job"
+      },
+      "FlexibleScheduling": {
+        "Title": "Flexible Scheduling",
+        "Description": "Set up cron schedules, intervals, or one-time executions with ease"
+      },
+      "RemoteExecution": {
+        "Title": "Remote Execution",
+        "Description": "Run scripts on remote servers securely using SSH connections"
+      },
+      "SecureEnvironment": {
+        "Title": "Secure Environment",
+        "Description": "Manage sensitive credentials with encrypted environment variables"
+      },
+      "EventDriven": {
+        "Title": "Event-Driven Workflows",
+        "Description": "Chain scripts together to create complex automation workflows"
+      },
+      "ExecutionMonitoring": {
+        "Title": "Execution Monitoring",
+        "Description": "Track performance and receive alerts for failed executions"
+      },
+      "CTA": {
+        "Title": "Ready to start automating?",
+        "Description": "Sign up for free and start building your first automation in minutes.",
+        "Community": "Join our growing community of developers to share insights and automation recipes.",
+        "GetStarted": "Get Started Free",
+        "GitHub": "Star on GitHub",
+        "Documentation": "Read the Docs"
+      }
+    }
+  },
+  "Documentation": {
+    "Title": "Documentation",
+    "Description": "Learn how to use Cronium to automate your scripts and workflows",
+    "GettingStarted": "Getting Started",
+    "Guides": "Guides",
+    "Tutorials": "Tutorials",
+    "APIReference": "API Reference",
+    "FAQs": "FAQs",
+    "Sections": {
+      "Installation": "Installation",
+      "Configuration": "Configuration",
+      "Authentication": "Authentication",
+      "Scripting": "Scripting",
+      "Events": "Events",
+      "Workflows": "Workflows",
+      "Scheduling": "Scheduling",
+      "RemoteExecution": "Remote Execution",
+      "Logging": "Logging",
+      "Webhooks": "Webhooks",
+      "Examples": "Example Use Cases"
+    }
+  },
+  "Common": {
+    "Error": "Error",
+    "Success": "Success",
+    "Loading": "Loading...",
+    "Save": "Save",
+    "Cancel": "Cancel",
+    "Delete": "Delete",
+    "Edit": "Edit",
+    "Update": "Update",
+    "Add": "Add",
+    "Create": "Create",
+    "TryAgain": "Try Again",
+    "Submit": "Submit",
+    "Refresh": "Refresh",
+    "Close": "Close",
+    "Back": "Back"
+  }
+}

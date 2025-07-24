@@ -1,19 +1,19 @@
 "use client";
 
 import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import { Label } from "@cronium/ui";
+import { Input } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+} from "@cronium/ui";
+import { Textarea } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
 import { Plus, Trash2, ArrowRight, Code, FileText, Hash } from "lucide-react";
 import { type DataMapping } from "./types";
 

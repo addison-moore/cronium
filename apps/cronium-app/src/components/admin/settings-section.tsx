@@ -7,7 +7,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@cronium/ui";
 
 interface SettingsSectionProps {
   title: string;

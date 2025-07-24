@@ -3,10 +3,10 @@
 import React from "react";
 import { Panel, ReactFlowProvider } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cronium/ui";
 import {
   Save,
   Download,

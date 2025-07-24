@@ -1,16 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@cronium/ui";
+import { Input } from "@cronium/ui";
+import { Label } from "@cronium/ui";
 import { Search, Filter, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 

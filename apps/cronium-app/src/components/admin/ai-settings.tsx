@@ -6,17 +6,17 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTranslations } from "next-intl";
 import { Sparkles, Save } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@cronium/ui";
+import { Input } from "@cronium/ui";
+import { Label } from "@cronium/ui";
+import { Switch } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@cronium/ui";
 import { SettingsSection } from "./settings-section";
 
 const aiSettingsSchema = z

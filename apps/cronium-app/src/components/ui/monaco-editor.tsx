@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, type MouseEventHandler } from "react";
 import Editor, { type Monaco } from "@monaco-editor/react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
 import { Maximize2, Minimize2, X } from "lucide-react";
 
 interface EditorSettings {

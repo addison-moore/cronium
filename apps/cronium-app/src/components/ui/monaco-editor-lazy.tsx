@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { CodeEditorSkeleton } from "@/components/ui/loading-skeletons";
+import { CodeEditorSkeleton } from "@cronium/ui";
 
 export const MonacoEditor = dynamic(
   () =>

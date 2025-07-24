@@ -8,10 +8,10 @@ import {
   RunLocation,
   type Event as DbEvent,
 } from "@shared/schema";
-import { useToast } from "@/components/ui/use-toast";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { useToast } from "@cronium/ui";
+import { ConfirmationDialog } from "@cronium/ui";
+import { Input } from "@cronium/ui";
+import { Button } from "@cronium/ui";
 import { Search, ArrowUp, ArrowDown } from "lucide-react";
 import {
   Select,
@@ -19,7 +19,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@cronium/ui";
 import { EventsTable } from "@/components/event-list";
 import type {
   Event,

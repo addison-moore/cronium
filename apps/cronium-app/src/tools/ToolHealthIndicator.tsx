@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
 import {
   CheckCircle2,
   XCircle,
@@ -12,13 +12,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@cronium/ui";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@cronium/ui";
 
 interface ToolHealthIndicatorProps {
   toolId: number;

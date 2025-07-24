@@ -9,7 +9,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@cronium/ui";
 import { RefreshCw, Terminal } from "lucide-react";
 import { formatDistance } from "date-fns";
 

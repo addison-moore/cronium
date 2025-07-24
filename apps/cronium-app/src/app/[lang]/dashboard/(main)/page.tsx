@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button } from "@cronium/ui";
 import { Plus } from "lucide-react";
 import DashboardStats from "@/components/dashboard/DashboardStats";
 import { DashboardStatsSkeleton } from "@/components/dashboard/DashboardStatsSkeleton";

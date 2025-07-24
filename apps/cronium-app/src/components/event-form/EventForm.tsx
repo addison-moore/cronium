@@ -5,25 +5,25 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTranslations } from "next-intl";
-import { useToast } from "@/components/ui/use-toast";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
+import { useToast } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Input } from "@cronium/ui";
+import { Label } from "@cronium/ui";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import { Switch } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
+} from "@cronium/ui";
+import { Checkbox } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 import { getDefaultScriptContent } from "@/lib/scriptTemplates";
-import { MonacoEditor } from "@/components/ui/monaco-editor-lazy";
-import { TagsInput } from "@/components/ui/tags-input";
+import { MonacoEditor } from "@cronium/ui";
+import { TagsInput } from "@cronium/ui";
 import AIScriptAssistant from "@/components/dashboard/AIScriptAssistant-lazy";
 import ConditionalActionsSection, {
   type EventData,

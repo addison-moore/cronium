@@ -1,17 +1,17 @@
 "use client";
 
 import React, { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
+import { Label } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@cronium/ui";
 import {
   Table,
   TableBody,
@@ -19,8 +19,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+} from "@cronium/ui";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cronium/ui";
 import {
   Activity,
   Clock,
@@ -32,7 +32,7 @@ import {
   Filter,
   Eye,
 } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@cronium/ui";
 import { trpc } from "@/components/providers/TrpcProvider";
 import { cn } from "@/lib/utils";
 import { QUERY_OPTIONS } from "@/trpc/shared";

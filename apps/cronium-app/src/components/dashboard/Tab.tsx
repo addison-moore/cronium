@@ -1,5 +1,5 @@
 import React from "react";
-import { TabsTrigger } from "@/components/ui/tabs";
+import { TabsTrigger } from "@cronium/ui";
 import { type LucideIcon } from "lucide-react";
 
 interface SettingsTabProps {

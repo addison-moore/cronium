@@ -2,15 +2,11 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Popover, PopoverContent, PopoverTrigger } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Separator } from "@cronium/ui";
+import { ScrollArea } from "@cronium/ui";
 import {
   Info,
   Tag,
@@ -24,7 +20,7 @@ import {
 import {
   EventTypeIcon,
   getEventTypeDisplayName,
-} from "@/components/ui/event-type-icon";
+} from "@components/ui/event-type-icon";
 import { type EventType } from "@/shared/schema";
 import { formatDate } from "@/lib/utils";
 import { EventEditModal } from "@/components/ui/event-edit-modal";

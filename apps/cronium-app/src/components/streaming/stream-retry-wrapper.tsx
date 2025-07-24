@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useCallback, type ReactNode } from "react";
 import { AlertCircle, RefreshCw, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@cronium/ui";
+import { Alert, AlertDescription, AlertTitle } from "@cronium/ui";
 import { cn } from "@/lib/utils";
 
 interface StreamRetryWrapperProps {

@@ -4,21 +4,21 @@ import React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@cronium/ui";
+import { Input } from "@cronium/ui";
+import { Label } from "@cronium/ui";
+import { Textarea } from "@cronium/ui";
+import { Switch } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+} from "@cronium/ui";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { Copy, RefreshCw, AlertCircle } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
 
 const webhookFormSchema = z.object({

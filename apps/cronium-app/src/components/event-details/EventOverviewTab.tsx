@@ -2,9 +2,9 @@
 
 import React from "react";
 import { Server, CheckCircle2, RefreshCw, Info, Tag } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
 import { useTranslations } from "next-intl";
 import { type Event } from "./types";
 import { EventTypeIcon } from "@/components/ui/event-type-icon";

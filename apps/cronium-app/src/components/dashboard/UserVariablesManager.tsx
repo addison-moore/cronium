@@ -1,17 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@cronium/ui";
+import { Input } from "@cronium/ui";
+import { Label } from "@cronium/ui";
+import { Textarea } from "@cronium/ui";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@cronium/ui";
 import {
   Table,
   TableBody,
@@ -19,7 +19,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@cronium/ui";
 import {
   Dialog,
   DialogContent,
@@ -27,9 +27,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@cronium/ui";
 import { Plus, Edit, Trash2, Variable } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@cronium/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";

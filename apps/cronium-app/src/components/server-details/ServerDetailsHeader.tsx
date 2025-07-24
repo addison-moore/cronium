@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 
 interface ServerDetailsHeaderProps {

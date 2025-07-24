@@ -1,19 +1,19 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Alert, AlertDescription } from "@cronium/ui";
+import { Switch } from "@cronium/ui";
+import { Label } from "@cronium/ui";
+import { Slider } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@cronium/ui";
 import { cn } from "@/lib/utils";
 import {
   Activity,

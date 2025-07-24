@@ -1,10 +1,10 @@
 "use client";
 
 import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import { ScrollArea } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cronium/ui";
 import { Play, Zap, GitBranch, Shuffle, Target, Search } from "lucide-react";
 import { NodeType, NODE_TEMPLATES } from "./types";
 import {
@@ -12,7 +12,7 @@ import {
   type ToolPlugin,
   type ToolAction,
 } from "@/tools/types/tool-plugin";
-import { Input } from "@/components/ui/input";
+import { Input } from "@cronium/ui";
 
 const NODE_ICONS: Record<
   NodeType,

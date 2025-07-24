@@ -22,9 +22,9 @@ import {
   Zap,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button } from "@cronium/ui";
 import { UserRole } from "@/shared/schema";
-import { Logo } from "@/components/ui/logo";
+import { Logo } from "@cronium/ui";
 import { useTheme } from "next-themes";
 import LanguageSelector from "@/components/language-selector";
 import { useTranslations } from "next-intl";

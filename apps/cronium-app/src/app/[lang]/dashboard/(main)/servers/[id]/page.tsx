@@ -11,7 +11,7 @@ import {
   Code,
   Eye,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@cronium/ui";
 import {
   Card,
   CardContent,
@@ -19,7 +19,7 @@ import {
   CardHeader,
   CardTitle,
   CardFooter,
-} from "@/components/ui/card";
+} from "@cronium/ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,10 +29,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Tabs, TabsContent, TabsList, Tab } from "@/components/ui/tabs";
-import { toast } from "@/components/ui/use-toast";
-import { Spinner } from "@/components/ui/spinner";
+} from "@cronium/ui";
+import { Tabs, TabsContent, TabsList, Tab } from "@cronium/ui";
+import { toast } from "@cronium/ui";
+import { Spinner } from "@cronium/ui";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
 import ServerEventsList from "@/components/dashboard/ServerEventsList";
 import ServerForm from "@/components/dashboard/ServerForm";

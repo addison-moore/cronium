@@ -1,8 +1,8 @@
 import React, { Suspense, type ReactNode } from "react";
 import { SuspenseErrorBoundary } from "@/components/error/suspense-error-boundary";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@cronium/ui";
 import { AlertCircle } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@cronium/ui";
 
 interface RSCStreamBoundaryProps {
   children: ReactNode;

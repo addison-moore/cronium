@@ -1,5 +1,5 @@
-import { Skeleton } from "@/components/ui/skeleton";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Skeleton } from "@cronium/ui";
+import { Card, CardContent, CardHeader } from "@cronium/ui";
 
 export function DashboardStatsSkeleton() {
   return (

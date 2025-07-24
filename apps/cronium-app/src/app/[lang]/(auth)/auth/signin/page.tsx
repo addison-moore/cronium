@@ -15,9 +15,9 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+} from "@cronium/ui";
+import { Input } from "@cronium/ui";
+import { Button } from "@cronium/ui";
 
 const signinSchema = z.object({
   username: z.string().min(1, "Username or email is required"),

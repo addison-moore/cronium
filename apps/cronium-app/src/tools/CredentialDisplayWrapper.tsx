@@ -3,7 +3,7 @@
 import React from "react";
 import { type Tool } from "@/shared/schema";
 import { ToolHealthIndicator } from "./ToolHealthIndicator";
-import { Button } from "@/components/ui/button";
+import { Button } from "@cronium/ui";
 import { Edit, Trash2 } from "lucide-react";
 
 interface CredentialDisplayWrapperProps {

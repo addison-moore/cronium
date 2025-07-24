@@ -10,7 +10,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@cronium/ui";
 import { useTranslations } from "next-intl";
 
 interface EventDeleteDialogProps {

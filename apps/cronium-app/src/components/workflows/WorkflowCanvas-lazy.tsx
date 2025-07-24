@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { WorkflowCanvasSkeleton } from "@/components/ui/loading-skeletons";
+import { WorkflowCanvasSkeleton } from "@cronium/ui";
 
 const WorkflowCanvas = dynamic(() => import("./WorkflowCanvas"), {
   ssr: false,

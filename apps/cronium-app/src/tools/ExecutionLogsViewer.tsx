@@ -1,33 +1,33 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
+import { Input } from "@cronium/ui";
+import { Label } from "@cronium/ui";
+import { ScrollArea } from "@cronium/ui";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cronium/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@cronium/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@cronium/ui";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Checkbox } from "@/components/ui/checkbox";
+} from "@cronium/ui";
+import { Checkbox } from "@cronium/ui";
 import { cn } from "@/lib/utils";
 import {
   Activity,
@@ -50,7 +50,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { format } from "date-fns";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@cronium/ui";
 
 export interface ExecutionLog {
   id: string;

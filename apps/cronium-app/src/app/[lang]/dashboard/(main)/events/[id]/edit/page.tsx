@@ -5,9 +5,9 @@ import { useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { Lock } from "lucide-react";
 import EventForm from "@/components/event-form/EventForm-lazy";
-import { PageHeader } from "@/components/ui/page-header";
-import { Spinner } from "@/components/ui/spinner";
-import { Button } from "@/components/ui/button";
+import { PageHeader } from "@cronium/ui";
+import { Spinner } from "@cronium/ui";
+import { Button } from "@cronium/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 

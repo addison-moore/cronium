@@ -1,0 +1,246 @@
+"use client";
+
+import React, { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@cronium/ui";
+import { ChevronDown, ChevronRight, Menu, X } from "lucide-react";
+import Navbar from "@/components/landing/navbar";
+import Footer from "@/components/landing/footer";
+
+interface NavItem {
+  title: string;
+  href?: string;
+  items?: NavItem[];
+}
+
+interface DocsLayoutProps {
+  children: React.ReactNode;
+  lang: string;
+  tableOfContents?: { title: string; href: string; level: number }[];
+}
+
+const navigationItems: NavItem[] = [
+  {
+    title: "Getting Started",
+    items: [
+      { title: "Quick Start", href: "/docs/quick-start" },
+      { title: "Installation", href: "/docs/installation" },
+      { title: "Configuration", href: "/docs/configuration" },
+    ],
+  },
+  {
+    title: "Features",
+    items: [
+      { title: "Overview", href: "/docs/features" },
+      { title: "Events & Scripts", href: "/docs/events" },
+      { title: "Workflows", href: "/docs/workflows" },
+      { title: "Runtime Helpers", href: "/docs/runtime-helpers" },
+      { title: "Unified Input/Output", href: "/docs/unified-io" },
+      { title: "Conditional Actions", href: "/docs/conditional-actions" },
+      { title: "Tools", href: "/docs/tools" },
+      { title: "Templates", href: "/docs/templates" },
+      { title: "Scheduling", href: "/docs/scheduling" },
+      { title: "Remote Execution", href: "/docs/remote-execution" },
+      { title: "Monitoring", href: "/docs/monitoring" },
+    ],
+  },
+  {
+    title: "API",
+    items: [
+      { title: "Authentication", href: "/docs/api/authentication" },
+      { title: "Events", href: "/docs/api/events" },
+      { title: "Workflows", href: "/docs/api/workflows" },
+      { title: "Servers", href: "/docs/api/servers" },
+      { title: "Users", href: "/docs/api/users" },
+    ],
+  },
+  {
+    title: "How-to",
+    items: [
+      { title: "Create Your First Event", href: "/docs/how-to/first-event" },
+      { title: "Set Up SSH Connection", href: "/docs/how-to/ssh-setup" },
+      { title: "Build a Workflow", href: "/docs/how-to/build-workflow" },
+      {
+        title: "Monitor Performance",
+        href: "/docs/how-to/monitor-performance",
+      },
+      { title: "Deploy to Production", href: "/docs/how-to/deploy-production" },
+      { title: "Troubleshooting", href: "/docs/how-to/troubleshooting" },
+    ],
+  },
+];
+
+function NavSection({
+  item,
+  lang,
+  level = 0,
+}: {
+  item: NavItem;
+  lang: string;
+  level?: number;
+}) {
+  // Ensure lang is a non-empty string
+  const safeLang = lang || "en";
+  const [isOpen, setIsOpen] = useState(true);
+  const pathname = usePathname();
+
+  if (item.items) {
+    return (
+      <div className="mb-2">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-medium text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
+        >
+          {isOpen ? (
+            <ChevronDown className="mr-2 h-4 w-4" />
+          ) : (
+            <ChevronRight className="mr-2 h-4 w-4" />
+          )}
+          {item.title}
+        </button>
+        {isOpen && (
+          <div className="ml-4 space-y-1">
+            {item.items.map((subItem, index) => (
+              <NavSection
+                key={index}
+                item={subItem}
+                lang={safeLang}
+                level={level + 1}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const isActive = pathname === `/${safeLang}${item.href ?? ""}`;
+
+  return (
+    <Link
+      href={`/${safeLang}${item.href ?? ""}`}
+      className={cn(
+        "block rounded-md px-3 py-2 text-sm transition-colors",
+        isActive
+          ? "bg-primary text-primary-foreground"
+          : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800",
+      )}
+    >
+      {item.title}
+    </Link>
+  );
+}
+
+function TableOfContents({
+  items,
+}: {
+  items: { title: string; href: string; level: number }[];
+}) {
+  if (!items || items.length === 0) return null;
+
+  return (
+    <aside className="hidden w-64 shrink-0 xl:block">
+      <div className="sticky top-24 p-4">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+          <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">
+            On this page
+          </h3>
+          <nav className="space-y-1">
+            {items.map((item, index) => (
+              <a
+                key={index}
+                href={item.href}
+                className={cn(
+                  "block py-1 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100",
+                  item.level === 2
+                    ? "pl-0"
+                    : item.level === 3
+                      ? "pl-4"
+                      : "pl-8",
+                )}
+              >
+                {item.title}
+              </a>
+            ))}
+          </nav>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+export default function DocsLayout({
+  children,
+  lang,
+  tableOfContents,
+}: DocsLayoutProps) {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <Navbar lang={lang} />
+
+      <div className="flex flex-1">
+        {/* Mobile sidebar overlay */}
+        {isSidebarOpen && (
+          <div
+            className="bg-opacity-50 fixed inset-0 z-40 bg-black lg:hidden"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        )}
+
+        {/* Sidebar */}
+        <aside
+          className={cn(
+            "fixed top-16 left-0 z-50 h-[calc(100vh-4rem)] w-72 transform overflow-y-auto border-r border-gray-200 bg-white transition-transform duration-200 ease-in-out lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:translate-x-0 dark:border-gray-800 dark:bg-gray-900",
+            isSidebarOpen ? "translate-x-0" : "-translate-x-full",
+          )}
+        >
+          <div className="p-6">
+            <div className="mb-6 flex items-center justify-between lg:hidden">
+              <h2 className="text-lg font-semibold">Documentation</h2>
+              <button
+                onClick={() => setIsSidebarOpen(false)}
+                className="rounded-md p-2 hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <nav className="space-y-2">
+              {navigationItems.map((item, index) => (
+                <NavSection key={index} item={item} lang={lang} />
+              ))}
+            </nav>
+          </div>
+        </aside>
+
+        {/* Main content area with table of contents */}
+        <div className="flex flex-1 lg:ml-0">
+          {/* Main content */}
+          <main className="min-w-0 flex-1">
+            {/* Mobile menu button */}
+            <div className="fixed top-20 left-4 z-30 lg:hidden">
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="rounded-md border border-gray-200 bg-white p-2 shadow-sm hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8 xl:mx-0 xl:max-w-none xl:pr-0">
+              {children}
+            </div>
+          </main>
+
+          {/* Table of contents */}
+          {tableOfContents && <TableOfContents items={tableOfContents} />}
+        </div>
+      </div>
+
+      <Footer lang={lang} />
+    </div>
+  );
+}

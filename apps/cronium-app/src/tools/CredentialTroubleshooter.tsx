@@ -1,22 +1,22 @@
 "use client";
 
 import React, { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
+import { Alert, AlertDescription } from "@cronium/ui";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from "@/components/ui/accordion";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+} from "@cronium/ui";
+import { Tabs, TabsList, TabsTrigger } from "@cronium/ui";
 import { type Tool } from "@/shared/schema";
 import { ToolPluginRegistry } from "./types/tool-plugin";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Input } from "@cronium/ui";
+import { Label } from "@cronium/ui";
 import {
   AlertCircle,
   AlertTriangle,
@@ -33,7 +33,7 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@cronium/ui";
 
 export interface CredentialTroubleshooterProps {
   tool?: Tool;

@@ -2,20 +2,20 @@
 
 import { useState } from "react";
 import { Sparkles, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { Button } from "@cronium/ui";
+import { Textarea } from "@cronium/ui";
+import { Label } from "@cronium/ui";
 import {
   Card,
   CardContent,
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { toast } from "@/components/ui/use-toast";
+} from "@cronium/ui";
+import { toast } from "@cronium/ui";
 import { EventType } from "@/shared/schema";
 import { trpc } from "@/lib/trpc";
-import { MonacoEditor } from "@/components/ui/monaco-editor-lazy";
+import { MonacoEditor } from "@cronium/ui";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 
 export interface AIScriptAssistantProps {

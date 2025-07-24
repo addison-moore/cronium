@@ -2,14 +2,14 @@
 
 import React, { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/components/ui/use-toast";
+import { Button } from "@cronium/ui";
+import { Input } from "@cronium/ui";
+import { Label } from "@cronium/ui";
+import { Textarea } from "@cronium/ui";
+import { useToast } from "@cronium/ui";
 import { Loader2, Save, X } from "lucide-react";
 import { TemplatePreview } from "./TemplatePreview";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cronium/ui";
 import { ToolPluginRegistry } from "@/tools/plugins";
 import { TemplateActionParameterForm } from "./TemplateActionParameterForm";
 import { Variable } from "lucide-react";
@@ -22,7 +22,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@cronium/ui";
 
 interface ToolActionTemplateFormProps {
   toolType: string;

@@ -6,8 +6,8 @@ import {
   FormControl,
   FormDescription,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+} from "@cronium/ui";
+import { Input } from "@cronium/ui";
 import {
   type UseFormReturn,
   type FieldValues,

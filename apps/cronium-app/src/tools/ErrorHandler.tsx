@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Progress } from "@/components/ui/progress";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import { Button } from "@cronium/ui";
+import { Badge } from "@cronium/ui";
+import { Alert, AlertDescription, AlertTitle } from "@cronium/ui";
+import { Progress } from "@cronium/ui";
 import {
   Dialog,
   DialogContent,
@@ -13,15 +13,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@cronium/ui";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from "@/components/ui/accordion";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+} from "@cronium/ui";
+import { ScrollArea } from "@cronium/ui";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cronium/ui";
 import { cn } from "@/lib/utils";
 import {
   AlertCircle,
@@ -43,7 +43,7 @@ import {
   Lightbulb,
   Send,
 } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@cronium/ui";
 
 export interface ErrorInfo {
   code: string;

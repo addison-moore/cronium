@@ -2,7 +2,7 @@
 
 import React, { Component, type ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@cronium/ui";
 import {
   Card,
   CardContent,
@@ -10,7 +10,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@cronium/ui";
 import { logError, ErrorSeverity } from "@/lib/error-handler";
 
 interface Props {

@@ -4,12 +4,12 @@ import { useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, AlertCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@cronium/ui";
+import { Card, CardContent } from "@cronium/ui";
 import ServerForm from "@/components/dashboard/ServerForm";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@cronium/ui";
 
 interface EditServerPageProps {
   params: Promise<{ id: string; lang: string }>;

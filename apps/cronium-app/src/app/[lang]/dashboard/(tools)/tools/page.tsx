@@ -1,7 +1,7 @@
 "use client";
 
 import ToolsDashboard from "@/tools/ToolsDashboard";
-import { PageHeader } from "@/components/ui/page-header";
+import { PageHeader } from "@cronium/ui";
 import { useTranslations } from "next-intl";
 
 export default function ToolsPage() {

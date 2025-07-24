@@ -1,6 +1,6 @@
 import { AlertCircle } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@cronium/ui";
+import { Skeleton } from "@cronium/ui";
 
 interface SuspenseFallbackProps {
   message?: string;

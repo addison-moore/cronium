@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import EventForm from "@/components/event-form/EventForm-lazy";
 import { type Event } from "./types";
 import { trpc } from "@/lib/trpc";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@cronium/ui";
 import { TimeUnit, RunLocation, type ConditionalAction } from "@/shared/schema";
 
 interface EventEditTabProps {

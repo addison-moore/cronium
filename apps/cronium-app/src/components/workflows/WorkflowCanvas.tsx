@@ -39,15 +39,15 @@ import {
   X,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@cronium/ui";
+import { Input } from "@cronium/ui";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { toast } from "@/components/ui/use-toast";
+} from "@cronium/ui";
+import { toast } from "@cronium/ui";
 import { ConnectionType } from "@/shared/schema";
 import { EventTypeIcon } from "@/components/ui/event-type-icon";
 import { EventDetailsPopover } from "@/components/ui/event-details-popover";
@@ -136,7 +136,7 @@ const validateWorkflowStructure = (
 // Import custom nodes
 import EventNode from "./nodes/EventNode";
 import ConnectionEdge from "./edges/ConnectionEdge";
-import { Spinner } from "../ui/spinner";
+import { Spinner } from "@cronium/ui";
 import type { EventType } from "@/shared/schema";
 
 // Event type icon mapping - now using consistent icons
