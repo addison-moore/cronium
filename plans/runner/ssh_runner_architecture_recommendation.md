@@ -11,32 +11,32 @@
 
 ## 2 Current State (July 2025)
 
-| Component             | Behaviour today                                       |
-| --------------------- | ----------------------------------------------------- |
-| Orchestrator → target | Opens SSH, pastes script inline.                      |
-| Runtime helpers       | **Not yet implemented** in SSH mode.                  |
-| Tool actions          | Executed via the same SSH channel (security concern). |
+| Component             | Behaviour today                                         |
+| --------------------- | ------------------------------------------------------- |
+| Orchestrator → target | Opens SSH, pastes script inline, streams stdout/stderr. |
+| Runtime helpers       | **Not yet implemented** in SSH mode.                    |
+| Tool actions          | Executed via the same SSH channel (security concern).   |
 
 Pain points: no sandboxing, helpers unavailable, difficult variable isolation, and tool actions unintentionally exposed on untrusted hosts.
 
 ---
 
-## 3 Proposed Architecture
+## 3 Proposed Architecture
 
 ```
 ┌─────────────┐       SSH        ┌──────────────┐
-│ cronium‑app │ ——— control ———→ │ orchestrator │
+│ cronium‑app │ ——— control —→ │  orchestrator │
 └─────────────┘                  │              │
                                  │ build Runner │
-                                 └─────┬────────┘
-                                       │ scp/ssh
-                                       ▼
-                                 ┌─────────────┐
-                                 │ target host │
-                                 │  /tmp/…     │
-                                 │ runner ▸    │
-                                 │ payload.tgz │
-                                 └─────────────┘
+                                 └────┬─────────┘
+                                      │ scp/ssh
+                                      ▼
+                               ┌─────────────┐
+                               │ target host │
+                               │  /tmp/…     │
+                               │ runner ▸    │
+                               │ payload.tgz │
+                               └─────────────┘
 ```
 
 - **Runner binary**: static x‑compile Go file, \~3 MB, per OS/arch.
@@ -48,12 +48,13 @@ Pain points: no sandboxing, helpers unavailable, difficult variable isolation, a
 
 ## 4 Creating & Caching Runner Modules
 
-| Aspect            | Recommendation                                                                                                                             |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Build trigger** | _Per event version change._ When a user saves/updates an event, orchestrator compiles a new Runner‑payload pair.                           |
-| **Binary reuse**  | The **Runner binary** is architecture‑specific and **cached per host** (checksum checked). Only copied again if version/hash differs.      |
-| **Payload reuse** | Rebuilt **when the script or manifest changes**; otherwise reused across multiple job executions.                                          |
-| **Storage**       | Store artefacts. Clean up via TTL policy (e.g., 90 days since last run). |
+| Aspect            | Recommendation                                                                                                                                                              |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Build trigger** | _Per event version change._ When a user saves/updates an event, orchestrator compiles a new Runner‑payload pair.                                                            |
+| **Binary reuse**  | The **Runner binary** is architecture‑specific and **cached per host** (checksum checked). Only copied again if version/hash differs.                                       |
+| **Payload reuse** | Rebuilt **when the script or manifest changes**; otherwise reused across multiple job executions.                                                                           |
+| **Storage**       | Store artefacts in `s3://cronium‑runner‑cache/<eventId>/<version>/` (or local FS). Clean up via TTL policy (e.g., 90 days since last run).                                  |
+| **Compile time**  | Go’s build cache means a **cold cross‑compile** (\~first time per arch) takes **≈ 5–10 s** on a 4‑core server; subsequent incremental builds typically finish in **≤ 1 s**. |
 
 ---
 
@@ -127,3 +128,52 @@ Pain points: no sandboxing, helpers unavailable, difficult variable isolation, a
 - **Signature‑verify failures**: alert with eventId, host, checksum.
 - **Runner exit codes**: map to Cronium statuses (OK, ERROR, TIMEOUT, SIG KILL).
 - **SSH latency & copy time**: include in job telemetry for capacity planning.
+
+---
+
+## 10 Open Questions / Next Steps
+
+1. Minimum supported Python/Node versions on target hosts? (affects payload size if we bundle runtimes.)
+2. Adopt `systemd‑run` or embed a tiny container runtime (e.g., `dobby`) for cgroup limits?
+3. Formal threat‑model doc: insider in orchestrator vs. compromised target.
+
+---
+
+### Appendix A — File/Env Contracts
+
+```
+CRONIUM_INPUT_FILE  =/tmp/…/inputs.json
+CRONIUM_OUTPUT_FILE =/tmp/…/outputs.json
+CRONIUM_VAR_TOKEN   =<JWT>
+```
+
+```
+manifest.yaml
+─────────────
+interpreter: python
+entrypoint: script.py
+runtimeVersion: v1
+helperMode: bundled | remote
+```
+
+---
+
+## Pre‑Compiled Language‑Specific Runners with On‑the‑Fly Payload Attachment
+
+| Aspect                      | Details                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Runner artefacts**        | Build _once_ per OS/arch × event‑type.Examples: `runner-bash-linux-amd64`, `runner-python-linux-arm64`, `runner-node-darwin-arm64`. Each binary statically embeds:• A minimal shim for the target interpreter (or its own portable runtime, e.g. Python 3.12 via pyOxidizer).• All language‑specific runtime‑helper libraries.• A self‑extraction header that can read an _appended_ tarball. |
+| **Job‑specific attachment** | When dispatching a job the orchestrator:1. Reads cached runner binary for the target host/arch.2. TARs **only the user script + manifest (≤ few KB)**.3. `cat runner-bash-linux-amd64 script.tar.gz > job.bin` (≈ 10 ms).4. Signs `job.bin` with cosign and pushes via SSH.5. Runner’s first step: seek to the footer offset, untar payload to `/tmp`, execute script.                        |
+| **Build time**              | Cold compile per runner \~5‑10 s, done once during CI.Per‑job concatenation and signing under 100 ms (no Go compile).                                                                                                                                                                                                                                                                         |
+| **Storage**                 | A dozen binaries per release (\~5 MB each) cached on orchestrator and optionally on hosts after first run.                                                                                                                                                                                                                                                                                    |
+| **Security**                | • Job binary carries _two signatures_: one for runner (+ helpers) tied to release, one for job payload.• Runner verifies both sigs before exec.• No public helper fetch; everything travels inside the signed artefact.• SSH tunnel still provides transport confidentiality.                                                                                                                 |
+| **Pros**                    | • Zero compile at dispatch → minimal latency.• Helpers always present offline.• Simple attachment logic (`cat`).• Host needs **no** Docker or language runtimes (if you embed them).                                                                                                                                                                                                          |
+| **Cons**                    | • Slightly larger upload per job (binary + payload).• Need to maintain multiple runner images and test matrix.• Cannot reuse the same runner binary across different languages in one workflow step (but you can mix steps).                                                                                                                                                                  |
+
+### 7.1 Recommended Decision Matrix
+
+- **Latency‑critical, many short jobs** → _Pre‑compiled runners_ (this option).
+- **Hosts with good build caches and long‑running jobs** → _On‑demand compile & cache_ (Option A in §3).
+- **Air‑gapped hosts with no interpreter** → Pre‑compiled + embedded runtime.
+
+In practice we can support _both_ modes: keep the single "universal" Runner for flexibility, and add pre‑compiled language‑specific runners where distribution size and startup latency are the primary concerns.

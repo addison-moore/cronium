@@ -110,7 +110,7 @@ pnpm clean            # Clean all build outputs
 The project is organized as a monorepo using Turborepo and PNPM workspaces:
 
 ```
-cronium-dev/
+cronium/
 ├── apps/
 │   ├── cronium-app/      # Main Cronium application (self-hosted)
 │   ├── cronium-info/     # Marketing/docs site (static export)
