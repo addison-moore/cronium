@@ -449,6 +449,14 @@ export default function EventForm({
     }
   }, [type, initialData, isScriptType, setValue]);
 
+  // Force local execution for Tool Actions
+  useEffect(() => {
+    if (type === EventType.TOOL_ACTION) {
+      setValue("runLocation", RunLocation.LOCAL);
+      setValue("selectedServerIds", []);
+    }
+  }, [type, setValue]);
+
   // Toggle password visibility
   const togglePasswordVisibility = (index: number) => {
     setPasswordVisibility((prev) => ({
@@ -1232,8 +1240,12 @@ export default function EventForm({
               name="runLocation"
               control={control}
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger id="runLocation">
+                <Select
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  disabled={isToolAction}
+                >
+                  <SelectTrigger id="runLocation" disabled={isToolAction}>
                     <SelectValue
                       placeholder={t("Placeholders.SelectLocation")}
                     />
@@ -1249,10 +1261,15 @@ export default function EventForm({
                 </Select>
               )}
             />
+            {isToolAction && (
+              <p className="text-muted-foreground text-sm">
+                Tool Actions can only run on the local server.
+              </p>
+            )}
           </div>
 
           {/* Server Selection */}
-          {isRemote && (
+          {isRemote && !isToolAction && (
             <div className="space-y-4">
               <Label>{t("Fields.Servers") || "Servers"}</Label>
               <Controller

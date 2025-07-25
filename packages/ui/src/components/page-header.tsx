@@ -31,7 +31,7 @@ export function PageHeader({
   backLink,
   actions,
   createButton,
-  className = "flex flex-col md:flex-row md:items-center mb-6 gap-4",
+  className = "flex flex-col sm:flex-row sm:items-center mb-6 gap-4",
 }: PageHeaderProps) {
   return (
     <div className={className}>
@@ -48,7 +48,7 @@ export function PageHeader({
         {description && <p className="text-muted-foreground">{description}</p>}
       </div>
 
-      <div className="flex items-center gap-2 self-start md:self-auto">
+      <div className="flex items-center gap-2">
         {createButton && (
           <Button asChild className="flex items-center gap-2">
             <Link href={createButton.href}>
