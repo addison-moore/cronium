@@ -10,9 +10,8 @@ const Card = React.forwardRef<
     ref={ref}
     className={cn(
       "rounded-lg shadow-sm",
-      "bg-secondary-bg text-[var(--card-foreground-color)]",
-      "dark:text-[var(--card-foreground-color)]",
-      "border border-[var(--border-color)] dark:border-[var(--border-color)]",
+      "bg-card text-card-foreground",
+      "border-border border",
       className,
     )}
     {...props}
@@ -26,13 +25,7 @@ const CardHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn(
-      "flex flex-col space-y-1.5 p-6",
-      "text-[var(--card-foreground-color)]",
-      "dark:text-[var(--card-foreground-color)]",
-      "border-border/10 border-b",
-      className,
-    )}
+    className={cn("flex flex-col space-y-1.5 p-6", className)}
     {...props}
   />
 ));
@@ -46,8 +39,6 @@ const CardTitle = React.forwardRef<
     ref={ref}
     className={cn(
       "text-2xl leading-none font-semibold tracking-tight",
-      "text-[var(--card-foreground-color)]",
-      "dark:text-[var(--card-foreground-color)]",
       className,
     )}
     {...props}
@@ -61,12 +52,7 @@ const CardDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <p
     ref={ref}
-    className={cn(
-      "text-sm",
-      "text-[var(--muted-foreground-color)]",
-      "dark:text-[var(--muted-foreground-color)]",
-      className,
-    )}
+    className={cn("text-muted-foreground text-sm", className)}
     {...props}
   />
 ));
@@ -76,16 +62,7 @@ const CardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn(
-      "p-6",
-      "text-[var(--card-foreground-color)]",
-      "dark:text-[var(--card-foreground-color)]",
-      className,
-    )}
-    {...props}
-  />
+  <div ref={ref} className={cn("p-6", className)} {...props} />
 ));
 CardContent.displayName = "CardContent";
 
@@ -95,12 +72,7 @@ const CardFooter = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn(
-      "flex items-center p-6 pt-0",
-      "text-[var(--card-foreground-color)]",
-      "dark:text-[var(--card-foreground-color)]",
-      className,
-    )}
+    className={cn("flex items-center p-6 pt-0", className)}
     {...props}
   />
 ));

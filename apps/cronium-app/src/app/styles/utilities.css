@@ -3,6 +3,15 @@
  */
 
 @layer utilities {
+  /* Special utilities that Tailwind CSS 4 doesn't generate automatically */
+  
+  /* Data state utilities for Switch component */
+  .data-\[state\=checked\]\:translate-x-5[data-state="checked"] { 
+    transform: translateX(1.25rem); 
+  }
+  .data-\[state\=unchecked\]\:translate-x-0[data-state="unchecked"] { 
+    transform: translateX(0); 
+  }
   /* === Text utilities === */
   .gradient-text {
     background-image: linear-gradient(to right, var(--primary-color), #3b82f6);

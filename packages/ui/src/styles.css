@@ -1,0 +1,82 @@
+/**
+ * Shared styles for @cronium/ui components
+ * These styles must be imported by any app using the UI package
+ */
+
+/* Import Tailwind base - this includes all default utilities */
+@import "tailwindcss";
+
+/* Dark mode variant for Tailwind CSS 4 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/**
+ * Custom theme variables for semantic colors
+ * Using @theme inline to reference CSS variables from the apps
+ */
+@theme inline {
+  /* Semantic colors for UI components */
+  --color-background: var(--background-color);
+  --color-foreground: var(--foreground-color);
+  --color-card: var(--card-color);
+  --color-card-foreground: var(--card-foreground-color);
+  --color-popover: var(--popover-color);
+  --color-popover-foreground: var(--popover-foreground-color);
+  --color-primary: var(--primary-color);
+  --color-primary-foreground: var(--primary-foreground-color);
+  --color-secondary: var(--secondary-color);
+  --color-secondary-foreground: var(--secondary-foreground-color);
+  --color-destructive: var(--destructive-color);
+  --color-destructive-foreground: var(--destructive-foreground-color);
+  --color-muted: var(--muted-color);
+  --color-muted-foreground: var(--muted-foreground-color);
+  --color-accent: var(--accent-color);
+  --color-accent-foreground: var(--accent-foreground-color);
+  --color-border: var(--border-color);
+  --color-input: var(--input-color);
+  --color-ring: var(--ring-color);
+  --color-success: var(--success-color);
+  --color-success-foreground: var(--success-foreground-color);
+  --color-warning: var(--warning-color);
+  --color-warning-foreground: var(--warning-foreground-color);
+  
+  /* Custom radius tokens */
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+}
+
+/* Define base spacing value for Tailwind CSS 4 */
+@layer theme {
+  :root {
+    --spacing: 0.25rem; /* Base unit - 1 = 0.25rem = 4px */
+  }
+}
+
+/**
+ * Note: Default theme values should be defined by the consuming apps
+ * The UI package only maps the semantic tokens to CSS variables
+ */
+
+/**
+ * Special utility classes for components that need CSS variables
+ * Tailwind CSS 4 generates these automatically when we define the colors in @theme
+ */
+@layer utilities {
+  /* Data state utilities for Switch and Checkbox - these need explicit definition */
+  .data-\[state\=checked\]\:translate-x-5[data-state="checked"] { 
+    transform: translateX(1.25rem); 
+  }
+  .data-\[state\=unchecked\]\:translate-x-0[data-state="unchecked"] { 
+    transform: translateX(0); 
+  }
+  
+  /* Padding utilities for Badge component */
+  .px-2\.5 { 
+    padding-left: 0.625rem; 
+    padding-right: 0.625rem; 
+  }
+  .py-0\.5 { 
+    padding-top: 0.125rem; 
+    padding-bottom: 0.125rem; 
+  }
+}

@@ -27,5 +27,12 @@ export default defineConfig({
         }
       }
     }
+
+    // Copy styles.css to dist
+    const srcStylesPath = path.join(process.cwd(), "src", "styles.css");
+    const distStylesPath = path.join(distPath, "styles.css");
+    if (fs.existsSync(srcStylesPath)) {
+      fs.copyFileSync(srcStylesPath, distStylesPath);
+    }
   },
 });
