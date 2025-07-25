@@ -24,49 +24,30 @@ const navigationItems: NavItem[] = [
   {
     title: "Getting Started",
     items: [
+      { title: "Overview", href: "/docs/getting-started" },
       { title: "Quick Start", href: "/docs/quick-start" },
-      { title: "Installation", href: "/docs/installation" },
-      { title: "Configuration", href: "/docs/configuration" },
     ],
   },
   {
     title: "Features",
     items: [
       { title: "Overview", href: "/docs/features" },
-      { title: "Events & Scripts", href: "/docs/events" },
-      { title: "Workflows", href: "/docs/workflows" },
       { title: "Runtime Helpers", href: "/docs/runtime-helpers" },
       { title: "Unified Input/Output", href: "/docs/unified-io" },
       { title: "Conditional Actions", href: "/docs/conditional-actions" },
       { title: "Tools", href: "/docs/tools" },
       { title: "Templates", href: "/docs/templates" },
-      { title: "Scheduling", href: "/docs/scheduling" },
-      { title: "Remote Execution", href: "/docs/remote-execution" },
-      { title: "Monitoring", href: "/docs/monitoring" },
     ],
   },
   {
-    title: "API",
-    items: [
-      { title: "Authentication", href: "/docs/api/authentication" },
-      { title: "Events", href: "/docs/api/events" },
-      { title: "Workflows", href: "/docs/api/workflows" },
-      { title: "Servers", href: "/docs/api/servers" },
-      { title: "Users", href: "/docs/api/users" },
-    ],
+    title: "API Reference",
+    items: [{ title: "REST API", href: "/docs/api" }],
   },
   {
-    title: "How-to",
+    title: "How-to Guides",
     items: [
+      { title: "Overview", href: "/docs/how-to" },
       { title: "Create Your First Event", href: "/docs/how-to/first-event" },
-      { title: "Set Up SSH Connection", href: "/docs/how-to/ssh-setup" },
-      { title: "Build a Workflow", href: "/docs/how-to/build-workflow" },
-      {
-        title: "Monitor Performance",
-        href: "/docs/how-to/monitor-performance",
-      },
-      { title: "Deploy to Production", href: "/docs/how-to/deploy-production" },
-      { title: "Troubleshooting", href: "/docs/how-to/troubleshooting" },
     ],
   },
 ];

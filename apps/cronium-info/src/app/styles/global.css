@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@cronium/ui/styles.css";
 
 /**
  * Global Styles using Tailwind 4 theme variables
@@ -6,6 +7,75 @@
  */
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* Tailwind CSS 4 Theme Configuration */
+@theme inline {
+  /* Colors */
+  --color-border: var(--border-color);
+  --color-input: var(--input-color);
+  --color-ring: var(--ring-color);
+  --color-background: var(--background-color);
+  --color-foreground: var(--foreground-color);
+  --color-primary: var(--primary-color);
+  --color-primary-foreground: var(--primary-foreground-color);
+  --color-secondary: var(--secondary-color);
+  --color-secondary-foreground: var(--secondary-foreground-color);
+  --color-destructive: var(--destructive-color);
+  --color-destructive-foreground: var(--destructive-foreground-color);
+  --color-muted: var(--muted-color);
+  --color-muted-foreground: var(--muted-foreground-color);
+  --color-accent: var(--accent-color);
+  --color-accent-foreground: var(--accent-foreground-color);
+  --color-card: var(--card-color);
+  --color-card-foreground: var(--card-foreground-color);
+  --color-popover: var(--popover-color);
+  --color-popover-foreground: var(--popover-foreground-color);
+
+  /* Status colors */
+  --color-success: var(--success-color);
+  --color-success-foreground: var(--success-foreground-color);
+  --color-warning: var(--warning-color);
+  --color-warning-foreground: var(--warning-foreground-color);
+  --color-info: var(--info-color);
+  --color-info-foreground: var(--info-foreground-color);
+
+  /* Additional theme variables for components */
+  --color-secondary-bg: var(--secondary-bg-color);
+  --color-tertiary-bg: var(--tertiary-bg-color);
+
+  /* Typography */
+  --font-sans:
+    ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+
+  /* Border Radius */
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-full: 9999px;
+
+  /* Animations */
+  --animate-spin: spin 1s linear infinite;
+  --animate-ping: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+  --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-bounce: bounce 1s infinite;
+  --animate-fade-in: fadeIn 0.3s ease-out;
+
+  @keyframes fadeIn {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+}
 
 /* Root theme variables for light mode */
 :root {
@@ -149,83 +219,6 @@
   --xy-controls-box-shadow-default: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
 }
 
-/**
- * Theme tokens for Tailwind CSS v4
- * These generate corresponding utility classes
- */
-@theme {
-  --color-primary: var(--primary-color);
-  --color-secondary: var(--secondary-color);
-  --color-primary-foreground: var(--primary-foreground-color);
-  --color-secondary-foreground: var(--secondary-foreground-color);
-
-  --color-background: var(--background-color);
-  --color-secondary-bg: var(--secondary-bg-color);
-  --color-tertiary-bg: var(--tertiary-bg-color);
-  --color-foreground: var(--foreground-color);
-
-  --color-card: var(--card-color);
-  --color-card-foreground: var(--card-foreground-color);
-
-  --color-border: var(--border-color);
-  --color-ring: var(--ring-color);
-  --color-input: var(--input-color);
-
-  --color-popover: var(--popover-color);
-  --color-popover-foreground: var(--popover-foreground-color);
-
-  --color-muted: var(--muted-color);
-  --color-muted-foreground: var(--muted-foreground-color);
-
-  --color-accent: var(--accent-color);
-  --color-accent-foreground: var(--accent-foreground-color);
-
-  --color-destructive: var(--destructive-color);
-  --color-destructive-foreground: var(--destructive-foreground-color);
-
-  --color-success: var(--success-color);
-  --color-success-foreground: var(--success-foreground-color);
-
-  --color-warning: var(--warning-color);
-  --color-warning-foreground: var(--warning-foreground-color);
-
-  --color-info: var(--info-color);
-  --color-info-foreground: var(--info-foreground-color);
-
-  /* Typography */
-  --font-sans:
-    ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
-    "Segoe UI Symbol", "Noto Color Emoji";
-  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-mono:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    "Courier New", monospace;
-
-  /* Border Radius */
-  --radius-sm: 0.125rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
-  --radius-2xl: 1rem;
-  --radius-full: 9999px;
-
-  /* Animations */
-  --animate-spin: spin 1s linear infinite;
-  --animate-ping: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
-  --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  --animate-bounce: bounce 1s infinite;
-  --animate-fade-in: fadeIn 0.3s ease-out;
-
-  @keyframes fadeIn {
-    0% {
-      opacity: 0;
-    }
-    100% {
-      opacity: 1;
-    }
-  }
-}
-
 /* Base styles using Tailwind 4 layers */
 @layer base {
   * {
@@ -293,81 +286,6 @@
     scroll-margin-top: 100px;
     font-weight: 600;
     color: var(--foreground-color);
-  }
-
-  /* Monaco Editor specific styles */
-  .monaco-editor .suggest-widget {
-    z-index: 1000 !important;
-  }
-
-  .monaco-editor .suggest-widget .monaco-list .monaco-list-row {
-    height: auto !important;
-    min-height: 22px !important;
-    line-height: 22px !important;
-    padding: 2px 8px !important;
-    display: flex !important;
-    align-items: center !important;
-  }
-
-  .monaco-editor
-    .suggest-widget
-    .monaco-list
-    .monaco-list-row
-    .monaco-icon-label {
-    line-height: 18px !important;
-    height: 18px !important;
-  }
-
-  .monaco-editor
-    .suggest-widget
-    .monaco-list
-    .monaco-list-row
-    .monaco-icon-label
-    .monaco-icon-label-container {
-    line-height: 18px !important;
-    height: 18px !important;
-  }
-
-  .monaco-editor .suggest-widget .monaco-list .monaco-list-row .suggest-icon {
-    width: 16px !important;
-    height: 16px !important;
-    margin-right: 6px !important;
-    flex-shrink: 0 !important;
-  }
-
-  .monaco-editor .suggest-widget .monaco-list .monaco-list-row .contents {
-    line-height: 18px !important;
-    height: 18px !important;
-    overflow: hidden !important;
-  }
-
-  .monaco-editor .suggest-widget .monaco-list .monaco-list-row .contents .main {
-    line-height: 18px !important;
-    height: 18px !important;
-  }
-
-  .monaco-editor
-    .suggest-widget
-    .monaco-list
-    .monaco-list-row
-    .contents
-    .main
-    .type-label {
-    line-height: 18px !important;
-    height: 18px !important;
-    font-size: 12px !important;
-  }
-
-  .monaco-editor
-    .suggest-widget
-    .monaco-list
-    .monaco-list-row
-    .contents
-    .main
-    .signature-label {
-    line-height: 18px !important;
-    height: 18px !important;
-    font-size: 11px !important;
   }
 
   /* Solarized color utility classes */

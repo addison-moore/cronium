@@ -1,3 +1,6 @@
+// Import shared styles - Apps must import '@cronium/ui/styles.css'
+// Example: import '@cronium/ui/styles.css' in your app's layout or main CSS file
+
 // UI Components
 export * from "./components/accordion";
 export * from "./components/action-button";

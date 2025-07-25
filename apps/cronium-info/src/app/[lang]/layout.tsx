@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import React from "react";
 import { NextIntlClientProvider } from "next-intl";
 import { type Metadata } from "next";
+import { ThemeProvider } from "@/components/theme-provider";
 import "../styles/global.css";
 
 // Define a type for the translation messages
@@ -59,13 +60,29 @@ export default async function LocaleLayout({
 
   return (
     <html lang={lang} className="h-full">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Apply dark mode based on system preference
+              try {
+                if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                  document.documentElement.classList.add('dark');
+                }
+              } catch (e) {}
+            `,
+          }}
+        />
+      </head>
       <body className="h-full bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100">
-        <NextIntlClientProvider
-          locale={lang as SupportedLocale}
-          messages={messages}
-        >
-          {children}
-        </NextIntlClientProvider>
+        <ThemeProvider>
+          <NextIntlClientProvider
+            locale={lang as SupportedLocale}
+            messages={messages}
+          >
+            {children}
+          </NextIntlClientProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

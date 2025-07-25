@@ -320,4 +320,79 @@
     background-color: var(--color-solarized-base03);
     color: var(--color-solarized-base0);
   }
+
+  /* Monaco Editor specific styles */
+  .monaco-editor .suggest-widget {
+    z-index: 1000 !important;
+  }
+
+  .monaco-editor .suggest-widget .monaco-list .monaco-list-row {
+    height: auto !important;
+    min-height: 22px !important;
+    line-height: 22px !important;
+    padding: 2px 8px !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  .monaco-editor
+    .suggest-widget
+    .monaco-list
+    .monaco-list-row
+    .monaco-icon-label {
+    line-height: 18px !important;
+    height: 18px !important;
+  }
+
+  .monaco-editor
+    .suggest-widget
+    .monaco-list
+    .monaco-list-row
+    .monaco-icon-label
+    .monaco-icon-label-container {
+    line-height: 18px !important;
+    height: 18px !important;
+  }
+
+  .monaco-editor .suggest-widget .monaco-list .monaco-list-row .suggest-icon {
+    width: 16px !important;
+    height: 16px !important;
+    margin-right: 6px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .monaco-editor .suggest-widget .monaco-list .monaco-list-row .contents {
+    line-height: 18px !important;
+    height: 18px !important;
+    overflow: hidden !important;
+  }
+
+  .monaco-editor .suggest-widget .monaco-list .monaco-list-row .contents .main {
+    line-height: 18px !important;
+    height: 18px !important;
+  }
+
+  .monaco-editor
+    .suggest-widget
+    .monaco-list
+    .monaco-list-row
+    .contents
+    .main
+    .type-label {
+    line-height: 18px !important;
+    height: 18px !important;
+    font-size: 12px !important;
+  }
+
+  .monaco-editor
+    .suggest-widget
+    .monaco-list
+    .monaco-list-row
+    .contents
+    .main
+    .signature-label {
+    line-height: 18px !important;
+    height: 18px !important;
+    font-size: 11px !important;
+  }
 }

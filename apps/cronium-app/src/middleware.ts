@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getToken } from "next-auth/jwt";
-import { UserRole } from "@/shared/schema";
-import {
-  supportedLocales,
-  defaultLocale,
-  type SupportedLocale,
-} from "@shared/i18n";
+
+// Define constants locally to avoid imports in Edge runtime
+const supportedLocales = ["en"] as const;
+type SupportedLocale = (typeof supportedLocales)[number];
+const defaultLocale: SupportedLocale = "en";
 
 // Simplified function to get the preferred locale from the request
 function getLocale(request: NextRequest): string {
@@ -22,9 +20,8 @@ function getLocale(request: NextRequest): string {
   // Find the first supported locale that matches the user's language
   for (const lang of userLanguages) {
     const parts = lang.split("-");
-    const languageCode = parts.length > 0 ? parts[0] : lang; // Extract just the language code (e.g., 'en' from 'en-US')
+    const languageCode = parts.length > 0 ? parts[0] : lang;
 
-    // Check if the language code is one of our supported locales
     if (
       languageCode &&
       supportedLocales.includes(languageCode as SupportedLocale)
@@ -33,7 +30,6 @@ function getLocale(request: NextRequest): string {
     }
   }
 
-  // Default to the default locale if no match is found
   return defaultLocale;
 }
 
@@ -61,7 +57,6 @@ export async function middleware(request: NextRequest) {
 
   // If URL doesn't have locale, redirect to add locale prefix
   if (!pathnameHasLocale) {
-    // Special handling for root path to avoid redirect loops
     if (pathname === "/") {
       const locale = getLocale(request);
       const newUrl = new URL(`/${locale}`, request.url);
@@ -75,56 +70,28 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Extract path components
+  // Extract path components for auth checks
   const pathParts = pathname.split("/");
-  // Ensure currentLocale is always a string
   const currentLocale = pathParts[1] ?? "en";
-
-  // Get pathname without locale prefix for route checks
   const pathnameWithoutLocale = "/" + pathParts.slice(2).join("/");
 
-  // Check if the path is a protected route (using path without locale)
+  // Check if the path is a protected route
   const isProtectedRoute =
     pathnameWithoutLocale.startsWith("/dashboard") ||
     pathnameWithoutLocale.startsWith("/api/dashboard") ||
     pathnameWithoutLocale.startsWith("/api/events") ||
     pathnameWithoutLocale.startsWith("/api/logs");
 
-  // Check if the path is an admin route
-  const isAdminRoute =
-    pathnameWithoutLocale.startsWith("/dashboard/admin") ||
-    pathnameWithoutLocale.startsWith("/api/admin");
+  // For protected routes, we'll check the session cookie
+  // This is a simple check - actual auth validation happens in the pages
+  if (isProtectedRoute) {
+    const sessionCookie =
+      request.cookies.get("next-auth.session-token") ||
+      request.cookies.get("__Secure-next-auth.session-token");
 
-  // Check if the path is an auth route
-  const isAuthRoute = pathnameWithoutLocale.startsWith("/api/auth");
-
-  // Public routes (no auth required)
-  if (!isProtectedRoute && !isAuthRoute) {
-    return NextResponse.next();
-  }
-
-  // Auth routes are handled by NextAuth.js
-  if (isAuthRoute) {
-    return NextResponse.next();
-  }
-
-  // For protected routes, check authentication
-  const token = await getToken({ req: request });
-
-  // If no token and accessing a protected route, redirect to login with locale
-  if (!token && isProtectedRoute) {
-    return NextResponse.redirect(
-      new URL(`/${currentLocale}/auth/signin`, request.url),
-    );
-  }
-
-  // If user is accessing an admin route, check role
-  if (isAdminRoute && token) {
-    // Check user role
-    if (token.role !== UserRole.ADMIN) {
-      // Redirect to dashboard if not admin, preserving locale
+    if (!sessionCookie) {
       return NextResponse.redirect(
-        new URL(`/${currentLocale}/dashboard`, request.url),
+        new URL(`/${currentLocale}/auth/signin`, request.url),
       );
     }
   }

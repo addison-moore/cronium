@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@cronium/ui/styles.css";
 @import "./components.css";
 @import "./utilities.css";
 
@@ -8,6 +9,39 @@
  */
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* Tailwind CSS 4 Theme Configuration */
+@theme {
+  /* Colors */
+  --color-border: var(--border-color);
+  --color-input: var(--input-color);
+  --color-ring: var(--ring-color);
+  --color-background: var(--background-color);
+  --color-foreground: var(--foreground-color);
+  --color-primary: var(--primary-color);
+  --color-primary-foreground: var(--primary-foreground-color);
+  --color-secondary: var(--secondary-color);
+  --color-secondary-foreground: var(--secondary-foreground-color);
+  --color-destructive: var(--destructive-color);
+  --color-destructive-foreground: var(--destructive-foreground-color);
+  --color-muted: var(--muted-color);
+  --color-muted-foreground: var(--muted-foreground-color);
+  --color-accent: var(--accent-color);
+  --color-accent-foreground: var(--accent-foreground-color);
+  --color-card: var(--card-color);
+  --color-card-foreground: var(--card-foreground-color);
+  --color-popover: var(--popover-color);
+  --color-popover-foreground: var(--popover-foreground-color);
+
+  /* Border Radius */
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+
+  /* Additional theme variables for components */
+  --color-secondary-bg: var(--secondary-bg-color);
+  --color-tertiary-bg: var(--tertiary-bg-color);
+}
 
 /* Root theme variables for light mode */
 :root {
@@ -153,9 +187,9 @@
 
 /**
  * Theme tokens for Tailwind CSS v4
- * These generate corresponding utility classes
+ * Using @theme inline since we're referencing CSS variables
  */
-@theme {
+@theme inline {
   --color-primary: var(--primary-color);
   --color-secondary: var(--secondary-color);
   --color-primary-foreground: var(--primary-foreground-color);
@@ -210,6 +244,7 @@
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;
   --radius-full: 9999px;
+
 
   /* Animations */
   --animate-spin: spin 1s linear infinite;
@@ -295,81 +330,6 @@
     scroll-margin-top: 100px;
     font-weight: 600;
     color: var(--foreground-color);
-  }
-
-  /* Monaco Editor specific styles */
-  .monaco-editor .suggest-widget {
-    z-index: 1000 !important;
-  }
-
-  .monaco-editor .suggest-widget .monaco-list .monaco-list-row {
-    height: auto !important;
-    min-height: 22px !important;
-    line-height: 22px !important;
-    padding: 2px 8px !important;
-    display: flex !important;
-    align-items: center !important;
-  }
-
-  .monaco-editor
-    .suggest-widget
-    .monaco-list
-    .monaco-list-row
-    .monaco-icon-label {
-    line-height: 18px !important;
-    height: 18px !important;
-  }
-
-  .monaco-editor
-    .suggest-widget
-    .monaco-list
-    .monaco-list-row
-    .monaco-icon-label
-    .monaco-icon-label-container {
-    line-height: 18px !important;
-    height: 18px !important;
-  }
-
-  .monaco-editor .suggest-widget .monaco-list .monaco-list-row .suggest-icon {
-    width: 16px !important;
-    height: 16px !important;
-    margin-right: 6px !important;
-    flex-shrink: 0 !important;
-  }
-
-  .monaco-editor .suggest-widget .monaco-list .monaco-list-row .contents {
-    line-height: 18px !important;
-    height: 18px !important;
-    overflow: hidden !important;
-  }
-
-  .monaco-editor .suggest-widget .monaco-list .monaco-list-row .contents .main {
-    line-height: 18px !important;
-    height: 18px !important;
-  }
-
-  .monaco-editor
-    .suggest-widget
-    .monaco-list
-    .monaco-list-row
-    .contents
-    .main
-    .type-label {
-    line-height: 18px !important;
-    height: 18px !important;
-    font-size: 12px !important;
-  }
-
-  .monaco-editor
-    .suggest-widget
-    .monaco-list
-    .monaco-list-row
-    .contents
-    .main
-    .signature-label {
-    line-height: 18px !important;
-    height: 18px !important;
-    font-size: 11px !important;
   }
 
   /* Solarized color utility classes */

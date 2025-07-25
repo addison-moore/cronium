@@ -4,8 +4,13 @@ import React, { useState, useEffect, createContext, useContext } from "react";
 import { Button } from "@cronium/ui";
 import { Copy } from "lucide-react";
 import Prism from "prismjs";
-import loadLanguages from "prismjs/components/";
-loadLanguages(["bash", "python", "javascript", "json"]);
+// Import Prism theme for syntax highlighting
+import "prismjs/themes/prism-tomorrow.css";
+// Import language components directly
+import "prismjs/components/prism-bash";
+import "prismjs/components/prism-python";
+import "prismjs/components/prism-javascript";
+import "prismjs/components/prism-json";
 
 type Language = "python" | "nodejs" | "curl";
 
@@ -48,7 +53,7 @@ export function CodeBlock({
   title?: string;
 }) {
   const { selectedLanguage, setSelectedLanguage } = useContext(LanguageContext);
-  const [highlightedCode, setHighlightedCode] = useState<string>("");
+  const [mounted, setMounted] = useState(false);
 
   const languages: { key: Language; label: string }[] = [
     { key: "python", label: "Python" },
@@ -57,32 +62,32 @@ export function CodeBlock({
   ];
 
   const code = examples[selectedLanguage];
+  const syntaxLanguage = getSyntaxLanguage(selectedLanguage);
 
   useEffect(() => {
-    // Dynamic import of Prism.js for client-side only
-    const loadPrism = async () => {
-      const syntaxLanguage = getSyntaxLanguage(selectedLanguage);
-      if (Prism.languages[syntaxLanguage]) {
-        const highlighted = Prism.highlight(
-          code,
-          Prism.languages[syntaxLanguage],
-          syntaxLanguage,
-        );
-        setHighlightedCode(highlighted);
-      } else {
-        setHighlightedCode(code);
-      }
-    };
+    setMounted(true);
+  }, []);
 
-    loadPrism().catch(() => {
-      // Fallback to plain text if Prism fails to load
-      setHighlightedCode(code);
-    });
-  }, [code, selectedLanguage]);
+  const getHighlightedCode = () => {
+    if (!mounted || typeof window === "undefined") {
+      return code;
+    }
+
+    if (Prism.languages[syntaxLanguage]) {
+      return Prism.highlight(
+        code,
+        Prism.languages[syntaxLanguage],
+        syntaxLanguage,
+      );
+    }
+    return code;
+  };
 
   const copyToClipboard = () => {
     void navigator.clipboard.writeText(code);
   };
+
+  const highlightedCode = getHighlightedCode();
 
   return (
     <div className="mb-4">
@@ -105,11 +110,19 @@ export function CodeBlock({
 
       {/* Code Block */}
       <div className="relative">
-        <pre className="border-border overflow-x-auto rounded-lg border bg-stone-900 p-4 text-sm text-gray-100">
-          <code
-            className={`language-${getSyntaxLanguage(selectedLanguage)}`}
-            dangerouslySetInnerHTML={{ __html: highlightedCode }}
-          />
+        <pre
+          className="border-border overflow-x-auto rounded-lg border bg-stone-900 p-4 text-sm text-gray-100"
+          suppressHydrationWarning
+        >
+          {mounted && highlightedCode !== code ? (
+            <code
+              className={`language-${syntaxLanguage}`}
+              dangerouslySetInnerHTML={{ __html: highlightedCode }}
+              suppressHydrationWarning
+            />
+          ) : (
+            <code className={`language-${syntaxLanguage}`}>{code}</code>
+          )}
         </pre>
         <button
           onClick={copyToClipboard}
@@ -132,42 +145,44 @@ export function SimpleCodeBlock({
   language?: string;
   className?: string;
 }) {
-  const [highlightedCode, setHighlightedCode] = useState<string>("");
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const loadPrism = async () => {
-      try {
-        if (Prism.languages[language]) {
-          const highlighted = Prism.highlight(
-            children,
-            Prism.languages[language],
-            language,
-          );
-          setHighlightedCode(highlighted);
-        } else {
-          setHighlightedCode(children);
-        }
-      } catch {
-        setHighlightedCode(children);
-      }
-    };
+    setMounted(true);
+  }, []);
 
-    void loadPrism();
-  }, [children, language]);
+  const getHighlightedCode = () => {
+    if (!mounted || typeof window === "undefined") {
+      return children;
+    }
+
+    if (Prism.languages[language]) {
+      return Prism.highlight(children, Prism.languages[language], language);
+    }
+    return children;
+  };
 
   const copyToClipboard = () => {
     void navigator.clipboard.writeText(children);
   };
 
+  const highlightedCode = getHighlightedCode();
+
   return (
     <div className="relative">
       <pre
         className={`bg-grey-800 overflow-x-auto rounded-lg p-4 text-sm text-gray-100 ${className ?? ""}`}
+        suppressHydrationWarning
       >
-        <code
-          className={`language-${language}`}
-          dangerouslySetInnerHTML={{ __html: highlightedCode }}
-        />
+        {mounted && highlightedCode !== children ? (
+          <code
+            className={`language-${language}`}
+            dangerouslySetInnerHTML={{ __html: highlightedCode }}
+            suppressHydrationWarning
+          />
+        ) : (
+          <code className={`language-${language}`}>{children}</code>
+        )}
       </pre>
       <button
         onClick={copyToClipboard}

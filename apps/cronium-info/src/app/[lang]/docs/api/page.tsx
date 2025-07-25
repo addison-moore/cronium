@@ -122,12 +122,16 @@ function EndpointCard({
         <AccordionTrigger className="px-6 py-3 hover:no-underline">
           <div className="flex w-full items-center gap-2">
             <Badge
-              variant={
+              className={
                 method === "GET"
-                  ? "secondary"
+                  ? "border-transparent bg-blue-500 text-white"
                   : method === "POST"
-                    ? "default"
-                    : "destructive"
+                    ? "border-transparent bg-green-500 text-white"
+                    : method === "PUT"
+                      ? "border-transparent bg-yellow-500 text-white"
+                      : method === "PATCH"
+                        ? "border-transparent bg-orange-500 text-white"
+                        : "border-transparent bg-red-500 text-white"
               }
             >
               {method}

@@ -6,17 +6,17 @@
 # Change to project root
 cd "$(dirname "$0")/../.."
 
-# Load environment variables from .env.local file if it exists
-if [ -f .env.local ]; then
+# Load environment variables from env/.env.local file if it exists
+if [ -f env/.env.local ]; then
     set -a
-    source .env.local
+    source env/.env.local
     set +a
-elif [ -f .env ]; then
+elif [ -f env/.env ]; then
     set -a
-    source .env
+    source env/.env
     set +a
 else
-    echo "Warning: No .env.local or .env file found. Some environment variables may be missing."
+    echo "Warning: No env/.env.local or env/.env file found. Some environment variables may be missing."
 fi
 
 # Display helpful information
@@ -33,5 +33,5 @@ echo ""
 if [ $# -eq 0 ]; then
     exec docker compose -f infra/docker/docker-compose.dev.local-app.yml up
 else
-    exec docker compose -f infra/docker/docker-compose.dev.local-app.yml "$@"
+    exec docker compose -f infra/docker/docker-compose.dev.local-app.yml "$@" --build
 fi
