@@ -75,10 +75,6 @@ export function EventEditTab({
         onEventUpdate(eventData);
         // Also refresh the logs to show any changes
         onRefreshLogs();
-        toast({
-          title: "Success",
-          description: "Event updated successfully",
-        });
       }
     } catch (error) {
       console.error("Error fetching updated event:", error);

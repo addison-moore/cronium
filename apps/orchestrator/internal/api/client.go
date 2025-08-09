@@ -370,7 +370,7 @@ func (c *Client) GetOrphanedJobs(ctx context.Context, orchestratorID string) ([]
 	params.Set("orchestratorId", orchestratorID)
 	
 	var jobs []*types.Job
-	if err := c.get(ctx, "/jobs/orphaned", params, &jobs); err != nil {
+	if err := c.get(ctx, "/api/internal/jobs/orphaned", params, &jobs); err != nil {
 		return nil, fmt.Errorf("failed to get orphaned jobs: %w", err)
 	}
 	

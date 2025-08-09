@@ -30,6 +30,12 @@ export interface EncryptionConfig {
   tagLength?: number;
 }
 
+// Store singleton on global to persist across hot reloads in development
+declare global {
+  // eslint-disable-next-line no-var
+  var __credentialEncryption: CredentialEncryption | undefined;
+}
+
 /**
  * Credential encryption service using AES-256-GCM
  */
@@ -52,10 +58,10 @@ export class CredentialEncryption {
   }
 
   static getInstance(config?: EncryptionConfig): CredentialEncryption {
-    if (!CredentialEncryption.instance) {
-      CredentialEncryption.instance = new CredentialEncryption(config);
+    if (!global.__credentialEncryption) {
+      global.__credentialEncryption = new CredentialEncryption(config);
     }
-    return CredentialEncryption.instance;
+    return global.__credentialEncryption;
   }
 
   /**

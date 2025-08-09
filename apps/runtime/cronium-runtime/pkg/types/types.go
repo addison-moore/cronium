@@ -71,6 +71,7 @@ type ConditionResult struct {
 
 // TokenClaims represents JWT token claims
 type TokenClaims struct {
+	JobID       string    `json:"jobId"`
 	ExecutionID string    `json:"executionId"`
 	UserID      string    `json:"userId"`
 	EventID     string    `json:"eventId"`

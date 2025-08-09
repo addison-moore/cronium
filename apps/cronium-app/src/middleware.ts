@@ -86,7 +86,7 @@ export async function middleware(request: NextRequest) {
   // This is a simple check - actual auth validation happens in the pages
   if (isProtectedRoute) {
     const sessionCookie =
-      request.cookies.get("next-auth.session-token") ||
+      request.cookies.get("next-auth.session-token") ??
       request.cookies.get("__Secure-next-auth.session-token");
 
     if (!sessionCookie) {

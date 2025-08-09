@@ -10,7 +10,12 @@ import {
   withRateLimit,
   withTransaction,
 } from "../trpc";
-import { EventStatus, LogStatus, RunLocation } from "@/shared/schema";
+import {
+  EventStatus,
+  EventType,
+  LogStatus,
+  RunLocation,
+} from "@/shared/schema";
 import type { ConditionalActionType, ScriptType } from "@/shared/schema";
 import { validateConditionalActions } from "@/server/utils/event-validation";
 import {
@@ -26,6 +31,7 @@ import {
 } from "@/shared/schemas/events";
 import { storage } from "@/server/storage";
 import { scheduler } from "@/lib/scheduler";
+import { payloadService } from "@/lib/services/payload-service";
 
 // Use the centralized development-friendly protected procedure
 // This handles authentication and auto-login in development mode
@@ -237,6 +243,21 @@ export const eventsRouter = createTRPCRouter({
           }
         }
 
+        // Generate payload for script events on remote servers
+        if (
+          event.runLocation === RunLocation.REMOTE &&
+          (event.type === EventType.BASH ||
+            event.type === EventType.PYTHON ||
+            event.type === EventType.NODEJS)
+        ) {
+          try {
+            await payloadService.generatePayload(event, input.envVars);
+          } catch (error) {
+            console.error("Failed to generate payload for event:", error);
+            // Don't fail the event creation if payload generation fails
+          }
+        }
+
         // Get the complete event with relations
         const completeEvent = await storage.getEventWithRelations(event.id);
 
@@ -396,6 +417,31 @@ export const eventsRouter = createTRPCRouter({
         // Get the updated event with relations
         const updatedEvent = await storage.getEventWithRelations(id);
 
+        // Generate new payload if content or env vars changed for remote script events
+        if (
+          updatedEvent &&
+          updatedEvent.runLocation === RunLocation.REMOTE &&
+          (updatedEvent.type === EventType.BASH ||
+            updatedEvent.type === EventType.PYTHON ||
+            updatedEvent.type === EventType.NODEJS) &&
+          (input.content !== undefined || input.envVars !== undefined)
+        ) {
+          try {
+            await payloadService.generatePayload(
+              updatedEvent,
+              envVars ?? updatedEvent.envVars,
+            );
+            // Remove old payloads
+            await payloadService.removeOldPayloads(id, 2); // Keep latest 2 versions
+          } catch (error) {
+            console.error(
+              "Failed to generate payload for updated event:",
+              error,
+            );
+            // Don't fail the event update if payload generation fails
+          }
+        }
+
         return updatedEvent;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -412,15 +458,20 @@ export const eventsRouter = createTRPCRouter({
     .input(eventIdSchema)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+
       try {
         // Check permissions
         const canEdit = await storage.canEditEvent(input.id, userId);
+
         if (!canEdit) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "Not authorized to delete this event",
           });
         }
+
+        // Clean up payloads before deleting the event
+        await payloadService.cleanupEventPayloads(input.id);
 
         await storage.deleteScript(input.id);
 
@@ -607,6 +658,18 @@ export const eventsRouter = createTRPCRouter({
           retries?: number;
         };
 
+        // Get payload path for SSH jobs
+        let payloadPath: string | undefined;
+        if (
+          event.runLocation === RunLocation.REMOTE &&
+          jobType === JobType.SCRIPT
+        ) {
+          const activePayload = await payloadService.getActivePayload(input.id);
+          if (activePayload) {
+            payloadPath = activePayload.payloadPath;
+          }
+        }
+
         // Create job in the queue
         const job = await jobService.createJob({
           eventId: input.id,
@@ -617,6 +680,7 @@ export const eventsRouter = createTRPCRouter({
             eventName: event.name,
             triggeredBy: "manual",
             logId: log.id,
+            ...(payloadPath && { payloadPath }),
           },
         });
 

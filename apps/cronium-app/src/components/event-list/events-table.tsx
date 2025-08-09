@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { EventStatus } from "@/shared/schema";
@@ -67,9 +68,19 @@ export function EventsTable({
   const router = useRouter();
   const t = useTranslations("Events");
   const { user } = useAuth();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const formatNextRunTime = (nextRunAt: string | null): string => {
     if (!nextRunAt) return t("NotScheduled");
+
+    // Only calculate relative time on the client to avoid hydration mismatches
+    if (!isClient) {
+      return formatDate(nextRunAt);
+    }
 
     const nextRun = new Date(nextRunAt);
     const now = new Date();

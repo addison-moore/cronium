@@ -18,6 +18,7 @@ export interface ActionMenuItem {
   variant?: "default" | "destructive";
   destructive?: boolean; // Alternative way to specify destructive action for backward compatibility
   disabled?: boolean;
+  separator?: boolean; // Add separator above this action
 }
 
 interface ActionMenuProps {
@@ -52,14 +53,19 @@ export function ActionMenu({
       <DropdownMenuContent align="end">
         {menuItems.map((item, index) => (
           <div key={`div-${index}`}>
-            {separatorIndices?.includes(index) && (
+            {(separatorIndices?.includes(index) || item.separator) && (
               <DropdownMenuSeparator key={`sep-${index}`} />
             )}
             <DropdownMenuItem
               key={`item-${index}`}
-              onClick={item.onClick}
+              onSelect={() => {
+                // Allow the dropdown to close naturally, then execute the action
+                setTimeout(() => {
+                  item.onClick();
+                }, 100);
+              }}
               disabled={item.disabled ?? false}
-              className={`${item.variant === "destructive" || "destructive" in item ? "text-red-600 focus:text-red-600" : ""} ${item.disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
+              className={`${item.variant === "destructive" || item.destructive ? "text-red-600 focus:text-red-600" : ""} ${item.disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
             >
               {item.icon && <span className="mr-2">{item.icon}</span>}
               {item.label}

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
+	"github.com/sirupsen/logrus"
 )
 
 // Executor defines the interface for job execution
@@ -46,6 +47,14 @@ func (m *Manager) GetExecutor(jobType types.JobType) (Executor, bool) {
 
 // Execute runs a job using the appropriate executor
 func (m *Manager) Execute(ctx context.Context, job *types.Job) (<-chan types.ExecutionUpdate, error) {
+	// Log job type for debugging
+	logrus.WithFields(logrus.Fields{
+		"jobID": job.ID,
+		"jobType": job.Type,
+		"hasSSHExecutor": m.executors[types.JobType("ssh")] != nil,
+		"hasContainerExecutor": m.executors[types.JobType("container")] != nil,
+	}).Debug("Selecting executor for job")
+	
 	executor, ok := m.GetExecutor(job.Type)
 	if !ok {
 		return nil, types.NewExecutionError(

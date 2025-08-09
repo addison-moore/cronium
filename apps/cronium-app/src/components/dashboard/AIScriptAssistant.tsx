@@ -168,7 +168,7 @@ export default function AIScriptAssistant({
             <Label htmlFor="ai-prompt">Describe what you want to create</Label>
             <Textarea
               id="ai-prompt"
-              placeholder={`Example: "Create a ${scriptType.toLowerCase().replace("_", " ")} that monitors disk usage and sends an alert if it exceeds 80%"`}
+              placeholder={`Example: "Create a ${scriptType.toLowerCase().replace("_", " ")} script that monitors disk usage and sends an alert if it exceeds 80%"`}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               rows={3}

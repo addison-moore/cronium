@@ -564,6 +564,7 @@ export class JobService {
     if (
       jobStatus === JobStatus.FAILED &&
       data?.error &&
+      typeof data.error === "string" &&
       (data.error.toLowerCase().includes("timeout") ||
         data.error.toLowerCase().includes("timed out"))
     ) {

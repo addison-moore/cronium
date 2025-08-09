@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { NavigationSkeleton, MobileNavigationSkeleton } from "@cronium/ui";
 import DashboardLayoutClient from "./layout-client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -23,23 +22,10 @@ export default async function DashboardLayout({
   }
 
   return (
-    <>
-      {/* Mobile navigation skeleton - shown immediately */}
-      <div className="md:hidden">
-        <MobileNavigationSkeleton />
-      </div>
-
-      {/* Desktop navigation skeleton - shown immediately */}
-      <div className="hidden md:block">
-        <NavigationSkeleton />
-      </div>
-
-      {/* Actual navigation - streamed in */}
-      <Suspense fallback={null}>
-        <DashboardLayoutClient user={session.user}>
-          {children}
-        </DashboardLayoutClient>
-      </Suspense>
-    </>
+    <Suspense fallback={null}>
+      <DashboardLayoutClient user={session.user}>
+        {children}
+      </DashboardLayoutClient>
+    </Suspense>
   );
 }

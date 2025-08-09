@@ -17,6 +17,7 @@ type JWTManager struct {
 
 // Claims represents the JWT claims
 type Claims struct {
+	JobID       string `json:"jobId"`       // From orchestrator
 	ExecutionID string `json:"executionId"`
 	UserID      string `json:"userId"`
 	EventID     string `json:"eventId"`
@@ -88,6 +89,7 @@ func (m *JWTManager) ValidateToken(tokenString string) (*types.TokenClaims, erro
 	}
 
 	return &types.TokenClaims{
+		JobID:       claims.JobID,
 		ExecutionID: claims.ExecutionID,
 		UserID:      claims.UserID,
 		EventID:     claims.EventID,

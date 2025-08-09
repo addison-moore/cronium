@@ -201,6 +201,7 @@ export const events = pgTable("events", {
   resetCounterOnActive: boolean("reset_counter_on_active")
     .default(false)
     .notNull(),
+  payloadVersion: integer("payload_version").default(1).notNull(),
   lastRunAt: timestamp("last_run_at"),
   nextRunAt: timestamp("next_run_at"),
   successCount: integer("success_count").default(0).notNull(),
@@ -1303,3 +1304,36 @@ export type InsertQuotaUsage = typeof quotaUsage.$inferInsert;
 
 export type ToolUsageMetric = typeof toolUsageMetrics.$inferSelect;
 export type InsertToolUsageMetric = typeof toolUsageMetrics.$inferInsert;
+
+// Runner tables
+export const runnerPayloads = pgTable("runner_payloads", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id")
+    .notNull()
+    .references(() => events.id, { onDelete: "cascade" }),
+  eventVersion: integer("event_version").notNull(),
+  payloadPath: text("payload_path").notNull(),
+  checksumPath: text("checksum_path"),
+  payloadSize: integer("payload_size").notNull(),
+  checksum: text("checksum").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  isActive: boolean("is_active").notNull().default(true),
+});
+
+export const runnerDeployments = pgTable("runner_deployments", {
+  id: serial("id").primaryKey(),
+  serverId: integer("server_id")
+    .notNull()
+    .references(() => servers.id, { onDelete: "cascade" }),
+  runnerVersion: text("runner_version").notNull(),
+  runnerPath: text("runner_path").notNull(),
+  checksum: text("checksum").notNull(),
+  deployedAt: timestamp("deployed_at").notNull().defaultNow(),
+  lastUsed: timestamp("last_used"),
+  status: text("status").notNull().default("active"), // active, failed, updating
+});
+
+export type RunnerPayload = typeof runnerPayloads.$inferSelect;
+export type InsertRunnerPayload = typeof runnerPayloads.$inferInsert;
+export type RunnerDeployment = typeof runnerDeployments.$inferSelect;
+export type InsertRunnerDeployment = typeof runnerDeployments.$inferInsert;

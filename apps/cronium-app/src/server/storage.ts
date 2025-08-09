@@ -536,33 +536,122 @@ class DatabaseStorage implements IStorage {
 
   // Script methods (now renamed to events)
   async getEvent(id: number): Promise<Script | undefined> {
-    const [script] = await db.select().from(events).where(eq(events.id, id));
-    return script ?? undefined;
+    try {
+      const [script] = await db.select().from(events).where(eq(events.id, id));
+      return script ?? undefined;
+    } catch (error: any) {
+      // If the error is about missing payload_version column, use explicit column selection
+      if (
+        error?.message?.includes("payload_version") ||
+        error?.code === "42703"
+      ) {
+        const [script] = await db
+          .select({
+            id: events.id,
+            userId: events.userId,
+            name: events.name,
+            description: events.description,
+            shared: events.shared,
+            type: events.type,
+            content: events.content,
+            httpMethod: events.httpMethod,
+            httpUrl: events.httpUrl,
+            httpHeaders: events.httpHeaders,
+            httpBody: events.httpBody,
+            toolActionConfig: events.toolActionConfig,
+            status: events.status,
+            triggerType: events.triggerType,
+            scheduleNumber: events.scheduleNumber,
+            scheduleUnit: events.scheduleUnit,
+            customSchedule: events.customSchedule,
+            runLocation: events.runLocation,
+            serverId: events.serverId,
+            timeoutValue: events.timeoutValue,
+            timeoutUnit: events.timeoutUnit,
+            retries: events.retries,
+            startTime: events.startTime,
+            executionCount: events.executionCount,
+            maxExecutions: events.maxExecutions,
+            resetCounterOnActive: events.resetCounterOnActive,
+            lastRunAt: events.lastRunAt,
+            nextRunAt: events.nextRunAt,
+            successCount: events.successCount,
+            failureCount: events.failureCount,
+            tags: events.tags,
+            createdAt: events.createdAt,
+            updatedAt: events.updatedAt,
+          })
+          .from(events)
+          .where(eq(events.id, id));
+
+        // Add default payloadVersion
+        if (script) {
+          return { ...script, payloadVersion: 1 } as Script;
+        }
+        return undefined;
+      }
+      throw error;
+    }
   }
 
   // Check if a user has access to view an event (they own it or it's shared)
   async canViewEvent(eventId: number, userId: string): Promise<boolean> {
-    const [script] = await db
-      .select()
-      .from(events)
-      .where(
-        and(
-          eq(events.id, eventId),
-          sql`(${events.userId} = ${userId} OR ${events.shared} = true)`,
-        ),
-      );
+    try {
+      const [script] = await db
+        .select()
+        .from(events)
+        .where(
+          and(
+            eq(events.id, eventId),
+            sql`(${events.userId} = ${userId} OR ${events.shared} = true)`,
+          ),
+        );
 
-    return !!script;
+      return !!script;
+    } catch (error: any) {
+      // If the error is about missing payload_version column, use a simpler query
+      if (
+        error?.message?.includes("payload_version") ||
+        error?.code === "42703"
+      ) {
+        const [script] = await db
+          .select({ id: events.id })
+          .from(events)
+          .where(
+            and(
+              eq(events.id, eventId),
+              sql`(${events.userId} = ${userId} OR ${events.shared} = true)`,
+            ),
+          );
+        return !!script;
+      }
+      throw error;
+    }
   }
 
   // Check if a user has permission to edit/delete an event (they must own it)
   async canEditEvent(eventId: number, userId: string): Promise<boolean> {
-    const [script] = await db
-      .select()
-      .from(events)
-      .where(and(eq(events.id, eventId), eq(events.userId, userId)));
+    try {
+      const [script] = await db
+        .select()
+        .from(events)
+        .where(and(eq(events.id, eventId), eq(events.userId, userId)));
 
-    return !!script;
+      return !!script;
+    } catch (error: any) {
+      // If the error is about missing payload_version column, use a simpler query
+      if (
+        error?.message?.includes("payload_version") ||
+        error?.code === "42703"
+      ) {
+        const [script] = await db
+          .select({ id: events.id })
+          .from(events)
+          .where(and(eq(events.id, eventId), eq(events.userId, userId)));
+        return !!script;
+      }
+      throw error;
+    }
   }
 
   async getEventWithRelations(
@@ -864,26 +953,91 @@ class DatabaseStorage implements IStorage {
   }
 
   async getAllEvents(userId: string): Promise<Event[]> {
-    // Get user's own scripts and shared scripts from other users with all relations in a single query
-    const eventsWithRelations = await db.query.events.findMany({
-      where: or(eq(events.userId, userId), eq(events.shared, true)),
-      orderBy: [desc(events.updatedAt)],
-      with: {
-        eventServers: {
-          columns: {
-            serverId: true,
+    try {
+      // Get user's own scripts and shared scripts from other users with all relations in a single query
+      const eventsWithRelations = await db.query.events.findMany({
+        where: or(eq(events.userId, userId), eq(events.shared, true)),
+        orderBy: [desc(events.updatedAt)],
+        with: {
+          eventServers: {
+            columns: {
+              serverId: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    // Transform to include eventServers array for backward compatibility
-    const enrichedScripts = eventsWithRelations.map((event) => ({
-      ...event,
-      eventServers: event.eventServers.map((es) => es.serverId),
-    }));
+      // Transform to include eventServers array for backward compatibility
+      const enrichedScripts = eventsWithRelations.map((event) => ({
+        ...event,
+        eventServers: event.eventServers.map((es) => es.serverId),
+        // Provide default for payload_version if missing
+        payloadVersion: (event as any).payloadVersion ?? 1,
+      }));
 
-    return enrichedScripts;
+      return enrichedScripts;
+    } catch (error: any) {
+      // If the error is about missing payload_version column, provide a fallback
+      if (
+        error?.message?.includes("payload_version") ||
+        error?.code === "42703"
+      ) {
+        console.warn(
+          "payload_version column missing - using fallback query. Run migration: pnpm tsx src/scripts/migrations/add-payload-version.ts",
+        );
+
+        // Fallback query without payload_version
+        const eventsWithRelations = await db
+          .select({
+            id: events.id,
+            userId: events.userId,
+            name: events.name,
+            description: events.description,
+            shared: events.shared,
+            type: events.type,
+            content: events.content,
+            httpMethod: events.httpMethod,
+            httpUrl: events.httpUrl,
+            httpHeaders: events.httpHeaders,
+            httpBody: events.httpBody,
+            toolActionConfig: events.toolActionConfig,
+            status: events.status,
+            triggerType: events.triggerType,
+            scheduleNumber: events.scheduleNumber,
+            scheduleUnit: events.scheduleUnit,
+            customSchedule: events.customSchedule,
+            runLocation: events.runLocation,
+            serverId: events.serverId,
+            timeoutValue: events.timeoutValue,
+            timeoutUnit: events.timeoutUnit,
+            retries: events.retries,
+            startTime: events.startTime,
+            executionCount: events.executionCount,
+            maxExecutions: events.maxExecutions,
+            resetCounterOnActive: events.resetCounterOnActive,
+            lastRunAt: events.lastRunAt,
+            nextRunAt: events.nextRunAt,
+            successCount: events.successCount,
+            failureCount: events.failureCount,
+            tags: events.tags,
+            createdAt: events.createdAt,
+            updatedAt: events.updatedAt,
+          })
+          .from(events)
+          .where(or(eq(events.userId, userId), eq(events.shared, true)))
+          .orderBy(desc(events.updatedAt));
+
+        // Add default payloadVersion and empty eventServers
+        return eventsWithRelations.map((event) => ({
+          ...event,
+          payloadVersion: 1,
+          eventServers: [],
+        })) as Event[];
+      }
+
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   async getEventsByServerId(
