@@ -1,18 +1,18 @@
 import { ScriptScheduler } from "./scheduler";
 
-// Create a single global instance of the scheduler with a more robust singleton pattern
-let globalSchedulerInstance: ScriptScheduler | null = null;
-let isCreating = false;
+// Store singleton on global to persist across hot reloads in development
+declare global {
+  // eslint-disable-next-line no-var
+  var __scheduler: ScriptScheduler | undefined;
+}
 
 // Get or create the scheduler instance
 function getSchedulerInstance(): ScriptScheduler {
-  if (!globalSchedulerInstance && !isCreating) {
-    isCreating = true;
+  if (!global.__scheduler) {
     console.log("Creating new global scheduler instance");
-    globalSchedulerInstance = new ScriptScheduler();
-    isCreating = false;
+    global.__scheduler = new ScriptScheduler();
   }
-  return globalSchedulerInstance!;
+  return global.__scheduler;
 }
 
 // Export a singleton instance (without auto-initialization)

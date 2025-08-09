@@ -104,11 +104,47 @@ export function buildJobPayload(
   }
 
   // Add target information
-  if (event.runLocation === RunLocation.REMOTE && event.serverId) {
-    jobPayload.target = {
-      serverId: event.serverId,
-    };
+  if (event.runLocation === RunLocation.REMOTE) {
+    // Check for direct serverId first
+    if (event.serverId) {
+      jobPayload.target = {
+        serverId: event.serverId,
+      };
+    } else if (event.eventServers && event.eventServers.length > 0) {
+      // If no direct serverId, check eventServers table
+      // For now, use the first server (multi-server support will be added later)
+      const firstEventServer = event.eventServers[0];
+      if (firstEventServer?.serverId) {
+        jobPayload.target = {
+          serverId: firstEventServer.serverId,
+        };
+      } else {
+        // Fallback to container if no server found
+        jobPayload.target = {
+          containerImage:
+            jobType === JobType.SCRIPT
+              ? `cronium/${event.type.toLowerCase()}:latest`
+              : jobType === JobType.HTTP_REQUEST
+                ? "cronium/http-client:latest"
+                : "cronium/tool-executor:latest",
+        };
+      }
+    } else {
+      // No servers configured for remote event - fallback to container
+      console.warn(
+        `Event ${event.id} is set to REMOTE but has no servers configured`,
+      );
+      jobPayload.target = {
+        containerImage:
+          jobType === JobType.SCRIPT
+            ? `cronium/${event.type.toLowerCase()}:latest`
+            : jobType === JobType.HTTP_REQUEST
+              ? "cronium/http-client:latest"
+              : "cronium/tool-executor:latest",
+      };
+    }
   } else {
+    // Local execution - use container
     jobPayload.target = {
       containerImage:
         jobType === JobType.SCRIPT

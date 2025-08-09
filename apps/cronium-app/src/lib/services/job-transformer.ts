@@ -16,7 +16,19 @@ export interface OrchestratorJob {
     timeout: number;
     inputData: Record<string, unknown>;
     variables: Record<string, unknown>;
-    target: { type: string; serverId?: string };
+    target: {
+      type: string;
+      serverId?: string;
+      serverDetails?: {
+        id: string;
+        name: string;
+        host: string;
+        port: number;
+        username: string;
+        privateKey: string;
+        passphrase?: string;
+      };
+    };
     script?: {
       type: string;
       content: string;

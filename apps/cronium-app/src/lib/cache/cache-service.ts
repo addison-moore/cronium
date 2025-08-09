@@ -286,8 +286,17 @@ export class CacheService {
   }
 }
 
+// Store singleton on global to persist across hot reloads in development
+declare global {
+  // eslint-disable-next-line no-var
+  var __cacheService: CacheService | undefined;
+}
+
 // Export singleton instance
-export const cacheService = new CacheService();
+if (!global.__cacheService) {
+  global.__cacheService = new CacheService();
+}
+export const cacheService = global.__cacheService;
 
 // Helper functions for common cache operations
 export const cacheHelpers = {

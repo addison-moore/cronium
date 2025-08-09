@@ -11,6 +11,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "./alert-dialog";
 import { Button } from "./button";
 import { Spinner } from "./spinner";
@@ -85,43 +86,44 @@ export function ConfirmationDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      {trigger && <div onClick={() => setOpen(true)}>{trigger}</div>}
+      {trigger && <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>}
 
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <div className="mb-2 flex items-center">
-            {icon}
-            <AlertDialogTitle className="ml-2">{title}</AlertDialogTitle>
-          </div>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
-        </AlertDialogHeader>
+      {open && (
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="mb-2 flex items-center">
+              {icon}
+              <AlertDialogTitle className="ml-2">{title}</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription>{description}</AlertDialogDescription>
+          </AlertDialogHeader>
 
-        <AlertDialogFooter>
-          <AlertDialogCancel asChild>
-            <Button variant="outline" disabled={isConfirming}>
-              <X className="mr-2 h-4 w-4" />
-              {cancelText}
-            </Button>
-          </AlertDialogCancel>
-
-          <AlertDialogAction asChild>
-            <Button
-              variant={effectiveVariant}
-              onClick={handleConfirm}
-              disabled={isConfirming}
-            >
-              {isConfirming ? (
-                <>
-                  <Spinner size="lg" />
-                  {loadingText ?? confirmText}
-                </>
-              ) : (
-                confirmText
-              )}
-            </Button>
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="outline" disabled={isConfirming}>
+                <X className="mr-2 h-4 w-4" />
+                {cancelText}
+              </Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                variant={effectiveVariant}
+                onClick={handleConfirm}
+                disabled={isConfirming}
+              >
+                {isConfirming ? (
+                  <>
+                    <Spinner size="lg" className="mr-2" />
+                    {loadingText ?? confirmText}
+                  </>
+                ) : (
+                  confirmText
+                )}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      )}
     </AlertDialog>
   );
 }

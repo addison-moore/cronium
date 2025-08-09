@@ -3,4 +3,5 @@ go 1.23.0
 use (
 	./apps/orchestrator
 	./apps/runtime/cronium-runtime
+	./apps/runner/cronium-runner
 )

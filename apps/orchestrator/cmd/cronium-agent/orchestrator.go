@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -62,8 +64,20 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 	}
 	executorMgr.Register(types.JobTypeContainer, containerExec)
 	
-	// Register SSH executor
-	sshExec, err := ssh.NewExecutor(cfg.SSH, log)
+	// Register SSH executor (with multi-server support)
+	// TODO: Make runtime host and port configurable
+	runtimeHost := os.Getenv("RUNTIME_HOST")
+	if runtimeHost == "" {
+		runtimeHost = "runtime-api" // Default to Docker service name
+	}
+	runtimePort := 8089 // Default runtime API port
+	if envPort := os.Getenv("RUNTIME_PORT"); envPort != "" {
+		if port, err := strconv.Atoi(envPort); err == nil {
+			runtimePort = port
+		}
+	}
+	jwtSecret := cfg.Container.Runtime.JWTSecret
+	sshExec, err := ssh.NewMultiServerExecutor(cfg.SSH, runtimeHost, runtimePort, jwtSecret, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SSH executor: %w", err)
 	}

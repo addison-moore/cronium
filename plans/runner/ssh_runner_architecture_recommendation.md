@@ -53,12 +53,12 @@ Pain points: no sandboxing, helpers unavailable, difficult variable isolation, a
 | **Build trigger** | _Per event version change._ When a user saves/updates an event, orchestrator compiles a new Runner‑payload pair.                                                            |
 | **Binary reuse**  | The **Runner binary** is architecture‑specific and **cached per host** (checksum checked). Only copied again if version/hash differs.                                       |
 | **Payload reuse** | Rebuilt **when the script or manifest changes**; otherwise reused across multiple job executions.                                                                           |
-| **Storage**       | Store artefacts in `s3://cronium‑runner‑cache/<eventId>/<version>/` (or local FS). Clean up via TTL policy (e.g., 90 days since last run).                                  |
-| **Compile time**  | Go’s build cache means a **cold cross‑compile** (\~first time per arch) takes **≈ 5–10 s** on a 4‑core server; subsequent incremental builds typically finish in **≤ 1 s**. |
+| **Storage**       | Store artefacts in local FS.                                                                                                                                                |
+| **Compile time**  | Go’s build cache means a **cold cross‑compile** (\~first time per arch) takes **≈ 5–10 s** on a 4‑core server; subsequent incremental builds typically finish in **≤ 1 s**. |
 
 ---
 
-## 5 Runtime Helpers
+## 5 Runtime Helpers
 
 ### 5.1 Design Principles
 

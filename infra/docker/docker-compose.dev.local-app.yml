@@ -54,6 +54,10 @@ services:
       CRONIUM_CONTAINER_RUNTIME_BACKEND_URL: http://host.docker.internal:5001
       CRONIUM_CONTAINER_RUNTIME_VALKEY_URL: valkey://cronium-valkey-dev:6379
 
+      # Runtime API Configuration for SSH execution
+      RUNTIME_HOST: runtime-api
+      RUNTIME_PORT: 8089
+
       # WebSocket Configuration
       CRONIUM_API_WS_ENDPOINT: ws://host.docker.internal:5002/socket.io/
 
@@ -70,6 +74,8 @@ services:
       - ../../apps/orchestrator:/app
       - ../../apps/orchestrator/configs:/app/config:ro
       - ../../data/orchestrator:/app/data
+      # Mount the payloads directory so orchestrator can access generated payloads
+      - ../../apps/cronium-app/storage/payloads:/Users/addison/Code/cronium/cronium/apps/cronium-app/storage/payloads:ro
     command: air -c .air.toml
     ports:
       - "${ORCHESTRATOR_PORT:-8080}:8080"
@@ -84,6 +90,46 @@ services:
       - cronium-dev-network
     security_opt:
       - no-new-privileges:true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Runtime API Service for SSH execution support
+  runtime-api:
+    build:
+      context: ../../apps/runtime/cronium-runtime
+      dockerfile: Dockerfile
+    container_name: cronium-runtime-api-dev
+    environment:
+      # Server configuration
+      PORT: 8089
+
+      # Backend API configuration
+      BACKEND_URL: http://host.docker.internal:5001
+      BACKEND_TOKEN: ${INTERNAL_API_KEY}
+
+      # Cache configuration
+      VALKEY_URL: valkey://valkey:6379
+
+      # Auth configuration
+      JWT_SECRET: ${JWT_SECRET}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+    ports:
+      - "8089:8089"
+    depends_on:
+      valkey:
+        condition: service_healthy
+    links:
+      - cronium-agent:cronium-agent
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8089/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - cronium-dev-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

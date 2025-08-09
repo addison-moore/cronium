@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { jobService } from "@/lib/services/job-service";
-import { transformJobsForOrchestrator } from "@/lib/services/job-transformer";
+import { enhancedTransformJobsForOrchestrator } from "@/lib/services/enhanced-job-transformer";
 import type { JobType } from "@shared/schema";
 
 // This is an internal API endpoint for the orchestrator to poll jobs
@@ -40,7 +40,15 @@ export async function GET(request: NextRequest) {
     );
 
     // Transform jobs to the format expected by the orchestrator
-    const transformedJobs = transformJobsForOrchestrator(jobs);
+    const transformedJobs = await enhancedTransformJobsForOrchestrator(jobs);
+
+    // Log job types for debugging
+    transformedJobs.forEach((job) => {
+      console.log(
+        `[Job Queue API] Job ${job.id} - Type: ${job.type}, Target:`,
+        job.execution?.target,
+      );
+    });
 
     return NextResponse.json({
       jobs: transformedJobs,

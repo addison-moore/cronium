@@ -82,6 +82,13 @@ export function EventsListClient({
       });
       if (onRefresh) onRefresh();
     },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete event",
+        variant: "destructive",
+      });
+    },
   });
 
   const executeEventMutation = trpc.events.execute.useMutation({
@@ -324,10 +331,10 @@ export function EventsListClient({
     try {
       await deleteEventMutation.mutateAsync({ id: deleteEventId });
       setEvents((prev) => prev.filter((e) => e.id !== deleteEventId));
-      setIsDeleteDialogOpen(false);
       setDeleteEventId(null);
-    } catch {
-      // Error handling is done in the mutation onError callback
+    } catch (error) {
+      // Re-throw to let ConfirmationDialog know the operation failed
+      throw error;
     }
   };
 

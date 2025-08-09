@@ -81,6 +81,7 @@ export async function GET(request: NextRequest) {
       customSchedule: null,
       startTime: null,
       resetCounterOnActive: false,
+      payloadVersion: 1,
       lastRunAt: null,
       nextRunAt: null,
       successCount: 0,

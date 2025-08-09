@@ -113,34 +113,6 @@ pnpm db:generate      # Generate Drizzle migrations
 
 ---
 
-## 🎯 Current Priorities
-
-### 1. **Type Safety Completion**
-
-- Continue systematic elimination of `any` types
-- Focus on test files and integration patterns
-- Implement advanced TypeScript patterns
-
-### 2. **Component Architecture Cleanup**
-
-- Remove redundant REST components (moved to backups)
-- Standardize tRPC component naming conventions
-- Clean up import statements and function exports
-
-### 3. **Security Enhancement**
-
-- Implement containerized script execution
-- Complete API token management system
-- Enhance role-based access controls
-
-### 4. **Form System Modernization**
-
-- Complete migration to React Hook Form + Zod
-- Standardize validation patterns
-- Implement comprehensive error handling
-
----
-
 ## 🧠 Implementation Guidelines
 
 ### tRPC Patterns
@@ -215,12 +187,6 @@ const form = useForm<CreateEventInput>({
 ---
 
 ## 🚨 Important Considerations
-
-### Script Execution Security
-
-- **Current State:** Scripts execute directly on host (security risk)
-- **Migration Goal:** Container isolation (Docker/LXC)
-- **User Permissions:** Role-based execution controls
 
 ### Data Management
 
