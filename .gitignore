@@ -3,6 +3,7 @@ _scratch/
 _backups/
 _packages/
 _duplicates/
+_plans/
 logs/
 .next/
 .config/
@@ -30,3 +31,5 @@ data/orchestrator/
 # Build outputs
 dist/
 build/
+
+GEMINI.md
