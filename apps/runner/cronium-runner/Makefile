@@ -5,6 +5,7 @@ GIT_COMMIT = $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
 # Go build flags
 LDFLAGS = -ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.GitCommit=$(GIT_COMMIT)"
+LDFLAGS_OPTIMIZED = -ldflags "-s -w -X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.GitCommit=$(GIT_COMMIT)"
 
 # Output directory
 DIST_DIR = dist
@@ -16,7 +17,7 @@ BINARY_NAME = cronium-runner
 # Platforms to build
 PLATFORMS = linux/amd64 linux/arm64
 
-.PHONY: all build clean test install-tools
+.PHONY: all build clean test install-tools build-optimized build-helpers
 
 all: clean build
 
@@ -34,6 +35,42 @@ build-local:
 	@echo "Building for current platform..."
 	@mkdir -p $(DIST_DIR)
 	go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME) ./cmd/runner
+
+# Build optimized binaries with platform-specific embeds
+build-optimized: build-helpers
+	@echo "Building optimized binaries..."
+	@mkdir -p $(DIST_DIR)
+	@for platform in $(PLATFORMS); do \
+		os=$$(echo $$platform | cut -d'/' -f1); \
+		arch=$$(echo $$platform | cut -d'/' -f2); \
+		echo "Building optimized $$os/$$arch..."; \
+		GOOS=$$os GOARCH=$$arch go build \
+			$(LDFLAGS_OPTIMIZED) \
+			-trimpath \
+			-o $(DIST_DIR)/$(BINARY_NAME)-$$os-$$arch \
+			./cmd/runner; \
+	done
+	@echo "Copying to artifacts..."
+	@mkdir -p ../../orchestrator/artifacts/runners/$(VERSION)
+	@mkdir -p ../../orchestrator/artifacts/runners/dev
+	@for platform in $(PLATFORMS); do \
+		os=$$(echo $$platform | cut -d'/' -f1); \
+		arch=$$(echo $$platform | cut -d'/' -f2); \
+		cp $(DIST_DIR)/$(BINARY_NAME)-$$os-$$arch ../../orchestrator/artifacts/runners/$(VERSION)/; \
+		cp $(DIST_DIR)/$(BINARY_NAME)-$$os-$$arch ../../orchestrator/artifacts/runners/dev/; \
+	done
+	@echo "Optimized build complete!"
+
+# Build and compress helper binaries
+build-helpers:
+	@echo "Building helper binaries..."
+	@./build-helpers.sh
+	@echo "Compressing helper binaries..."
+	@for file in internal/helpers/binaries/linux_*.cronium.*; do \
+		if [ -f "$$file" ] && [ ! -f "$$file.gz" ]; then \
+			gzip -9 -k -f "$$file"; \
+		fi \
+	done
 
 # Install build dependencies
 install-tools:

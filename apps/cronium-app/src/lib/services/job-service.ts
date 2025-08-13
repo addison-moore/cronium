@@ -9,7 +9,13 @@ import {
   LogStatus,
 } from "@shared/schema";
 import { eq, desc, and, or, isNull, lte, gte } from "drizzle-orm";
-import { nanoid } from "nanoid";
+import { customAlphabet } from "nanoid";
+
+// Use only alphanumeric characters for job IDs to avoid issues with dashes
+const generateJobId = customAlphabet(
+  "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+  12,
+);
 import { storage } from "@server/storage";
 
 // Job queue management service
@@ -87,7 +93,7 @@ export class JobService {
    * Create a new job in the queue
    */
   async createJob(input: CreateJobInput): Promise<Job> {
-    const jobId = `job_${nanoid(12)}`;
+    const jobId = `job_${generateJobId()}`;
 
     const [job] = await this.db
       .insert(jobsTable)

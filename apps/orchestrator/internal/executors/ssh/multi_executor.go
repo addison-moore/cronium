@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/addison-moore/cronium/apps/orchestrator/internal/api"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/config"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
 	"github.com/sirupsen/logrus"
@@ -18,8 +19,8 @@ type MultiServerExecutor struct {
 }
 
 // NewMultiServerExecutor creates a new multi-server SSH executor
-func NewMultiServerExecutor(cfg config.SSHConfig, runtimeHost string, runtimePort int, jwtSecret string, log *logrus.Logger) (*MultiServerExecutor, error) {
-	executor, err := NewExecutor(cfg, runtimeHost, runtimePort, jwtSecret, log)
+func NewMultiServerExecutor(cfg config.SSHConfig, apiClient *api.Client, runtimeHost string, runtimePort int, jwtSecret string, log *logrus.Logger) (*MultiServerExecutor, error) {
+	executor, err := NewExecutor(cfg, apiClient, runtimeHost, runtimePort, jwtSecret, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SSH executor: %w", err)
 	}

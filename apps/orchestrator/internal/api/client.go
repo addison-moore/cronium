@@ -130,6 +130,62 @@ func (c *Client) CompleteJob(ctx context.Context, jobID string, req *CompleteJob
 	return c.post(ctx, fmt.Sprintf("/api/internal/jobs/%s/complete", jobID), req, &response)
 }
 
+// CreateExecution creates a new execution record
+func (c *Client) CreateExecution(ctx context.Context, executionID, jobID string, serverID *string, serverName *string) error {
+	req := map[string]interface{}{
+		"jobId": jobID,
+	}
+	
+	if serverID != nil {
+		// Parse server ID to int if it's numeric
+		req["serverId"] = *serverID
+	}
+	
+	if serverName != nil {
+		req["serverName"] = *serverName
+	}
+	
+	var response interface{}
+	return c.post(ctx, fmt.Sprintf("/api/internal/executions/%s/create", executionID), req, &response)
+}
+
+// ExecutionStatusUpdate contains execution status update details
+type ExecutionStatusUpdate struct {
+	StartedAt   *time.Time
+	CompletedAt *time.Time
+	ExitCode    *int
+	Output      *string
+	Error       *string
+}
+
+// UpdateExecution updates an execution's status
+func (c *Client) UpdateExecution(ctx context.Context, executionID string, status types.JobStatus, details *ExecutionStatusUpdate) error {
+	req := map[string]interface{}{
+		"status": status,
+	}
+	
+	if details != nil {
+		if details.StartedAt != nil {
+			req["startedAt"] = details.StartedAt.Format(time.RFC3339)
+		}
+		if details.CompletedAt != nil {
+			req["completedAt"] = details.CompletedAt.Format(time.RFC3339)
+		}
+		if details.ExitCode != nil {
+			req["exitCode"] = *details.ExitCode
+		}
+		if details.Output != nil {
+			req["output"] = *details.Output
+		}
+		if details.Error != nil {
+			req["error"] = *details.Error
+		}
+	}
+	
+	var response interface{}
+	return c.put(ctx, fmt.Sprintf("/api/internal/executions/%s/update", executionID), req, &response)
+}
+
 // ReportHealth sends a health report to the backend
 func (c *Client) ReportHealth(ctx context.Context, report *HealthReport) error {
 	report.Timestamp = time.Now().Format(time.RFC3339)

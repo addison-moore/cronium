@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     transformedJobs.forEach((job) => {
       console.log(
         `[Job Queue API] Job ${job.id} - Type: ${job.type}, Target:`,
-        job.execution?.target,
+        job.execution?.target?.serverDetails?.name,
       );
     });
 

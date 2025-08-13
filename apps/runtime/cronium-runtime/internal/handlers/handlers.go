@@ -86,8 +86,19 @@ func (h *Handler) GetVariable(w http.ResponseWriter, r *http.Request) {
 	key := chi.URLParam(r, "key")
 	
 	// Verify token matches execution
-	claims, _ := middleware.GetTokenClaims(r.Context())
+	claims, ok := middleware.GetTokenClaims(r.Context())
+	h.log.WithFields(logrus.Fields{
+		"urlExecutionID": executionID,
+		"claimsExecutionID": claims.ExecutionID,
+		"hasToken": ok,
+		"key": key,
+	}).Debug("GetVariable request")
+	
 	if claims.ExecutionID != executionID {
+		h.log.WithFields(logrus.Fields{
+			"urlExecutionID": executionID,
+			"claimsExecutionID": claims.ExecutionID,
+		}).Error("Execution ID mismatch")
 		h.writeError(w, http.StatusForbidden, "execution ID mismatch")
 		return
 	}

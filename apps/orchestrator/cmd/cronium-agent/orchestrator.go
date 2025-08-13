@@ -58,7 +58,7 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 	executorMgr := executors.NewManager()
 	
 	// Register container executor
-	containerExec, err := container.NewExecutor(cfg.Container, log)
+	containerExec, err := container.NewExecutor(cfg.Container, apiClient, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create container executor: %w", err)
 	}
@@ -77,7 +77,7 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 		}
 	}
 	jwtSecret := cfg.Container.Runtime.JWTSecret
-	sshExec, err := ssh.NewMultiServerExecutor(cfg.SSH, runtimeHost, runtimePort, jwtSecret, log)
+	sshExec, err := ssh.NewMultiServerExecutor(cfg.SSH, apiClient, runtimeHost, runtimePort, jwtSecret, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SSH executor: %w", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/addison-moore/cronium/apps/orchestrator/internal/api"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/config"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
 	"github.com/docker/docker/api/types/container"
@@ -24,6 +25,7 @@ type Executor struct {
 	config       config.ContainerConfig
 	dockerClient *client.Client
 	log          *logrus.Logger
+	apiClient    *api.Client
 	sidecar      *SidecarManager
 	cleanup      *CleanupManager
 	
@@ -36,7 +38,7 @@ type Executor struct {
 }
 
 // NewExecutor creates a new container executor
-func NewExecutor(cfg config.ContainerConfig, log *logrus.Logger) (*Executor, error) {
+func NewExecutor(cfg config.ContainerConfig, apiClient *api.Client, log *logrus.Logger) (*Executor, error) {
 	// Create Docker client
 	dockerClient, err := client.NewClientWithOpts(
 		client.WithHost(cfg.Docker.Endpoint),
@@ -58,6 +60,7 @@ func NewExecutor(cfg config.ContainerConfig, log *logrus.Logger) (*Executor, err
 		config:       cfg,
 		dockerClient: dockerClient,
 		log:          log,
+		apiClient:    apiClient,
 		containers:   make(map[string]string),
 		sidecars:     make(map[string]string),
 		networks:     make(map[string]string),
@@ -99,8 +102,27 @@ func (e *Executor) Validate(job *types.Job) error {
 func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.ExecutionUpdate, error) {
 	updates := make(chan types.ExecutionUpdate, 100)
 	
+	// Generate execution ID with underscore separator to avoid double dash issues
+	executionID := fmt.Sprintf("exec_%s_%d", job.ID, time.Now().Unix())
+	
 	go func() {
 		defer close(updates)
+		
+		// Create execution record in the database
+		if e.apiClient != nil {
+			if err := e.apiClient.CreateExecution(ctx, executionID, job.ID, nil, nil); err != nil {
+				e.log.WithError(err).Warn("Failed to create execution record")
+				// Continue anyway - execution tracking is not critical for job success
+			}
+			
+			// Mark execution as started
+			now := time.Now()
+			if err := e.apiClient.UpdateExecution(ctx, executionID, types.JobStatusRunning, &api.ExecutionStatusUpdate{
+				StartedAt: &now,
+			}); err != nil {
+				e.log.WithError(err).Warn("Failed to update execution status to running")
+			}
+		}
 		
 		// Ensure cleanup happens no matter what
 		defer func() {

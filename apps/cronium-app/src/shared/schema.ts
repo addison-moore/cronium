@@ -313,6 +313,32 @@ export const jobs = pgTable("jobs", {
     .notNull(),
 });
 
+// Executions Table - tracks individual execution attempts for jobs
+export const executions = pgTable("executions", {
+  id: varchar("id", { length: 100 }).primaryKey(), // Format: exec-{jobId}-{timestamp}
+  jobId: varchar("job_id", { length: 50 })
+    .references(() => jobs.id)
+    .notNull(),
+  serverId: integer("server_id").references(() => servers.id), // NULL for local/container executions
+  serverName: varchar("server_name", { length: 255 }), // Quick reference for server name
+  status: varchar("status", { length: 50 })
+    .$type<JobStatus>()
+    .default(JobStatus.QUEUED)
+    .notNull(),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  exitCode: integer("exit_code"),
+  output: text("output"), // stdout/stderr combined
+  error: text("error"), // Error message if failed
+  metadata: jsonb("metadata").default("{}").notNull(), // Additional execution data
+  createdAt: timestamp("created_at")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
+  updatedAt: timestamp("updated_at")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
+});
+
 export const eventServers = pgTable("event_servers", {
   id: serial("id").primaryKey(),
   eventId: integer("event_id")
@@ -670,6 +696,7 @@ export const serversRelations = relations(servers, ({ one, many }) => ({
   }),
   events: many(events),
   eventServers: many(eventServers),
+  executions: many(executions),
 }));
 
 export const logsRelations = relations(logs, ({ one }) => ({
@@ -697,6 +724,18 @@ export const jobsRelations = relations(jobs, ({ one, many }) => ({
     references: [users.id],
   }),
   logs: many(logs),
+  executions: many(executions),
+}));
+
+export const executionsRelations = relations(executions, ({ one }) => ({
+  job: one(jobs, {
+    fields: [executions.jobId],
+    references: [jobs.id],
+  }),
+  server: one(servers, {
+    fields: [executions.serverId],
+    references: [servers.id],
+  }),
 }));
 
 export const conditionalActionsRelations = relations(
@@ -1057,6 +1096,9 @@ export type InsertLog = typeof logs.$inferInsert;
 
 export type Job = typeof jobs.$inferSelect;
 export type InsertJob = typeof jobs.$inferInsert;
+
+export type Execution = typeof executions.$inferSelect;
+export type InsertExecution = typeof executions.$inferInsert;
 
 export type ConditionalAction = typeof conditionalActions.$inferSelect;
 export type InsertConditionalAction = typeof conditionalActions.$inferInsert;

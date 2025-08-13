@@ -1,5 +1,5 @@
-//go:build !nohelpers
-// +build !nohelpers
+//go:build !nohelpers && !linux_amd64_only && !linux_arm64_only
+// +build !nohelpers,!linux_amd64_only,!linux_arm64_only
 
 package helpers
 
@@ -11,7 +11,7 @@ import (
     "runtime"
 )
 
-// Embedded helper binaries
+// Embedded helper binaries for Linux platforms only
 var (
     //go:embed binaries/linux_amd64_cronium.input
     linux_amd64_input []byte
@@ -42,37 +42,6 @@ var (
 
     //go:embed binaries/linux_arm64_cronium.event
     linux_arm64_event []byte
-
-    //go:embed binaries/darwin_amd64_cronium.input
-    darwin_amd64_input []byte
-
-    //go:embed binaries/darwin_amd64_cronium.output
-    darwin_amd64_output []byte
-
-    //go:embed binaries/darwin_amd64_cronium.getVariable
-    darwin_amd64_getVariable []byte
-
-    //go:embed binaries/darwin_amd64_cronium.setVariable
-    darwin_amd64_setVariable []byte
-
-    //go:embed binaries/darwin_amd64_cronium.event
-    darwin_amd64_event []byte
-
-    //go:embed binaries/darwin_arm64_cronium.input
-    darwin_arm64_input []byte
-
-    //go:embed binaries/darwin_arm64_cronium.output
-    darwin_arm64_output []byte
-
-    //go:embed binaries/darwin_arm64_cronium.getVariable
-    darwin_arm64_getVariable []byte
-
-    //go:embed binaries/darwin_arm64_cronium.setVariable
-    darwin_arm64_setVariable []byte
-
-    //go:embed binaries/darwin_arm64_cronium.event
-    darwin_arm64_event []byte
-
 )
 
 // GetHelperBinary returns the embedded helper binary for the current platform
@@ -100,26 +69,6 @@ func GetHelperBinary(name string) ([]byte, error) {
         return linux_arm64_setVariable, nil
     case "linux_arm64_event":
         return linux_arm64_event, nil
-    case "darwin_amd64_input":
-        return darwin_amd64_input, nil
-    case "darwin_amd64_output":
-        return darwin_amd64_output, nil
-    case "darwin_amd64_getVariable":
-        return darwin_amd64_getVariable, nil
-    case "darwin_amd64_setVariable":
-        return darwin_amd64_setVariable, nil
-    case "darwin_amd64_event":
-        return darwin_amd64_event, nil
-    case "darwin_arm64_input":
-        return darwin_arm64_input, nil
-    case "darwin_arm64_output":
-        return darwin_arm64_output, nil
-    case "darwin_arm64_getVariable":
-        return darwin_arm64_getVariable, nil
-    case "darwin_arm64_setVariable":
-        return darwin_arm64_setVariable, nil
-    case "darwin_arm64_event":
-        return darwin_arm64_event, nil
     default:
         return nil, fmt.Errorf("helper binary not found for platform %s: %s", platform, name)
     }

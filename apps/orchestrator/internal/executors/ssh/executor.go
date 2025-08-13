@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/addison-moore/cronium/apps/orchestrator/internal/api"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/auth"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/config"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
@@ -30,6 +31,7 @@ type RunnerInfo struct {
 type Executor struct {
 	config     config.SSHConfig
 	log        *logrus.Logger
+	apiClient  *api.Client
 	
 	// Connection pool
 	pool *ConnectionPool
@@ -62,7 +64,7 @@ type Session struct {
 }
 
 // NewExecutor creates a new SSH executor
-func NewExecutor(cfg config.SSHConfig, runtimeHost string, runtimePort int, jwtSecret string, log *logrus.Logger) (*Executor, error) {
+func NewExecutor(cfg config.SSHConfig, apiClient *api.Client, runtimeHost string, runtimePort int, jwtSecret string, log *logrus.Logger) (*Executor, error) {
 	// Create connection pool
 	pool := NewConnectionPool(cfg.ConnectionPool, log)
 	
@@ -82,6 +84,7 @@ func NewExecutor(cfg config.SSHConfig, runtimeHost string, runtimePort int, jwtS
 	return &Executor{
 		config:      cfg,
 		log:         log,
+		apiClient:   apiClient,
 		pool:        pool,
 		runnerInfo:  runnerInfo,
 		runnerCache: runnerCache,
@@ -153,7 +156,7 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 		var cancel context.CancelFunc
 		
 		// Apply timeout if specified (default to 1 hour if not set)
-		timeout := time.Duration(job.Execution.Timeout) * time.Second
+		timeout := job.Execution.Timeout
 		if timeout <= 0 {
 			timeout = time.Hour
 		}
@@ -224,7 +227,26 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 	useAPIMode := e.runtimePort > 0 && e.jwtSecret != ""
 	var tunnelManager *TunnelManager
 	var apiEndpoint, apiToken string
-	executionID := fmt.Sprintf("exec-%s-%d", job.ID, time.Now().Unix())
+	// Generate execution ID with underscore separator to avoid double dash issues
+	executionID := fmt.Sprintf("exec_%s_%d", job.ID, time.Now().Unix())
+	
+	// Create execution record in the database
+	if e.apiClient != nil {
+		serverID := job.Execution.Target.ServerDetails.ID
+		serverName := job.Execution.Target.ServerDetails.Name
+		if err := e.apiClient.CreateExecution(ctx, executionID, job.ID, &serverID, &serverName); err != nil {
+			e.log.WithError(err).Warn("Failed to create execution record")
+			// Continue anyway - execution tracking is not critical for job success
+		}
+		
+		// Mark execution as started
+		now := time.Now()
+		if err := e.apiClient.UpdateExecution(ctx, executionID, types.JobStatusRunning, &api.ExecutionStatusUpdate{
+			StartedAt: &now,
+		}); err != nil {
+			e.log.WithError(err).Warn("Failed to update execution status to running")
+		}
+	}
 	
 	if useAPIMode {
 		// Try to set up reverse tunnel for API mode
@@ -355,16 +377,20 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 	sequence := int64(0)
 	sequenceMu := sync.Mutex{}
 	
+	// Create a context for the streaming goroutines
+	streamCtx, cancelStream := context.WithCancel(context.Background())
+	defer cancelStream()
+	
 	// Read stdout
 	go func() {
 		defer wg.Done()
-		e.streamOutput(stdout, "stdout", updates, &sequence, &sequenceMu)
+		e.streamOutputWithContext(streamCtx, stdout, "stdout", updates, &sequence, &sequenceMu)
 	}()
 	
 	// Read stderr
 	go func() {
 		defer wg.Done()
-		e.streamOutput(stderr, "stderr", updates, &sequence, &sequenceMu)
+		e.streamOutputWithContext(streamCtx, stderr, "stderr", updates, &sequence, &sequenceMu)
 	}()
 	
 	// Wait for command to complete or context cancellation
@@ -377,6 +403,10 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 	select {
 	case <-ctx.Done():
 		// Context cancelled or timed out
+		// First cancel the streaming goroutines
+		cancelStream()
+		
+		// Then terminate the SSH session
 		sess.session.Signal(ssh.SIGTERM)
 		time.Sleep(5 * time.Second)
 		sess.session.Signal(ssh.SIGKILL)
@@ -412,6 +442,17 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		status := types.JobStatusCompleted
 		if exitCode != 0 {
 			status = types.JobStatusFailed
+		}
+		
+		// Update execution record with completion status
+		if e.apiClient != nil {
+			now := time.Now()
+			if err := e.apiClient.UpdateExecution(ctx, executionID, status, &api.ExecutionStatusUpdate{
+				CompletedAt: &now,
+				ExitCode:    &exitCode,
+			}); err != nil {
+				e.log.WithError(err).Warn("Failed to update execution completion status")
+			}
 		}
 		
 		e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
@@ -468,7 +509,8 @@ func (e *Executor) deployRunnerWithRetry(ctx context.Context, session *ssh.Sessi
 	
 	// Check cache first
 	cachedEntry, isValid := e.runnerCache.Get(server.ID)
-	if isValid && cachedEntry.Version == e.runnerInfo.Version {
+	// In dev mode, always redeploy to ensure we have the latest runner
+	if isValid && cachedEntry.Version == e.runnerInfo.Version && e.runnerInfo.Version != "dev" {
 		e.log.WithFields(logrus.Fields{
 			"serverID": server.ID,
 			"version":  cachedEntry.Version,
@@ -478,7 +520,8 @@ func (e *Executor) deployRunnerWithRetry(ctx context.Context, session *ssh.Sessi
 	}
 	
 	// If we have a cached entry but it needs verification
-	if cachedEntry != nil && cachedEntry.Version == e.runnerInfo.Version {
+	// Skip verification in dev mode to always redeploy
+	if cachedEntry != nil && cachedEntry.Version == e.runnerInfo.Version && e.runnerInfo.Version != "dev" {
 		// Quick version check
 		checkCmd := fmt.Sprintf("test -f %s && %s version | grep -q %s", runnerPath, runnerPath, e.runnerInfo.Version)
 		if err := session.Run(checkCmd); err == nil {
@@ -492,19 +535,22 @@ func (e *Executor) deployRunnerWithRetry(ctx context.Context, session *ssh.Sessi
 	}
 	
 	// Check if runner exists and has correct version
-	checkCmd := fmt.Sprintf("test -f %s && %s version | grep -q %s", runnerPath, runnerPath, e.runnerInfo.Version)
-	if err := session.Run(checkCmd); err == nil {
-		// Runner exists and has correct version, add to cache
-		e.runnerCache.Set(server.ID, &RunnerCacheEntry{
-			ServerID:     server.ID,
-			RunnerPath:   runnerPath,
-			Version:      e.runnerInfo.Version,
-			Checksum:     e.runnerInfo.Checksum,
-			DeployedAt:   time.Now(),
-			LastVerified: time.Now(),
-		})
-		e.log.Debug("Runner already deployed, added to cache")
-		return nil
+	// In dev mode, always redeploy
+	if e.runnerInfo.Version != "dev" {
+		checkCmd := fmt.Sprintf("test -f %s && %s version | grep -q %s", runnerPath, runnerPath, e.runnerInfo.Version)
+		if err := session.Run(checkCmd); err == nil {
+			// Runner exists and has correct version, add to cache
+			e.runnerCache.Set(server.ID, &RunnerCacheEntry{
+				ServerID:     server.ID,
+				RunnerPath:   runnerPath,
+				Version:      e.runnerInfo.Version,
+				Checksum:     e.runnerInfo.Checksum,
+				DeployedAt:   time.Now(),
+				LastVerified: time.Now(),
+			})
+			e.log.Debug("Runner already deployed, added to cache")
+			return nil
+		}
 	}
 	
 	// Need to deploy runner
@@ -645,10 +691,17 @@ func (e *Executor) copyFileToServer(session *ssh.Session, conn *ssh.Client, loca
 	return e.copyPayloadToServer(session, conn, localPath, remotePath)
 }
 
-// streamOutput reads from a reader and sends log updates
-func (e *Executor) streamOutput(reader io.Reader, stream string, updates chan<- types.ExecutionUpdate, sequence *int64, sequenceMu *sync.Mutex) {
+// streamOutputWithContext reads from a reader and sends log updates until context is cancelled
+func (e *Executor) streamOutputWithContext(ctx context.Context, reader io.Reader, stream string, updates chan<- types.ExecutionUpdate, sequence *int64, sequenceMu *sync.Mutex) {
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
+		// Check if context is cancelled
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		
 		line := scanner.Text()
 		
 		// Send log entry
@@ -665,9 +718,14 @@ func (e *Executor) streamOutput(reader io.Reader, stream string, updates chan<- 
 		})
 	}
 	
-	if err := scanner.Err(); err != nil {
+	if err := scanner.Err(); err != nil && !errors.Is(err, context.Canceled) {
 		e.log.WithError(err).Errorf("Error reading %s stream", stream)
 	}
+}
+
+// streamOutput reads from a reader and sends log updates
+func (e *Executor) streamOutput(reader io.Reader, stream string, updates chan<- types.ExecutionUpdate, sequence *int64, sequenceMu *sync.Mutex) {
+	e.streamOutputWithContext(context.Background(), reader, stream, updates, sequence, sequenceMu)
 }
 
 // Cleanup performs cleanup after execution
@@ -728,6 +786,11 @@ func (e *Executor) untrackSession(jobID string) {
 
 // sendUpdate sends an execution update
 func (e *Executor) sendUpdate(updates chan<- types.ExecutionUpdate, updateType types.UpdateType, data interface{}) {
+	// Check if channel is nil or use non-blocking send to avoid panic
+	if updates == nil {
+		return
+	}
+	
 	select {
 	case updates <- types.ExecutionUpdate{
 		Type:      updateType,

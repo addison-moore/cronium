@@ -61,6 +61,7 @@ import subprocess
 # Helper binary directory
 CRONIUM_HELPERS_DIR = "%s"
 
+
 class cronium:
     """Cronium runtime helper functions"""
     
@@ -70,7 +71,8 @@ class cronium:
         result = subprocess.run(
             [os.path.join(CRONIUM_HELPERS_DIR, "cronium.input")],
             capture_output=True,
-            text=True
+            text=True,
+            env=os.environ.copy()
         )
         if result.returncode != 0:
             raise RuntimeError(f"cronium.input failed: {result.stderr}")
@@ -84,7 +86,8 @@ class cronium:
             [os.path.join(CRONIUM_HELPERS_DIR, "cronium.output")],
             input=json_data,
             capture_output=True,
-            text=True
+            text=True,
+            env=os.environ.copy()
         )
         if result.returncode != 0:
             raise RuntimeError(f"cronium.output failed: {result.stderr}")
@@ -95,7 +98,8 @@ class cronium:
         result = subprocess.run(
             [os.path.join(CRONIUM_HELPERS_DIR, "cronium.getVariable"), key],
             capture_output=True,
-            text=True
+            text=True,
+            env=os.environ.copy()
         )
         if result.returncode != 0:
             raise RuntimeError(f"cronium.getVariable failed: {result.stderr}")
@@ -109,7 +113,8 @@ class cronium:
             [os.path.join(CRONIUM_HELPERS_DIR, "cronium.setVariable"), key],
             input=json_value,
             capture_output=True,
-            text=True
+            text=True,
+            env=os.environ.copy()
         )
         if result.returncode != 0:
             raise RuntimeError(f"cronium.setVariable failed: {result.stderr}")
@@ -120,7 +125,8 @@ class cronium:
         result = subprocess.run(
             [os.path.join(CRONIUM_HELPERS_DIR, "cronium.event")],
             capture_output=True,
-            text=True
+            text=True,
+            env=os.environ.copy()
         )
         if result.returncode != 0:
             raise RuntimeError(f"cronium.event failed: {result.stderr}")

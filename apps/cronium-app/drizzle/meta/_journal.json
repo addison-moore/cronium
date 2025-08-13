@@ -43,6 +43,13 @@
       "when": 1754594512733,
       "tag": "0005_thin_magneto",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1755054466461,
+      "tag": "0006_early_lord_tyger",
+      "breakpoints": true
     }
   ]
 }

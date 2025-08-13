@@ -33,3 +33,4 @@ dist/
 build/
 
 GEMINI.md
+.claude/
