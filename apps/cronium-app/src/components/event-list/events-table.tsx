@@ -196,7 +196,7 @@ export function EventsTable({
             >
               {event.name}
             </StandardizedTableLink>
-            {isSharedEvent && (
+            {isClient && isSharedEvent && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>

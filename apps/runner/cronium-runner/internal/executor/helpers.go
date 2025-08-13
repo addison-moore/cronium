@@ -40,10 +40,16 @@ func (e *Executor) SetupHelpers(manifest *types.Manifest) error {
 		}
 	}
 
-	// Get execution ID from environment or manifest
+	// Get execution ID from environment (set by orchestrator)
+	// The manifest may contain a different execution ID that was generated
+	// when the payload was created, but we should use the one from the orchestrator
+	// which matches the JWT token
 	executionID := os.Getenv("CRONIUM_EXECUTION_ID")
 	if executionID == "" {
+		// Only fall back to manifest if no environment variable is set
+		// This should only happen in local testing
 		executionID = manifest.Metadata.ExecutionID
+		e.log.Warn("Using execution ID from manifest as environment variable not set")
 	}
 
 	// Create helper config
@@ -77,6 +83,7 @@ func (e *Executor) SetupHelpers(manifest *types.Manifest) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
+
 
 	if err := os.WriteFile(configPath, configData, 0644); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)

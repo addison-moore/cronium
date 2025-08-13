@@ -40,7 +40,7 @@ type APIConfig struct {
 	Endpoint       string        `yaml:"endpoint" envconfig:"ENDPOINT" required:"true"`
 	Token          string        `yaml:"token" envconfig:"TOKEN" required:"true"`
 	WSEndpoint     string        `yaml:"wsEndpoint" envconfig:"WS_ENDPOINT"`
-	Timeout        time.Duration `yaml:"timeout" envconfig:"TIMEOUT" default:"30s"`
+	Timeout        time.Duration `yaml:"timeout" envconfig:"TIMEOUT" default:"5m"`
 	RetryConfig    RetryConfig   `yaml:"retry" envconfig:"RETRY"`
 	RateLimit      RateLimitConfig `yaml:"rateLimit" envconfig:"RATE_LIMIT"`
 	OrchestratorID string        `yaml:"-"` // Set from OrchestratorConfig.ID

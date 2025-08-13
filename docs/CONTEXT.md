@@ -210,7 +210,7 @@ const form = useForm<CreateEventInput>({
 - **[TRPC.md](docs/TRPC.md)** - tRPC patterns and conventions
 - **[TYPE_SAFETY.md](docs/TYPE_SAFETY.md)** - TypeScript best practices
 - **[STYLING.md](docs/STYLING.md)** - Styling and UI/UX best practices
-- **[plans/](plans/)** - Comprehensive plans and roadmaps
+- **[\_plans/](_plans/)** - Comprehensive plans and roadmaps
 
 ---
 

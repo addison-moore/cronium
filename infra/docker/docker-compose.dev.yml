@@ -24,7 +24,7 @@ services:
   # Orchestrator Service (cronium-agent)
   cronium-agent:
     build:
-      context: ../../orchestrator/cronium-orchestrator
+      context: ../../apps/orchestrator
       dockerfile: Dockerfile.dev
     container_name: cronium-agent-dev
     environment:
@@ -32,8 +32,9 @@ services:
       CONFIG_FILE: /app/config/cronium-orchestrator.yaml
 
       # API Configuration (CRONIUM_ prefix required)
-      CRONIUM_API_ENDPOINT: http://cronium-app-dev:5001
+      CRONIUM_API_ENDPOINT: http://host.docker.internal:5001
       CRONIUM_API_TOKEN: ${INTERNAL_API_KEY}
+      CRONIUM_API_TIMEOUT: 5m
 
       # Server Configuration
       CRONIUM_SERVER_ID: ${ORCHESTRATOR_ID:-dev-orchestrator-01}
@@ -66,9 +67,10 @@ services:
       GO_ENV: development
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ../../apps/orchestrator/cronium-orchestrator:/app
-      - ../../apps/orchestrator/cronium-orchestrator/configs:/app/config:ro
+      - ../../apps/orchestrator:/app
+      - ../../apps/orchestrator/configs:/app/config:ro
       - ../../data/orchestrator:/app/data
+      - ../../apps/cronium-app/storage/payloads:/Users/addison/Code/cronium/cronium/apps/cronium-app/storage/payloads:ro
     command: air -c .air.toml
     restart: unless-stopped
     healthcheck:

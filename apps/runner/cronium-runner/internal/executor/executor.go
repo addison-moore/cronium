@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -141,6 +142,20 @@ exec(open('%s').read())
 
 	// Set environment variables
 	cmd.Env = os.Environ()
+	
+	// Debug: Log initial environment
+	e.log.Debug("Initial environment variables from os.Environ():")
+	for _, env := range os.Environ() {
+		if strings.HasPrefix(env, "CRONIUM_") {
+			// Hide token value for security
+			if strings.HasPrefix(env, "CRONIUM_API_TOKEN=") {
+				e.log.Debugf("  %s=<hidden>", strings.Split(env, "=")[0])
+			} else {
+				e.log.Debugf("  %s", env)
+			}
+		}
+	}
+	
 	for key, value := range e.manifest.Environment {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
 	}
@@ -148,12 +163,40 @@ exec(open('%s').read())
 	// Add Cronium-specific environment variables
 	if e.manifest.Metadata.JobID != "" {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_JOB_ID=%s", e.manifest.Metadata.JobID))
+	} else if jobID := os.Getenv("CRONIUM_JOB_ID"); jobID != "" {
+		// Pass through from parent environment if not in manifest
+		cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_JOB_ID=%s", jobID))
 	}
+	
 	cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_EVENT_ID=%s", e.manifest.Metadata.EventID))
-	if e.manifest.Metadata.ExecutionID != "" {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_EXECUTION_ID=%s", e.manifest.Metadata.ExecutionID))
+	
+	// Pass execution ID from parent environment or manifest
+	// Prefer environment variable (from orchestrator) over manifest
+	envExecID := os.Getenv("CRONIUM_EXECUTION_ID")
+	manifestExecID := e.manifest.Metadata.ExecutionID
+	
+	if envExecID != "" {
+		// Use execution ID from orchestrator (matches JWT)
+		cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_EXECUTION_ID=%s", envExecID))
+	} else if manifestExecID != "" {
+		// Fall back to manifest only if no environment variable
+		cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_EXECUTION_ID=%s", manifestExecID))
+		e.log.Warn("Using execution ID from manifest as environment variable not set")
 	}
+	
 	cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_WORK_DIR=%s", e.workDir))
+	
+	// Pass through helper-related environment variables if they exist
+	if helperMode := os.Getenv("CRONIUM_HELPER_MODE"); helperMode != "" {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_HELPER_MODE=%s", helperMode))
+	}
+	if apiEndpoint := os.Getenv("CRONIUM_API_ENDPOINT"); apiEndpoint != "" {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_API_ENDPOINT=%s", apiEndpoint))
+	}
+	if apiToken := os.Getenv("CRONIUM_API_TOKEN"); apiToken != "" {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_API_TOKEN=%s", apiToken))
+	}
+	
 
 	// Get stdout and stderr pipes
 	stdout, err := cmd.StdoutPipe()

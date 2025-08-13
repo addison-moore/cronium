@@ -1,8 +1,9 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
-import { jobs, events, users } from "@/shared/schema";
+import { jobs, events, users, executions } from "@/shared/schema";
 import { eq } from "drizzle-orm";
+import { executionService } from "@/lib/services/execution-service";
 
 export async function GET(
   request: NextRequest,
@@ -19,6 +20,15 @@ export async function GET(
 
     const { executionId } = await params;
 
+    // Get execution details
+    const execution = await executionService.getExecution(executionId);
+    if (!execution) {
+      return NextResponse.json(
+        { error: "Execution not found" },
+        { status: 404 },
+      );
+    }
+
     // Get job details
     const job = await db
       .select({
@@ -31,14 +41,11 @@ export async function GET(
         status: jobs.status,
       })
       .from(jobs)
-      .where(eq(jobs.id, executionId))
+      .where(eq(jobs.id, execution.jobId))
       .limit(1);
 
     if (!job || job.length === 0) {
-      return NextResponse.json(
-        { error: "Execution not found" },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
     const jobData = job[0];
@@ -115,12 +122,12 @@ export async function GET(
     const executionContext = {
       executionId,
       jobId: jobData.id,
-      eventId: jobData.eventId,
+      eventId: jobData.eventId ? String(jobData.eventId) : null,
       userId: jobData.userId,
       metadata,
       event: eventData
         ? {
-            id: eventData.id,
+            id: String(eventData.id),
             name: eventData.name,
             type: eventData.type,
             content: eventData.content,

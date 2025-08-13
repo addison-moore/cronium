@@ -40,7 +40,7 @@ Change types include: Feature, Bug Fix, Refactor, Documentation, Testing, etc.
 
 ## Planning
 
-- [plans/](plans/)
+- [\_plans/](_plans/)
 
 Plans are contained in the plans directory. Plans should be updated as needed. As progress is made, update the plans to reflect the current state of the project.
 IMPORTANT: Cronium is meant to be an open-source, self-hosted application. This is not a large enterprise product. The app is in early development and hasn't been released publicly yet. Keep this in mind when making plans.

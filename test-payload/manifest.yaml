@@ -1,0 +1,8 @@
+version: v1
+interpreter: python
+entrypoint: script.py
+metadata:
+  jobId: test-job-123
+  eventId: test-event-456
+  eventVersion: 1
+  createdAt: 2025-08-13T00:00:00Z

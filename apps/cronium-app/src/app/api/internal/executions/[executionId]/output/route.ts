@@ -1,8 +1,9 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
-import { jobs } from "@/shared/schema";
+import { jobs, executions } from "@/shared/schema";
 import { eq } from "drizzle-orm";
+import { executionService } from "@/lib/services/execution-service";
 
 export async function POST(
   request: NextRequest,
@@ -23,24 +24,37 @@ export async function POST(
       timestamp: string;
     };
 
-    // Update job's result with the output
-    const job = await db
-      .select({ id: jobs.id, result: jobs.result })
-      .from(jobs)
-      .where(eq(jobs.id, executionId))
-      .limit(1);
-
-    if (!job || job.length === 0) {
+    // Get execution
+    const execution = await executionService.getExecution(executionId);
+    if (!execution) {
       return NextResponse.json(
         { error: "Execution not found" },
         { status: 404 },
       );
     }
 
-    // Merge output into existing result
-    const existingResult = (job[0]?.result as Record<string, unknown>) || {};
+    // Store output in execution metadata
+    const updatedMetadata = {
+      ...(execution.metadata as Record<string, unknown>),
+      output: body.output,
+      outputTimestamp: body.timestamp,
+    };
+
+    await executionService.updateExecution(executionId, {
+      metadata: updatedMetadata,
+    });
+
+    // Also update job's result for backward compatibility
+    const existingResult = await db
+      .select({ result: jobs.result })
+      .from(jobs)
+      .where(eq(jobs.id, execution.jobId))
+      .limit(1);
+
+    const jobResult =
+      (existingResult[0]?.result as Record<string, unknown>) || {};
     const updatedResult = {
-      ...existingResult,
+      ...jobResult,
       output: body.output,
       outputTimestamp: body.timestamp,
     };
@@ -51,7 +65,7 @@ export async function POST(
         result: updatedResult,
         updatedAt: new Date(),
       })
-      .where(eq(jobs.id, executionId));
+      .where(eq(jobs.id, execution.jobId));
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -44,6 +44,14 @@ func AuthMiddleware(jwtManager *auth.JWTManager, log *logrus.Logger) func(http.H
 				return
 			}
 
+			log.WithFields(logrus.Fields{
+				"executionID": claims.ExecutionID,
+				"jobID": claims.JobID,
+				"userID": claims.UserID,
+				"eventID": claims.EventID,
+				"path": r.URL.Path,
+			}).Debug("JWT token validated successfully")
+
 			// Add claims to context
 			ctx := context.WithValue(r.Context(), tokenClaimsKey, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
