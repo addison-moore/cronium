@@ -196,7 +196,7 @@ func (c *Client) ReportHealth(ctx context.Context, report *HealthReport) error {
 
 // HealthCheck performs a health check on the API
 func (c *Client) HealthCheck(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	
 	var response interface{}

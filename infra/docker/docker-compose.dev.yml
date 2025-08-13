@@ -70,7 +70,6 @@ services:
       - ../../apps/orchestrator:/app
       - ../../apps/orchestrator/configs:/app/config:ro
       - ../../data/orchestrator:/app/data
-      - ../../apps/cronium-app/storage/payloads:/Users/addison/Code/cronium/cronium/apps/cronium-app/storage/payloads:ro
     command: air -c .air.toml
     restart: unless-stopped
     healthcheck:

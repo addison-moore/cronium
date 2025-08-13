@@ -243,20 +243,8 @@ export const eventsRouter = createTRPCRouter({
           }
         }
 
-        // Generate payload for script events on remote servers
-        if (
-          event.runLocation === RunLocation.REMOTE &&
-          (event.type === EventType.BASH ||
-            event.type === EventType.PYTHON ||
-            event.type === EventType.NODEJS)
-        ) {
-          try {
-            await payloadService.generatePayload(event, input.envVars);
-          } catch (error) {
-            console.error("Failed to generate payload for event:", error);
-            // Don't fail the event creation if payload generation fails
-          }
-        }
+        // Payload generation moved to orchestrator
+        // The orchestrator will create payloads from job script content
 
         // Get the complete event with relations
         const completeEvent = await storage.getEventWithRelations(event.id);
@@ -417,28 +405,19 @@ export const eventsRouter = createTRPCRouter({
         // Get the updated event with relations
         const updatedEvent = await storage.getEventWithRelations(id);
 
-        // Generate new payload if content or env vars changed for remote script events
+        // Payload generation moved to orchestrator
+        // The orchestrator will create payloads from job script content
+        // Clean up old payloads if they exist
         if (
           updatedEvent &&
           updatedEvent.runLocation === RunLocation.REMOTE &&
-          (updatedEvent.type === EventType.BASH ||
-            updatedEvent.type === EventType.PYTHON ||
-            updatedEvent.type === EventType.NODEJS) &&
           (input.content !== undefined || input.envVars !== undefined)
         ) {
           try {
-            await payloadService.generatePayload(
-              updatedEvent,
-              envVars ?? updatedEvent.envVars,
-            );
-            // Remove old payloads
-            await payloadService.removeOldPayloads(id, 2); // Keep latest 2 versions
+            // Just clean up old payloads without generating new ones
+            await payloadService.removeOldPayloads(id, 0); // Remove all payloads
           } catch (error) {
-            console.error(
-              "Failed to generate payload for updated event:",
-              error,
-            );
-            // Don't fail the event update if payload generation fails
+            // Ignore cleanup errors
           }
         }
 
@@ -658,17 +637,8 @@ export const eventsRouter = createTRPCRouter({
           retries?: number;
         };
 
-        // Get payload path for SSH jobs
-        let payloadPath: string | undefined;
-        if (
-          event.runLocation === RunLocation.REMOTE &&
-          jobType === JobType.SCRIPT
-        ) {
-          const activePayload = await payloadService.getActivePayload(input.id);
-          if (activePayload) {
-            payloadPath = activePayload.payloadPath;
-          }
-        }
+        // Payload generation moved to orchestrator
+        // No need to get payload path - orchestrator creates payloads on-demand
 
         // Create job in the queue
         const job = await jobService.createJob({
@@ -680,7 +650,6 @@ export const eventsRouter = createTRPCRouter({
             eventName: event.name,
             triggeredBy: "manual",
             logId: log.id,
-            ...(payloadPath && { payloadPath }),
           },
         });
 

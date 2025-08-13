@@ -207,7 +207,7 @@ func SetupDiscovery(workDir string, interpreter string) error {
 	helpersDir := filepath.Join(workDir, ".cronium", "bin")
 	
 	switch interpreter {
-	case "bash":
+	case "BASH", "bash":
 		// Source the discovery script in bash
 		scriptPath := filepath.Join(workDir, ".cronium", "discovery.sh")
 		script := GenerateDiscoveryScript(helpersDir)
@@ -215,7 +215,7 @@ func SetupDiscovery(workDir string, interpreter string) error {
 			return fmt.Errorf("failed to write bash discovery script: %w", err)
 		}
 		
-	case "python":
+	case "PYTHON", "python":
 		// Create Python discovery module
 		scriptPath := filepath.Join(workDir, ".cronium", "discovery.py")
 		script := GeneratePythonDiscovery(helpersDir)
@@ -223,7 +223,7 @@ func SetupDiscovery(workDir string, interpreter string) error {
 			return fmt.Errorf("failed to write Python discovery script: %w", err)
 		}
 		
-	case "node":
+	case "NODE", "node":
 		// Create Node.js discovery module
 		scriptPath := filepath.Join(workDir, ".cronium", "discovery.js")
 		script := GenerateNodeDiscovery(helpersDir)

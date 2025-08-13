@@ -189,10 +189,12 @@ type ConnectionPoolConfig struct {
 
 // SSHExecutionConfig defines SSH execution settings
 type SSHExecutionConfig struct {
-	DefaultShell string `yaml:"defaultShell" envconfig:"DEFAULT_SHELL" default:"/bin/bash"`
-	TempDir      string `yaml:"tempDir" envconfig:"TEMP_DIR" default:"/tmp/cronium"`
-	CleanupAfter bool   `yaml:"cleanupAfter" envconfig:"CLEANUP_AFTER" default:"true"`
-	PTYMode      bool   `yaml:"ptyMode" envconfig:"PTY_MODE" default:"false"`
+	DefaultShell      string `yaml:"defaultShell" envconfig:"DEFAULT_SHELL" default:"/bin/bash"`
+	TempDir           string `yaml:"tempDir" envconfig:"TEMP_DIR" default:"/tmp/cronium"`
+	CleanupAfter      bool   `yaml:"cleanupAfter" envconfig:"CLEANUP_AFTER" default:"true"`
+	PTYMode           bool   `yaml:"ptyMode" envconfig:"PTY_MODE" default:"false"`
+	PayloadStorageDir string `yaml:"payloadStorageDir" envconfig:"PAYLOAD_STORAGE_DIR" default:"/app/data/payloads"`
+	CleanupPayloads   bool   `yaml:"cleanupPayloads" envconfig:"CLEANUP_PAYLOADS" default:"false"`
 }
 
 // CircuitBreakerConfig defines circuit breaker settings

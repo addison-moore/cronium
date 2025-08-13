@@ -6,9 +6,9 @@ import "time"
 type ScriptType string
 
 const (
-	ScriptTypeBash   ScriptType = "bash"
-	ScriptTypePython ScriptType = "python"
-	ScriptTypeNode   ScriptType = "node"
+	ScriptTypeBash   ScriptType = "BASH"
+	ScriptTypePython ScriptType = "PYTHON"
+	ScriptTypeNode   ScriptType = "NODE"
 )
 
 // Manifest represents the payload manifest
