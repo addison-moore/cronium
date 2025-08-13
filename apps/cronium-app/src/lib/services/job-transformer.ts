@@ -107,7 +107,7 @@ export function transformJobForOrchestrator(job: Job): OrchestratorJob {
   // Set script configuration if present
   if (payload.script) {
     execution.script = {
-      type: payload.script.type.toLowerCase(), // Convert BASH -> bash, PYTHON -> python, etc.
+      type: payload.script.type, // Keep original casing (BASH, PYTHON, etc.)
       content: payload.script.content,
       workingDirectory: payload.script.workingDirectory ?? "",
     };

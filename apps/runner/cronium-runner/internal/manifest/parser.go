@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/addison-moore/cronium/apps/runner/cronium-runner/pkg/types"
 	"gopkg.in/yaml.v3"
@@ -39,9 +40,12 @@ func validate(m *types.Manifest) error {
 		return fmt.Errorf("unsupported manifest version: %s", m.Version)
 	}
 
-	switch m.Interpreter {
+	// Normalize interpreter to uppercase for comparison
+	normalizedInterpreter := types.ScriptType(strings.ToUpper(string(m.Interpreter)))
+	switch normalizedInterpreter {
 	case types.ScriptTypeBash, types.ScriptTypePython, types.ScriptTypeNode:
-		// Valid interpreter
+		// Valid interpreter - update manifest to use normalized version
+		m.Interpreter = normalizedInterpreter
 	default:
 		return fmt.Errorf("unsupported interpreter: %s", m.Interpreter)
 	}

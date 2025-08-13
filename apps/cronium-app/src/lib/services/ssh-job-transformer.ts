@@ -1,5 +1,4 @@
 import type { Job, Event } from "@/shared/schema";
-import { PayloadService } from "./payload-service";
 import {
   transformJobForOrchestrator,
   type OrchestratorJob,
@@ -9,8 +8,8 @@ import { events, envVars } from "@/shared/schema";
 import { eq } from "drizzle-orm";
 
 /**
- * Transform SSH jobs to include payload file path
- * The SSH executor expects a payload file, not raw script content
+ * Transform SSH jobs to include script content and metadata
+ * The orchestrator will handle payload creation internally
  */
 export async function transformSSHJobForOrchestrator(
   job: Job,
@@ -31,7 +30,7 @@ export async function transformSSHJobForOrchestrator(
     return transformedJob;
   }
 
-  // For SSH jobs, we need to generate a payload file
+  // For SSH jobs, we need to include script content and metadata
   const eventId = job.eventId;
   if (!eventId) {
     console.error("SSH job missing eventId:", job.id);
@@ -56,34 +55,40 @@ export async function transformSSHJobForOrchestrator(
       .from(envVars)
       .where(eq(envVars.eventId, eventId));
 
-    // Initialize payload service
-    const payloadService = new PayloadService();
-    await payloadService.ensurePayloadDirectory();
-
-    // Get active payload or generate new one
-    let payload = await payloadService.getActivePayload(eventId);
-    if (!payload) {
-      payload = await payloadService.generatePayload(event, eventEnvVars);
+    // Build environment map
+    const environment: Record<string, string> = {};
+    for (const envVar of eventEnvVars) {
+      environment[envVar.name] = envVar.value;
     }
 
-    // Create a job-specific payload with updated manifest
-    const jobPayloadPath = await payloadService.createJobSpecificPayload(
-      payload.payloadPath,
-      job.id,
-      `exec-${job.id}-${Date.now()}`,
-    );
+    // Extract script content from event
+    const eventContent = event.content as any;
+    const scriptContent = eventContent?.content || "";
+    const scriptType = eventContent?.type || "BASH";
 
-    // Add payload path to metadata
-    transformedJob.metadata = {
-      ...transformedJob.metadata,
-      payloadPath: jobPayloadPath, // Use the job-specific payload
-      payloadVersion: payload.eventVersion,
-      eventId: String(eventId),
-      eventName: event.name,
+    // Ensure script content is included in execution
+    if (!transformedJob.execution.script) {
+      transformedJob.execution.script = {
+        type: scriptType, // Keep original casing (BASH, PYTHON, etc.)
+        content: scriptContent,
+        workingDirectory: "/tmp",
+      };
+    }
+
+    // Merge environment variables
+    transformedJob.execution.environment = {
+      ...transformedJob.execution.environment,
+      ...environment,
     };
 
-    // Remove script content from execution (runner will read from payload)
-    delete transformedJob.execution.script;
+    // Add metadata for orchestrator payload creation
+    transformedJob.metadata = {
+      ...transformedJob.metadata,
+      eventId: String(eventId),
+      eventName: event.name,
+      eventVersion: event.version,
+      userId: job.userId || "",
+    };
 
     // Add server details if available
     if (transformedJob.execution.target.serverId) {
@@ -93,11 +98,11 @@ export async function transformSSHJobForOrchestrator(
     }
 
     console.log(
-      `Generated job-specific payload for SSH job ${job.id}: ${jobPayloadPath}`,
+      `Prepared SSH job ${job.id} with script content for orchestrator payload creation`,
     );
   } catch (error) {
-    console.error("Failed to generate payload for SSH job:", error);
-    // Continue with script content as fallback
+    console.error("Failed to prepare SSH job:", error);
+    // Continue with existing script content
   }
 
   return transformedJob;

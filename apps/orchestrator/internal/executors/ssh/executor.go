@@ -111,9 +111,12 @@ func (e *Executor) Validate(job *types.Job) error {
 		return fmt.Errorf("server details required for SSH execution")
 	}
 	
-	// Check for payload information in job metadata
-	if job.Metadata == nil || job.Metadata["payloadPath"] == nil {
-		return fmt.Errorf("payload path required in job metadata for runner execution")
+	// Check for script content or payload path (backwards compatibility)
+	if job.Execution.Script == nil || job.Execution.Script.Content == "" {
+		// Check for legacy payload path
+		if job.Metadata == nil || job.Metadata["payloadPath"] == nil {
+			return fmt.Errorf("script content or payload path required for SSH execution")
+		}
 	}
 	
 	return nil
@@ -194,12 +197,16 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 
 // executeWithRunner executes the job using the runner binary
 func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *types.Job, updates chan<- types.ExecutionUpdate, startTime time.Time, timeout time.Duration) {
-	// Get payload path from job metadata
-	payloadPath, ok := job.Metadata["payloadPath"].(string)
-	if !ok {
-		e.sendError(updates, fmt.Errorf("invalid payload path in job metadata"), true)
+	// Generate execution ID with underscore separator to avoid double dash issues
+	executionID := fmt.Sprintf("exec_%s_%d", job.ID, time.Now().Unix())
+	
+	// Create or get payload path
+	payloadPath, err := e.createPayloadForJob(job, executionID)
+	if err != nil {
+		e.sendError(updates, fmt.Errorf("failed to create payload: %w", err), true)
 		return
 	}
+	defer e.cleanupPayload(payloadPath)
 	
 	// Ensure runner is deployed (create a new session for deployment)
 	runnerPath := fmt.Sprintf("/tmp/cronium-runner-%s", e.runnerInfo.Version)
@@ -227,8 +234,6 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 	useAPIMode := e.runtimePort > 0 && e.jwtSecret != ""
 	var tunnelManager *TunnelManager
 	var apiEndpoint, apiToken string
-	// Generate execution ID with underscore separator to avoid double dash issues
-	executionID := fmt.Sprintf("exec_%s_%d", job.ID, time.Now().Unix())
 	
 	// Create execution record in the database
 	if e.apiClient != nil {
