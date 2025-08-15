@@ -187,11 +187,11 @@ export class ExecutionService {
    */
   static extractJobIdFromExecutionId(executionId: string): string | null {
     // Try new format first
-    let match = executionId.match(/^exec_(.+)_\d+$/);
+    let match = /^exec_(.+)_\d+$/.exec(executionId);
     if (match) return match[1];
 
     // Fall back to old format for backward compatibility
-    match = executionId.match(/^exec-(.+)-\d+$/);
+    match = /^exec-(.+)-\d+$/.exec(executionId);
     return match ? match[1] : null;
   }
 

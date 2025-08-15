@@ -2,7 +2,6 @@ import { ScriptScheduler } from "./scheduler";
 
 // Store singleton on global to persist across hot reloads in development
 declare global {
-  // eslint-disable-next-line no-var
   var __scheduler: ScriptScheduler | undefined;
 }
 

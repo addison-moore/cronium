@@ -131,6 +131,26 @@ func NewValidationError(field, constraint, message string) *ValidationError {
 	}
 }
 
+// NetworkError represents network-related errors
+type NetworkError struct {
+	BaseError
+	Protocol string
+	Endpoint string
+}
+
+// NewNetworkError creates a new network error
+func NewNetworkError(message, protocol string) *NetworkError {
+	return &NetworkError{
+		BaseError: BaseError{
+			Type:      ErrorTypeNetwork,
+			Code:      "NETWORK_ERROR",
+			Message:   message,
+			Retryable: true, // Network errors are typically retryable
+		},
+		Protocol: protocol,
+	}
+}
+
 // IsRetryable checks if an error is retryable
 func IsRetryable(err error) bool {
 	if err == nil {
@@ -145,6 +165,8 @@ func IsRetryable(err error) bool {
 	case *DockerError:
 		return e.Retryable
 	case *SSHError:
+		return e.Retryable
+	case *NetworkError:
 		return e.Retryable
 	case *ValidationError:
 		return false
@@ -167,6 +189,8 @@ func GetErrorType(err error) ErrorType {
 	case *DockerError:
 		return e.Type
 	case *SSHError:
+		return e.Type
+	case *NetworkError:
 		return e.Type
 	case *ValidationError:
 		return e.Type

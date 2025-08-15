@@ -317,16 +317,20 @@ export class JobService {
   ): Promise<Job | null> {
     const isSuccess = !result?.error && result?.exitCode === 0;
 
-    // Store logs in the result field
-    const updatedResult = {
-      ...result,
-      logs: result?.output, // Store output as logs for backward compatibility
-    };
+    // Only store minimal data in result (exit code, metrics)
+    // Output is now stored in execution records
+    const minimalResult: UpdateJobInput["result"] = {};
+    if (result?.exitCode !== undefined) {
+      minimalResult.exitCode = result.exitCode;
+    }
+    if (result?.metrics !== undefined) {
+      minimalResult.metrics = result.metrics;
+    }
 
     return this.updateJob(jobId, {
       status: isSuccess ? JobStatus.COMPLETED : JobStatus.FAILED,
       completedAt: new Date(),
-      result: updatedResult,
+      result: minimalResult,
     });
   }
 
@@ -343,7 +347,6 @@ export class JobService {
       lastError: error,
       attempts: (job.attempts || 0) + 1,
       result: {
-        error,
         exitCode: 1,
       },
     });
@@ -467,9 +470,8 @@ export class JobService {
       updateInput.completedAt = data.completedAt;
     }
     if (data) {
+      // Only store minimal data in result (no output/error - those go in execution)
       const result: UpdateJobInput["result"] = {};
-      if (data.output !== undefined) result.output = data.output;
-      if (data.error !== undefined) result.error = data.error;
       if (data.exitCode !== undefined) result.exitCode = data.exitCode;
       if (data.metrics !== undefined) result.metrics = data.metrics;
 
@@ -488,8 +490,17 @@ export class JobService {
     const executionLogId = payload?.executionLogId ?? metadata?.executionLogId;
 
     if (executionLogId) {
-      // Map job status to log status
-      const logStatus = this.mapJobStatusToLogStatus(status, data);
+      // Map job status to log status (include exitCode for partial success detection)
+      const logStatusData: Parameters<
+        JobService["mapJobStatusToLogStatus"]
+      >[1] = {};
+      if (data?.error !== undefined) {
+        logStatusData.error = data.error;
+      }
+      if (data?.exitCode !== undefined) {
+        logStatusData.exitCode = data.exitCode;
+      }
+      const logStatus = this.mapJobStatusToLogStatus(status, logStatusData);
 
       // Get the existing log to calculate duration
       const existingLog = await storage.getLog(executionLogId);
@@ -524,31 +535,28 @@ export class JobService {
 
       const updatedLog = await storage.updateLog(executionLogId, logUpdateData);
 
-      // Broadcast the update via HTTP to WebSocket server
+      // Broadcast the update via enhanced broadcaster
       try {
-        const socketPort = process.env.SOCKET_PORT ?? "5002";
-        const broadcastUrl = `http://localhost:${socketPort}/broadcast/log-update`;
+        const { getWebSocketBroadcaster } = await import(
+          "@/lib/websocket-broadcaster"
+        );
+        const broadcaster = getWebSocketBroadcaster();
 
-        const response = await fetch(broadcastUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            logId: executionLogId,
-            update: {
-              status: updatedLog.status,
-              output: updatedLog.output,
-              error: updatedLog.error,
-              endTime: updatedLog.endTime,
-              duration: updatedLog.duration,
-            },
-          }),
+        const result = await broadcaster.broadcastLogUpdate(executionLogId, {
+          status: updatedLog.status,
+          output: updatedLog.output,
+          error: updatedLog.error,
+          endTime: updatedLog.endTime,
+          duration: updatedLog.duration,
         });
 
-        if (!response.ok) {
+        if (!result.success) {
           console.error(
-            `[JobService] Broadcast request failed: ${response.status} ${response.statusText}`,
+            `[JobService] Broadcast failed after ${result.attempts} attempts: ${result.error}`,
+          );
+        } else if (result.attempts > 1) {
+          console.log(
+            `[JobService] Broadcast succeeded after ${result.attempts} attempts`,
           );
         }
       } catch (error) {
@@ -564,25 +572,41 @@ export class JobService {
    */
   private mapJobStatusToLogStatus(
     jobStatus: JobStatus,
-    data?: { error?: string; serverResults?: Array<{ status: string }> },
+    data?: {
+      error?: string;
+      exitCode?: number;
+      serverResults?: Array<{ status: string }>;
+    },
   ): LogStatus {
-    // Check for timeout error
-    if (
-      jobStatus === JobStatus.FAILED &&
-      data?.error &&
-      typeof data.error === "string" &&
-      (data.error.toLowerCase().includes("timeout") ||
-        data.error.toLowerCase().includes("timed out"))
-    ) {
-      return LogStatus.TIMEOUT;
+    // Check for timeout (either by error message or exit code -1)
+    if (jobStatus === JobStatus.FAILED) {
+      // Check exit code -1 (timeout indicator)
+      if (data?.exitCode === -1) {
+        return LogStatus.TIMEOUT;
+      }
+      // Check error message for timeout
+      if (
+        data?.error &&
+        typeof data.error === "string" &&
+        (data.error.toLowerCase().includes("timeout") ||
+          data.error.toLowerCase().includes("timed out"))
+      ) {
+        return LogStatus.TIMEOUT;
+      }
     }
 
-    // Handle multi-server partial success (for future use)
-    if (jobStatus === JobStatus.COMPLETED && data?.serverResults) {
-      const hasFailures = data.serverResults.some(
-        (r) => r.status !== "SUCCESS",
-      );
-      if (hasFailures) return LogStatus.PARTIAL;
+    // Handle multi-server partial success
+    // Exit codes 100+ indicate partial success (100 + number of failed servers)
+    if (jobStatus === JobStatus.COMPLETED) {
+      if (data?.exitCode && data.exitCode >= 100) {
+        return LogStatus.PARTIAL;
+      }
+      if (data?.serverResults) {
+        const hasFailures = data.serverResults.some(
+          (r) => r.status !== "SUCCESS",
+        );
+        if (hasFailures) return LogStatus.PARTIAL;
+      }
     }
 
     // Map job status to log status

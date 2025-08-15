@@ -258,6 +258,9 @@ export const logs = pgTable("logs", {
     .notNull(),
   workflowId: integer("workflow_id").references(() => workflows.id),
   jobId: varchar("job_id", { length: 50 }).references(() => jobs.id),
+  executionId: varchar("execution_id", { length: 100 }).references(
+    () => executions.id,
+  ),
   status: varchar("status", { length: 50 })
     .$type<LogStatus>()
     .default(LogStatus.RUNNING)
@@ -274,6 +277,13 @@ export const logs = pgTable("logs", {
   retries: integer("retries").default(0),
   error: text("error"),
   userId: varchar("user_id", { length: 255 }),
+  exitCode: integer("exit_code"),
+  createdAt: timestamp("created_at")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
+  updatedAt: timestamp("updated_at")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
 });
 
 // Job Queue Table

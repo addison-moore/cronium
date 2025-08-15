@@ -12,6 +12,7 @@ import (
 
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/config"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/errors"
+	"github.com/addison-moore/cronium/apps/orchestrator/pkg/retry"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/singleflight"
@@ -259,59 +260,81 @@ func (c *Client) doRequest(req *http.Request, response interface{}) error {
 	req.Header.Set("Accept", "application/json")
 	
 	// Log request
-	c.log.WithFields(logrus.Fields{
+	logEntry := c.log.WithFields(logrus.Fields{
 		"method": req.Method,
 		"url":    req.URL.String(),
-	}).Debug("API request")
+	})
+	logEntry.Debug("API request")
 	
-	// Execute request with retry
+	// Configure retry
+	retryCfg := retry.Config{
+		MaxAttempts:  c.config.RetryConfig.MaxAttempts + 1, // Include initial attempt
+		InitialDelay: c.config.RetryConfig.InitialDelay,
+		MaxDelay:     c.config.RetryConfig.MaxDelay,
+		Multiplier:   2.0,
+	}
+	
 	var resp *http.Response
-	var err error
+	var body []byte
 	
-	for attempt := 0; attempt <= c.config.RetryConfig.MaxAttempts; attempt++ {
-		if attempt > 0 {
-			delay := calculateBackoff(attempt, c.config.RetryConfig)
-			time.Sleep(delay)
-		}
-		
+	// Execute request with retry utility
+	err := retry.WithRetry(req.Context(), retryCfg, func() error {
+		var err error
 		resp, err = c.httpClient.Do(req)
 		if err != nil {
-			c.log.WithError(err).Warn("API request failed")
-			continue
+			// Network errors are retryable
+			netErr := errors.NewNetworkError(
+				fmt.Sprintf("HTTP request failed: %v", err),
+				"HTTP",
+			)
+			netErr.Retryable = true
+			return netErr
+		}
+		defer resp.Body.Close()
+		
+		// Read response body
+		body, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response body: %w", err)
 		}
 		
-		// Don't retry on 4xx errors (except 429)
-		if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != 429 {
-			break
-		}
-		
-		// Success or non-retryable error
-		if resp.StatusCode < 500 {
-			break
-		}
-	}
-	
-	if err != nil {
-		return fmt.Errorf("request failed after %d attempts: %w", c.config.RetryConfig.MaxAttempts, err)
-	}
-	defer resp.Body.Close()
-	
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response body: %w", err)
-	}
-	
-	// Check for errors
-	if resp.StatusCode >= 400 {
-		var errorResp ErrorResponse
-		if err := json.Unmarshal(body, &errorResp); err == nil && errorResp.Error.Code != "" {
-			apiErr := errors.NewAPIError(resp.StatusCode, errorResp.Error.Code, errorResp.Error.Message)
+		// Check status code
+		if resp.StatusCode >= 400 {
+			// Parse error response
+			var errorResp ErrorResponse
+			if err := json.Unmarshal(body, &errorResp); err == nil && errorResp.Error.Code != "" {
+				apiErr := errors.NewAPIError(resp.StatusCode, errorResp.Error.Code, errorResp.Error.Message)
+				apiErr.Endpoint = req.URL.String()
+				apiErr.Method = req.Method
+				
+				// Determine if retryable
+				if resp.StatusCode == 429 || resp.StatusCode >= 500 {
+					apiErr.Retryable = true
+				}
+				return apiErr
+			}
+			
+			// Generic error
+			apiErr := errors.NewAPIError(
+				resp.StatusCode,
+				"UNKNOWN",
+				fmt.Sprintf("API request failed with status %d: %s", resp.StatusCode, string(body)),
+			)
 			apiErr.Endpoint = req.URL.String()
 			apiErr.Method = req.Method
+			
+			// 5xx errors are retryable
+			if resp.StatusCode >= 500 {
+				apiErr.Retryable = true
+			}
 			return apiErr
 		}
-		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+		
+		return nil
+	}, logEntry)
+	
+	if err != nil {
+		return err
 	}
 	
 	// Parse response
@@ -324,24 +347,6 @@ func (c *Client) doRequest(req *http.Request, response interface{}) error {
 	return nil
 }
 
-func calculateBackoff(attempt int, cfg config.RetryConfig) time.Duration {
-	var delay time.Duration
-	
-	switch cfg.BackoffType {
-	case "exponential":
-		delay = cfg.InitialDelay * time.Duration(1<<uint(attempt-1))
-	case "linear":
-		delay = cfg.InitialDelay * time.Duration(attempt)
-	default:
-		delay = cfg.InitialDelay
-	}
-	
-	if delay > cfg.MaxDelay {
-		delay = cfg.MaxDelay
-	}
-	
-	return delay
-}
 
 // convertQueuedJob converts API response to internal job type
 func convertQueuedJob(qj QueuedJob) *types.Job {

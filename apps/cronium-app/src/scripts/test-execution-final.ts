@@ -2,7 +2,7 @@
 
 import { db } from "../server/db";
 import { executions } from "../shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 
 async function testExecutionContext() {
   console.log("\n=== Testing Execution System ===\n");
@@ -65,8 +65,8 @@ async function testExecutionContext() {
         console.log("✓ Context API working:");
         console.log(`  - Execution ID: ${context.executionId}`);
         console.log(`  - Job ID: ${context.jobId}`);
-        console.log(`  - Event ID: ${context.eventId || "N/A"}`);
-        console.log(`  - User ID: ${context.userId || "N/A"}`);
+        console.log(`  - Event ID: ${context.eventId ?? "N/A"}`);
+        console.log(`  - User ID: ${context.userId ?? "N/A"}`);
 
         // Verify eventId is a string if present
         if (context.eventId !== null && typeof context.eventId === "string") {
@@ -82,7 +82,7 @@ async function testExecutionContext() {
         console.log(`  Error: ${error}`);
       }
     } catch (error) {
-      console.log(`✗ Context API request failed: ${error}`);
+      console.log(`✗ Context API request failed: ${String(error)}`);
     }
 
     // 3. Check recent executions

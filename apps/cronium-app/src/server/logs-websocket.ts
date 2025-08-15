@@ -170,11 +170,39 @@ export class LogsWebSocketHandler {
     const roomName = `log:${logId}`;
     const logsNamespace = this.io.of("/logs");
 
-    logsNamespace.to(roomName).emit("log:update", {
+    // Include all relevant timing information
+    const enhancedUpdate = {
       logId,
       ...update,
       timestamp: new Date().toISOString(),
-    });
+      // Include timing data if available
+      timing: {
+        startedAt: (update as any).startedAt ?? update.startTime,
+        completedAt: (update as any).completedAt ?? update.endTime,
+        duration: update.duration,
+      },
+      // Include execution data if available
+      execution: {
+        exitCode: (update as any).exitCode,
+        status: update.status,
+      },
+      // Include output data
+      output: {
+        stdout: update.output,
+        stderr: update.error,
+        combined: update.output,
+      },
+    };
+
+    logsNamespace.to(roomName).emit("log:update", enhancedUpdate);
+
+    // Log the broadcast for debugging
+    if (this.activeStreams.has(roomName)) {
+      const subscriberCount = this.activeStreams.get(roomName)?.size ?? 0;
+      console.log(
+        `[LogsWebSocket] Broadcasting to ${subscriberCount} subscribers for log ${logId}`,
+      );
+    }
   }
 
   /**

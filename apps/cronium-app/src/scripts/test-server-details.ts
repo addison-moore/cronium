@@ -57,7 +57,7 @@ async function testServerDetails() {
   console.log(`  Job Type: ${basicTransformed.type}`);
   console.log(`  Target Type: ${basicTransformed.execution.target.type}`);
   console.log(
-    `  Target Server ID: ${basicTransformed.execution.target.serverId}`,
+    `  Target Server ID: ${String(basicTransformed.execution.target.serverId ?? "N/A")}`,
   );
   console.log(
     `  Has Server Details: ${basicTransformed.execution.target.serverDetails ? "Yes" : "No"}`,
@@ -68,7 +68,9 @@ async function testServerDetails() {
   const enhancedJob = await enhancedTransformJobForOrchestrator(mockJob);
   console.log(`  Job Type: ${enhancedJob.type}`);
   console.log(`  Target Type: ${enhancedJob.execution.target.type}`);
-  console.log(`  Target Server ID: ${enhancedJob.execution.target.serverId}`);
+  console.log(
+    `  Target Server ID: ${String(enhancedJob.execution.target.serverId ?? "N/A")}`,
+  );
   console.log(
     `  Has Server Details: ${enhancedJob.execution.target.serverDetails ? "Yes" : "No"}`,
   );

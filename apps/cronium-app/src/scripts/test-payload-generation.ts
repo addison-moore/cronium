@@ -1,5 +1,5 @@
 import { db } from "@/server/db";
-import { events, runnerPayloads } from "@/shared/schema";
+import { runnerPayloads } from "@/shared/schema";
 import { payloadService } from "@/lib/services/payload-service";
 import {
   EventType,
@@ -106,11 +106,12 @@ echo "Environment variable TEST_VAR: $TEST_VAR"`,
         // Read manifest
         const manifestPath = path.join(tempDir, "manifest.yaml");
         const manifestContent = await fs.readFile(manifestPath, "utf-8");
-        const manifest = yaml.load(manifestContent) as any;
+        const manifest = yaml.load(manifestContent) as Record<string, unknown>;
         console.log("📄 Manifest:", manifest);
 
         // Read script
-        const scriptPath = path.join(tempDir, manifest.entrypoint);
+        const entrypoint = manifest.entrypoint as string;
+        const scriptPath = path.join(tempDir, entrypoint);
         const scriptContent = await fs.readFile(scriptPath, "utf-8");
         console.log("📜 Script content:");
         console.log(scriptContent);

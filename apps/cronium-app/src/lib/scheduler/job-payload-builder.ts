@@ -110,13 +110,13 @@ export function buildJobPayload(
       jobPayload.target = {
         serverId: event.serverId,
       };
-    } else if (event.eventServers && event.eventServers.length > 0) {
-      // If no direct serverId, check eventServers table
+    } else if (event.servers && event.servers.length > 0) {
+      // If no direct serverId, check servers table
       // For now, use the first server (multi-server support will be added later)
-      const firstEventServer = event.eventServers[0];
-      if (firstEventServer?.serverId) {
+      const firstServer = event.servers[0];
+      if (firstServer?.id) {
         jobPayload.target = {
-          serverId: firstEventServer.serverId,
+          serverId: firstServer.id,
         };
       } else {
         // Fallback to container if no server found

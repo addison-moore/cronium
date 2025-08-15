@@ -1,4 +1,4 @@
-import type { Job, Event } from "@/shared/schema";
+import type { Job } from "@/shared/schema";
 import {
   transformJobForOrchestrator,
   type OrchestratorJob,
@@ -58,22 +58,23 @@ export async function transformSSHJobForOrchestrator(
     // Build environment map
     const environment: Record<string, string> = {};
     for (const envVar of eventEnvVars) {
-      environment[envVar.name] = envVar.value;
+      environment[envVar.key] = envVar.value;
     }
 
     // Extract script content from event
-    const eventContent = event.content as any;
-    const scriptContent = eventContent?.content || "";
-    const scriptType = eventContent?.type || "BASH";
+    const eventContent = event.content as {
+      content?: string;
+      type?: string;
+    } | null;
+    const scriptContent = eventContent?.content ?? "";
+    const scriptType = eventContent?.type ?? "BASH";
 
     // Ensure script content is included in execution
-    if (!transformedJob.execution.script) {
-      transformedJob.execution.script = {
-        type: scriptType, // Keep original casing (BASH, PYTHON, etc.)
-        content: scriptContent,
-        workingDirectory: "/tmp",
-      };
-    }
+    transformedJob.execution.script ??= {
+      type: scriptType,
+      content: scriptContent,
+      workingDirectory: "/tmp",
+    };
 
     // Merge environment variables
     transformedJob.execution.environment = {
@@ -86,7 +87,7 @@ export async function transformSSHJobForOrchestrator(
       ...transformedJob.metadata,
       eventId: String(eventId),
       eventName: event.name,
-      eventVersion: event.version,
+      eventVersion: 1,
       userId: job.userId || "",
     };
 
