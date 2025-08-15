@@ -25,7 +25,6 @@ Personal settings (git-ignored) for individual preferences:
 
 ### Pre-Tool Hooks
 
-- **File Modification Logging**: Logs all file edits to `.claude/activity.log`
 - **File Operation Warnings**: Tracks rm/mv/cp commands for safety
 
 ### Post-Tool Hooks

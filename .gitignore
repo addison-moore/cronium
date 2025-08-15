@@ -34,8 +34,3 @@ build/
 
 GEMINI.md
 .claude/
-
-
-
-apps/runner/cronium-runner/cronium-runner-linux-amd64
-apps/runner/cronium-runner/cronium-runner
