@@ -42,14 +42,14 @@ async function testInterpreterFix() {
   await new Promise((resolve) => setTimeout(resolve, 10000));
 
   const [job] = await db.select().from(jobs).where(eq(jobs.id, testJobId));
-  console.log(`Job status: ${job?.status}`);
+  console.log(`Job status: ${String(job?.status)}`);
 
   if (job?.status === JobStatus.COMPLETED) {
     console.log("✅ Interpreter fix successful!");
   } else if (job?.status === JobStatus.FAILED) {
     console.log("❌ Job failed - check orchestrator logs");
   } else {
-    console.log(`Job still ${job?.status}`);
+    console.log(`Job still ${String(job?.status)}`);
   }
 }
 

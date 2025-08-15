@@ -1,6 +1,6 @@
 import type { EventWithRelations } from "@/server/storage";
 import { storage } from "@/server/storage";
-import type { Server } from "@/shared/schema";
+import { RunLocation } from "@/shared/schema";
 
 export interface MultiServerJobPayload {
   servers?: Array<{
@@ -24,7 +24,7 @@ export async function buildMultiServerJobMetadata(
   baseMetadata: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   // If the event doesn't have remote execution, return base metadata
-  if (event.runLocation !== "REMOTE") {
+  if (event.runLocation !== RunLocation.REMOTE) {
     return baseMetadata;
   }
 
@@ -89,7 +89,7 @@ export async function buildMultiServerJobMetadata(
 export async function shouldUseMultiServerExecution(
   event: EventWithRelations,
 ): Promise<boolean> {
-  if (event.runLocation !== "REMOTE") {
+  if (event.runLocation !== RunLocation.REMOTE) {
     return false;
   }
 

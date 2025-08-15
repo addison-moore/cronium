@@ -29,11 +29,13 @@ async function testEvent557JobCreation() {
 
   if (event.eventServers && event.eventServers.length > 0) {
     console.log("\n🖥️  Event Servers:");
-    event.eventServers.forEach((es) => {
-      console.log(
-        `  - Server ID: ${es.serverId}, Server: ${es.server?.name ?? "Unknown"}`,
-      );
-    });
+    event.eventServers.forEach(
+      (es: { serverId: unknown; server?: { name?: string } }) => {
+        console.log(
+          `  - Server ID: ${String(es.serverId)}, Server: ${es.server?.name ?? "Unknown"}`,
+        );
+      },
+    );
   }
 
   console.log("\n📦 Building Job Payload...");
@@ -55,9 +57,11 @@ async function testEvent557JobCreation() {
   );
 
   if (wouldRouteToSSH) {
-    console.log(`  Target Server ID: ${jobPayload.target?.serverId}`);
+    console.log(`  Target Server ID: ${String(jobPayload.target?.serverId)}`);
   } else {
-    console.log(`  Container Image: ${jobPayload.target?.containerImage}`);
+    console.log(
+      `  Container Image: ${String(jobPayload.target?.containerImage)}`,
+    );
   }
 
   // Determine job type

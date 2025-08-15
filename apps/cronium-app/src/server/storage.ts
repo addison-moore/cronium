@@ -539,12 +539,10 @@ class DatabaseStorage implements IStorage {
     try {
       const [script] = await db.select().from(events).where(eq(events.id, id));
       return script ?? undefined;
-    } catch (error: any) {
+    } catch (error) {
       // If the error is about missing payload_version column, use explicit column selection
-      if (
-        error?.message?.includes("payload_version") ||
-        error?.code === "42703"
-      ) {
+      const err = error as { message?: string; code?: string };
+      if (err?.message?.includes("payload_version") || err?.code === "42703") {
         const [script] = await db
           .select({
             id: events.id,
@@ -608,12 +606,10 @@ class DatabaseStorage implements IStorage {
         );
 
       return !!script;
-    } catch (error: any) {
+    } catch (error) {
       // If the error is about missing payload_version column, use a simpler query
-      if (
-        error?.message?.includes("payload_version") ||
-        error?.code === "42703"
-      ) {
+      const err = error as { message?: string; code?: string };
+      if (err?.message?.includes("payload_version") || err?.code === "42703") {
         const [script] = await db
           .select({ id: events.id })
           .from(events)
@@ -638,12 +634,10 @@ class DatabaseStorage implements IStorage {
         .where(and(eq(events.id, eventId), eq(events.userId, userId)));
 
       return !!script;
-    } catch (error: any) {
+    } catch (error) {
       // If the error is about missing payload_version column, use a simpler query
-      if (
-        error?.message?.includes("payload_version") ||
-        error?.code === "42703"
-      ) {
+      const err = error as { message?: string; code?: string };
+      if (err?.message?.includes("payload_version") || err?.code === "42703") {
         const [script] = await db
           .select({ id: events.id })
           .from(events)
@@ -972,16 +966,15 @@ class DatabaseStorage implements IStorage {
         ...event,
         eventServers: event.eventServers.map((es) => es.serverId),
         // Provide default for payload_version if missing
-        payloadVersion: (event as any).payloadVersion ?? 1,
+        payloadVersion:
+          ((event as Record<string, unknown>).payloadVersion as number) ?? 1,
       }));
 
       return enrichedScripts;
-    } catch (error: any) {
+    } catch (error) {
       // If the error is about missing payload_version column, provide a fallback
-      if (
-        error?.message?.includes("payload_version") ||
-        error?.code === "42703"
-      ) {
+      const err = error as { message?: string; code?: string };
+      if (err?.message?.includes("payload_version") || err?.code === "42703") {
         console.warn(
           "payload_version column missing - using fallback query. Run migration: pnpm tsx src/scripts/migrations/add-payload-version.ts",
         );
@@ -1529,6 +1522,10 @@ class DatabaseStorage implements IStorage {
       error: logs.error,
       userId: logs.userId,
       jobId: logs.jobId,
+      executionId: logs.executionId,
+      exitCode: logs.exitCode,
+      createdAt: logs.createdAt,
+      updatedAt: logs.updatedAt,
       workflowName: workflows.name,
     };
 

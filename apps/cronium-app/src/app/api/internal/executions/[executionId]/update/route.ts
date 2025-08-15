@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { executionService } from "@/lib/services/execution-service";
+import { jobService } from "@/lib/services/job-service";
 import { JobStatus } from "@/shared/schema";
 
 // Update an execution
@@ -53,6 +54,62 @@ export async function PUT(
         { error: "Execution not found" },
         { status: 404 },
       );
+    }
+
+    // Broadcast execution update via WebSocket
+    try {
+      const { getWebSocketBroadcaster } = await import(
+        "@/lib/websocket-broadcaster"
+      );
+      const broadcaster = getWebSocketBroadcaster();
+
+      const broadcastData: Parameters<
+        typeof broadcaster.broadcastExecutionUpdate
+      >[2] = {};
+      if (execution.output) broadcastData.output = execution.output;
+      if (execution.error) broadcastData.error = execution.error;
+      if (execution.exitCode !== null)
+        broadcastData.exitCode = execution.exitCode;
+      if (execution.startedAt) broadcastData.startedAt = execution.startedAt;
+      if (execution.completedAt)
+        broadcastData.completedAt = execution.completedAt;
+
+      await broadcaster.broadcastExecutionUpdate(
+        executionId,
+        execution.status,
+        broadcastData,
+      );
+    } catch (error) {
+      console.error("[Execution API] Error broadcasting update:", error);
+    }
+
+    // If execution is completing, also update the associated job's log
+    if (
+      execution.jobId &&
+      (body.completedAt ||
+        body.status === JobStatus.COMPLETED ||
+        body.status === JobStatus.FAILED)
+    ) {
+      // Get the job to find the log ID
+      const job = await jobService.getJob(execution.jobId);
+      if (job) {
+        // Update job status to sync with execution (this will also update the log)
+        const jobUpdateData: Parameters<typeof jobService.updateJobStatus>[2] =
+          {};
+
+        if (execution.output) jobUpdateData.output = execution.output;
+        if (execution.error) jobUpdateData.error = execution.error;
+        if (execution.exitCode !== null)
+          jobUpdateData.exitCode = execution.exitCode;
+        if (execution.completedAt)
+          jobUpdateData.completedAt = execution.completedAt;
+
+        await jobService.updateJobStatus(
+          execution.jobId,
+          execution.status,
+          jobUpdateData,
+        );
+      }
     }
 
     return NextResponse.json({ success: true, execution });

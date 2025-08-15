@@ -3,6 +3,7 @@ package ssh
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,8 +15,9 @@ import (
 
 // MultiServerExecutor handles SSH execution across multiple servers
 type MultiServerExecutor struct {
-	executor *Executor
-	log      *logrus.Logger
+	executor  *Executor
+	log       *logrus.Logger
+	apiClient *api.Client
 }
 
 // NewMultiServerExecutor creates a new multi-server SSH executor
@@ -26,8 +28,9 @@ func NewMultiServerExecutor(cfg config.SSHConfig, apiClient *api.Client, runtime
 	}
 
 	return &MultiServerExecutor{
-		executor: executor,
-		log:      log,
+		executor:  executor,
+		log:       log,
+		apiClient: apiClient,
 	}, nil
 }
 
@@ -45,9 +48,12 @@ func (m *MultiServerExecutor) Validate(job *types.Job) error {
 		return m.executor.Validate(job)
 	}
 
-	// Validate we have payload path
-	if job.Metadata == nil || job.Metadata["payloadPath"] == nil {
-		return fmt.Errorf("payload path required in job metadata for runner execution")
+	// Check for script content or payload path (backwards compatibility)
+	if job.Execution.Script == nil || job.Execution.Script.Content == "" {
+		// Check for legacy payload path
+		if job.Metadata == nil || job.Metadata["payloadPath"] == nil {
+			return fmt.Errorf("script content or payload path required for multi-server SSH execution")
+		}
 	}
 
 	return nil
@@ -101,12 +107,28 @@ func (m *MultiServerExecutor) Execute(ctx context.Context, job *types.Job) (<-ch
 			go func(idx int, server *types.ServerDetails) {
 				defer wg.Done()
 				
+				// Generate unique execution ID for this server
+				executionID := fmt.Sprintf("exec_%s_%s_%d", job.ID, server.ID, time.Now().Unix())
+				
+				// Create execution record for this server
+				if m.apiClient != nil {
+					if err := m.apiClient.CreateExecution(ctx, executionID, job.ID, &server.ID, &server.Name); err != nil {
+						m.log.WithError(err).WithField("serverID", server.ID).Warn("Failed to create execution record")
+					}
+				}
+				
 				// Create a copy of the job for this server
 				serverJob := *job
 				serverJob.Execution.Target.ServerDetails = server
 				
+				// Pass execution ID in metadata to prevent duplicate creation
+				if serverJob.Metadata == nil {
+					serverJob.Metadata = make(map[string]any)
+				}
+				serverJob.Metadata["executionId"] = executionID
+				
 				// Execute on this server
-				serverResult := m.executeOnServer(ctx, &serverJob, idx, len(servers))
+				serverResult := m.executeOnServer(ctx, &serverJob, idx, len(servers), executionID)
 				
 				// Store result
 				resultsMu.Lock()
@@ -132,19 +154,26 @@ func (m *MultiServerExecutor) Execute(ctx context.Context, job *types.Job) (<-ch
 
 // ServerResult holds the result of execution on a single server
 type ServerResult struct {
-	ServerID string
-	Updates  <-chan types.ExecutionUpdate
-	Status   types.JobStatus
-	ExitCode int
-	Output   string
-	Error    error
+	ServerID    string
+	ServerName  string
+	ExecutionID string
+	Updates     <-chan types.ExecutionUpdate
+	Status      types.JobStatus
+	ExitCode    int
+	Output      string
+	Error       error
+	StartTime   time.Time
+	EndTime     time.Time
 }
 
 // executeOnServer executes the job on a single server
-func (m *MultiServerExecutor) executeOnServer(ctx context.Context, job *types.Job, index, total int) *ServerResult {
+func (m *MultiServerExecutor) executeOnServer(ctx context.Context, job *types.Job, index, total int, executionID string) *ServerResult {
 	result := &ServerResult{
-		ServerID: job.Execution.Target.ServerDetails.ID,
-		Status:   types.JobStatusPending,
+		ServerID:    job.Execution.Target.ServerDetails.ID,
+		ServerName:  job.Execution.Target.ServerDetails.Name,
+		ExecutionID: executionID,
+		Status:      types.JobStatusPending,
+		StartTime:   time.Now(),
 	}
 	
 	// Create a channel to capture updates from single executor
@@ -174,21 +203,59 @@ func (m *MultiServerExecutor) executeOnServer(ctx context.Context, job *types.Jo
 	go func() {
 		defer close(processedUpdates)
 		
+		var outputBuf, errorBuf strings.Builder
+		
 		for update := range serverUpdates {
 			// Forward the update
 			processedUpdates <- update
 			
-			// Track status
+			// Track status and collect output
 			switch update.Type {
+			case types.UpdateTypeLog:
+				if logEntry, ok := update.Data.(*types.LogEntry); ok {
+					if logEntry.Stream == "stdout" {
+						outputBuf.WriteString(logEntry.Line + "\n")
+					} else if logEntry.Stream == "stderr" {
+						errorBuf.WriteString(logEntry.Line + "\n")
+					}
+				}
 			case types.UpdateTypeStatus:
 				if status, ok := update.Data.(*types.StatusUpdate); ok {
 					result.Status = status.Status
+					// Update execution status
+					if m.apiClient != nil && status.Status == types.JobStatusRunning {
+						now := time.Now()
+						m.apiClient.UpdateExecution(ctx, executionID, status.Status, &api.ExecutionStatusUpdate{
+							StartedAt: &now,
+						})
+					}
 				}
 			case types.UpdateTypeComplete:
 				if status, ok := update.Data.(*types.StatusUpdate); ok {
 					result.Status = status.Status
 					if status.ExitCode != nil {
 						result.ExitCode = *status.ExitCode
+					}
+					result.EndTime = time.Now()
+					
+					// Update execution record with final status
+					if m.apiClient != nil {
+						outputStr := outputBuf.String()
+						errorStr := errorBuf.String()
+						updateData := &api.ExecutionStatusUpdate{
+							CompletedAt: &result.EndTime,
+							ExitCode:    &result.ExitCode,
+						}
+						if outputStr != "" {
+							updateData.Output = &outputStr
+						}
+						if errorStr != "" {
+							updateData.Error = &errorStr
+						}
+						
+						apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
+						defer apiCancel()
+						m.apiClient.UpdateExecution(apiCtx, executionID, result.Status, updateData)
 					}
 				}
 			case types.UpdateTypeError:
@@ -198,6 +265,8 @@ func (m *MultiServerExecutor) executeOnServer(ctx context.Context, job *types.Jo
 				}
 			}
 		}
+		
+		result.Output = outputBuf.String()
 	}()
 	
 	result.Updates = processedUpdates
@@ -276,34 +345,76 @@ func (m *MultiServerExecutor) forwardUpdate(updates chan<- types.ExecutionUpdate
 // aggregateResults aggregates results from all servers
 func (m *MultiServerExecutor) aggregateResults(updates chan<- types.ExecutionUpdate, results map[string]*ServerResult) {
 	// Count successes and failures
-	var successCount, failureCount int
+	var successCount, failureCount, timeoutCount int
 	var totalExitCode int
+	var aggregatedOutput strings.Builder
 	
-	for _, result := range results {
+	aggregatedOutput.WriteString("=== Multi-Server Execution Summary ===\n\n")
+	
+	for serverID, result := range results {
+		serverInfo := fmt.Sprintf("[%s - %s]\n", result.ServerName, serverID)
+		aggregatedOutput.WriteString(serverInfo)
+		
 		if result.Status == types.JobStatusCompleted && result.ExitCode == 0 {
 			successCount++
-		} else {
+			aggregatedOutput.WriteString(fmt.Sprintf("  Status: SUCCESS (exit code: %d)\n", result.ExitCode))
+		} else if result.Status == types.JobStatusTimeout || result.ExitCode == -1 {
+			timeoutCount++
 			failureCount++
+			aggregatedOutput.WriteString("  Status: TIMEOUT\n")
 			if result.ExitCode != 0 {
 				totalExitCode = result.ExitCode
 			}
+		} else {
+			failureCount++
+			aggregatedOutput.WriteString(fmt.Sprintf("  Status: FAILED (exit code: %d)\n", result.ExitCode))
+			if result.ExitCode != 0 {
+				totalExitCode = result.ExitCode
+			}
+			if result.Error != nil {
+				aggregatedOutput.WriteString(fmt.Sprintf("  Error: %v\n", result.Error))
+			}
 		}
+		
+		if result.Output != "" {
+			// Include first few lines of output
+			lines := strings.Split(result.Output, "\n")
+			if len(lines) > 3 {
+				aggregatedOutput.WriteString(fmt.Sprintf("  Output (first 3 lines): %s...\n", strings.Join(lines[:3], "\n  ")))
+			} else {
+				aggregatedOutput.WriteString(fmt.Sprintf("  Output: %s\n", result.Output))
+			}
+		}
+		aggregatedOutput.WriteString("\n")
 	}
 	
 	// Determine overall status
-	overallStatus := types.JobStatusCompleted
-	statusMessage := fmt.Sprintf("Execution completed on %d/%d servers", successCount, len(results))
+	var overallStatus types.JobStatus
+	var statusMessage string
 	
-	if failureCount > 0 {
-		if successCount == 0 {
-			overallStatus = types.JobStatusFailed
-			statusMessage = fmt.Sprintf("Execution failed on all %d servers", len(results))
+	if failureCount == 0 {
+		// All succeeded
+		overallStatus = types.JobStatusCompleted
+		statusMessage = fmt.Sprintf("Execution succeeded on all %d servers", len(results))
+	} else if successCount == 0 {
+		// All failed
+		overallStatus = types.JobStatusFailed
+		if timeoutCount == len(results) {
+			statusMessage = fmt.Sprintf("Execution timed out on all %d servers", len(results))
 		} else {
-			// Partial failure
-			overallStatus = types.JobStatusCompleted
-			statusMessage = fmt.Sprintf("Execution partially succeeded: %d succeeded, %d failed", successCount, failureCount)
+			statusMessage = fmt.Sprintf("Execution failed on all %d servers", len(results))
 		}
+	} else {
+		// Partial success - we'll map this to completed with details in the message
+		// Note: The API/UI should interpret this based on the exit code and message
+		overallStatus = types.JobStatusCompleted
+		statusMessage = fmt.Sprintf("PARTIAL SUCCESS: %d succeeded, %d failed (including %d timeouts) out of %d servers", 
+			successCount, failureCount, timeoutCount, len(results))
+		// Use a special exit code to indicate partial success
+		totalExitCode = 100 + failureCount // e.g., 101 means 1 server failed
 	}
+	
+	aggregatedOutput.WriteString(fmt.Sprintf("\n=== Final Summary ===\n%s\n", statusMessage))
 	
 	// Send aggregated status
 	m.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
@@ -314,8 +425,10 @@ func (m *MultiServerExecutor) aggregateResults(updates chan<- types.ExecutionUpd
 			Data: map[string]interface{}{
 				"successCount": successCount,
 				"failureCount": failureCount,
+				"timeoutCount": timeoutCount,
 				"totalServers": len(results),
 				"results":      m.formatResults(results),
+				"summary":      aggregatedOutput.String(),
 			},
 		},
 	})
@@ -326,12 +439,22 @@ func (m *MultiServerExecutor) formatResults(results map[string]*ServerResult) []
 	formatted := make([]map[string]interface{}, 0, len(results))
 	
 	for serverID, result := range results {
-		formatted = append(formatted, map[string]interface{}{
-			"serverId": serverID,
-			"status":   string(result.Status),
-			"exitCode": result.ExitCode,
-			"error":    result.Error,
-		})
+		entry := map[string]interface{}{
+			"serverId":    serverID,
+			"serverName":  result.ServerName,
+			"executionId": result.ExecutionID,
+			"status":      string(result.Status),
+			"exitCode":    result.ExitCode,
+			"startTime":   result.StartTime.Format(time.RFC3339),
+			"endTime":     result.EndTime.Format(time.RFC3339),
+			"duration":    result.EndTime.Sub(result.StartTime).Seconds(),
+		}
+		
+		if result.Error != nil {
+			entry["error"] = result.Error.Error()
+		}
+		
+		formatted = append(formatted, entry)
 	}
 	
 	return formatted

@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/config"
+	"github.com/addison-moore/cronium/apps/orchestrator/pkg/errors"
+	"github.com/addison-moore/cronium/apps/orchestrator/pkg/retry"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
@@ -140,24 +142,60 @@ func (p *ConnectionPool) createConnection(ctx context.Context, server *types.Ser
 	// Create connection with context
 	addr := fmt.Sprintf("%s:%d", server.Host, server.Port)
 	
-	// Use a goroutine to handle context cancellation
-	type result struct {
-		conn *ssh.Client
-		err  error
+	// Configure retry for connection attempts
+	retryCfg := retry.Config{
+		MaxAttempts:  3,
+		InitialDelay: 2 * time.Second,
+		MaxDelay:     10 * time.Second,
+		Multiplier:   2.0,
 	}
 	
-	resChan := make(chan result, 1)
-	go func() {
-		conn, err := ssh.Dial("tcp", addr, config)
-		resChan <- result{conn, err}
-	}()
+	var conn *ssh.Client
+	logEntry := p.log.WithFields(logrus.Fields{
+		"server": server.Name,
+		"host":   server.Host,
+		"port":   server.Port,
+	})
 	
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case res := <-resChan:
-		return res.conn, res.err
+	// Use retry utility for connection attempts
+	err = retry.WithRetry(ctx, retryCfg, func() error {
+		// Use a goroutine to handle context cancellation
+		type result struct {
+			conn *ssh.Client
+			err  error
+		}
+		
+		resChan := make(chan result, 1)
+		go func() {
+			c, e := ssh.Dial("tcp", addr, config)
+			resChan <- result{c, e}
+		}()
+		
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case res := <-resChan:
+			if res.err != nil {
+				// Create typed SSH error
+				sshErr := errors.NewSSHError(
+					"CONNECTION_FAILED",
+					fmt.Sprintf("SSH connection failed to %s: %v", addr, res.err),
+					"Connect",
+				)
+				sshErr.ServerID = server.ID
+				sshErr.Retryable = true // SSH connections are retryable
+				return sshErr
+			}
+			conn = res.conn
+			return nil
+		}
+	}, logEntry)
+	
+	if err != nil {
+		return nil, err
 	}
+	
+	return conn, nil
 }
 
 // addConnection adds a connection to the pool

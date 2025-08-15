@@ -10,12 +10,7 @@ import {
   withRateLimit,
   withTransaction,
 } from "../trpc";
-import {
-  EventStatus,
-  EventType,
-  LogStatus,
-  RunLocation,
-} from "@/shared/schema";
+import { EventStatus, LogStatus, RunLocation } from "@/shared/schema";
 import type { ConditionalActionType, ScriptType } from "@/shared/schema";
 import { validateConditionalActions } from "@/server/utils/event-validation";
 import {
@@ -416,7 +411,7 @@ export const eventsRouter = createTRPCRouter({
           try {
             // Just clean up old payloads without generating new ones
             await payloadService.removeOldPayloads(id, 0); // Remove all payloads
-          } catch (error) {
+          } catch (_error) {
             // Ignore cleanup errors
           }
         }

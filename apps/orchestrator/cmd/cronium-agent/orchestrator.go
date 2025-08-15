@@ -266,6 +266,8 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 	
 	// Process execution updates
 	var exitCode int
+	var finalStatus types.JobStatus
+	var timedOut bool
 	var stdout, stderr strings.Builder
 	startTime := time.Now()
 	
@@ -292,6 +294,11 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 				if status.ExitCode != nil {
 					exitCode = *status.ExitCode
 				}
+				finalStatus = status.Status
+				// Check for timeout based on exit code
+				if exitCode == -1 {
+					timedOut = true
+				}
 			}
 			
 		case types.UpdateTypeError:
@@ -305,9 +312,30 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 	endTime := time.Now()
 	duration := endTime.Sub(startTime)
 	
+	// Determine final status
+	var jobStatus types.JobStatus
+	var statusMessage string
+	
+	if timedOut || exitCode == -1 {
+		// Timeout detected
+		jobStatus = types.JobStatusTimeout
+		statusMessage = fmt.Sprintf("Job execution timed out after %v", job.Timeout)
+	} else if finalStatus != "" {
+		// Use status from executor
+		jobStatus = finalStatus
+	} else if exitCode != 0 {
+		// Non-zero exit code
+		jobStatus = types.JobStatusFailed
+		statusMessage = fmt.Sprintf("Job failed with exit code %d", exitCode)
+	} else {
+		// Success
+		jobStatus = types.JobStatusCompleted
+		statusMessage = "Job completed successfully"
+	}
+	
 	// Mark job as completed
 	completeReq := &api.CompleteJobRequest{
-		Status:   types.JobStatusCompleted,
+		Status:   jobStatus,
 		ExitCode: exitCode,
 		Output: api.Output{
 			Stdout: stdout.String(),
@@ -322,24 +350,32 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 	
-	// Set status based on exit code
-	if exitCode != 0 {
-		completeReq.Status = types.JobStatusFailed
-	}
-	
 	// Record job completion metrics
 	jobDuration := time.Since(jobStartTime).Seconds()
-	if completeReq.Status == types.JobStatusCompleted {
+	switch completeReq.Status {
+	case types.JobStatusCompleted:
 		o.metrics.RecordJobCompleted(string(job.Type), jobDuration)
-	} else {
-		o.metrics.RecordJobFailed(string(job.Type), "non_zero_exit")
+	case types.JobStatusTimeout:
+		o.metrics.RecordJobFailed(string(job.Type), "timeout")
+	case types.JobStatusFailed:
+		if exitCode >= 100 {
+			o.metrics.RecordJobFailed(string(job.Type), "partial_failure")
+		} else {
+			o.metrics.RecordJobFailed(string(job.Type), "non_zero_exit")
+		}
+	default:
+		o.metrics.RecordJobFailed(string(job.Type), "unknown")
 	}
 	
 	if err := o.apiClient.CompleteJob(ctx, job.ID, completeReq); err != nil {
 		log.WithError(err).Error("Failed to complete job")
 		o.metrics.RecordJobFailed(string(job.Type), "complete_api_failed")
 	} else {
-		log.WithField("exitCode", exitCode).Info("Job completed")
+		log.WithFields(logrus.Fields{
+			"exitCode": exitCode,
+			"status":   jobStatus,
+			"duration": jobDuration,
+		}).Info(statusMessage)
 	}
 }
 

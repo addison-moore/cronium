@@ -1,5 +1,4 @@
 import type { Job } from "@/shared/schema";
-import { JobType, JobPriority } from "@/shared/schema";
 import {
   transformJobForOrchestrator,
   type OrchestratorJob,
@@ -27,8 +26,9 @@ export async function enhancedTransformJobForOrchestrator(
   }
 
   // Get payload for server info
-  const payload = job.payload as any;
-  if (!payload?.target?.serverId) {
+  const payload = job.payload as Record<string, unknown>;
+  const target = payload?.target as { serverId?: number } | undefined;
+  if (!target?.serverId) {
     return transformedJob;
   }
 

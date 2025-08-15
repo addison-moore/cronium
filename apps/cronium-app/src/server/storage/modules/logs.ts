@@ -1,12 +1,63 @@
 // Logging operations module
 import { db } from "../../db";
-import { logs, events, workflows } from "../../../shared/schema";
+import {
+  logs,
+  events,
+  workflows,
+  executions,
+  LogStatus,
+  JobStatus,
+} from "../../../shared/schema";
 import { eq, and, desc, sql, count, gte, lte } from "drizzle-orm";
 import type { Log, InsertLog, LogFilters } from "../types";
 
 export class LogStorage {
   async getLog(id: number): Promise<Log | undefined> {
     const [log] = await db.select().from(logs).where(eq(logs.id, id));
+
+    if (!log) return undefined;
+
+    // If log has a jobId, try to get execution data
+    if (log.jobId) {
+      // Get the most recent execution for this job
+      const [execution] = await db
+        .select()
+        .from(executions)
+        .where(eq(executions.jobId, log.jobId))
+        .orderBy(desc(executions.createdAt))
+        .limit(1);
+
+      // If execution has output/error and log doesn't, use execution data
+      if (execution) {
+        if (!log.output && execution.output) {
+          log.output = execution.output;
+        }
+        if (!log.error && execution.error) {
+          log.error = execution.error;
+        }
+        // Also update status if execution has completed but log hasn't
+        if (
+          log.status === LogStatus.RUNNING &&
+          execution.status !== JobStatus.RUNNING &&
+          execution.status !== JobStatus.QUEUED
+        ) {
+          // Map execution status to log status
+          if (
+            execution.status === JobStatus.COMPLETED &&
+            execution.exitCode === 0
+          ) {
+            log.status = LogStatus.SUCCESS;
+          } else if (
+            execution.status === JobStatus.FAILED ||
+            (execution.status === JobStatus.COMPLETED &&
+              execution.exitCode !== 0)
+          ) {
+            log.status = LogStatus.FAILURE;
+          }
+        }
+      }
+    }
+
     return log;
   }
 
@@ -204,6 +255,10 @@ export class LogStorage {
       error: logs.error,
       userId: logs.userId,
       jobId: logs.jobId,
+      executionId: logs.executionId,
+      exitCode: logs.exitCode,
+      createdAt: logs.createdAt,
+      updatedAt: logs.updatedAt,
       workflowName: workflows.name,
     };
 

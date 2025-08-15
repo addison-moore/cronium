@@ -36,8 +36,22 @@ export async function POST(
       serverId: body.serverId ?? null,
       serverName: body.serverName ?? null,
       status: JobStatus.QUEUED,
-      metadata: body.metadata || {},
+      metadata: body.metadata ?? {},
     });
+
+    // Broadcast execution creation via WebSocket
+    try {
+      const { getWebSocketBroadcaster } = await import(
+        "@/lib/websocket-broadcaster"
+      );
+      const broadcaster = getWebSocketBroadcaster();
+
+      await broadcaster.broadcastExecutionUpdate(executionId, "created", {
+        startedAt: execution.createdAt,
+      });
+    } catch (error) {
+      console.error("[Execution API] Error broadcasting creation:", error);
+    }
 
     return NextResponse.json({ success: true, execution });
   } catch (error) {

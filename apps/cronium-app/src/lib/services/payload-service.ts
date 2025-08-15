@@ -23,8 +23,8 @@ interface PayloadManifest {
     trigger?: string;
     apiEndpoint?: string;
     apiToken?: string;
-    inputData?: any;
-    extra?: Record<string, any>;
+    inputData?: unknown;
+    extra?: Record<string, unknown>;
   };
 }
 
@@ -225,7 +225,7 @@ export class PayloadService {
       manifest.metadata = {
         ...manifest.metadata,
         jobId,
-        executionId: executionId || undefined,
+        executionId: executionId ?? undefined,
       };
 
       // Write updated manifest

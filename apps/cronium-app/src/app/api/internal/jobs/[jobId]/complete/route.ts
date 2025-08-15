@@ -19,6 +19,7 @@ export async function POST(
 
     const { jobId } = await params;
     const body = (await request.json()) as {
+      status?: string; // Orchestrator sends the status
       output?: string | { stdout: string; stderr: string };
       exitCode?: number;
       metrics?: Record<string, unknown>;
@@ -29,8 +30,49 @@ export async function POST(
       return NextResponse.json({ error: "Job ID required" }, { status: 400 });
     }
 
+    // Determine status based on what orchestrator sends or exit code
+    let jobStatus = JobStatus.COMPLETED;
+    const exitCode = body.exitCode ?? 0;
+
+    // If orchestrator explicitly sends status, use it
+    if (body.status) {
+      // Map orchestrator status to our JobStatus enum
+      switch (body.status) {
+        case "completed":
+        case "COMPLETED":
+          jobStatus = JobStatus.COMPLETED;
+          break;
+        case "failed":
+        case "FAILED":
+          jobStatus = JobStatus.FAILED;
+          break;
+        case "timeout":
+        case "TIMEOUT":
+          // Note: JobStatus doesn't have TIMEOUT, so we map to FAILED
+          // The timeout will be detected in log status mapping
+          jobStatus = JobStatus.FAILED;
+          break;
+        case "cancelled":
+        case "CANCELLED":
+          jobStatus = JobStatus.CANCELLED;
+          break;
+        default:
+          // Fallback to exit code check
+          jobStatus = exitCode === 0 ? JobStatus.COMPLETED : JobStatus.FAILED;
+      }
+    } else {
+      // No explicit status, determine from exit code
+      // Check for timeout exit code (-1)
+      if (exitCode === -1) {
+        jobStatus = JobStatus.FAILED; // Will be mapped to TIMEOUT in log status
+      } else {
+        jobStatus = exitCode === 0 ? JobStatus.COMPLETED : JobStatus.FAILED;
+      }
+    }
+
     // Handle both formats: string or {stdout, stderr}
     let output: string | undefined;
+    let error: string | undefined;
     if (body.output) {
       if (typeof body.output === "string") {
         output = body.output;
@@ -38,18 +80,44 @@ export async function POST(
         // Combine stdout and stderr
         output = body.output.stdout;
         if (body.output.stderr) {
-          output += "\n--- STDERR ---\n" + body.output.stderr;
+          // Store stderr separately as error if job failed
+          if (jobStatus === JobStatus.FAILED) {
+            error = body.output.stderr;
+            // Add timeout indication to error if detected
+            if (
+              body.status === "timeout" ||
+              body.status === "TIMEOUT" ||
+              exitCode === -1
+            ) {
+              error = "Job execution timed out\n" + (error || "");
+            }
+          } else {
+            // Otherwise combine with stdout
+            output += "\n--- STDERR ---\n" + body.output.stderr;
+          }
+        } else if (
+          jobStatus === JobStatus.FAILED &&
+          (body.status === "timeout" ||
+            body.status === "TIMEOUT" ||
+            exitCode === -1)
+        ) {
+          // No stderr but we have a timeout
+          error = "Job execution timed out";
         }
       }
     }
 
     const updateData: Parameters<typeof jobService.updateJobStatus>[2] = {
       completedAt: new Date(),
-      exitCode: body.exitCode ?? 0,
+      exitCode: exitCode,
     };
 
     if (output !== undefined) {
       updateData.output = output;
+    }
+
+    if (error !== undefined) {
+      updateData.error = error;
     }
 
     if (body.metrics !== undefined) {
@@ -58,7 +126,7 @@ export async function POST(
 
     const updatedJob = await jobService.updateJobStatus(
       jobId,
-      JobStatus.COMPLETED,
+      jobStatus,
       updateData,
     );
 
