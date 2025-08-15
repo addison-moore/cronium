@@ -102,7 +102,10 @@ async function testNormalExecutionFlow() {
   if (updatedLog.executionId === executionId) {
     log("✓ Log correctly linked to execution", colors.green);
   } else {
-    log(`✗ Log not linked to execution: ${updatedLog.executionId}`, colors.red);
+    log(
+      `✗ Log not linked to execution: ${String(updatedLog.executionId ?? "null")}`,
+      colors.red,
+    );
   }
 
   if (
@@ -248,7 +251,7 @@ async function testManualIntervention() {
   if (createdExecution) {
     log("✓ Recovery execution created successfully", colors.green);
 
-    const metadata = createdExecution.metadata as any;
+    const metadata = createdExecution.metadata as Record<string, unknown>;
     if (metadata?.createdFromLog) {
       log("✓ Execution marked as recovery", colors.green);
     }

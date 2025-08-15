@@ -5,7 +5,7 @@
 import { db } from "@/server/db";
 import { logs, executions, jobs } from "@/shared/schema";
 import { eq, isNull, sql } from "drizzle-orm";
-import type { Log, Job } from "@/shared/schema";
+import type { Log } from "@/shared/schema";
 
 export interface IntegrityIssue {
   logId?: number;

@@ -2,7 +2,7 @@
 Setup configuration for Cronium Python SDK
 """
 
-from setuptools import setup, find_packages
+from setuptools import setup
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
@@ -11,7 +11,7 @@ setup(
     name="cronium",
     version="2.0.0",
     author="Cronium Team",
-    author_email="support@cronium.io",
+    author_email="support@cronium.app",
     description="Runtime SDK for Cronium containerized script execution",
     long_description=long_description,
     long_description_content_type="text/markdown",

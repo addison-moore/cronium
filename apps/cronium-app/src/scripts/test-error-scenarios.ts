@@ -90,7 +90,7 @@ async function testTimeoutScenario() {
     log("✓ Timeout scenario: Log shows TIMEOUT status", colors.green);
   } else {
     log(
-      `✗ Timeout scenario: Expected TIMEOUT, got ${logRecord?.status}`,
+      `✗ Timeout scenario: Expected TIMEOUT, got ${String(logRecord?.status ?? "undefined")}`,
       colors.red,
     );
   }
@@ -99,7 +99,7 @@ async function testTimeoutScenario() {
     log("✓ Timeout scenario: Exit code is -1", colors.green);
   } else {
     log(
-      `✗ Timeout scenario: Expected exit code -1, got ${logRecord?.exitCode}`,
+      `✗ Timeout scenario: Expected exit code -1, got ${String(logRecord?.exitCode ?? "undefined")}`,
       colors.red,
     );
   }

@@ -11,7 +11,7 @@
  * 5. Retry logic
  */
 
-import { io, Socket } from "socket.io-client";
+import { io, type Socket } from "socket.io-client";
 import { getWebSocketBroadcaster } from "../lib/websocket-broadcaster";
 
 // ANSI color codes
@@ -31,7 +31,7 @@ function log(message: string, color = colors.reset) {
 class WebSocketTester {
   private sockets: Socket[] = [];
   private broadcaster = getWebSocketBroadcaster();
-  private socketPort = process.env.SOCKET_PORT || "5002";
+  private socketPort = process.env.SOCKET_PORT ?? "5002";
 
   async testRealTimeStatusUpdates() {
     log("\n=== Testing Real-Time Status Updates ===", colors.cyan);

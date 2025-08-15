@@ -316,7 +316,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		})
 		return
 	}
-	defer e.cleanupPayload(payloadPath)
+	defer e.cleanupPayload(payloadPath, job)
 	
 	// Ensure runner is deployed (create a new session for deployment)
 	runnerPath := fmt.Sprintf("/tmp/cronium-runner-%s", e.runnerInfo.Version)

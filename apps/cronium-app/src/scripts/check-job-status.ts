@@ -5,15 +5,15 @@ import { jobs } from "@/shared/schema";
 import { eq } from "drizzle-orm";
 
 async function checkJobStatus() {
-  const jobId = process.argv[2] || "job_test_1755113330323";
+  const jobId = process.argv[2] ?? "job_test_1755113330323";
   const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId));
 
   if (job) {
     console.log(`Job ID: ${job.id}`);
     console.log(`Status: ${job.status}`);
     console.log(`Attempts: ${job.attempts}`);
-    console.log(`Created: ${job.createdAt}`);
-    console.log(`Updated: ${job.updatedAt}`);
+    console.log(`Created: ${job.createdAt.toISOString()}`);
+    console.log(`Updated: ${job.updatedAt.toISOString()}`);
     if (job.orchestratorId) {
       console.log(`Orchestrator: ${job.orchestratorId}`);
     }

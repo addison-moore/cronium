@@ -552,7 +552,7 @@ export class JobService {
 
         if (!result.success) {
           console.error(
-            `[JobService] Broadcast failed after ${result.attempts} attempts: ${result.error}`,
+            `[JobService] Broadcast failed after ${result.attempts} attempts: ${String(result.error ?? "Unknown error")}`,
           );
         } else if (result.attempts > 1) {
           console.log(

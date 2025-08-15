@@ -37,7 +37,7 @@ func TestExecutor_DeploymentRetry(t *testing.T) {
 	log := logrus.New()
 	log.SetLevel(logrus.DebugLevel)
 
-	executor, err := NewExecutor(cfg, "localhost", 8080, "test-secret", log)
+	executor, err := NewExecutor(cfg, nil, "localhost", 8080, "test-secret", log)
 	require.NoError(t, err)
 
 	// Test deployment retry logic
@@ -102,7 +102,7 @@ func TestExecutor_Timeout(t *testing.T) {
 	}
 
 	log := logrus.New()
-	executor, err := NewExecutor(cfg, "localhost", 8080, "test-secret", log)
+	executor, err := NewExecutor(cfg, nil, "localhost", 8080, "test-secret", log)
 	require.NoError(t, err)
 
 	// Create a job with very short timeout
@@ -164,7 +164,7 @@ func TestExecutor_Cleanup(t *testing.T) {
 	}
 
 	log := logrus.New()
-	executor, err := NewExecutor(cfg, "localhost", 8080, "test-secret", log)
+	executor, err := NewExecutor(cfg, nil, "localhost", 8080, "test-secret", log)
 	require.NoError(t, err)
 
 	job := &types.Job{
@@ -219,7 +219,7 @@ func TestExecutor_Metrics(t *testing.T) {
 	}
 
 	log := logrus.New()
-	executor, err := NewExecutor(cfg, "localhost", 8080, "test-secret", log)
+	executor, err := NewExecutor(cfg, nil, "localhost", 8080, "test-secret", log)
 	require.NoError(t, err)
 
 	// Record some metrics
@@ -306,10 +306,10 @@ func TestMultiServerExecution(t *testing.T) {
 	}
 
 	log := logrus.New()
-	executor, err := NewExecutor(cfg, "localhost", 8080, "test-secret", log)
+	executor, err := NewExecutor(cfg, nil, "localhost", 8080, "test-secret", log)
 	require.NoError(t, err)
 
-	multiExecutor, err := NewMultiServerExecutor(cfg, "localhost", 8080, "test-secret", log)
+	multiExecutor, err := NewMultiServerExecutor(cfg, nil, "localhost", 8080, "test-secret", log)
 	require.NoError(t, err)
 
 	// Verify the multi-executor wraps the single executor
