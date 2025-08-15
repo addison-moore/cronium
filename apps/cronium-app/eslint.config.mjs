@@ -13,7 +13,7 @@ export default [
       "_backups/**",
       "scripts/**",
       "src/scripts/deprecated/**",
-      "src/scripts/migrations/archived/**",
+      "src/scripts/migrations/**",
     ],
   },
 ];

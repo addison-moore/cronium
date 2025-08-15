@@ -167,7 +167,7 @@ export class WebSocketBroadcaster {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const result = await response.json();
+    const result = (await response.json()) as { success?: boolean };
     return result.success === true;
   }
 
@@ -201,7 +201,7 @@ export class WebSocketBroadcaster {
     );
 
     if (!exists) {
-      this.broadcastQueue.push({ type: type as any, data, retries: 0 });
+      this.broadcastQueue.push({ type, data, retries: 0 });
       console.log(`[WebSocketBroadcaster] Queued broadcast for later: ${type}`);
     }
   }

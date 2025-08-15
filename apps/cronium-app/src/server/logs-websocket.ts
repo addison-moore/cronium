@@ -177,8 +177,13 @@ export class LogsWebSocketHandler {
       timestamp: new Date().toISOString(),
       // Include timing data if available
       timing: {
-        startedAt: (update as any).startedAt ?? update.startTime,
-        completedAt: (update as any).completedAt ?? update.endTime,
+        startedAt:
+          ((update as Record<string, unknown>).startedAt as Date | undefined) ??
+          update.startTime,
+        completedAt:
+          ((update as Record<string, unknown>).completedAt as
+            | Date
+            | undefined) ?? update.endTime,
         duration: update.duration,
       },
       // Include execution data if available

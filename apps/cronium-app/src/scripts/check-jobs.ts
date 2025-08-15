@@ -13,7 +13,7 @@ async function checkJobs() {
   console.log("Recent jobs:");
   results.forEach((j) =>
     console.log(
-      `  - ${j.id}: type=${j.type}, status=${j.status}, orchestratorId=${j.orchestratorId || "none"}`,
+      `  - ${j.id}: type=${j.type}, status=${j.status}, orchestratorId=${j.orchestratorId ?? "none"}`,
     ),
   );
   process.exit(0);

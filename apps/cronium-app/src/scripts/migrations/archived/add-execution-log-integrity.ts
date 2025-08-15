@@ -12,7 +12,7 @@
 
 import { db } from "../../server/db";
 import { logs, executions, jobs } from "../../shared/schema";
-import { eq, and, isNull, desc, sql } from "drizzle-orm";
+import { eq, isNull, desc, sql } from "drizzle-orm";
 
 // ANSI color codes
 const colors = {

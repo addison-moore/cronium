@@ -17,6 +17,7 @@ import (
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/logger"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/metrics"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/orchestrator"
+	"github.com/addison-moore/cronium/apps/orchestrator/internal/payload"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
 	"github.com/sirupsen/logrus"
 )
@@ -133,6 +134,11 @@ func (o *SimpleOrchestrator) Run(ctx context.Context) error {
 		if cleanupMgr != nil {
 			cleanupMgr.StartPeriodicCleanup(ctx, 30*time.Minute)
 		}
+	}
+	
+	// Start periodic payload cleanup if enabled
+	if o.config.SSH.Execution.CleanupPayloads {
+		go o.payloadCleanupLoop(ctx)
 	}
 	
 	// Start log streamer
@@ -376,6 +382,42 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 			"status":   jobStatus,
 			"duration": jobDuration,
 		}).Info(statusMessage)
+	}
+}
+
+// payloadCleanupLoop periodically cleans up old payload files
+func (o *SimpleOrchestrator) payloadCleanupLoop(ctx context.Context) {
+	interval := o.config.SSH.Execution.PayloadCleanupInterval
+	if interval <= 0 {
+		interval = time.Hour // Default to 1 hour if not set
+	}
+	
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	
+	payloadService := payload.NewService(o.config.SSH.Execution.PayloadStorageDir)
+	
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			retention := o.config.SSH.Execution.PayloadRetentionPeriod
+			if retention <= 0 {
+				retention = 24 * time.Hour // Default to 24 hours if not set
+			}
+			
+			o.log.WithFields(logrus.Fields{
+				"retention": retention,
+				"directory": o.config.SSH.Execution.PayloadStorageDir,
+			}).Debug("Running payload cleanup")
+			
+			if err := payloadService.CleanupOldPayloads(retention); err != nil {
+				o.log.WithError(err).Warn("Failed to cleanup old payloads")
+			} else {
+				o.log.Debug("Payload cleanup completed")
+			}
+		}
 	}
 }
 

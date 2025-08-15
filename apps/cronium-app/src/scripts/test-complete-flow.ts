@@ -25,8 +25,10 @@ async function testCompleteFlow() {
   console.log(`  Name: ${event.name}`);
   console.log(`  Type: ${event.type}`);
   console.log(`  Run Location: ${event.runLocation}`);
-  console.log(`  Server ID: ${event.serverId}`);
-  console.log(`  Event Servers: ${event.eventServers?.length ?? 0}`);
+  console.log(`  Server ID: ${String(event.serverId ?? "N/A")}`);
+  console.log(
+    `  Event Servers: ${String((event as Record<string, unknown>).eventServers ? ((event as Record<string, unknown>).eventServers as unknown[]).length : 0)}`,
+  );
 
   // Step 2: Build job payload
   console.log("\n📦 Step 2: Build Job Payload");
@@ -57,7 +59,7 @@ async function testCompleteFlow() {
   };
   console.log(`  Job Type: ${mockJob.type}`);
   console.log(
-    `  Payload Target: ${JSON.stringify((mockJob.payload as any).target)}`,
+    `  Payload Target: ${JSON.stringify((mockJob.payload as Record<string, unknown>).target)}`,
   );
 
   // Step 4: Transform for orchestrator
@@ -80,10 +82,12 @@ async function testCompleteFlow() {
   console.log("\n📊 Final Analysis:");
   if (enhancedJob.type === "ssh") {
     console.log("  ✅ Job will be routed to SSH executor");
-    console.log(`  Target Server ID: ${enhancedJob.execution.target.serverId}`);
+    console.log(
+      `  Target Server ID: ${String(enhancedJob.execution.target.serverId ?? "N/A")}`,
+    );
     if (enhancedJob.metadata?.payloadPath) {
       console.log(
-        `  ✅ Payload file generated: ${enhancedJob.metadata.payloadPath}`,
+        `  ✅ Payload file generated: ${String(enhancedJob.metadata.payloadPath)}`,
       );
     } else {
       console.log("  ⚠️  Warning: No payload file generated");

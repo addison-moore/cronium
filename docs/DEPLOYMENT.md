@@ -25,7 +25,7 @@ This guide covers deploying Cronium using Docker Compose in various environments
 1. **Clone the repository**:
 
    ```bash
-   git clone https://github.com/your-org/cronium.git
+   git clone https://github.com/addison-moore/cronium.git
    cd cronium
    ```
 

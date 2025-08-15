@@ -926,8 +926,10 @@ func (e *Executor) updateExecutionError(ctx context.Context, executionID string,
 	apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer apiCancel()
 	
-	if err := e.apiClient.UpdateExecution(apiCtx, executionID, types.JobStatusFailed, updateData); err != nil {
-		e.log.WithError(err).Warn("Failed to update execution with error")
+	if e.apiClient != nil {
+		if err := e.apiClient.UpdateExecution(apiCtx, executionID, types.JobStatusFailed, updateData); err != nil {
+			e.log.WithError(err).Warn("Failed to update execution with error")
+		}
 	}
 }
 

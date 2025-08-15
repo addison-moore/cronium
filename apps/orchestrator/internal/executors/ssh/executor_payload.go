@@ -2,6 +2,7 @@ package ssh
 
 import (
 	"fmt"
+	"os"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/payload"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
 	"time"
@@ -88,10 +89,35 @@ func (e *Executor) createPayloadForJob(job *types.Job, executionID string) (stri
 }
 
 // cleanupPayload removes the payload file after job completion
-func (e *Executor) cleanupPayload(payloadPath string) {
+func (e *Executor) cleanupPayload(payloadPath string, job *types.Job) {
 	// Only cleanup if it's a local payload (not from cronium-app)
-	if payloadPath != "" && e.config.Execution.CleanupPayloads {
-		// For now, we'll keep payloads for debugging
-		e.log.WithField("payloadPath", payloadPath).Debug("Keeping payload for debugging")
+	if payloadPath == "" {
+		return
+	}
+	
+	// Check if this is a legacy payload from cronium-app (don't delete those)
+	if job.Metadata != nil {
+		if _, isLegacy := job.Metadata["payloadPath"]; isLegacy {
+			e.log.WithField("payloadPath", payloadPath).Debug("Keeping legacy payload from cronium-app")
+			return
+		}
+	}
+	
+	// Clean up based on configuration
+	if e.config.Execution.CleanupPayloads {
+		// Actually remove the payload file
+		if err := os.Remove(payloadPath); err != nil && !os.IsNotExist(err) {
+			e.log.WithError(err).WithField("payloadPath", payloadPath).Warn("Failed to cleanup payload file")
+		} else {
+			e.log.WithField("payloadPath", payloadPath).Debug("Cleaned up payload file")
+		}
+		
+		// Also remove the checksum file
+		checksumPath := payloadPath + ".sha256"
+		if err := os.Remove(checksumPath); err != nil && !os.IsNotExist(err) {
+			e.log.WithError(err).WithField("checksumPath", checksumPath).Debug("Failed to cleanup checksum file")
+		}
+	} else {
+		e.log.WithField("payloadPath", payloadPath).Debug("Keeping payload (cleanup disabled)")
 	}
 }
