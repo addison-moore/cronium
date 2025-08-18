@@ -4,6 +4,10 @@ import { env } from "../env.mjs";
 import { systemSettings } from "@/shared/schema";
 import fs from "fs";
 import path from "path";
+import {
+  encryptionService,
+  isSystemSettingSensitive,
+} from "./encryption-service";
 
 // Interface for email message
 interface EmailMessage {
@@ -28,23 +32,44 @@ export async function getSmtpSettings() {
   // Fetch all settings
   const allSettings = await db.select().from(systemSettings);
 
+  // Decrypt sensitive settings
+  const decryptedSettings = allSettings.map((setting) => {
+    if (isSystemSettingSensitive(setting.key)) {
+      try {
+        return {
+          ...setting,
+          value: encryptionService.decrypt(setting.value),
+        };
+      } catch (error) {
+        console.error(`Error decrypting system setting ${setting.key}:`, error);
+        // Return setting without decryption rather than failing
+        return setting;
+      }
+    }
+    return setting;
+  });
+
   // Extract SMTP settings
   const smtpEnabled =
-    allSettings.find((s) => s.key === "smtpEnabled")?.value === "true";
-  const smtpHost = allSettings.find((s) => s.key === "smtpHost")?.value;
+    decryptedSettings.find((s) => s.key === "smtpEnabled")?.value === "true";
+  const smtpHost = decryptedSettings.find((s) => s.key === "smtpHost")?.value;
   const smtpPort = Number(
-    allSettings.find((s) => s.key === "smtpPort")?.value ?? 587,
+    decryptedSettings.find((s) => s.key === "smtpPort")?.value ?? 587,
   );
-  const smtpUser = allSettings.find((s) => s.key === "smtpUser")?.value;
-  const smtpPassword = allSettings.find((s) => s.key === "smtpPassword")?.value;
-  const smtpFromEmail = allSettings.find(
+  const smtpUser = decryptedSettings.find((s) => s.key === "smtpUser")?.value;
+  const smtpPassword = decryptedSettings.find(
+    (s) => s.key === "smtpPassword",
+  )?.value;
+  const smtpFromEmail = decryptedSettings.find(
     (s) => s.key === "smtpFromEmail",
   )?.value;
-  const smtpFromName = allSettings.find((s) => s.key === "smtpFromName")?.value;
+  const smtpFromName = decryptedSettings.find(
+    (s) => s.key === "smtpFromName",
+  )?.value;
 
   // System name for email sender fallback
   const systemName =
-    allSettings.find((s) => s.key === "systemName")?.value ?? "Cronium";
+    decryptedSettings.find((s) => s.key === "systemName")?.value ?? "Cronium";
 
   return {
     enabled: smtpEnabled,

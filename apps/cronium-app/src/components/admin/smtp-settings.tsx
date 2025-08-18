@@ -5,7 +5,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTranslations } from "next-intl";
-import { Mail, Save } from "lucide-react";
+import { Mail, Save, Eye, EyeOff } from "lucide-react";
 import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
 import { Label } from "@cronium/ui";
@@ -45,7 +45,7 @@ const smtpSettingsSchema = z
 
 interface SystemSettings {
   smtpHost?: string;
-  smtpPort?: string;
+  smtpPort?: string | number;
   smtpUser?: string;
   smtpPassword?: string;
   smtpFromEmail?: string;
@@ -61,12 +61,13 @@ interface SmtpSettingsProps {
 export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
   const t = useTranslations("Admin");
   const tCommon = useTranslations("Common");
+  const [showPassword, setShowPassword] = React.useState(false);
 
   const form = useForm<z.infer<typeof smtpSettingsSchema>>({
     resolver: zodResolver(smtpSettingsSchema),
     defaultValues: {
       smtpHost: settings.smtpHost ?? "",
-      smtpPort: settings.smtpPort ?? "25",
+      smtpPort: String(settings.smtpPort ?? "25"),
       smtpUser: settings.smtpUser ?? "",
       smtpPassword: settings.smtpPassword ?? "",
       smtpFromEmail: settings.smtpFromEmail ?? "",
@@ -79,7 +80,7 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
   React.useEffect(() => {
     form.reset({
       smtpHost: settings.smtpHost ?? "",
-      smtpPort: settings.smtpPort ?? "587",
+      smtpPort: String(settings.smtpPort ?? "587"),
       smtpUser: settings.smtpUser ?? "",
       smtpPassword: settings.smtpPassword ?? "",
       smtpFromEmail: settings.smtpFromEmail ?? "",
@@ -151,17 +152,34 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
             <Label htmlFor="smtpPassword">
               {t("EmailSettings.SmtpPassword")}
             </Label>
-            <Input
-              id="smtpPassword"
-              type="password"
-              placeholder="your-app-password"
-              aria-describedby={
-                form.formState.errors.smtpPassword
-                  ? "smtpPassword-error"
-                  : undefined
-              }
-              {...form.register("smtpPassword")}
-            />
+            <div className="relative">
+              <Input
+                id="smtpPassword"
+                type={showPassword ? "text" : "password"}
+                placeholder="your-app-password"
+                className="pr-10"
+                aria-describedby={
+                  form.formState.errors.smtpPassword
+                    ? "smtpPassword-error"
+                    : undefined
+                }
+                {...form.register("smtpPassword")}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="absolute top-0 right-0 h-full px-3 py-2 hover:bg-transparent"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4 text-gray-500" />
+                ) : (
+                  <Eye className="h-4 w-4 text-gray-500" />
+                )}
+              </Button>
+            </div>
             {form.formState.errors.smtpPassword && (
               <p id="smtpPassword-error" className="text-sm text-red-600">
                 {form.formState.errors.smtpPassword.message}

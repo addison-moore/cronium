@@ -10,6 +10,10 @@ import {
 import type { Setting } from "../../../shared/schema";
 import type { DashboardStats } from "../types";
 import { eq, and, gte, desc, count } from "drizzle-orm";
+import {
+  encryptionService,
+  isSystemSettingSensitive,
+} from "../../../lib/encryption-service";
 
 export class SystemStorage {
   // Settings methods
@@ -18,28 +22,75 @@ export class SystemStorage {
       .select()
       .from(systemSettings)
       .where(eq(systemSettings.key, key));
+
+    // Decrypt sensitive settings
+    if (setting && isSystemSettingSensitive(key)) {
+      try {
+        return {
+          ...setting,
+          value: encryptionService.decrypt(setting.value),
+        };
+      } catch (error) {
+        console.error(`Error decrypting system setting ${key}:`, error);
+        // Return setting without decryption rather than failing
+        return setting;
+      }
+    }
+
     return setting;
   }
 
   async getAllSettings(): Promise<Setting[]> {
     const allSettings = await db.select().from(systemSettings);
-    return allSettings;
+
+    // Decrypt sensitive settings
+    return allSettings.map((setting) => {
+      if (isSystemSettingSensitive(setting.key)) {
+        try {
+          return {
+            ...setting,
+            value: encryptionService.decrypt(setting.value),
+          };
+        } catch (error) {
+          console.error(
+            `Error decrypting system setting ${setting.key}:`,
+            error,
+          );
+          // Return setting without decryption rather than failing
+          return setting;
+        }
+      }
+      return setting;
+    });
   }
 
   async upsertSetting(key: string, value: string): Promise<Setting> {
-    // Check if the setting exists
-    const existingSetting = await this.getSetting(key);
+    // Encrypt sensitive values before storing
+    const valueToStore = isSystemSettingSensitive(key)
+      ? encryptionService.encrypt(value)
+      : value;
+
+    // Check if the setting exists (raw from DB, not decrypted)
+    const [existingSetting] = await db
+      .select()
+      .from(systemSettings)
+      .where(eq(systemSettings.key, key));
 
     if (existingSetting) {
       // Update the existing setting
       const [setting] = await db
         .update(systemSettings)
-        .set({ value, updatedAt: new Date() })
+        .set({ value: valueToStore, updatedAt: new Date() })
         .where(eq(systemSettings.key, key))
         .returning();
 
       if (!setting) {
         throw new Error("Failed to update setting");
+      }
+
+      // Return decrypted value for immediate use
+      if (isSystemSettingSensitive(key)) {
+        return { ...setting, value };
       }
       return setting;
     } else {
@@ -48,7 +99,7 @@ export class SystemStorage {
         .insert(systemSettings)
         .values({
           key,
-          value,
+          value: valueToStore,
           createdAt: new Date(),
           updatedAt: new Date(),
         })
@@ -56,6 +107,11 @@ export class SystemStorage {
 
       if (!setting) {
         throw new Error("Failed to create setting");
+      }
+
+      // Return decrypted value for immediate use
+      if (isSystemSettingSensitive(key)) {
+        return { ...setting, value };
       }
       return setting;
     }

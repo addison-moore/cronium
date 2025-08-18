@@ -158,7 +158,26 @@ export const SENSITIVE_FIELDS = {
   envVars: ["value"],
   apiTokens: ["token"],
   settings: ["value"],
+  systemSettings: ["value"],
 } as const;
+
+/**
+ * List of system settings keys that contain sensitive data
+ */
+export const SENSITIVE_SYSTEM_SETTINGS = [
+  "smtpPassword",
+  "openaiApiKey",
+  // Add more sensitive keys here as needed
+] as const;
+
+/**
+ * Check if a system setting key contains sensitive data
+ */
+export function isSystemSettingSensitive(key: string): boolean {
+  return SENSITIVE_SYSTEM_SETTINGS.includes(
+    key as (typeof SENSITIVE_SYSTEM_SETTINGS)[number],
+  );
+}
 
 /**
  * Check if a field should be encrypted
