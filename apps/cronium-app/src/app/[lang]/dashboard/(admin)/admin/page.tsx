@@ -19,7 +19,7 @@ import { toast } from "@cronium/ui";
 
 interface SystemSettings {
   smtpHost?: string;
-  smtpPort?: string;
+  smtpPort?: string | number;
   smtpUser?: string;
   smtpPassword?: string;
   smtpFromEmail?: string;
@@ -203,9 +203,13 @@ export default function AdminPage() {
   async function saveSmtpSettings(data: SmtpSettingsData): Promise<void> {
     // Validate the data using the schema
     const validatedData = smtpSettingsSchema.parse(data);
+    // Ensure smtpPort is always a string
     updateSystemSettingsMutation.mutate({
       ...settings,
       ...validatedData,
+      smtpPort: validatedData.smtpPort
+        ? String(validatedData.smtpPort)
+        : undefined,
     });
   }
 
