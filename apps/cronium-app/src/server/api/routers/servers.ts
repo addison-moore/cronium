@@ -128,11 +128,16 @@ export const serversRouter = createTRPCRouter({
           `Testing SSH connection to ${input.address}:${input.port} as ${input.username}`,
         );
 
+        // Determine auth type based on provided credentials
+        const authCredential = (input.sshKey ?? input.password) || "";
+        const authType = input.sshKey ? "privateKey" : "password";
+
         const connectionResult = await sshService.testConnection(
           input.address,
-          input.sshKey,
+          authCredential,
           input.username,
           input.port,
+          authType,
         );
 
         if (!connectionResult.success) {
@@ -198,15 +203,21 @@ export const serversRouter = createTRPCRouter({
           });
         }
 
-        // If SSH key is provided, test the connection
-        if (updateData.sshKey) {
+        // If SSH key or password is provided, test the connection
+        if (updateData.sshKey || updateData.password) {
           const { sshService } = await import("@/lib/ssh");
+
+          // Determine auth type and credential
+          const authCredential =
+            (updateData.sshKey ?? updateData.password) || "";
+          const authType = updateData.sshKey ? "privateKey" : "password";
 
           const connectionResult = await sshService.testConnection(
             updateData.address ?? existingServer.address,
-            updateData.sshKey,
+            authCredential,
             updateData.username ?? existingServer.username,
             updateData.port ?? existingServer.port,
+            authType,
           );
 
           if (!connectionResult.success) {
@@ -335,11 +346,16 @@ export const serversRouter = createTRPCRouter({
           `Testing connection to ${input.address}:${input.port} as ${input.username}`,
         );
 
+        // Determine auth type and credential
+        const authCredential = (input.sshKey ?? input.password) || "";
+        const authType = input.sshKey ? "privateKey" : "password";
+
         const connectionResult = await sshService.testConnection(
           input.address,
-          input.sshKey,
+          authCredential,
           input.username,
           input.port,
+          authType,
         );
 
         return {

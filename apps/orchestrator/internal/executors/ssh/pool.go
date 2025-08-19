@@ -115,26 +115,49 @@ func (p *ConnectionPool) getExistingConnection(serverKey string) *ssh.Client {
 
 // createConnection creates a new SSH connection
 func (p *ConnectionPool) createConnection(ctx context.Context, server *types.ServerDetails) (*ssh.Client, error) {
-	// Parse private key
-	signer, err := ssh.ParsePrivateKey([]byte(server.PrivateKey))
-	if err != nil {
-		// Try with passphrase if provided
-		if server.Passphrase != "" {
-			signer, err = ssh.ParsePrivateKeyWithPassphrase([]byte(server.PrivateKey), []byte(server.Passphrase))
-			if err != nil {
+	// Build auth methods based on available credentials
+	var authMethods []ssh.AuthMethod
+	
+	// Try password authentication if password is provided
+	if server.Password != "" {
+		authMethods = append(authMethods, ssh.Password(server.Password))
+	}
+	
+	// Try SSH key authentication if private key is provided
+	if server.PrivateKey != "" {
+		// Parse private key
+		signer, err := ssh.ParsePrivateKey([]byte(server.PrivateKey))
+		if err != nil {
+			// Try with passphrase if provided
+			if server.Passphrase != "" {
+				signer, err = ssh.ParsePrivateKeyWithPassphrase([]byte(server.PrivateKey), []byte(server.Passphrase))
+				if err != nil {
+					// Log error but continue if password auth is available
+					if server.Password == "" {
+						return nil, fmt.Errorf("failed to parse private key: %w", err)
+					}
+					p.log.WithError(err).Warn("Failed to parse private key, falling back to password auth")
+				} else {
+					authMethods = append(authMethods, ssh.PublicKeys(signer))
+				}
+			} else if server.Password == "" {
+				// No password and failed to parse key
 				return nil, fmt.Errorf("failed to parse private key: %w", err)
 			}
 		} else {
-			return nil, fmt.Errorf("failed to parse private key: %w", err)
+			authMethods = append(authMethods, ssh.PublicKeys(signer))
 		}
+	}
+	
+	// Ensure we have at least one auth method
+	if len(authMethods) == 0 {
+		return nil, fmt.Errorf("no authentication method available: neither password nor private key provided")
 	}
 	
 	// SSH client configuration
 	config := &ssh.ClientConfig{
-		User: server.Username,
-		Auth: []ssh.AuthMethod{
-			ssh.PublicKeys(signer),
-		},
+		User:            server.Username,
+		Auth:            authMethods,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Implement proper host key verification
 		Timeout:         p.config.ConnectionTimeout,
 	}
@@ -151,6 +174,7 @@ func (p *ConnectionPool) createConnection(ctx context.Context, server *types.Ser
 	}
 	
 	var conn *ssh.Client
+	var err error
 	logEntry := p.log.WithFields(logrus.Fields{
 		"server": server.Name,
 		"host":   server.Host,

@@ -80,11 +80,11 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
   React.useEffect(() => {
     form.reset({
       smtpHost: settings.smtpHost ?? "",
-      smtpPort: String(settings.smtpPort ?? "587"),
+      smtpPort: String(settings.smtpPort ?? ""),
       smtpUser: settings.smtpUser ?? "",
       smtpPassword: settings.smtpPassword ?? "",
       smtpFromEmail: settings.smtpFromEmail ?? "",
-      smtpFromName: settings.smtpFromName ?? "Cronium",
+      smtpFromName: settings.smtpFromName ?? "",
       smtpEnabled: settings.smtpEnabled ?? false,
     });
   }, [settings, form]);

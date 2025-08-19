@@ -313,20 +313,26 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         if (!command) {
           // Prewarm the connection when terminal is first opened for this server
           const decryptedServer = decryptSensitiveData(server, "servers");
+          // Determine auth type and credential
+          const authCredential =
+            decryptedServer.sshKey || decryptedServer.password || "";
+          const authType = decryptedServer.sshKey ? "privateKey" : "password";
           await terminalSSHService.prewarmConnection(
             server.address,
-            decryptedServer.sshKey,
+            authCredential,
             server.username,
             server.port,
+            authType,
           );
 
           // Get the actual shell prompt from the remote server
           const actualPrompt = await terminalSSHService.getShellPrompt(
             server.address,
-            decryptedServer.sshKey,
+            authCredential,
             server.username,
             server.port,
             remoteCwd,
+            authType,
           );
 
           return NextResponse.json({
@@ -338,8 +344,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           });
         }
 
-        // Decrypt the SSH key for secure connection
+        // Decrypt the authentication credentials for secure connection
         const decryptedServer = decryptSensitiveData(server, "servers");
+        // Determine auth type and credential
+        const authCredential =
+          decryptedServer.sshKey || decryptedServer.password || "";
+        const authType = decryptedServer.sshKey ? "privateKey" : "password";
 
         // For cd commands, try to track directory changes
         let newRemoteCwd = remoteCwd;
@@ -348,22 +358,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         try {
           const result = await terminalSSHService.executeCommand(
             server.address,
-            decryptedServer.sshKey,
+            authCredential,
             server.username,
             server.port,
             String(command),
             remoteCwd,
+            authType,
           );
           // For cd commands, get the actual working directory after execution
           if (String(command).trim().startsWith("cd ")) {
             try {
               const pwdResult = await terminalSSHService.executeCommand(
                 server.address,
-                decryptedServer.sshKey,
+                authCredential,
                 server.username,
                 server.port,
                 "pwd",
                 remoteCwd,
+                authType,
               );
               if (pwdResult.stdout && !pwdResult.stderr) {
                 newRemoteCwd = String(pwdResult.stdout).trim();
@@ -382,10 +394,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           // Get the updated shell prompt after command execution
           const updatedPrompt = await terminalSSHService.getShellPrompt(
             server.address,
-            decryptedServer.sshKey,
+            authCredential,
             server.username,
             server.port,
             newRemoteCwd,
+            authType,
           );
 
           return NextResponse.json({

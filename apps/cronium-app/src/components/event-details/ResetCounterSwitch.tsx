@@ -28,6 +28,7 @@ export function ResetCounterSwitch({
       toast({
         title: "Setting Saved",
         description: `Reset counter on activate has been ${isChecked ? "enabled" : "disabled"}.`,
+        variant: "success",
         duration: 3000,
       });
 

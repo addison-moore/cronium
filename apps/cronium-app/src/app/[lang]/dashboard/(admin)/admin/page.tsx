@@ -19,7 +19,7 @@ import { toast } from "@cronium/ui";
 
 interface SystemSettings {
   smtpHost?: string;
-  smtpPort?: string | number;
+  smtpPort?: string;
   smtpUser?: string;
   smtpPassword?: string;
   smtpFromEmail?: string;

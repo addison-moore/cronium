@@ -57,7 +57,8 @@ type ServerDetails struct {
 	Host       string `json:"host"`
 	Port       int    `json:"port"`
 	Username   string `json:"username"`
-	PrivateKey string `json:"privateKey"`
+	PrivateKey string `json:"privateKey,omitempty"`
+	Password   string `json:"password,omitempty"`
 	Passphrase string `json:"passphrase,omitempty"`
 }
 

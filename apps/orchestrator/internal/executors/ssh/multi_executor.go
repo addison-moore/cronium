@@ -306,10 +306,18 @@ func (m *MultiServerExecutor) extractServerDetails(serverMap map[string]interfac
 		return nil, fmt.Errorf("missing server username")
 	}
 	
+	// Extract authentication credentials (either privateKey or password required)
 	if privateKey, ok := serverMap["privateKey"].(string); ok {
 		details.PrivateKey = privateKey
-	} else {
-		return nil, fmt.Errorf("missing server private key")
+	}
+	
+	if password, ok := serverMap["password"].(string); ok {
+		details.Password = password
+	}
+	
+	// Ensure at least one auth method is provided
+	if details.PrivateKey == "" && details.Password == "" {
+		return nil, fmt.Errorf("missing server authentication: neither privateKey nor password provided")
 	}
 	
 	if passphrase, ok := serverMap["passphrase"].(string); ok {

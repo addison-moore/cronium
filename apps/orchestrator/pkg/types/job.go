@@ -82,8 +82,9 @@ type ServerDetails struct {
 	Host       string `json:"host"`
 	Port       int    `json:"port"`
 	Username   string `json:"username"`
-	PrivateKey string `json:"privateKey"` // Base64 encoded
-	Passphrase string `json:"passphrase,omitempty"`
+	PrivateKey string `json:"privateKey,omitempty"` // Base64 encoded, optional
+	Password   string `json:"password,omitempty"`   // Password for authentication, optional
+	Passphrase string `json:"passphrase,omitempty"` // Passphrase for encrypted SSH keys
 }
 
 // Script contains the script to execute

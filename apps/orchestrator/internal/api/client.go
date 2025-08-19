@@ -421,6 +421,7 @@ func convertServerDetails(sd *ServerDetails) *types.ServerDetails {
 		Port:       sd.Port,
 		Username:   sd.Username,
 		PrivateKey: sd.PrivateKey,
+		Password:   sd.Password,
 		Passphrase: sd.Passphrase,
 	}
 }

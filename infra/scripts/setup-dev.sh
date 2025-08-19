@@ -147,7 +147,7 @@ echo "
 📝 Next Steps:
 1. Start all services: pnpm dev
 2. Or start individually:
-   - Next.js: pnpm dev:web
+   - Next.js: pnpm dev:app
    - WebSocket: cd apps/cronium-app && pnpm dev:socket
 3. View logs: docker-compose -f infra/docker/docker-compose.stack.yml logs -f
 

@@ -539,7 +539,7 @@ export function EventsListClient({
         toast({
           title: "Partial Success",
           description: `Deleted ${successCount} of ${state.selectedEvents.size} event(s). ${failureCount} failed.`,
-          variant: "destructive",
+          variant: "info",
         });
       } else {
         toast({
@@ -583,7 +583,7 @@ export function EventsListClient({
         toast({
           title: "Partial Success",
           description: `Activated ${state.selectedEvents.size - failures.length} of ${state.selectedEvents.size} event(s). ${failures.length} failed.`,
-          variant: "destructive",
+          variant: "info",
         });
       } else {
         toast({
@@ -631,7 +631,7 @@ export function EventsListClient({
         toast({
           title: "Partial Success",
           description: `Paused ${state.selectedEvents.size - failures.length} of ${state.selectedEvents.size} event(s). ${failures.length} failed.`,
-          variant: "destructive",
+          variant: "info",
         });
       } else {
         toast({
@@ -687,7 +687,7 @@ export function EventsListClient({
       toast({
         title: "Success",
         description: `Successfully downloaded ${state.selectedEvents.size} event(s).`,
-        variant: "success",
+        variant: "info",
       });
 
       updateState({ selectedEvents: new Set() });
@@ -723,7 +723,7 @@ export function EventsListClient({
         toast({
           title: "Partial Success",
           description: `Archived ${state.selectedEvents.size - failures.length} of ${state.selectedEvents.size} event(s). ${failures.length} failed.`,
-          variant: "destructive",
+          variant: "info",
         });
       } else {
         toast({

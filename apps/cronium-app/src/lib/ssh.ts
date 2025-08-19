@@ -58,10 +58,11 @@ export class SSHService {
 
   private async getPooledConnection(
     host: string,
-    privateKey: string,
+    authCredential: string,
     username = "root",
     port = 22,
     forceNew = false,
+    authType: "privateKey" | "password" = "privateKey",
   ): Promise<SSHConnection> {
     const connectionKey = this.getConnectionKey(host, username, port);
 
@@ -113,10 +114,11 @@ export class SSHService {
     // Create a promise for the new connection and lock it
     const connectionPromise = this.createNewConnection(
       host,
-      privateKey,
+      authCredential,
       username,
       port,
       connectionKey,
+      authType,
     );
     this.connectionLocks.set(connectionKey, connectionPromise);
 
@@ -131,10 +133,11 @@ export class SSHService {
 
   private async createNewConnection(
     host: string,
-    privateKey: string,
+    authCredential: string,
     username: string,
     port: number,
     connectionKey: string,
+    authType: "privateKey" | "password" = "privateKey",
   ): Promise<SSHConnection> {
     // Clean up old connections if we're at max capacity
     if (this.connectionPool.size >= this.maxConnections) {
@@ -189,7 +192,9 @@ export class SSHService {
       ssh.connect({
         host,
         username,
-        privateKey: privateKey,
+        ...(authType === "password"
+          ? { password: authCredential }
+          : { privateKey: authCredential }),
         port,
         readyTimeout: 20000,
         keepaliveInterval: 10000,
@@ -227,9 +232,10 @@ export class SSHService {
    */
   public async connect(
     host: string,
-    privateKey: string,
+    authCredential: string,
     username = "root",
     port = 22,
+    authType: "privateKey" | "password" = "privateKey",
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const sshClient = new Client();
@@ -253,7 +259,9 @@ export class SSHService {
         .connect({
           host,
           username,
-          privateKey: privateKey,
+          ...(authType === "password"
+            ? { password: authCredential }
+            : { privateKey: authCredential }),
           port,
           readyTimeout: 60000,
           keepaliveInterval: 5000,
@@ -279,12 +287,13 @@ export class SSHService {
    */
   public async testConnection(
     host: string,
-    privateKey: string,
+    authCredential: string,
     username = "root",
     port = 22,
+    authType: "privateKey" | "password" = "privateKey",
   ): Promise<{ success: boolean; message: string }> {
     try {
-      await this.connect(host, privateKey, username, port);
+      await this.connect(host, authCredential, username, port, authType);
       await this.disconnect();
       return { success: true, message: "Connection successful" };
     } catch (error) {
@@ -1101,7 +1110,8 @@ module.exports = croniumInstance;`;
     id: number;
     name: string;
     address: string;
-    sshKey: string;
+    sshKey: string | null;
+    password?: string | null;
     username: string;
     port: number;
   }): Promise<{
@@ -1121,11 +1131,16 @@ module.exports = croniumInstance;`;
     error?: string;
   }> {
     try {
+      // Determine auth type and credential
+      const authCredential = server.sshKey || server.password || "";
+      const authType = server.sshKey ? "privateKey" : "password";
+
       await this.connect(
         server.address,
-        server.sshKey,
+        authCredential,
         server.username,
         server.port,
+        authType,
       );
 
       // Get system information
@@ -1535,18 +1550,20 @@ module.exports = croniumInstance;`;
 
   async openShell(
     host: string,
-    privateKey: string,
+    authCredential: string,
     username = "root",
     port = 22,
     cols = 80,
     rows = 30,
+    authType: "privateKey" | "password" = "privateKey",
   ): Promise<{ shell: ClientChannel; connectionKey: string }> {
     const connection = await this.getPooledConnection(
       host,
-      privateKey,
+      authCredential,
       username,
       port,
       false, // Don't force new connection
+      authType,
     );
 
     const shell = await new Promise<ClientChannel>((resolve, reject) => {

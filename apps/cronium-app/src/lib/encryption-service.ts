@@ -153,7 +153,7 @@ export const encryptionService = new EncryptionService();
  * Configuration for which fields need encryption by table
  */
 export const SENSITIVE_FIELDS = {
-  servers: ["sshKey"],
+  servers: ["sshKey", "password"],
   users: ["password"],
   envVars: ["value"],
   apiTokens: ["token"],

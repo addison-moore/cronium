@@ -649,6 +649,9 @@ export default function WorkflowCanvas({
             eventId: eventId,
             label: eventData.name,
             type: eventData.type,
+            eventTypeIcon: eventData.type,
+            description: "",
+            tags: [],
           },
         };
 
