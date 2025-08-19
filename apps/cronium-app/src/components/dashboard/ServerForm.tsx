@@ -12,6 +12,7 @@ import {
   Hash,
   Save,
   AlertTriangle,
+  Lock,
 } from "lucide-react";
 import {
   Form,
@@ -26,21 +27,46 @@ import { Button } from "@cronium/ui";
 import { Textarea } from "@cronium/ui";
 import { Checkbox } from "@cronium/ui";
 import { Alert, AlertDescription, AlertTitle } from "@cronium/ui";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@cronium/ui";
 import { type UpdateServerInput } from "@shared/schemas/servers";
 import { z } from "zod";
+import { AuthType } from "@/lib/validations/server";
 
 // Create a form schema that matches the update schema structure
-const serverFormSchema = z.object({
-  name: z.string().min(1, "Server name is required").max(100),
-  address: z.string().min(1, "Server address is required").max(255),
-  sshKey: z.string().optional(), // Optional for editing, required validation handled in component
-  username: z.string().min(1, "Username is required").max(50),
-  port: z.number().int().min(1).max(65535),
-  description: z.string().max(500).optional(),
-  tags: z.array(z.string()),
-  shared: z.boolean(),
-  maxConcurrentJobs: z.number().int().min(1).max(100),
-});
+const serverFormSchema = z
+  .object({
+    name: z.string().min(1, "Server name is required").max(100),
+    address: z.string().min(1, "Server address is required").max(255),
+    authType: z.nativeEnum(AuthType).default(AuthType.SSH_KEY),
+    sshKey: z.string().optional(),
+    password: z.string().optional(),
+    username: z.string().min(1, "Username is required").max(50),
+    port: z.number().int().min(1).max(65535),
+    description: z.string().max(500).optional(),
+    tags: z.array(z.string()),
+    shared: z.boolean(),
+    maxConcurrentJobs: z.number().int().min(1).max(100),
+  })
+  .refine(
+    (data) => {
+      if (data.authType === AuthType.SSH_KEY) {
+        return data.sshKey && data.sshKey.length > 0;
+      } else if (data.authType === AuthType.PASSWORD) {
+        return data.password && data.password.length > 0;
+      }
+      return false;
+    },
+    {
+      message: "Authentication credentials are required",
+      path: ["authType"],
+    },
+  );
 
 // Create form type from the schema
 type ServerFormInput = z.infer<typeof serverFormSchema>;
@@ -63,11 +89,26 @@ export default function ServerForm({
   const t = useTranslations("Servers.Form");
   const [sshKeyWarning, setSshKeyWarning] = useState<string | null>(null);
 
+  // Determine initial auth type based on existing server data
+  const determineAuthType = (): AuthType => {
+    if (initialServer) {
+      // If editing, check which auth method is currently used
+      if (initialServer.sshKey && initialServer.sshKey !== null) {
+        return AuthType.SSH_KEY;
+      } else if (initialServer.password && initialServer.password !== null) {
+        return AuthType.PASSWORD;
+      }
+    }
+    return AuthType.SSH_KEY; // Default to SSH key for new servers
+  };
+
   // Default values for the form
   const defaultValues: ServerFormInput = {
     name: "",
     address: "",
+    authType: AuthType.SSH_KEY,
     sshKey: "",
+    password: "",
     username: "root",
     port: 22,
     description: "",
@@ -78,12 +119,14 @@ export default function ServerForm({
 
   // Initialize the form with the provided server data or defaults
   const form = useForm<ServerFormInput>({
-    resolver: zodResolver(serverFormSchema),
+    resolver: zodResolver(serverFormSchema) as any,
     defaultValues: initialServer
       ? {
           name: initialServer.name ?? "",
           address: initialServer.address ?? "",
-          sshKey: "", // For security, don't populate the SSH key field when editing
+          authType: determineAuthType(),
+          sshKey: "", // For security, don't populate auth fields when editing
+          password: "", // For security, don't populate auth fields when editing
           username: initialServer.username ?? "root",
           port: initialServer.port ? Number(initialServer.port) : 22,
           description: initialServer.description ?? "",
@@ -93,6 +136,8 @@ export default function ServerForm({
         }
       : defaultValues,
   });
+
+  const authType = form.watch("authType");
 
   // tRPC mutations
   const createServerMutation = trpc.servers.create.useMutation({
@@ -147,7 +192,11 @@ export default function ServerForm({
     const subscription = form.watch((value, { name }) => {
       if (name === "sshKey" || name === undefined) {
         const sshKeyValue = value.sshKey;
-        if (sshKeyValue && typeof sshKeyValue === "string") {
+        if (
+          sshKeyValue &&
+          typeof sshKeyValue === "string" &&
+          value.authType === AuthType.SSH_KEY
+        ) {
           const warning = validateSshKey(sshKeyValue);
           setSshKeyWarning(warning);
         } else {
@@ -170,10 +219,23 @@ export default function ServerForm({
       ...data,
     };
 
-    // When editing, only include SSH key if it's provided (changed)
-    if (isEditing && !data.sshKey) {
+    // Clean up unused auth fields based on authType
+    if (data.authType === AuthType.SSH_KEY) {
+      delete payload.password;
+      // When editing, only include SSH key if it's provided (changed)
+      if (isEditing && !data.sshKey) {
+        delete payload.sshKey;
+      }
+    } else if (data.authType === AuthType.PASSWORD) {
       delete payload.sshKey;
+      // When editing, only include password if it's provided (changed)
+      if (isEditing && !data.password) {
+        delete payload.password;
+      }
     }
+
+    // Remove authType from payload as it's not stored in DB
+    const { authType, ...serverPayload } = payload;
 
     try {
       if (isEditing) {
@@ -187,21 +249,29 @@ export default function ServerForm({
         }
         await updateServerMutation.mutateAsync({
           id: initialServer.id,
-          ...payload,
+          ...serverPayload,
         });
       } else {
-        if (!payload.sshKey) {
+        // Ensure auth credentials are provided for new servers
+        if (data.authType === AuthType.SSH_KEY && !serverPayload.sshKey) {
           toast({
             title: "Error",
             description: "SSH key is required when creating a new server",
             variant: "destructive",
           });
           return;
+        } else if (
+          data.authType === AuthType.PASSWORD &&
+          !serverPayload.password
+        ) {
+          toast({
+            title: "Error",
+            description: "Password is required when creating a new server",
+            variant: "destructive",
+          });
+          return;
         }
-        await createServerMutation.mutateAsync({
-          ...payload,
-          sshKey: payload.sshKey,
-        });
+        await createServerMutation.mutateAsync(serverPayload);
       }
     } catch (error) {
       console.error(
@@ -314,44 +384,117 @@ export default function ServerForm({
 
           <FormField
             control={form.control}
-            name="sshKey"
+            name="authType"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>
-                  {isEditing
-                    ? t("SSHKey") + " (" + t("KeepExistingKey") + ")"
-                    : t("SSHKey")}
-                </FormLabel>
-
-                {sshKeyWarning && (
-                  <Alert className="mb-2 border-amber-200 bg-amber-50">
-                    <AlertTriangle className="h-4 w-4 text-amber-600" />
-                    <AlertTitle className="text-amber-800">
-                      SSH Key Format Warning
-                    </AlertTitle>
-                    <AlertDescription className="text-amber-700">
-                      {sshKeyWarning}
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                <FormControl>
-                  <div className="relative">
-                    <Key className="text-muted-foreground absolute top-2.5 left-2 h-4 w-4" />
-                    <Textarea
-                      className={`min-h-[180px] pl-8 font-mono ${sshKeyWarning ? "border-amber-500" : ""}`}
-                      placeholder={`-----BEGIN RSA PRIVATE KEY-----
-MIIEpAIBAAKCAQEAxyz...
-...
------END RSA PRIVATE KEY-----`}
-                      {...field}
-                    />
-                  </div>
-                </FormControl>
+                <FormLabel>Authentication Method</FormLabel>
+                <Select
+                  value={field.value}
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    // Clear the other auth field when switching
+                    if (value === AuthType.SSH_KEY) {
+                      form.setValue("password", "");
+                    } else {
+                      form.setValue("sshKey", "");
+                    }
+                  }}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select authentication method" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value={AuthType.SSH_KEY}>
+                      <div className="flex items-center">
+                        <Key className="mr-2 h-4 w-4" />
+                        SSH Key
+                      </div>
+                    </SelectItem>
+                    <SelectItem value={AuthType.PASSWORD}>
+                      <div className="flex items-center">
+                        <Lock className="mr-2 h-4 w-4" />
+                        Password
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
                 <FormMessage />
               </FormItem>
             )}
           />
+
+          {authType === AuthType.SSH_KEY && (
+            <FormField
+              control={form.control}
+              name="sshKey"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {isEditing
+                      ? t("SSHKey") + " (" + t("KeepExistingKey") + ")"
+                      : t("SSHKey")}
+                  </FormLabel>
+
+                  {sshKeyWarning && (
+                    <Alert className="mb-2 border-amber-200 bg-amber-50">
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      <AlertTitle className="text-amber-800">
+                        SSH Key Format Warning
+                      </AlertTitle>
+                      <AlertDescription className="text-amber-700">
+                        {sshKeyWarning}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <FormControl>
+                    <div className="relative">
+                      <Key className="text-muted-foreground absolute top-2.5 left-2 h-4 w-4" />
+                      <Textarea
+                        className={`min-h-[180px] pl-8 font-mono ${sshKeyWarning ? "border-amber-500" : ""}`}
+                        placeholder={`-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEAxyz...
+...
+-----END RSA PRIVATE KEY-----`}
+                        {...field}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          {authType === AuthType.PASSWORD && (
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {isEditing
+                      ? "Password (Leave empty to keep existing)"
+                      : "Password"}
+                  </FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Lock className="text-muted-foreground absolute top-2.5 left-2 h-4 w-4" />
+                      <Input
+                        className="pl-8"
+                        type="password"
+                        placeholder={isEditing ? "••••••••" : "Enter password"}
+                        {...field}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
           <FormField
             control={form.control}

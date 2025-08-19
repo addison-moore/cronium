@@ -121,6 +121,9 @@ export default function WorkflowDetailsPage({
     type?: string;
     animated?: boolean;
     markerEnd?: { type: string };
+    data?: {
+      connectionType?: string;
+    };
   }
 
   interface WorkflowExecutionDetailed {
@@ -213,7 +216,7 @@ export default function WorkflowDetailsPage({
       const typedNodes = workflowDetails?.nodes as WorkflowNode[] | undefined;
       const nodes: LocalWorkflowNode[] = (typedNodes ?? []).map((node) => ({
         id: `node-${String(node.id)}`,
-        type: "workflowNode",
+        type: "eventNode",
         position: { x: node.position_x, y: node.position_y },
         data: {
           eventId: node.eventId,
@@ -236,8 +239,11 @@ export default function WorkflowDetailsPage({
         id: `edge-${String(conn.id)}`,
         source: `node-${String(conn.sourceNodeId)}`,
         target: `node-${String(conn.targetNodeId)}`,
-        type: conn.connectionType ?? "default",
+        type: "connectionEdge",
         animated: false,
+        data: {
+          connectionType: conn.connectionType ?? "ALWAYS",
+        },
       }));
       setWorkflowEdges(edges);
 
@@ -442,8 +448,9 @@ export default function WorkflowDetailsPage({
         type: "connectionEdge" as const,
         animated: edge.animated ?? true,
         data: {
-          type: (edge.type ?? "default") as ConnectionType,
-          connectionType: (edge.type ?? "default") as ConnectionType,
+          type: (edge.data?.connectionType ?? "ALWAYS") as ConnectionType,
+          connectionType: (edge.data?.connectionType ??
+            "ALWAYS") as ConnectionType,
         },
       }));
 
@@ -824,7 +831,7 @@ export default function WorkflowDetailsPage({
               source: edge.source,
               target: edge.target,
               data: {
-                connectionType: edge.type ?? "default",
+                connectionType: edge.data?.connectionType ?? "ALWAYS",
               },
             }))}
             executionId={currentExecution?.id}

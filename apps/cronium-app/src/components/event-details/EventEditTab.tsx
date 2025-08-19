@@ -81,7 +81,7 @@ export function EventEditTab({
       toast({
         title: "Warning",
         description: "Event may have been updated, but failed to refresh data",
-        variant: "destructive",
+        variant: "info",
       });
 
       router.refresh();

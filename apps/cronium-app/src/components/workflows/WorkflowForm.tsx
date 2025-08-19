@@ -620,15 +620,17 @@ export default function WorkflowForm({
                     </div>
                   </div>
                 ) : (
-                  <WorkflowCanvas
-                    availableEvents={events}
-                    initialNodes={workflowNodes}
-                    initialEdges={workflowEdges}
-                    onChange={(nodes, edges) =>
-                      handleCanvasChange(nodes, edges)
-                    }
-                    updateEvents={updateEvents}
-                  />
+                  <div className="h-[600px] w-full">
+                    <WorkflowCanvas
+                      availableEvents={events}
+                      initialNodes={workflowNodes}
+                      initialEdges={workflowEdges}
+                      onChange={(nodes, edges) =>
+                        handleCanvasChange(nodes, edges)
+                      }
+                      updateEvents={updateEvents}
+                    />
+                  </div>
                 )}
               </CardContent>
             </Card>

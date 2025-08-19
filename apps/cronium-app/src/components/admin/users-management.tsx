@@ -209,7 +209,7 @@ export function UsersManagement({
       toast({
         title: "Success",
         description: "Invitation email sent successfully",
-        variant: "default",
+        variant: "success",
       });
     } catch (error: unknown) {
       const errorMessage =
@@ -228,7 +228,7 @@ export function UsersManagement({
       toast({
         title: "Success",
         description: "User approved successfully",
-        variant: "default",
+        variant: "success",
       });
     } catch (error: unknown) {
       const errorMessage =
@@ -247,7 +247,7 @@ export function UsersManagement({
       toast({
         title: "Success",
         description: "User registration denied",
-        variant: "default",
+        variant: "success",
       });
     } catch (error: unknown) {
       const errorMessage =

@@ -14,7 +14,8 @@ export interface SSHConnection {
 
 export interface SSHConnectionConfig {
   host: string;
-  privateKey: string;
+  privateKey?: string;
+  password?: string;
   username: string;
   port: number;
 }
@@ -70,12 +71,14 @@ export class SSHConnectionManager {
     });
   }
 
+  // Updated to support both privateKey and password authentication
   async getPooledConnection(
     host: string,
-    privateKey: string,
+    authCredential: string, // Can be either privateKey or password
     username = "root",
     port = 22,
     forceNew = false,
+    authType: "privateKey" | "password" = "privateKey",
   ): Promise<SSHConnection> {
     const connectionKey = this.getConnectionKey(host, username, port);
 
@@ -116,10 +119,11 @@ export class SSHConnectionManager {
     // Create a promise for the new connection and lock it
     const connectionPromise = this.createNewConnection(
       host,
-      privateKey,
+      authCredential,
       username,
       port,
       connectionKey,
+      authType,
     );
     this.connectionLocks.set(connectionKey, connectionPromise);
 
@@ -134,20 +138,22 @@ export class SSHConnectionManager {
 
   private async createNewConnection(
     host: string,
-    privateKey: string,
+    authCredential: string,
     username: string,
     port: number,
     connectionKey: string,
+    authType: "privateKey" | "password" = "privateKey",
   ): Promise<SSHConnection> {
-    console.log(`Creating new SSH connection to ${connectionKey}...`);
+    console.log(
+      `Creating new SSH connection to ${connectionKey} using ${authType}...`,
+    );
 
     const ssh = new NodeSSH();
 
     try {
-      await ssh.connect({
+      const connectionConfig: any = {
         host,
         username,
-        privateKey,
         port,
         readyTimeout: this.connectionTimeout,
         algorithms: {
@@ -178,7 +184,16 @@ export class SSHConnectionManager {
           ],
           hmac: ["hmac-sha2-256", "hmac-sha2-512", "hmac-sha1"],
         },
-      });
+      };
+
+      // Set authentication method based on authType
+      if (authType === "password") {
+        connectionConfig.password = authCredential;
+      } else {
+        connectionConfig.privateKey = authCredential;
+      }
+
+      await ssh.connect(connectionConfig);
 
       const connection: SSHConnection = {
         ssh,
@@ -211,19 +226,22 @@ export class SSHConnectionManager {
     }
   }
 
+  // Updated to support both privateKey and password authentication
   async testConnection(
     host: string,
-    privateKey: string,
+    authCredential: string,
     username = "root",
     port = 22,
+    authType: "privateKey" | "password" = "privateKey",
   ): Promise<{ success: boolean; message: string }> {
     try {
       const connection = await this.getPooledConnection(
         host,
-        privateKey,
+        authCredential,
         username,
         port,
         true,
+        authType,
       );
 
       const testResult = await connection.ssh.execCommand(

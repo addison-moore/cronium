@@ -369,7 +369,12 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
 
         <TabsContent value="edit" className="space-y-4">
           <ServerForm
-            initialServer={server}
+            initialServer={(() => {
+              const filtered: any = { ...server };
+              if (server.sshKey === null) delete filtered.sshKey;
+              if (server.password === null) delete filtered.password;
+              return filtered;
+            })()}
             isEditing={true}
             onSuccess={handleServerUpdate}
           />

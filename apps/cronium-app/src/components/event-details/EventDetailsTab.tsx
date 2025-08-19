@@ -91,6 +91,7 @@ export function EventDetailsTab({
       toast({
         title: "Success",
         description: "Event content updated successfully",
+        variant: "success",
       });
     },
     onError: (error) => {

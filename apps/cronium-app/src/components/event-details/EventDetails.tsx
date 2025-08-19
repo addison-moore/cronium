@@ -100,6 +100,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
       toast({
         title: "Event Deleted",
         description: "Event has been successfully deleted.",
+        variant: "success",
       });
       router.push(`/${langParam}/dashboard/events`);
     },
@@ -110,7 +111,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
       toast({
         title: "Event Executed",
         description: "Event execution initiated successfully.",
-        variant: "default",
+        variant: "success",
       });
       // Refresh logs to show new execution
       void refetchLogs();
@@ -122,6 +123,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
       toast({
         title: "Event Activated",
         description: "Event has been activated successfully.",
+        variant: "success",
       });
       void refetchEvent();
     },
@@ -132,6 +134,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
       toast({
         title: "Event Paused",
         description: "Event has been paused successfully.",
+        variant: "success",
       });
       void refetchEvent();
     },
@@ -142,6 +145,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
       toast({
         title: "Counter Reset",
         description: "Execution counter has been reset to 0.",
+        variant: "success",
       });
       void refetchEvent();
     },
@@ -152,6 +156,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
       toast({
         title: "Event Updated",
         description: "Event status updated successfully.",
+        variant: "success",
       });
       void refetchEvent();
     },

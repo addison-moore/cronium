@@ -101,7 +101,7 @@ export function WorkflowListClient({
   // tRPC mutations
   const deleteMutation = trpc.workflows.delete.useMutation({
     onSuccess: () => {
-      toast({ title: t("DeleteSuccess") });
+      toast({ title: t("DeleteSuccess"), variant: "success" });
     },
     onError: () => {
       toast({ title: t("DeleteError"), variant: "destructive" });
@@ -110,7 +110,7 @@ export function WorkflowListClient({
 
   const updateMutation = trpc.workflows.update.useMutation({
     onSuccess: () => {
-      toast({ title: t("UpdateSuccess") });
+      toast({ title: t("UpdateSuccess"), variant: "success" });
     },
   });
 
@@ -119,7 +119,7 @@ export function WorkflowListClient({
       setExecutingWorkflows((prev) => new Set(prev).add(id));
     },
     onSuccess: () => {
-      toast({ title: t("ExecuteSuccess") });
+      toast({ title: t("ExecuteSuccess"), variant: "success" });
     },
     onError: () => {
       toast({ title: t("ExecuteError"), variant: "destructive" });

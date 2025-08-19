@@ -73,7 +73,7 @@ IMPORTANT: Cronium is meant to be an open-source, self-hosted application. This 
 ```bash
 # Development - Monorepo Root
 pnpm dev              # Start all services concurrently
-pnpm dev:web          # Start Cronium app (port 3000)
+pnpm dev:app          # Start Cronium app (port 5001)
 pnpm dev:info         # Start Cronium info site (port 3001)
 pnpm dev:socket       # Start WebSocket server only
 pnpm dev:services     # Start Go services (orchestrator + runtime)
@@ -142,6 +142,8 @@ cronium/
 - React Hook Form + Zod for forms
 - Turborepo for monorepo orchestration
 - PNPM for package management
+- Go for orchestrator and runtime services
+- Docker for containerized execution
 
 **Applications:**
 
@@ -154,14 +156,27 @@ cronium/
   - No authentication required
   - Runs on port 3001 in development
   - Contains landing page and documentation
+- **orchestrator**: Go service for job queue management
+  - Polls jobs from database queue
+  - Manages container and SSH executors
+  - Handles job lifecycle and status updates
+  - Runs on port 8088 in development
+- **runtime**: Go service for SSH runner execution
+  - Provides signed runner binaries for SSH servers
+  - Handles helper function execution
+  - Manages payload distribution
+  - Runs on port 8089 in development
 
 **Core Concepts:**
 
 - **Events**: Scheduled scripts (bash, Node.js, Python) or HTTP requests
+- **Jobs**: Queued execution tasks created from events
+- **Executions**: Records of job runs with status and logs
 - **Workflows**: Multi-step event chains with conditional logic
 - **Servers**: Remote execution targets via SSH
 - **Variables**: Global/user-defined runtime variables
 - **Tools**: Integration plugins (Slack, Discord, Email)
+- **Payloads**: Packaged scripts and metadata for execution
 
 ## Key Directories
 
@@ -192,7 +207,13 @@ cronium/
 **Go Services:**
 
 - `apps/orchestrator/` - Orchestrator service for job management
+  - `internal/executors/` - Container and SSH execution engines
+  - `internal/api/` - API client for cronium-app communication
+  - `internal/payload/` - Payload creation and management
+  - `pkg/types/` - Shared type definitions
 - `apps/runtime/cronium-runtime/` - Runtime service for script execution
+  - Provides signed runner binaries
+  - Handles helper API endpoints
 
 ## Important Implementation Notes
 
@@ -202,17 +223,48 @@ cronium/
 - Role-based permissions (admin, user, viewer)
 - Admin dashboard for user management
 
-**Script Execution:**
+**Execution Flow:**
 
-- Local execution runs in isolated Docker containers via orchestrator
-- SSH execution does not support runtime helpers (will be added with signed runner)
-- Terminal via xterm.js + WebSockets
+1. **Event Trigger**: User creates/schedules an event in cronium-app
+2. **Job Creation**: Event creates a job in the database queue
+3. **Job Polling**: Orchestrator polls and claims jobs from the queue
+4. **Execution Routing**: Based on job type, routes to appropriate executor:
+   - **Container Executor**: For local/containerized execution
+   - **SSH Executor**: For remote server execution (single or multi-server)
+5. **Status Updates**: Real-time updates via WebSocket to UI
+6. **Completion**: Job results and logs stored in database
+
+**Script Execution Types:**
+
+- **Containerized (Local)**:
+  - Runs in isolated Docker containers
+  - Full runtime helper support
+  - Resource limits and isolation
+  - Automatic cleanup after execution
+- **SSH (Remote)**:
+  - Deploys signed runner binary to remote servers
+  - Supports single and multi-server execution
+  - Runtime helpers via API callbacks
+  - Payload-based script distribution
+  - Automatic runner and payload cleanup
+- **Terminal**: Interactive shell via xterm.js + WebSockets
 
 **Runtime Helpers:**
 
 - `cronium.input()` / `cronium.output()` - Pass data between events
 - `cronium.getVariable()` / `cronium.setVariable()` - Manage variables
 - `cronium.event()` - Access current event metadata
+- `cronium.log()` - Structured logging with levels
+- `cronium.sleep()` - Delay execution
+- `cronium.fetch()` - HTTP requests with authentication
+
+**Payload System:**
+
+- **Creation**: Scripts packaged as tar.gz with manifest
+- **Distribution**: Uploaded to SSH servers for execution
+- **Cleanup**: Automatic removal after job completion
+- **Retention**: Configurable retention period (default 24h)
+- **Periodic Cleanup**: Background process removes old payloads
 
 ## Path Aliases
 
@@ -262,6 +314,26 @@ Located in `apps/cronium-app/src/shared/schema.ts` using Drizzle ORM.
 - Role-based access control throughout the application
 - Encryption for sensitive data (API tokens, passwords)
 - SSH key management for remote server access
+- Signed runner binaries prevent tampering
+- JWT authentication for service-to-service communication
+- Payload checksums ensure integrity
+
+## Key Configuration
+
+**Orchestrator Environment Variables:**
+
+- `DATABASE_URL` - PostgreSQL connection string
+- `API_TOKEN` - Authentication token for cronium-app API
+- `RUNTIME_HOST` - Runtime service hostname (default: runtime-api)
+- `RUNTIME_PORT` - Runtime service port (default: 8089)
+- `CLEANUP_PAYLOADS` - Enable payload cleanup (default: false)
+- `PAYLOAD_RETENTION_PERIOD` - How long to keep payloads (default: 24h)
+- `PAYLOAD_CLEANUP_INTERVAL` - Cleanup frequency (default: 1h)
+
+**Runtime Environment Variables:**
+
+- `JWT_SECRET` - Secret for signing runner tokens
+- `PORT` - Service port (default: 8089)
 
 ## Package Management
 
@@ -283,7 +355,9 @@ Located in `apps/cronium-app/src/shared/schema.ts` using Drizzle ORM.
 2. **Working on Specific Apps:**
 
    ```bash
-   pnpm dev:web       # Cronium app only (port 3000)
+   pnpm dev:app       # Cronium app only (port 5001)
+   pnpm dev:socket    # WebSocket server only (port 5002)
+   pnpm docker:up     # Start orchestrator + runtime and Valkey/Redis in Docker
    pnpm dev:info      # Info site only (port 3001)
    pnpm dev:services  # Go services only
    ```
@@ -300,3 +374,35 @@ Located in `apps/cronium-app/src/shared/schema.ts` using Drizzle ORM.
    - Export from `packages/ui/src/index.ts`
    - Run `pnpm build --filter @cronium/ui`
    - Import in apps as `import { Component } from '@cronium/ui'`
+
+## Recent Architecture Improvements
+
+**Job Queue System:**
+
+- Database-backed job queue for reliability
+- Atomic job claiming prevents duplicate processing
+- Automatic retry with exponential backoff
+- Dead letter queue for failed jobs
+- Job status tracking: pending → claimed → running → completed/failed
+
+**Execution-Log Integrity:**
+
+- Foreign key relationships ensure data consistency
+- Execution records track job runs with proper status flow
+- Log entries linked to executions for traceability
+- Exit codes properly captured and stored
+
+**Multi-Server Execution:**
+
+- Parallel execution across multiple SSH servers
+- Unified execution tracking with unique IDs
+- Aggregated status reporting
+- Independent failure handling per server
+
+**Payload Management:**
+
+- Automatic cleanup after job completion
+- Configurable retention periods
+- Periodic background cleanup process
+- Support for both inline scripts and file-based payloads
+- Checksum verification for integrity

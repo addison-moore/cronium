@@ -85,6 +85,7 @@ export default function ApiTokensManager() {
       toast({
         title: "Token created",
         description: "Your new API token has been created successfully.",
+        variant: "success",
       });
     },
     onError: (error) => {
@@ -103,6 +104,7 @@ export default function ApiTokensManager() {
         title: "Token revoked",
         description:
           "The API token has been revoked and can no longer be used.",
+        variant: "success",
       });
     },
     onError: (error) => {
@@ -120,6 +122,7 @@ export default function ApiTokensManager() {
       toast({
         title: "Token deleted",
         description: "The API token has been permanently deleted.",
+        variant: "success",
       });
     },
     onError: (error) => {
@@ -142,6 +145,7 @@ export default function ApiTokensManager() {
     toast({
       title: "Copied!",
       description: "Token copied to clipboard",
+      variant: "info",
     });
   };
 

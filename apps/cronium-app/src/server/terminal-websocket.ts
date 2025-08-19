@@ -179,13 +179,19 @@ export class TerminalWebSocketHandler {
       const decryptedServer = decryptSensitiveData(server, "servers");
 
       try {
+        // Determine auth type and credential
+        const authCredential =
+          decryptedServer.sshKey || decryptedServer.password || "";
+        const authType = decryptedServer.sshKey ? "privateKey" : "password";
+
         const { shell } = await sshService.openShell(
           decryptedServer.address,
-          decryptedServer.sshKey,
+          authCredential,
           decryptedServer.username,
           decryptedServer.port,
           cols,
           rows,
+          authType,
         );
         ptyProcess = shell; // Assign the node-ssh shell stream
         console.log(
