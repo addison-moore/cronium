@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "dotenv -e ../../env/.env.local -- next dev -p 5001",
-    "build": "next build",
-    "start": "next start -p 5001",
+    "build": "dotenv -e ../../env/.env.local -- next build",
+    "start": "dotenv -e ../../env/.env.local -- next start -p 5001",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
     "lint:log": "SKIP_ENV_VALIDATION=1 next lint > ../../logs/lint.log 2>&1",

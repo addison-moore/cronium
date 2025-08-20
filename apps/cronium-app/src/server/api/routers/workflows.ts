@@ -329,20 +329,10 @@ export const workflowsRouter = createTRPCRouter({
           throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
         }
 
-        // Create workflow execution record
-        const _execution = await storage.createWorkflowExecution({
-          workflowId: input.id,
-          userId: ctx.session.user.id,
-          status: LogStatus.RUNNING,
-          triggerType: input.manual ? "MANUAL" : "API",
-          startedAt: new Date(),
-          executionData: input.payload ?? {},
-        });
-
         // Import and use workflow executor
         const { workflowExecutor } = await import("@/lib/workflow-executor");
 
-        // Execute the workflow
+        // Execute the workflow (it will create its own execution record)
         const result = await workflowExecutor.executeWorkflow(
           input.id,
           ctx.session.user.id,

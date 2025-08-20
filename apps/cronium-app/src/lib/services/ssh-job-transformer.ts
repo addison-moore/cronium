@@ -17,16 +17,8 @@ export async function transformSSHJobForOrchestrator(
   // Start with the standard transformation
   const transformedJob = transformJobForOrchestrator(job);
 
-  console.log(
-    `[SSH Transformer] Job ${job.id} - Type: ${transformedJob.type}, Payload:`,
-    job.payload,
-  );
-
   // If it's not an SSH job, return as-is
   if (transformedJob.type !== "ssh") {
-    console.log(
-      `[SSH Transformer] Job ${job.id} is not SSH type, returning as-is`,
-    );
     return transformedJob;
   }
 

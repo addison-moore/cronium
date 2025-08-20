@@ -42,7 +42,7 @@ func TestExecutor_DeploymentRetry(t *testing.T) {
 
 	// Test deployment retry logic
 	ctx := context.Background()
-	
+
 	// Create a test job
 	job := &types.Job{
 		ID:   "test-job-1",
@@ -140,9 +140,9 @@ func TestExecutor_Timeout(t *testing.T) {
 	for update := range updates {
 		if update.Type == types.UpdateTypeError {
 			if statusUpdate, ok := update.Data.(*types.StatusUpdate); ok {
-				if statusUpdate.Message != "" && 
-				   (contains(statusUpdate.Message, "timed out") || 
-				    contains(statusUpdate.Message, "timeout")) {
+				if statusUpdate.Message != "" &&
+					(contains(statusUpdate.Message, "timed out") ||
+						contains(statusUpdate.Message, "timeout")) {
 					timedOut = true
 				}
 			}
@@ -230,7 +230,7 @@ func TestExecutor_Metrics(t *testing.T) {
 
 	// Get stats
 	stats := executor.metrics.GetStats()
-	
+
 	execStats := stats["executions"].(map[string]interface{})
 	assert.Equal(t, int64(2), execStats["total"])
 	assert.Equal(t, int64(1), execStats["successful"])
@@ -240,7 +240,7 @@ func TestExecutor_Metrics(t *testing.T) {
 	deployStats := stats["deployments"].(map[string]interface{})
 	assert.Equal(t, int64(2), deployStats["total"])
 	assert.Equal(t, int64(1), deployStats["successful"]) // Only server1 counts as successful
-	assert.Equal(t, int64(1), deployStats["cached"])      // server2 was cached
+	assert.Equal(t, int64(1), deployStats["cached"])     // server2 was cached
 }
 
 func contains(s, substr string) bool {
@@ -278,9 +278,9 @@ func TestRunnerCache(t *testing.T) {
 		LastVerified: time.Now().Add(-2 * time.Hour), // More than 1 hour ago
 	}
 	cache.Set("server2", expiredEntry)
-	
+
 	cached, valid = cache.Get("server2")
-	assert.False(t, valid) // Should be invalid (needs verification)
+	assert.False(t, valid)   // Should be invalid (needs verification)
 	assert.NotNil(t, cached) // But entry is still returned
 
 	// Test remove
@@ -294,7 +294,7 @@ func TestRunnerCache(t *testing.T) {
 func TestMultiServerExecution(t *testing.T) {
 	// This test would require actual SSH servers or mocks
 	// For now, we'll create a basic structure test
-	
+
 	cfg := config.SSHConfig{
 		ConnectionPool: config.ConnectionPoolConfig{
 			MaxPerServer:        10,

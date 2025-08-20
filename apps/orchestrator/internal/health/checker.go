@@ -27,10 +27,10 @@ type Checker struct {
 	config       config.MonitoringConfig
 	dockerClient *client.Client
 	log          *logrus.Logger
-	
-	mu           sync.RWMutex
-	lastCheck    time.Time
-	components   map[string]ComponentStatus
+
+	mu         sync.RWMutex
+	lastCheck  time.Time
+	components map[string]ComponentStatus
 }
 
 // ComponentStatus represents the health of a component
@@ -61,11 +61,11 @@ func NewChecker(cfg config.MonitoringConfig, log *logrus.Logger) *Checker {
 func (c *Checker) Start(ctx context.Context) {
 	// Initial check
 	c.checkAll(ctx)
-	
+
 	// Periodic checks
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -80,13 +80,13 @@ func (c *Checker) Start(ctx context.Context) {
 func (c *Checker) GetHealth() *HealthResponse {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	// Copy components
 	components := make(map[string]ComponentStatus)
 	for k, v := range c.components {
 		components[k] = v
 	}
-	
+
 	// Determine overall status
 	status := StatusHealthy
 	for _, comp := range components {
@@ -97,7 +97,7 @@ func (c *Checker) GetHealth() *HealthResponse {
 			status = StatusDegraded
 		}
 	}
-	
+
 	return &HealthResponse{
 		Status:     status,
 		Timestamp:  time.Now(),
@@ -109,15 +109,15 @@ func (c *Checker) GetHealth() *HealthResponse {
 func (c *Checker) checkAll(ctx context.Context) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	c.lastCheck = time.Now()
-	
+
 	// Check Docker
 	c.checkDocker(ctx)
-	
+
 	// Check API connectivity
 	c.checkAPI(ctx)
-	
+
 	// Add more checks as needed
 }
 
@@ -137,11 +137,11 @@ func (c *Checker) checkDocker(ctx context.Context) {
 			return
 		}
 	}
-	
+
 	// Ping Docker daemon
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	
+
 	info, err := c.dockerClient.Info(ctx)
 	if err != nil {
 		c.components["docker"] = ComponentStatus{
@@ -152,7 +152,7 @@ func (c *Checker) checkDocker(ctx context.Context) {
 		}
 		return
 	}
-	
+
 	c.components["docker"] = ComponentStatus{
 		Status:    StatusHealthy,
 		LastCheck: time.Now(),
@@ -198,19 +198,19 @@ func (s *Server) Start() error {
 		s.log.Info("Health check server disabled")
 		return nil
 	}
-	
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/ready", s.handleReady)
 	mux.HandleFunc("/live", s.handleLive)
-	
+
 	s.server = &http.Server{
 		Addr:         fmt.Sprintf(":%d", s.config.HealthPort),
 		Handler:      mux,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
-	
+
 	s.log.WithField("port", s.config.HealthPort).Info("Starting health check server")
 	return s.server.ListenAndServe()
 }
@@ -226,13 +226,13 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // handleHealth returns overall health status
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	health := s.checker.GetHealth()
-	
+
 	// Set status code based on health
 	statusCode := http.StatusOK
 	if health.Status == StatusUnhealthy {
 		statusCode = http.StatusServiceUnavailable
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(health)
@@ -250,7 +250,7 @@ func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "alive",
+		"status":    "alive",
 		"timestamp": time.Now(),
 	})
 }

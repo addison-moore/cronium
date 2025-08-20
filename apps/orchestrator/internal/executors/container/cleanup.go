@@ -256,7 +256,7 @@ func (cm *CleanupManager) cleanupNetworksByPattern(ctx context.Context, pattern 
 			"networkName": network.Name,
 		}).Debug("Cleaning up network")
 
-		if err := cm.executor.dockerClient.NetworkRemove(ctx, network.ID); err != nil && 
+		if err := cm.executor.dockerClient.NetworkRemove(ctx, network.ID); err != nil &&
 			!strings.Contains(err.Error(), "No such network") &&
 			!strings.Contains(err.Error(), "has active endpoints") {
 			cm.log.WithError(err).Error("Failed to remove network")

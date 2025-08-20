@@ -25,7 +25,8 @@ export interface OrchestratorJob {
         host: string;
         port: number;
         username: string;
-        privateKey: string;
+        privateKey?: string;
+        password?: string;
         passphrase?: string;
       };
     };
@@ -86,7 +87,7 @@ export function transformJobForOrchestrator(job: Job): OrchestratorJob {
   // Build execution config from payload
   const execution: OrchestratorJob["execution"] = {
     environment: payload.environment ?? {},
-    timeout: payload.timeout?.value ?? 3600, // Default 1 hour in seconds
+    timeout: (payload.timeout?.value ?? 3600) * 1000000000, // Convert seconds to nanoseconds for Go time.Duration
     inputData: payload.input ?? {},
     variables: {},
     target: { type: "local" }, // Initialize with default

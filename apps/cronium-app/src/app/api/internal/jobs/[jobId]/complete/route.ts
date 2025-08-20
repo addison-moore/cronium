@@ -23,6 +23,8 @@ export async function POST(
       output?: string | { stdout: string; stderr: string };
       exitCode?: number;
       metrics?: Record<string, unknown>;
+      scriptOutput?: unknown; // Data from cronium.output()
+      condition?: boolean; // Condition from cronium.setCondition()
       timestamp: string;
     };
 
@@ -122,6 +124,26 @@ export async function POST(
 
     if (body.metrics !== undefined) {
       updateData.metrics = body.metrics;
+    }
+
+    // Store scriptOutput and condition in the result field
+    const result: Record<string, unknown> = {};
+    if (body.scriptOutput !== undefined) {
+      result.scriptOutput = body.scriptOutput;
+    }
+    if (body.condition !== undefined) {
+      result.condition = body.condition;
+    }
+    if (exitCode !== undefined) {
+      result.exitCode = exitCode;
+    }
+    if (body.metrics !== undefined) {
+      result.metrics = body.metrics;
+    }
+
+    // Only add result if we have data to store
+    if (Object.keys(result).length > 0) {
+      updateData.result = result;
     }
 
     const updatedJob = await jobService.updateJobStatus(

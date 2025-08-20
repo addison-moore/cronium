@@ -38,17 +38,17 @@ func NewRunnerCache(log *logrus.Logger) *RunnerCache {
 func (rc *RunnerCache) Get(serverID string) (*RunnerCacheEntry, bool) {
 	rc.mu.RLock()
 	defer rc.mu.RUnlock()
-	
+
 	entry, exists := rc.entries[serverID]
 	if !exists {
 		return nil, false
 	}
-	
+
 	// Check if entry is stale (not verified in last hour)
 	if time.Since(entry.LastVerified) > time.Hour {
 		return entry, false // Return entry but indicate it needs verification
 	}
-	
+
 	return entry, true
 }
 
@@ -56,7 +56,7 @@ func (rc *RunnerCache) Get(serverID string) (*RunnerCacheEntry, bool) {
 func (rc *RunnerCache) Set(serverID string, entry *RunnerCacheEntry) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
-	
+
 	rc.entries[serverID] = entry
 	rc.log.WithFields(logrus.Fields{
 		"serverID": serverID,
@@ -69,7 +69,7 @@ func (rc *RunnerCache) Set(serverID string, entry *RunnerCacheEntry) {
 func (rc *RunnerCache) UpdateVerified(serverID string) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
-	
+
 	if entry, exists := rc.entries[serverID]; exists {
 		entry.LastVerified = time.Now()
 	}
@@ -79,7 +79,7 @@ func (rc *RunnerCache) UpdateVerified(serverID string) {
 func (rc *RunnerCache) Remove(serverID string) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
-	
+
 	delete(rc.entries, serverID)
 	rc.log.WithField("serverID", serverID).Debug("Removed runner from cache")
 }
@@ -88,7 +88,7 @@ func (rc *RunnerCache) Remove(serverID string) {
 func (rc *RunnerCache) Clear() {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
-	
+
 	rc.entries = make(map[string]*RunnerCacheEntry)
 	rc.log.Info("Cleared runner cache")
 }
@@ -97,12 +97,12 @@ func (rc *RunnerCache) Clear() {
 func (rc *RunnerCache) GetStats() map[string]interface{} {
 	rc.mu.RLock()
 	defer rc.mu.RUnlock()
-	
+
 	stats := map[string]interface{}{
 		"total_entries": len(rc.entries),
 		"servers":       make([]map[string]interface{}, 0, len(rc.entries)),
 	}
-	
+
 	for serverID, entry := range rc.entries {
 		stats["servers"] = append(stats["servers"].([]map[string]interface{}), map[string]interface{}{
 			"server_id":     serverID,
@@ -111,7 +111,7 @@ func (rc *RunnerCache) GetStats() map[string]interface{} {
 			"last_verified": entry.LastVerified,
 		})
 	}
-	
+
 	return stats
 }
 

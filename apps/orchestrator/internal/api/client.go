@@ -25,7 +25,7 @@ type Client struct {
 	baseURL    *url.URL
 	token      string
 	log        *logrus.Logger
-	
+
 	// Deduplication for concurrent requests
 	requestGroup singleflight.Group
 }
@@ -36,7 +36,7 @@ func NewClient(cfg config.APIConfig, log *logrus.Logger) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid API endpoint: %w", err)
 	}
-	
+
 	httpClient := &http.Client{
 		Timeout: cfg.Timeout,
 		Transport: &http.Transport{
@@ -47,7 +47,7 @@ func NewClient(cfg config.APIConfig, log *logrus.Logger) (*Client, error) {
 			DisableKeepAlives:   false,
 		},
 	}
-	
+
 	return &Client{
 		config:     cfg,
 		httpClient: httpClient,
@@ -61,18 +61,18 @@ func NewClient(cfg config.APIConfig, log *logrus.Logger) (*Client, error) {
 func (c *Client) PollJobs(ctx context.Context, limit int) ([]*types.Job, error) {
 	params := url.Values{}
 	params.Set("batchSize", fmt.Sprintf("%d", limit))
-	
+
 	var response PollJobsResponse
 	if err := c.get(ctx, "/api/internal/jobs/queue", params, &response); err != nil {
 		return nil, err
 	}
-	
+
 	// Convert response to types.Job
 	jobs := make([]*types.Job, len(response.Jobs))
 	for i, qj := range response.Jobs {
 		jobs[i] = convertQueuedJob(qj)
 	}
-	
+
 	return jobs, nil
 }
 
@@ -83,16 +83,16 @@ func (c *Client) AcknowledgeJob(ctx context.Context, jobID string) error {
 		Timestamp:          time.Now().Format(time.RFC3339),
 		EstimatedStartTime: time.Now().Add(5 * time.Second).Format(time.RFC3339),
 	}
-	
+
 	var response AcknowledgeResponse
 	if err := c.post(ctx, fmt.Sprintf("/api/internal/jobs/%s/acknowledge", jobID), req, &response); err != nil {
 		return err
 	}
-	
+
 	if !response.Success {
 		return fmt.Errorf("failed to acknowledge job")
 	}
-	
+
 	return nil
 }
 
@@ -102,7 +102,7 @@ func (c *Client) UpdateJobStatus(ctx context.Context, jobID string, status types
 		Status:    status,
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
-	
+
 	if details != nil {
 		req.Details = &StatusDetails{
 			Message:  details.Message,
@@ -110,23 +110,23 @@ func (c *Client) UpdateJobStatus(ctx context.Context, jobID string, status types
 			Error:    details.Error,
 		}
 	}
-	
+
 	var response UpdateStatusResponse
 	if err := c.put(ctx, fmt.Sprintf("/api/internal/jobs/%s/status", jobID), req, &response); err != nil {
 		return err
 	}
-	
+
 	if !response.Success {
 		return fmt.Errorf("failed to update job status")
 	}
-	
+
 	return nil
 }
 
 // CompleteJob marks a job as completed
 func (c *Client) CompleteJob(ctx context.Context, jobID string, req *CompleteJobRequest) error {
 	req.Timestamp = time.Now().Format(time.RFC3339)
-	
+
 	var response interface{}
 	return c.post(ctx, fmt.Sprintf("/api/internal/jobs/%s/complete", jobID), req, &response)
 }
@@ -136,16 +136,16 @@ func (c *Client) CreateExecution(ctx context.Context, executionID, jobID string,
 	req := map[string]interface{}{
 		"jobId": jobID,
 	}
-	
+
 	if serverID != nil {
 		// Parse server ID to int if it's numeric
 		req["serverId"] = *serverID
 	}
-	
+
 	if serverName != nil {
 		req["serverName"] = *serverName
 	}
-	
+
 	var response interface{}
 	return c.post(ctx, fmt.Sprintf("/api/internal/executions/%s/create", executionID), req, &response)
 }
@@ -164,7 +164,7 @@ func (c *Client) UpdateExecution(ctx context.Context, executionID string, status
 	req := map[string]interface{}{
 		"status": status,
 	}
-	
+
 	if details != nil {
 		if details.StartedAt != nil {
 			req["startedAt"] = details.StartedAt.Format(time.RFC3339)
@@ -182,7 +182,7 @@ func (c *Client) UpdateExecution(ctx context.Context, executionID string, status
 			req["error"] = *details.Error
 		}
 	}
-	
+
 	var response interface{}
 	return c.put(ctx, fmt.Sprintf("/api/internal/executions/%s/update", executionID), req, &response)
 }
@@ -190,7 +190,7 @@ func (c *Client) UpdateExecution(ctx context.Context, executionID string, status
 // ReportHealth sends a health report to the backend
 func (c *Client) ReportHealth(ctx context.Context, report *HealthReport) error {
 	report.Timestamp = time.Now().Format(time.RFC3339)
-	
+
 	var response interface{}
 	return c.post(ctx, "/api/internal/orchestrator/health", report, &response)
 }
@@ -199,7 +199,7 @@ func (c *Client) ReportHealth(ctx context.Context, report *HealthReport) error {
 func (c *Client) HealthCheck(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	
+
 	var response interface{}
 	return c.get(ctx, "/api/internal/orchestrator/health", nil, &response)
 }
@@ -211,12 +211,12 @@ func (c *Client) get(ctx context.Context, path string, params url.Values, respon
 	if params != nil {
 		u.RawQuery = params.Encode()
 	}
-	
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return err
 	}
-	
+
 	return c.doRequest(req, response)
 }
 
@@ -237,17 +237,17 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body interface
 		}
 		bodyReader = bytes.NewReader(jsonData)
 	}
-	
+
 	u := c.baseURL.ResolveReference(&url.URL{Path: path})
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), bodyReader)
 	if err != nil {
 		return err
 	}
-	
+
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	
+
 	return c.doRequest(req, response)
 }
 
@@ -258,14 +258,14 @@ func (c *Client) doRequest(req *http.Request, response interface{}) error {
 	req.Header.Set("X-Service-Version", "1.0.0")
 	req.Header.Set("X-Orchestrator-ID", c.config.OrchestratorID)
 	req.Header.Set("Accept", "application/json")
-	
+
 	// Log request
 	logEntry := c.log.WithFields(logrus.Fields{
 		"method": req.Method,
 		"url":    req.URL.String(),
 	})
 	logEntry.Debug("API request")
-	
+
 	// Configure retry
 	retryCfg := retry.Config{
 		MaxAttempts:  c.config.RetryConfig.MaxAttempts + 1, // Include initial attempt
@@ -273,10 +273,10 @@ func (c *Client) doRequest(req *http.Request, response interface{}) error {
 		MaxDelay:     c.config.RetryConfig.MaxDelay,
 		Multiplier:   2.0,
 	}
-	
+
 	var resp *http.Response
 	var body []byte
-	
+
 	// Execute request with retry utility
 	err := retry.WithRetry(req.Context(), retryCfg, func() error {
 		var err error
@@ -291,13 +291,13 @@ func (c *Client) doRequest(req *http.Request, response interface{}) error {
 			return netErr
 		}
 		defer resp.Body.Close()
-		
+
 		// Read response body
 		body, err = io.ReadAll(resp.Body)
 		if err != nil {
 			return fmt.Errorf("failed to read response body: %w", err)
 		}
-		
+
 		// Check status code
 		if resp.StatusCode >= 400 {
 			// Parse error response
@@ -306,14 +306,14 @@ func (c *Client) doRequest(req *http.Request, response interface{}) error {
 				apiErr := errors.NewAPIError(resp.StatusCode, errorResp.Error.Code, errorResp.Error.Message)
 				apiErr.Endpoint = req.URL.String()
 				apiErr.Method = req.Method
-				
+
 				// Determine if retryable
 				if resp.StatusCode == 429 || resp.StatusCode >= 500 {
 					apiErr.Retryable = true
 				}
 				return apiErr
 			}
-			
+
 			// Generic error
 			apiErr := errors.NewAPIError(
 				resp.StatusCode,
@@ -322,31 +322,30 @@ func (c *Client) doRequest(req *http.Request, response interface{}) error {
 			)
 			apiErr.Endpoint = req.URL.String()
 			apiErr.Method = req.Method
-			
+
 			// 5xx errors are retryable
 			if resp.StatusCode >= 500 {
 				apiErr.Retryable = true
 			}
 			return apiErr
 		}
-		
+
 		return nil
 	}, logEntry)
-	
+
 	if err != nil {
 		return err
 	}
-	
+
 	// Parse response
 	if response != nil && len(body) > 0 {
 		if err := json.Unmarshal(body, response); err != nil {
 			return fmt.Errorf("failed to parse response: %w", err)
 		}
 	}
-	
+
 	return nil
 }
-
 
 // convertQueuedJob converts API response to internal job type
 func convertQueuedJob(qj QueuedJob) *types.Job {
@@ -359,7 +358,7 @@ func convertQueuedJob(qj QueuedJob) *types.Job {
 		Attempts:     qj.Attempts,
 		Metadata:     qj.Metadata,
 	}
-	
+
 	// Convert execution config
 	job.Execution = types.ExecutionConfig{
 		Environment: qj.Execution.Environment,
@@ -367,14 +366,14 @@ func convertQueuedJob(qj QueuedJob) *types.Job {
 		InputData:   qj.Execution.InputData,
 		Variables:   qj.Execution.Variables,
 	}
-	
+
 	// Set target
 	job.Execution.Target = types.Target{
 		Type:          types.TargetType(qj.Execution.Target.Type),
 		ServerID:      qj.Execution.Target.ServerID,
 		ServerDetails: convertServerDetails(qj.Execution.Target.ServerDetails),
 	}
-	
+
 	// Set script if present
 	if qj.Execution.Script != nil {
 		job.Execution.Script = &types.Script{
@@ -383,7 +382,7 @@ func convertQueuedJob(qj QueuedJob) *types.Job {
 			WorkingDirectory: qj.Execution.Script.WorkingDirectory,
 		}
 	}
-	
+
 	// Set resources if present
 	if qj.Execution.Resources != nil {
 		job.Execution.Resources = &types.Resources{
@@ -393,7 +392,7 @@ func convertQueuedJob(qj QueuedJob) *types.Job {
 			PidsLimit:   qj.Execution.Resources.PidsLimit,
 		}
 	}
-	
+
 	// Set retry policy if present
 	if qj.Execution.RetryPolicy != nil {
 		job.Execution.RetryPolicy = &types.RetryPolicy{
@@ -402,10 +401,10 @@ func convertQueuedJob(qj QueuedJob) *types.Job {
 			BackoffDelay: time.Duration(qj.Execution.RetryPolicy.BackoffDelay) * time.Second,
 		}
 	}
-	
+
 	// Set timeout from config
 	job.Timeout = job.GetTimeout()
-	
+
 	return job
 }
 
@@ -413,7 +412,7 @@ func convertServerDetails(sd *ServerDetails) *types.ServerDetails {
 	if sd == nil {
 		return nil
 	}
-	
+
 	return &types.ServerDetails{
 		ID:         sd.ID,
 		Name:       sd.Name,
@@ -430,12 +429,12 @@ func convertServerDetails(sd *ServerDetails) *types.ServerDetails {
 func (c *Client) GetOrphanedJobs(ctx context.Context, orchestratorID string) ([]*types.Job, error) {
 	params := url.Values{}
 	params.Set("orchestratorId", orchestratorID)
-	
+
 	var jobs []*types.Job
 	if err := c.get(ctx, "/api/internal/jobs/orphaned", params, &jobs); err != nil {
 		return nil, fmt.Errorf("failed to get orphaned jobs: %w", err)
 	}
-	
+
 	return jobs, nil
 }
 

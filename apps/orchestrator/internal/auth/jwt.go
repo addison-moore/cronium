@@ -49,7 +49,7 @@ func (m *JWTManager) GenerateJobToken(jobID, executionID, userID, eventID string
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	
+
 	tokenString, err := token.SignedString(m.secret)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign token: %w", err)

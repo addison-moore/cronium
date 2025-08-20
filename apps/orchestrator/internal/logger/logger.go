@@ -27,7 +27,7 @@ func Configure(log *logrus.Logger, cfg config.LoggingConfig) {
 		level = logrus.InfoLevel
 	}
 	log.SetLevel(level)
-	
+
 	// Set formatter
 	switch cfg.Format {
 	case "json":
@@ -45,7 +45,7 @@ func Configure(log *logrus.Logger, cfg config.LoggingConfig) {
 			TimestampFormat: "2006-01-02T15:04:05.000Z07:00",
 		})
 	}
-	
+
 	// Set output
 	switch cfg.Output {
 	case "stdout":

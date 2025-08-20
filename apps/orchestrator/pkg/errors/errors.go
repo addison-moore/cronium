@@ -12,22 +12,22 @@ const (
 	ErrorTypeSystem        ErrorType = "system"
 	ErrorTypeConfiguration ErrorType = "configuration"
 	ErrorTypeResource      ErrorType = "resource"
-	
+
 	// Execution errors
-	ErrorTypeExecution     ErrorType = "execution"
-	ErrorTypeTimeout       ErrorType = "timeout"
-	ErrorTypeValidation    ErrorType = "validation"
-	
+	ErrorTypeExecution  ErrorType = "execution"
+	ErrorTypeTimeout    ErrorType = "timeout"
+	ErrorTypeValidation ErrorType = "validation"
+
 	// External service errors
-	ErrorTypeDocker        ErrorType = "docker"
-	ErrorTypeSSH           ErrorType = "ssh"
-	ErrorTypeAPI           ErrorType = "api"
-	ErrorTypeNetwork       ErrorType = "network"
-	
+	ErrorTypeDocker  ErrorType = "docker"
+	ErrorTypeSSH     ErrorType = "ssh"
+	ErrorTypeAPI     ErrorType = "api"
+	ErrorTypeNetwork ErrorType = "network"
+
 	// User errors
-	ErrorTypeScript        ErrorType = "script"
-	ErrorTypePermission    ErrorType = "permission"
-	ErrorTypeQuota         ErrorType = "quota"
+	ErrorTypeScript     ErrorType = "script"
+	ErrorTypePermission ErrorType = "permission"
+	ErrorTypeQuota      ErrorType = "quota"
 )
 
 // BaseError provides common error functionality
@@ -156,7 +156,7 @@ func IsRetryable(err error) bool {
 	if err == nil {
 		return false
 	}
-	
+
 	switch e := err.(type) {
 	case *BaseError:
 		return e.Retryable
@@ -180,7 +180,7 @@ func GetErrorType(err error) ErrorType {
 	if err == nil {
 		return ""
 	}
-	
+
 	switch e := err.(type) {
 	case *BaseError:
 		return e.Type

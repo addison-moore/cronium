@@ -18,20 +18,20 @@ import (
 type ConnectionPool struct {
 	config config.ConnectionPoolConfig
 	log    *logrus.Logger
-	
+
 	mu          sync.RWMutex
 	connections map[string]*poolEntry
-	
+
 	// Circuit breaker state
 	breakers map[string]*CircuitBreaker
 }
 
 // poolEntry represents a pooled connection
 type poolEntry struct {
-	conn       *ssh.Client
-	lastUsed   time.Time
-	inUse      bool
-	healthy    bool
+	conn     *ssh.Client
+	lastUsed time.Time
+	inUse    bool
+	healthy  bool
 }
 
 // NewConnectionPool creates a new connection pool
@@ -42,13 +42,13 @@ func NewConnectionPool(cfg config.ConnectionPoolConfig, log *logrus.Logger) *Con
 		connections: make(map[string]*poolEntry),
 		breakers:    make(map[string]*CircuitBreaker),
 	}
-	
+
 	// Start health check routine
 	go pool.healthCheckLoop()
-	
+
 	// Start cleanup routine
 	go pool.cleanupLoop()
-	
+
 	return pool
 }
 
@@ -59,25 +59,25 @@ func (p *ConnectionPool) Get(ctx context.Context, serverKey string, server *type
 	if !breaker.Allow() {
 		return nil, fmt.Errorf("circuit breaker open for %s", serverKey)
 	}
-	
+
 	// Try to get existing connection
 	conn := p.getExistingConnection(serverKey)
 	if conn != nil {
 		return conn, nil
 	}
-	
+
 	// Create new connection
 	conn, err := p.createConnection(ctx, server)
 	if err != nil {
 		breaker.RecordFailure()
 		return nil, err
 	}
-	
+
 	breaker.RecordSuccess()
-	
+
 	// Add to pool
 	p.addConnection(serverKey, conn)
-	
+
 	return conn, nil
 }
 
@@ -85,12 +85,12 @@ func (p *ConnectionPool) Get(ctx context.Context, serverKey string, server *type
 func (p *ConnectionPool) Put(serverKey string, conn *ssh.Client, healthy bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	if entry, exists := p.connections[serverKey]; exists && entry.conn == conn {
 		entry.inUse = false
 		entry.lastUsed = time.Now()
 		entry.healthy = healthy
-		
+
 		// If unhealthy, close and remove
 		if !healthy {
 			conn.Close()
@@ -103,13 +103,13 @@ func (p *ConnectionPool) Put(serverKey string, conn *ssh.Client, healthy bool) {
 func (p *ConnectionPool) getExistingConnection(serverKey string) *ssh.Client {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	if entry, exists := p.connections[serverKey]; exists && !entry.inUse && entry.healthy {
 		entry.inUse = true
 		entry.lastUsed = time.Now()
 		return entry.conn
 	}
-	
+
 	return nil
 }
 
@@ -117,12 +117,12 @@ func (p *ConnectionPool) getExistingConnection(serverKey string) *ssh.Client {
 func (p *ConnectionPool) createConnection(ctx context.Context, server *types.ServerDetails) (*ssh.Client, error) {
 	// Build auth methods based on available credentials
 	var authMethods []ssh.AuthMethod
-	
+
 	// Try password authentication if password is provided
 	if server.Password != "" {
 		authMethods = append(authMethods, ssh.Password(server.Password))
 	}
-	
+
 	// Try SSH key authentication if private key is provided
 	if server.PrivateKey != "" {
 		// Parse private key
@@ -148,12 +148,12 @@ func (p *ConnectionPool) createConnection(ctx context.Context, server *types.Ser
 			authMethods = append(authMethods, ssh.PublicKeys(signer))
 		}
 	}
-	
+
 	// Ensure we have at least one auth method
 	if len(authMethods) == 0 {
 		return nil, fmt.Errorf("no authentication method available: neither password nor private key provided")
 	}
-	
+
 	// SSH client configuration
 	config := &ssh.ClientConfig{
 		User:            server.Username,
@@ -161,10 +161,10 @@ func (p *ConnectionPool) createConnection(ctx context.Context, server *types.Ser
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Implement proper host key verification
 		Timeout:         p.config.ConnectionTimeout,
 	}
-	
+
 	// Create connection with context
 	addr := fmt.Sprintf("%s:%d", server.Host, server.Port)
-	
+
 	// Configure retry for connection attempts
 	retryCfg := retry.Config{
 		MaxAttempts:  3,
@@ -172,7 +172,7 @@ func (p *ConnectionPool) createConnection(ctx context.Context, server *types.Ser
 		MaxDelay:     10 * time.Second,
 		Multiplier:   2.0,
 	}
-	
+
 	var conn *ssh.Client
 	var err error
 	logEntry := p.log.WithFields(logrus.Fields{
@@ -180,7 +180,7 @@ func (p *ConnectionPool) createConnection(ctx context.Context, server *types.Ser
 		"host":   server.Host,
 		"port":   server.Port,
 	})
-	
+
 	// Use retry utility for connection attempts
 	err = retry.WithRetry(ctx, retryCfg, func() error {
 		// Use a goroutine to handle context cancellation
@@ -188,13 +188,13 @@ func (p *ConnectionPool) createConnection(ctx context.Context, server *types.Ser
 			conn *ssh.Client
 			err  error
 		}
-		
+
 		resChan := make(chan result, 1)
 		go func() {
 			c, e := ssh.Dial("tcp", addr, config)
 			resChan <- result{c, e}
 		}()
-		
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -214,11 +214,11 @@ func (p *ConnectionPool) createConnection(ctx context.Context, server *types.Ser
 			return nil
 		}
 	}, logEntry)
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return conn, nil
 }
 
@@ -226,7 +226,7 @@ func (p *ConnectionPool) createConnection(ctx context.Context, server *types.Ser
 func (p *ConnectionPool) addConnection(serverKey string, conn *ssh.Client) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	p.connections[serverKey] = &poolEntry{
 		conn:     conn,
 		lastUsed: time.Now(),
@@ -239,11 +239,11 @@ func (p *ConnectionPool) addConnection(serverKey string, conn *ssh.Client) {
 func (p *ConnectionPool) getOrCreateBreaker(serverKey string) *CircuitBreaker {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	if breaker, exists := p.breakers[serverKey]; exists {
 		return breaker
 	}
-	
+
 	breaker := NewCircuitBreaker(5, 2, 60*time.Second)
 	p.breakers[serverKey] = breaker
 	return breaker
@@ -253,7 +253,7 @@ func (p *ConnectionPool) getOrCreateBreaker(serverKey string) *CircuitBreaker {
 func (p *ConnectionPool) healthCheckLoop() {
 	ticker := time.NewTicker(p.config.HealthCheckInterval)
 	defer ticker.Stop()
-	
+
 	for range ticker.C {
 		p.checkAllConnections()
 	}
@@ -270,7 +270,7 @@ func (p *ConnectionPool) checkAllConnections() {
 		}
 	}
 	p.mu.Unlock()
-	
+
 	// Check each connection
 	for key, conn := range toCheck {
 		if !p.checkConnection(conn) {
@@ -299,7 +299,7 @@ func (p *ConnectionPool) checkConnection(conn *ssh.Client) bool {
 func (p *ConnectionPool) cleanupLoop() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-	
+
 	for range ticker.C {
 		p.cleanupIdleConnections()
 	}
@@ -309,7 +309,7 @@ func (p *ConnectionPool) cleanupLoop() {
 func (p *ConnectionPool) cleanupIdleConnections() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	now := time.Now()
 	for key, entry := range p.connections {
 		if !entry.inUse && now.Sub(entry.lastUsed) > p.config.IdleTimeout {
@@ -324,7 +324,7 @@ func (p *ConnectionPool) cleanupIdleConnections() {
 func (p *ConnectionPool) Close() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	for _, entry := range p.connections {
 		entry.conn.Close()
 	}

@@ -52,7 +52,7 @@ services:
       CRONIUM_CONTAINER_DOCKER_ENDPOINT: unix:///var/run/docker.sock
       CRONIUM_CONTAINER_RUNTIME_JWT_SECRET: ${JWT_SECRET}
       CRONIUM_CONTAINER_RUNTIME_BACKEND_URL: http://cronium-app-dev:5001
-      CRONIUM_CONTAINER_RUNTIME_VALKEY_URL: valkey://cronium-valkey-dev:6379
+      CRONIUM_CONTAINER_RUNTIME_VALKEY_URL: redis://cronium-valkey-dev:6379
 
       # WebSocket Configuration
       CRONIUM_API_WS_ENDPOINT: ws://cronium-app-dev:5002/socket.io/

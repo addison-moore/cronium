@@ -75,12 +75,12 @@ func (rm *RecoveryManager) recoverJob(ctx context.Context, job *types.Job) error
 
 	// Since the orchestrator's Job type doesn't have a Status field,
 	// we need to infer the state from the available timestamp fields
-	
+
 	// Check how long ago the job was started
 	var jobAge time.Duration
 	if job.StartedAt != nil {
 		jobAge = time.Since(*job.StartedAt)
-		
+
 		// If job was started, it was running
 		// Check if it exceeded timeout
 		if job.Timeout > 0 && jobAge > job.Timeout {

@@ -22,7 +22,7 @@ export class WebSocketBroadcaster {
   private healthCheckInterval: NodeJS.Timeout | null = null;
   private isHealthy = false;
   private broadcastQueue: Array<{
-    type: "log" | "job";
+    type: "log" | "job" | "execution" | "log-line";
     data: any;
     retries: number;
   }> = [];
@@ -102,7 +102,7 @@ export class WebSocketBroadcaster {
    * Core broadcast function with retry logic
    */
   private async broadcastWithRetry(
-    type: string,
+    type: "log" | "job" | "execution" | "log-line",
     data: any,
   ): Promise<BroadcastResult> {
     let attempts = 0;
@@ -150,7 +150,10 @@ export class WebSocketBroadcaster {
   /**
    * Send a single broadcast attempt
    */
-  private async sendBroadcast(type: string, data: any): Promise<boolean> {
+  private async sendBroadcast(
+    type: "log" | "job" | "execution" | "log-line",
+    data: any,
+  ): Promise<boolean> {
     const endpoint = this.getEndpointForType(type);
     const url = `http://localhost:${this.config.socketPort}${endpoint}`;
 
@@ -174,7 +177,9 @@ export class WebSocketBroadcaster {
   /**
    * Get the appropriate endpoint for broadcast type
    */
-  private getEndpointForType(type: string): string {
+  private getEndpointForType(
+    type: "log" | "job" | "execution" | "log-line",
+  ): string {
     switch (type) {
       case "log":
         return "/broadcast/log-update";
@@ -192,7 +197,10 @@ export class WebSocketBroadcaster {
   /**
    * Queue broadcast for later retry
    */
-  private queueBroadcast(type: string, data: any): void {
+  private queueBroadcast(
+    type: "log" | "job" | "execution" | "log-line",
+    data: any,
+  ): void {
     // Avoid duplicate entries
     const exists = this.broadcastQueue.some(
       (item) =>
@@ -209,7 +217,10 @@ export class WebSocketBroadcaster {
   /**
    * Clear queued broadcast
    */
-  private clearQueuedBroadcast(type: string, data: any): void {
+  private clearQueuedBroadcast(
+    type: "log" | "job" | "execution" | "log-line",
+    data: any,
+  ): void {
     this.broadcastQueue = this.broadcastQueue.filter(
       (item) =>
         !(

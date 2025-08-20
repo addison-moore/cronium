@@ -31,28 +31,28 @@ type RunnerInfo struct {
 
 // Executor implements SSH-based job execution using the runner binary
 type Executor struct {
-	config     config.SSHConfig
-	log        *logrus.Logger
-	apiClient  *api.Client
-	
+	config    config.SSHConfig
+	log       *logrus.Logger
+	apiClient *api.Client
+
 	// Connection pool
 	pool *ConnectionPool
-	
+
 	// Runner binary info
 	runnerInfo RunnerInfo
-	
+
 	// Runner cache
 	runnerCache *RunnerCache
-	
+
 	// Runtime API settings
 	runtimeHost string
 	runtimePort int
 	jwtSecret   string
-	
+
 	// Track active sessions
 	mu       sync.RWMutex
 	sessions map[string]*Session
-	
+
 	// Metrics
 	metrics *ExecutorMetrics
 }
@@ -69,20 +69,20 @@ type Session struct {
 func NewExecutor(cfg config.SSHConfig, apiClient *api.Client, runtimeHost string, runtimePort int, jwtSecret string, log *logrus.Logger) (*Executor, error) {
 	// Create connection pool
 	pool := NewConnectionPool(cfg.ConnectionPool, log)
-	
+
 	// Get runner binary info
 	runnerInfo := RunnerInfo{
 		Version:  getRunnerVersion(),
 		Path:     getRunnerPath(),
 		Checksum: getRunnerChecksum(),
 	}
-	
+
 	// Create runner cache
 	runnerCache := NewRunnerCache(log)
-	
+
 	// Create metrics tracker
 	metrics := NewExecutorMetrics(logrus.NewEntry(log).WithField("component", "ssh-executor"))
-	
+
 	return &Executor{
 		config:      cfg,
 		log:         log,
@@ -108,11 +108,11 @@ func (e *Executor) Validate(job *types.Job) error {
 	if job.Execution.Target.Type != types.TargetTypeServer {
 		return fmt.Errorf("SSH executor requires server target")
 	}
-	
+
 	if job.Execution.Target.ServerDetails == nil {
 		return fmt.Errorf("server details required for SSH execution")
 	}
-	
+
 	// Check for script content or payload path (backwards compatibility)
 	if job.Execution.Script == nil || job.Execution.Script.Content == "" {
 		// Check for legacy payload path
@@ -120,26 +120,26 @@ func (e *Executor) Validate(job *types.Job) error {
 			return fmt.Errorf("script content or payload path required for SSH execution")
 		}
 	}
-	
+
 	return nil
 }
 
 // Execute runs the job via SSH using the runner
 func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.ExecutionUpdate, error) {
 	updates := make(chan types.ExecutionUpdate, 100)
-	
+
 	go func() {
 		defer close(updates)
-		
+
 		// Track execution time
 		startTime := time.Now()
-		
+
 		// Send initial status
 		e.sendUpdate(updates, types.UpdateTypeStatus, &types.StatusUpdate{
 			Status:  types.JobStatusRunning,
 			Message: "Connecting to server",
 		})
-		
+
 		// Check if execution ID was provided (from multi-server executor)
 		var executionID string
 		var executionExists bool
@@ -149,12 +149,12 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 				executionExists = true
 			}
 		}
-		
+
 		// Generate execution ID if not provided
 		if executionID == "" {
 			executionID = fmt.Sprintf("exec_%s_%d", job.ID, time.Now().Unix())
 		}
-		
+
 		// Create execution record in the database only if it doesn't exist
 		if e.apiClient != nil {
 			if !executionExists {
@@ -165,7 +165,7 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 					// Continue anyway - execution tracking is not critical for job success
 				}
 			}
-			
+
 			// Mark execution as started
 			now := time.Now()
 			if err := e.apiClient.UpdateExecution(ctx, executionID, types.JobStatusRunning, &api.ExecutionStatusUpdate{
@@ -174,14 +174,14 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 				e.log.WithError(err).Warn("Failed to update execution status to running")
 			}
 		}
-		
+
 		// Get connection from pool
 		serverKey := fmt.Sprintf("%s:%d", job.Execution.Target.ServerDetails.Host, job.Execution.Target.ServerDetails.Port)
 		conn, err := e.pool.Get(ctx, serverKey, job.Execution.Target.ServerDetails)
 		if err != nil {
 			connError := fmt.Errorf("SSH connection failed to %s: %w", serverKey, err)
 			e.sendError(updates, connError, true)
-			
+
 			// Update execution record with connection failure
 			if e.apiClient != nil {
 				now := time.Now()
@@ -192,14 +192,14 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 					ExitCode:    &exitCode,
 					Error:       &errorMsg,
 				}
-				
+
 				apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer apiCancel()
 				if err := e.apiClient.UpdateExecution(apiCtx, executionID, types.JobStatusFailed, updateData); err != nil {
 					e.log.WithError(err).Warn("Failed to update execution with connection failure")
 				}
 			}
-			
+
 			e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
 				Status:   types.JobStatusFailed,
 				ExitCode: intPtr(-3),
@@ -207,14 +207,14 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 			})
 			return
 		}
-		
+
 		// Create session
 		session, err := conn.NewSession()
 		if err != nil {
 			e.pool.Put(serverKey, conn, false) // Return connection as failed
 			sessionError := fmt.Errorf("failed to create SSH session: %w", err)
 			e.sendError(updates, sessionError, true)
-			
+
 			// Update execution record with session failure
 			if e.apiClient != nil {
 				now := time.Now()
@@ -225,14 +225,14 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 					ExitCode:    &exitCode,
 					Error:       &errorMsg,
 				}
-				
+
 				apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer apiCancel()
 				if err := e.apiClient.UpdateExecution(apiCtx, executionID, types.JobStatusFailed, updateData); err != nil {
 					e.log.WithError(err).Warn("Failed to update execution with session failure")
 				}
 			}
-			
+
 			e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
 				Status:   types.JobStatusFailed,
 				ExitCode: intPtr(-4),
@@ -240,25 +240,25 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 			})
 			return
 		}
-		
+
 		// Create context for cancellation with timeout
 		var execCtx context.Context
 		var cancel context.CancelFunc
-		
+
 		// Apply timeout if specified (default to 1 hour if not set)
 		timeout := job.Execution.Timeout
 		if timeout <= 0 {
 			timeout = time.Hour
 		}
-		
+
 		execCtx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
-		
+
 		e.log.WithFields(logrus.Fields{
 			"jobID":   job.ID,
 			"timeout": timeout.String(),
 		}).Debug("Execution timeout configured")
-		
+
 		// Track session
 		sess := &Session{
 			jobID:      job.ID,
@@ -268,29 +268,29 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 		}
 		e.trackSession(job.ID, sess)
 		defer e.untrackSession(job.ID)
-		
+
 		// Clean up session
 		defer func() {
 			session.Close()
 			e.pool.Put(serverKey, conn, true) // Return connection as healthy
 		}()
-		
+
 		// Execute with runner
 		e.executeWithRunner(execCtx, sess, job, updates, startTime, timeout, executionID)
 	}()
-	
+
 	return updates, nil
 }
 
 // executeWithRunner executes the job using the runner binary
 func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *types.Job, updates chan<- types.ExecutionUpdate, startTime time.Time, timeout time.Duration, executionID string) {
-	
+
 	// Create or get payload path
 	payloadPath, err := e.createPayloadForJob(job, executionID)
 	if err != nil {
 		payloadError := fmt.Errorf("failed to create payload: %w", err)
 		e.sendError(updates, payloadError, true)
-		
+
 		// Update execution record with payload failure
 		if e.apiClient != nil {
 			now := time.Now()
@@ -301,14 +301,14 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 				ExitCode:    &exitCode,
 				Error:       &errorMsg,
 			}
-			
+
 			apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer apiCancel()
 			if err := e.apiClient.UpdateExecution(apiCtx, executionID, types.JobStatusFailed, updateData); err != nil {
 				e.log.WithError(err).Warn("Failed to update execution with payload failure")
 			}
 		}
-		
+
 		e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
 			Status:   types.JobStatusFailed,
 			ExitCode: intPtr(-5),
@@ -317,7 +317,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		return
 	}
 	defer e.cleanupPayload(payloadPath, job)
-	
+
 	// Ensure runner is deployed (create a new session for deployment)
 	runnerPath := fmt.Sprintf("/tmp/cronium-runner-%s", e.runnerInfo.Version)
 	deploySession, err := sess.conn.NewSession()
@@ -326,11 +326,11 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		return
 	}
 	defer deploySession.Close()
-	
+
 	if err := e.ensureRunnerDeployed(ctx, deploySession, sess.conn, job.Execution.Target.ServerDetails, runnerPath); err != nil {
 		deployError := fmt.Errorf("failed to deploy runner: %w", err)
 		e.sendError(updates, deployError, true)
-		
+
 		// Update execution record with deployment failure
 		if e.apiClient != nil {
 			now := time.Now()
@@ -341,14 +341,14 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 				ExitCode:    &exitCode,
 				Error:       &errorMsg,
 			}
-			
+
 			apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer apiCancel()
 			if err := e.apiClient.UpdateExecution(apiCtx, executionID, types.JobStatusFailed, updateData); err != nil {
 				e.log.WithError(err).Warn("Failed to update execution with deployment failure")
 			}
 		}
-		
+
 		e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
 			Status:   types.JobStatusFailed,
 			ExitCode: intPtr(-6),
@@ -356,7 +356,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		})
 		return
 	}
-	
+
 	// Log runner version
 	e.sendUpdate(updates, types.UpdateTypeLog, &types.LogEntry{
 		Stream:    "system",
@@ -364,29 +364,29 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		Timestamp: time.Now(),
 		Sequence:  1,
 	})
-	
+
 	// Determine if we should use API mode
 	useAPIMode := e.runtimePort > 0 && e.jwtSecret != ""
 	var tunnelManager *TunnelManager
 	var apiEndpoint, apiToken string
-	
+
 	if useAPIMode {
 		// Try to set up reverse tunnel for API mode
 		e.log.Info("Setting up SSH reverse tunnel for API mode")
-		
+
 		// Find an available remote port (starting from 9090)
 		remotePort := 9090
 		tunnelManager = NewTunnelManager(e.runtimeHost, e.runtimePort, remotePort, e.log)
-		
+
 		if err := tunnelManager.Start(sess.conn); err != nil {
 			e.log.WithError(err).Warn("Failed to establish SSH tunnel, falling back to bundled mode")
 			useAPIMode = false
 		} else {
 			// Generate JWT token for this execution
 			jwtManager := auth.NewJWTManager(e.jwtSecret)
-			userID := "" // Extract from job metadata if available
+			userID := ""  // Extract from job metadata if available
 			eventID := "" // Extract from job metadata if available
-			
+
 			if job.Metadata != nil {
 				if uid, ok := job.Metadata["userId"].(string); ok {
 					userID = uid
@@ -395,7 +395,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 					eventID = eid
 				}
 			}
-			
+
 			token, err := jwtManager.GenerateJobToken(job.ID, executionID, userID, eventID)
 			if err != nil {
 				e.log.WithError(err).Warn("Failed to generate JWT token, falling back to bundled mode")
@@ -405,18 +405,18 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 				apiEndpoint = tunnelManager.GetRemoteEndpoint()
 				apiToken = token
 				e.log.WithFields(logrus.Fields{
-					"endpoint": apiEndpoint,
+					"endpoint":    apiEndpoint,
 					"executionId": executionID,
 				}).Info("API mode enabled for execution")
 			}
 		}
 	}
-	
+
 	// Clean up tunnel when done
 	if tunnelManager != nil {
 		defer tunnelManager.Stop()
 	}
-	
+
 	// Copy payload to server (create a new session for file transfer)
 	remotePayloadPath := fmt.Sprintf("/tmp/cronium-payload-%s.tar.gz", job.ID)
 	copySession, err := sess.conn.NewSession()
@@ -425,12 +425,12 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		return
 	}
 	defer copySession.Close()
-	
+
 	if err := e.copyPayloadToServer(copySession, sess.conn, payloadPath, remotePayloadPath); err != nil {
 		e.sendError(updates, fmt.Errorf("failed to copy payload: %w", err), true)
 		return
 	}
-	
+
 	// Clean up payload after execution
 	defer func() {
 		cleanupSession, _ := sess.conn.NewSession()
@@ -439,29 +439,29 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 			cleanupSession.Close()
 		}
 	}()
-	
+
 	// Set up pipes for stdout and stderr
 	stdout, err := sess.session.StdoutPipe()
 	if err != nil {
 		e.sendError(updates, fmt.Errorf("failed to create stdout pipe: %w", err), true)
 		return
 	}
-	
+
 	stderr, err := sess.session.StderrPipe()
 	if err != nil {
 		e.sendError(updates, fmt.Errorf("failed to create stderr pipe: %w", err), true)
 		return
 	}
-	
+
 	// Build environment variables for the runner
 	envVars := make([]string, 0)
-	
+
 	// Always include job ID and execution ID
 	envVars = append(envVars,
 		fmt.Sprintf("CRONIUM_JOB_ID=%s", job.ID),
 		fmt.Sprintf("CRONIUM_EXECUTION_ID=%s", executionID),
 	)
-	
+
 	if useAPIMode {
 		envVars = append(envVars,
 			fmt.Sprintf("CRONIUM_HELPER_MODE=api"),
@@ -469,7 +469,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 			fmt.Sprintf("CRONIUM_API_TOKEN=%s", apiToken),
 		)
 	}
-	
+
 	// Build the command with environment variables
 	var cmd string
 	if e.log.GetLevel() == logrus.DebugLevel {
@@ -477,7 +477,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 	} else {
 		cmd = fmt.Sprintf("%s run %s", runnerPath, remotePayloadPath)
 	}
-	
+
 	// Add environment variables using export
 	if len(envVars) > 0 {
 		exports := make([]string, len(envVars))
@@ -486,63 +486,63 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		}
 		cmd = fmt.Sprintf("%s && %s", strings.Join(exports, " && "), cmd)
 	}
-	
+
 	if err := sess.session.Start(cmd); err != nil {
 		e.sendError(updates, fmt.Errorf("failed to start runner: %w", err), true)
 		return
 	}
-	
+
 	// Stream output and collect for execution record
 	var wg sync.WaitGroup
 	wg.Add(2)
-	
+
 	sequence := int64(0)
 	sequenceMu := sync.Mutex{}
-	
+
 	// Buffers to collect output
 	var stdoutBuf, stderrBuf strings.Builder
 	var outputMu sync.Mutex
-	
+
 	// Create a context for the streaming goroutines
 	streamCtx, cancelStream := context.WithCancel(context.Background())
 	defer cancelStream()
-	
+
 	// Read stdout
 	go func() {
 		defer wg.Done()
 		e.streamOutputWithContextAndCollect(streamCtx, stdout, "stdout", updates, &sequence, &sequenceMu, &stdoutBuf, &outputMu)
 	}()
-	
+
 	// Read stderr
 	go func() {
 		defer wg.Done()
 		e.streamOutputWithContextAndCollect(streamCtx, stderr, "stderr", updates, &sequence, &sequenceMu, &stderrBuf, &outputMu)
 	}()
-	
+
 	// Wait for command to complete or context cancellation
 	done := make(chan error, 1)
 	go func() {
 		wg.Wait()
 		done <- sess.session.Wait()
 	}()
-	
+
 	select {
 	case <-ctx.Done():
 		// Context cancelled or timed out
 		// First cancel the streaming goroutines
 		cancelStream()
-		
+
 		// Then terminate the SSH session
 		sess.session.Signal(ssh.SIGTERM)
 		time.Sleep(5 * time.Second)
 		sess.session.Signal(ssh.SIGKILL)
-		
+
 		// Determine if it was a timeout or cancellation
 		duration := time.Since(startTime)
 		var exitCode int
 		var finalStatus types.JobStatus
 		var statusMessage string
-		
+
 		if stderrors.Is(ctx.Err(), context.DeadlineExceeded) {
 			e.log.WithField("jobID", job.ID).Warn("Execution timed out")
 			e.sendError(updates, fmt.Errorf("execution timed out after %v", timeout), true)
@@ -557,7 +557,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 			finalStatus = types.JobStatusFailed
 			statusMessage = "SSH execution cancelled"
 		}
-		
+
 		// Update execution record with timeout/cancellation status
 		if e.apiClient != nil {
 			now := time.Now()
@@ -565,13 +565,13 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 				CompletedAt: &now,
 				ExitCode:    &exitCode,
 			}
-			
+
 			// Include output collected so far
 			outputMu.Lock()
 			outputStr := stdoutBuf.String()
 			errorStr := stderrBuf.String()
 			outputMu.Unlock()
-			
+
 			if outputStr != "" {
 				updateData.Output = &outputStr
 			}
@@ -581,7 +581,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 				// Add timeout error if no stderr captured
 				updateData.Error = &statusMessage
 			}
-			
+
 			// Use a fresh context for the API call
 			apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer apiCancel()
@@ -589,14 +589,14 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 				e.log.WithError(err).Warn("Failed to update execution timeout status")
 			}
 		}
-		
+
 		// Send completion update
 		e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
 			Status:   finalStatus,
 			ExitCode: &exitCode,
 			Message:  statusMessage,
 		})
-		
+
 	case err := <-done:
 		// Command completed
 		exitCode := 0
@@ -609,16 +609,16 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 				return
 			}
 		}
-		
+
 		// Record execution metrics
 		e.metrics.RecordExecution(job.ID, exitCode == 0, time.Since(startTime), false)
-		
+
 		// Send completion update with appropriate status
 		status := types.JobStatusCompleted
 		if exitCode != 0 {
 			status = types.JobStatusFailed
 		}
-		
+
 		// Update execution record with completion status and output
 		if e.apiClient != nil {
 			now := time.Now()
@@ -626,20 +626,20 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 				CompletedAt: &now,
 				ExitCode:    &exitCode,
 			}
-			
+
 			// Include output if available
 			outputMu.Lock()
 			outputStr := stdoutBuf.String()
 			errorStr := stderrBuf.String()
 			outputMu.Unlock()
-			
+
 			if outputStr != "" {
 				updateData.Output = &outputStr
 			}
 			if errorStr != "" {
 				updateData.Error = &errorStr
 			}
-			
+
 			// Use a fresh context for the API call in case original timed out
 			apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer apiCancel()
@@ -647,7 +647,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 				e.log.WithError(err).Warn("Failed to update execution completion status")
 			}
 		}
-		
+
 		e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
 			Status:   status,
 			ExitCode: &exitCode,
@@ -665,12 +665,12 @@ func (e *Executor) ensureRunnerDeployed(ctx context.Context, session *ssh.Sessio
 		MaxDelay:     8 * time.Second,
 		Multiplier:   2.0,
 	}
-	
+
 	logEntry := e.log.WithFields(logrus.Fields{
 		"serverID": server.ID,
 		"server":   server.Name,
 	})
-	
+
 	// Use retry utility for deployment attempts
 	err := retry.WithRetry(ctx, retryCfg, func() error {
 		deployErr := e.deployRunnerWithRetry(ctx, session, conn, server, runnerPath)
@@ -688,18 +688,18 @@ func (e *Executor) ensureRunnerDeployed(ctx context.Context, session *ssh.Sessio
 		}
 		return nil
 	}, logEntry)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to deploy runner after retries: %w", err)
 	}
-	
+
 	return nil
 }
 
 // deployRunnerWithRetry performs a single deployment attempt
 func (e *Executor) deployRunnerWithRetry(ctx context.Context, session *ssh.Session, conn *ssh.Client, server *types.ServerDetails, runnerPath string) error {
 	deployStart := time.Now()
-	
+
 	// Check cache first
 	cachedEntry, isValid := e.runnerCache.Get(server.ID)
 	// In dev mode, always redeploy to ensure we have the latest runner
@@ -711,7 +711,7 @@ func (e *Executor) deployRunnerWithRetry(ctx context.Context, session *ssh.Sessi
 		e.metrics.RecordDeployment(server.ID, true, true, time.Since(deployStart))
 		return nil
 	}
-	
+
 	// If we have a cached entry but it needs verification
 	// Skip verification in dev mode to always redeploy
 	if cachedEntry != nil && cachedEntry.Version == e.runnerInfo.Version && e.runnerInfo.Version != "dev" {
@@ -726,7 +726,7 @@ func (e *Executor) deployRunnerWithRetry(ctx context.Context, session *ssh.Sessi
 		// Runner invalid, remove from cache
 		e.runnerCache.Remove(server.ID)
 	}
-	
+
 	// Check if runner exists and has correct version
 	// In dev mode, always redeploy
 	if e.runnerInfo.Version != "dev" {
@@ -745,32 +745,32 @@ func (e *Executor) deployRunnerWithRetry(ctx context.Context, session *ssh.Sessi
 			return nil
 		}
 	}
-	
+
 	// Need to deploy runner
 	e.log.WithFields(logrus.Fields{
 		"serverID": server.ID,
 		"version":  e.runnerInfo.Version,
 	}).Info("Deploying runner to server")
-	
+
 	// Ensure deployment directory exists
 	mkdirSession, err := conn.NewSession()
 	if err != nil {
 		return fmt.Errorf("failed to create mkdir session: %w", err)
 	}
 	defer mkdirSession.Close()
-	
+
 	runnerDir := "/tmp/cronium"
 	if err := mkdirSession.Run(fmt.Sprintf("mkdir -p %s", runnerDir)); err != nil {
 		return fmt.Errorf("failed to create runner directory: %w", err)
 	}
-	
+
 	// Create new session for deployment
 	deploySession, err := conn.NewSession()
 	if err != nil {
 		return fmt.Errorf("failed to create deployment session: %w", err)
 	}
 	defer deploySession.Close()
-	
+
 	// Copy runner binary with cleanup on failure
 	localRunnerPath := e.runnerInfo.Path
 	if err := e.copyFileToServer(deploySession, conn, localRunnerPath, runnerPath); err != nil {
@@ -782,7 +782,7 @@ func (e *Executor) deployRunnerWithRetry(ctx context.Context, session *ssh.Sessi
 		}
 		return fmt.Errorf("failed to copy runner binary: %w", err)
 	}
-	
+
 	// Make runner executable
 	chmodSession, err := conn.NewSession()
 	if err != nil {
@@ -795,7 +795,7 @@ func (e *Executor) deployRunnerWithRetry(ctx context.Context, session *ssh.Sessi
 		return fmt.Errorf("failed to create chmod session: %w", err)
 	}
 	defer chmodSession.Close()
-	
+
 	if err := chmodSession.Run(fmt.Sprintf("chmod +x %s", runnerPath)); err != nil {
 		// Clean up partial deployment
 		cleanupSession, _ := conn.NewSession()
@@ -805,14 +805,14 @@ func (e *Executor) deployRunnerWithRetry(ctx context.Context, session *ssh.Sessi
 		}
 		return fmt.Errorf("failed to make runner executable: %w", err)
 	}
-	
+
 	// Verify deployment
 	verifySession, err := conn.NewSession()
 	if err != nil {
 		return fmt.Errorf("failed to create verify session: %w", err)
 	}
 	defer verifySession.Close()
-	
+
 	verifyCmd := fmt.Sprintf("test -x %s && %s version", runnerPath, runnerPath)
 	if err := verifySession.Run(verifyCmd); err != nil {
 		// Clean up failed deployment
@@ -823,7 +823,7 @@ func (e *Executor) deployRunnerWithRetry(ctx context.Context, session *ssh.Sessi
 		}
 		return fmt.Errorf("failed to verify runner deployment: %w", err)
 	}
-	
+
 	// Add to cache
 	e.runnerCache.Set(server.ID, &RunnerCacheEntry{
 		ServerID:     server.ID,
@@ -833,7 +833,7 @@ func (e *Executor) deployRunnerWithRetry(ctx context.Context, session *ssh.Sessi
 		DeployedAt:   time.Now(),
 		LastVerified: time.Now(),
 	})
-	
+
 	e.log.WithField("serverID", server.ID).Info("Runner deployed successfully")
 	e.metrics.RecordDeployment(server.ID, true, false, time.Since(deployStart))
 	return nil
@@ -846,36 +846,36 @@ func (e *Executor) copyPayloadToServer(session *ssh.Session, conn *ssh.Client, l
 	if err != nil {
 		return fmt.Errorf("failed to read payload file: %w", err)
 	}
-	
+
 	// Create new session for copy
 	copySession, err := conn.NewSession()
 	if err != nil {
 		return fmt.Errorf("failed to create copy session: %w", err)
 	}
 	defer copySession.Close()
-	
+
 	// Set up stdin pipe
 	stdin, err := copySession.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stdin pipe: %w", err)
 	}
-	
+
 	// Start cat command
 	if err := copySession.Start(fmt.Sprintf("cat > %s", remotePath)); err != nil {
 		return fmt.Errorf("failed to start cat command: %w", err)
 	}
-	
+
 	// Write data
 	if _, err := stdin.Write(data); err != nil {
 		return fmt.Errorf("failed to write data: %w", err)
 	}
 	stdin.Close()
-	
+
 	// Wait for completion
 	if err := copySession.Wait(); err != nil {
 		return fmt.Errorf("failed to copy file: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -894,21 +894,21 @@ func (e *Executor) streamOutputWithContextAndCollect(ctx context.Context, reader
 			return
 		default:
 		}
-		
+
 		line := scanner.Text()
-		
+
 		// Collect output
 		bufferMu.Lock()
 		buffer.WriteString(line)
 		buffer.WriteString("\n")
 		bufferMu.Unlock()
-		
+
 		// Send log entry
 		sequenceMu.Lock()
 		*sequence++
 		seq := *sequence
 		sequenceMu.Unlock()
-		
+
 		e.sendUpdate(updates, types.UpdateTypeLog, &types.LogEntry{
 			Stream:    stream,
 			Line:      line,
@@ -916,7 +916,7 @@ func (e *Executor) streamOutputWithContextAndCollect(ctx context.Context, reader
 			Sequence:  seq,
 		})
 	}
-	
+
 	if err := scanner.Err(); err != nil && !stderrors.Is(err, context.Canceled) {
 		e.log.WithError(err).Errorf("Error reading %s stream", stream)
 	}
@@ -932,15 +932,15 @@ func (e *Executor) streamOutputWithContext(ctx context.Context, reader io.Reader
 			return
 		default:
 		}
-		
+
 		line := scanner.Text()
-		
+
 		// Send log entry
 		sequenceMu.Lock()
 		*sequence++
 		seq := *sequence
 		sequenceMu.Unlock()
-		
+
 		e.sendUpdate(updates, types.UpdateTypeLog, &types.LogEntry{
 			Stream:    stream,
 			Line:      line,
@@ -948,7 +948,7 @@ func (e *Executor) streamOutputWithContext(ctx context.Context, reader io.Reader
 			Sequence:  seq,
 		})
 	}
-	
+
 	if err := scanner.Err(); err != nil && !stderrors.Is(err, context.Canceled) {
 		e.log.WithError(err).Errorf("Error reading %s stream", stream)
 	}
@@ -964,16 +964,16 @@ func (e *Executor) Cleanup(ctx context.Context, job *types.Job) error {
 	e.mu.RLock()
 	sess, exists := e.sessions[job.ID]
 	e.mu.RUnlock()
-	
+
 	if exists {
 		// Cancel the session
 		sess.cancelFunc()
-		
+
 		// Close SSH session
 		if sess.session != nil {
 			sess.session.Close()
 		}
-		
+
 		// Clean up remote files if we have a connection
 		if sess.conn != nil && job.Execution.Target.ServerDetails != nil {
 			// Clean up payload file
@@ -987,17 +987,17 @@ func (e *Executor) Cleanup(ctx context.Context, job *types.Job) error {
 				}
 				cleanupSession.Close()
 			}
-			
+
 			// Return connection to pool
-			serverKey := fmt.Sprintf("%s:%d", 
-				job.Execution.Target.ServerDetails.Host, 
+			serverKey := fmt.Sprintf("%s:%d",
+				job.Execution.Target.ServerDetails.Host,
 				job.Execution.Target.ServerDetails.Port)
 			e.pool.Put(serverKey, sess.conn, false)
 		}
-		
+
 		e.untrackSession(job.ID)
 	}
-	
+
 	return nil
 }
 
@@ -1021,7 +1021,7 @@ func (e *Executor) sendUpdate(updates chan<- types.ExecutionUpdate, updateType t
 	if updates == nil {
 		return
 	}
-	
+
 	select {
 	case updates <- types.ExecutionUpdate{
 		Type:      updateType,
@@ -1039,7 +1039,7 @@ func (e *Executor) sendError(updates chan<- types.ExecutionUpdate, err error, fa
 	if !fatal {
 		status = types.JobStatusRunning
 	}
-	
+
 	e.sendUpdate(updates, types.UpdateTypeError, &types.StatusUpdate{
 		Status:  status,
 		Message: err.Error(),
@@ -1063,12 +1063,12 @@ func getRunnerPath() string {
 	if runtime := os.Getenv("RUNNER_ARCH"); runtime != "" {
 		arch = runtime
 	}
-	
+
 	runnerDir := os.Getenv("RUNNER_ARTIFACTS_DIR")
 	if runnerDir == "" {
 		runnerDir = "/app/artifacts/runners"
 	}
-	
+
 	version := getRunnerVersion()
 	return filepath.Join(runnerDir, version, fmt.Sprintf("cronium-runner-%s", arch))
 }

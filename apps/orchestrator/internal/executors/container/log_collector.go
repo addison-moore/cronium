@@ -22,21 +22,21 @@ func (e *Executor) collectFinalLogs(ctx context.Context, containerID string, upd
 		Timestamps: true,
 		Details:    true,
 	}
-	
+
 	logs, err := e.dockerClient.ContainerLogs(ctx, containerID, options)
 	if err != nil {
 		return fmt.Errorf("failed to collect final logs: %w", err)
 	}
 	defer logs.Close()
-	
+
 	// Process all logs at once
 	stdout := &strings.Builder{}
 	stderr := &strings.Builder{}
-	
+
 	if _, err := stdcopy.StdCopy(stdout, stderr, logs); err != nil {
 		return fmt.Errorf("failed to process final logs: %w", err)
 	}
-	
+
 	// Send stdout logs
 	if stdout.Len() > 0 {
 		sequence := int64(0)
@@ -52,7 +52,7 @@ func (e *Executor) collectFinalLogs(ctx context.Context, containerID string, upd
 			}
 		}
 	}
-	
+
 	// Send stderr logs
 	if stderr.Len() > 0 {
 		sequence := int64(0)
@@ -68,7 +68,7 @@ func (e *Executor) collectFinalLogs(ctx context.Context, containerID string, upd
 			}
 		}
 	}
-	
+
 	return nil
 }
 

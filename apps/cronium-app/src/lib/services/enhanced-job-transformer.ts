@@ -54,15 +54,24 @@ export async function enhancedTransformJobForOrchestrator(
     }
 
     // Add server details to the execution target
-    transformedJob.execution.target.serverDetails = {
+    const serverDetails: NonNullable<
+      typeof transformedJob.execution.target.serverDetails
+    > = {
       id: String(server.id),
       name: server.name,
       host: server.address,
       port: server.port,
       username: server.username,
-      privateKey: server.sshKey, // Already decrypted from storage
-      passphrase: undefined, // Add if needed
     };
+
+    // Add authentication credentials based on what's available
+    if (server.sshKey) {
+      serverDetails.privateKey = server.sshKey;
+    } else if (server.password) {
+      serverDetails.password = server.password;
+    }
+
+    transformedJob.execution.target.serverDetails = serverDetails;
 
     console.log(
       `Added server details for job ${job.id}: ${server.name} (${server.address}:${server.port})`,
@@ -78,14 +87,20 @@ export async function enhancedTransformJobForOrchestrator(
         const srv = await storage.getServer(eventServer.serverId);
         if (!srv) continue;
 
-        const serverInfo = {
+        const serverInfo: any = {
           id: String(srv.id),
           name: srv.name,
           host: srv.address,
           port: srv.port,
           username: srv.username,
-          privateKey: srv.sshKey,
         };
+
+        // Add authentication credentials based on what's available
+        if (srv.sshKey) {
+          serverInfo.privateKey = srv.sshKey;
+        } else if (srv.password) {
+          serverInfo.password = srv.password;
+        }
 
         servers.push(serverInfo);
       }

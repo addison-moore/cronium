@@ -456,6 +456,7 @@ export class JobService {
       startedAt?: Date;
       completedAt?: Date;
       metrics?: Record<string, unknown>;
+      result?: Record<string, unknown>; // Accept full result object
     },
   ): Promise<Job | null> {
     // Update the job
@@ -470,13 +471,18 @@ export class JobService {
       updateInput.completedAt = data.completedAt;
     }
     if (data) {
-      // Only store minimal data in result (no output/error - those go in execution)
-      const result: UpdateJobInput["result"] = {};
-      if (data.exitCode !== undefined) result.exitCode = data.exitCode;
-      if (data.metrics !== undefined) result.metrics = data.metrics;
+      // If result is provided directly, use it (for scriptOutput, condition, etc.)
+      if (data.result !== undefined) {
+        updateInput.result = data.result;
+      } else {
+        // Otherwise build minimal result from exitCode and metrics
+        const result: UpdateJobInput["result"] = {};
+        if (data.exitCode !== undefined) result.exitCode = data.exitCode;
+        if (data.metrics !== undefined) result.metrics = data.metrics;
 
-      if (Object.keys(result).length > 0) {
-        updateInput.result = result;
+        if (Object.keys(result).length > 0) {
+          updateInput.result = result;
+        }
       }
     }
 

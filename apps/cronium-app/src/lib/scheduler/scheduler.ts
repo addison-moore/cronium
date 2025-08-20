@@ -29,7 +29,7 @@ interface ExecutionResult {
   output: string;
   duration?: number;
   scriptOutput?: unknown;
-  condition?: boolean;
+  condition?: boolean | undefined;
 }
 
 export class ScriptScheduler {
@@ -721,7 +721,18 @@ export class ScriptScheduler {
     _sequenceOrder?: number,
     input: Record<string, unknown> = {},
     workflowId?: number,
+    waitForCompletion = false,
   ): Promise<ExecutionResult> {
+    // Log all arguments to debug
+    console.log(`[DEBUG executeEvent] Called with:`, {
+      eventId,
+      workflowExecutionId,
+      _sequenceOrder,
+      inputKeys: Object.keys(input),
+      workflowId,
+      waitForCompletion,
+      waitForCompletionType: typeof waitForCompletion,
+    });
     const event = (await storage.getEventWithRelations(
       eventId,
     )) as EventWithRelations | null;
@@ -789,10 +800,81 @@ export class ScriptScheduler {
       status: LogStatus.PENDING,
     });
 
+    // If waitForCompletion is true (for workflows), wait for job to complete
+    console.log(
+      `[DEBUG] executeEvent - waitForCompletion: ${waitForCompletion}, type: ${typeof waitForCompletion}, workflowId: ${workflowId}, job: ${job.id}`,
+    );
+    console.log(`[DEBUG] executeEvent - All params:`, {
+      eventId,
+      workflowExecutionId,
+      _sequenceOrder,
+      workflowId,
+      waitForCompletion,
+    });
+
+    // Force waiting for workflows by checking workflowId as well
+    const shouldWait =
+      waitForCompletion === true ||
+      (workflowId !== undefined && workflowId !== null);
+    console.log(
+      `[DEBUG] executeEvent - shouldWait: ${shouldWait} (waitForCompletion=${waitForCompletion}, workflowId=${workflowId})`,
+    );
+
+    if (shouldWait) {
+      console.log(
+        `[DEBUG] executeEvent - Entering wait block for job ${job.id}`,
+      );
+
+      const { waitForJobCompletion } = await import(
+        "@/lib/services/job-polling-service"
+      );
+
+      console.log(
+        `Waiting for job ${job.id} to complete for workflow execution...`,
+      );
+
+      try {
+        // Poll for job completion with appropriate timeout based on event settings
+        const timeoutMs = event.timeoutValue
+          ? event.timeoutValue *
+            ((event.timeoutUnit as string) === "MINUTES"
+              ? 60000
+              : (event.timeoutUnit as string) === "HOURS"
+                ? 3600000
+                : (event.timeoutUnit as string) === "DAYS"
+                  ? 86400000
+                  : 1000)
+          : 5 * 60 * 1000; // Default 5 minutes
+
+        const result = await waitForJobCompletion({
+          jobId: job.id,
+          maxWaitTime: timeoutMs,
+          pollInterval: 1000, // Poll every second
+        });
+
+        console.log(`Job ${job.id} completed with status: ${result.status}`);
+
+        // Return the full execution result
+        return {
+          success: result.success,
+          output: result.output ?? result.error ?? "",
+          duration: result.duration ?? Date.now() - startTime,
+          scriptOutput: result.scriptOutput,
+          condition: result.condition,
+        };
+      } catch (error) {
+        console.error(`Error waiting for job ${job.id}:`, error);
+        return {
+          success: false,
+          output: error instanceof Error ? error.message : String(error),
+          duration: Date.now() - startTime,
+        };
+      }
+    }
+
     const duration = Date.now() - startTime;
 
-    // Return immediately with job creation info
-    // The actual execution will happen asynchronously
+    // Return immediately with job creation info (for standalone events)
     return {
       success: true,
       output: `Job ${job.id} created and queued for execution`,

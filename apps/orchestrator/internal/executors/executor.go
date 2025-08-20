@@ -11,13 +11,13 @@ import (
 type Executor interface {
 	// Execute runs a job and returns a channel for real-time updates
 	Execute(ctx context.Context, job *types.Job) (<-chan types.ExecutionUpdate, error)
-	
+
 	// Validate checks if the job can be executed by this executor
 	Validate(job *types.Job) error
-	
+
 	// Cleanup performs any necessary cleanup after execution
 	Cleanup(ctx context.Context, job *types.Job) error
-	
+
 	// Type returns the executor type
 	Type() types.JobType
 }
@@ -49,12 +49,12 @@ func (m *Manager) GetExecutor(jobType types.JobType) (Executor, bool) {
 func (m *Manager) Execute(ctx context.Context, job *types.Job) (<-chan types.ExecutionUpdate, error) {
 	// Log job type for debugging
 	logrus.WithFields(logrus.Fields{
-		"jobID": job.ID,
-		"jobType": job.Type,
-		"hasSSHExecutor": m.executors[types.JobType("ssh")] != nil,
+		"jobID":                job.ID,
+		"jobType":              job.Type,
+		"hasSSHExecutor":       m.executors[types.JobType("ssh")] != nil,
 		"hasContainerExecutor": m.executors[types.JobType("container")] != nil,
 	}).Debug("Selecting executor for job")
-	
+
 	executor, ok := m.GetExecutor(job.Type)
 	if !ok {
 		return nil, types.NewExecutionError(
@@ -64,12 +64,12 @@ func (m *Manager) Execute(ctx context.Context, job *types.Job) (<-chan types.Exe
 			false,
 		)
 	}
-	
+
 	// Validate the job
 	if err := executor.Validate(job); err != nil {
 		return nil, err
 	}
-	
+
 	// Execute the job
 	return executor.Execute(ctx, job)
 }

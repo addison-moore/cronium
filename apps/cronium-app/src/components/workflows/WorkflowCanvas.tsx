@@ -192,8 +192,8 @@ export default function WorkflowCanvas({
 }: WorkflowCanvasProps) {
   const t = useTranslations("Workflows");
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges] = useEdgesState(initialEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges] = useEdgesState<Edge>([]);
   const [reactFlowInstance, setReactFlowInstance] =
     useState<ReactFlowInstance | null>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
@@ -269,9 +269,29 @@ export default function WorkflowCanvas({
     [isInitializing, createHistoryState, currentHistoryIndex, maxHistorySize],
   );
 
-  // Load initial data and handle updates
+  // Track if initial data has been loaded
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+  const [prevNodesLength, setPrevNodesLength] = useState(0);
+
+  // Load initial data only once
   useEffect(() => {
-    setNodes(initialNodes);
+    // Only set nodes if we have data and haven't loaded yet, or if nodes changed from empty to populated
+    if (
+      initialNodes.length > 0 &&
+      (!initialDataLoaded || prevNodesLength === 0)
+    ) {
+      setNodes(initialNodes);
+      setInitialDataLoaded(true);
+      setPrevNodesLength(initialNodes.length);
+
+      // Fit view after nodes are set
+      if (reactFlowInstance) {
+        setTimeout(() => {
+          reactFlowInstance.fitView({ padding: 0.2, duration: 200 });
+        }, 100);
+      }
+    }
+
     // Reset initialization flag after a short delay to allow for initial rendering
     const timer = setTimeout(() => {
       setIsInitializing(false);
@@ -291,23 +311,46 @@ export default function WorkflowCanvas({
   }, [
     initialNodes,
     initialEdges,
-    setNodes,
     createHistoryState,
     historyInitialized,
+    reactFlowInstance,
+    initialDataLoaded,
+    prevNodesLength,
+    setNodes, // This is stable from the hook
   ]);
 
+  // Track if initial edges have been loaded
+  const [initialEdgesLoaded, setInitialEdgesLoaded] = useState(false);
+
   useEffect(() => {
-    // Normalize edges to ensure all required properties are present
-    const normalizedEdges = initialEdges.map((edge) => ({
-      ...edge,
-      type: edge.type ?? "connectionEdge",
-      data: edge.data ?? { type: ConnectionType.ALWAYS },
-      animated: edge.animated ?? true,
-      sourceHandle: edge.sourceHandle ?? null,
-      targetHandle: edge.targetHandle ?? null,
-    })) as Edge[];
-    setEdges(normalizedEdges);
-  }, [initialEdges, setEdges]);
+    // Only set edges if they've actually changed and we have data
+    if (initialEdges.length > 0 && !initialEdgesLoaded) {
+      // Normalize edges to ensure all required properties are present
+      const normalizedEdges = initialEdges.map((edge) => ({
+        ...edge,
+        type: edge.type ?? "connectionEdge",
+        data: edge.data ?? { type: ConnectionType.ALWAYS },
+        animated: edge.animated ?? true,
+        sourceHandle: edge.sourceHandle ?? null,
+        targetHandle: edge.targetHandle ?? null,
+      })) as Edge[];
+      setEdges(normalizedEdges);
+      setInitialEdgesLoaded(true);
+
+      // Fit view again after edges are set if we have nodes
+      if (reactFlowInstance && nodes.length > 0) {
+        setTimeout(() => {
+          reactFlowInstance.fitView({ padding: 0.2, duration: 200 });
+        }, 150);
+      }
+    }
+  }, [
+    initialEdges,
+    reactFlowInstance,
+    nodes.length,
+    initialEdgesLoaded,
+    setEdges,
+  ]);
 
   // Update last saved state when save is called
   useEffect(() => {
@@ -798,8 +841,15 @@ export default function WorkflowCanvas({
           onDragOver={onDragOver}
           nodeTypes={eventNodeType}
           edgeTypes={connectionEdgeType}
-          onInit={(instance) => setReactFlowInstance(instance)}
-          fitView
+          onInit={(instance) => {
+            setReactFlowInstance(instance);
+            // Ensure nodes are visible after initialization
+            setTimeout(() => {
+              instance.fitView({ padding: 0.2, duration: 200 });
+            }, 50);
+          }}
+          fitView={false}
+          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
           snapToGrid
           snapGrid={[15, 15]}
           defaultEdgeOptions={{

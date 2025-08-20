@@ -53,10 +53,10 @@ func (sm *SidecarManager) CreateRuntimeSidecar(ctx context.Context, job *types.J
 		},
 		User: "1000:1000",
 		Labels: map[string]string{
-			"cronium.type":        "sidecar",
-			"cronium.job.id":      job.ID,
-			"cronium.service":     "runtime-api",
-			"cronium.managed":     "true",
+			"cronium.type":    "sidecar",
+			"cronium.job.id":  job.ID,
+			"cronium.service": "runtime-api",
+			"cronium.managed": "true",
 		},
 		AttachStdout: true,
 		AttachStderr: true,
@@ -64,8 +64,8 @@ func (sm *SidecarManager) CreateRuntimeSidecar(ctx context.Context, job *types.J
 
 	// Build host configuration
 	hostConfig := &container.HostConfig{
-		AutoRemove: false,
-		NetworkMode: container.NetworkMode(networkID),
+		AutoRemove:   false,
+		NetworkMode:  container.NetworkMode(networkID),
 		PortBindings: nil, // No external port binding
 		Resources: container.Resources{
 			Memory:   256 * 1024 * 1024, // 256MB
@@ -122,8 +122,18 @@ func (sm *SidecarManager) CreateRuntimeSidecar(ctx context.Context, job *types.J
 	// Connect to shared services network if in development mode
 	if os.Getenv("GO_ENV") == "development" {
 		// Try to connect to the development network for access to shared services
-		if err := sm.executor.dockerClient.NetworkConnect(ctx, "cronium-dev_cronium-dev-network", resp.ID, nil); err != nil {
-			sm.log.WithError(err).Warn("Failed to connect sidecar to development network")
+		// Try both possible network names
+		networks := []string{"docker_cronium-dev-network", "cronium-dev_cronium-dev-network"}
+		connected := false
+		for _, netName := range networks {
+			if err := sm.executor.dockerClient.NetworkConnect(ctx, netName, resp.ID, nil); err == nil {
+				sm.log.WithField("network", netName).Debug("Connected sidecar to development network")
+				connected = true
+				break
+			}
+		}
+		if !connected {
+			sm.log.Warn("Failed to connect sidecar to any development network")
 		}
 	}
 
@@ -168,7 +178,7 @@ func (sm *SidecarManager) StopSidecar(ctx context.Context, containerID string) e
 
 // waitForHealth waits for the sidecar to become healthy
 func (sm *SidecarManager) waitForHealth(ctx context.Context, containerID string) error {
-	healthCheckURL := "http://runtime-api:8081/health"
+	healthCheckURL := "http://localhost:8081/health"
 	maxAttempts := 30
 	interval := 1 * time.Second
 
@@ -215,7 +225,7 @@ func (sm *SidecarManager) generateExecutionToken(job *types.Job) (string, error)
 	// Extract user and event IDs from metadata
 	userID := ""
 	eventID := ""
-	
+
 	if job.Metadata != nil {
 		if uid, ok := job.Metadata["userId"].(string); ok {
 			userID = uid
@@ -228,7 +238,7 @@ func (sm *SidecarManager) generateExecutionToken(job *types.Job) (string, error)
 			eventID = eid
 		}
 	}
-	
+
 	return generateJWT(job.ID, sm.executor.config.Runtime.JWTSecret, userID, eventID)
 }
 
@@ -237,7 +247,7 @@ func (sm *SidecarManager) storeExecutionToken(jobID string, token string) {
 	// Store in executor's token map (we'll add this to the executor)
 	sm.executor.mu.Lock()
 	defer sm.executor.mu.Unlock()
-	
+
 	if sm.executor.tokens == nil {
 		sm.executor.tokens = make(map[string]string)
 	}
@@ -248,12 +258,12 @@ func (sm *SidecarManager) storeExecutionToken(jobID string, token string) {
 func (sm *SidecarManager) getExecutionToken(jobID string) (string, error) {
 	sm.executor.mu.RLock()
 	defer sm.executor.mu.RUnlock()
-	
+
 	token, ok := sm.executor.tokens[jobID]
 	if !ok {
 		return "", fmt.Errorf("no token found for job %s", jobID)
 	}
-	
+
 	return token, nil
 }
 
@@ -268,7 +278,7 @@ func (sm *SidecarManager) getRuntimeImage() string {
 // CreateJobNetwork creates an isolated network for a job
 func (sm *SidecarManager) CreateJobNetwork(ctx context.Context, jobID string) (string, error) {
 	networkName := fmt.Sprintf("cronium-job-%s", jobID)
-	
+
 	// Create network with specific configuration
 	resp, err := sm.executor.dockerClient.NetworkCreate(ctx, networkName, network.CreateOptions{
 		Driver: "bridge",
