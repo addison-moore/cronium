@@ -31,7 +31,7 @@ type Executor struct {
 	apiClient    *api.Client
 	sidecar      *SidecarManager
 	cleanup      *CleanupManager
-	
+
 	// Track active containers and resources
 	mu         sync.RWMutex
 	containers map[string]string // jobID -> containerID
@@ -50,15 +50,15 @@ func NewExecutor(cfg config.ContainerConfig, apiClient *api.Client, log *logrus.
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}
-	
+
 	// Test connection
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	if _, err := dockerClient.Ping(ctx); err != nil {
 		return nil, fmt.Errorf("failed to connect to Docker daemon: %w", err)
 	}
-	
+
 	executor := &Executor{
 		config:       cfg,
 		dockerClient: dockerClient,
@@ -69,13 +69,13 @@ func NewExecutor(cfg config.ContainerConfig, apiClient *api.Client, log *logrus.
 		networks:     make(map[string]string),
 		tokens:       make(map[string]string),
 	}
-	
+
 	// Create sidecar manager
 	executor.sidecar = NewSidecarManager(executor, log)
-	
+
 	// Create cleanup manager
 	executor.cleanup = NewCleanupManager(executor, log)
-	
+
 	return executor, nil
 }
 
@@ -93,7 +93,7 @@ func (e *Executor) Validate(job *types.Job) error {
 			"container job missing script configuration",
 		)
 	}
-	
+
 	// Validate script type
 	switch job.Execution.Script.Type {
 	case types.ScriptTypeBash, types.ScriptTypePython, types.ScriptTypeNode:
@@ -105,17 +105,17 @@ func (e *Executor) Validate(job *types.Job) error {
 			fmt.Sprintf("unsupported script type: %s", job.Execution.Script.Type),
 		)
 	}
-	
+
 	return nil
 }
 
 // Execute runs the job in a container
 func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.ExecutionUpdate, error) {
 	updates := make(chan types.ExecutionUpdate, 100)
-	
+
 	// Generate execution ID with underscore separator to avoid double dash issues
 	executionID := fmt.Sprintf("exec_%s_%d", job.ID, time.Now().Unix())
-	
+
 	// Store execution ID for later use
 	e.mu.Lock()
 	if e.tokens == nil {
@@ -123,17 +123,17 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 	}
 	e.tokens[job.ID] = executionID
 	e.mu.Unlock()
-	
+
 	go func() {
 		defer close(updates)
-		
+
 		// Create execution record in the database
 		if e.apiClient != nil {
 			if err := e.apiClient.CreateExecution(ctx, executionID, job.ID, nil, nil); err != nil {
 				e.log.WithError(err).Warn("Failed to create execution record")
 				// Continue anyway - execution tracking is not critical for job success
 			}
-			
+
 			// Mark execution as started
 			now := time.Now()
 			if err := e.apiClient.UpdateExecution(ctx, executionID, types.JobStatusRunning, &api.ExecutionStatusUpdate{
@@ -142,20 +142,20 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 				e.log.WithError(err).Warn("Failed to update execution status to running")
 			}
 		}
-		
+
 		// Ensure cleanup happens no matter what
 		defer func() {
 			if err := e.cleanup.CleanupJobResources(ctx, job.ID); err != nil {
 				e.log.WithError(err).Error("Failed to cleanup job resources")
 			}
 		}()
-		
+
 		// Send initial status
 		e.sendUpdate(updates, types.UpdateTypeStatus, &types.StatusUpdate{
 			Status:  types.JobStatusRunning,
 			Message: "Preparing execution environment",
 		})
-		
+
 		// Create isolated network for this job
 		networkID, err := e.sidecar.CreateJobNetwork(ctx, job.ID)
 		if err != nil {
@@ -167,28 +167,28 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 			e.sendError(updates, dockerErr, true)
 			e.updateExecutionError(ctx, executionID, dockerErr)
 			e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
-				Status:   types.JobStatusFailed,
-				Message:  dockerErr.Error(),
+				Status:  types.JobStatusFailed,
+				Message: dockerErr.Error(),
 			})
 			return
 		}
-		
+
 		// Track network
 		e.mu.Lock()
 		e.networks[job.ID] = networkID
 		e.mu.Unlock()
-		
+
 		// Clean up network when done
 		defer func() {
 			e.mu.Lock()
 			delete(e.networks, job.ID)
 			e.mu.Unlock()
-			
+
 			if err := e.sidecar.RemoveJobNetwork(ctx, networkID); err != nil {
 				e.log.WithError(err).WithField("networkID", networkID).Error("Failed to remove job network")
 			}
 		}()
-		
+
 		// Create and start runtime sidecar
 		sidecarID, err := e.sidecar.CreateRuntimeSidecar(ctx, job, networkID)
 		if err != nil {
@@ -200,56 +200,56 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 			e.sendError(updates, dockerErr, true)
 			e.updateExecutionError(ctx, executionID, dockerErr)
 			e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
-				Status:   types.JobStatusFailed,
-				Message:  dockerErr.Error(),
+				Status:  types.JobStatusFailed,
+				Message: dockerErr.Error(),
 			})
 			return
 		}
-		
+
 		// Track sidecar
 		e.mu.Lock()
 		e.sidecars[job.ID] = sidecarID
 		e.mu.Unlock()
-		
+
 		// Clean up sidecar when done
 		defer func() {
 			e.mu.Lock()
 			delete(e.sidecars, job.ID)
 			e.mu.Unlock()
-			
+
 			if err := e.sidecar.StopSidecar(ctx, sidecarID); err != nil {
 				e.log.WithError(err).WithField("sidecarID", sidecarID).Error("Failed to stop sidecar")
 			}
 		}()
-		
+
 		// Create and run main container
 		containerID, err := e.createContainer(ctx, job, networkID)
 		if err != nil {
 			e.sendError(updates, err, true)
 			e.updateExecutionError(ctx, executionID, err)
 			e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
-				Status:   types.JobStatusFailed,
-				Message:  fmt.Sprintf("Failed to create container: %v", err),
+				Status:  types.JobStatusFailed,
+				Message: fmt.Sprintf("Failed to create container: %v", err),
 			})
 			return
 		}
-		
+
 		// Track container
 		e.mu.Lock()
 		e.containers[job.ID] = containerID
 		e.mu.Unlock()
-		
+
 		// Clean up container when done
 		defer func() {
 			e.mu.Lock()
 			delete(e.containers, job.ID)
 			e.mu.Unlock()
-			
+
 			if err := e.removeContainer(ctx, containerID); err != nil {
 				e.log.WithError(err).WithField("containerID", containerID).Error("Failed to remove container")
 			}
 		}()
-		
+
 		// Start container
 		if err := e.dockerClient.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
 			dockerErr := errors.NewDockerError(
@@ -261,27 +261,27 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 			e.sendError(updates, dockerErr, true)
 			e.updateExecutionError(ctx, executionID, dockerErr)
 			e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
-				Status:   types.JobStatusFailed,
-				Message:  dockerErr.Error(),
+				Status:  types.JobStatusFailed,
+				Message: dockerErr.Error(),
 			})
 			return
 		}
-		
+
 		// Create a WaitGroup to track log streaming completion
 		var logWg sync.WaitGroup
-		
+
 		// Stream logs with synchronization
 		logWg.Add(1)
 		go func() {
 			defer logWg.Done()
 			e.streamLogs(ctx, containerID, updates)
 		}()
-		
+
 		// Wait for container to finish
 		statusCh, errCh := e.dockerClient.ContainerWait(ctx, containerID, container.WaitConditionNotRunning)
 		var exitCode int
 		var timedOut bool
-		
+
 		select {
 		case <-ctx.Done():
 			// Context cancelled or timed out
@@ -325,20 +325,20 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 				}
 			}
 		}
-		
+
 		// IMPORTANT: Wait for all logs to be read before sending completion
 		logWg.Wait()
-		
+
 		// Check if container was OOM killed
 		var oomKilled bool
 		if inspect, err := e.dockerClient.ContainerInspect(context.Background(), containerID); err == nil {
 			oomKilled = inspect.State.OOMKilled
 		}
-		
+
 		// Determine final status based on exit code and timeout
 		var finalStatus types.JobStatus
 		var statusMessage string
-		
+
 		if timedOut {
 			finalStatus = types.JobStatusFailed
 			if exitCode == -1 {
@@ -356,7 +356,7 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 			finalStatus = types.JobStatusCompleted
 			statusMessage = "Container completed successfully"
 		}
-		
+
 		// Collect output from logs (we already have it in memory from streaming)
 		// Try to get logs one more time for the execution record
 		// Use a fresh context in case the original timed out
@@ -380,7 +380,7 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 				}
 			}
 		}
-		
+
 		// Update execution record with final status and output
 		if e.apiClient != nil {
 			now := time.Now()
@@ -405,7 +405,7 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 				e.log.WithError(err).Warn("Failed to update execution completion status")
 			}
 		}
-		
+
 		// Now send completion update after all logs have been processed
 		e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
 			Status:   finalStatus,
@@ -413,26 +413,26 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 			Message:  statusMessage,
 		})
 	}()
-	
+
 	return updates, nil
 }
 
 // Cleanup performs cleanup after execution
 func (e *Executor) Cleanup(ctx context.Context, job *types.Job) error {
 	var errs []error
-	
+
 	// If job is nil, we can't clean up specific resources
 	if job == nil {
 		return nil
 	}
-	
+
 	// Clean up main container
 	e.mu.RLock()
 	containerID, hasContainer := e.containers[job.ID]
 	sidecarID, hasSidecar := e.sidecars[job.ID]
 	networkID, hasNetwork := e.networks[job.ID]
 	e.mu.RUnlock()
-	
+
 	if hasContainer {
 		// Stop container if still running
 		timeout := 10
@@ -441,49 +441,49 @@ func (e *Executor) Cleanup(ctx context.Context, job *types.Job) error {
 		}); err != nil {
 			e.log.WithError(err).Warn("Failed to stop container")
 		}
-		
+
 		// Remove container
 		if err := e.removeContainer(ctx, containerID); err != nil {
 			errs = append(errs, fmt.Errorf("failed to remove container: %w", err))
 		}
-		
+
 		e.mu.Lock()
 		delete(e.containers, job.ID)
 		e.mu.Unlock()
 	}
-	
+
 	// Clean up sidecar
 	if hasSidecar {
 		if err := e.sidecar.StopSidecar(ctx, sidecarID); err != nil {
 			errs = append(errs, fmt.Errorf("failed to stop sidecar: %w", err))
 		}
-		
+
 		e.mu.Lock()
 		delete(e.sidecars, job.ID)
 		e.mu.Unlock()
 	}
-	
+
 	// Clean up network
 	if hasNetwork {
 		if err := e.sidecar.RemoveJobNetwork(ctx, networkID); err != nil {
 			errs = append(errs, fmt.Errorf("failed to remove network: %w", err))
 		}
-		
+
 		e.mu.Lock()
 		delete(e.networks, job.ID)
 		e.mu.Unlock()
 	}
-	
+
 	// Clean up token
 	e.mu.Lock()
 	delete(e.tokens, job.ID)
 	e.mu.Unlock()
-	
+
 	// Return combined error if any
 	if len(errs) > 0 {
 		return fmt.Errorf("cleanup errors: %v", errs)
 	}
-	
+
 	return nil
 }
 
@@ -491,7 +491,7 @@ func (e *Executor) Cleanup(ctx context.Context, job *types.Job) error {
 func (e *Executor) createContainer(ctx context.Context, job *types.Job, networkID string) (string, error) {
 	// Select image based on script type
 	image := e.getImageForScript(job.Execution.Script.Type)
-	
+
 	// Try to pull the image first (in case it's not available locally)
 	if err := e.ensureImage(ctx, image); err != nil {
 		dockerErr := errors.NewDockerError(
@@ -502,7 +502,7 @@ func (e *Executor) createContainer(ctx context.Context, job *types.Job, networkI
 		dockerErr.ImageName = image
 		return "", dockerErr
 	}
-	
+
 	// Build container configuration
 	containerConfig := &container.Config{
 		Image:        image,
@@ -514,16 +514,16 @@ func (e *Executor) createContainer(ctx context.Context, job *types.Job, networkI
 		Tty:          false,
 		User:         e.config.Security.User,
 	}
-	
+
 	// Build host configuration with resource limits
 	hostConfig := &container.HostConfig{
-		AutoRemove: false,
+		AutoRemove:  false,
 		NetworkMode: container.NetworkMode(networkID),
-		Resources:  e.buildResourceLimits(job),
-		Mounts:     e.buildMounts(job),
+		Resources:   e.buildResourceLimits(job),
+		Mounts:      e.buildMounts(job),
 		SecurityOpt: e.buildSecurityOptions(),
 	}
-	
+
 	// Network configuration
 	networkConfig := &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{
@@ -532,7 +532,7 @@ func (e *Executor) createContainer(ctx context.Context, job *types.Job, networkI
 			},
 		},
 	}
-	
+
 	// Create container
 	resp, err := e.dockerClient.ContainerCreate(
 		ctx,
@@ -558,7 +558,7 @@ func (e *Executor) createContainer(ctx context.Context, job *types.Job, networkI
 		}
 		return "", dockerErr
 	}
-	
+
 	return resp.ID, nil
 }
 
@@ -570,18 +570,18 @@ func (e *Executor) getImageForScript(scriptType types.ScriptType) string {
 		"python": "cronium/runner:python-alpine",
 		"node":   "cronium/runner:node-alpine",
 	}
-	
+
 	// Get configured image or use default
 	imageKey := string(scriptType)
 	if image, ok := e.config.Images[imageKey]; ok && image != "" {
 		return image
 	}
-	
+
 	// Fallback to defaults
 	if defaultImage, ok := defaults[imageKey]; ok {
 		return defaultImage
 	}
-	
+
 	// Ultimate fallback
 	return "cronium/runner:bash-alpine"
 }
@@ -603,19 +603,19 @@ func (e *Executor) buildCommand(script *types.Script) []string {
 // buildEnvironment builds the container environment variables
 func (e *Executor) buildEnvironment(job *types.Job) []string {
 	env := make([]string, 0)
-	
+
 	// Add execution environment variables
 	for k, v := range job.Execution.Environment {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
-	
+
 	// Get execution token
 	token, err := e.sidecar.getExecutionToken(job.ID)
 	if err != nil {
 		e.log.WithError(err).Warn("Failed to get execution token")
 		token = "" // Continue without token (will fail auth)
 	}
-	
+
 	// Get actual execution ID
 	e.mu.RLock()
 	executionID := e.tokens[job.ID]
@@ -624,7 +624,7 @@ func (e *Executor) buildEnvironment(job *types.Job) []string {
 		// Fallback if not found
 		executionID = fmt.Sprintf("exec_%s_%d", job.ID, time.Now().Unix())
 	}
-	
+
 	// Add Cronium-specific variables
 	env = append(env,
 		fmt.Sprintf("CRONIUM_JOB_ID=%s", job.ID),
@@ -634,14 +634,14 @@ func (e *Executor) buildEnvironment(job *types.Job) []string {
 		fmt.Sprintf("CRONIUM_EXECUTION_TOKEN=%s", token),
 		"CRONIUM_RUNTIME_API=http://runtime-api:8081",
 	)
-	
+
 	return env
 }
 
 // buildResourceLimits builds container resource limits
 func (e *Executor) buildResourceLimits(job *types.Job) container.Resources {
 	resources := container.Resources{}
-	
+
 	// Use job-specific limits or defaults
 	if job.Execution.Resources != nil {
 		if job.Execution.Resources.CPULimit > 0 {
@@ -663,7 +663,7 @@ func (e *Executor) buildResourceLimits(job *types.Job) container.Resources {
 		pidsLimit := e.config.Resources.Defaults.Pids
 		resources.PidsLimit = &pidsLimit
 	}
-	
+
 	return resources
 }
 
@@ -679,7 +679,7 @@ func (e *Executor) buildMounts(job *types.Job) []mount.Mount {
 			},
 		},
 	}
-	
+
 	// Add workspace mount if needed
 	if job.Execution.Script.WorkingDirectory != "" {
 		// In production, this would mount from a secure location
@@ -693,24 +693,24 @@ func (e *Executor) buildMounts(job *types.Job) []mount.Mount {
 			},
 		})
 	}
-	
+
 	return mounts
 }
 
 // buildSecurityOptions builds container security options
 func (e *Executor) buildSecurityOptions() []string {
 	opts := []string{}
-	
+
 	if e.config.Security.NoNewPrivileges {
 		opts = append(opts, "no-new-privileges")
 	}
-	
+
 	// Add seccomp profile
 	if e.config.Security.SeccompProfile != "" && e.config.Security.SeccompProfile != "default" {
 		// Only add custom seccomp profiles, let Docker use its default
 		opts = append(opts, fmt.Sprintf("seccomp=%s", e.config.Security.SeccompProfile))
 	}
-	
+
 	return opts
 }
 
@@ -722,47 +722,47 @@ func (e *Executor) streamLogs(ctx context.Context, containerID string, updates c
 		Follow:     true,
 		Timestamps: true,
 	}
-	
+
 	logs, err := e.dockerClient.ContainerLogs(ctx, containerID, options)
 	if err != nil {
 		e.sendError(updates, fmt.Errorf("failed to get container logs: %w", err), false)
 		return
 	}
 	defer logs.Close()
-	
+
 	// Read logs and send updates
 	stdoutReader, stdoutWriter := io.Pipe()
 	stderrReader, stderrWriter := io.Pipe()
-	
+
 	// WaitGroup to track when all log processing is complete
 	var wg sync.WaitGroup
-	
+
 	// Start the log splitter
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		defer stdoutWriter.Close()
 		defer stderrWriter.Close()
-		
+
 		if _, err := stdcopy.StdCopy(stdoutWriter, stderrWriter, logs); err != nil {
 			e.log.WithError(err).Error("Failed to read container logs")
 		}
 	}()
-	
+
 	// Read stdout
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		e.readStream(stdoutReader, "stdout", updates)
 	}()
-	
+
 	// Read stderr
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		e.readStream(stderrReader, "stderr", updates)
 	}()
-	
+
 	// Wait for all log processing to complete
 	wg.Wait()
 }
@@ -771,7 +771,7 @@ func (e *Executor) streamLogs(ctx context.Context, containerID string, updates c
 func (e *Executor) readStream(reader io.Reader, stream string, updates chan<- types.ExecutionUpdate) {
 	buffer := make([]byte, 4096)
 	sequence := int64(0)
-	
+
 	for {
 		n, err := reader.Read(buffer)
 		if n > 0 {
@@ -788,7 +788,7 @@ func (e *Executor) readStream(reader io.Reader, stream string, updates chan<- ty
 				}
 			}
 		}
-		
+
 		if err == io.EOF {
 			break
 		}
@@ -825,7 +825,7 @@ func (e *Executor) sendError(updates chan<- types.ExecutionUpdate, err error, fa
 	if !fatal {
 		status = types.JobStatusRunning
 	}
-	
+
 	e.sendUpdate(updates, types.UpdateTypeError, &types.StatusUpdate{
 		Status:  status,
 		Message: err.Error(),
@@ -838,17 +838,17 @@ func parseMemory(mem string) (int64, error) {
 	if mem == "" {
 		return 0, fmt.Errorf("empty memory string")
 	}
-	
+
 	// Simple parser for common units
 	mem = strings.ToUpper(strings.TrimSpace(mem))
-	
+
 	multipliers := map[string]int64{
 		"B":  1,
 		"KB": 1024,
 		"MB": 1024 * 1024,
 		"GB": 1024 * 1024 * 1024,
 	}
-	
+
 	for suffix, multiplier := range multipliers {
 		if strings.HasSuffix(mem, suffix) {
 			valueStr := strings.TrimSuffix(mem, suffix)
@@ -859,13 +859,13 @@ func parseMemory(mem string) (int64, error) {
 			return int64(value * float64(multiplier)), nil
 		}
 	}
-	
+
 	// Try parsing as raw number (assume bytes)
 	value, err := strconv.ParseInt(mem, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("invalid memory format: %s", mem)
 	}
-	
+
 	return value, nil
 }
 
@@ -877,22 +877,22 @@ func (e *Executor) ensureImage(ctx context.Context, image string) error {
 		// Image exists locally
 		return nil
 	}
-	
+
 	// Image doesn't exist, try to pull it
 	e.log.WithField("image", image).Info("Pulling Docker image")
-	
+
 	reader, err := e.dockerClient.ImagePull(ctx, image, dockerimage.PullOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to pull image: %w", err)
 	}
 	defer reader.Close()
-	
+
 	// Read the output to ensure the pull completes
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, reader); err != nil {
 		return fmt.Errorf("failed to read pull output: %w", err)
 	}
-	
+
 	e.log.WithField("image", image).Info("Successfully pulled Docker image")
 	return nil
 }
@@ -902,11 +902,11 @@ func (e *Executor) updateExecutionError(ctx context.Context, executionID string,
 	if e.apiClient == nil || executionID == "" {
 		return
 	}
-	
+
 	now := time.Now()
 	errorMsg := err.Error()
 	exitCode := -99 // Generic error code
-	
+
 	// Determine exit code based on error type
 	if errors.GetErrorType(err) == errors.ErrorTypeTimeout {
 		exitCode = -1
@@ -915,17 +915,17 @@ func (e *Executor) updateExecutionError(ctx context.Context, executionID string,
 	} else if errors.GetErrorType(err) == errors.ErrorTypeValidation {
 		exitCode = -20
 	}
-	
+
 	updateData := &api.ExecutionStatusUpdate{
 		CompletedAt: &now,
 		ExitCode:    &exitCode,
 		Error:       &errorMsg,
 	}
-	
+
 	// Use a fresh context for the API call
 	apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer apiCancel()
-	
+
 	if e.apiClient != nil {
 		if err := e.apiClient.UpdateExecution(apiCtx, executionID, types.JobStatusFailed, updateData); err != nil {
 			e.log.WithError(err).Warn("Failed to update execution with error")

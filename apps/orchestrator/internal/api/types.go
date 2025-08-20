@@ -12,9 +12,9 @@ import (
 type PollJobsResponse struct {
 	Jobs     []QueuedJob `json:"jobs"`
 	Metadata struct {
-		Timestamp      string `json:"timestamp"`
-		NextPollAfter  string `json:"nextPollAfter,omitempty"`
-		QueueSize      int    `json:"queueSize"`
+		Timestamp     string `json:"timestamp"`
+		NextPollAfter string `json:"nextPollAfter,omitempty"`
+		QueueSize     int    `json:"queueSize"`
 	} `json:"metadata"`
 }
 
@@ -71,10 +71,10 @@ type Script struct {
 
 // HTTPConfig from API
 type HTTPConfig struct {
-	Method  string                 `json:"method"`
-	URL     string                 `json:"url"`
-	Headers map[string]string      `json:"headers,omitempty"`
-	Body    interface{}            `json:"body,omitempty"`
+	Method  string            `json:"method"`
+	URL     string            `json:"url"`
+	Headers map[string]string `json:"headers,omitempty"`
+	Body    interface{}       `json:"body,omitempty"`
 }
 
 // Resources from API
@@ -87,9 +87,9 @@ type Resources struct {
 
 // RetryPolicy from API
 type RetryPolicy struct {
-	MaxAttempts  int `json:"maxAttempts"`
+	MaxAttempts  int    `json:"maxAttempts"`
 	BackoffType  string `json:"backoffType"`
-	BackoffDelay int `json:"backoffDelay"` // seconds
+	BackoffDelay int    `json:"backoffDelay"` // seconds
 }
 
 // AcknowledgeRequest is sent to acknowledge a job
@@ -117,10 +117,10 @@ type UpdateStatusRequest struct {
 
 // StatusDetails contains optional status details
 type StatusDetails struct {
-	Message  string                `json:"message,omitempty"`
-	ExitCode *int                  `json:"exitCode,omitempty"`
-	Error    *types.ErrorDetails   `json:"error,omitempty"`
-	Output   *OutputSummary        `json:"output,omitempty"`
+	Message  string                  `json:"message,omitempty"`
+	ExitCode *int                    `json:"exitCode,omitempty"`
+	Error    *types.ErrorDetails     `json:"error,omitempty"`
+	Output   *OutputSummary          `json:"output,omitempty"`
 	Metrics  *types.ExecutionMetrics `json:"metrics,omitempty"`
 }
 
@@ -146,12 +146,12 @@ type UpdateStatusResponse struct {
 
 // CompleteJobRequest marks a job as complete
 type CompleteJobRequest struct {
-	Status    types.JobStatus          `json:"status"`
-	ExitCode  int                      `json:"exitCode"`
-	Output    Output                   `json:"output"`
-	Artifacts *Artifacts               `json:"artifacts,omitempty"`
-	Metrics   types.ExecutionMetrics   `json:"metrics"`
-	Timestamp string                   `json:"timestamp"`
+	Status    types.JobStatus        `json:"status"`
+	ExitCode  int                    `json:"exitCode"`
+	Output    Output                 `json:"output"`
+	Artifacts *Artifacts             `json:"artifacts,omitempty"`
+	Metrics   types.ExecutionMetrics `json:"metrics"`
+	Timestamp string                 `json:"timestamp"`
 }
 
 // Output contains job output
@@ -178,13 +178,13 @@ type FileArtifact struct {
 
 // HealthReport is sent periodically
 type HealthReport struct {
-	OrchestratorID string                          `json:"orchestratorId"`
-	Timestamp      string                          `json:"timestamp"`
-	Status         string                          `json:"status"`
-	Version        string                          `json:"version"`
-	Uptime         int64                           `json:"uptime"`
-	Components     map[string]ComponentHealth      `json:"components"`
-	Metrics        map[string]interface{}          `json:"metrics"`
+	OrchestratorID string                     `json:"orchestratorId"`
+	Timestamp      string                     `json:"timestamp"`
+	Status         string                     `json:"status"`
+	Version        string                     `json:"version"`
+	Uptime         int64                      `json:"uptime"`
+	Components     map[string]ComponentHealth `json:"components"`
+	Metrics        map[string]interface{}     `json:"metrics"`
 }
 
 // ComponentHealth represents health of a component
@@ -223,16 +223,16 @@ type AuthenticateMessage struct {
 
 // LogMessage streams log entries
 type LogMessage struct {
-	JobID   string            `json:"jobId"`
-	Entries []types.LogEntry  `json:"entries"`
+	JobID   string           `json:"jobId"`
+	Entries []types.LogEntry `json:"entries"`
 }
 
 // StatusMessage updates job status via WebSocket
 type StatusMessage struct {
-	JobID     string              `json:"jobId"`
-	Status    types.JobStatus     `json:"status"`
-	Timestamp string              `json:"timestamp"`
-	Details   interface{}         `json:"details,omitempty"`
+	JobID     string          `json:"jobId"`
+	Status    types.JobStatus `json:"status"`
+	Timestamp string          `json:"timestamp"`
+	Details   interface{}     `json:"details,omitempty"`
 }
 
 // PingMessage is a heartbeat message

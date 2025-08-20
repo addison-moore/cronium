@@ -28,43 +28,43 @@ const (
 
 // Job represents a job to be executed
 type Job struct {
-	ID           string              `json:"id"`
-	Type         JobType             `json:"type"`
-	Priority     int                 `json:"priority"`
-	CreatedAt    time.Time           `json:"createdAt"`
-	ScheduledFor *time.Time          `json:"scheduledFor,omitempty"`
-	Attempts     int                 `json:"attempts"`
-	Execution    ExecutionConfig     `json:"execution"`
-	Metadata     map[string]any      `json:"metadata,omitempty"`
-	
+	ID           string          `json:"id"`
+	Type         JobType         `json:"type"`
+	Priority     int             `json:"priority"`
+	CreatedAt    time.Time       `json:"createdAt"`
+	ScheduledFor *time.Time      `json:"scheduledFor,omitempty"`
+	Attempts     int             `json:"attempts"`
+	Execution    ExecutionConfig `json:"execution"`
+	Metadata     map[string]any  `json:"metadata,omitempty"`
+
 	// Runtime fields
-	AcknowledgedAt *time.Time         `json:"-"`
-	StartedAt      *time.Time         `json:"-"`
-	CompletedAt    *time.Time         `json:"-"`
-	LeaseExpiry    *time.Time         `json:"-"`
-	Timeout        time.Duration      `json:"-"`
+	AcknowledgedAt *time.Time    `json:"-"`
+	StartedAt      *time.Time    `json:"-"`
+	CompletedAt    *time.Time    `json:"-"`
+	LeaseExpiry    *time.Time    `json:"-"`
+	Timeout        time.Duration `json:"-"`
 }
 
 // ExecutionConfig contains the job execution configuration
 type ExecutionConfig struct {
-	Target       Target              `json:"target"`
-	Script       *Script             `json:"script,omitempty"`
-	HTTP         *HTTPConfig         `json:"http,omitempty"`
-	Environment  map[string]string   `json:"environment"`
-	Timeout      time.Duration       `json:"timeout"`
-	Resources    *Resources          `json:"resources,omitempty"`
-	RetryPolicy  *RetryPolicy        `json:"retryPolicy,omitempty"`
-	
+	Target      Target            `json:"target"`
+	Script      *Script           `json:"script,omitempty"`
+	HTTP        *HTTPConfig       `json:"http,omitempty"`
+	Environment map[string]string `json:"environment"`
+	Timeout     time.Duration     `json:"timeout"`
+	Resources   *Resources        `json:"resources,omitempty"`
+	RetryPolicy *RetryPolicy      `json:"retryPolicy,omitempty"`
+
 	// Workflow support
-	InputData    map[string]any      `json:"inputData,omitempty"`
-	Variables    map[string]any      `json:"variables,omitempty"`
+	InputData map[string]any `json:"inputData,omitempty"`
+	Variables map[string]any `json:"variables,omitempty"`
 }
 
 // Target defines where to execute the job
 type Target struct {
-	Type          TargetType         `json:"type"`
-	ServerID      *string            `json:"serverId,omitempty"`
-	ServerDetails *ServerDetails     `json:"serverDetails,omitempty"`
+	Type          TargetType     `json:"type"`
+	ServerID      *string        `json:"serverId,omitempty"`
+	ServerDetails *ServerDetails `json:"serverDetails,omitempty"`
 }
 
 // TargetType defines the execution target type

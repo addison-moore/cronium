@@ -9,7 +9,8 @@ export interface MultiServerJobPayload {
     host: string;
     port: number;
     username: string;
-    privateKey: string;
+    privateKey?: string;
+    password?: string;
     passphrase?: string;
   }>;
   payloadPath?: string;
@@ -51,24 +52,20 @@ export async function buildMultiServerJobMetadata(
     const server = await storage.getServer(eventServer.serverId);
     if (!server) continue;
 
-    // Decrypt server credentials
-    // Server credentials are already decrypted
-    const decrypted = {
-      privateKey: server.sshKey,
-      passphrase: undefined as string | undefined,
-    };
-
+    // Build server info based on authentication method
     const serverInfo: NonNullable<MultiServerJobPayload["servers"]>[number] = {
       id: String(server.id),
       name: server.name,
       host: server.address,
       port: server.port,
       username: server.username,
-      privateKey: decrypted.privateKey,
     };
 
-    if (decrypted.passphrase !== undefined) {
-      serverInfo.passphrase = decrypted.passphrase;
+    // Add authentication credentials based on what's available
+    if (server.sshKey) {
+      serverInfo.privateKey = server.sshKey;
+    } else if (server.password) {
+      serverInfo.password = server.password;
     }
 
     servers.push(serverInfo);

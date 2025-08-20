@@ -34,10 +34,10 @@ export const workflowNodeSchema = z.object({
     eventTypeIcon: z.string(),
     description: z.string().optional(),
     tags: z.array(z.string()).default([]),
-    serverId: z.number().int().positive().optional(),
+    serverId: z.number().int().positive().nullable().optional(),
     serverName: z.string().optional(),
-    createdAt: z.string().optional(),
-    updatedAt: z.string().optional(),
+    createdAt: z.union([z.string(), z.date()]).optional(),
+    updatedAt: z.union([z.string(), z.date()]).optional(),
   }),
 });
 

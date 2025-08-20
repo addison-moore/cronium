@@ -14,19 +14,19 @@ import (
 
 // WebSocketClient handles log streaming to the backend via WebSocket
 type WebSocketClient struct {
-	url        string
-	token      string
-	log        *logrus.Logger
-	conn       *websocket.Conn
-	mu         sync.RWMutex
-	connected  bool
-	reconnectDelay time.Duration
+	url               string
+	token             string
+	log               *logrus.Logger
+	conn              *websocket.Conn
+	mu                sync.RWMutex
+	connected         bool
+	reconnectDelay    time.Duration
 	maxReconnectDelay time.Duration
-	
+
 	// Channels
-	send       chan LogMessage
-	done       chan struct{}
-	
+	send chan LogMessage
+	done chan struct{}
+
 	// Callbacks
 	onConnect    func()
 	onDisconnect func(error)
@@ -58,44 +58,44 @@ func NewWebSocketClient(wsURL, token string, log *logrus.Logger) *WebSocketClien
 func (c *WebSocketClient) Connect(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	if c.connected {
 		return nil
 	}
-	
+
 	// Parse URL and add auth token
 	u, err := url.Parse(c.url)
 	if err != nil {
 		return fmt.Errorf("invalid WebSocket URL: %w", err)
 	}
-	
+
 	// Add authentication
 	header := make(map[string][]string)
 	header["Authorization"] = []string{"Bearer " + c.token}
-	
+
 	// Connect with context
 	dialer := websocket.Dialer{
 		HandshakeTimeout: 10 * time.Second,
 	}
-	
+
 	conn, _, err := dialer.DialContext(ctx, u.String(), header)
 	if err != nil {
 		return fmt.Errorf("failed to connect to WebSocket: %w", err)
 	}
-	
+
 	c.conn = conn
 	c.connected = true
 	c.reconnectDelay = time.Second // Reset delay on successful connection
-	
+
 	// Call connect callback
 	if c.onConnect != nil {
 		c.onConnect()
 	}
-	
+
 	// Start read and write pumps
 	go c.readPump()
 	go c.writePump()
-	
+
 	c.log.Info("WebSocket connected for log streaming")
 	return nil
 }
@@ -104,20 +104,20 @@ func (c *WebSocketClient) Connect(ctx context.Context) error {
 func (c *WebSocketClient) Disconnect() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	if !c.connected {
 		return nil
 	}
-	
+
 	c.connected = false
 	close(c.done)
-	
+
 	// Send close message
 	if c.conn != nil {
 		c.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 		c.conn.Close()
 	}
-	
+
 	c.log.Info("WebSocket disconnected")
 	return nil
 }
@@ -131,7 +131,7 @@ func (c *WebSocketClient) SendLog(jobID string, logEntry *types.LogEntry) {
 		Line:      logEntry.Line,
 		Sequence:  logEntry.Sequence,
 	}
-	
+
 	select {
 	case c.send <- msg:
 	default:
@@ -160,13 +160,13 @@ func (c *WebSocketClient) readPump() {
 		c.mu.Unlock()
 		c.conn.Close()
 	}()
-	
+
 	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		return nil
 	})
-	
+
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
@@ -178,7 +178,7 @@ func (c *WebSocketClient) readPump() {
 			}
 			return
 		}
-		
+
 		// Handle control messages from server if needed
 		c.log.WithField("message", string(message)).Debug("Received WebSocket message")
 	}
@@ -191,7 +191,7 @@ func (c *WebSocketClient) writePump() {
 		ticker.Stop()
 		c.conn.Close()
 	}()
-	
+
 	for {
 		select {
 		case message, ok := <-c.send:
@@ -200,13 +200,13 @@ func (c *WebSocketClient) writePump() {
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-			
+
 			// Send as JSON
 			if err := c.conn.WriteJSON(message); err != nil {
 				c.log.WithError(err).Error("Failed to send log message")
 				return
 			}
-			
+
 			// Send any buffered messages
 			n := len(c.send)
 			for i := 0; i < n; i++ {
@@ -216,13 +216,13 @@ func (c *WebSocketClient) writePump() {
 					return
 				}
 			}
-			
+
 		case <-ticker.C:
 			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
-			
+
 		case <-c.done:
 			return
 		}
@@ -237,10 +237,10 @@ func (c *WebSocketClient) Reconnect(ctx context.Context) {
 			return
 		case <-time.After(c.reconnectDelay):
 			c.log.Info("Attempting to reconnect WebSocket")
-			
+
 			if err := c.Connect(ctx); err != nil {
 				c.log.WithError(err).Warn("Failed to reconnect WebSocket")
-				
+
 				// Exponential backoff
 				c.reconnectDelay *= 2
 				if c.reconnectDelay > c.maxReconnectDelay {

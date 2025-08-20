@@ -45,17 +45,17 @@ in isolated Docker containers with real-time log streaming and comprehensive mon
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Initialize logger
 		log = logger.New()
-		
+
 		// Load configuration
 		var err error
 		cfg, err = config.Load(cfgFile)
 		if err != nil {
 			return fmt.Errorf("failed to load configuration: %w", err)
 		}
-		
+
 		// Configure logger with loaded config
 		logger.Configure(log, cfg.Logging)
-		
+
 		return nil
 	},
 	RunE: runAgent,
@@ -63,7 +63,7 @@ in isolated Docker containers with real-time log streaming and comprehensive mon
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is cronium-orchestrator.yaml)")
-	
+
 	// Add subcommands
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(validateCmd)
@@ -91,12 +91,12 @@ var validateCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Configuration is already loaded and validated in PersistentPreRunE
 		log.Info("Configuration is valid")
-		
+
 		// Pretty print configuration (with secrets hidden)
 		if err := cfg.Print(os.Stdout); err != nil {
 			return fmt.Errorf("failed to print configuration: %w", err)
 		}
-		
+
 		return nil
 	},
 }
@@ -107,19 +107,19 @@ func runAgent(cmd *cobra.Command, args []string) error {
 		"build":   BuildTime,
 		"commit":  GitCommit,
 	}).Info("Starting Cronium Agent")
-	
+
 	// Create main context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	
+
 	// Set up signal handling
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	
+
 	// Create health checker
 	healthChecker := health.NewChecker(cfg.Monitoring, log)
 	go healthChecker.Start(ctx)
-	
+
 	// Create and start health server
 	healthServer := health.NewServer(cfg.Monitoring, healthChecker, log)
 	if cfg.Monitoring.Enabled {
@@ -129,7 +129,7 @@ func runAgent(cmd *cobra.Command, args []string) error {
 			}
 		}()
 	}
-	
+
 	// Create and start metrics server
 	metricsServer := metrics.NewServer(cfg.Monitoring, log)
 	if cfg.Monitoring.Enabled {
@@ -139,43 +139,43 @@ func runAgent(cmd *cobra.Command, args []string) error {
 			}
 		}()
 	}
-	
+
 	// Create and start the orchestrator
 	orch, err := NewSimpleOrchestrator(cfg, log)
 	if err != nil {
 		return fmt.Errorf("failed to create orchestrator: %w", err)
 	}
-	
+
 	// Start orchestrator in background
 	orchDone := make(chan error, 1)
 	go func() {
 		orchDone <- orch.Run(ctx)
 	}()
-	
+
 	// Wait for shutdown signal or orchestrator error
 	select {
 	case sig := <-sigChan:
 		log.WithField("signal", sig).Info("Received shutdown signal")
 		cancel()
-		
+
 		// Wait for orchestrator to finish
 		if err := <-orchDone; err != nil {
 			log.WithError(err).Error("Orchestrator shutdown error")
 		}
-		
+
 		// Shutdown health server
 		if err := healthServer.Shutdown(context.Background()); err != nil {
 			log.WithError(err).Error("Failed to shutdown health server")
 		}
-		
+
 		// Shutdown metrics server
 		if err := metricsServer.Shutdown(context.Background()); err != nil {
 			log.WithError(err).Error("Failed to shutdown metrics server")
 		}
-		
+
 		log.Info("Cronium Agent stopped")
 		return nil
-		
+
 	case err := <-orchDone:
 		if err != nil {
 			log.WithError(err).Error("Orchestrator failed")

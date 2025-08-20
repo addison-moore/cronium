@@ -562,12 +562,26 @@ export class WorkflowExecutor {
       const executionStartTime = new Date();
 
       // Execute the event using scheduler with input data
+      // Use synchronous execution (waitForCompletion) for workflows
+      console.log(
+        `[DEBUG] executeNode - Calling scheduler.executeEvent with waitForCompletion=true for event ${event.id}, workflow ${workflow.id}`,
+      );
+      console.log(
+        `[DEBUG] executeNode - Parameters: eventId=${event.id}, workflowExecutionId=${workflowExecutionId}, sequenceOrder=${sequenceOrder}, workflowId=${workflow.id}, waitForCompletion=true`,
+      );
+
       const executionResult = await scheduler.executeEvent(
         event.id,
         workflowExecutionId,
         sequenceOrder,
         resolvedInputData,
         workflow.id,
+        true, // waitForCompletion - ensures we get scriptOutput and condition
+      );
+
+      console.log(
+        `[DEBUG] executeNode - Result received:`,
+        JSON.stringify(executionResult),
       );
 
       // Record execution end time and calculate duration

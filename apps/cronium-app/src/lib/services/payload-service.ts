@@ -225,7 +225,7 @@ export class PayloadService {
       manifest.metadata = {
         ...manifest.metadata,
         jobId,
-        executionId: executionId ?? undefined,
+        ...(executionId && { executionId }),
       };
 
       // Write updated manifest

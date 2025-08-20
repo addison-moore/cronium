@@ -16,22 +16,22 @@ import (
 type Collector struct {
 	config config.MonitoringConfig
 	log    *logrus.Logger
-	
+
 	// Metrics
-	jobsReceived   *prometheus.CounterVec
-	jobsCompleted  *prometheus.CounterVec
-	jobsFailed     *prometheus.CounterVec
-	jobDuration    *prometheus.HistogramVec
-	jobsActive     prometheus.Gauge
-	
+	jobsReceived  *prometheus.CounterVec
+	jobsCompleted *prometheus.CounterVec
+	jobsFailed    *prometheus.CounterVec
+	jobDuration   *prometheus.HistogramVec
+	jobsActive    prometheus.Gauge
+
 	// API metrics
-	apiRequests    *prometheus.CounterVec
-	apiDuration    *prometheus.HistogramVec
-	apiErrors      *prometheus.CounterVec
-	
+	apiRequests *prometheus.CounterVec
+	apiDuration *prometheus.HistogramVec
+	apiErrors   *prometheus.CounterVec
+
 	// Resource metrics
 	connectionPool *prometheus.GaugeVec
-	
+
 	mu sync.RWMutex
 }
 
@@ -40,7 +40,7 @@ func NewCollector(cfg config.MonitoringConfig, log *logrus.Logger) *Collector {
 	c := &Collector{
 		config: cfg,
 		log:    log,
-		
+
 		// Job metrics
 		jobsReceived: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -77,7 +77,7 @@ func NewCollector(cfg config.MonitoringConfig, log *logrus.Logger) *Collector {
 				Help: "Number of currently executing jobs",
 			},
 		),
-		
+
 		// API metrics
 		apiRequests: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -101,7 +101,7 @@ func NewCollector(cfg config.MonitoringConfig, log *logrus.Logger) *Collector {
 			},
 			[]string{"endpoint", "method", "code"},
 		),
-		
+
 		// Resource metrics
 		connectionPool: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -111,10 +111,10 @@ func NewCollector(cfg config.MonitoringConfig, log *logrus.Logger) *Collector {
 			[]string{"server", "state"},
 		),
 	}
-	
+
 	// Register metrics
 	c.registerMetrics()
-	
+
 	return c
 }
 
@@ -207,15 +207,15 @@ func (s *Server) Start() error {
 		s.log.Info("Metrics server disabled")
 		return nil
 	}
-	
+
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
-	
+
 	s.server = &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.config.MetricsPort),
 		Handler: mux,
 	}
-	
+
 	s.log.WithField("port", s.config.MetricsPort).Info("Starting metrics server")
 	return s.server.ListenAndServe()
 }

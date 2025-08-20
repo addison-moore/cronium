@@ -26,11 +26,11 @@ type PayloadManifest struct {
 
 // PayloadData represents the data needed to create a payload
 type PayloadData struct {
-	JobID         string            `json:"jobId"`
-	ExecutionID   string            `json:"executionId"`
-	ScriptContent string            `json:"scriptContent"`
-	ScriptType    string            `json:"scriptType"`
-	Environment   map[string]string `json:"environment"`
+	JobID         string                 `json:"jobId"`
+	ExecutionID   string                 `json:"executionId"`
+	ScriptContent string                 `json:"scriptContent"`
+	ScriptType    string                 `json:"scriptType"`
+	Environment   map[string]string      `json:"environment"`
 	Metadata      map[string]interface{} `json:"metadata"`
 }
 
@@ -100,7 +100,7 @@ func (s *Service) CreatePayload(data *PayloadData) (string, error) {
 	// Create tar.gz archive
 	payloadFilename := fmt.Sprintf("job-%s.tar.gz", data.JobID)
 	payloadPath := filepath.Join(s.storageDir, payloadFilename)
-	
+
 	if err := s.createTarGz(tempDir, payloadPath); err != nil {
 		return "", fmt.Errorf("failed to create archive: %w", err)
 	}

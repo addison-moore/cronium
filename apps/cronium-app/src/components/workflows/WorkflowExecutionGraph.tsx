@@ -12,10 +12,12 @@ import {
   Loader2,
   Activity,
   Info,
+  RefreshCw,
 } from "lucide-react";
 import { LogStatus } from "@/shared/schema";
 import type { EventType } from "@/shared/schema";
 import { EventDetailsPopover } from "@/components/ui/event-details-popover";
+import { trpc } from "@/lib/trpc";
 
 interface WorkflowNode {
   id: string;
@@ -106,6 +108,10 @@ export default function WorkflowExecutionGraph({
   const [stateTransitionTimeout, setStateTransitionTimeout] =
     useState<NodeJS.Timeout | null>(null);
   const hasAnyDataRef = React.useRef(false);
+  const lastNotifiedExecutionRef = React.useRef<{
+    id: number;
+    status: string;
+  } | null>(null);
 
   // Detect screen size for responsive layout
   useEffect(() => {
@@ -118,83 +124,89 @@ export default function WorkflowExecutionGraph({
     return () => window.removeEventListener("resize", checkScreenSize);
   }, []);
 
-  // Use REST API for execution details since tRPC endpoint doesn't exist yet
+  // Use tRPC query for execution details
+  const { data: executionData, refetch: refetchExecution } =
+    trpc.workflows.getExecution.useQuery(
+      {
+        workflowId,
+        executionId: executionId ?? 0,
+      },
+      {
+        enabled: !!executionId && executionId > 0,
+        refetchInterval: isExecuting ? 2000 : false, // Poll every 2 seconds when executing
+      },
+    );
 
-  // Declare fetchExecutionEvents function for fetching execution details via REST API
-  const fetchExecutionEvents = useCallback(
-    async (_isPolling = false) => {
-      if (!executionId) {
-        return;
+  // Process execution data when it changes
+  useEffect(() => {
+    if (executionData) {
+      // Extract events from the execution data
+      const events = (executionData as any).events ?? [];
+      setExecutionEvents(events);
+
+      // Set current execution
+      const execution = {
+        id: executionData.id,
+        workflowId: executionData.workflowId,
+        status: executionData.status,
+        startedAt:
+          executionData.startedAt instanceof Date
+            ? executionData.startedAt.toISOString()
+            : (executionData.startedAt as string),
+        completedAt:
+          executionData.completedAt instanceof Date
+            ? executionData.completedAt.toISOString()
+            : (executionData.completedAt as string | null),
+        totalDuration: executionData.totalDuration ?? null,
+      };
+      setCurrentExecution(execution);
+      hasAnyDataRef.current = true;
+
+      // Update internal execution state based on actual status
+      const isCompleted =
+        executionData.status === LogStatus.SUCCESS ||
+        executionData.status === LogStatus.FAILURE ||
+        executionData.status === LogStatus.TIMEOUT ||
+        executionData.status === LogStatus.PARTIAL;
+
+      setActuallyExecuting(!isCompleted);
+    }
+  }, [executionData]);
+
+  // Notify parent of execution update in a separate effect to prevent loops
+  useEffect(() => {
+    if (currentExecution && onExecutionUpdate) {
+      // Only notify if execution has actually changed
+      const lastNotified = lastNotifiedExecutionRef.current;
+      if (
+        !lastNotified ||
+        lastNotified.id !== currentExecution.id ||
+        lastNotified.status !== currentExecution.status
+      ) {
+        onExecutionUpdate(currentExecution);
+        lastNotifiedExecutionRef.current = {
+          id: currentExecution.id,
+          status: currentExecution.status,
+        };
       }
-
-      try {
-        const response = await fetch(
-          `/api/workflows/${workflowId}/executions/${executionId}`,
-        );
-
-        if (response.ok) {
-          const data = (await response.json()) as {
-            data?: {
-              events?: WorkflowExecutionEvent[];
-              execution?: WorkflowExecution;
-            };
-          };
-          const events = data.data?.events ?? [];
-          const execution = data.data?.execution;
-
-          // Only update state if we're still working with the same execution ID
-          if (executionId === lastExecutionId) {
-            setExecutionEvents(events);
-            setCurrentExecution(execution ?? null);
-            hasAnyDataRef.current = true;
-
-            // Update internal execution state based on actual status
-            if (execution) {
-              const isCompleted =
-                execution.status === LogStatus.SUCCESS ||
-                execution.status === LogStatus.FAILURE ||
-                execution.status === "completed" ||
-                execution.status === "failed";
-
-              setActuallyExecuting(!isCompleted);
-            }
-
-            // Notify parent of execution update
-            if (onExecutionUpdate && execution) {
-              onExecutionUpdate(execution);
-            }
-          }
-        }
-      } catch {
-        // Silently handle fetch errors to prevent state corruption
-      } finally {
-      }
-    },
-    [workflowId, executionId, lastExecutionId, onExecutionUpdate],
-  );
+    }
+  }, [currentExecution, onExecutionUpdate]);
 
   // Function to manually refetch execution details
   const refetchExecutionDetails = useCallback(() => {
     if (!executionId) return;
-    void fetchExecutionEvents(false);
-  }, [executionId, fetchExecutionEvents]);
-
-  // Initial fetch of execution data when executionId changes
-  useEffect(() => {
-    // Fetch execution details via REST API
-    if (
-      executionId &&
-      executionId === lastExecutionId &&
-      !hasAnyDataRef.current
-    ) {
-      void fetchExecutionEvents(false);
-    }
-  }, [executionId, lastExecutionId, fetchExecutionEvents]);
+    void refetchExecution();
+  }, [executionId, refetchExecution]);
 
   // Update nodes with execution status
   useEffect(() => {
     const updatedNodes: NodeWithStatus[] = nodes.map((node) => {
-      const nodeId = parseInt(node.id);
+      // Extract numeric ID from node.id which is in format "node-123"
+      const nodeIdMatch = /node-(\d+)/.exec(node.id);
+      const nodeId =
+        nodeIdMatch && nodeIdMatch[1]
+          ? parseInt(nodeIdMatch[1])
+          : parseInt(node.id);
       const executionEvent = executionEvents.find(
         (event) => event.nodeId === nodeId,
       );
@@ -244,13 +256,9 @@ export default function WorkflowExecutionGraph({
           setCurrentExecution(null);
           hasAnyDataRef.current = false;
 
-          // Trigger tRPC refetch or REST fetch
+          // Trigger tRPC refetch
           if (executionId) {
-            if (refetchExecutionDetails) {
-              void refetchExecutionDetails();
-            } else {
-              void fetchExecutionEvents(false);
-            }
+            void refetchExecutionDetails();
           }
         }, 100); // Brief delay to prevent rapid state changes
 
@@ -264,7 +272,6 @@ export default function WorkflowExecutionGraph({
     isExecuting,
     stateTransitionTimeout,
     refetchExecutionDetails,
-    fetchExecutionEvents,
   ]);
 
   // Stabilize actuallyExecuting state to prevent rapid changes
@@ -288,13 +295,7 @@ export default function WorkflowExecutionGraph({
     }
   }, [isExecuting, currentExecution, actuallyExecuting]);
 
-  // Poll for updates when execution is active using REST API fallback
-  useEffect(() => {
-    if (!isExecuting || !executionId) return;
-
-    const interval = setInterval(() => void fetchExecutionEvents(true), 2000);
-    return () => clearInterval(interval);
-  }, [isExecuting, executionId, fetchExecutionEvents]);
+  // Note: Polling is now handled by the tRPC query's refetchInterval
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -308,7 +309,7 @@ export default function WorkflowExecutionGraph({
   // Get status icon for a node
   const getStatusIcon = (node: NodeWithStatus) => {
     if (node.isCurrentlyExecuting) {
-      return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
+      return <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />;
     }
 
     switch (node.status) {
@@ -317,7 +318,7 @@ export default function WorkflowExecutionGraph({
       case LogStatus.FAILURE:
         return <XCircle className="h-4 w-4 text-red-500" />;
       case LogStatus.RUNNING:
-        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
+        return <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />;
       default:
         return <Clock className="h-4 w-4 text-gray-400" />;
     }
@@ -707,7 +708,7 @@ export default function WorkflowExecutionGraph({
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Loader2 className="h-4 w-4 text-blue-500" />
+                    <RefreshCw className="h-4 w-4 text-blue-500" />
                     <span>
                       {
                         executionEvents.filter(

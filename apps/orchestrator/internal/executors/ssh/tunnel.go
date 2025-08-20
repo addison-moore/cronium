@@ -56,15 +56,15 @@ func (tm *TunnelManager) Start(sshClient *ssh.Client) error {
 // Stop stops the reverse tunnel
 func (tm *TunnelManager) Stop() {
 	tm.log.Info("Stopping SSH reverse tunnel")
-	
+
 	close(tm.stopCh)
-	
+
 	if tm.listener != nil {
 		tm.listener.Close()
 	}
-	
+
 	tm.wg.Wait()
-	
+
 	tm.log.Info("SSH reverse tunnel stopped")
 }
 

@@ -12,34 +12,34 @@ import (
 
 // Streamer handles log streaming for multiple jobs
 type Streamer struct {
-	config    config.WSLogConfig
-	wsClient  *WebSocketClient
-	log       *logrus.Logger
-	
+	config   config.WSLogConfig
+	wsClient *WebSocketClient
+	log      *logrus.Logger
+
 	// Job tracking
-	mu          sync.RWMutex
-	activeJobs  map[string]*JobLogger
-	
+	mu         sync.RWMutex
+	activeJobs map[string]*JobLogger
+
 	// Control
-	ctx         context.Context
-	cancel      context.CancelFunc
-	wg          sync.WaitGroup
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
 // JobLogger tracks logging for a specific job
 type JobLogger struct {
-	jobID      string
-	streamer   *Streamer
-	buffer     []LogMessage
-	bufferMu   sync.Mutex
-	lastFlush  time.Time
-	sequence   int64
+	jobID     string
+	streamer  *Streamer
+	buffer    []LogMessage
+	bufferMu  sync.Mutex
+	lastFlush time.Time
+	sequence  int64
 }
 
 // NewStreamer creates a new log streamer
 func NewStreamer(cfg config.WSLogConfig, wsURL, token string, log *logrus.Logger) *Streamer {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	s := &Streamer{
 		config:     cfg,
 		log:        log,
@@ -47,20 +47,20 @@ func NewStreamer(cfg config.WSLogConfig, wsURL, token string, log *logrus.Logger
 		ctx:        ctx,
 		cancel:     cancel,
 	}
-	
+
 	// Create WebSocket client if enabled
 	if cfg.Enabled && wsURL != "" {
 		s.wsClient = NewWebSocketClient(wsURL, token, log)
 		s.wsClient.SetCallbacks(
 			func() { log.Info("Log streaming connected") },
-			func(err error) { 
+			func(err error) {
 				log.WithError(err).Warn("Log streaming disconnected")
 				// Attempt reconnection
 				go s.wsClient.Reconnect(ctx)
 			},
 		)
 	}
-	
+
 	return s
 }
 
@@ -70,36 +70,36 @@ func (s *Streamer) Start(ctx context.Context) error {
 		s.log.Info("Log streaming disabled")
 		return nil
 	}
-	
+
 	// Connect WebSocket
 	if err := s.wsClient.Connect(ctx); err != nil {
 		s.log.WithError(err).Warn("Failed to connect log streaming, will retry")
 		// Start reconnection in background
 		go s.wsClient.Reconnect(s.ctx)
 	}
-	
+
 	// Start flush timer
 	s.wg.Add(1)
 	go s.flushLoop()
-	
+
 	return nil
 }
 
 // Stop stops the log streaming service
 func (s *Streamer) Stop() error {
 	s.cancel()
-	
+
 	// Flush all pending logs
 	s.flushAll()
-	
+
 	// Disconnect WebSocket
 	if s.wsClient != nil {
 		s.wsClient.Disconnect()
 	}
-	
+
 	// Wait for goroutines
 	s.wg.Wait()
-	
+
 	return nil
 }
 
@@ -107,17 +107,17 @@ func (s *Streamer) Stop() error {
 func (s *Streamer) StartJob(jobID string) *JobLogger {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	jl := &JobLogger{
 		jobID:     jobID,
 		streamer:  s,
 		buffer:    make([]LogMessage, 0, s.config.BufferSize),
 		lastFlush: time.Now(),
 	}
-	
+
 	s.activeJobs[jobID] = jl
 	s.log.WithField("jobID", jobID).Debug("Started job logging")
-	
+
 	return jl
 }
 
@@ -125,11 +125,11 @@ func (s *Streamer) StartJob(jobID string) *JobLogger {
 func (s *Streamer) StopJob(jobID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if jl, exists := s.activeJobs[jobID]; exists {
 		// Flush any remaining logs
 		jl.Flush()
-		
+
 		delete(s.activeJobs, jobID)
 		s.log.WithField("jobID", jobID).Debug("Stopped job logging")
 	}
@@ -139,7 +139,7 @@ func (s *Streamer) StopJob(jobID string) {
 func (s *Streamer) GetJobLogger(jobID string) (*JobLogger, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	jl, exists := s.activeJobs[jobID]
 	return jl, exists
 }
@@ -159,10 +159,10 @@ func (s *Streamer) StreamLog(jobID string, logEntry *types.LogEntry) {
 // flushLoop periodically flushes buffered logs
 func (s *Streamer) flushLoop() {
 	defer s.wg.Done()
-	
+
 	ticker := time.NewTicker(s.config.FlushInterval)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -181,7 +181,7 @@ func (s *Streamer) flushAll() {
 		jobs = append(jobs, jl)
 	}
 	s.mu.RUnlock()
-	
+
 	for _, jl := range jobs {
 		jl.FlushIfNeeded()
 	}
@@ -193,9 +193,9 @@ func (s *Streamer) flushAll() {
 func (jl *JobLogger) AddLog(logEntry *types.LogEntry) {
 	jl.bufferMu.Lock()
 	defer jl.bufferMu.Unlock()
-	
+
 	jl.sequence++
-	
+
 	msg := LogMessage{
 		JobID:     jl.jobID,
 		Timestamp: logEntry.Timestamp,
@@ -203,13 +203,13 @@ func (jl *JobLogger) AddLog(logEntry *types.LogEntry) {
 		Line:      logEntry.Line,
 		Sequence:  jl.sequence,
 	}
-	
+
 	jl.buffer = append(jl.buffer, msg)
-	
+
 	// Check if we should flush
 	shouldFlush := len(jl.buffer) >= jl.streamer.config.BatchSize ||
 		time.Since(jl.lastFlush) > jl.streamer.config.FlushInterval
-	
+
 	if shouldFlush {
 		jl.flushLocked()
 	}
@@ -219,7 +219,7 @@ func (jl *JobLogger) AddLog(logEntry *types.LogEntry) {
 func (jl *JobLogger) FlushIfNeeded() {
 	jl.bufferMu.Lock()
 	defer jl.bufferMu.Unlock()
-	
+
 	if len(jl.buffer) > 0 && time.Since(jl.lastFlush) > jl.streamer.config.FlushInterval {
 		jl.flushLocked()
 	}
@@ -229,7 +229,7 @@ func (jl *JobLogger) FlushIfNeeded() {
 func (jl *JobLogger) Flush() {
 	jl.bufferMu.Lock()
 	defer jl.bufferMu.Unlock()
-	
+
 	if len(jl.buffer) > 0 {
 		jl.flushLocked()
 	}
@@ -240,13 +240,13 @@ func (jl *JobLogger) flushLocked() {
 	if len(jl.buffer) == 0 {
 		return
 	}
-	
+
 	// Send to WebSocket if connected
 	if jl.streamer.wsClient != nil && jl.streamer.wsClient.IsConnected() {
 		for _, msg := range jl.buffer {
 			jl.streamer.wsClient.send <- msg
 		}
-		
+
 		jl.streamer.log.WithFields(logrus.Fields{
 			"jobID": jl.jobID,
 			"count": len(jl.buffer),
@@ -254,7 +254,7 @@ func (jl *JobLogger) flushLocked() {
 	} else {
 		jl.streamer.log.WithField("jobID", jl.jobID).Debug("WebSocket not connected, dropping logs")
 	}
-	
+
 	// Clear buffer
 	jl.buffer = jl.buffer[:0]
 	jl.lastFlush = time.Now()

@@ -37,13 +37,13 @@ type OrchestratorConfig struct {
 
 // APIConfig defines backend API settings
 type APIConfig struct {
-	Endpoint       string        `yaml:"endpoint" envconfig:"ENDPOINT" required:"true"`
-	Token          string        `yaml:"token" envconfig:"TOKEN" required:"true"`
-	WSEndpoint     string        `yaml:"wsEndpoint" envconfig:"WS_ENDPOINT"`
-	Timeout        time.Duration `yaml:"timeout" envconfig:"TIMEOUT" default:"5m"`
-	RetryConfig    RetryConfig   `yaml:"retry" envconfig:"RETRY"`
+	Endpoint       string          `yaml:"endpoint" envconfig:"ENDPOINT" required:"true"`
+	Token          string          `yaml:"token" envconfig:"TOKEN" required:"true"`
+	WSEndpoint     string          `yaml:"wsEndpoint" envconfig:"WS_ENDPOINT"`
+	Timeout        time.Duration   `yaml:"timeout" envconfig:"TIMEOUT" default:"5m"`
+	RetryConfig    RetryConfig     `yaml:"retry" envconfig:"RETRY"`
 	RateLimit      RateLimitConfig `yaml:"rateLimit" envconfig:"RATE_LIMIT"`
-	OrchestratorID string        `yaml:"-"` // Set from OrchestratorConfig.ID
+	OrchestratorID string          `yaml:"-"` // Set from OrchestratorConfig.ID
 }
 
 // JobsConfig defines job processing settings
@@ -58,13 +58,13 @@ type JobsConfig struct {
 
 // ContainerConfig defines Docker container settings
 type ContainerConfig struct {
-	Docker    DockerConfig              `yaml:"docker" envconfig:"DOCKER"`
-	Images    map[string]string         `yaml:"images" envconfig:"IMAGES"`
-	Resources ResourceConfig            `yaml:"resources" envconfig:"RESOURCES"`
-	Security  ContainerSecurityConfig   `yaml:"security" envconfig:"SECURITY"`
-	Volumes   VolumeConfig              `yaml:"volumes" envconfig:"VOLUMES"`
-	Network   NetworkConfig             `yaml:"network" envconfig:"NETWORK"`
-	Runtime   RuntimeConfig             `yaml:"runtime" envconfig:"RUNTIME"`
+	Docker    DockerConfig            `yaml:"docker" envconfig:"DOCKER"`
+	Images    map[string]string       `yaml:"images" envconfig:"IMAGES"`
+	Resources ResourceConfig          `yaml:"resources" envconfig:"RESOURCES"`
+	Security  ContainerSecurityConfig `yaml:"security" envconfig:"SECURITY"`
+	Volumes   VolumeConfig            `yaml:"volumes" envconfig:"VOLUMES"`
+	Network   NetworkConfig           `yaml:"network" envconfig:"NETWORK"`
+	Runtime   RuntimeConfig           `yaml:"runtime" envconfig:"RUNTIME"`
 }
 
 // SSHConfig defines SSH execution settings
@@ -126,10 +126,10 @@ type RateLimitConfig struct {
 
 // DockerConfig defines Docker daemon settings
 type DockerConfig struct {
-	Endpoint   string `yaml:"endpoint" envconfig:"ENDPOINT" default:"unix:///var/run/docker.sock"`
-	Version    string `yaml:"version" envconfig:"VERSION" default:"1.41"`
-	TLSVerify  bool   `yaml:"tlsVerify" envconfig:"TLS_VERIFY" default:"false"`
-	CertPath   string `yaml:"certPath" envconfig:"CERT_PATH"`
+	Endpoint  string `yaml:"endpoint" envconfig:"ENDPOINT" default:"unix:///var/run/docker.sock"`
+	Version   string `yaml:"version" envconfig:"VERSION" default:"1.41"`
+	TLSVerify bool   `yaml:"tlsVerify" envconfig:"TLS_VERIFY" default:"false"`
+	CertPath  string `yaml:"certPath" envconfig:"CERT_PATH"`
 }
 
 // ResourceConfig defines resource limits
@@ -189,14 +189,14 @@ type ConnectionPoolConfig struct {
 
 // SSHExecutionConfig defines SSH execution settings
 type SSHExecutionConfig struct {
-	DefaultShell            string        `yaml:"defaultShell" envconfig:"DEFAULT_SHELL" default:"/bin/bash"`
-	TempDir                 string        `yaml:"tempDir" envconfig:"TEMP_DIR" default:"/tmp/cronium"`
-	CleanupAfter            bool          `yaml:"cleanupAfter" envconfig:"CLEANUP_AFTER" default:"true"`
-	PTYMode                 bool          `yaml:"ptyMode" envconfig:"PTY_MODE" default:"false"`
-	PayloadStorageDir       string        `yaml:"payloadStorageDir" envconfig:"PAYLOAD_STORAGE_DIR" default:"/app/data/payloads"`
-	CleanupPayloads         bool          `yaml:"cleanupPayloads" envconfig:"CLEANUP_PAYLOADS" default:"false"`
-	PayloadRetentionPeriod  time.Duration `yaml:"payloadRetentionPeriod" envconfig:"PAYLOAD_RETENTION_PERIOD" default:"24h"`
-	PayloadCleanupInterval  time.Duration `yaml:"payloadCleanupInterval" envconfig:"PAYLOAD_CLEANUP_INTERVAL" default:"1h"`
+	DefaultShell           string        `yaml:"defaultShell" envconfig:"DEFAULT_SHELL" default:"/bin/bash"`
+	TempDir                string        `yaml:"tempDir" envconfig:"TEMP_DIR" default:"/tmp/cronium"`
+	CleanupAfter           bool          `yaml:"cleanupAfter" envconfig:"CLEANUP_AFTER" default:"true"`
+	PTYMode                bool          `yaml:"ptyMode" envconfig:"PTY_MODE" default:"false"`
+	PayloadStorageDir      string        `yaml:"payloadStorageDir" envconfig:"PAYLOAD_STORAGE_DIR" default:"/app/data/payloads"`
+	CleanupPayloads        bool          `yaml:"cleanupPayloads" envconfig:"CLEANUP_PAYLOADS" default:"false"`
+	PayloadRetentionPeriod time.Duration `yaml:"payloadRetentionPeriod" envconfig:"PAYLOAD_RETENTION_PERIOD" default:"24h"`
+	PayloadCleanupInterval time.Duration `yaml:"payloadCleanupInterval" envconfig:"PAYLOAD_CLEANUP_INTERVAL" default:"1h"`
 }
 
 // CircuitBreakerConfig defines circuit breaker settings
@@ -271,10 +271,10 @@ type EncryptionConfig struct {
 // Load loads configuration from file and environment
 func Load(configPath string) (*Config, error) {
 	config := &Config{}
-	
+
 	// Set defaults
 	setDefaults()
-	
+
 	// Load from file if specified
 	if configPath != "" {
 		viper.SetConfigFile(configPath)
@@ -286,7 +286,7 @@ func Load(configPath string) (*Config, error) {
 		viper.AddConfigPath("/etc/cronium")
 		viper.AddConfigPath("$HOME/.cronium")
 	}
-	
+
 	// Read config file
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
@@ -294,27 +294,27 @@ func Load(configPath string) (*Config, error) {
 		}
 		// Config file not found is not an error - we'll use defaults and env
 	}
-	
+
 	// Unmarshal to struct
 	if err := viper.Unmarshal(config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-	
+
 	// Apply environment variables
 	if err := envconfig.Process("CRONIUM", config); err != nil {
 		return nil, fmt.Errorf("failed to process environment variables: %w", err)
 	}
-	
+
 	// Process special values
 	if err := processConfig(config); err != nil {
 		return nil, fmt.Errorf("failed to process config: %w", err)
 	}
-	
+
 	// Validate configuration
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("configuration validation failed: %w", err)
 	}
-	
+
 	return config, nil
 }
 
@@ -324,14 +324,14 @@ func setDefaults() {
 	viper.SetDefault("orchestrator.name", "cronium-orchestrator")
 	viper.SetDefault("orchestrator.environment", "production")
 	viper.SetDefault("orchestrator.region", "default")
-	
+
 	viper.SetDefault("jobs.pollInterval", "1s")
 	viper.SetDefault("jobs.pollBatchSize", 10)
 	viper.SetDefault("jobs.maxConcurrent", 5)
 	viper.SetDefault("jobs.defaultTimeout", "1h")
 	viper.SetDefault("jobs.queueStrategy", "priority")
 	viper.SetDefault("jobs.leaseRenewal", "30s")
-	
+
 	viper.SetDefault("container.docker.endpoint", "unix:///var/run/docker.sock")
 	viper.SetDefault("container.docker.version", "1.41")
 	viper.SetDefault("container.resources.defaults.cpu", 0.5)
@@ -341,11 +341,11 @@ func setDefaults() {
 	viper.SetDefault("container.security.user", "1000:1000")
 	viper.SetDefault("container.security.noNewPrivileges", true)
 	viper.SetDefault("container.security.dropCapabilities", []string{"ALL"})
-	
+
 	viper.SetDefault("logging.level", "info")
 	viper.SetDefault("logging.format", "json")
 	viper.SetDefault("logging.output", "stdout")
-	
+
 	viper.SetDefault("monitoring.enabled", true)
 	viper.SetDefault("monitoring.metricsPort", 9090)
 	viper.SetDefault("monitoring.healthPort", 8080)
@@ -358,37 +358,37 @@ func processConfig(config *Config) error {
 		hostname, _ := os.Hostname()
 		config.Orchestrator.ID = fmt.Sprintf("orch-%s-%d", hostname, time.Now().Unix())
 	}
-	
+
 	// Set orchestrator ID in API config
 	config.API.OrchestratorID = config.Orchestrator.ID
-	
+
 	// Set WebSocket endpoint if not specified
 	if config.API.WSEndpoint == "" && config.API.Endpoint != "" {
 		wsEndpoint := strings.Replace(config.API.Endpoint, "http://", "ws://", 1)
 		wsEndpoint = strings.Replace(wsEndpoint, "https://", "wss://", 1)
 		config.API.WSEndpoint = wsEndpoint + "/socket"
 	}
-	
+
 	// Set default drop capabilities if empty
 	if len(config.Container.Security.DropCapabilities) == 0 {
 		config.Container.Security.DropCapabilities = []string{"ALL"}
 	}
-	
+
 	// Set default DNS servers if empty
 	if len(config.Container.Network.DNS) == 0 {
 		config.Container.Network.DNS = []string{"8.8.8.8", "8.8.4.4"}
 	}
-	
+
 	// Parse resource sizes
 	// TODO: Implement size parsing for memory and disk values
-	
+
 	return nil
 }
 
 // Validate validates the configuration
 func (c *Config) Validate() error {
 	var errors []string
-	
+
 	// Required fields
 	if c.API.Endpoint == "" {
 		errors = append(errors, "api.endpoint is required")
@@ -396,7 +396,7 @@ func (c *Config) Validate() error {
 	if c.API.Token == "" {
 		errors = append(errors, "api.token is required")
 	}
-	
+
 	// Validate ranges
 	if c.Jobs.MaxConcurrent < 1 || c.Jobs.MaxConcurrent > 100 {
 		errors = append(errors, "jobs.maxConcurrent must be between 1 and 100")
@@ -404,12 +404,12 @@ func (c *Config) Validate() error {
 	if c.Jobs.PollBatchSize < 1 || c.Jobs.PollBatchSize > 50 {
 		errors = append(errors, "jobs.pollBatchSize must be between 1 and 50")
 	}
-	
+
 	// Validate resource limits
 	if c.Container.Resources.Defaults.CPU > c.Container.Resources.Limits.CPU {
 		errors = append(errors, "container default CPU exceeds limit")
 	}
-	
+
 	// Validate ports
 	if c.Monitoring.MetricsPort < 1 || c.Monitoring.MetricsPort > 65535 {
 		errors = append(errors, "monitoring.metricsPort must be a valid port number")
@@ -417,11 +417,11 @@ func (c *Config) Validate() error {
 	if c.Monitoring.HealthPort < 1 || c.Monitoring.HealthPort > 65535 {
 		errors = append(errors, "monitoring.healthPort must be a valid port number")
 	}
-	
+
 	if len(errors) > 0 {
 		return fmt.Errorf("validation errors: %s", strings.Join(errors, "; "))
 	}
-	
+
 	return nil
 }
 
@@ -430,13 +430,13 @@ func (c *Config) Print(w io.Writer) error {
 	// Create a copy with secrets hidden
 	safeCfg := *c
 	safeCfg.API.Token = "***hidden***"
-	
+
 	// Marshal to YAML
 	data, err := yaml.Marshal(&safeCfg)
 	if err != nil {
 		return err
 	}
-	
+
 	_, err = w.Write(data)
 	return err
 }
@@ -446,19 +446,19 @@ func GetConfigPath() string {
 	if path := viper.ConfigFileUsed(); path != "" {
 		return path
 	}
-	
+
 	// Check standard locations
 	locations := []string{
 		"cronium-orchestrator.yaml",
 		"/etc/cronium/cronium-orchestrator.yaml",
 		filepath.Join(os.Getenv("HOME"), ".cronium", "cronium-orchestrator.yaml"),
 	}
-	
+
 	for _, loc := range locations {
 		if _, err := os.Stat(loc); err == nil {
 			return loc
 		}
 	}
-	
+
 	return ""
 }

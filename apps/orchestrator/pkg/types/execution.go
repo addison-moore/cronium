@@ -25,7 +25,7 @@ type ExecutionUpdate struct {
 
 // LogEntry represents a log line from execution
 type LogEntry struct {
-	Stream    string    `json:"stream"`    // stdout, stderr
+	Stream    string    `json:"stream"` // stdout, stderr
 	Line      string    `json:"line"`
 	Timestamp time.Time `json:"timestamp"`
 	Sequence  int64     `json:"sequence"`
@@ -33,11 +33,11 @@ type LogEntry struct {
 
 // StatusUpdate represents a status change
 type StatusUpdate struct {
-	Status    JobStatus              `json:"status"`
-	Message   string                 `json:"message,omitempty"`
-	ExitCode  *int                   `json:"exitCode,omitempty"`
-	Error     *ErrorDetails          `json:"error,omitempty"`
-	Output    *OutputData            `json:"output,omitempty"`
+	Status   JobStatus     `json:"status"`
+	Message  string        `json:"message,omitempty"`
+	ExitCode *int          `json:"exitCode,omitempty"`
+	Error    *ErrorDetails `json:"error,omitempty"`
+	Output   *OutputData   `json:"output,omitempty"`
 }
 
 // ProgressUpdate represents execution progress
@@ -79,9 +79,9 @@ type OutputData struct {
 
 // ExecutionMetrics contains execution performance metrics
 type ExecutionMetrics struct {
-	StartTime     time.Time `json:"startTime"`
-	EndTime       time.Time `json:"endTime,omitempty"`
-	Duration      int64     `json:"duration,omitempty"` // milliseconds
+	StartTime     time.Time      `json:"startTime"`
+	EndTime       time.Time      `json:"endTime,omitempty"`
+	Duration      int64          `json:"duration,omitempty"` // milliseconds
 	ResourceUsage *ResourceUsage `json:"resourceUsage,omitempty"`
 }
 
@@ -100,12 +100,12 @@ func ErrorDetailsFromError(err error) *ErrorDetails {
 	if err == nil {
 		return nil
 	}
-	
+
 	// Check if it's already an ExecutionError
 	if execErr, ok := err.(*ExecutionError); ok {
 		return &execErr.ErrorDetails
 	}
-	
+
 	// Create generic error details
 	return &ErrorDetails{
 		Type:      "generic",

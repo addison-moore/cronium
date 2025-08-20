@@ -2,9 +2,9 @@ package ssh
 
 import (
 	"fmt"
-	"os"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/payload"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
+	"os"
 	"time"
 )
 
@@ -23,13 +23,13 @@ func (e *Executor) createPayloadForJob(job *types.Job, executionID string) (stri
 	// Extract script content from job
 	scriptContent := ""
 	scriptType := "BASH" // default
-	
+
 	if job.Execution.Script != nil {
 		scriptContent = job.Execution.Script.Content
 		scriptType = string(job.Execution.Script.Type)
 		e.log.WithFields(map[string]interface{}{
-			"jobID":       job.ID,
-			"scriptType":  scriptType,
+			"jobID":             job.ID,
+			"scriptType":        scriptType,
 			"scriptTypeFromJob": job.Execution.Script.Type,
 		}).Debug("Extracted script type from job")
 	}
@@ -51,7 +51,7 @@ func (e *Executor) createPayloadForJob(job *types.Job, executionID string) (stri
 			metadata[k] = v
 		}
 	}
-	
+
 	// Add standard metadata
 	metadata["jobId"] = job.ID
 	metadata["executionId"] = executionID
@@ -94,7 +94,7 @@ func (e *Executor) cleanupPayload(payloadPath string, job *types.Job) {
 	if payloadPath == "" {
 		return
 	}
-	
+
 	// Check if this is a legacy payload from cronium-app (don't delete those)
 	if job.Metadata != nil {
 		if _, isLegacy := job.Metadata["payloadPath"]; isLegacy {
@@ -102,7 +102,7 @@ func (e *Executor) cleanupPayload(payloadPath string, job *types.Job) {
 			return
 		}
 	}
-	
+
 	// Clean up based on configuration
 	if e.config.Execution.CleanupPayloads {
 		// Actually remove the payload file
@@ -111,7 +111,7 @@ func (e *Executor) cleanupPayload(payloadPath string, job *types.Job) {
 		} else {
 			e.log.WithField("payloadPath", payloadPath).Debug("Cleaned up payload file")
 		}
-		
+
 		// Also remove the checksum file
 		checksumPath := payloadPath + ".sha256"
 		if err := os.Remove(checksumPath); err != nil && !os.IsNotExist(err) {

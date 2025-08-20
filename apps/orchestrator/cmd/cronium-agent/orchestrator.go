@@ -24,20 +24,20 @@ import (
 
 // SimpleOrchestrator is a minimal orchestrator for testing
 type SimpleOrchestrator struct {
-	config          *config.Config
-	log             *logrus.Logger
-	apiClient       *api.Client
-	executorMgr     *executors.Manager
-	logStreamer     *logger.Streamer
-	metrics         *metrics.Collector
-	recovery        *orchestrator.RecoveryManager
-	containerExec   *container.Executor
-	orchestratorID  string
-	
+	config         *config.Config
+	log            *logrus.Logger
+	apiClient      *api.Client
+	executorMgr    *executors.Manager
+	logStreamer    *logger.Streamer
+	metrics        *metrics.Collector
+	recovery       *orchestrator.RecoveryManager
+	containerExec  *container.Executor
+	orchestratorID string
+
 	// Control channels
 	shutdown chan struct{}
 	done     chan struct{}
-	
+
 	// State
 	mu             sync.RWMutex
 	activeJobs     map[string]*types.Job
@@ -51,20 +51,20 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 	if err != nil {
 		return nil, fmt.Errorf("failed to create API client: %w", err)
 	}
-	
+
 	// Generate orchestrator ID
 	orchestratorID := fmt.Sprintf("orchestrator-%s", cfg.Orchestrator.ID)
-	
+
 	// Create executor manager
 	executorMgr := executors.NewManager()
-	
+
 	// Register container executor
 	containerExec, err := container.NewExecutor(cfg.Container, apiClient, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create container executor: %w", err)
 	}
 	executorMgr.Register(types.JobTypeContainer, containerExec)
-	
+
 	// Register SSH executor (with multi-server support)
 	// TODO: Make runtime host and port configurable
 	runtimeHost := os.Getenv("RUNTIME_HOST")
@@ -83,16 +83,16 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 		return nil, fmt.Errorf("failed to create SSH executor: %w", err)
 	}
 	executorMgr.Register(types.JobTypeSSH, sshExec)
-	
+
 	// Create log streamer
 	logStreamer := logger.NewStreamer(cfg.Logging.WebSocket, cfg.API.WSEndpoint, cfg.API.Token, log)
-	
+
 	// Create metrics collector
 	metricsCollector := metrics.NewCollector(cfg.Monitoring, log)
-	
+
 	// Connect metrics to API client
 	apiClient.WithMetrics(metricsCollector)
-	
+
 	// Create recovery manager (use container executor's cleanup manager if available)
 	var cleanupMgr *container.CleanupManager
 	if containerExec != nil {
@@ -100,7 +100,7 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 		cleanupMgr = container.NewCleanupManager(containerExec, log)
 	}
 	recovery := orchestrator.NewRecoveryManager(apiClient, cleanupMgr, log)
-	
+
 	return &SimpleOrchestrator{
 		config:         cfg,
 		log:            log,
@@ -121,13 +121,13 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 func (o *SimpleOrchestrator) Run(ctx context.Context) error {
 	o.log.Info("Starting orchestrator")
 	defer close(o.done)
-	
+
 	// Perform recovery on startup
 	if err := o.recovery.RecoverOnStartup(ctx, o.orchestratorID); err != nil {
 		o.log.WithError(err).Error("Recovery failed on startup")
 		// Continue anyway - recovery errors shouldn't prevent startup
 	}
-	
+
 	// Start periodic cleanup if we have a container executor
 	if o.containerExec != nil {
 		cleanupMgr := o.containerExec.GetCleanupManager()
@@ -135,35 +135,35 @@ func (o *SimpleOrchestrator) Run(ctx context.Context) error {
 			cleanupMgr.StartPeriodicCleanup(ctx, 30*time.Minute)
 		}
 	}
-	
+
 	// Start periodic payload cleanup if enabled
 	if o.config.SSH.Execution.CleanupPayloads {
 		go o.payloadCleanupLoop(ctx)
 	}
-	
+
 	// Start log streamer
 	if err := o.logStreamer.Start(ctx); err != nil {
 		o.log.WithError(err).Warn("Failed to start log streamer")
 	}
 	defer o.logStreamer.Stop()
-	
+
 	// Start API health check
 	go o.healthCheckLoop(ctx)
-	
+
 	// Start job polling loop
 	pollTicker := time.NewTicker(o.config.Jobs.PollInterval)
 	defer pollTicker.Stop()
-	
+
 	for {
 		select {
 		case <-ctx.Done():
 			o.log.Info("Context cancelled, shutting down orchestrator")
 			return o.gracefulShutdown()
-			
+
 		case <-o.shutdown:
 			o.log.Info("Shutdown requested")
 			return o.gracefulShutdown()
-			
+
 		case <-pollTicker.C:
 			if err := o.pollAndProcessJobs(ctx); err != nil {
 				o.log.WithError(err).Error("Failed to poll jobs")
@@ -178,52 +178,52 @@ func (o *SimpleOrchestrator) pollAndProcessJobs(ctx context.Context) error {
 	o.mu.RLock()
 	activeCount := len(o.activeJobs)
 	o.mu.RUnlock()
-	
+
 	if activeCount >= o.config.Jobs.MaxConcurrent {
 		o.log.Debug("At maximum concurrent jobs, skipping poll")
 		return nil
 	}
-	
+
 	// Calculate how many jobs we can accept
-	limit := min(o.config.Jobs.MaxConcurrent - activeCount, o.config.Jobs.PollBatchSize)
-	
+	limit := min(o.config.Jobs.MaxConcurrent-activeCount, o.config.Jobs.PollBatchSize)
+
 	// Poll for jobs (pass orchestrator ID)
 	jobs, err := o.apiClient.PollJobs(ctx, limit)
 	if err != nil {
 		return fmt.Errorf("failed to poll jobs: %w", err)
 	}
-	
+
 	if len(jobs) == 0 {
 		o.log.Debug("No jobs available")
 		return nil
 	}
-	
+
 	o.log.WithField("count", len(jobs)).Info("Received jobs from queue")
-	
+
 	// Process each job
 	for _, job := range jobs {
 		// Record job received
 		o.metrics.RecordJobReceived(string(job.Type))
-		
+
 		// Acknowledge the job
 		if err := o.apiClient.AcknowledgeJob(ctx, job.ID); err != nil {
 			o.log.WithError(err).WithField("jobID", job.ID).Error("Failed to acknowledge job")
 			o.metrics.RecordJobFailed(string(job.Type), "acknowledge_failed")
 			continue
 		}
-		
+
 		// Add to active jobs
 		o.mu.Lock()
 		o.activeJobs[job.ID] = job
 		o.mu.Unlock()
-		
+
 		// Update active jobs metric
 		o.metrics.IncActiveJobs()
-		
+
 		// Process job in goroutine
 		go o.processJob(ctx, job)
 	}
-	
+
 	return nil
 }
 
@@ -231,7 +231,7 @@ func (o *SimpleOrchestrator) pollAndProcessJobs(ctx context.Context) error {
 func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 	log := o.log.WithField("jobID", job.ID)
 	log.Info("Starting job execution")
-	
+
 	// Remove from active jobs when done
 	defer func() {
 		o.mu.Lock()
@@ -239,7 +239,7 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 		o.mu.Unlock()
 		o.metrics.DecActiveJobs()
 	}()
-	
+
 	// Create job context with timeout
 	jobCtx := ctx
 	if job.Timeout > 0 {
@@ -247,16 +247,16 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 		jobCtx, cancel = context.WithTimeout(ctx, job.Timeout)
 		defer cancel()
 	}
-	
+
 	// Track job start time
 	jobStartTime := time.Now()
-	
+
 	// Execute job using executor manager
 	updates, err := o.executorMgr.Execute(jobCtx, job)
 	if err != nil {
 		log.WithError(err).Error("Failed to start job execution")
 		o.metrics.RecordJobFailed(string(job.Type), "execution_failed")
-		
+
 		// Update job status to failed
 		o.apiClient.UpdateJobStatus(ctx, job.ID, types.JobStatusFailed, &types.StatusUpdate{
 			Status:  types.JobStatusFailed,
@@ -265,18 +265,18 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 		})
 		return
 	}
-	
+
 	// Start job logging
 	jobLogger := o.logStreamer.StartJob(job.ID)
 	defer o.logStreamer.StopJob(job.ID)
-	
+
 	// Process execution updates
 	var exitCode int
 	var finalStatus types.JobStatus
 	var timedOut bool
 	var stdout, stderr strings.Builder
 	startTime := time.Now()
-	
+
 	for update := range updates {
 		switch update.Type {
 		case types.UpdateTypeLog:
@@ -289,12 +289,12 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 				// Stream logs via WebSocket
 				jobLogger.AddLog(logEntry)
 			}
-			
+
 		case types.UpdateTypeStatus:
 			if status, ok := update.Data.(*types.StatusUpdate); ok {
 				o.apiClient.UpdateJobStatus(ctx, job.ID, status.Status, status)
 			}
-			
+
 		case types.UpdateTypeComplete:
 			if status, ok := update.Data.(*types.StatusUpdate); ok {
 				if status.ExitCode != nil {
@@ -306,22 +306,22 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 					timedOut = true
 				}
 			}
-			
+
 		case types.UpdateTypeError:
 			if status, ok := update.Data.(*types.StatusUpdate); ok {
 				log.WithField("error", status.Message).Error("Execution error")
 			}
 		}
 	}
-	
+
 	// Calculate execution metrics
 	endTime := time.Now()
 	duration := endTime.Sub(startTime)
-	
+
 	// Determine final status
 	var jobStatus types.JobStatus
 	var statusMessage string
-	
+
 	if timedOut || exitCode == -1 {
 		// Timeout detected
 		jobStatus = types.JobStatusTimeout
@@ -338,7 +338,7 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 		jobStatus = types.JobStatusCompleted
 		statusMessage = "Job completed successfully"
 	}
-	
+
 	// Mark job as completed
 	completeReq := &api.CompleteJobRequest{
 		Status:   jobStatus,
@@ -355,7 +355,7 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
-	
+
 	// Record job completion metrics
 	jobDuration := time.Since(jobStartTime).Seconds()
 	switch completeReq.Status {
@@ -372,7 +372,7 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 	default:
 		o.metrics.RecordJobFailed(string(job.Type), "unknown")
 	}
-	
+
 	if err := o.apiClient.CompleteJob(ctx, job.ID, completeReq); err != nil {
 		log.WithError(err).Error("Failed to complete job")
 		o.metrics.RecordJobFailed(string(job.Type), "complete_api_failed")
@@ -391,12 +391,12 @@ func (o *SimpleOrchestrator) payloadCleanupLoop(ctx context.Context) {
 	if interval <= 0 {
 		interval = time.Hour // Default to 1 hour if not set
 	}
-	
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	
+
 	payloadService := payload.NewService(o.config.SSH.Execution.PayloadStorageDir)
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -406,12 +406,12 @@ func (o *SimpleOrchestrator) payloadCleanupLoop(ctx context.Context) {
 			if retention <= 0 {
 				retention = 24 * time.Hour // Default to 24 hours if not set
 			}
-			
+
 			o.log.WithFields(logrus.Fields{
 				"retention": retention,
 				"directory": o.config.SSH.Execution.PayloadStorageDir,
 			}).Debug("Running payload cleanup")
-			
+
 			if err := payloadService.CleanupOldPayloads(retention); err != nil {
 				o.log.WithError(err).Warn("Failed to cleanup old payloads")
 			} else {
@@ -425,7 +425,7 @@ func (o *SimpleOrchestrator) payloadCleanupLoop(ctx context.Context) {
 func (o *SimpleOrchestrator) healthCheckLoop(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -443,20 +443,20 @@ func (o *SimpleOrchestrator) healthCheckLoop(ctx context.Context) {
 // gracefulShutdown performs a graceful shutdown
 func (o *SimpleOrchestrator) gracefulShutdown() error {
 	o.log.Info("Starting graceful shutdown")
-	
+
 	o.mu.Lock()
 	o.isShuttingDown = true
 	activeCount := len(o.activeJobs)
 	o.mu.Unlock()
-	
+
 	if activeCount > 0 {
 		o.log.WithField("count", activeCount).Info("Waiting for active jobs to complete")
-		
+
 		// Wait for jobs to complete with timeout
 		timeout := time.After(30 * time.Second)
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
-		
+
 		for {
 			select {
 			case <-timeout:
@@ -466,7 +466,7 @@ func (o *SimpleOrchestrator) gracefulShutdown() error {
 				o.mu.RLock()
 				remaining := len(o.activeJobs)
 				o.mu.RUnlock()
-				
+
 				if remaining == 0 {
 					o.log.Info("All jobs completed")
 					return nil
@@ -475,7 +475,7 @@ func (o *SimpleOrchestrator) gracefulShutdown() error {
 			}
 		}
 	}
-	
+
 	return nil
 }
 

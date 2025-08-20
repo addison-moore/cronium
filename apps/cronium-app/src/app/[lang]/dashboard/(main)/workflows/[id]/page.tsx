@@ -8,6 +8,7 @@ import { Badge } from "@cronium/ui";
 import { Tab, Tabs, TabsContent, TabsList } from "@cronium/ui";
 import { Separator } from "@cronium/ui";
 import { useToast } from "@cronium/ui";
+import { Spinner } from "@cronium/ui";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
 import { trpc } from "@/lib/trpc";
 import type { RouterOutputs } from "@/server/api/root";
@@ -122,6 +123,7 @@ export default function WorkflowDetailsPage({
     animated?: boolean;
     markerEnd?: { type: string };
     data?: {
+      type?: string;
       connectionType?: string;
     };
   }
@@ -242,6 +244,7 @@ export default function WorkflowDetailsPage({
         type: "connectionEdge",
         animated: false,
         data: {
+          type: conn.connectionType ?? "ALWAYS",
           connectionType: conn.connectionType ?? "ALWAYS",
         },
       }));
@@ -622,11 +625,15 @@ export default function WorkflowDetailsPage({
         };
 
         setCurrentExecution(execution);
+        setIsExecuting(true); // Ensure we're tracking execution
 
         toast({
           title: "Workflow Started",
           description: "Workflow execution has begun",
         });
+
+        // Force a refresh of executions data to get the real execution
+        void utils.workflows.getExecutions.invalidate({ id: workflowId });
       }
     },
     onError: (error) => {
@@ -1055,131 +1062,140 @@ export default function WorkflowDetailsPage({
           className="h-[calc(100vh-12rem)] overflow-hidden"
         >
           <div className="bg-secondary-bg relative h-full w-full overflow-hidden p-0">
-            <WorkflowCanvas
-              availableEvents={availableEvents.map((event): AvailableEvent => {
-                const mappedEvent: AvailableEvent = {
-                  id: event.id,
-                  name: event.name,
-                  type: event.type,
-                };
+            {hasInitialData ? (
+              <WorkflowCanvas
+                availableEvents={availableEvents.map(
+                  (event): AvailableEvent => {
+                    const mappedEvent: AvailableEvent = {
+                      id: event.id,
+                      name: event.name,
+                      type: event.type,
+                    };
 
-                if (event.description) {
-                  mappedEvent.description = event.description;
-                }
+                    if (event.description) {
+                      mappedEvent.description = event.description;
+                    }
 
-                if (Array.isArray(event.tags) && event.tags.length > 0) {
-                  mappedEvent.tags = event.tags as string[];
-                }
+                    if (Array.isArray(event.tags) && event.tags.length > 0) {
+                      mappedEvent.tags = event.tags as string[];
+                    }
 
-                if (event.serverId) {
-                  mappedEvent.serverId = event.serverId;
-                }
+                    if (event.serverId) {
+                      mappedEvent.serverId = event.serverId;
+                    }
 
-                mappedEvent.createdAt = event.createdAt;
-                mappedEvent.updatedAt = event.updatedAt;
+                    mappedEvent.createdAt = event.createdAt;
+                    mappedEvent.updatedAt = event.updatedAt;
 
-                return mappedEvent;
-              })}
-              initialNodes={enrichedWorkflowNodes.map(
-                (node): Node => ({
-                  id: node.id,
-                  type: node.type,
-                  position: node.position,
-                  data: {
-                    eventId: node.data.eventId,
-                    label: node.data.label,
-                    type: node.data.type,
-                    eventTypeIcon: node.data.eventTypeIcon,
-                    description: node.data.description,
-                    tags: node.data.tags,
-                    serverId: node.data.serverId,
-                    serverName: node.data.serverName,
-                    createdAt: node.data.createdAt,
-                    updatedAt: node.data.updatedAt,
-                    updateEvents: node.data.updateEvents,
+                    return mappedEvent;
                   },
-                }),
-              )}
-              initialEdges={workflowEdges.map((edge): Edge => {
-                const mappedEdge: Edge = {
-                  id: edge.id,
-                  source: edge.source,
-                  target: edge.target,
-                };
-
-                if (edge.type !== undefined) {
-                  mappedEdge.type = edge.type;
-                }
-
-                if (edge.animated !== undefined) {
-                  mappedEdge.animated = edge.animated;
-                }
-
-                if (edge.markerEnd !== undefined) {
-                  // @ts-expect-error - exactOptionalPropertyTypes: markerEnd type compatibility
-                  mappedEdge.markerEnd = edge.markerEnd as Edge["markerEnd"];
-                }
-
-                return mappedEdge;
-              })}
-              onChange={(nodes: Node[], edges: Edge[]) => {
-                // Convert back to our local types
-                // @ts-expect-error - exactOptionalPropertyTypes: Node data type is unknown
-                const localNodes: LocalWorkflowNode[] = nodes.map((node) => {
-                  const nodeData = isWorkflowNodeData(node.data)
-                    ? node.data
-                    : ({} as WorkflowNodeData);
-                  return {
+                )}
+                initialNodes={enrichedWorkflowNodes.map(
+                  (node): Node => ({
                     id: node.id,
-                    type: node.type ?? "",
+                    type: node.type,
                     position: node.position,
                     data: {
-                      eventId: nodeData.eventId,
-                      label: nodeData.label,
-                      type: nodeData.type,
-                      eventTypeIcon: nodeData.eventTypeIcon,
-                      description: nodeData.description,
-                      tags: nodeData.tags,
-                      serverId: nodeData.serverId,
-                      serverName: nodeData.serverName,
-                      createdAt: nodeData.createdAt,
-                      updatedAt: nodeData.updatedAt,
-                      updateEvents: nodeData.updateEvents,
+                      eventId: node.data.eventId,
+                      label: node.data.label,
+                      type: node.data.type,
+                      eventTypeIcon: node.data.eventTypeIcon,
+                      description: node.data.description,
+                      tags: node.data.tags,
+                      serverId: node.data.serverId,
+                      serverName: node.data.serverName,
+                      createdAt: node.data.createdAt,
+                      updatedAt: node.data.updatedAt,
+                      updateEvents: node.data.updateEvents,
                     },
-                  };
-                });
-                const localEdges: WorkflowEdge[] = edges.map((edge) => {
-                  const localEdge: WorkflowEdge = {
+                  }),
+                )}
+                initialEdges={workflowEdges.map((edge): Edge => {
+                  const mappedEdge: Edge = {
                     id: edge.id,
                     source: edge.source,
                     target: edge.target,
+                    data: edge.data ?? {},
                   };
 
                   if (edge.type !== undefined) {
-                    localEdge.type = edge.type;
+                    mappedEdge.type = edge.type;
                   }
 
                   if (edge.animated !== undefined) {
-                    localEdge.animated = edge.animated;
+                    mappedEdge.animated = edge.animated;
                   }
 
                   if (edge.markerEnd !== undefined) {
                     // @ts-expect-error - exactOptionalPropertyTypes: markerEnd type compatibility
-                    localEdge.markerEnd =
-                      edge.markerEnd as WorkflowEdge["markerEnd"];
+                    mappedEdge.markerEnd = edge.markerEnd as Edge["markerEnd"];
                   }
 
-                  return localEdge;
-                });
-                handleCanvasChange(localNodes, localEdges);
-              }}
-              onRefresh={handleCanvasRefresh}
-              updateEvents={updateEvents}
-              isLoading={loadingEvents}
-              onSave={handleManualSave}
-              isSaving={isSaving}
-              hasUnsavedChanges={hasUnsavedChanges}
-            />
+                  return mappedEdge;
+                })}
+                onChange={(nodes: Node[], edges: Edge[]) => {
+                  // Convert back to our local types
+                  // @ts-expect-error - exactOptionalPropertyTypes: Node data type is unknown
+                  const localNodes: LocalWorkflowNode[] = nodes.map((node) => {
+                    const nodeData = isWorkflowNodeData(node.data)
+                      ? node.data
+                      : ({} as WorkflowNodeData);
+                    return {
+                      id: node.id,
+                      type: node.type ?? "",
+                      position: node.position,
+                      data: {
+                        eventId: nodeData.eventId,
+                        label: nodeData.label,
+                        type: nodeData.type,
+                        eventTypeIcon: nodeData.eventTypeIcon,
+                        description: nodeData.description,
+                        tags: nodeData.tags,
+                        serverId: nodeData.serverId,
+                        serverName: nodeData.serverName,
+                        createdAt: nodeData.createdAt,
+                        updatedAt: nodeData.updatedAt,
+                        updateEvents: nodeData.updateEvents,
+                      },
+                    };
+                  });
+                  const localEdges: WorkflowEdge[] = edges.map((edge) => {
+                    const localEdge: WorkflowEdge = {
+                      id: edge.id,
+                      source: edge.source,
+                      target: edge.target,
+                    };
+
+                    if (edge.type !== undefined) {
+                      localEdge.type = edge.type;
+                    }
+
+                    if (edge.animated !== undefined) {
+                      localEdge.animated = edge.animated;
+                    }
+
+                    if (edge.markerEnd !== undefined) {
+                      // @ts-expect-error - exactOptionalPropertyTypes: markerEnd type compatibility
+                      localEdge.markerEnd =
+                        edge.markerEnd as WorkflowEdge["markerEnd"];
+                    }
+
+                    return localEdge;
+                  });
+                  handleCanvasChange(localNodes, localEdges);
+                }}
+                onRefresh={handleCanvasRefresh}
+                updateEvents={updateEvents}
+                isLoading={loadingEvents}
+                onSave={handleManualSave}
+                isSaving={isSaving}
+                hasUnsavedChanges={hasUnsavedChanges}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <Spinner className="h-8 w-8" />
+              </div>
+            )}
           </div>
         </TabsContent>
 

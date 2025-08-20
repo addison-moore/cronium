@@ -20,7 +20,7 @@ type CircuitBreaker struct {
 	failureThreshold int
 	successThreshold int
 	timeout          time.Duration
-	
+
 	state            CircuitBreakerState
 	failures         int
 	successes        int
@@ -42,13 +42,13 @@ func NewCircuitBreaker(failureThreshold, successThreshold int, timeout time.Dura
 func (cb *CircuitBreaker) Allow() bool {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	
+
 	now := time.Now()
-	
+
 	switch cb.state {
 	case StateClosed:
 		return true
-		
+
 	case StateOpen:
 		// Check if timeout has passed
 		if now.Sub(cb.lastFailureTime) > cb.timeout {
@@ -58,7 +58,7 @@ func (cb *CircuitBreaker) Allow() bool {
 			return true
 		}
 		return false
-		
+
 	case StateHalfOpen:
 		// Allow limited requests in half-open state
 		if cb.halfOpenRequests < 3 {
@@ -66,7 +66,7 @@ func (cb *CircuitBreaker) Allow() bool {
 			return true
 		}
 		return false
-		
+
 	default:
 		return false
 	}
@@ -76,11 +76,11 @@ func (cb *CircuitBreaker) Allow() bool {
 func (cb *CircuitBreaker) RecordSuccess() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	
+
 	switch cb.state {
 	case StateClosed:
 		cb.failures = 0
-		
+
 	case StateHalfOpen:
 		cb.successes++
 		if cb.successes >= cb.successThreshold {
@@ -88,7 +88,7 @@ func (cb *CircuitBreaker) RecordSuccess() {
 			cb.failures = 0
 			cb.successes = 0
 		}
-		
+
 	case StateOpen:
 		// Shouldn't happen, but reset if it does
 		cb.state = StateClosed
@@ -101,21 +101,21 @@ func (cb *CircuitBreaker) RecordSuccess() {
 func (cb *CircuitBreaker) RecordFailure() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	
+
 	cb.lastFailureTime = time.Now()
-	
+
 	switch cb.state {
 	case StateClosed:
 		cb.failures++
 		if cb.failures >= cb.failureThreshold {
 			cb.state = StateOpen
 		}
-		
+
 	case StateHalfOpen:
 		// Failure in half-open state immediately opens the circuit
 		cb.state = StateOpen
 		cb.failures = cb.failureThreshold
-		
+
 	case StateOpen:
 		// Already open, just update failure time
 	}
@@ -132,7 +132,7 @@ func (cb *CircuitBreaker) GetState() CircuitBreakerState {
 func (cb *CircuitBreaker) Reset() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	
+
 	cb.state = StateClosed
 	cb.failures = 0
 	cb.successes = 0
