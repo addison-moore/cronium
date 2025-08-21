@@ -802,7 +802,7 @@ export class ScriptScheduler {
 
     // If waitForCompletion is true (for workflows), wait for job to complete
     console.log(
-      `[DEBUG] executeEvent - waitForCompletion: ${waitForCompletion}, type: ${typeof waitForCompletion}, workflowId: ${workflowId}, job: ${job.id}`,
+      `[DEBUG] executeEvent - waitForCompletion: ${waitForCompletion}, type: ${typeof waitForCompletion}, workflowId: ${String(workflowId)}, job: ${job.id}`,
     );
     console.log(`[DEBUG] executeEvent - All params:`, {
       eventId,
@@ -817,7 +817,7 @@ export class ScriptScheduler {
       waitForCompletion === true ||
       (workflowId !== undefined && workflowId !== null);
     console.log(
-      `[DEBUG] executeEvent - shouldWait: ${shouldWait} (waitForCompletion=${waitForCompletion}, workflowId=${workflowId})`,
+      `[DEBUG] executeEvent - shouldWait: ${shouldWait} (waitForCompletion=${waitForCompletion}, workflowId=${String(workflowId)})`,
     );
 
     if (shouldWait) {

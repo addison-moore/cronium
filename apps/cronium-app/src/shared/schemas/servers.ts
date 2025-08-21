@@ -72,10 +72,9 @@ export const createServerSchema = z
   .refine(
     (data) => {
       // Ensure at least one authentication method is provided
-      return (
-        (data.sshKey && data.sshKey.length > 0) ||
-        (data.password && data.password.length > 0)
-      );
+      const hasSSHKey = Boolean(data.sshKey && data.sshKey.length > 0);
+      const hasPassword = Boolean(data.password && data.password.length > 0);
+      return hasSSHKey || hasPassword;
     },
     {
       message: "Either SSH key or password must be provided",
@@ -187,10 +186,9 @@ export const testServerConnectionSchema = z
   .refine(
     (data) => {
       // Ensure at least one authentication method is provided
-      return (
-        (data.sshKey && data.sshKey.length > 0) ||
-        (data.password && data.password.length > 0)
-      );
+      const hasSSHKey = Boolean(data.sshKey && data.sshKey.length > 0);
+      const hasPassword = Boolean(data.password && data.password.length > 0);
+      return hasSSHKey || hasPassword;
     },
     {
       message: "Either SSH key or password must be provided",

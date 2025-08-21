@@ -209,7 +209,11 @@ export class WebSocketBroadcaster {
     );
 
     if (!exists) {
-      this.broadcastQueue.push({ type, data, retries: 0 });
+      this.broadcastQueue.push({
+        type,
+        data: data as Record<string, unknown>,
+        retries: 0,
+      });
       console.log(`[WebSocketBroadcaster] Queued broadcast for later: ${type}`);
     }
   }
@@ -254,7 +258,7 @@ export class WebSocketBroadcaster {
           item.retries++;
           this.broadcastQueue.push(item);
         }
-      } catch (error) {
+      } catch {
         // Re-queue with incremented retry count
         item.retries++;
         this.broadcastQueue.push(item);
@@ -329,8 +333,6 @@ export class WebSocketBroadcaster {
 let broadcaster: WebSocketBroadcaster | null = null;
 
 export function getWebSocketBroadcaster(): WebSocketBroadcaster {
-  if (!broadcaster) {
-    broadcaster = new WebSocketBroadcaster();
-  }
+  broadcaster ??= new WebSocketBroadcaster();
   return broadcaster;
 }

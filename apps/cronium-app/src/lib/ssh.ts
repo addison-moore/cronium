@@ -1132,7 +1132,7 @@ module.exports = croniumInstance;`;
   }> {
     try {
       // Determine auth type and credential
-      const authCredential = server.sshKey || server.password || "";
+      const authCredential = server.sshKey ?? server.password ?? "";
       const authType = server.sshKey ? "privateKey" : "password";
 
       await this.connect(

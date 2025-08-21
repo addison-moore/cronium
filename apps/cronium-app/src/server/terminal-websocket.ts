@@ -181,7 +181,7 @@ export class TerminalWebSocketHandler {
       try {
         // Determine auth type and credential
         const authCredential =
-          decryptedServer.sshKey || decryptedServer.password || "";
+          decryptedServer.sshKey ?? decryptedServer.password ?? "";
         const authType = decryptedServer.sshKey ? "privateKey" : "password";
 
         const { shell } = await sshService.openShell(

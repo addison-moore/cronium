@@ -561,13 +561,34 @@ export class WorkflowExecutor {
       // Record execution start time
       const executionStartTime = new Date();
 
+      // Create a RUNNING workflow execution event before executing
+      let executionEventId: number | undefined;
+      if (workflowExecutionId) {
+        const runningEventData: InsertWorkflowExecutionEvent = {
+          workflowExecutionId,
+          eventId: event.id,
+          nodeId: node.id,
+          sequenceOrder: sequenceOrder ?? 0,
+          status: LogStatus.RUNNING,
+          startedAt: executionStartTime,
+          completedAt: null,
+          duration: null,
+          output: null,
+          errorMessage: null,
+          connectionType: ConnectionType.ALWAYS,
+        };
+        const runningEvent =
+          await storage.createWorkflowExecutionEvent(runningEventData);
+        executionEventId = runningEvent.id;
+      }
+
       // Execute the event using scheduler with input data
       // Use synchronous execution (waitForCompletion) for workflows
       console.log(
         `[DEBUG] executeNode - Calling scheduler.executeEvent with waitForCompletion=true for event ${event.id}, workflow ${workflow.id}`,
       );
       console.log(
-        `[DEBUG] executeNode - Parameters: eventId=${event.id}, workflowExecutionId=${workflowExecutionId}, sequenceOrder=${sequenceOrder}, workflowId=${workflow.id}, waitForCompletion=true`,
+        `[DEBUG] executeNode - Parameters: eventId=${event.id}, workflowExecutionId=${workflowExecutionId ? String(workflowExecutionId) : "undefined"}, sequenceOrder=${sequenceOrder}, workflowId=${workflow.id ? String(workflow.id) : "undefined"}, waitForCompletion=true`,
       );
 
       const executionResult = await scheduler.executeEvent(
@@ -612,8 +633,25 @@ export class WorkflowExecutor {
         }),
       });
 
-      // Create a workflow execution event record
-      if (workflowExecutionId) {
+      // Update the workflow execution event record with completion status
+      if (workflowExecutionId && executionEventId) {
+        const updateData = {
+          status: executionResult.success
+            ? LogStatus.SUCCESS
+            : LogStatus.FAILURE,
+          completedAt: executionEndTime,
+          duration: executionDuration, // Now properly calculated in milliseconds
+          output: executionResult.output ?? "",
+          errorMessage: executionResult.success
+            ? null
+            : (executionResult.output ?? "Unknown error"),
+        };
+        await storage.updateWorkflowExecutionEvent(
+          executionEventId,
+          updateData,
+        );
+      } else if (workflowExecutionId && !executionEventId) {
+        // Fallback: create if we couldn't create the RUNNING event earlier
         const executionEventData: InsertWorkflowExecutionEvent = {
           workflowExecutionId,
           eventId: event.id,
@@ -624,7 +662,7 @@ export class WorkflowExecutor {
             : LogStatus.FAILURE,
           startedAt: executionStartTime,
           completedAt: executionEndTime,
-          duration: executionDuration, // Now properly calculated in milliseconds
+          duration: executionDuration,
           output: executionResult.output ?? "",
           errorMessage: executionResult.success
             ? null
