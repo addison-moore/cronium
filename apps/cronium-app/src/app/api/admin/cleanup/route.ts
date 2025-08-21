@@ -2,7 +2,7 @@
  * Admin endpoint for manually triggering cleanup of stuck workflows and jobs
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getCleanupService } from "@/lib/services/workflow-cleanup-service";
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
 
       // Trigger manual cleanup
       const cleanupService = getCleanupService();
-      await cleanupService["performCleanup"](); // Access private method for manual trigger
+      await cleanupService.performCleanup(); // Access method for manual trigger
 
       const statsAfter = await service.getStuckItemStats();
 

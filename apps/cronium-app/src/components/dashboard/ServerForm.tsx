@@ -119,7 +119,7 @@ export default function ServerForm({
 
   // Initialize the form with the provided server data or defaults
   const form = useForm<ServerFormInput>({
-    resolver: zodResolver(serverFormSchema) as any,
+    resolver: zodResolver(serverFormSchema),
     defaultValues: initialServer
       ? {
           name: initialServer.name ?? "",
@@ -235,6 +235,7 @@ export default function ServerForm({
     }
 
     // Remove authType from payload as it's not stored in DB
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { authType, ...serverPayload } = payload;
 
     try {
@@ -393,7 +394,7 @@ export default function ServerForm({
                   onValueChange={(value) => {
                     field.onChange(value);
                     // Clear the other auth field when switching
-                    if (value === AuthType.SSH_KEY) {
+                    if (value === "SSH_KEY") {
                       form.setValue("password", "");
                     } else {
                       form.setValue("sshKey", "");

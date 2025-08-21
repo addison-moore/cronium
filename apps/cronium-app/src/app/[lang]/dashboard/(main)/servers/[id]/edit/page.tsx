@@ -160,10 +160,10 @@ export default function EditServerPage({ params }: EditServerPageProps) {
       <div className="bg-card border-input mx-auto max-w-4xl rounded-lg border p-6">
         <ServerForm
           initialServer={(() => {
-            const filtered: any = { ...server };
+            const filtered = { ...server } as Record<string, unknown>;
             if (server.sshKey === null) delete filtered.sshKey;
             if (server.password === null) delete filtered.password;
-            return filtered;
+            return filtered as typeof server;
           })()}
           isEditing={true}
           onSuccess={handleSuccess}

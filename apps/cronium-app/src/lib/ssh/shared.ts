@@ -151,7 +151,7 @@ export class SSHConnectionManager {
     const ssh = new NodeSSH();
 
     try {
-      const connectionConfig: any = {
+      const connectionConfig: Config = {
         host,
         username,
         port,
@@ -184,14 +184,10 @@ export class SSHConnectionManager {
           ],
           hmac: ["hmac-sha2-256", "hmac-sha2-512", "hmac-sha1"],
         },
+        ...(authType === "password"
+          ? { password: authCredential }
+          : { privateKey: authCredential }),
       };
-
-      // Set authentication method based on authType
-      if (authType === "password") {
-        connectionConfig.password = authCredential;
-      } else {
-        connectionConfig.privateKey = authCredential;
-      }
 
       await ssh.connect(connectionConfig);
 

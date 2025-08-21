@@ -87,7 +87,15 @@ export async function enhancedTransformJobForOrchestrator(
         const srv = await storage.getServer(eventServer.serverId);
         if (!srv) continue;
 
-        const serverInfo: any = {
+        const serverInfo: {
+          id: string;
+          name: string;
+          host: string;
+          port: number;
+          username: string;
+          privateKey?: string | null;
+          password?: string | null;
+        } = {
           id: String(srv.id),
           name: srv.name,
           host: srv.address,

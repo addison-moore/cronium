@@ -13,7 +13,7 @@ import {
   workflowLogs,
   executions,
 } from "@/shared/schema";
-import { eq, and, lt, or, isNull, inArray, sql } from "drizzle-orm";
+import { eq, and, lt, or, isNull, sql } from "drizzle-orm";
 import { LogStatus, JobStatus, WorkflowLogLevel } from "@/shared/schema";
 
 interface CleanupOptions {
@@ -195,7 +195,7 @@ export class WorkflowCleanupService {
       // Note: We need to check metadata JSON field differently
       const allJobs = await db.select().from(jobs);
       const runningJobs = allJobs.filter((job) => {
-        const metadata = job.metadata as any;
+        const metadata = job.metadata as Record<string, unknown>;
         return (
           metadata?.workflowExecutionId === workflowId &&
           (job.status === JobStatus.RUNNING || job.status === JobStatus.CLAIMED)
@@ -259,7 +259,7 @@ export class WorkflowCleanupService {
       await db
         .update(executions)
         .set({
-          status: JobStatus.FAILED as any,
+          status: JobStatus.FAILED as JobStatus,
           completedAt: now,
           error: "Job execution timed out",
           exitCode: -1,
@@ -338,9 +338,7 @@ let cleanupService: WorkflowCleanupService | null = null;
  * Get or create the cleanup service instance
  */
 export function getCleanupService(): WorkflowCleanupService {
-  if (!cleanupService) {
-    cleanupService = new WorkflowCleanupService();
-  }
+  cleanupService ??= new WorkflowCleanupService();
   return cleanupService;
 }
 

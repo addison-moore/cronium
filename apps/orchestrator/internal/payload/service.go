@@ -176,7 +176,7 @@ func (s *Service) getInterpreter(scriptType string) string {
 	case "PYTHON":
 		return "PYTHON"
 	case "NODE_JS", "NODEJS", "NODE":
-		return "NODE"
+		return "NODEJS"
 	case "BASH", "SH", "SHELL":
 		return "BASH"
 	default:

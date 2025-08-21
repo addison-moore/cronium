@@ -287,7 +287,7 @@ export default function WorkflowCanvas({
       // Fit view after nodes are set
       if (reactFlowInstance) {
         setTimeout(() => {
-          reactFlowInstance.fitView({ padding: 0.2, duration: 200 });
+          void reactFlowInstance.fitView({ padding: 0.2, duration: 200 });
         }, 100);
       }
     }
@@ -340,7 +340,7 @@ export default function WorkflowCanvas({
       // Fit view again after edges are set if we have nodes
       if (reactFlowInstance && nodes.length > 0) {
         setTimeout(() => {
-          reactFlowInstance.fitView({ padding: 0.2, duration: 200 });
+          void reactFlowInstance.fitView({ padding: 0.2, duration: 200 });
         }, 150);
       }
     }
@@ -845,7 +845,7 @@ export default function WorkflowCanvas({
             setReactFlowInstance(instance);
             // Ensure nodes are visible after initialization
             setTimeout(() => {
-              instance.fitView({ padding: 0.2, duration: 200 });
+              void instance.fitView({ padding: 0.2, duration: 200 });
             }, 50);
           }}
           fitView={false}

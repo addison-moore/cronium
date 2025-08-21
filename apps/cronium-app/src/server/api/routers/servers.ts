@@ -129,7 +129,7 @@ export const serversRouter = createTRPCRouter({
         );
 
         // Determine auth type based on provided credentials
-        const authCredential = (input.sshKey ?? input.password) || "";
+        const authCredential = input.sshKey ?? input.password ?? "";
         const authType = input.sshKey ? "privateKey" : "password";
 
         const connectionResult = await sshService.testConnection(
@@ -208,8 +208,7 @@ export const serversRouter = createTRPCRouter({
           const { sshService } = await import("@/lib/ssh");
 
           // Determine auth type and credential
-          const authCredential =
-            (updateData.sshKey ?? updateData.password) || "";
+          const authCredential = updateData.sshKey ?? updateData.password ?? "";
           const authType = updateData.sshKey ? "privateKey" : "password";
 
           const connectionResult = await sshService.testConnection(
@@ -347,7 +346,7 @@ export const serversRouter = createTRPCRouter({
         );
 
         // Determine auth type and credential
-        const authCredential = (input.sshKey ?? input.password) || "";
+        const authCredential = input.sshKey ?? input.password ?? "";
         const authType = input.sshKey ? "privateKey" : "password";
 
         const connectionResult = await sshService.testConnection(

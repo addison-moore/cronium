@@ -87,7 +87,7 @@ container:
   images:
     bash: cronium/runner:bash-alpine
     python: cronium/runner:python-alpine
-    node: cronium/runner:node-alpine
+    nodejs: cronium/runner:node-alpine
 
   # Resource limits
   resources:

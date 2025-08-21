@@ -100,7 +100,7 @@ type ScriptType string
 const (
 	ScriptTypeBash   ScriptType = "BASH"
 	ScriptTypePython ScriptType = "PYTHON"
-	ScriptTypeNode   ScriptType = "NODE"
+	ScriptTypeNode   ScriptType = "NODEJS"
 )
 
 // HTTPConfig contains HTTP request configuration

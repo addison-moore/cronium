@@ -315,7 +315,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           const decryptedServer = decryptSensitiveData(server, "servers");
           // Determine auth type and credential
           const authCredential =
-            decryptedServer.sshKey || decryptedServer.password || "";
+            decryptedServer.sshKey ?? decryptedServer.password ?? "";
           const authType = decryptedServer.sshKey ? "privateKey" : "password";
           await terminalSSHService.prewarmConnection(
             server.address,
@@ -348,7 +348,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         const decryptedServer = decryptSensitiveData(server, "servers");
         // Determine auth type and credential
         const authCredential =
-          decryptedServer.sshKey || decryptedServer.password || "";
+          decryptedServer.sshKey ?? decryptedServer.password ?? "";
         const authType = decryptedServer.sshKey ? "privateKey" : "password";
 
         // For cd commands, try to track directory changes

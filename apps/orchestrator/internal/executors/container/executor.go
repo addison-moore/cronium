@@ -566,14 +566,14 @@ func (e *Executor) createContainer(ctx context.Context, job *types.Job, networkI
 func (e *Executor) getImageForScript(scriptType types.ScriptType) string {
 	// Default images if not configured
 	defaults := map[string]string{
-		"bash":   "cronium/runner:bash-alpine",
-		"python": "cronium/runner:python-alpine",
-		"node":   "cronium/runner:node-alpine",
+		"BASH":   "cronium/runner:bash-alpine",
+		"PYTHON": "cronium/runner:python-alpine",
+		"NODEJS": "cronium/runner:node-alpine",
 	}
 
 	// Get configured image or use default
 	imageKey := string(scriptType)
-	if image, ok := e.config.Images[imageKey]; ok && image != "" {
+	if image, ok := e.config.Images[strings.ToLower(imageKey)]; ok && image != "" {
 		return image
 	}
 

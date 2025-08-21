@@ -9,7 +9,6 @@ import {
   XCircle,
   Clock,
   Play,
-  Loader2,
   Activity,
   Info,
   RefreshCw,
@@ -112,6 +111,15 @@ export default function WorkflowExecutionGraph({
     id: number;
     status: string;
   } | null>(null);
+  const isMountedRef = React.useRef(true);
+
+  // Track component mount state
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Detect screen size for responsive layout
   useEffect(() => {
@@ -139,9 +147,11 @@ export default function WorkflowExecutionGraph({
 
   // Process execution data when it changes
   useEffect(() => {
-    if (executionData) {
+    if (executionData && isMountedRef.current) {
       // Extract events from the execution data
-      const events = (executionData as any).events ?? [];
+      const events =
+        ((executionData as Record<string, unknown>)
+          .events as WorkflowExecutionEvent[]) ?? [];
       setExecutionEvents(events);
 
       // Set current execution
@@ -181,7 +191,7 @@ export default function WorkflowExecutionGraph({
       if (
         !lastNotified ||
         lastNotified.id !== currentExecution.id ||
-        lastNotified.status !== currentExecution.status
+        lastNotified.status !== (currentExecution.status as string)
       ) {
         onExecutionUpdate(currentExecution);
         lastNotifiedExecutionRef.current = {
@@ -194,7 +204,7 @@ export default function WorkflowExecutionGraph({
 
   // Function to manually refetch execution details
   const refetchExecutionDetails = useCallback(() => {
-    if (!executionId) return;
+    if (!executionId || !isMountedRef.current) return;
     void refetchExecution();
   }, [executionId, refetchExecution]);
 
@@ -203,10 +213,9 @@ export default function WorkflowExecutionGraph({
     const updatedNodes: NodeWithStatus[] = nodes.map((node) => {
       // Extract numeric ID from node.id which is in format "node-123"
       const nodeIdMatch = /node-(\d+)/.exec(node.id);
-      const nodeId =
-        nodeIdMatch && nodeIdMatch[1]
-          ? parseInt(nodeIdMatch[1])
-          : parseInt(node.id);
+      const nodeId = nodeIdMatch?.[1]
+        ? parseInt(nodeIdMatch[1])
+        : parseInt(node.id);
       const executionEvent = executionEvents.find(
         (event) => event.nodeId === nodeId,
       );
@@ -252,12 +261,15 @@ export default function WorkflowExecutionGraph({
 
         // Use a debounced approach to clear old data and load new data
         const timeout = setTimeout(() => {
+          // Only proceed if component is still mounted
+          if (!isMountedRef.current) return;
+
           setExecutionEvents([]);
           setCurrentExecution(null);
           hasAnyDataRef.current = false;
 
           // Trigger tRPC refetch
-          if (executionId) {
+          if (executionId && isMountedRef.current) {
             void refetchExecutionDetails();
           }
         }, 100); // Brief delay to prevent rapid state changes
@@ -621,13 +633,6 @@ export default function WorkflowExecutionGraph({
                           <div className="flex w-full items-center gap-1 overflow-hidden">
                             <div className="relative flex-shrink-0">
                               {getStatusIcon(node)}
-                              {(node.isCurrentlyExecuting ||
-                                node.status === LogStatus.RUNNING) && (
-                                <>
-                                  <div className="absolute -inset-1 animate-ping rounded-full border border-blue-400 opacity-75"></div>
-                                  <div className="absolute -inset-2 animate-pulse rounded-full border border-blue-300 opacity-50"></div>
-                                </>
-                              )}
                             </div>
                             <span
                               className="min-w-0 flex-1 truncate text-xs leading-tight font-medium"
