@@ -193,7 +193,7 @@ export default function WorkflowCanvas({
   const t = useTranslations("Workflows");
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-  const [edges, setEdges] = useEdgesState<Edge>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [reactFlowInstance, setReactFlowInstance] =
     useState<ReactFlowInstance | null>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
@@ -500,8 +500,7 @@ export default function WorkflowCanvas({
         }
       }
 
-      // Notify parent of user changes
-      notifyParentOfChanges(updatedNodes, edges);
+      // Parent will be notified via useEffect
 
       // Keep track of selected node
       const selectedNodes = updatedNodes.filter((node) => node.selected);
@@ -522,59 +521,54 @@ export default function WorkflowCanvas({
     ],
   );
 
+  // Store nodes in a ref so we always have the current value
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
+
+  // Track when edges are updated by ConnectionEdge component
+  const lastNotifiedEdgesRef = useRef<string>("");
+
+  useEffect(() => {
+    // Only check for changes after initialization
+    if (!isInitializing) {
+      const currentEdgesStr = JSON.stringify(
+        edges.map((e) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          data: e.data,
+        })),
+      );
+
+      // Only notify if the edges have actually changed since last notification
+      if (lastNotifiedEdgesRef.current !== currentEdgesStr) {
+        lastNotifiedEdgesRef.current = currentEdgesStr;
+        // Use the current nodes from ref and notify parent
+        if (onChange) {
+          onChange(nodesRef.current, edges);
+        }
+      }
+    }
+  }, [edges, isInitializing, onChange]); // Safe dependencies
+
   // Handle edge changes
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
       if (readOnly) return;
 
-      // Apply changes to get updated edges
-      const updatedEdges = changes.reduce((acc, change) => {
-        if (change.type === "add") {
-          // Validate the edge being added
-          const validation = validateWorkflowStructure(nodes, [
-            ...acc,
-            change.item,
-          ]);
-          if (!validation.isValid) {
-            toast({
-              title: "Invalid Workflow Connection",
-              description: validation.error,
-              variant: "destructive",
-            });
-            return acc; // Don't add the invalid edge
-          }
-          return [...acc, change.item];
-        } else if (change.type === "remove") {
-          return acc.filter((edge) => edge.id !== change.id);
-        } else if (change.type === "select") {
-          return acc.map((edge) =>
-            edge.id === change.id
-              ? { ...edge, selected: change.selected }
-              : edge,
-          );
-        } else if (change.type === "replace") {
-          // Handle edge replacement (used for data updates)
-          return acc.map((edge) =>
-            edge.id === change.id ? change.item : edge,
-          );
-        }
-        return acc;
-      }, edges);
-
-      setEdges(updatedEdges);
+      // Apply the changes via the onEdgesChange handler from useEdgesState
+      onEdgesChange(changes);
 
       // Track meaningful changes in history (not selection changes)
       const hasMeaningfulChange = changes.some(
         (change) => change.type !== "select",
       );
       if (hasMeaningfulChange) {
-        addToHistory(nodes, updatedEdges);
+        addToHistory(nodes, edges);
+        // Parent notification will happen via useEffect
       }
-
-      // Notify parent of user changes
-      notifyParentOfChanges(nodes, updatedEdges);
     },
-    [edges, nodes, readOnly, setEdges, notifyParentOfChanges, addToHistory],
+    [readOnly, onEdgesChange, addToHistory, nodes, edges],
   );
 
   // Handle connections between nodes
@@ -617,9 +611,11 @@ export default function WorkflowCanvas({
         data: edge.data
           ? {
               ...edge.data,
-              type: (edge.data.type as ConnectionType) ?? ConnectionType.ALWAYS,
+              connectionType:
+                (edge.data?.connectionType as ConnectionType) ??
+                ConnectionType.ALWAYS,
             }
-          : { type: ConnectionType.ALWAYS },
+          : { connectionType: ConnectionType.ALWAYS },
         animated: edge.animated ?? true,
         sourceHandle: edge.sourceHandle ?? null,
         targetHandle: edge.targetHandle ?? null,
@@ -639,8 +635,7 @@ export default function WorkflowCanvas({
       // Track connection in history
       addToHistory(nodes, updatedEdges);
 
-      // Notify parent of new connection
-      notifyParentOfChanges(nodes, updatedEdges);
+      // Parent will be notified via useEffect
     },
     [edges, nodes, setEdges, readOnly, notifyParentOfChanges, addToHistory],
   );
@@ -704,8 +699,7 @@ export default function WorkflowCanvas({
         // Track node addition in history
         addToHistory(updatedNodes, edges);
 
-        // Notify parent of new node
-        notifyParentOfChanges(updatedNodes, edges);
+        // Parent will be notified via useEffect
       } catch (error) {
         console.error("Error adding node:", error);
         toast({

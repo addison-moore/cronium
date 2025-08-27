@@ -49,7 +49,6 @@ export const workflowEdgeSchema = z.object({
   type: z.literal("connectionEdge"),
   animated: z.boolean().default(true),
   data: z.object({
-    type: z.nativeEnum(ConnectionType),
     connectionType: z.nativeEnum(ConnectionType),
   }),
 });

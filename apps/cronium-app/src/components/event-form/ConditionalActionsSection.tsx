@@ -19,6 +19,8 @@ import {
   SelectValue,
 } from "@cronium/ui";
 import { Badge } from "@cronium/ui";
+import { ComboBox, type ComboBoxOption } from "@cronium/ui";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { MonacoEditor } from "@cronium/ui";
 import {
   Trash2,
@@ -63,6 +65,7 @@ export interface EventData {
     id: number;
     type: ConditionalActionType;
     value?: string | undefined;
+    emailAddresses?: string | undefined;
     emailSubject?: string | undefined;
     targetEventId?: number | undefined;
     toolId?: number | undefined;
@@ -72,6 +75,7 @@ export interface EventData {
     id: number;
     type: ConditionalActionType;
     value?: string | undefined;
+    emailAddresses?: string | undefined;
     emailSubject?: string | undefined;
     targetEventId?: number | undefined;
     toolId?: number | undefined;
@@ -81,6 +85,7 @@ export interface EventData {
     id: number;
     type: ConditionalActionType;
     value?: string | undefined;
+    emailAddresses?: string | undefined;
     targetEventId?: number | undefined;
     toolId?: number | undefined;
     message?: string | undefined;
@@ -89,6 +94,7 @@ export interface EventData {
     id: number;
     type: ConditionalActionType;
     value?: string | undefined;
+    emailAddresses?: string | undefined;
     emailSubject?: string | undefined;
     targetEventId?: number | undefined;
     toolId?: number | undefined;
@@ -252,6 +258,7 @@ export default function ConditionalActionsSection({
   // All available message types based on tools with conditional actions
   const availableToolTypes = useMemo(() => {
     const conditionalActions = ToolPluginRegistry.getConditionalActions();
+    // Store as uppercase for consistency with database
     return [
       ...new Set(conditionalActions.map((ca) => ca.tool.id.toUpperCase())),
     ];
@@ -273,6 +280,7 @@ export default function ConditionalActionsSection({
   // Get the conditional action configuration for a tool type
   const getConditionalActionConfig = useCallback((toolType: string) => {
     try {
+      // Always convert to lowercase when accessing plugins
       const action = ToolPluginRegistry.getConditionalActionForTool(
         toolType.toLowerCase(),
       );
@@ -288,7 +296,7 @@ export default function ConditionalActionsSection({
       try {
         await createToolMutation.mutateAsync({
           name: data.name,
-          type: selectedToolType!,
+          type: selectedToolType!.toUpperCase(), // Store as uppercase in database
           credentials: data.credentials,
         });
       } catch {
@@ -403,6 +411,13 @@ export default function ConditionalActionsSection({
 
     const events: ConditionalAction[] = [];
 
+    // Helper function to get tool type from toolId
+    const getToolTypeFromId = (toolId: number | undefined) => {
+      if (!toolId || !toolsData?.tools) return undefined;
+      const tool = toolsData.tools.find((t) => t.id === toolId);
+      return tool?.type;
+    };
+
     // Add success events
     if (eventData.successEvents) {
       eventData.successEvents.forEach((event) => {
@@ -410,10 +425,11 @@ export default function ConditionalActionsSection({
           id: event.id,
           type: "ON_SUCCESS",
           action: event.type,
-          emailAddresses: event.value ?? "",
+          emailAddresses: event.emailAddresses ?? event.value ?? "",
           emailSubject: event.emailSubject ?? "",
           targetEventId: event.targetEventId ?? undefined,
           toolId: event.toolId ?? undefined,
+          toolType: getToolTypeFromId(event.toolId),
           message: event.message ?? "",
         });
       });
@@ -426,10 +442,11 @@ export default function ConditionalActionsSection({
           id: event.id,
           type: "ON_FAILURE",
           action: event.type,
-          emailAddresses: event.value ?? "",
+          emailAddresses: event.emailAddresses ?? event.value ?? "",
           emailSubject: event.emailSubject ?? "",
           targetEventId: event.targetEventId ?? undefined,
           toolId: event.toolId ?? undefined,
+          toolType: getToolTypeFromId(event.toolId),
           message: event.message ?? "",
         });
       });
@@ -442,9 +459,10 @@ export default function ConditionalActionsSection({
           id: event.id,
           type: "ALWAYS",
           action: event.type,
-          emailAddresses: event.value ?? "",
+          emailAddresses: event.emailAddresses ?? event.value ?? "",
           targetEventId: event.targetEventId ?? undefined,
           toolId: event.toolId ?? undefined,
+          toolType: getToolTypeFromId(event.toolId),
           message: event.message ?? "",
         });
       });
@@ -457,10 +475,11 @@ export default function ConditionalActionsSection({
           id: event.id,
           type: "ON_CONDITION",
           action: event.type,
-          emailAddresses: event.value ?? "",
+          emailAddresses: event.emailAddresses ?? event.value ?? "",
           emailSubject: event.emailSubject ?? "",
           targetEventId: event.targetEventId ?? undefined,
           toolId: event.toolId ?? undefined,
+          toolType: getToolTypeFromId(event.toolId),
           message: event.message ?? "",
         });
       });
@@ -469,7 +488,7 @@ export default function ConditionalActionsSection({
     setConditionalActions(events);
     setIsInitialized(true);
     // Don't notify parent on initial load to prevent loops
-  }, [eventData, eventId]);
+  }, [eventData, eventId, toolsData?.tools]);
 
   // Stable action handlers using useCallback
   const addConditionalAction = useCallback(() => {
@@ -600,6 +619,19 @@ export default function ConditionalActionsSection({
       const action = conditionalActions[index];
       if (!action) return;
 
+      // For SEND_MESSAGE actions, ensure toolType is set
+      if (
+        action.action === ConditionalActionType.SEND_MESSAGE &&
+        action.toolId
+      ) {
+        // Get the tool type from the toolId if not already set
+        const tool = allTools.find((t) => t.id === action.toolId);
+        const toolType = action.toolType || tool?.type || null;
+        setSelectedToolType(toolType);
+      } else {
+        setSelectedToolType(action.toolType ?? null);
+      }
+
       setNewEventType(action.type);
       setNewEventAction(action.action);
       setNewEmailAddresses(action.emailAddresses ?? "");
@@ -607,11 +639,10 @@ export default function ConditionalActionsSection({
       setNewTargetEventId(action.targetEventId ?? null);
       setNewToolId(action.toolId ?? null);
       setNewMessage(action.message ?? "");
-      setSelectedToolType(action.toolType ?? null);
       setIsEditing(true);
       setEditingIndex(index);
     },
-    [conditionalActions],
+    [conditionalActions, allTools],
   );
 
   // Helper functions with stable references
@@ -634,15 +665,17 @@ export default function ConditionalActionsSection({
     }
   }, []);
 
-  const getTypeColor = useCallback((type: string) => {
+  const getConditionalActionStatus = useCallback((type: string) => {
+    // Map conditional action types to appropriate status types for StatusBadge
     if (type === "ON_SUCCESS") {
-      return "bg-green-100 text-green-800";
+      return "success";
     } else if (type === "ON_FAILURE") {
-      return "bg-red-100 text-red-800";
+      return "failure";
     } else if (type === "ON_CONDITION") {
-      return "bg-purple-100 text-purple-800";
+      return "info"; // Purple/indigo coloring for condition
     } else {
-      return "bg-blue-100 text-blue-800";
+      // ALWAYS type
+      return "active"; // Green with different styling than success
     }
   }, []);
 
@@ -900,7 +933,7 @@ export default function ConditionalActionsSection({
                     disabled={!selectedToolType}
                     value={(() => {
                       if (
-                        selectedToolType === "email" &&
+                        selectedToolType?.toLowerCase() === "email" &&
                         systemSmtpEnabled &&
                         newToolId === null
                       ) {
@@ -940,19 +973,20 @@ export default function ConditionalActionsSection({
                     </SelectTrigger>
                     <SelectContent>
                       {/* System SMTP option for EMAIL tools when enabled */}
-                      {selectedToolType === "email" && systemSmtpEnabled && (
-                        <>
-                          <SelectItem value="system">
-                            <div className="flex items-center gap-2">
-                              <Mail className="h-4 w-4" />
-                              System SMTP Settings
-                            </div>
-                          </SelectItem>
-                          {credentialsForSelectedTool.length > 0 && (
-                            <div className="border-border my-1 border-t" />
-                          )}
-                        </>
-                      )}
+                      {selectedToolType?.toLowerCase() === "email" &&
+                        systemSmtpEnabled && (
+                          <>
+                            <SelectItem value="system">
+                              <div className="flex items-center gap-2">
+                                <Mail className="h-4 w-4" />
+                                System SMTP Settings
+                              </div>
+                            </SelectItem>
+                            {credentialsForSelectedTool.length > 0 && (
+                              <div className="border-border my-1 border-t" />
+                            )}
+                          </>
+                        )}
 
                       {/* User credentials */}
                       {credentialsForSelectedTool.map((tool) => (
@@ -968,7 +1002,7 @@ export default function ConditionalActionsSection({
                       {selectedToolType && (
                         <>
                           {(credentialsForSelectedTool.length > 0 ||
-                            (selectedToolType === "email" &&
+                            (selectedToolType?.toLowerCase() === "email" &&
                               systemSmtpEnabled)) && (
                             <div className="border-border my-1 border-t" />
                           )}
@@ -1091,17 +1125,17 @@ export default function ConditionalActionsSection({
                               setNewEmailAddresses(e.target.value)
                             }
                             placeholder={
-                              selectedToolType === "email"
+                              selectedToolType?.toLowerCase() === "email"
                                 ? "user1@example.com, user2@example.com"
-                                : selectedToolType === "slack"
+                                : selectedToolType?.toLowerCase() === "slack"
                                   ? "#channel or @user"
                                   : "Enter recipients..."
                             }
                           />
                           <p className="text-muted-foreground text-xs">
-                            {selectedToolType === "email"
+                            {selectedToolType?.toLowerCase() === "email"
                               ? "Enter multiple email addresses separated by commas"
-                              : selectedToolType === "slack"
+                              : selectedToolType?.toLowerCase() === "slack"
                                 ? "Enter channel name or user handle"
                                 : "Enter recipient information"}
                           </p>
@@ -1174,25 +1208,24 @@ export default function ConditionalActionsSection({
           {newEventAction === ConditionalActionType.SCRIPT && (
             <div className="space-y-2">
               <Label htmlFor="targetEvent">Target Event</Label>
-              <Select
+              <ComboBox
+                options={availableEvents
+                  .filter((event) => event.id !== eventId) // Don't allow self-reference
+                  .map((event) => ({
+                    label: event.description
+                      ? `${event.name} - ${event.description}`
+                      : event.name,
+                    value: event.id.toString(),
+                  }))}
                 value={newTargetEventId?.toString() ?? ""}
-                onValueChange={(value) =>
+                onChange={(value) =>
                   setNewTargetEventId(value ? parseInt(value) : null)
                 }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select event to run" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableEvents
-                    .filter((event) => event.id !== eventId) // Don't allow self-reference
-                    .map((event) => (
-                      <SelectItem key={event.id} value={event.id.toString()}>
-                        {event.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+                placeholder="Search and select an event to run..."
+                emptyMessage="No events found. Create an event first."
+                className="w-full"
+                maxDisplayItems={7}
+              />
               {eventId && (
                 <p className="text-muted-foreground text-sm">
                   <Info className="mr-1 inline-block h-3 w-3" />
@@ -1259,15 +1292,25 @@ export default function ConditionalActionsSection({
                 className="border-border bg-muted/50 flex items-center justify-between rounded-lg border p-3"
               >
                 <div className="flex items-center space-x-3">
-                  <Badge className={getTypeColor(action.type)}>
-                    {action.type === "ON_SUCCESS"
-                      ? "Success"
-                      : action.type === "ON_FAILURE"
-                        ? "Failure"
-                        : action.type === "ON_CONDITION"
-                          ? "Condition"
-                          : "Always"}
-                  </Badge>
+                  <StatusBadge
+                    status={
+                      getConditionalActionStatus(action.type) as
+                        | "success"
+                        | "failure"
+                        | "info"
+                        | "active"
+                    }
+                    label={
+                      action.type === "ON_SUCCESS"
+                        ? "On Success"
+                        : action.type === "ON_FAILURE"
+                          ? "On Failure"
+                          : action.type === "ON_CONDITION"
+                            ? "On Condition"
+                            : "Always"
+                    }
+                    size="sm"
+                  />
                   <div className="flex items-center space-x-2">
                     {getActionIcon(action.action)}
                     <span className="font-medium">

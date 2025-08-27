@@ -182,7 +182,11 @@ export default function EditWorkflowPage() {
         id: `edge-${String(conn.id)}`,
         source: `node-${String(conn.sourceNodeId)}`,
         target: `node-${String(conn.targetNodeId)}`,
-        type: "default",
+        type: "connectionEdge",
+        data: {
+          connectionType:
+            (conn.connectionType as ConnectionType) || ConnectionType.ALWAYS,
+        },
       }));
       setWorkflowEdges(edges);
     }
@@ -278,10 +282,8 @@ export default function EditWorkflowPage() {
         type: "connectionEdge" as const,
         animated: edge.animated ?? true,
         data: {
-          type: (edge.data?.type as ConnectionType) ?? ConnectionType.ALWAYS,
           connectionType:
             (edge.data?.connectionType as ConnectionType) ??
-            (edge.data?.type as ConnectionType) ??
             ConnectionType.ALWAYS,
         },
       }));

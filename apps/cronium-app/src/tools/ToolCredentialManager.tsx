@@ -219,6 +219,8 @@ export default function ToolCredentialManager({
       type: "email",
       config: {},
     });
+    // Ensure selected tool is also cleared
+    setSelectedTool(null);
   };
 
   // Toggle secret visibility
@@ -257,10 +259,15 @@ export default function ToolCredentialManager({
     const plugin = ToolPluginRegistry.get(type);
     if (!plugin) return;
 
+    // Create a deep copy of default values to prevent mutation
+    const defaultConfig = JSON.parse(
+      JSON.stringify(plugin.defaultValues || {}),
+    ) as Record<string, string>;
+
     setFormData({
       name: `${plugin.name} - ${new Date().toLocaleDateString()}`,
       type,
-      config: plugin.defaultValues as Record<string, string>,
+      config: defaultConfig,
     });
   };
 
@@ -269,17 +276,51 @@ export default function ToolCredentialManager({
     const decryptedTool = toolsWithDecrypted.find((t) => t.id === tool.id);
     if (!decryptedTool) return;
 
+    // If ANY dialog is open (edit or add), close it first
+    if (isEditDialogOpen || isAddDialogOpen) {
+      // Check if we're trying to edit a different tool
+      if (selectedTool && selectedTool.id !== tool.id) {
+        // Close the current dialog completely
+        setIsEditDialogOpen(false);
+        setIsAddDialogOpen(false);
+        resetForm(); // This also clears selectedTool
+        return; // Don't open for the new tool
+      }
+
+      // If it's the same tool, close the add dialog if open
+      if (isAddDialogOpen) {
+        setIsAddDialogOpen(false);
+        resetForm();
+      }
+    }
+
+    // Create a fresh copy of the credentials to avoid mutation
+    const freshConfig = JSON.parse(
+      JSON.stringify(decryptedTool.credentials || {}),
+    ) as Record<string, string>;
+
+    // Set up edit dialog for this tool with fresh data
     setSelectedTool(tool);
     setFormData({
       name: tool.name,
       type: tool.type,
-      config: decryptedTool.credentials || {},
+      config: freshConfig,
     });
     setIsEditDialogOpen(true);
   };
 
   // Handle save
   const handleSave = () => {
+    // Validate that we have the necessary data
+    if (!formData.name || !formData.type) {
+      toast({
+        title: "Validation Error",
+        description: "Please provide a name and select a tool type.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (selectedTool) {
       updateToolMutation.mutate({
         id: selectedTool.id,
@@ -289,7 +330,7 @@ export default function ToolCredentialManager({
     } else {
       createToolMutation.mutate({
         name: formData.name,
-        type: formData.type,
+        type: formData.type.toUpperCase(), // Store as uppercase in database
         credentials: formData.config,
       });
     }
@@ -297,7 +338,7 @@ export default function ToolCredentialManager({
 
   // Filter tools
   const filteredTools = tools.filter((tool) => {
-    const plugin = ToolPluginRegistry.get(tool.type);
+    const plugin = ToolPluginRegistry.get(tool.type.toLowerCase());
     if (!plugin) return false;
 
     const matchesCategory =
@@ -388,7 +429,7 @@ export default function ToolCredentialManager({
         ) : (
           <div className="space-y-6">
             {Object.entries(groupedTools).map(([type, typeTools]) => {
-              const plugin = ToolPluginRegistry.get(type);
+              const plugin = ToolPluginRegistry.get(type.toLowerCase());
               if (!plugin) return null;
 
               return (
@@ -626,10 +667,13 @@ export default function ToolCredentialManager({
         open={isAddDialogOpen || isEditDialogOpen}
         onOpenChange={(open) => {
           if (!open) {
+            // Clean up all state when dialog closes
             setIsAddDialogOpen(false);
             setIsEditDialogOpen(false);
             setSelectedTool(null);
             resetForm();
+            // Also clear any sensitive data from memory
+            setShowSecrets({});
           }
         }}
       >
@@ -725,7 +769,9 @@ export default function ToolCredentialManager({
 
                 {/* Setup Guide */}
                 {(() => {
-                  const plugin = ToolPluginRegistry.get(formData.type);
+                  const plugin = ToolPluginRegistry.get(
+                    formData.type.toLowerCase(),
+                  );
                   const helpUrl = plugin?.actions?.[0]?.helpUrl;
                   return helpUrl ? (
                     <Alert>

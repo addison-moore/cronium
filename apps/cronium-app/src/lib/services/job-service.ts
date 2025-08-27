@@ -541,6 +541,44 @@ export class JobService {
 
       const updatedLog = await storage.updateLog(executionLogId, logUpdateData);
 
+      // Trigger conditional actions if job is completing
+      if (isCompleting && job.eventId) {
+        try {
+          const {
+            handleSuccessActions,
+            handleFailureActions,
+            handleAlwaysActions,
+            handleConditionActions,
+            processEvent,
+          } = await import("@/lib/scheduler/event-handlers");
+
+          // Always trigger "always" actions regardless of success/failure
+          await handleAlwaysActions(job.eventId, processEvent);
+
+          // Trigger success or failure actions based on status
+          if (status === JobStatus.COMPLETED) {
+            await handleSuccessActions(job.eventId, processEvent);
+          } else if (status === JobStatus.FAILED) {
+            await handleFailureActions(job.eventId, processEvent);
+          }
+
+          // Handle condition-based actions if a condition was set
+          if (job.result && typeof job.result === "object") {
+            const result = job.result as Record<string, unknown>;
+            if (typeof result.condition === "boolean") {
+              await handleConditionActions(
+                job.eventId,
+                result.condition,
+                processEvent,
+              );
+            }
+          }
+        } catch (error) {
+          console.error("Error triggering conditional actions:", error);
+          // Don't fail the job update if conditional actions fail
+        }
+      }
+
       // Broadcast the update via enhanced broadcaster
       try {
         const { getWebSocketBroadcaster } = await import(

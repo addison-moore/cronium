@@ -345,22 +345,30 @@ export class WorkflowExecutor {
       await storage.createWorkflowLog(infoLogData);
 
       // Create a map to track node results with script output data
+      // Using a Map is thread-safe in Node.js for concurrent updates
       const nodeResults = new Map<number, NodeResult>();
 
-      // Execute the workflow by starting with the starting nodes
-      let sequenceOrder = 1;
-      for (const startNode of startingNodes) {
-        await this.executeNode(
+      // Execute the workflow by starting with the starting nodes in parallel
+      // Each starting node represents an independent branch that can run concurrently
+      const parallelGroupId = `group_${workflowExecution.id}_${Date.now()}`;
+      const startingNodePromises = startingNodes.map((startNode, index) => {
+        const branchId = `branch_${workflowExecution.id}_${index}`;
+        return this.executeNode(
           startNode,
           nodeMap,
           connections,
           nodeResults,
           workflow,
           workflowExecution.id,
-          sequenceOrder++,
+          index + 1, // sequenceOrder for each parallel branch
           inputData,
+          branchId,
+          parallelGroupId,
         );
-      }
+      });
+
+      // Wait for all starting nodes to complete (they will handle their own branches)
+      await Promise.all(startingNodePromises);
 
       // Calculate execution duration
       const endTime = new Date();
@@ -473,6 +481,8 @@ export class WorkflowExecutor {
     workflowExecutionId?: number,
     sequenceOrder?: number,
     initialInputData: Record<string, unknown> = {},
+    branchId?: string,
+    parallelGroupId?: string,
   ): Promise<void> {
     // Check if this node has already been executed
     if (nodeResults.has(node.id)) {
@@ -487,35 +497,74 @@ export class WorkflowExecutor {
 
       // Wait for all prerequisite nodes to complete
       if (incomingConnections.length > 0) {
-        const prerequisiteCompleted = incomingConnections.every((conn) => {
-          const sourceNodeResult = nodeResults.get(conn.sourceNodeId);
-          if (!sourceNodeResult) return false;
+        // Poll for prerequisites to be ready (with timeout to prevent infinite waiting)
+        const maxWaitTime = 30 * 60 * 1000; // 30 minutes max wait
+        const startWaitTime = Date.now();
+        const pollInterval = 100; // Check every 100ms
 
-          // Check connection condition
-          switch (conn.connectionType) {
-            case ConnectionType.ON_SUCCESS:
-              return sourceNodeResult.success;
-            case ConnectionType.ON_FAILURE:
-              return !sourceNodeResult.success;
-            case ConnectionType.ON_CONDITION:
-              return sourceNodeResult.condition === true;
-            case ConnectionType.ALWAYS:
-            default:
-              return true;
+        let prerequisiteCompleted = false;
+        let hasLoggedWaiting = false;
+
+        while (
+          !prerequisiteCompleted &&
+          Date.now() - startWaitTime < maxWaitTime
+        ) {
+          prerequisiteCompleted = incomingConnections.every((conn) => {
+            const sourceNodeResult = nodeResults.get(conn.sourceNodeId);
+            if (!sourceNodeResult) return false;
+
+            // Check connection condition
+            switch (conn.connectionType) {
+              case ConnectionType.ON_SUCCESS:
+                return sourceNodeResult.success;
+              case ConnectionType.ON_FAILURE:
+                return !sourceNodeResult.success;
+              case ConnectionType.ON_CONDITION:
+                return sourceNodeResult.condition === true;
+              case ConnectionType.ALWAYS:
+              default:
+                return true;
+            }
+          });
+
+          if (!prerequisiteCompleted) {
+            // Log once that this node is waiting
+            if (!hasLoggedWaiting) {
+              const waitingLogData: InsertWorkflowLog = {
+                workflowId: workflow.id,
+                userId: workflow.userId,
+                level: WorkflowLogLevel.INFO,
+                message: `Node ${node.id} waiting for prerequisite nodes to complete`,
+                timestamp: new Date(),
+                status: LogStatus.PENDING,
+              };
+              await storage.createWorkflowLog(waitingLogData);
+              hasLoggedWaiting = true;
+            }
+
+            // Wait before checking again
+            await new Promise((resolve) => setTimeout(resolve, pollInterval));
           }
-        });
+        }
 
+        // If we timed out waiting for prerequisites
         if (!prerequisiteCompleted) {
-          // Log that this node is waiting for prerequisites
-          const waitingLogData: InsertWorkflowLog = {
+          const timeoutMessage = `Node ${node.id} timed out waiting for prerequisites after ${maxWaitTime / 1000} seconds`;
+          nodeResults.set(node.id, {
+            success: false,
+            output: timeoutMessage,
+            condition: false,
+          });
+
+          const timeoutLogData: InsertWorkflowLog = {
             workflowId: workflow.id,
             userId: workflow.userId,
-            level: WorkflowLogLevel.INFO,
-            message: `Node ${node.id} waiting for prerequisite nodes to complete`,
+            level: WorkflowLogLevel.ERROR,
+            message: timeoutMessage,
             timestamp: new Date(),
-            status: LogStatus.PENDING,
+            status: LogStatus.FAILURE,
           };
-          await storage.createWorkflowLog(waitingLogData);
+          await storage.createWorkflowLog(timeoutLogData);
           return;
         }
       }
@@ -576,6 +625,8 @@ export class WorkflowExecutor {
           output: null,
           errorMessage: null,
           connectionType: ConnectionType.ALWAYS,
+          branchId,
+          parallelGroupId,
         };
         const runningEvent =
           await storage.createWorkflowExecutionEvent(runningEventData);
@@ -668,6 +719,8 @@ export class WorkflowExecutor {
             ? null
             : (executionResult.output ?? "Unknown error"),
           connectionType: ConnectionType.ALWAYS,
+          branchId,
+          parallelGroupId,
         };
         await storage.createWorkflowExecutionEvent(executionEventData);
       }
@@ -685,10 +738,16 @@ export class WorkflowExecutor {
       };
       await storage.createWorkflowLog(nodeLogData);
 
-      // Execute connected nodes
+      // Execute connected nodes in parallel where possible
       const outgoingConnections = connections.filter(
         (conn) => conn.sourceNodeId === node.id,
       );
+
+      // Group connections that should be followed
+      const connectionsToFollow: Array<{
+        connection: WorkflowConnection;
+        targetNode: WorkflowNode;
+      }> = [];
 
       for (const connection of outgoingConnections) {
         const targetNode = nodeMap.get(connection.targetNodeId);
@@ -705,19 +764,41 @@ export class WorkflowExecutor {
               nodeResult?.condition === true);
 
           if (shouldFollow) {
-            await this.executeNode(
-              targetNode,
-              nodeMap,
-              connections,
-              nodeResults,
-              workflow,
-              workflowExecutionId,
-              sequenceOrder,
-              initialInputData,
-            );
+            connectionsToFollow.push({ connection, targetNode });
           }
         }
       }
+
+      // Execute all outgoing connections in parallel
+      // Each branch can proceed independently
+      const outgoingPromises = connectionsToFollow.map(
+        ({ targetNode }, index) => {
+          // For parallel branches from this node, create new branch IDs
+          // If there's only one outgoing connection, keep the same branch ID
+          const newBranchId =
+            connectionsToFollow.length > 1 ? `${branchId}_${index}` : branchId;
+          const newParallelGroupId =
+            connectionsToFollow.length > 1
+              ? `group_${node.id}_${Date.now()}`
+              : parallelGroupId;
+
+          return this.executeNode(
+            targetNode,
+            nodeMap,
+            connections,
+            nodeResults,
+            workflow,
+            workflowExecutionId,
+            sequenceOrder,
+            initialInputData,
+            newBranchId,
+            newParallelGroupId,
+          );
+        },
+      );
+
+      // Wait for all outgoing branches to complete
+      await Promise.all(outgoingPromises);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);

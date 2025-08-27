@@ -177,7 +177,7 @@ export const DiscordPlugin: ToolPlugin = {
       (action) => action.actionType === type,
     ),
   getConditionalAction: () =>
-    Object.values(discordActions).find((action) => action.isConditionalAction),
+    Object.values(discordActions).find((action) => action.isSendMessageAction),
 
   // API Routes
   apiRoutes: discordApiRoutes,

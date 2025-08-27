@@ -97,10 +97,9 @@ export async function GET(request: NextRequest) {
       parameters: {},
     };
 
-    // Get the first available action from the plugin
-    const plugin = await import("@/tools/types/tool-plugin").then((m) =>
-      m.ToolPluginRegistry.get(testTool.type.toLowerCase()),
-    );
+    // Skip plugin-based action selection on server side
+    // TODO: Create server-side action registry
+    const plugin = null;
 
     if (plugin?.actions && plugin.actions.length > 0) {
       const firstAction = plugin.actions[0];

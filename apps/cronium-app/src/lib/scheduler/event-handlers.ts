@@ -249,20 +249,19 @@ export async function processEvent(
           return;
         }
 
-        // Import the tool plugin registry to find the appropriate action
-        const { ToolPluginRegistry } = await import(
-          "@/tools/types/tool-plugin"
-        );
+        // For SEND_MESSAGE actions, we need to determine the action ID
+        // Map tool types to their send message action IDs
+        const sendMessageActionIds: Record<string, string> = {
+          email: "send-email",
+          slack: "slack-send-message",
+          discord: "discord-send-message",
+          teams: "teams-send-message",
+        };
 
-        // Get the conditional action for this tool type
-        const conditionalAction =
-          ToolPluginRegistry.getConditionalActionForTool(
-            tool.type.toLowerCase(),
-          );
-
-        if (!conditionalAction) {
+        const actionId = sendMessageActionIds[tool.type.toLowerCase()];
+        if (!actionId) {
           console.error(
-            `Tool type ${tool.type} does not support conditional actions`,
+            `Tool type ${tool.type} does not support send message actions`,
           );
           return;
         }
@@ -314,42 +313,36 @@ export async function processEvent(
           templateContext,
         );
 
-        // Prepare parameters based on tool type and conditional action fields
+        // Prepare parameters based on tool type
         const actionParameters: Record<string, unknown> = {};
 
-        // Map conditional action fields to tool action parameters
-        // The ConditionalActionsSection stores emailAddresses and emailSubject
-        // We need to map these to the tool's expected parameter names
-
-        if (conditional_event.emailAddresses) {
-          // Map to 'to' or 'recipients' based on tool expectations
-          actionParameters.to = conditional_event.emailAddresses;
-          actionParameters.recipients = conditional_event.emailAddresses;
-        }
-
-        if (conditional_event.emailSubject) {
-          const processedSubject = templateProcessor.processTemplate(
-            conditional_event.emailSubject,
-            templateContext,
-          );
-          actionParameters.subject = processedSubject;
-        } else if (tool.type === "email") {
-          // Default subject for email if not provided
-          actionParameters.subject = `Event ${isSuccess ? "Success" : "Failure"}: ${event.name ?? ""}`;
-        }
-
-        // Add the message content
-        if (tool.type === "email") {
-          actionParameters.message = processedMessage;
+        // Map based on tool type
+        if (tool.type.toLowerCase() === "email") {
+          actionParameters.to = conditional_event.emailAddresses || "";
+          actionParameters.subject = conditional_event.emailSubject
+            ? templateProcessor.processTemplate(
+                conditional_event.emailSubject,
+                templateContext,
+              )
+            : `Event ${isSuccess ? "Success" : "Failure"}: ${event.name ?? ""}`;
           actionParameters.body = processedMessage;
           actionParameters.isHtml = true;
+        } else if (tool.type.toLowerCase() === "slack") {
+          actionParameters.channel = conditional_event.emailAddresses || ""; // Channel stored in emailAddresses field
+          actionParameters.text = processedMessage;
+        } else if (tool.type.toLowerCase() === "discord") {
+          actionParameters.content = processedMessage;
+        } else if (tool.type.toLowerCase() === "teams") {
+          actionParameters.message = processedMessage;
+          actionParameters.title =
+            conditional_event.emailSubject || `Event ${event.name ?? ""}`;
         } else {
-          // For non-email tools, just pass the message
+          // Generic message parameter
           actionParameters.message = processedMessage;
         }
 
         console.log(
-          `Executing conditional action ${conditionalAction.id} for ${tool.type}`,
+          `Executing conditional action ${actionId} for ${tool.type}`,
         );
 
         // Create a temporary event object for the tool action executor
@@ -360,7 +353,7 @@ export async function processEvent(
           eventType: EventType.TOOL_ACTION,
           toolActionConfig: JSON.stringify({
             toolType: tool.type,
-            actionId: conditionalAction.id,
+            actionId: actionId,
             toolId: conditional_event.toolId,
             parameters: actionParameters,
           } as ToolActionConfig),

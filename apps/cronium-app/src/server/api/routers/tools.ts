@@ -16,7 +16,7 @@ import {
 } from "@shared/schemas/tools";
 import { toolCredentials, EventType } from "@/shared/schema";
 import { db } from "@/server/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, ne } from "drizzle-orm";
 import {
   credentialEncryption,
   type EncryptedData,
@@ -141,17 +141,52 @@ async function getUserTools(
             credentials = {};
           }
         } else {
-          // Not encrypted, try to parse as JSON
+          // Not marked as encrypted, but check if it might be encrypted data
           try {
+            const trimmed = rawCredentials.trim();
             // Check if this might be encrypted data that wasn't properly marked
             // Encrypted strings typically don't start with { or [ and contain base64-like characters
-            const trimmed = rawCredentials.trim();
             if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
               console.warn(
-                `Tool ${tool.id} credentials appear to be encrypted but tool.encrypted is false. Treating as empty credentials.`,
+                `Tool ${tool.id} credentials appear to be encrypted but tool.encrypted is false. Attempting to decrypt...`,
               );
-              credentials = {};
+
+              // Try to decrypt even though the flag is false
+              if (credentialEncryption.isAvailable()) {
+                try {
+                  // Try parsing as encrypted data
+                  const encryptedData = JSON.parse(
+                    rawCredentials,
+                  ) as EncryptedData;
+                  const decrypted = credentialEncryption.decrypt(encryptedData);
+
+                  if (typeof decrypted === "object" && decrypted !== null) {
+                    credentials = decrypted as Record<string, unknown>;
+                    console.log(
+                      `Successfully decrypted credentials for tool ${tool.id} despite encrypted flag being false`,
+                    );
+                  } else {
+                    // Try parsing the decrypted string
+                    credentials = JSON.parse(String(decrypted)) as Record<
+                      string,
+                      unknown
+                    >;
+                  }
+                } catch (decryptError) {
+                  console.error(
+                    `Failed to decrypt unmarked encrypted credentials for tool ${tool.id}:`,
+                    decryptError,
+                  );
+                  credentials = {};
+                }
+              } else {
+                console.error(
+                  `Tool ${tool.id} appears to have encrypted credentials but encryption is not available`,
+                );
+                credentials = {};
+              }
             } else {
+              // Normal JSON credentials
               credentials = JSON.parse(rawCredentials) as Record<
                 string,
                 unknown
@@ -240,33 +275,23 @@ async function validateCredentialsForType(
   type: string,
   credentials: Record<string, unknown>,
 ): Promise<{ valid: boolean; errors: string[] }> {
-  const errors: string[] = [];
-
   try {
-    // Import tool plugin registry dynamically
-    const { ToolPluginRegistry } = await import("@/tools/types/tool-plugin");
-
-    // Get the plugin for this tool type
-    const plugin = ToolPluginRegistry.get(type.toLowerCase());
-    if (!plugin) {
-      errors.push(`Unsupported tool type: ${type}`);
-      return { valid: false, errors };
-    }
-
-    // Use the plugin's schema to validate
-    const result = plugin.schema.safeParse(credentials);
-    if (!result.success) {
-      errors.push(
-        ...result.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`),
-      );
-    }
-  } catch (error) {
-    errors.push(
-      `Validation error: ${error instanceof Error ? error.message : "Unknown error"}`,
+    // Import server-side validation registry (no React components)
+    const { validateToolCredentials } = await import(
+      "@/tools/plugins/validation-registry"
     );
-  }
 
-  return { valid: errors.length === 0, errors };
+    // Validate using the server-side registry
+    return validateToolCredentials(type, credentials);
+  } catch (error) {
+    console.error("Error validating credentials:", error);
+    return {
+      valid: false,
+      errors: [
+        `Failed to validate credentials: ${error instanceof Error ? error.message : "Unknown error"}`,
+      ],
+    };
+  }
 }
 
 // Helper function to check if a tool is being used in tool actions
@@ -519,9 +544,9 @@ export const toolsRouter = createTRPCRouter({
     .input(createToolSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        // Validate credentials for the tool type
+        // Validate credentials for the tool type (convert to lowercase for plugin access)
         const validation = await validateCredentialsForType(
-          input.type,
+          input.type.toLowerCase(),
           input.credentials,
         );
         if (!validation.valid) {
@@ -574,7 +599,7 @@ export const toolsRouter = createTRPCRouter({
         const values: ToolInsertValues = {
           userId: ctx.session.user.id,
           name: input.name,
-          type: input.type,
+          type: input.type.toUpperCase(), // Store as uppercase in database for consistency
           credentials: credentialsData,
           description: input.description ?? "",
           tags: input.tags ?? [],
@@ -649,8 +674,16 @@ export const toolsRouter = createTRPCRouter({
       try {
         const { id, ...updateData } = input;
 
-        const tools = await getUserTools(ctx.session.user.id);
-        const existingTool = tools.find((t) => t.id === id);
+        // Get the tool directly from database to check ownership and type
+        const [existingTool] = await db
+          .select()
+          .from(toolCredentials)
+          .where(
+            and(
+              eq(toolCredentials.id, id),
+              eq(toolCredentials.userId, ctx.session.user.id),
+            ),
+          );
 
         if (!existingTool) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Tool not found" });
@@ -659,7 +692,7 @@ export const toolsRouter = createTRPCRouter({
         // Validate credentials if provided
         if (updateData.credentials) {
           const validation = await validateCredentialsForType(
-            existingTool.type,
+            existingTool.type.toLowerCase(),
             updateData.credentials,
           );
           if (!validation.valid) {
@@ -672,11 +705,18 @@ export const toolsRouter = createTRPCRouter({
 
         // Check for name conflicts if name is being updated
         if (updateData.name && updateData.name !== existingTool.name) {
-          if (
-            tools.some(
-              (tool) => tool.id !== id && tool.name === updateData.name,
-            )
-          ) {
+          const conflictingTool = await db
+            .select()
+            .from(toolCredentials)
+            .where(
+              and(
+                eq(toolCredentials.userId, ctx.session.user.id),
+                eq(toolCredentials.name, updateData.name),
+                ne(toolCredentials.id, id),
+              ),
+            );
+
+          if (conflictingTool.length > 0) {
             throw new TRPCError({
               code: "CONFLICT",
               message: "A tool with this name already exists",

@@ -244,7 +244,6 @@ export default function WorkflowDetailsPage({
         type: "connectionEdge",
         animated: false,
         data: {
-          type: conn.connectionType ?? "ALWAYS",
           connectionType: conn.connectionType ?? "ALWAYS",
         },
       }));
@@ -451,7 +450,6 @@ export default function WorkflowDetailsPage({
         type: "connectionEdge" as const,
         animated: edge.animated ?? true,
         data: {
-          type: (edge.data?.connectionType ?? "ALWAYS") as ConnectionType,
           connectionType: (edge.data?.connectionType ??
             "ALWAYS") as ConnectionType,
         },
@@ -1178,6 +1176,11 @@ export default function WorkflowDetailsPage({
                       // @ts-expect-error - exactOptionalPropertyTypes: markerEnd type compatibility
                       localEdge.markerEnd =
                         edge.markerEnd as WorkflowEdge["markerEnd"];
+                    }
+
+                    // IMPORTANT: Copy edge data which contains the connection type
+                    if (edge.data !== undefined) {
+                      localEdge.data = edge.data;
                     }
 
                     return localEdge;

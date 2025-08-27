@@ -170,7 +170,63 @@ export async function executeToolAction(
       );
     }
 
-    const credentials = cachedTool.credentials as Record<string, unknown>;
+    // Decrypt credentials if needed
+    let credentials: Record<string, unknown>;
+
+    // Handle credential decryption based on encryption status
+    if (cachedTool.encrypted) {
+      // Tool has encrypted credentials
+      const { credentialEncryption } = await import(
+        "@/lib/security/credential-encryption"
+      );
+
+      if (!credentialEncryption.isAvailable()) {
+        throw new Error("Encryption key not configured");
+      }
+
+      try {
+        // Parse the encrypted data
+        let encryptedData: unknown;
+        if (typeof cachedTool.credentials === "string") {
+          encryptedData = JSON.parse(cachedTool.credentials);
+        } else {
+          encryptedData = cachedTool.credentials;
+        }
+
+        console.log(`[ToolAction] Decrypting credentials...`);
+        // Decrypt using the credential encryption service
+        const decrypted = credentialEncryption.decrypt(encryptedData as any);
+
+        // The decrypted value should be the credentials object
+        if (typeof decrypted === "string") {
+          credentials = JSON.parse(decrypted);
+        } else {
+          credentials = decrypted as Record<string, unknown>;
+        }
+        console.log(`[ToolAction] Credentials decrypted successfully`);
+      } catch (err) {
+        console.error(`[ToolAction] Failed to decrypt credentials:`, err);
+        throw new Error(
+          `Failed to decrypt tool credentials: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
+      }
+    } else {
+      // Tool has unencrypted credentials
+      if (typeof cachedTool.credentials === "string") {
+        try {
+          credentials = JSON.parse(cachedTool.credentials);
+        } catch (err) {
+          console.error(
+            `[ToolAction] Failed to parse unencrypted credentials:`,
+            err,
+          );
+          throw new Error(`Invalid credential format`);
+        }
+      } else {
+        credentials = cachedTool.credentials as Record<string, unknown>;
+      }
+    }
+
     console.log(
       `[ToolAction] Tool found: ${cachedTool.name} (${cachedTool.type})`,
     );
@@ -190,21 +246,23 @@ export async function executeToolAction(
       pooledConnection ? "Found" : "Not found",
     );
 
-    // Import tool plugin registry
-    const { ToolPluginRegistry } = await import("@/tools/types/tool-plugin");
+    // Use server-side action executor instead of client-side registry
+    const { getServerActionById, getAllServerActionIds } = await import(
+      "@/lib/tools/server-action-executor"
+    );
 
     // Get the action definition
     console.log(
       `[ToolAction] Looking for action: ${toolActionConfig.actionId}`,
     );
-    const action = ToolPluginRegistry.getActionById(toolActionConfig.actionId);
+    const action = getServerActionById(toolActionConfig.actionId);
     if (!action) {
       console.error(
-        `[ToolAction] Action not found in registry: ${toolActionConfig.actionId}`,
+        `[ToolAction] Action not found in server registry: ${toolActionConfig.actionId}`,
       );
       console.log(
-        `[ToolAction] Available actions:`,
-        ToolPluginRegistry.getAllActions().map((a) => a.id),
+        `[ToolAction] Available server actions:`,
+        getAllServerActionIds(),
       );
       throw new Error(`Action not found: ${toolActionConfig.actionId}`);
     }

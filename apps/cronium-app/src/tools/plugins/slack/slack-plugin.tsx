@@ -258,7 +258,7 @@ export const SlackPluginTrpc: ToolPlugin = {
   getActionsByType: (type: string) =>
     Object.values(slackActions).filter((action) => action.actionType === type),
   getConditionalAction: () =>
-    Object.values(slackActions).find((action) => action.isConditionalAction),
+    Object.values(slackActions).find((action) => action.isSendMessageAction),
 
   async validate(credentials: Record<string, unknown>) {
     const result = slackCredentialsSchema.safeParse(credentials);

@@ -269,6 +269,11 @@ export function ModularToolsManager() {
   useEffect(() => {
     if (!selectedTool && filteredPlugins.length > 0 && filteredPlugins[0]) {
       setSelectedTool(filteredPlugins[0].id);
+      // Clear any open forms when auto-selecting
+      setEditingTool(null);
+      setShowAddForm(false);
+      setShowAddTemplateForm(false);
+      setEditingTemplateId(null);
     }
   }, [selectedTool, filteredPlugins]);
 
@@ -328,6 +333,9 @@ export function ModularToolsManager() {
                       )}
                       onClick={() => {
                         setSelectedTool(plugin.id);
+                        // Close any open forms when switching tools
+                        setEditingTool(null);
+                        setShowAddForm(false);
                         // Close template form when switching tools
                         setShowAddTemplateForm(false);
                         setEditingTemplateId(null);
