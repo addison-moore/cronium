@@ -68,7 +68,7 @@ export interface ToolAction {
   helpUrl?: string;
 
   // Flag to indicate if this action can be used as a conditional action
-  isConditionalAction?: boolean;
+  isSendMessageAction?: boolean;
 
   // Configuration for conditional action usage
   conditionalActionConfig?: ConditionalActionConfig;
@@ -361,7 +361,7 @@ export class ToolPluginRegistry {
 
     this.plugins.forEach((plugin) => {
       plugin.actions.forEach((action) => {
-        if (action.isConditionalAction) {
+        if (action.isSendMessageAction) {
           conditionalActions.push({ tool: plugin, action });
         }
       });
@@ -375,7 +375,7 @@ export class ToolPluginRegistry {
     const plugin = this.plugins.get(toolType.toLowerCase());
     if (!plugin) return undefined;
 
-    return plugin.actions.find((action) => action.isConditionalAction);
+    return plugin.actions.find((action) => action.isSendMessageAction);
   }
 
   // Check if a tool has any conditional actions
@@ -383,7 +383,7 @@ export class ToolPluginRegistry {
     const plugin = this.plugins.get(toolType.toLowerCase());
     if (!plugin) return false;
 
-    return plugin.actions.some((action) => action.isConditionalAction);
+    return plugin.actions.some((action) => action.isSendMessageAction);
   }
 
   static unregister(id: string) {

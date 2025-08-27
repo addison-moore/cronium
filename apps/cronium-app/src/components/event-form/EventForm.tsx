@@ -478,6 +478,66 @@ export default function EventForm({
           ...baseData
         } = data;
 
+        // Import ConditionalActionType at the top of the file
+        const { ConditionalActionType } = await import("@/shared/schema");
+
+        // Separate conditional actions by type
+        const successActions = conditionalActions
+          .filter((action) => action.type === "ON_SUCCESS")
+          .map((action) => ({
+            type: action.type,
+            action: action.action as ConditionalActionType,
+            details: {
+              emailAddresses: action.emailAddresses ?? "",
+              emailSubject: action.emailSubject ?? "",
+              targetEventId: action.targetEventId ?? null,
+              toolId: action.toolId ?? null,
+              message: action.message ?? "",
+            },
+          }));
+
+        const failureActions = conditionalActions
+          .filter((action) => action.type === "ON_FAILURE")
+          .map((action) => ({
+            type: action.type,
+            action: action.action as ConditionalActionType,
+            details: {
+              emailAddresses: action.emailAddresses ?? "",
+              emailSubject: action.emailSubject ?? "",
+              targetEventId: action.targetEventId ?? null,
+              toolId: action.toolId ?? null,
+              message: action.message ?? "",
+            },
+          }));
+
+        const alwaysActions = conditionalActions
+          .filter((action) => action.type === "ALWAYS")
+          .map((action) => ({
+            type: action.type,
+            action: action.action as ConditionalActionType,
+            details: {
+              emailAddresses: action.emailAddresses ?? "",
+              emailSubject: action.emailSubject ?? "",
+              targetEventId: action.targetEventId ?? null,
+              toolId: action.toolId ?? null,
+              message: action.message ?? "",
+            },
+          }));
+
+        const conditionActions = conditionalActions
+          .filter((action) => action.type === "ON_CONDITION")
+          .map((action) => ({
+            type: action.type,
+            action: action.action as ConditionalActionType,
+            details: {
+              emailAddresses: action.emailAddresses ?? "",
+              emailSubject: action.emailSubject ?? "",
+              targetEventId: action.targetEventId ?? null,
+              toolId: action.toolId ?? null,
+              message: action.message ?? "",
+            },
+          }));
+
         const formData = {
           ...baseData,
           content: isScriptType ? data.content : undefined,
@@ -494,19 +554,10 @@ export default function EventForm({
               : undefined,
           envVars: data.envVars, // Already an array
           tags: data.tags, // Already an array
-          conditionalEvents: JSON.stringify(
-            conditionalActions.map((action) => ({
-              type: action.type,
-              action: action.action,
-              details: {
-                emailAddresses: action.emailAddresses ?? "",
-                emailSubject: action.emailSubject ?? "",
-                targetEventId: action.targetEventId ?? null,
-                toolId: action.toolId ?? null,
-                message: action.message ?? "",
-              },
-            })),
-          ),
+          onSuccessActions: successActions,
+          onFailActions: failureActions,
+          onAlwaysActions: alwaysActions,
+          onConditionActions: conditionActions,
           // Include httpHeaders as array if it's HTTP request
           ...(isHttpRequest &&
             data.httpHeaders && {

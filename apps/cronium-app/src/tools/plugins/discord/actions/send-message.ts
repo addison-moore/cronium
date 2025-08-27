@@ -37,7 +37,7 @@ export const sendMessageAction: ToolAction = {
   category: "Communication",
   actionType: "create",
   developmentMode: "visual",
-  isConditionalAction: true,
+  isSendMessageAction: true,
   conditionalActionConfig: {
     parameterMapping: {
       message: "content",

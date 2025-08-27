@@ -934,6 +934,8 @@ export const workflowExecutionEvents = pgTable("workflow_execution_events", {
   output: text("output"),
   errorMessage: text("error_message"),
   connectionType: varchar("connection_type", { length: 50 }), // how this event was triggered
+  branchId: varchar("branch_id", { length: 100 }), // identifies which branch this event belongs to
+  parallelGroupId: varchar("parallel_group_id", { length: 100 }), // groups parallel nodes executing together
   createdAt: timestamp("created_at")
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),

@@ -14,7 +14,7 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      "fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse gap-2 p-4 sm:top-auto sm:right-0 sm:bottom-0 sm:flex-col md:max-w-[420px]",
+      "pointer-events-none fixed top-4 right-0 left-0 z-[9999] flex max-h-screen flex-col items-end gap-2 px-4 sm:right-4 sm:left-auto sm:max-w-[420px]",
       className,
     )}
     {...props}
@@ -23,7 +23,7 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName;
 
 const toastVariants = cva(
-  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-8 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full toast",
+  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-8 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full sm:data-[state=open]:slide-in-from-right-full toast",
   {
     variants: {
       variant: {
@@ -82,7 +82,7 @@ const ToastClose = React.forwardRef<
   <ToastPrimitives.Close
     ref={ref}
     className={cn(
-      "absolute top-2 right-2 rounded-md p-1 opacity-70 transition-opacity group-hover:opacity-100 hover:opacity-100 focus:opacity-100 focus:ring-2 focus:outline-none",
+      "pointer-events-auto absolute top-2 right-2 z-50 rounded-md p-1 opacity-70 transition-opacity group-hover:opacity-100 hover:opacity-100 focus:opacity-100 focus:ring-2 focus:outline-none",
       "group-[.destructive-toast]:text-red-600 group-[.destructive-toast]:hover:text-red-700 group-[.destructive-toast]:focus:ring-red-500 dark:group-[.destructive-toast]:text-red-400 dark:group-[.destructive-toast]:hover:text-red-300",
       "group-[.success-toast]:text-green-600 group-[.success-toast]:hover:text-green-700 group-[.success-toast]:focus:ring-green-500 dark:group-[.success-toast]:text-green-400 dark:group-[.success-toast]:hover:text-green-300",
       "group-[.warning-toast]:text-amber-600 group-[.warning-toast]:hover:text-amber-700 group-[.warning-toast]:focus:ring-amber-500 dark:group-[.warning-toast]:text-amber-400 dark:group-[.warning-toast]:hover:text-amber-300",

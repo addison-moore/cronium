@@ -282,7 +282,7 @@ const emailActions: ToolAction[] = [
     category: "Communication",
     actionType: "create",
     developmentMode: "visual",
-    isConditionalAction: true,
+    isSendMessageAction: true,
     conditionalActionConfig: {
       parameterMapping: {
         recipients: "to",
@@ -472,7 +472,7 @@ export const EmailPlugin: ToolPlugin = {
   getActionsByType: (type: ActionType) =>
     emailActions.filter((action) => action.actionType === type),
   getConditionalAction: () =>
-    emailActions.find((action) => action.isConditionalAction),
+    emailActions.find((action) => action.isSendMessageAction),
 
   // API Routes
   apiRoutes: emailApiRoutes,

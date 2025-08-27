@@ -84,6 +84,28 @@ interface NodeWithStatus extends WorkflowNode {
   nodeId: number;
 }
 
+// Global cache for execution data to persist across tab switches and remounts
+const executionCache = new Map<
+  number,
+  {
+    events: WorkflowExecutionEvent[];
+    execution: WorkflowExecution;
+    timestamp: number;
+  }
+>();
+
+const CACHE_DURATION = 30000; // 30 seconds
+
+// Clean up old cache entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of executionCache.entries()) {
+    if (now - value.timestamp > CACHE_DURATION) {
+      executionCache.delete(key);
+    }
+  }
+}, 60000); // Clean up every minute
+
 export default function WorkflowExecutionGraph({
   workflowId,
   nodes,
@@ -142,6 +164,25 @@ export default function WorkflowExecutionGraph({
       {
         enabled: !!executionId && executionId > 0,
         refetchInterval: isExecuting ? 2000 : false, // Poll every 2 seconds when executing
+        refetchOnWindowFocus: false, // Prevent refetch on focus to avoid cancelled queries
+        refetchOnReconnect: false, // Prevent refetch on reconnect
+        staleTime: 1000, // Keep data fresh for 1 second
+        gcTime: 60000, // Keep data in cache for 60 seconds (formerly cacheTime)
+        retry: (failureCount, error) => {
+          // Don't retry on cancelled queries
+          if (
+            error instanceof Error &&
+            (error.name === "CancelledError" ||
+              error.message === "CancelledError")
+          ) {
+            return false;
+          }
+          // Don't retry on abort errors
+          if (error instanceof Error && error.name === "AbortError") {
+            return false;
+          }
+          return failureCount < 2;
+        },
       },
     );
 
@@ -171,6 +212,15 @@ export default function WorkflowExecutionGraph({
       };
       setCurrentExecution(execution);
       hasAnyDataRef.current = true;
+
+      // Cache the execution data
+      if (executionData.id) {
+        executionCache.set(executionData.id, {
+          events,
+          execution,
+          timestamp: Date.now(),
+        });
+      }
 
       // Update internal execution state based on actual status
       const isCompleted =
@@ -203,9 +253,30 @@ export default function WorkflowExecutionGraph({
   }, [currentExecution, onExecutionUpdate]);
 
   // Function to manually refetch execution details
-  const refetchExecutionDetails = useCallback(() => {
+  const refetchExecutionDetails = useCallback(async () => {
     if (!executionId || !isMountedRef.current) return;
-    void refetchExecution();
+
+    try {
+      // Only refetch if component is still mounted
+      if (isMountedRef.current) {
+        await refetchExecution();
+      }
+    } catch (error: unknown) {
+      // Silently handle cancelled queries when component unmounts
+      // TanStack Query throws errors with name property
+      if (
+        error instanceof Error &&
+        (error.name === "CancelledError" || error.message === "CancelledError")
+      ) {
+        return;
+      }
+      // Also handle abort errors
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
+      // Log other errors but don't throw
+      console.debug("WorkflowExecutionGraph refetch error:", error);
+    }
   }, [executionId, refetchExecution]);
 
   // Update nodes with execution status
@@ -247,6 +318,26 @@ export default function WorkflowExecutionGraph({
 
   // Handle execution ID changes with debounced state management
   useEffect(() => {
+    // Check if we have cached data for this execution
+    if (executionId && executionCache.has(executionId)) {
+      const cached = executionCache.get(executionId);
+      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+        // Restore cached data immediately to prevent flashing
+        setExecutionEvents(cached.events);
+        setCurrentExecution(cached.execution);
+        hasAnyDataRef.current = true;
+
+        // Set executing state based on cached execution status
+        const isCompleted =
+          cached.execution.status === LogStatus.SUCCESS ||
+          cached.execution.status === LogStatus.FAILURE ||
+          cached.execution.status === "completed" ||
+          cached.execution.status === "failed";
+        setActuallyExecuting(!isCompleted);
+      }
+    }
+
+    // Only handle actual execution ID changes, not remounts with same ID
     if (executionId !== lastExecutionId) {
       // Clear any existing transition timeout
       if (stateTransitionTimeout) {
@@ -254,29 +345,41 @@ export default function WorkflowExecutionGraph({
         setStateTransitionTimeout(null);
       }
 
-      // Only reset state when switching to a different execution ID
-      if (executionId && executionId !== lastExecutionId) {
-        // Immediately set the executing state based on prop to prevent flashing
-        setActuallyExecuting(isExecuting);
+      // Check if this is a new execution or just a remount
+      const isNewExecution = executionId && executionId !== lastExecutionId;
 
-        // Use a debounced approach to clear old data and load new data
-        const timeout = setTimeout(() => {
-          // Only proceed if component is still mounted
-          if (!isMountedRef.current) return;
-
+      if (isNewExecution) {
+        // Check cache first
+        const cached = executionCache.get(executionId);
+        if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+          // Use cached data
+          setExecutionEvents(cached.events);
+          setCurrentExecution(cached.execution);
+          hasAnyDataRef.current = true;
+        } else {
+          // Clear old data for truly new executions
           setExecutionEvents([]);
           setCurrentExecution(null);
           hasAnyDataRef.current = false;
+        }
 
-          // Trigger tRPC refetch
+        // Set executing state
+        setActuallyExecuting(isExecuting);
+
+        // Trigger refetch after a brief delay
+        const timeout = setTimeout(() => {
           if (executionId && isMountedRef.current) {
             void refetchExecutionDetails();
           }
-        }, 100); // Brief delay to prevent rapid state changes
+        }, 100);
 
         setStateTransitionTimeout(timeout);
       }
+
       setLastExecutionId(executionId);
+    } else if (executionId && !hasAnyDataRef.current) {
+      // Same execution ID but no data (e.g., after remount) - refetch without clearing
+      void refetchExecutionDetails();
     }
   }, [
     executionId,

@@ -72,7 +72,7 @@ function ConnectionEdge({
 
   // Get connection type from edge data or default to ALWAYS
   const connectionType =
-    (data?.type as ConnectionType) || ConnectionType.ALWAYS;
+    (data?.connectionType as ConnectionType) || ConnectionType.ALWAYS;
   const connectionStyle = connectionStyles[connectionType];
   const { label } = connectionStyle;
 
@@ -100,7 +100,7 @@ function ConnectionEdge({
             ...edge,
             data: {
               ...edge.data,
-              type: newType,
+              connectionType: newType,
             },
           };
         }
@@ -113,11 +113,14 @@ function ConnectionEdge({
     [id, getEdges, setEdges],
   );
 
+  // Create a unique marker ID for this edge to ensure correct color
+  const markerId = `arrowhead-${id}`;
+
   return (
     <>
       <BaseEdge
         path={edgePath}
-        markerEnd="url(#arrowhead)"
+        markerEnd={`url(#${markerId})`}
         style={{
           stroke: edgeColor,
           strokeWidth: selected ? 2 : 1,
@@ -125,11 +128,11 @@ function ConnectionEdge({
         }}
       />
 
-      {/* SVG Arrow Marker Definition */}
+      {/* SVG Arrow Marker Definition - Unique per edge */}
       <svg style={{ position: "absolute", width: 0, height: 0 }}>
         <defs>
           <marker
-            id="arrowhead"
+            id={markerId}
             markerWidth="10"
             markerHeight="7"
             refX="9"

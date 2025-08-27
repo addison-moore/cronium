@@ -177,6 +177,8 @@ export const eventsRouter = createTRPCRouter({
         const allConditionalActions = [
           ...(input.onSuccessActions ?? []),
           ...(input.onFailActions ?? []),
+          ...(input.onAlwaysActions ?? []),
+          ...(input.onConditionActions ?? []),
         ];
 
         const validationErrors = await validateConditionalActions(
@@ -238,6 +240,34 @@ export const eventsRouter = createTRPCRouter({
           }
         }
 
+        if (input.onAlwaysActions && input.onAlwaysActions.length > 0) {
+          for (const conditionalAction of input.onAlwaysActions) {
+            await storage.createAction({
+              type: conditionalAction.action as ConditionalActionType,
+              alwaysEventId: event.id, // Link to parent event
+              targetEventId: conditionalAction.details?.targetEventId ?? null,
+              toolId: conditionalAction.details?.toolId ?? null,
+              message: conditionalAction.details?.message ?? "",
+              emailAddresses: conditionalAction.details?.emailAddresses ?? "",
+              emailSubject: conditionalAction.details?.emailSubject ?? "",
+            });
+          }
+        }
+
+        if (input.onConditionActions && input.onConditionActions.length > 0) {
+          for (const conditionalAction of input.onConditionActions) {
+            await storage.createAction({
+              type: conditionalAction.action as ConditionalActionType,
+              conditionEventId: event.id, // Link to parent event
+              targetEventId: conditionalAction.details?.targetEventId ?? null,
+              toolId: conditionalAction.details?.toolId ?? null,
+              message: conditionalAction.details?.message ?? "",
+              emailAddresses: conditionalAction.details?.emailAddresses ?? "",
+              emailSubject: conditionalAction.details?.emailSubject ?? "",
+            });
+          }
+        }
+
         // Payload generation moved to orchestrator
         // The orchestrator will create payloads from job script content
 
@@ -283,6 +313,8 @@ export const eventsRouter = createTRPCRouter({
           envVars,
           onSuccessActions,
           onFailActions,
+          onAlwaysActions,
+          onConditionActions,
           selectedServerIds,
           ...eventData
         } = input;
@@ -328,11 +360,18 @@ export const eventsRouter = createTRPCRouter({
         }
 
         // Handle conditional actions - Fixed to use proper storage methods and data structure
-        if (onSuccessActions !== undefined || onFailActions !== undefined) {
+        if (
+          onSuccessActions !== undefined ||
+          onFailActions !== undefined ||
+          onAlwaysActions !== undefined ||
+          onConditionActions !== undefined
+        ) {
           // Validate conditional actions before updating
           const allConditionalActions = [
             ...(onSuccessActions ?? []),
             ...(onFailActions ?? []),
+            ...(onAlwaysActions ?? []),
+            ...(onConditionActions ?? []),
           ];
 
           const validationErrors = await validateConditionalActions(
@@ -387,6 +426,36 @@ export const eventsRouter = createTRPCRouter({
               await storage.createAction({
                 type: conditionalAction.action as ConditionalActionType, // Use action, not type
                 failEventId: id, // Link to parent event
+                targetEventId: conditionalAction.details?.targetEventId ?? null,
+                toolId: conditionalAction.details?.toolId ?? null,
+                message: conditionalAction.details?.message ?? "",
+                emailAddresses: conditionalAction.details?.emailAddresses ?? "",
+                emailSubject: conditionalAction.details?.emailSubject ?? "",
+              });
+            }
+          }
+
+          // Create new always events
+          if (onAlwaysActions && onAlwaysActions.length > 0) {
+            for (const conditionalAction of onAlwaysActions) {
+              await storage.createAction({
+                type: conditionalAction.action as ConditionalActionType,
+                alwaysEventId: id, // Link to parent event
+                targetEventId: conditionalAction.details?.targetEventId ?? null,
+                toolId: conditionalAction.details?.toolId ?? null,
+                message: conditionalAction.details?.message ?? "",
+                emailAddresses: conditionalAction.details?.emailAddresses ?? "",
+                emailSubject: conditionalAction.details?.emailSubject ?? "",
+              });
+            }
+          }
+
+          // Create new condition events
+          if (onConditionActions && onConditionActions.length > 0) {
+            for (const conditionalAction of onConditionActions) {
+              await storage.createAction({
+                type: conditionalAction.action as ConditionalActionType,
+                conditionEventId: id, // Link to parent event
                 targetEventId: conditionalAction.details?.targetEventId ?? null,
                 toolId: conditionalAction.details?.toolId ?? null,
                 message: conditionalAction.details?.message ?? "",

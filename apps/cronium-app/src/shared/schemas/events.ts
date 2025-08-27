@@ -109,6 +109,8 @@ export const createEventSchema = z
     envVars: z.array(envVarSchema).default([]),
     onSuccessActions: z.array(conditionalActionSchema).default([]),
     onFailActions: z.array(conditionalActionSchema).default([]),
+    onAlwaysActions: z.array(conditionalActionSchema).default([]),
+    onConditionActions: z.array(conditionalActionSchema).default([]),
   })
   .refine(
     (data) => {
@@ -213,6 +215,8 @@ export const updateEventSchema = z.object({
   envVars: z.array(envVarSchema).optional(),
   onSuccessActions: z.array(conditionalActionSchema).optional(),
   onFailActions: z.array(conditionalActionSchema).optional(),
+  onAlwaysActions: z.array(conditionalActionSchema).optional(),
+  onConditionActions: z.array(conditionalActionSchema).optional(),
 });
 
 // Event ID parameter schema

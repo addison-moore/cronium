@@ -41,7 +41,10 @@ export function ComboBox({
 
   // Handle filtering options based on search term
   const filteredOptions = React.useMemo(() => {
-    if (!searchTerm) return options;
+    if (!searchTerm) {
+      // Apply maxDisplayItems even when not searching
+      return options.slice(0, maxDisplayItems);
+    }
 
     const filtered = options.filter((option) =>
       option.label.toLowerCase().includes(searchTerm.toLowerCase()),
