@@ -26,7 +26,7 @@ class DatabaseStorage implements IStorage {
   private auth: AuthStorage;
   private variables: VariablesStorage;
   private webhooks: WebhookStorage;
-  private servers: ServerStorage;
+  public servers: ServerStorage;
   private logs: LogStorage;
   private users: UserStorage;
   private workflows: WorkflowStorage;
@@ -145,7 +145,10 @@ class DatabaseStorage implements IStorage {
 
   // Server methods - delegate to servers module
   getServer = (id: number) => this.servers.getServer(id);
-  getAllServers = (userId: string) => this.servers.getAllServers(userId);
+  getAllServers = (userId: string, includeArchived = false) =>
+    this.servers.getAllServers(userId, includeArchived);
+  getArchivedServers = (userId: string) =>
+    this.servers.getArchivedServers(userId);
   canUserAccessServer = (serverId: number, userId: string) =>
     this.servers.canUserAccessServer(serverId, userId);
   createServer = (insertServer: Parameters<IStorage["createServer"]>[0]) =>
@@ -156,6 +159,13 @@ class DatabaseStorage implements IStorage {
   ) => this.servers.updateServer(id, updateData);
   updateServerStatus = (id: number, online: boolean, lastChecked: Date) =>
     this.servers.updateServerStatus(id, online, lastChecked);
+  getServerDeletionImpact = (id: number) =>
+    this.servers.getServerDeletionImpact(id);
+  archiveServer = (id: number, userId: string, reason?: string) =>
+    this.servers.archiveServer(id, userId, reason);
+  restoreServer = (id: number) => this.servers.restoreServer(id);
+  permanentlyDeleteServer = (id: number) =>
+    this.servers.permanentlyDeleteServer(id);
   deleteServer = (id: number) => this.servers.deleteServer(id);
 
   // Event-Server relationship methods - delegate to servers module
@@ -251,6 +261,8 @@ class DatabaseStorage implements IStorage {
     this.workflowExecution.getWorkflowExecution(id);
   getWorkflowExecutions = (workflowId: number, limit?: number, page?: number) =>
     this.workflowExecution.getWorkflowExecutions(workflowId, limit, page);
+  getAllWorkflowExecutions = (userId: string, limit?: number, page?: number) =>
+    this.workflowExecution.getAllWorkflowExecutions(userId, limit, page);
   createWorkflowExecution = (
     insertExecution: Parameters<IStorage["createWorkflowExecution"]>[0],
   ) => this.workflowExecution.createWorkflowExecution(insertExecution);
@@ -317,4 +329,5 @@ class DatabaseStorage implements IStorage {
 }
 
 // Create and export singleton instance for backward compatibility
-export const storage: IStorage = new DatabaseStorage();
+export const storage: IStorage & { servers: ServerStorage } =
+  new DatabaseStorage();

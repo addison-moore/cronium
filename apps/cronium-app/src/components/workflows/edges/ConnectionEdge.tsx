@@ -71,8 +71,10 @@ function ConnectionEdge({
   const isDark = resolvedTheme === "dark";
 
   // Get connection type from edge data or default to ALWAYS
+  // Support both 'type' and 'connectionType' for backwards compatibility
   const connectionType =
-    (data?.connectionType as ConnectionType) || ConnectionType.ALWAYS;
+    ((data?.type || data?.connectionType) as ConnectionType) ||
+    ConnectionType.ALWAYS;
   const connectionStyle = connectionStyles[connectionType];
   const { label } = connectionStyle;
 

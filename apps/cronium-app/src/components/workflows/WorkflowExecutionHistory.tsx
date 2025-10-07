@@ -113,7 +113,7 @@ export default function WorkflowExecutionHistory({
 
   // Extract executions from tRPC response with proper type safety
   const typedData = executionsData as WorkflowExecutionsResponse | undefined;
-  const executions: WorkflowExecution[] =
+  const executions: (WorkflowExecution & { workflowName?: string })[] =
     typedData?.executions?.executions ?? [];
 
   // Handle manual refresh
@@ -208,10 +208,11 @@ export default function WorkflowExecutionHistory({
 
   // Apply filters to executions
   const filteredExecutions = executions.filter((execution) => {
+    const workflowDisplayName =
+      execution.workflowName || `Workflow ${String(execution.workflowId)}`;
     const matchesSearch =
-      `Workflow ${String(execution.workflowId)}`
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()) ?? true;
+      workflowDisplayName?.toLowerCase().includes(searchTerm.toLowerCase()) ??
+      true;
 
     const matchesStatus =
       statusFilter === "all" ||
@@ -544,7 +545,8 @@ export default function WorkflowExecutionHistory({
                           className="hover:underline"
                         >
                           <div className="font-medium">
-                            {`Workflow ${String(execution.workflowId)}`}
+                            {execution.workflowName ||
+                              `Workflow ${String(execution.workflowId)}`}
                           </div>
                         </Link>
                       </TableCell>
@@ -587,8 +589,9 @@ export default function WorkflowExecutionHistory({
                           <DialogHeader>
                             <DialogTitle>
                               Execution Details -{" "}
-                              {`Workflow ${String(execution.workflowId)}`} -{" "}
-                              {formatDate(execution.startedAt)}
+                              {execution.workflowName ||
+                                `Workflow ${String(execution.workflowId)}`}{" "}
+                              - {formatDate(execution.startedAt)}
                             </DialogTitle>
                           </DialogHeader>
                           {isLoadingDetails ? (

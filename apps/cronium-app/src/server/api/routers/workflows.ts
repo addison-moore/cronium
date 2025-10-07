@@ -30,7 +30,14 @@ import {
   workflowFilterSchema,
 } from "@shared/schemas/workflows";
 import { storage, type WorkflowWithRelations } from "@/server/storage";
-import { EventStatus, LogStatus } from "@shared/schema";
+import {
+  EventStatus,
+  LogStatus,
+  workflowExecutions,
+  workflows,
+} from "@shared/schema";
+import { db } from "@/server/db";
+import { eq, desc, sql } from "drizzle-orm";
 
 // Use centralized authentication from trpc.ts
 
@@ -382,47 +389,58 @@ export const workflowsRouter = createTRPCRouter({
             hasMore: executions.executions.length === input.limit,
           };
         } else {
-          // Get all workflows for the user first
-          const userWorkflows = await storage.getAllWorkflows(
-            ctx.session.user.id,
-          );
+          // Get all workflow executions for the user with workflow names
+          // Direct database query since storage method isn't available
+          const limit = input.limit;
+          const offset = input.offset;
 
-          if (userWorkflows.length === 0) {
-            return {
-              executions: { executions: [], total: 0 },
-              hasMore: false,
-            };
-          }
+          const executions = await db
+            .select({
+              id: workflowExecutions.id,
+              workflowId: workflowExecutions.workflowId,
+              userId: workflowExecutions.userId,
+              status: workflowExecutions.status,
+              triggerType: workflowExecutions.triggerType,
+              startedAt: workflowExecutions.startedAt,
+              completedAt: workflowExecutions.completedAt,
+              totalDuration: workflowExecutions.totalDuration,
+              totalEvents: workflowExecutions.totalEvents,
+              successfulEvents: workflowExecutions.successfulEvents,
+              failedEvents: workflowExecutions.failedEvents,
+              executionData: workflowExecutions.executionData,
+              createdAt: workflowExecutions.createdAt,
+              updatedAt: workflowExecutions.updatedAt,
+              workflowName: workflows.name,
+            })
+            .from(workflowExecutions)
+            .leftJoin(
+              workflows,
+              eq(workflowExecutions.workflowId, workflows.id),
+            )
+            .where(eq(workflowExecutions.userId, ctx.session.user.id))
+            .orderBy(desc(workflowExecutions.startedAt))
+            .limit(limit)
+            .offset(offset);
 
-          // Use a different approach - get executions for all user workflows
-          const executionPromises = userWorkflows.map((workflow) =>
-            storage.getWorkflowExecutions(
-              workflow.id,
-              input.limit,
-              Math.floor(input.offset / input.limit) + 1,
-            ),
-          );
-
-          const allExecutions = await Promise.all(executionPromises);
-          const combinedExecutions = allExecutions.flatMap(
-            (result) => result.executions,
-          );
-          const totalExecutions = allExecutions.reduce(
-            (sum, result) => sum + result.total,
-            0,
-          );
+          // Get total count
+          const [totalResult] = await db
+            .select({ count: sql`count(*)::int` })
+            .from(workflowExecutions)
+            .where(eq(workflowExecutions.userId, ctx.session.user.id));
 
           const userExecutions = {
-            executions: combinedExecutions.slice(0, input.limit),
-            total: totalExecutions,
+            executions,
+            total: totalResult?.count ?? 0,
           };
 
           return {
-            executions: userExecutions,
+            executions: userExecutions.executions,
             hasMore: userExecutions.total > input.offset + input.limit,
+            total: userExecutions.total,
           };
         }
       } catch (error: unknown) {
+        console.error("Error fetching workflow executions:", error);
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",

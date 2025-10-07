@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
-import { zodToParameters } from "@/tools/utils/zod-to-parameters";
+import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
 
 // Schema for send-message action parameters
 export const sendMessageSchema = z.object({
@@ -76,7 +76,7 @@ export const sendMessageAction: ToolAction = {
   actionType: "create",
   developmentMode: "visual",
   inputSchema: sendMessageSchema,
-  parameters: zodToParameters(sendMessageSchema),
+  parameters: safeZodToParameters(sendMessageSchema),
   outputSchema: z.object({
     success: z.boolean(),
     error: z.string().optional(),

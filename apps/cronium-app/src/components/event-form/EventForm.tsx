@@ -486,7 +486,7 @@ export default function EventForm({
           .filter((action) => action.type === "ON_SUCCESS")
           .map((action) => ({
             type: action.type,
-            action: action.action as ConditionalActionType,
+            action: action.action as any,
             details: {
               emailAddresses: action.emailAddresses ?? "",
               emailSubject: action.emailSubject ?? "",
@@ -500,7 +500,7 @@ export default function EventForm({
           .filter((action) => action.type === "ON_FAILURE")
           .map((action) => ({
             type: action.type,
-            action: action.action as ConditionalActionType,
+            action: action.action as any,
             details: {
               emailAddresses: action.emailAddresses ?? "",
               emailSubject: action.emailSubject ?? "",
@@ -514,7 +514,7 @@ export default function EventForm({
           .filter((action) => action.type === "ALWAYS")
           .map((action) => ({
             type: action.type,
-            action: action.action as ConditionalActionType,
+            action: action.action as any,
             details: {
               emailAddresses: action.emailAddresses ?? "",
               emailSubject: action.emailSubject ?? "",
@@ -528,7 +528,7 @@ export default function EventForm({
           .filter((action) => action.type === "ON_CONDITION")
           .map((action) => ({
             type: action.type,
-            action: action.action as ConditionalActionType,
+            action: action.action as any,
             details: {
               emailAddresses: action.emailAddresses ?? "",
               emailSubject: action.emailSubject ?? "",

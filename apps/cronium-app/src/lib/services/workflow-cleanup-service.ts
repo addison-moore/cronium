@@ -68,7 +68,7 @@ export class WorkflowCleanupService {
   /**
    * Perform cleanup of stuck workflows and jobs
    */
-  private async performCleanup(): Promise<void> {
+  public async performCleanup(): Promise<void> {
     try {
       console.log("[WorkflowCleanup] Starting cleanup cycle");
 

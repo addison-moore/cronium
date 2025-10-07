@@ -19,7 +19,7 @@ import {
   type ActionType,
   type ExecutionContext,
 } from "../../types/tool-plugin";
-import { zodToParameters } from "../../utils/zod-to-parameters";
+import { safeZodToParameters } from "../../utils/zod-to-parameters";
 import { emailCredentialsSchema, type EmailCredentials } from "./schemas";
 import { emailApiRoutes } from "./api-routes";
 
@@ -317,7 +317,7 @@ const emailActions: ToolAction[] = [
       },
     },
     inputSchema: sendEmailSchema,
-    parameters: zodToParameters(sendEmailSchema),
+    parameters: safeZodToParameters(sendEmailSchema),
     outputSchema: z.object({
       messageId: z.string(),
       status: z.enum(["sent", "failed"]),

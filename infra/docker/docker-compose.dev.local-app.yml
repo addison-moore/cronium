@@ -98,6 +98,7 @@ services:
     build:
       context: ../../apps/runtime/cronium-runtime
       dockerfile: Dockerfile
+    image: cronium/runtime-api:latest
     container_name: cronium-runtime-api-dev
     environment:
       # Server configuration
@@ -132,6 +133,38 @@ services:
       - cronium-dev-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  # Execution environment images - built but not run as services
+  # These are used by the orchestrator for containerized script execution
+  bash-executor:
+    build:
+      context: ../../apps/runtime/container-images/bash
+      dockerfile: Dockerfile
+    image: cronium/runner:bash-alpine
+    container_name: cronium-bash-build
+    command: /bin/true # Exit immediately after build
+    profiles:
+      - build-only
+
+  nodejs-executor:
+    build:
+      context: ../../apps/runtime/container-images/nodejs
+      dockerfile: Dockerfile
+    image: cronium/runner:node-alpine
+    container_name: cronium-nodejs-build
+    command: /bin/true # Exit immediately after build
+    profiles:
+      - build-only
+
+  python-executor:
+    build:
+      context: ../../apps/runtime/container-images/python
+      dockerfile: Dockerfile
+    image: cronium/runner:python-alpine
+    container_name: cronium-python-build
+    command: /bin/true # Exit immediately after build
+    profiles:
+      - build-only
 
 networks:
   cronium-dev-network:

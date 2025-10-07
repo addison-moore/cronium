@@ -119,7 +119,7 @@ export function WorkflowListClient({
       setExecutingWorkflows((prev) => new Set(prev).add(id));
     },
     onSuccess: () => {
-      toast({ title: t("ExecuteSuccess"), variant: "success" });
+      toast({ title: t("Messages.WorkflowStarted"), variant: "success" });
     },
     onError: () => {
       toast({ title: t("ExecuteError"), variant: "destructive" });

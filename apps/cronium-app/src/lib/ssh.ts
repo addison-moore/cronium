@@ -12,8 +12,10 @@ export class SSHService {
   private ssh?: Client; // Changed to optional ssh2 Client
   private isConnected = false;
   private connectionPool = new Map<string, SSHConnection>();
-  private maxConnections = 8; // Reduced to prevent overwhelming servers
+  private maxConnections = 3; // Further reduced to prevent overwhelming servers
+  private maxChannelsPerConnection = 5; // Reduced SSH channels limit per connection
   private connectionTimeout = 300000; // 5 minutes - longer for terminal sessions
+  private channelCounts = new Map<string, number>(); // Track open channels
 
   constructor() {
     // Clean up stale connections every 2 minutes
@@ -78,20 +80,28 @@ export class SSHService {
     if (!forceNew && this.connectionPool.has(connectionKey)) {
       const connection = this.connectionPool.get(connectionKey)!;
       if (connection.isConnected) {
-        // Test the connection is still alive
+        // Test the connection is still alive with a timeout
         try {
-          await new Promise<void>((resolve, reject) => {
-            connection.ssh.exec('echo "test"', (err, stream) => {
-              if (err) return reject(err);
-              stream.on("close", () => resolve()).resume();
-            });
-          });
+          await Promise.race([
+            new Promise<void>((resolve, reject) => {
+              connection.ssh.exec('echo "test"', (err, stream) => {
+                if (err) return reject(err);
+                stream.on("close", () => resolve()).resume();
+              });
+            }),
+            new Promise<void>((_, reject) =>
+              setTimeout(
+                () => reject(new Error("Connection test timeout")),
+                5000,
+              ),
+            ),
+          ]);
           connection.lastUsed = Date.now();
           console.log(`Reusing existing connection to ${connectionKey ?? ""}`);
           return connection;
-        } catch {
+        } catch (error) {
           console.log(
-            `Existing connection to ${connectionKey ?? ""} failed test, removing...`,
+            `Existing connection to ${connectionKey ?? ""} failed test: ${error instanceof Error ? error.message : "Unknown error"}`,
           );
           // Connection is dead, remove it
           try {
@@ -175,11 +185,33 @@ export class SSHService {
           `Failed to create SSH connection to ${connectionKey ?? ""}:`,
           err,
         );
-        reject(
-          new Error(
-            `Server ${host ?? ""} is not reachable: ${err.message ?? ""}`,
-          ),
-        );
+
+        // Provide more specific error messages
+        let errorMessage = `Server ${host ?? ""} is not reachable`;
+        if (err.message) {
+          if (err.message.includes("ECONNREFUSED")) {
+            errorMessage = `Connection refused by ${host}:${port}. Verify the server is running and accepting SSH connections.`;
+          } else if (
+            err.message.includes("ETIMEDOUT") ||
+            err.message.includes("ECONNABORTED")
+          ) {
+            errorMessage = `Connection to ${host}:${port} timed out. Check if the server is reachable and firewall rules allow SSH.`;
+          } else if (
+            err.message.includes("authentication") ||
+            err.message.includes("publickey") ||
+            err.message.includes("password")
+          ) {
+            errorMessage = `Authentication failed for ${username}@${host}. Please verify your ${authType === "password" ? "password" : "SSH key"} is correct.`;
+          } else if (err.message.includes("EHOSTUNREACH")) {
+            errorMessage = `Host ${host} is unreachable. Check network connectivity.`;
+          } else if (err.message.includes("getaddrinfo")) {
+            errorMessage = `Cannot resolve hostname ${host}. Check if the address is correct.`;
+          } else {
+            errorMessage = `SSH connection failed: ${err.message}`;
+          }
+        }
+
+        reject(new Error(errorMessage));
       });
       ssh.on("end", () => {
         console.log(`SSH connection to ${connectionKey ?? ""} ended.`);
@@ -197,6 +229,16 @@ export class SSHService {
           : { privateKey: authCredential }),
         port,
         readyTimeout: 20000,
+        // Add debugging for authentication issues
+        debug: (info) => {
+          if (
+            info.includes("authentication") ||
+            info.includes("publickey") ||
+            info.includes("password")
+          ) {
+            console.log(`SSH Auth Debug for ${connectionKey}: ${info}`);
+          }
+        },
         keepaliveInterval: 10000,
         keepaliveCountMax: 3,
         tryKeyboard: false,
@@ -1556,17 +1598,176 @@ module.exports = croniumInstance;`;
     cols = 80,
     rows = 30,
     authType: "privateKey" | "password" = "privateKey",
-  ): Promise<{ shell: ClientChannel; connectionKey: string }> {
+  ): Promise<{
+    shell: ClientChannel;
+    connectionKey: string;
+    cleanup: () => void;
+  }> {
+    const connectionKey = this.getConnectionKey(host, username, port);
+
+    // Check if we've hit the channel limit for this connection
+    const currentChannels = this.channelCounts.get(connectionKey) || 0;
+
+    // Lower the threshold to prevent hitting server limits (use maxChannelsPerConnection)
+    const shouldForceNew = currentChannels >= this.maxChannelsPerConnection;
+
+    if (shouldForceNew) {
+      console.log(
+        `Channel limit reached for ${connectionKey} (${currentChannels}/${this.maxChannelsPerConnection} channels), forcing new connection`,
+      );
+      // Remove the overloaded connection gracefully
+      const oldConnection = this.connectionPool.get(connectionKey);
+      if (oldConnection) {
+        try {
+          // Don't end the connection immediately - let existing channels finish
+          this.connectionPool.delete(connectionKey);
+          // Schedule connection cleanup after a delay
+          setTimeout(() => {
+            try {
+              if (oldConnection.ssh && !oldConnection.ssh.destroyed) {
+                oldConnection.ssh.end();
+              }
+            } catch (e) {
+              console.error(`Error cleaning up old connection: ${e}`);
+            }
+          }, 5000);
+        } catch (e) {
+          console.error(`Error handling old connection: ${e}`);
+        }
+      }
+    }
+
     const connection = await this.getPooledConnection(
       host,
       authCredential,
       username,
       port,
-      false, // Don't force new connection
+      shouldForceNew, // Force new if approaching limit
       authType,
     );
 
+    // Verify connection is actually connected
+    if (!connection.isConnected || !connection.ssh) {
+      throw new Error(`SSH connection to ${host} is not established`);
+    }
+
+    // Check if the ssh2 Client is actually connected
+    // @ts-ignore - accessing private property for debugging
+    if (!connection.ssh._sock || connection.ssh._sock.destroyed) {
+      console.error(
+        `SSH client socket is not connected or destroyed for ${host}`,
+      );
+      // Try to remove the bad connection and create a new one
+      this.connectionPool.delete(connection.host);
+      this.channelCounts.delete(connection.host);
+
+      // Get a fresh connection
+      const freshConnection = await this.getPooledConnection(
+        host,
+        authCredential,
+        username,
+        port,
+        true, // Force new connection
+        authType,
+      );
+
+      const shell = await new Promise<ClientChannel>((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          reject(
+            new Error("Shell creation timeout - server may be overloaded"),
+          );
+        }, 10000);
+
+        freshConnection.ssh.shell(
+          {
+            term: "xterm",
+            cols,
+            rows,
+          },
+          (err, stream) => {
+            clearTimeout(timeoutId);
+
+            if (err) {
+              // Clean up the fresh connection if it fails
+              this.connectionPool.delete(freshConnection.host);
+              this.channelCounts.delete(freshConnection.host);
+              try {
+                freshConnection.ssh.end();
+              } catch (e) {
+                // Ignore cleanup errors
+              }
+              return reject(
+                new Error(
+                  "Unable to open shell - SSH server may have reached its limit",
+                ),
+              );
+            }
+
+            // Track channel count
+            const key = freshConnection.host;
+            const newCount = (this.channelCounts.get(key) || 0) + 1;
+            this.channelCounts.set(key, newCount);
+            console.log(
+              `Channel opened for ${key}, total channels: ${newCount}`,
+            );
+
+            // Track if cleanup was already called
+            let cleanupCalled = false;
+
+            // Clean up channel count on close
+            const handleClose = () => {
+              if (!cleanupCalled) {
+                cleanupCalled = true;
+                const count = this.channelCounts.get(key) || 1;
+                if (count <= 1) {
+                  this.channelCounts.delete(key);
+                } else {
+                  this.channelCounts.set(key, count - 1);
+                }
+                console.log(
+                  `Channel closed for ${key}, remaining channels: ${count - 1}`,
+                );
+              }
+            };
+
+            stream.on("close", handleClose);
+            stream.on("end", handleClose);
+
+            resolve(stream);
+          },
+        );
+      });
+
+      console.log(
+        `Opened interactive shell for ${freshConnection.host} (new connection)`,
+      );
+      freshConnection.lastUsed = Date.now();
+
+      // Create manual cleanup function
+      const cleanup = () => {
+        const key = freshConnection.host;
+        const count = this.channelCounts.get(key) || 0;
+        if (count > 0) {
+          const newCount = count - 1;
+          if (newCount <= 0) {
+            this.channelCounts.delete(key);
+          } else {
+            this.channelCounts.set(key, newCount);
+          }
+          console.log(
+            `Manual cleanup: Channel closed for ${key}, remaining channels: ${newCount}`,
+          );
+        }
+      };
+
+      return { shell, connectionKey: freshConnection.host, cleanup };
+    }
+
     const shell = await new Promise<ClientChannel>((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error("Shell creation timeout - server may be overloaded"));
+      }, 10000); // 10 second timeout for shell creation
+
       connection.ssh.shell(
         {
           term: "xterm",
@@ -1574,16 +1775,84 @@ module.exports = croniumInstance;`;
           rows,
         },
         (err, stream) => {
-          if (err) return reject(err);
+          clearTimeout(timeoutId);
+
+          if (err) {
+            // If shell creation fails, it might be due to channel limits
+            // Remove this connection from the pool to force a fresh one next time
+            if (err.message && err.message.includes("Channel open failure")) {
+              console.error(
+                `Shell creation failed due to channel limits, removing connection from pool`,
+              );
+              this.connectionPool.delete(connection.host);
+              this.channelCounts.delete(connection.host);
+
+              // Try to gracefully close the connection
+              try {
+                connection.ssh.end();
+              } catch (e) {
+                // Ignore cleanup errors
+              }
+            }
+            return reject(err);
+          }
+
+          // Track channel count
+          const key = connection.host;
+          const newCount = (this.channelCounts.get(key) || 0) + 1;
+          this.channelCounts.set(key, newCount);
+          console.log(`Channel opened for ${key}, total channels: ${newCount}`);
+
+          // Track if cleanup was already called to prevent double cleanup
+          let cleanupCalled = false;
+
+          // Clean up channel count on close
+          const handleClose = () => {
+            if (!cleanupCalled) {
+              cleanupCalled = true;
+              const count = this.channelCounts.get(key) || 1;
+              if (count <= 1) {
+                this.channelCounts.delete(key);
+              } else {
+                this.channelCounts.set(key, count - 1);
+              }
+              console.log(
+                `Channel closed for ${key}, remaining channels: ${count - 1}`,
+              );
+            }
+          };
+
+          stream.on("close", handleClose);
+          stream.on("end", handleClose); // Also listen for end event
+
           resolve(stream);
         },
       );
     });
 
-    console.log(`Opened interactive shell for ${connection.host}`);
+    console.log(
+      `Opened interactive shell for ${connection.host}, channels: ${this.channelCounts.get(connection.host) || 1}`,
+    );
     connection.lastUsed = Date.now(); // Update last used time
 
-    return { shell, connectionKey: connection.host };
+    // Create manual cleanup function
+    const cleanup = () => {
+      const key = connection.host;
+      const count = this.channelCounts.get(key) || 0;
+      if (count > 0) {
+        const newCount = count - 1;
+        if (newCount <= 0) {
+          this.channelCounts.delete(key);
+        } else {
+          this.channelCounts.set(key, newCount);
+        }
+        console.log(
+          `Manual cleanup: Channel closed for ${key}, remaining channels: ${newCount}`,
+        );
+      }
+    };
+
+    return { shell, connectionKey: connection.host, cleanup };
   }
 }
 

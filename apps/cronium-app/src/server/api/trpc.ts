@@ -10,9 +10,8 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { type CreateNextContextOptions } from "@trpc/server/adapters/next";
 import superjson from "superjson";
 import { ZodError } from "zod";
-import { getServerSession } from "next-auth";
 import type { Session } from "next-auth";
-import { authOptions } from "../../lib/auth";
+import { getCachedServerSession } from "../../lib/auth-cache";
 import { UserRole } from "../../shared/schema";
 import { db } from "../db";
 
@@ -58,8 +57,8 @@ export const createTRPCContext = async (
   // Extract headers from the options
   const headers = "headers" in opts ? opts.headers : new Headers();
 
-  // Get session using the simplified App Router approach
-  const session = await getServerSession(authOptions);
+  // Get session using the cached version to avoid repeated DB calls
+  const session = await getCachedServerSession();
 
   return createInnerTRPCContext({
     session,

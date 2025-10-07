@@ -40,6 +40,9 @@ export async function waitForJobCompletion(
     pollInterval = 1000, // 1 second
   } = options;
 
+  console.log(
+    `[Job Polling] Starting poll for job ${jobId}, maxWait=${maxWaitTime}ms, interval=${pollInterval}ms`,
+  );
   const startTime = Date.now();
 
   return new Promise((resolve, reject) => {
@@ -65,15 +68,24 @@ export async function waitForJobCompletion(
           return reject(new Error(`Job ${jobId} not found`));
         }
 
+        console.log(`[Job Polling] Job ${jobId} status: ${job.status}`);
+
         // If job is still pending or running, continue polling
         if (
           job.status === JobStatus.QUEUED ||
           job.status === JobStatus.CLAIMED ||
           job.status === JobStatus.RUNNING
         ) {
+          console.log(
+            `[Job Polling] Job ${jobId} still in progress, continuing to poll...`,
+          );
           setTimeout(() => void checkJob(), pollInterval);
           return;
         }
+
+        console.log(
+          `[Job Polling] Job ${jobId} completed with status: ${job.status}`,
+        );
 
         // Job has completed (success or failure)
         // Get execution details
@@ -150,6 +162,7 @@ export async function waitForJobCompletion(
     };
 
     // Start polling
+    console.log(`[Job Polling] Starting initial check for job ${jobId}`);
     void checkJob();
   });
 }

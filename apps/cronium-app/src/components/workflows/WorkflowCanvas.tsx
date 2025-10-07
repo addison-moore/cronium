@@ -611,11 +611,12 @@ export default function WorkflowCanvas({
         data: edge.data
           ? {
               ...edge.data,
-              connectionType:
-                (edge.data?.connectionType as ConnectionType) ??
+              type:
+                ((edge.data?.type ||
+                  edge.data?.connectionType) as ConnectionType) ??
                 ConnectionType.ALWAYS,
             }
-          : { connectionType: ConnectionType.ALWAYS },
+          : { type: ConnectionType.ALWAYS },
         animated: edge.animated ?? true,
         sourceHandle: edge.sourceHandle ?? null,
         targetHandle: edge.targetHandle ?? null,

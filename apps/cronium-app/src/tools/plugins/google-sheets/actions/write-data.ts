@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
-import { zodToParameters } from "@/tools/utils/zod-to-parameters";
+import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
 
 // Schema for write-data action parameters
 export const writeDataSchema = z.object({
@@ -38,7 +38,7 @@ export const writeDataAction: ToolAction = {
   actionType: "update",
   developmentMode: "visual",
   inputSchema: writeDataSchema,
-  parameters: zodToParameters(writeDataSchema),
+  parameters: safeZodToParameters(writeDataSchema),
   outputSchema: z.object({
     success: z.boolean(),
     updatedRange: z.string().optional(),

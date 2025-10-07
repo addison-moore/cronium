@@ -76,6 +76,10 @@
       "cache": false,
       "dependsOn": ["db:push"],
       "env": ["DATABASE_URL"]
+    },
+    "db:studio": {
+      "cache": false,
+      "env": ["DATABASE_URL"]
     }
   }
 }

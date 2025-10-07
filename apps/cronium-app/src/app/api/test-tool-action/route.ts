@@ -99,9 +99,9 @@ export async function GET(request: NextRequest) {
 
     // Skip plugin-based action selection on server side
     // TODO: Create server-side action registry
-    const plugin = null;
+    const plugin: any = null;
 
-    if (plugin?.actions && plugin.actions.length > 0) {
+    if (plugin && plugin.actions && plugin.actions.length > 0) {
       const firstAction = plugin.actions[0];
       if (firstAction) {
         toolActionConfig.actionId = `${plugin.id}.${firstAction.id}`;

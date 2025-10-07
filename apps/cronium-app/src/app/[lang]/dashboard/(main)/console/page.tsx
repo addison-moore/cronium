@@ -12,7 +12,6 @@ import {
   SelectValue,
 } from "@cronium/ui";
 import { Server, ServerOff, Plus } from "lucide-react";
-import { usePermissions } from "@/hooks/usePermissions";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
@@ -27,29 +26,22 @@ interface ServerData {
 }
 
 interface ServersResponse {
-  items: ServerData[];
+  servers: ServerData[];
   total: number;
-  limit: number;
-  offset: number;
   hasMore: boolean;
-  filters?: {
-    search?: string;
-    [key: string]: unknown;
-  };
 }
 
 export default function ConsolePage() {
   const t = useTranslations("Console");
   const params = useParams<{ lang: string }>();
   const lang = params.lang;
-  const { permissions, loading: permissionsLoading } = usePermissions();
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
   const [autoConnected, setAutoConnected] = useState(false);
 
   // Use tRPC query to fetch servers
   const { data: serversData, isLoading } = trpc.servers.getAll.useQuery(
     {
-      limit: 1000,
+      limit: 100,
       offset: 0,
       search: "",
       online: undefined,
@@ -58,39 +50,27 @@ export default function ConsolePage() {
     QUERY_OPTIONS.dynamic,
   );
 
-  // Type the response correctly
-  const typedData = serversData as ServersResponse | undefined;
-  const servers: ServerData[] = typedData?.items ?? [];
+  // Extract servers from the response
+  const servers: ServerData[] = serversData?.servers ?? [];
 
-  // Auto-select server based on permissions
+  // Auto-select first available server
   useEffect(() => {
-    if (
-      !isLoading &&
-      !permissionsLoading &&
-      !autoConnected &&
-      selectedServerId === null &&
-      permissions
-    ) {
+    if (!isLoading && !autoConnected && selectedServerId === null) {
       autoSelectServer();
     }
-  }, [isLoading, permissionsLoading, autoConnected, servers, permissions]);
+  }, [isLoading, autoConnected, servers]);
 
   const autoSelectServer = (): void => {
     console.log("Auto-selecting server:", {
-      localAccess: permissions?.localServerAccess,
       serversCount: servers.length,
-      permissions,
     });
 
-    if (permissions?.localServerAccess) {
-      // User has local server access, connect to local
-      console.log("Selecting local server");
-      setSelectedServerId("local");
-    } else if (servers.length > 0) {
-      // No local access, connect to first available server
-      const firstServer = servers[0];
+    if (servers.length > 0) {
+      // Connect to first available server, preferring online servers
+      const onlineServer = servers.find((s) => s.online);
+      const firstServer = onlineServer ?? servers[0];
       if (firstServer) {
-        console.log("Selecting first remote server:", firstServer.name);
+        console.log("Selecting remote server:", firstServer.name);
         setSelectedServerId(firstServer.id.toString());
       }
     }
@@ -98,10 +78,9 @@ export default function ConsolePage() {
     setAutoConnected(true);
   };
 
-  const selectedServer: ServerData | null | undefined =
-    selectedServerId === "local"
-      ? null
-      : servers.find((s) => s.id.toString() === selectedServerId);
+  const selectedServer: ServerData | null | undefined = servers.find(
+    (s) => s.id.toString() === selectedServerId,
+  );
 
   return (
     <div className="flex h-full flex-col space-y-4 p-4">
@@ -121,16 +100,11 @@ export default function ConsolePage() {
         <Select
           value={selectedServerId ?? ""}
           onValueChange={setSelectedServerId}
-          disabled={isLoading || permissionsLoading}
+          disabled={isLoading}
         >
           <SelectTrigger className="w-64">
             <SelectValue>
-              {selectedServerId === "local" ? (
-                <div className="flex w-full min-w-0 items-center gap-2">
-                  <Server className="h-4 w-4 flex-shrink-0 text-green-500" />
-                  <span className="truncate">Local Server</span>
-                </div>
-              ) : selectedServer ? (
+              {selectedServer ? (
                 <div className="flex w-full min-w-0 items-center gap-2">
                   {selectedServer.online ? (
                     <Server className="h-4 w-4 flex-shrink-0 text-green-500" />
@@ -148,57 +122,49 @@ export default function ConsolePage() {
                 </div>
               ) : (
                 <span className="text-muted-foreground">
-                  Select a server...
+                  {isLoading ? "Loading servers..." : "Select a server..."}
                 </span>
               )}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {permissions.localServerAccess && (
-              <SelectItem value="local">
-                <div className="flex items-center gap-2">
-                  <Server className="h-4 w-4 flex-shrink-0 text-green-500" />
-                  <span>Local Server</span>
-                </div>
-              </SelectItem>
+            {servers.length === 0 ? (
+              <div className="text-muted-foreground px-2 py-4 text-center text-sm">
+                No servers configured
+              </div>
+            ) : (
+              servers.map((server) => (
+                <SelectItem key={server.id} value={server.id.toString()}>
+                  <div className="flex w-full min-w-0 items-center gap-2">
+                    {server.online ? (
+                      <Server className="h-4 w-4 flex-shrink-0 text-green-500" />
+                    ) : (
+                      <ServerOff className="h-4 w-4 flex-shrink-0 text-red-500" />
+                    )}
+                    <span className="truncate font-medium">{server.name}</span>
+                    <span className="text-muted-foreground truncate text-xs">
+                      ({server.address})
+                    </span>
+                  </div>
+                </SelectItem>
+              ))
             )}
-            {servers.map((server) => (
-              <SelectItem key={server.id} value={server.id.toString()}>
-                <div className="flex w-full min-w-0 items-center gap-2">
-                  {server.online ? (
-                    <Server className="h-4 w-4 flex-shrink-0 text-green-500" />
-                  ) : (
-                    <ServerOff className="h-4 w-4 flex-shrink-0 text-red-500" />
-                  )}
-                  <span className="truncate font-medium">{server.name}</span>
-                  <span className="text-muted-foreground truncate text-xs">
-                    ({server.address})
-                  </span>
-                </div>
-              </SelectItem>
-            ))}
           </SelectContent>
         </Select>
       </div>
 
       <div className="flex-grow">
-        {isLoading || permissionsLoading ? (
+        {isLoading ? (
           <div className="bg-card border-border flex h-[60vh] items-center justify-center rounded-lg border">
             <div className="space-y-2 text-center">
               <div className="border-primary mx-auto h-8 w-8 animate-spin rounded-full border-2 border-t-transparent"></div>
-              <p className="text-muted-foreground">Loading terminal...</p>
+              <p className="text-muted-foreground">Loading servers...</p>
             </div>
           </div>
         ) : selectedServerId ? (
           <Terminal
-            serverId={
-              selectedServerId === "local" ? null : parseInt(selectedServerId)
-            }
-            serverName={
-              selectedServerId === "local"
-                ? "Local Server"
-                : (selectedServer?.name ?? "Unknown Server")
-            }
+            serverId={parseInt(selectedServerId)}
+            serverName={selectedServer?.name ?? "Unknown Server"}
           />
         ) : (
           <div className="bg-card border-border space-y-4 rounded-lg border p-8 text-center">
@@ -208,20 +174,20 @@ export default function ConsolePage() {
                 No Servers Available
               </h3>
               <p>
-                {!permissions.localServerAccess && servers.length === 0
-                  ? "You don't have access to the local server and no remote servers are configured."
-                  : servers.length === 0
-                    ? "No remote servers are configured."
-                    : "No accessible servers found."}
+                {servers.length === 0
+                  ? "No remote servers are configured. Add a server to start using the console."
+                  : "Please select a server from the dropdown above."}
               </p>
             </div>
-            <Link
-              href={`/${lang}/dashboard/servers/new`}
-              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-md px-4 py-2 font-medium transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              Add New Server
-            </Link>
+            {servers.length === 0 && (
+              <Link
+                href={`/${lang}/dashboard/servers/new`}
+                className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-md px-4 py-2 font-medium transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                Add New Server
+              </Link>
+            )}
           </div>
         )}
       </div>
