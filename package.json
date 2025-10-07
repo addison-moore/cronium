@@ -8,6 +8,7 @@
     "dev:info": "turbo dev --filter=@cronium/info",
     "dev:all": "turbo dev --parallel",
     "build": "turbo build",
+    "build:ui": "turbo build --filter=@cronium/ui",
     "build:app": "turbo build --filter=@cronium/app",
     "build:info": "turbo build --filter=@cronium/info",
     "build:go": "turbo build:go",
@@ -27,7 +28,8 @@
     "clean": "turbo clean && rm -rf node_modules .turbo",
     "docker:up": "./infra/scripts/dev-docker-local-app.sh",
     "docker:down": "docker compose -f infra/docker/docker-compose.dev.local-app.yml down",
-    "docker:build": "docker compose -f infra/docker/docker-compose.dev.local-app.yml build",
+    "docker:build": "./scripts/build-docker-images.sh",
+    "docker:build:simple": "docker compose -f infra/docker/docker-compose.dev.local-app.yml build",
     "docker:logs": "docker compose -f infra/docker/docker-compose.dev.local-app.yml logs -f",
     "prepare": "husky"
   },

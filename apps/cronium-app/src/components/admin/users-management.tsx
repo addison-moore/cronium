@@ -118,6 +118,7 @@ export function UsersManagement({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -293,12 +294,19 @@ export function UsersManagement({
           <div className="flex gap-2">
             <Button
               variant="outline"
-              onClick={onRefresh}
-              disabled={isLoading}
+              onClick={async () => {
+                setIsRefreshing(true);
+                try {
+                  await onRefresh();
+                } finally {
+                  setIsRefreshing(false);
+                }
+              }}
+              disabled={isLoading || isRefreshing}
               className="flex items-center gap-2"
             >
               <RefreshCw
-                className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+                className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
               />
               Refresh
             </Button>

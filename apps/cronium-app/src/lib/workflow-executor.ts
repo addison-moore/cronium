@@ -484,8 +484,15 @@ export class WorkflowExecutor {
     branchId?: string,
     parallelGroupId?: string,
   ): Promise<void> {
+    console.log(
+      `[Workflow ${workflow.id}] Starting execution of node ${node.id}`,
+    );
+
     // Check if this node has already been executed
     if (nodeResults.has(node.id)) {
+      console.log(
+        `[Workflow ${workflow.id}] Node ${node.id} already executed, skipping`,
+      );
       return;
     }
 
@@ -664,10 +671,10 @@ export class WorkflowExecutor {
 
       // Store the result with script output data
       console.log(
-        `Workflow ${workflow.id}: Node ${node.id} execution result:`,
+        `[Workflow ${workflow.id}] Node ${node.id} execution completed:`,
         {
           success: executionResult.success,
-          output: executionResult.output ?? "",
+          output: (executionResult.output ?? "").substring(0, 100),
           scriptOutput: executionResult.scriptOutput,
           condition: executionResult.condition,
         },
@@ -743,6 +750,10 @@ export class WorkflowExecutor {
         (conn) => conn.sourceNodeId === node.id,
       );
 
+      console.log(
+        `[Workflow ${workflow.id}] Node ${node.id} has ${outgoingConnections.length} outgoing connections`,
+      );
+
       // Group connections that should be followed
       const connectionsToFollow: Array<{
         connection: WorkflowConnection;
@@ -762,6 +773,15 @@ export class WorkflowExecutor {
               !(nodeResult?.success ?? true)) ||
             (connection.connectionType === ConnectionType.ON_CONDITION &&
               nodeResult?.condition === true);
+
+          console.log(
+            `[Workflow ${workflow.id}] Node ${node.id} -> Node ${targetNode.id} connection check:`,
+            {
+              connectionType: connection.connectionType,
+              nodeSuccess: nodeResult?.success,
+              shouldFollow,
+            },
+          );
 
           if (shouldFollow) {
             connectionsToFollow.push({ connection, targetNode });

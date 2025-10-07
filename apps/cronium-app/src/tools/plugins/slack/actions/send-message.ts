@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
-import { zodToParameters } from "@/tools/utils/zod-to-parameters";
+import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
 
 // Schema for the send-message action parameters - Enhanced to support blocks
 export const sendMessageSchema = z
@@ -66,7 +66,7 @@ export const sendMessageAction: ToolAction = {
     },
   },
   inputSchema: sendMessageSchema,
-  parameters: zodToParameters(sendMessageSchema),
+  parameters: safeZodToParameters(sendMessageSchema),
   outputSchema: z.object({
     ok: z.boolean(),
     ts: z.string().optional().describe("Message timestamp"),

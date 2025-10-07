@@ -1,3 +1,14 @@
 packages:
   - apps/*
   - packages/*
+
+onlyBuiltDependencies:
+  - "@swc/core"
+  - "@tailwindcss/oxide"
+  - bcrypt
+  - cpu-features
+  - esbuild
+  - node-pty
+  - sharp
+  - ssh2
+  - unrs-resolver

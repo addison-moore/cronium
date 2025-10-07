@@ -43,7 +43,8 @@ type StatusType =
   | "info"
   | "active"
   | "online"
-  | "offline";
+  | "offline"
+  | "archived";
 
 interface StatusBadgeProps {
   status: StatusType;
@@ -168,14 +169,15 @@ export const getStatusConfig = (
         border: "border-gray-300 dark:border-gray-600",
       };
     case EventStatus.ARCHIVED:
+    case "archived":
       return {
         label: "Archived",
-        color: "text-slate-600 dark:text-slate-400",
-        textColor: "text-slate-700 dark:text-slate-300",
-        bgColor: "bg-slate-50 dark:bg-slate-800",
-        indicator: "bg-slate-500",
+        color: "text-purple-600 dark:text-purple-400",
+        textColor: "text-purple-700 dark:text-purple-300",
+        bgColor: "bg-purple-50 dark:bg-purple-900/20",
+        indicator: "bg-purple-500",
         icon: icon ?? <Archive />,
-        border: "border-slate-300 dark:border-slate-600",
+        border: "border-purple-300 dark:border-purple-600",
       };
     case LogStatus.RUNNING:
     case "running":

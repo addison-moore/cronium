@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import DashboardLayoutClient from "./layout-client";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getCachedServerSession } from "@/lib/auth-cache";
 import { redirect } from "next/navigation";
 
 interface DashboardLayoutProps {
@@ -13,8 +12,8 @@ export default async function DashboardLayout({
   children,
   params,
 }: DashboardLayoutProps) {
-  // Check authentication on the server
-  const session = await getServerSession(authOptions);
+  // Check authentication on the server (cached to avoid repeated DB calls)
+  const session = await getCachedServerSession();
   const { lang } = await params;
 
   if (!session) {

@@ -46,7 +46,7 @@ export function CredentialDisplayWrapper({
   );
 }
 
-// Enhanced credential display that includes health indicators
+// Credential display that includes health indicators
 export function createEnhancedCredentialDisplay(
   OriginalDisplay: React.ComponentType<{
     tools: Tool[];

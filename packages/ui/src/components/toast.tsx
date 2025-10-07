@@ -14,7 +14,7 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      "pointer-events-none fixed top-4 right-0 left-0 z-[9999] flex max-h-screen flex-col items-end gap-2 px-4 sm:right-4 sm:left-auto sm:max-w-[420px]",
+      "fixed top-4 right-0 left-0 z-[100] flex max-h-screen flex-col items-end gap-2 px-4 sm:right-4 sm:left-auto sm:max-w-[420px]",
       className,
     )}
     {...props}
@@ -82,7 +82,7 @@ const ToastClose = React.forwardRef<
   <ToastPrimitives.Close
     ref={ref}
     className={cn(
-      "pointer-events-auto absolute top-2 right-2 z-50 rounded-md p-1 opacity-70 transition-opacity group-hover:opacity-100 hover:opacity-100 focus:opacity-100 focus:ring-2 focus:outline-none",
+      "absolute top-2 right-2 rounded-md p-1 opacity-70 transition-opacity group-hover:opacity-100 hover:opacity-100 focus:opacity-100 focus:ring-2 focus:outline-none disabled:pointer-events-none",
       "group-[.destructive-toast]:text-red-600 group-[.destructive-toast]:hover:text-red-700 group-[.destructive-toast]:focus:ring-red-500 dark:group-[.destructive-toast]:text-red-400 dark:group-[.destructive-toast]:hover:text-red-300",
       "group-[.success-toast]:text-green-600 group-[.success-toast]:hover:text-green-700 group-[.success-toast]:focus:ring-green-500 dark:group-[.success-toast]:text-green-400 dark:group-[.success-toast]:hover:text-green-300",
       "group-[.warning-toast]:text-amber-600 group-[.warning-toast]:hover:text-amber-700 group-[.warning-toast]:focus:ring-amber-500 dark:group-[.warning-toast]:text-amber-400 dark:group-[.warning-toast]:hover:text-amber-300",
@@ -92,7 +92,7 @@ const ToastClose = React.forwardRef<
     toast-close=""
     {...props}
   >
-    <X className="h-4 w-4" />
+    <X className="h-4 w-4 hover:cursor-pointer" />
   </ToastPrimitives.Close>
 ));
 ToastClose.displayName = ToastPrimitives.Close.displayName;

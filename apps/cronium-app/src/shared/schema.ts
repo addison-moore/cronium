@@ -244,6 +244,15 @@ export const servers = pgTable("servers", {
   shared: boolean("shared").default(false).notNull(),
   online: boolean("online"),
   lastChecked: timestamp("last_checked"),
+  // Archive fields for soft delete
+  isArchived: boolean("is_archived").default(false).notNull(),
+  archivedAt: timestamp("archived_at"),
+  archivedBy: varchar("archived_by", { length: 255 }),
+  archiveReason: text("archive_reason"),
+  deletionScheduledAt: timestamp("deletion_scheduled_at"),
+  // Original sensitive data (before purging)
+  sshKeyPurged: boolean("ssh_key_purged").default(false).notNull(),
+  passwordPurged: boolean("password_purged").default(false).notNull(),
   createdAt: timestamp("created_at")
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),
@@ -362,6 +371,29 @@ export const eventServers = pgTable("event_servers", {
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),
 });
+
+// Server deletion notifications
+export const serverDeletionNotifications = pgTable(
+  "server_deletion_notifications",
+  {
+    id: serial("id").primaryKey(),
+    serverId: integer("server_id")
+      .references(() => servers.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: varchar("user_id", { length: 255 })
+      .references(() => users.id)
+      .notNull(),
+    notificationType: varchar("notification_type", { length: 50 }).notNull(), // "7_day_warning", "1_day_warning", "deletion_complete"
+    sentAt: timestamp("sent_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    acknowledged: boolean("acknowledged").default(false).notNull(),
+    acknowledgedAt: timestamp("acknowledged_at"),
+    createdAt: timestamp("created_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+);
 
 export const conditionalActions = pgTable("conditional_actions", {
   id: serial("id").primaryKey(),
@@ -1159,6 +1191,11 @@ export type InsertEventServer = typeof eventServers.$inferInsert;
 
 export type ToolActionLog = typeof toolActionLogs.$inferSelect;
 export type InsertToolActionLog = typeof toolActionLogs.$inferInsert;
+
+export type ServerDeletionNotification =
+  typeof serverDeletionNotifications.$inferSelect;
+export type InsertServerDeletionNotification =
+  typeof serverDeletionNotifications.$inferInsert;
 
 // Webhook tables
 export const webhooks = pgTable("webhooks", {

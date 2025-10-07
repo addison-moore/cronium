@@ -548,7 +548,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
       label: t("Edit"),
       icon: <Edit className="h-4 w-4" />,
       onClick: () =>
-        router.push(`/${lang}/dashboard/workflows/${workflow.id}/edit`),
+        router.push(`/${lang}/dashboard/workflows/${workflow.id}?tab=canvas`),
     },
     {
       label: t("Execute"),

@@ -207,7 +207,8 @@ export interface IStorage {
 
   // Server methods
   getServer(id: number): Promise<Server | undefined>;
-  getAllServers(userId: string): Promise<Server[]>;
+  getAllServers(userId: string, includeArchived?: boolean): Promise<Server[]>;
+  getArchivedServers(userId: string): Promise<Server[]>;
   canUserAccessServer(serverId: number, userId: string): Promise<boolean>;
   createServer(insertServer: InsertServer): Promise<Server>;
   updateServer(id: number, updateData: Partial<InsertServer>): Promise<Server>;
@@ -216,6 +217,16 @@ export interface IStorage {
     online: boolean,
     lastChecked: Date,
   ): Promise<Server>;
+  getServerDeletionImpact(id: number): Promise<{
+    eventCount: number;
+    eventServerCount: number;
+    executionCount: number;
+    activeEvents: Array<{ id: number; name: string; status: string }>;
+  }>;
+  archiveServer(id: number, userId: string, reason?: string): Promise<Server>;
+  getArchivedServers(userId: string): Promise<Server[]>;
+  restoreServer(id: number): Promise<Server>;
+  permanentlyDeleteServer(id: number): Promise<void>;
   deleteServer(id: number): Promise<void>;
 
   // Event-Server relationship methods
@@ -297,7 +308,18 @@ export interface IStorage {
     workflowId: number,
     limit?: number,
     page?: number,
-  ): Promise<{ executions: WorkflowExecution[]; total: number }>;
+  ): Promise<{
+    executions: (WorkflowExecution & { workflowName?: string })[];
+    total: number;
+  }>;
+  getAllWorkflowExecutions(
+    userId: string,
+    limit?: number,
+    page?: number,
+  ): Promise<{
+    executions: (WorkflowExecution & { workflowName?: string })[];
+    total: number;
+  }>;
   createWorkflowExecution(
     insertExecution: InsertWorkflowExecution,
   ): Promise<WorkflowExecution>;

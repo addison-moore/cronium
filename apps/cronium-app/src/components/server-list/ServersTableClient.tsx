@@ -4,7 +4,15 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Server, Plus, Eye, Edit, CheckCircle, Trash2 } from "lucide-react";
+import {
+  Server,
+  Plus,
+  Eye,
+  Edit,
+  CheckCircle,
+  Trash2,
+  RotateCcw,
+} from "lucide-react";
 import { Button } from "@cronium/ui";
 import { Card, CardContent } from "@cronium/ui";
 import { toast } from "@cronium/ui";
@@ -23,6 +31,7 @@ import type {
   StandardizedTableAction,
 } from "@cronium/ui";
 import { ServerFilters } from "@/components/server-list/ServerFilters";
+import { ServerDeleteConfirmDialog } from "@/components/server-list/ServerDeleteConfirmDialog";
 import { trpc } from "@/lib/trpc";
 
 interface ServerData {
@@ -35,6 +44,7 @@ interface ServerData {
   updatedAt: string;
   online: boolean | undefined;
   lastChecked: string | undefined;
+  isArchived?: boolean;
 }
 
 interface ServerListFilters {
@@ -56,9 +66,22 @@ export function ServersTableClient({
   const lang = params.lang as string;
 
   const [servers, setServers] = useState<ServerData[]>(initialServers);
+  const [archivedServers, setArchivedServers] = useState<ServerData[]>([]);
+  const [hasLoadedArchived, setHasLoadedArchived] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Delete confirmation dialog state
+  const [deleteDialogState, setDeleteDialogState] = useState<{
+    isOpen: boolean;
+    serverId: number | null;
+    serverName: string;
+  }>({
+    isOpen: false,
+    serverId: null,
+    serverName: "",
+  });
 
   // Filter state
   const [filters, setFilters] = useState<ServerListFilters>({
@@ -66,6 +89,23 @@ export function ServersTableClient({
     statusFilter: "all",
     sortBy: "createdAt",
     sortOrder: "desc",
+  });
+
+  // Query for archived servers
+  const archivedQuery = trpc.servers.getArchived.useQuery(undefined, {
+    enabled: filters.statusFilter === "archived" && !hasLoadedArchived,
+    onSuccess: (data) => {
+      const transformedServers = data.servers.map((server) => ({
+        ...server,
+        createdAt: server.createdAt.toISOString(),
+        updatedAt: server.updatedAt.toISOString(),
+        lastChecked: server.lastChecked?.toISOString() ?? undefined,
+        online: server.online ?? undefined,
+        isArchived: true,
+      }));
+      setArchivedServers(transformedServers);
+      setHasLoadedArchived(true);
+    },
   });
 
   // Mutations for health check and delete
@@ -102,6 +142,66 @@ export function ServersTableClient({
       });
       // Remove from local state
       setServers((prev) => prev.filter((server) => server.id !== variables.id));
+      // Close dialog
+      setDeleteDialogState({ isOpen: false, serverId: null, serverName: "" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Deletion Failed",
+        description:
+          error.message || "Failed to delete the server. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const restoreServerMutation = trpc.servers.restore.useMutation({
+    onSuccess: (data, variables) => {
+      toast({
+        title: "Server Restored",
+        description: data.requiresCredentials
+          ? "Server restored. Please reconfigure credentials."
+          : "The server has been successfully restored.",
+        variant: data.requiresCredentials ? "default" : "default",
+      });
+      // Remove from archived servers list
+      setArchivedServers((prev) =>
+        prev.filter((server) => server.id !== variables.id),
+      );
+      // Refetch active servers if needed
+      if (filters.statusFilter !== "archived") {
+        window.location.reload();
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: "Restore Failed",
+        description:
+          error.message || "Failed to restore the server. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const archiveServerMutation = trpc.servers.archive.useMutation({
+    onSuccess: (_, variables) => {
+      toast({
+        title: "Server Archived",
+        description:
+          "The server has been archived. Sensitive data has been purged.",
+      });
+      // Remove from local state (since we're showing active servers)
+      setServers((prev) => prev.filter((server) => server.id !== variables.id));
+      // Close dialog
+      setDeleteDialogState({ isOpen: false, serverId: null, serverName: "" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Archive Failed",
+        description:
+          error.message || "Failed to archive the server. Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -110,8 +210,36 @@ export function ServersTableClient({
     checkHealthMutation.mutate({ id: serverId });
   };
 
-  const deleteServer = async (serverId: number): Promise<void> => {
-    deleteServerMutation.mutate({ id: serverId });
+  const openDeleteDialog = (serverId: number, serverName: string) => {
+    setDeleteDialogState({
+      isOpen: true,
+      serverId,
+      serverName,
+    });
+  };
+
+  const closeDeleteDialog = () => {
+    setDeleteDialogState({
+      isOpen: false,
+      serverId: null,
+      serverName: "",
+    });
+  };
+
+  const handleServerAction = async (
+    action: "archive" | "delete",
+    reason?: string,
+  ): Promise<void> => {
+    if (deleteDialogState.serverId) {
+      if (action === "archive") {
+        archiveServerMutation.mutate({
+          id: deleteDialogState.serverId,
+          reason,
+        });
+      } else {
+        deleteServerMutation.mutate({ id: deleteDialogState.serverId });
+      }
+    }
   };
 
   const formatDate = (dateString: string): string => {
@@ -134,16 +262,25 @@ export function ServersTableClient({
     setCurrentPage(1);
   };
 
+  // Determine which servers to show based on filter
+  const displayServers =
+    filters.statusFilter === "archived" ? archivedServers : servers;
+
   // Apply filters to servers
-  const filteredServers = servers.filter((server) => {
+  const filteredServers = displayServers.filter((server) => {
     const matchesSearch =
       server.name.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
       server.address.toLowerCase().includes(filters.searchTerm.toLowerCase());
 
+    // For archived filter, we already have the right servers
+    if (filters.statusFilter === "archived") {
+      return matchesSearch;
+    }
+
     const matchesStatus =
-      (filters.statusFilter === "all" ||
-        (filters.statusFilter === "online" && server.online === true)) ??
-      (filters.statusFilter === "offline" && server.online === false) ??
+      filters.statusFilter === "all" ||
+      (filters.statusFilter === "online" && server.online === true) ||
+      (filters.statusFilter === "offline" && server.online === false) ||
       (filters.statusFilter === "unknown" && server.online === undefined);
 
     return matchesSearch && matchesStatus;
@@ -217,6 +354,11 @@ export function ServersTableClient({
       key: "status",
       header: t("Status.Title"),
       cell: (server) => {
+        // Show archived status if server is archived
+        if (server.isArchived) {
+          return <StatusBadge status="archived" label="Archived" size="sm" />;
+        }
+        // Otherwise show online status
         if (server.online === undefined) {
           return (
             <StatusBadge
@@ -253,37 +395,94 @@ export function ServersTableClient({
     },
   ];
 
-  const getServerActions = (server: ServerData): StandardizedTableAction[] => [
-    {
-      label: isCheckingStatus === server.id ? t("Checking") : t("CheckStatus"),
-      icon: <CheckCircle className="h-4 w-4" />,
-      onClick: () => void checkServerStatus(server.id),
-      disabled: isCheckingStatus === server.id || checkHealthMutation.isPending,
-    },
-    {
-      label: t("ViewDetails"),
-      icon: <Eye className="h-4 w-4" />,
-      onClick: () =>
-        (window.location.href = `/${lang}/dashboard/servers/${server.id}`),
-    },
-    {
-      label: t("EditServer"),
-      icon: <Edit className="h-4 w-4" />,
-      onClick: () =>
-        (window.location.href = `/${lang}/dashboard/servers/${server.id}#edit`),
-      separator: true,
-    },
-    {
-      label: deleteServerMutation.isPending ? "Deleting..." : "Delete Server",
-      icon: <Trash2 className="h-4 w-4" />,
-      onClick: () => void deleteServer(server.id),
-      disabled: deleteServerMutation.isPending,
-      variant: "destructive",
-      separator: true,
-    },
-  ];
+  const getServerActions = (server: ServerData): StandardizedTableAction[] => {
+    // Different actions for archived servers
+    if (server.isArchived) {
+      return [
+        {
+          label: "Restore Server",
+          icon: <RotateCcw className="h-4 w-4" />,
+          onClick: () => restoreServerMutation.mutate({ id: server.id }),
+          disabled: restoreServerMutation.isPending,
+        },
+        {
+          label: t("ViewDetails"),
+          icon: <Eye className="h-4 w-4" />,
+          onClick: () =>
+            (window.location.href = `/${lang}/dashboard/servers/${server.id}`),
+        },
+        {
+          label: "Permanently Delete",
+          icon: <Trash2 className="h-4 w-4" />,
+          onClick: () => openDeleteDialog(server.id, server.name),
+          disabled: false,
+          variant: "destructive",
+          separator: true,
+        },
+      ];
+    }
 
-  if (servers.length === 0) {
+    // Regular actions for active servers
+    return [
+      {
+        label:
+          isCheckingStatus === server.id ? t("Checking") : t("CheckStatus"),
+        icon: <CheckCircle className="h-4 w-4" />,
+        onClick: () => void checkServerStatus(server.id),
+        disabled:
+          isCheckingStatus === server.id || checkHealthMutation.isPending,
+      },
+      {
+        label: t("ViewDetails"),
+        icon: <Eye className="h-4 w-4" />,
+        onClick: () =>
+          (window.location.href = `/${lang}/dashboard/servers/${server.id}`),
+      },
+      {
+        label: t("EditServer"),
+        icon: <Edit className="h-4 w-4" />,
+        onClick: () =>
+          (window.location.href = `/${lang}/dashboard/servers/${server.id}#edit`),
+        separator: true,
+      },
+      {
+        label: "Delete Server",
+        icon: <Trash2 className="h-4 w-4" />,
+        onClick: () => openDeleteDialog(server.id, server.name),
+        disabled: false,
+        variant: "destructive",
+        separator: true,
+      },
+    ];
+  };
+
+  // Check for empty state based on current filter
+  if (filters.statusFilter === "archived" && archivedServers.length === 0) {
+    return (
+      <div>
+        <ServerFilters
+          filters={filters}
+          onFiltersChange={updateFilters}
+          onClearFilters={handleClearFilters}
+        />
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center justify-center p-8">
+              <Server className="mb-4 h-16 w-16 text-gray-300" />
+              <h2 className="mb-2 text-xl font-semibold">
+                No Archived Servers
+              </h2>
+              <p className="text-center text-gray-500">
+                You don't have any archived servers.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (servers.length === 0 && filters.statusFilter !== "archived") {
     return (
       <Card>
         <CardContent className="pt-6">
@@ -360,6 +559,15 @@ export function ServersTableClient({
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ServerDeleteConfirmDialog
+        serverId={deleteDialogState.serverId}
+        serverName={deleteDialogState.serverName}
+        isOpen={deleteDialogState.isOpen}
+        onClose={closeDeleteDialog}
+        onConfirm={handleServerAction}
+      />
     </div>
   );
 }

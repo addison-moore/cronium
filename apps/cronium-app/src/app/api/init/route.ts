@@ -5,6 +5,7 @@
 
 import { NextResponse } from "next/server";
 import { initializeCleanupService } from "@/lib/services/workflow-cleanup-service";
+import { serverCleanupService } from "@/lib/services/server-cleanup-service";
 
 // Track if services have been initialized
 let servicesInitialized = false;
@@ -26,6 +27,14 @@ export async function GET() {
       checkInterval: 5 * 60 * 1000, // Check every 5 minutes
     });
 
+    // Initialize server cleanup service
+    if (process.env.SERVER_CLEANUP_ENABLED === "true") {
+      console.log("[Init] Starting server cleanup service...");
+      serverCleanupService.start();
+    } else {
+      console.log("[Init] Server cleanup service is disabled");
+    }
+
     servicesInitialized = true;
 
     console.log("[Init] All services initialized successfully");
@@ -34,6 +43,7 @@ export async function GET() {
       initialized: true,
       services: {
         workflowCleanup: true,
+        serverCleanup: process.env.SERVER_CLEANUP_ENABLED === "true",
       },
     });
   } catch (error) {

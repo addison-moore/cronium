@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
-import { zodToParameters } from "@/tools/utils/zod-to-parameters";
+import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
 
 // Schema for move-card action parameters
 export const moveCardSchema = z.object({
@@ -30,7 +30,7 @@ export const moveCardAction: ToolAction = {
   actionType: "update",
   developmentMode: "visual",
   inputSchema: moveCardSchema,
-  parameters: zodToParameters(moveCardSchema),
+  parameters: safeZodToParameters(moveCardSchema),
   outputSchema: z.object({
     success: z.boolean(),
     error: z.string().optional(),

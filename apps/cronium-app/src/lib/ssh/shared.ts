@@ -4,7 +4,7 @@
  * Common SSH functionality used by both terminal and script execution
  */
 
-import { NodeSSH } from "node-ssh";
+import { NodeSSH, type Config } from "node-ssh";
 
 export interface SSHConnection {
   ssh: NodeSSH;

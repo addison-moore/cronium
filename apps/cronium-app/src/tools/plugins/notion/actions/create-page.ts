@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
-import { zodToParameters } from "@/tools/utils/zod-to-parameters";
+import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
 
 // Schema for Notion block objects
 const blockSchema = z.object({
@@ -114,7 +114,7 @@ export const createPageAction: ToolAction = {
   actionType: "create",
   developmentMode: "visual",
   inputSchema: createPageSchema,
-  parameters: zodToParameters(createPageSchema),
+  parameters: safeZodToParameters(createPageSchema),
   outputSchema: z.object({
     success: z.boolean(),
     pageId: z.string().optional(),

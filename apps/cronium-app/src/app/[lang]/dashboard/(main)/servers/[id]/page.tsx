@@ -39,6 +39,7 @@ import ServerForm from "@/components/dashboard/ServerForm";
 import { ServerDetailsHeader } from "@/components/server-details/ServerDetailsHeader";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
+import { type UpdateServerInput } from "@shared/schemas/servers";
 
 interface ServerDetailsPageProps {
   params: Promise<{ id: string; lang: string }>;
@@ -369,12 +370,7 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
 
         <TabsContent value="edit" className="space-y-4">
           <ServerForm
-            initialServer={(() => {
-              const filtered = { ...server } as Record<string, unknown>;
-              if (server.sshKey === null) delete filtered.sshKey;
-              if (server.password === null) delete filtered.password;
-              return filtered as typeof server;
-            })()}
+            initialServer={server as Partial<UpdateServerInput>}
             isEditing={true}
             onSuccess={handleServerUpdate}
           />

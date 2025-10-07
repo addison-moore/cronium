@@ -117,7 +117,7 @@ export const nodeDataSchema = z
     description: z.string().optional(),
     toolId: z.string().optional(),
     actionId: z.string().optional(),
-    parameters: z.record(z.unknown()).optional(),
+    parameters: z.record(z.string(), z.unknown()).optional(),
     isConfigured: z.boolean().optional(),
     nodeType: z.nativeEnum(NodeType),
   })

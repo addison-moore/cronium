@@ -20,7 +20,7 @@ const nextConfig = {
   env: {
     PUBLIC_APP_URL: env.PUBLIC_APP_URL,
   },
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, dev }) => {
     // Handle SSH binary modules properly
     config.externals = [...(config.externals || []), "ssh2"];
 
@@ -35,65 +35,66 @@ const nextConfig = {
         crypto: false,
       };
 
-      // Optimize chunk splitting and tree shaking
-      config.optimization = {
-        ...config.optimization,
-        // Remove usedExports to avoid conflict with cacheUnaffected
-        // usedExports: true, // This causes the error
-        sideEffects: false,
-        minimize: true,
-        splitChunks: {
-          chunks: "all",
-          cacheGroups: {
-            default: false,
-            vendors: false,
-            // Framework chunk
-            framework: {
-              name: "framework",
-              chunks: "all",
-              test: /[\\/]node_modules[\\/](react|react-dom|scheduler|next)[\\/]/,
-              priority: 40,
-              enforce: true,
-            },
-            // Common libraries used across the app
-            lib: {
-              test(module) {
-                return (
-                  module.size() > 160000 &&
-                  /node_modules[/\\]/.test(module.identifier())
-                );
+      // Only apply optimization in production
+      if (!dev) {
+        // Optimize chunk splitting and tree shaking
+        config.optimization = {
+          ...config.optimization,
+          sideEffects: false,
+          minimize: true,
+          splitChunks: {
+            chunks: "all",
+            cacheGroups: {
+              default: false,
+              vendors: false,
+              // Framework chunk
+              framework: {
+                name: "framework",
+                chunks: "all",
+                test: /[\\/]node_modules[\\/](react|react-dom|scheduler|next)[\\/]/,
+                priority: 40,
+                enforce: true,
               },
-              name(module) {
-                const hash = crypto.createHash("sha1");
-                hash.update(module.identifier());
-                return hash.digest("hex").substring(0, 8);
+              // Common libraries used across the app
+              lib: {
+                test(module) {
+                  return (
+                    module.size() > 160000 &&
+                    /node_modules[/\\]/.test(module.identifier())
+                  );
+                },
+                name(module) {
+                  const hash = crypto.createHash("sha1");
+                  hash.update(module.identifier());
+                  return hash.digest("hex").substring(0, 8);
+                },
+                priority: 30,
+                minChunks: 1,
+                reuseExistingChunk: true,
               },
-              priority: 30,
-              minChunks: 1,
-              reuseExistingChunk: true,
-            },
-            // UI components chunk
-            ui: {
-              name: "ui",
-              test: /[\\/]node_modules[\\/](@radix-ui|lucide-react|react-icons)[\\/]/,
-              priority: 20,
-            },
-            // Form libraries chunk
-            forms: {
-              name: "forms",
-              test: /[\\/]node_modules[\\/](react-hook-form|@hookform|zod)[\\/]/,
-              priority: 20,
-            },
-            // Shared components chunk
-            commons: {
-              name: "commons",
-              minChunks: 2,
-              priority: 10,
-              reuseExistingChunk: true,
+              // UI components chunk
+              ui: {
+                name: "ui",
+                test: /[\\/]node_modules[\\/](@radix-ui|lucide-react|react-icons)[\\/]/,
+                priority: 20,
+              },
+              // Form libraries chunk
+              forms: {
+                name: "forms",
+                test: /[\\/]node_modules[\\/](react-hook-form|@hookform|zod)[\\/]/,
+                priority: 20,
+              },
+              // Shared components chunk
+              commons: {
+                name: "commons",
+                minChunks: 2,
+                priority: 10,
+                reuseExistingChunk: true,
+              },
             },
           },
-        },
-      };
+        };
+      }
 
       // Configure module rules for better tree shaking
       // Removed sideEffects: false rule to avoid conflicts
@@ -140,10 +141,10 @@ const nextConfig = {
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
   experimental: {
-    // Enable Partial Prerendering (PPR)
-    // Note: PPR requires Next.js canary version
-    ppr: true,
-    // PPR works best with these additional settings
+    // Enable Partial Prerendering (PPR) only in production
+    // PPR causes severe performance issues in development
+    ppr: process.env.NODE_ENV === "production",
+    // Optimize package imports
     optimizePackageImports: [
       "@radix-ui/react-*",
       "lucide-react",

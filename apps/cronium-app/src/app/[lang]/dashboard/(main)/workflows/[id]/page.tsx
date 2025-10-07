@@ -14,9 +14,17 @@ import { trpc } from "@/lib/trpc";
 import type { RouterOutputs } from "@/server/api/root";
 
 type WorkflowExecutions = RouterOutputs["workflows"]["getExecutions"];
-type WorkflowExecution = NonNullable<
-  WorkflowExecutions["executions"]["executions"][number]
->;
+type WorkflowExecution = WorkflowExecutions extends {
+  executions: { executions: infer T };
+}
+  ? T extends readonly unknown[]
+    ? T[number]
+    : never
+  : WorkflowExecutions extends { executions: infer T }
+    ? T extends readonly unknown[]
+      ? T[number]
+      : never
+    : never;
 import WorkflowExecutionHistory from "@/components/workflows/WorkflowExecutionHistory";
 import WorkflowExecutionGraph from "@/components/workflows/WorkflowExecutionGraph";
 import WorkflowCanvas from "@/components/workflows/WorkflowCanvas-lazy";

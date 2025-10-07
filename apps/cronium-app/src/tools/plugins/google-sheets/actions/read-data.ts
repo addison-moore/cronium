@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
-import { zodToParameters } from "@/tools/utils/zod-to-parameters";
+import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
 
 // Schema for read-data action parameters
 export const readDataSchema = z.object({
@@ -37,7 +37,7 @@ export const readDataAction: ToolAction = {
   actionType: "search",
   developmentMode: "visual",
   inputSchema: readDataSchema,
-  parameters: zodToParameters(readDataSchema),
+  parameters: safeZodToParameters(readDataSchema),
   outputSchema: z.object({
     success: z.boolean(),
     range: z.string().optional(),

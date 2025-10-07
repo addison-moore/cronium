@@ -2,6 +2,21 @@ import { z } from "zod";
 import type { ActionParameter } from "../types/tool-plugin";
 
 /**
+ * Safely convert a Zod schema to ActionParameter array
+ * Wraps zodToParameters with error handling for use in module initialization
+ */
+export function safeZodToParameters(
+  schema: z.ZodSchema<any>,
+): ActionParameter[] {
+  try {
+    return zodToParameters(schema);
+  } catch (error) {
+    console.warn("Failed to convert Zod schema to parameters:", error);
+    return [];
+  }
+}
+
+/**
  * Convert a Zod schema to ActionParameter array
  * This utility helps maintain consistency between Zod schemas and parameter definitions
  */
@@ -9,20 +24,32 @@ import type { ActionParameter } from "../types/tool-plugin";
 export function zodToParameters(schema: z.ZodSchema<any>): ActionParameter[] {
   const parameters: ActionParameter[] = [];
 
+  // Check if schema is undefined or null
+  if (!schema) {
+    console.warn("zodToParameters: schema is undefined or null");
+    return parameters;
+  }
+
   // Unwrap ZodEffects (from .refine(), .transform(), etc.)
   let unwrappedSchema: z.ZodTypeAny = schema;
-  while (unwrappedSchema instanceof z.ZodEffects) {
-    unwrappedSchema = unwrappedSchema._def.schema as z.ZodTypeAny;
+  while (
+    unwrappedSchema?._def?.typeName === z.ZodFirstPartyTypeKind.ZodEffects
+  ) {
+    const nextSchema = unwrappedSchema._def?.schema;
+    if (!nextSchema) break;
+    unwrappedSchema = nextSchema as z.ZodTypeAny;
   }
 
   // Handle ZodObject
-  if (unwrappedSchema instanceof z.ZodObject) {
+  if (unwrappedSchema?._def?.typeName === z.ZodFirstPartyTypeKind.ZodObject) {
     const shape = unwrappedSchema.shape as Record<string, z.ZodTypeAny>;
 
-    for (const [key, value] of Object.entries(shape)) {
-      const param = parseZodType(key, value);
-      if (param) {
-        parameters.push(param);
+    if (shape) {
+      for (const [key, value] of Object.entries(shape)) {
+        const param = parseZodType(key, value);
+        if (param) {
+          parameters.push(param);
+        }
       }
     }
   }
@@ -34,6 +61,11 @@ function parseZodType(
   name: string,
   schema: z.ZodTypeAny,
 ): ActionParameter | null {
+  if (!schema) {
+    console.warn(`parseZodType: schema is undefined for field "${name}"`);
+    return null;
+  }
+
   let baseSchema = schema;
   let required = true;
   let description: string | undefined;
@@ -42,19 +74,31 @@ function parseZodType(
 
   // Unwrap modifiers
   while (
-    baseSchema instanceof z.ZodOptional ||
-    baseSchema instanceof z.ZodDefault ||
-    baseSchema instanceof z.ZodNullable
+    baseSchema?._def?.typeName === z.ZodFirstPartyTypeKind.ZodOptional ||
+    baseSchema?._def?.typeName === z.ZodFirstPartyTypeKind.ZodDefault ||
+    baseSchema?._def?.typeName === z.ZodFirstPartyTypeKind.ZodNullable
   ) {
-    if (baseSchema instanceof z.ZodOptional) {
+    if (baseSchema._def?.typeName === z.ZodFirstPartyTypeKind.ZodOptional) {
       required = false;
-      baseSchema = baseSchema._def.innerType as z.ZodTypeAny;
-    } else if (baseSchema instanceof z.ZodDefault) {
-      defaultValue = baseSchema._def.defaultValue() as unknown;
-      baseSchema = baseSchema._def.innerType as z.ZodTypeAny;
-    } else if (baseSchema instanceof z.ZodNullable) {
+      const nextSchema = baseSchema._def?.innerType;
+      if (!nextSchema) break;
+      baseSchema = nextSchema as z.ZodTypeAny;
+    } else if (
+      baseSchema._def?.typeName === z.ZodFirstPartyTypeKind.ZodDefault
+    ) {
+      if (baseSchema._def?.defaultValue) {
+        defaultValue = baseSchema._def.defaultValue() as unknown;
+      }
+      const nextSchema = baseSchema._def?.innerType;
+      if (!nextSchema) break;
+      baseSchema = nextSchema as z.ZodTypeAny;
+    } else if (
+      baseSchema._def?.typeName === z.ZodFirstPartyTypeKind.ZodNullable
+    ) {
       required = false;
-      baseSchema = baseSchema._def.innerType as z.ZodTypeAny;
+      const nextSchema = baseSchema._def?.innerType;
+      if (!nextSchema) break;
+      baseSchema = nextSchema as z.ZodTypeAny;
     }
   }
 
@@ -70,18 +114,19 @@ function parseZodType(
 
   // Determine type
   let type = "string";
+  const typeName = baseSchema._def?.typeName;
 
-  if (baseSchema instanceof z.ZodString) {
+  if (typeName === z.ZodFirstPartyTypeKind.ZodString) {
     type = "string";
-  } else if (baseSchema instanceof z.ZodNumber) {
+  } else if (typeName === z.ZodFirstPartyTypeKind.ZodNumber) {
     type = "number";
-  } else if (baseSchema instanceof z.ZodBoolean) {
+  } else if (typeName === z.ZodFirstPartyTypeKind.ZodBoolean) {
     type = "boolean";
-  } else if (baseSchema instanceof z.ZodArray) {
+  } else if (typeName === z.ZodFirstPartyTypeKind.ZodArray) {
     type = "array";
-  } else if (baseSchema instanceof z.ZodObject) {
+  } else if (typeName === z.ZodFirstPartyTypeKind.ZodObject) {
     type = "object";
-  } else if (baseSchema instanceof z.ZodEnum) {
+  } else if (typeName === z.ZodFirstPartyTypeKind.ZodEnum) {
     type = "string";
     enumValues = baseSchema._def.values as string[];
   }

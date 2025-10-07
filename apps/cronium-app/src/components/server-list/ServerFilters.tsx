@@ -6,6 +6,7 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@cronium/ui";
@@ -90,6 +91,16 @@ export function ServerFilters({
                 <div className="flex items-center">
                   <span className="mr-2 flex h-2 w-2 rounded-full bg-gray-500"></span>
                   Unknown
+                </div>
+              </SelectItem>
+              <SelectSeparator className="my-1" />
+              <SelectItem
+                value="archived"
+                className="hover:bg-muted py-2 pr-3 pl-8 text-sm"
+              >
+                <div className="flex items-center">
+                  <span className="mr-2 flex h-2 w-2 rounded-full bg-purple-500"></span>
+                  Archived
                 </div>
               </SelectItem>
             </SelectContent>

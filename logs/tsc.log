@@ -1,0 +1,40 @@
+src/components/dashboard/ServerForm.tsx(306,22): error TS2322: Type '{ onChange: (...event: any[]) => void; onBlur: Noop; value: string | number | boolean | string[] | undefined; disabled?: boolean; name: "password" | "description" | "name" | "shared" | "username" | ... 6 more ... | `tags.${number}`; ref: RefCallBack; className: string; placeholder: string; }' is not assignable to type 'InputProps'.
+  Types of property 'value' are incompatible.
+    Type 'string | number | boolean | string[] | undefined' is not assignable to type 'string | number | readonly string[] | undefined'.
+      Type 'false' is not assignable to type 'string | number | readonly string[] | undefined'.
+src/components/dashboard/ServerForm.tsx(327,22): error TS2322: Type '{ onChange: (...event: any[]) => void; onBlur: Noop; value: string | number | boolean | string[] | undefined; disabled?: boolean; name: "password" | "description" | "name" | "shared" | "username" | ... 6 more ... | `tags.${number}`; ref: RefCallBack; className: string; placeholder: string; }' is not assignable to type 'InputProps'.
+  Types of property 'value' are incompatible.
+    Type 'string | number | boolean | string[] | undefined' is not assignable to type 'string | number | readonly string[] | undefined'.
+      Type 'false' is not assignable to type 'string | number | readonly string[] | undefined'.
+src/components/dashboard/ServerForm.tsx(349,24): error TS2322: Type '{ onChange: (...event: any[]) => void; onBlur: Noop; value: string | number | boolean | string[] | undefined; disabled?: boolean; name: "password" | "description" | "name" | "shared" | "username" | ... 6 more ... | `tags.${number}`; ref: RefCallBack; className: string; placeholder: string; }' is not assignable to type 'InputProps'.
+  Types of property 'value' are incompatible.
+    Type 'string | number | boolean | string[] | undefined' is not assignable to type 'string | number | readonly string[] | undefined'.
+      Type 'false' is not assignable to type 'string | number | readonly string[] | undefined'.
+src/components/dashboard/ServerForm.tsx(370,24): error TS2322: Type '{ onChange: (...event: any[]) => void; onBlur: Noop; value: string | number | boolean | string[] | undefined; disabled?: boolean; name: "password" | "description" | "name" | "shared" | "username" | ... 6 more ... | `tags.${number}`; ... 5 more ...; placeholder: string; }' is not assignable to type 'InputProps'.
+  Types of property 'value' are incompatible.
+    Type 'string | number | boolean | string[] | undefined' is not assignable to type 'string | number | readonly string[] | undefined'.
+      Type 'false' is not assignable to type 'string | number | readonly string[] | undefined'.
+src/components/dashboard/ServerForm.tsx(393,19): error TS2412: Type 'string | number | boolean | string[] | undefined' is not assignable to type 'string | undefined' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the type of the target.
+src/components/dashboard/ServerForm.tsx(456,24): error TS2322: Type '{ onChange: (...event: any[]) => void; onBlur: Noop; value: string | number | boolean | string[] | undefined; disabled?: boolean; name: "password" | "description" | "name" | "shared" | "username" | ... 6 more ... | `tags.${number}`; ref: RefCallBack; className: string; placeholder: string; }' is not assignable to type 'TextareaProps'.
+  Types of property 'value' are incompatible.
+    Type 'string | number | boolean | string[] | undefined' is not assignable to type 'string | number | readonly string[] | undefined'.
+      Type 'false' is not assignable to type 'string | number | readonly string[] | undefined'.
+src/components/dashboard/ServerForm.tsx(486,24): error TS2322: Type '{ onChange: (...event: any[]) => void; onBlur: Noop; value: string | number | boolean | string[] | undefined; disabled?: boolean; name: "password" | "description" | "name" | "shared" | "username" | ... 6 more ... | `tags.${number}`; ref: RefCallBack; className: string; type: "password"; placeholder: string; }' is not assignable to type 'InputProps'.
+  Types of property 'value' are incompatible.
+    Type 'string | number | boolean | string[] | undefined' is not assignable to type 'string | number | readonly string[] | undefined'.
+      Type 'false' is not assignable to type 'string | number | readonly string[] | undefined'.
+src/components/dashboard/ServerForm.tsx(507,21): error TS2412: Type 'string | number | boolean | string[] | undefined' is not assignable to type 'CheckedState | undefined' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the type of the target.
+src/server/api/routers/workflows.ts(430,22): error TS2365: Operator '>' cannot be applied to types '{}' and 'number'.
+src/server/storage/modules/workflow-execution.ts(130,7): error TS2322: Type '{ id: number; workflowId: number; userId: string; status: LogStatus; triggerType: string; startedAt: Date; completedAt: Date | null; totalDuration: number | null; ... 6 more ...; workflowName: string | null; }[]' is not assignable to type '({ userId: string; id: number; createdAt: Date; updatedAt: Date; status: LogStatus; triggerType: string; workflowId: number; startedAt: Date; completedAt: Date | null; ... 4 more ...; executionData: unknown; } & { ...; })[]'.
+  Type '{ id: number; workflowId: number; userId: string; status: LogStatus; triggerType: string; startedAt: Date; completedAt: Date | null; totalDuration: number | null; ... 6 more ...; workflowName: string | null; }' is not assignable to type '{ userId: string; id: number; createdAt: Date; updatedAt: Date; status: LogStatus; triggerType: string; workflowId: number; startedAt: Date; completedAt: Date | null; ... 4 more ...; executionData: unknown; } & { ...; }'.
+    Type '{ id: number; workflowId: number; userId: string; status: LogStatus; triggerType: string; startedAt: Date; completedAt: Date | null; totalDuration: number | null; ... 6 more ...; workflowName: string | null; }' is not assignable to type '{ workflowName?: string; }'.
+      Types of property 'workflowName' are incompatible.
+        Type 'string | null' is not assignable to type 'string'.
+          Type 'null' is not assignable to type 'string'.
+src/server/storage/modules/workflow-execution.ts(208,7): error TS2322: Type '{ id: number; workflowId: number; userId: string; status: LogStatus; triggerType: string; startedAt: Date; completedAt: Date | null; totalDuration: number | null; ... 6 more ...; workflowName: string | null; }[]' is not assignable to type '({ userId: string; id: number; createdAt: Date; updatedAt: Date; status: LogStatus; triggerType: string; workflowId: number; startedAt: Date; completedAt: Date | null; ... 4 more ...; executionData: unknown; } & { ...; })[]'.
+  Type '{ id: number; workflowId: number; userId: string; status: LogStatus; triggerType: string; startedAt: Date; completedAt: Date | null; totalDuration: number | null; ... 6 more ...; workflowName: string | null; }' is not assignable to type '{ userId: string; id: number; createdAt: Date; updatedAt: Date; status: LogStatus; triggerType: string; workflowId: number; startedAt: Date; completedAt: Date | null; ... 4 more ...; executionData: unknown; } & { ...; }'.
+    Type '{ id: number; workflowId: number; userId: string; status: LogStatus; triggerType: string; startedAt: Date; completedAt: Date | null; totalDuration: number | null; ... 6 more ...; workflowName: string | null; }' is not assignable to type '{ workflowName?: string; }'.
+      Types of property 'workflowName' are incompatible.
+        Type 'string | null' is not assignable to type 'string'.
+          Type 'null' is not assignable to type 'string'.
+src/server/terminal-websocket.ts(125,13): error TS18046: 'session.ptyProcess.resize' is of type 'unknown'.

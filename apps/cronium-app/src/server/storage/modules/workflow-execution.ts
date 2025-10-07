@@ -93,12 +93,32 @@ export class WorkflowExecutionStorage {
     workflowId: number,
     limit = 50,
     page = 1,
-  ): Promise<{ executions: WorkflowExecution[]; total: number }> {
+  ): Promise<{
+    executions: (WorkflowExecution & { workflowName?: string })[];
+    total: number;
+  }> {
     const offset = (page - 1) * limit;
 
     const executions = await db
-      .select()
+      .select({
+        id: workflowExecutions.id,
+        workflowId: workflowExecutions.workflowId,
+        userId: workflowExecutions.userId,
+        status: workflowExecutions.status,
+        triggerType: workflowExecutions.triggerType,
+        startedAt: workflowExecutions.startedAt,
+        completedAt: workflowExecutions.completedAt,
+        totalDuration: workflowExecutions.totalDuration,
+        totalEvents: workflowExecutions.totalEvents,
+        successfulEvents: workflowExecutions.successfulEvents,
+        failedEvents: workflowExecutions.failedEvents,
+        executionData: workflowExecutions.executionData,
+        createdAt: workflowExecutions.createdAt,
+        updatedAt: workflowExecutions.updatedAt,
+        workflowName: workflows.name,
+      })
       .from(workflowExecutions)
+      .leftJoin(workflows, eq(workflowExecutions.workflowId, workflows.id))
       .where(eq(workflowExecutions.workflowId, workflowId))
       .orderBy(desc(workflowExecutions.startedAt))
       .limit(limit)
@@ -110,7 +130,10 @@ export class WorkflowExecutionStorage {
       .where(eq(workflowExecutions.workflowId, workflowId));
 
     return {
-      executions,
+      executions: executions.map((exec) => {
+        const { workflowName, ...rest } = exec;
+        return workflowName ? { ...rest, workflowName } : rest;
+      }) as (WorkflowExecution & { workflowName?: string })[],
       total: totalResult?.count ?? 0,
     };
   }
@@ -148,6 +171,55 @@ export class WorkflowExecutionStorage {
       );
     }
     return execution;
+  }
+
+  async getAllWorkflowExecutions(
+    userId: string,
+    limit = 50,
+    page = 1,
+  ): Promise<{
+    executions: (WorkflowExecution & { workflowName?: string })[];
+    total: number;
+  }> {
+    const offset = (page - 1) * limit;
+
+    const executions = await db
+      .select({
+        id: workflowExecutions.id,
+        workflowId: workflowExecutions.workflowId,
+        userId: workflowExecutions.userId,
+        status: workflowExecutions.status,
+        triggerType: workflowExecutions.triggerType,
+        startedAt: workflowExecutions.startedAt,
+        completedAt: workflowExecutions.completedAt,
+        totalDuration: workflowExecutions.totalDuration,
+        totalEvents: workflowExecutions.totalEvents,
+        successfulEvents: workflowExecutions.successfulEvents,
+        failedEvents: workflowExecutions.failedEvents,
+        executionData: workflowExecutions.executionData,
+        createdAt: workflowExecutions.createdAt,
+        updatedAt: workflowExecutions.updatedAt,
+        workflowName: workflows.name,
+      })
+      .from(workflowExecutions)
+      .leftJoin(workflows, eq(workflowExecutions.workflowId, workflows.id))
+      .where(eq(workflowExecutions.userId, userId))
+      .orderBy(desc(workflowExecutions.startedAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [totalResult] = await db
+      .select({ count: count() })
+      .from(workflowExecutions)
+      .where(eq(workflowExecutions.userId, userId));
+
+    return {
+      executions: executions.map((exec) => {
+        const { workflowName, ...rest } = exec;
+        return workflowName ? { ...rest, workflowName } : rest;
+      }) as (WorkflowExecution & { workflowName?: string })[],
+      total: totalResult?.count ?? 0,
+    };
   }
 
   // Workflow execution event methods

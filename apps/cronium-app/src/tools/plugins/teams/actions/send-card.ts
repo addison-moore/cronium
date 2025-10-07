@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
-import { zodToParameters } from "@/tools/utils/zod-to-parameters";
+import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
 
 // Schema for Adaptive Card elements
 const adaptiveCardSchema = z.object({
@@ -123,7 +123,7 @@ export const sendCardAction: ToolAction = {
   actionType: "create",
   developmentMode: "visual",
   inputSchema: sendCardSchema,
-  parameters: zodToParameters(sendCardSchema),
+  parameters: safeZodToParameters(sendCardSchema),
   outputSchema: z.object({
     success: z.boolean(),
     error: z.string().optional(),

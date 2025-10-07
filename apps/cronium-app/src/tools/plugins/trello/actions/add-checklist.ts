@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
-import { zodToParameters } from "@/tools/utils/zod-to-parameters";
+import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
 
 // Schema for add-checklist action parameters
 export const addChecklistSchema = z.object({
@@ -38,7 +38,7 @@ export const addChecklistAction: ToolAction = {
   actionType: "update",
   developmentMode: "visual",
   inputSchema: addChecklistSchema,
-  parameters: zodToParameters(addChecklistSchema),
+  parameters: safeZodToParameters(addChecklistSchema),
   outputSchema: z.object({
     success: z.boolean(),
     checklistId: z.string().optional(),

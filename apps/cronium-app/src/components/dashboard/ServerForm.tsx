@@ -43,7 +43,7 @@ const serverFormSchema = z
   .object({
     name: z.string().min(1, "Server name is required").max(100),
     address: z.string().min(1, "Server address is required").max(255),
-    authType: z.nativeEnum(AuthType).default(AuthType.SSH_KEY),
+    authType: z.nativeEnum(AuthType),
     sshKey: z.string().optional(),
     password: z.string().optional(),
     username: z.string().min(1, "Username is required").max(50),
@@ -294,7 +294,7 @@ export default function ServerForm({
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <div className="space-y-4">
-          <FormField
+          <FormField<ServerFormInput>
             control={form.control}
             name="name"
             render={({ field }) => (
@@ -315,7 +315,7 @@ export default function ServerForm({
             )}
           />
 
-          <FormField
+          <FormField<ServerFormInput>
             control={form.control}
             name="address"
             render={({ field }) => (
@@ -337,7 +337,7 @@ export default function ServerForm({
           />
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <FormField
+            <FormField<ServerFormInput>
               control={form.control}
               name="username"
               render={({ field }) => (
@@ -358,7 +358,7 @@ export default function ServerForm({
               )}
             />
 
-            <FormField
+            <FormField<ServerFormInput>
               control={form.control}
               name="port"
               render={({ field }) => (
@@ -383,7 +383,7 @@ export default function ServerForm({
             />
           </div>
 
-          <FormField
+          <FormField<ServerFormInput>
             control={form.control}
             name="authType"
             render={({ field }) => (
@@ -427,7 +427,7 @@ export default function ServerForm({
           />
 
           {authType === AuthType.SSH_KEY && (
-            <FormField
+            <FormField<ServerFormInput>
               control={form.control}
               name="sshKey"
               render={({ field }) => (
@@ -470,7 +470,7 @@ MIIEpAIBAAKCAQEAxyz...
           )}
 
           {authType === AuthType.PASSWORD && (
-            <FormField
+            <FormField<ServerFormInput>
               control={form.control}
               name="password"
               render={({ field }) => (
@@ -488,6 +488,7 @@ MIIEpAIBAAKCAQEAxyz...
                         type="password"
                         placeholder={isEditing ? "••••••••" : "Enter password"}
                         {...field}
+                        value={field.value || ""}
                       />
                     </div>
                   </FormControl>
@@ -497,7 +498,7 @@ MIIEpAIBAAKCAQEAxyz...
             />
           )}
 
-          <FormField
+          <FormField<ServerFormInput>
             control={form.control}
             name="shared"
             render={({ field }) => (

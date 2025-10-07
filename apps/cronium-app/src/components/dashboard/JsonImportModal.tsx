@@ -282,6 +282,8 @@ export function JsonImportModal({ isOpen, onClose }: JsonImportModalProps) {
               },
             }))
           : [],
+        onAlwaysActions: [],
+        onConditionActions: [],
       };
 
       // Validate with schema
