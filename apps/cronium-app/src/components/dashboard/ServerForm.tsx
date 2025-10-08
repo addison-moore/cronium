@@ -306,7 +306,11 @@ export default function ServerForm({
                     <Input
                       className="pl-8"
                       placeholder={t("ServerNamePlaceholder")}
-                      {...field}
+                      name={field.name}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      value={(field.value as string) ?? ""}
+                      ref={field.ref}
                     />
                   </div>
                 </FormControl>
@@ -327,7 +331,11 @@ export default function ServerForm({
                     <Input
                       className="pl-8"
                       placeholder={t("ServerAddressPlaceholder")}
-                      {...field}
+                      name={field.name}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      value={(field.value as string) ?? ""}
+                      ref={field.ref}
                     />
                   </div>
                 </FormControl>
@@ -349,7 +357,11 @@ export default function ServerForm({
                       <Input
                         className="pl-8"
                         placeholder={t("UsernamePlaceholder")}
-                        {...field}
+                        name={field.name}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        value={(field.value as string) ?? ""}
+                        ref={field.ref}
                       />
                     </div>
                   </FormControl>
@@ -373,7 +385,13 @@ export default function ServerForm({
                         min={1}
                         max={65535}
                         placeholder={t("PortPlaceholder")}
-                        {...field}
+                        name={field.name}
+                        onBlur={field.onBlur}
+                        value={(field.value as number) ?? 22}
+                        onChange={(e) =>
+                          field.onChange(parseInt(e.target.value) || 22)
+                        }
+                        ref={field.ref}
                       />
                     </div>
                   </FormControl>
@@ -390,7 +408,7 @@ export default function ServerForm({
               <FormItem>
                 <FormLabel>Authentication Method</FormLabel>
                 <Select
-                  value={field.value}
+                  value={(field.value as string) ?? "SSH_KEY"}
                   onValueChange={(value) => {
                     field.onChange(value);
                     // Clear the other auth field when switching
@@ -459,7 +477,11 @@ export default function ServerForm({
 MIIEpAIBAAKCAQEAxyz...
 ...
 -----END RSA PRIVATE KEY-----`}
-                        {...field}
+                        name={field.name}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        value={(field.value as string) ?? ""}
+                        ref={field.ref}
                       />
                     </div>
                   </FormControl>
@@ -487,8 +509,11 @@ MIIEpAIBAAKCAQEAxyz...
                         className="pl-8"
                         type="password"
                         placeholder={isEditing ? "••••••••" : "Enter password"}
-                        {...field}
-                        value={field.value || ""}
+                        name={field.name}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        value={(field.value as string) ?? ""}
+                        ref={field.ref}
                       />
                     </div>
                   </FormControl>
@@ -505,7 +530,7 @@ MIIEpAIBAAKCAQEAxyz...
               <FormItem className="border-border flex flex-row items-start space-y-0 space-x-3 rounded-md border p-4">
                 <FormControl>
                   <Checkbox
-                    checked={field.value}
+                    checked={(field.value as boolean) ?? false}
                     onCheckedChange={field.onChange}
                   />
                 </FormControl>

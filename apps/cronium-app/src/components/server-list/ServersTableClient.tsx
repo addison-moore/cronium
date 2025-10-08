@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -94,8 +94,12 @@ export function ServersTableClient({
   // Query for archived servers
   const archivedQuery = trpc.servers.getArchived.useQuery(undefined, {
     enabled: filters.statusFilter === "archived" && !hasLoadedArchived,
-    onSuccess: (data) => {
-      const transformedServers = data.servers.map((server) => ({
+  });
+
+  // Handle archived servers query success
+  useEffect(() => {
+    if (archivedQuery.data && filters.statusFilter === "archived") {
+      const transformedServers = archivedQuery.data.servers.map((server) => ({
         ...server,
         createdAt: server.createdAt.toISOString(),
         updatedAt: server.updatedAt.toISOString(),
@@ -105,8 +109,8 @@ export function ServersTableClient({
       }));
       setArchivedServers(transformedServers);
       setHasLoadedArchived(true);
-    },
-  });
+    }
+  }, [archivedQuery.data, filters.statusFilter]);
 
   // Mutations for health check and delete
   const checkHealthMutation = trpc.servers.checkHealth.useMutation({

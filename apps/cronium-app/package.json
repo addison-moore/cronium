@@ -9,7 +9,7 @@
     "lint": "next lint",
     "lint:fix": "next lint --fix",
     "lint:log": "SKIP_ENV_VALIDATION=1 next lint > ../../logs/lint.log 2>&1",
-    "tsc:log": "tsc --noEmit > ../../logs/tsc.log 2>&1",
+    "tsc:log": "tsc --noEmit > ../../logs/tsc.log 2>&1 || true",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write . --ignore-path ../../.prettierignore",
     "db:push": "drizzle-kit push",

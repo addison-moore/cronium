@@ -52,9 +52,21 @@ export function TemplateActionParameterForm({
   const getSchemaShape = () => {
     let schema: z.ZodTypeAny = action.inputSchema;
 
-    // Unwrap ZodEffects (from .refine(), .transform(), etc.)
-    while (schema instanceof z.ZodEffects) {
-      schema = schema._def.schema as z.ZodTypeAny;
+    // Unwrap ZodEffects/ZodPipeline (from .refine(), .transform(), etc.)
+    // In Zod v4, effects are represented with type 'pipe' or 'effects'
+    while (schema && (schema as any)._def) {
+      const def = (schema as any)._def;
+      if (
+        def.type === "pipe" ||
+        def.type === "effects" ||
+        def.typeName === "ZodEffects"
+      ) {
+        const innerSchema = def.in || def.schema;
+        if (!innerSchema) break;
+        schema = innerSchema as z.ZodTypeAny;
+      } else {
+        break;
+      }
     }
 
     if (schema instanceof z.ZodObject) {
@@ -97,7 +109,8 @@ export function TemplateActionParameterForm({
       const result = action.inputSchema.safeParse(value);
       if (!result.success) {
         const newErrors: Record<string, string> = {};
-        result.error.errors.forEach((error) => {
+        // In Zod v4, use 'issues' instead of 'errors'
+        result.error.issues.forEach((error) => {
           const path = error.path.join(".");
           newErrors[path] = error.message;
         });
@@ -244,7 +257,7 @@ export function TemplateActionParameterForm({
       if (
         key.toLowerCase().includes("email") ||
         baseSchema._def.checks?.some(
-          (check: { kind: string }) => check.kind === "email",
+          (check: any) => check.format === "email" || check.kind === "email",
         )
       ) {
         return (
@@ -368,7 +381,10 @@ export function TemplateActionParameterForm({
     }
 
     if (baseSchema instanceof z.ZodEnum) {
-      const options = baseSchema._def.values as string[];
+      // In Zod v4, enum values are in _def.entries
+      const options = baseSchema._def.entries
+        ? Object.values(baseSchema._def.entries as Record<string, string>)
+        : ((baseSchema._def.values as string[] | undefined) ?? []);
       return (
         <div key={key} className="space-y-2">
           <Label htmlFor={key}>

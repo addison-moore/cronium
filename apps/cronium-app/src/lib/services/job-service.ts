@@ -457,6 +457,8 @@ export class JobService {
       completedAt?: Date;
       metrics?: Record<string, unknown>;
       result?: Record<string, unknown>; // Accept full result object
+      executionDuration?: number; // Actual script execution time in milliseconds
+      setupDuration?: number; // Setup time in milliseconds
     },
   ): Promise<Job | null> {
     // Update the job
@@ -537,6 +539,14 @@ export class JobService {
       }
       if (data?.error !== undefined) {
         logUpdateData.error = data.error;
+      }
+
+      // Include timing information if available
+      if (data?.executionDuration !== undefined) {
+        logUpdateData.executionDuration = data.executionDuration;
+      }
+      if (data?.setupDuration !== undefined) {
+        logUpdateData.setupDuration = data.setupDuration;
       }
 
       const updatedLog = await storage.updateLog(executionLogId, logUpdateData);

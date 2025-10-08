@@ -127,6 +127,9 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 	go func() {
 		defer close(updates)
 
+		// Initialize phase timing
+		timing := NewExecutionTiming()
+
 		// Create execution record in the database
 		if e.apiClient != nil {
 			if err := e.apiClient.CreateExecution(ctx, executionID, job.ID, nil, nil); err != nil {
@@ -134,17 +137,25 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 				// Continue anyway - execution tracking is not critical for job success
 			}
 
-			// Mark execution as started
-			now := time.Now()
-			if err := e.apiClient.UpdateExecution(ctx, executionID, types.JobStatusRunning, &api.ExecutionStatusUpdate{
-				StartedAt: &now,
-			}); err != nil {
+			// Mark execution as started with setup phase timing
+			if err := e.apiClient.UpdateExecution(ctx, executionID, types.JobStatusRunning, timing.ToExecutionStatusUpdate()); err != nil {
 				e.log.WithError(err).Warn("Failed to update execution status to running")
 			}
 		}
 
 		// Ensure cleanup happens no matter what
 		defer func() {
+			timing.MarkExecutionComplete()
+			timing.MarkCleanupComplete()
+			
+			// Update final timing before cleanup
+			if e.apiClient != nil {
+				finalUpdate := timing.ToExecutionStatusUpdate()
+				if err := e.apiClient.UpdateExecution(ctx, executionID, types.JobStatusCompleted, finalUpdate); err != nil {
+					e.log.WithError(err).Warn("Failed to update final execution timing")
+				}
+			}
+			
 			if err := e.cleanup.CleanupJobResources(ctx, job.ID); err != nil {
 				e.log.WithError(err).Error("Failed to cleanup job resources")
 			}
@@ -156,8 +167,10 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 			Message: "Preparing execution environment",
 		})
 
-		// Create isolated network for this job
+		// SETUP PHASE: Create isolated network for this job
+		timing.NetworkCreateStart = time.Now()
 		networkID, err := e.sidecar.CreateJobNetwork(ctx, job.ID)
+		timing.NetworkCreateEnd = time.Now()
 		if err != nil {
 			dockerErr := errors.NewDockerError(
 				"NETWORK_CREATE_FAILED",
@@ -189,8 +202,10 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 			}
 		}()
 
-		// Create and start runtime sidecar
+		// SETUP PHASE: Create and start runtime sidecar
+		timing.SidecarCreateStart = time.Now()
 		sidecarID, err := e.sidecar.CreateRuntimeSidecar(ctx, job, networkID)
+		timing.SidecarCreateEnd = time.Now()
 		if err != nil {
 			dockerErr := errors.NewDockerError(
 				"SIDECAR_CREATE_FAILED",
@@ -222,8 +237,10 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 			}
 		}()
 
-		// Create and run main container
-		containerID, err := e.createContainer(ctx, job, networkID)
+		// SETUP PHASE: Create and run main container
+		timing.ContainerCreateStart = time.Now()
+		containerID, err := e.createContainer(ctx, job, networkID, timing)
+		timing.ContainerCreateEnd = time.Now()
 		if err != nil {
 			e.sendError(updates, err, true)
 			e.updateExecutionError(ctx, executionID, err)
@@ -250,7 +267,8 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 			}
 		}()
 
-		// Start container
+		// Start container - marks end of setup phase and beginning of execution phase
+		timing.MarkSetupComplete()
 		if err := e.dockerClient.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
 			dockerErr := errors.NewDockerError(
 				"CONTAINER_START_FAILED",
@@ -381,13 +399,14 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 			}
 		}
 
-		// Update execution record with final status and output
+		// Mark execution phase complete
+		timing.MarkExecutionComplete()
+		
+		// Update execution record with final status, output, and phase timing
 		if e.apiClient != nil {
-			now := time.Now()
-			updateData := &api.ExecutionStatusUpdate{
-				CompletedAt: &now,
-				ExitCode:    &exitCode,
-			}
+			updateData := timing.ToExecutionStatusUpdate()
+			updateData.ExitCode = &exitCode
+			
 			if outputStr != "" {
 				updateData.Output = &outputStr
 			}
@@ -488,11 +507,14 @@ func (e *Executor) Cleanup(ctx context.Context, job *types.Job) error {
 }
 
 // createContainer creates a new container for the job
-func (e *Executor) createContainer(ctx context.Context, job *types.Job, networkID string) (string, error) {
+func (e *Executor) createContainer(ctx context.Context, job *types.Job, networkID string, timing *ExecutionTiming) (string, error) {
 	// Select image based on script type
 	image := e.getImageForScript(job.Execution.Script.Type)
 
 	// Try to pull the image first (in case it's not available locally)
+	if timing != nil {
+		timing.ContainerPullStart = time.Now()
+	}
 	if err := e.ensureImage(ctx, image); err != nil {
 		dockerErr := errors.NewDockerError(
 			"IMAGE_PULL_FAILED",
@@ -501,6 +523,9 @@ func (e *Executor) createContainer(ctx context.Context, job *types.Job, networkI
 		)
 		dockerErr.ImageName = image
 		return "", dockerErr
+	}
+	if timing != nil {
+		timing.ContainerPullEnd = time.Now()
 	}
 
 	// Build container configuration

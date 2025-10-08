@@ -78,16 +78,16 @@ export function IntegrationTestPanel({
     { enabled: !!toolId },
   );
 
-  const testConnectionMutation = trpc.integrations.testMessage.useMutation();
+  // Note: This component appears to be deprecated - consider removing
+  // Using a default plugin mutation for now
+  const testConnectionMutation = trpc.tools.test.useMutation();
 
   // Dynamic access to plugin mutations
   const pluginRoutes = trpc.tools.plugins as Record<
     string,
     {
       testConnection?: {
-        useMutation: () => ReturnType<
-          typeof trpc.integrations.testMessage.useMutation
-        >;
+        useMutation: () => ReturnType<typeof trpc.tools.test.useMutation>;
       };
     }
   >;

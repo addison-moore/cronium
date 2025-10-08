@@ -30,23 +30,39 @@ export function zodToParameters(schema: z.ZodSchema<any>): ActionParameter[] {
     return parameters;
   }
 
+  // Get the definition
+  const def = (schema as any)._def;
+  if (!def) {
+    console.warn("zodToParameters: schema._def is undefined");
+    return parameters;
+  }
+
   // Unwrap ZodEffects (from .refine(), .transform(), etc.)
-  let unwrappedSchema: z.ZodTypeAny = schema;
+  let unwrappedSchema = schema;
+  let currentDef = def;
+
   while (
-    unwrappedSchema?._def?.typeName === z.ZodFirstPartyTypeKind.ZodEffects
+    currentDef?.type === "effects" ||
+    currentDef?.typeName === "ZodEffects"
   ) {
-    const nextSchema = unwrappedSchema._def?.schema;
-    if (!nextSchema) break;
-    unwrappedSchema = nextSchema as z.ZodTypeAny;
+    const innerSchema =
+      (unwrappedSchema as any)._def?.schema || currentDef.schema;
+    if (!innerSchema) break;
+    unwrappedSchema = innerSchema;
+    currentDef = innerSchema._def;
   }
 
   // Handle ZodObject
-  if (unwrappedSchema?._def?.typeName === z.ZodFirstPartyTypeKind.ZodObject) {
-    const shape = unwrappedSchema.shape as Record<string, z.ZodTypeAny>;
+  if (currentDef?.type === "object" || currentDef?.typeName === "ZodObject") {
+    // Try to get shape from multiple possible locations
+    const shape =
+      currentDef.shape ||
+      (unwrappedSchema as any).shape ||
+      (unwrappedSchema as any)._shape;
 
-    if (shape) {
+    if (shape && typeof shape === "object") {
       for (const [key, value] of Object.entries(shape)) {
-        const param = parseZodType(key, value);
+        const param = parseZodType(key, value as any);
         if (param) {
           parameters.push(param);
         }
@@ -72,68 +88,76 @@ function parseZodType(
   let defaultValue: unknown;
   let enumValues: string[] | undefined;
 
-  // Unwrap modifiers
-  while (
-    baseSchema?._def?.typeName === z.ZodFirstPartyTypeKind.ZodOptional ||
-    baseSchema?._def?.typeName === z.ZodFirstPartyTypeKind.ZodDefault ||
-    baseSchema?._def?.typeName === z.ZodFirstPartyTypeKind.ZodNullable
-  ) {
-    if (baseSchema._def?.typeName === z.ZodFirstPartyTypeKind.ZodOptional) {
+  // Unwrap modifiers - check both old and new formats
+  while (baseSchema && (baseSchema as any)._def) {
+    const def = (baseSchema as any)._def;
+    const type = def.type || def.typeName;
+
+    if (type === "optional" || type === "ZodOptional") {
       required = false;
-      const nextSchema = baseSchema._def?.innerType;
-      if (!nextSchema) break;
-      baseSchema = nextSchema as z.ZodTypeAny;
-    } else if (
-      baseSchema._def?.typeName === z.ZodFirstPartyTypeKind.ZodDefault
-    ) {
-      if (baseSchema._def?.defaultValue) {
-        defaultValue = baseSchema._def.defaultValue() as unknown;
+      const innerType =
+        def.innerType || def.unwrap?.() || (baseSchema as any).unwrap?.();
+      if (!innerType) break;
+      baseSchema = innerType;
+    } else if (type === "default" || type === "ZodDefault") {
+      if (def.defaultValue) {
+        defaultValue =
+          typeof def.defaultValue === "function"
+            ? def.defaultValue()
+            : def.defaultValue;
       }
-      const nextSchema = baseSchema._def?.innerType;
-      if (!nextSchema) break;
-      baseSchema = nextSchema as z.ZodTypeAny;
-    } else if (
-      baseSchema._def?.typeName === z.ZodFirstPartyTypeKind.ZodNullable
-    ) {
+      const innerType =
+        def.innerType || def.unwrap?.() || (baseSchema as any).unwrap?.();
+      if (!innerType) break;
+      baseSchema = innerType;
+    } else if (type === "nullable" || type === "ZodNullable") {
       required = false;
-      const nextSchema = baseSchema._def?.innerType;
-      if (!nextSchema) break;
-      baseSchema = nextSchema as z.ZodTypeAny;
+      const innerType =
+        def.innerType || def.unwrap?.() || (baseSchema as any).unwrap?.();
+      if (!innerType) break;
+      baseSchema = innerType;
+    } else {
+      break;
     }
   }
 
   // Get description if available
-  if (
-    baseSchema._def &&
-    typeof baseSchema._def === "object" &&
-    "description" in baseSchema._def
-  ) {
-    // Use a type assertion to tell TypeScript that baseSchema._def has a description property
-    description = (baseSchema._def as { description: string }).description;
+  const baseDef = (baseSchema as any)._def;
+  if (baseDef && typeof baseDef === "object") {
+    if ("description" in baseDef) {
+      description = baseDef.description;
+    } else if ((baseSchema as any).description) {
+      description = (baseSchema as any).description;
+    }
   }
 
-  // Determine type
-  let type = "string";
-  const typeName = baseSchema._def?.typeName;
+  // Determine type - check both old and new formats
+  let paramType = "string";
 
-  if (typeName === z.ZodFirstPartyTypeKind.ZodString) {
-    type = "string";
-  } else if (typeName === z.ZodFirstPartyTypeKind.ZodNumber) {
-    type = "number";
-  } else if (typeName === z.ZodFirstPartyTypeKind.ZodBoolean) {
-    type = "boolean";
-  } else if (typeName === z.ZodFirstPartyTypeKind.ZodArray) {
-    type = "array";
-  } else if (typeName === z.ZodFirstPartyTypeKind.ZodObject) {
-    type = "object";
-  } else if (typeName === z.ZodFirstPartyTypeKind.ZodEnum) {
-    type = "string";
-    enumValues = baseSchema._def.values as string[];
+  if (baseDef) {
+    const defType = baseDef.type || baseDef.typeName;
+
+    if (defType === "string" || defType === "ZodString") {
+      paramType = "string";
+    } else if (defType === "number" || defType === "ZodNumber") {
+      paramType = "number";
+    } else if (defType === "boolean" || defType === "ZodBoolean") {
+      paramType = "boolean";
+    } else if (defType === "array" || defType === "ZodArray") {
+      paramType = "array";
+    } else if (defType === "object" || defType === "ZodObject") {
+      paramType = "object";
+    } else if (defType === "enum" || defType === "ZodEnum") {
+      paramType = "string";
+      if (baseDef.values) {
+        enumValues = baseDef.values as string[];
+      }
+    }
   }
 
   const param: ActionParameter = {
     name,
-    type,
+    type: paramType,
     required,
   };
 

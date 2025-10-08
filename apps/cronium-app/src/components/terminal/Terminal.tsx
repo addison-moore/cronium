@@ -134,7 +134,7 @@ export default function Terminal({ serverId, serverName }: TerminalProps) {
           console.log(
             "Terminal: Component unmounted during socket connection, aborting",
           );
-          return;
+          return null;
         }
 
         socketRef.current = socket;
@@ -257,7 +257,7 @@ export default function Terminal({ serverId, serverName }: TerminalProps) {
             `\r\nFailed to initialize terminal: ${error}\r\n`,
           );
         }
-        return () => {};
+        return null;
       }
     };
 

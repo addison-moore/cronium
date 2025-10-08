@@ -27,6 +27,18 @@ export async function PUT(
       output?: string;
       error?: string;
       metadata?: Record<string, unknown>;
+      // Phase-based timing fields
+      setupStartedAt?: string;
+      setupCompletedAt?: string;
+      executionStartedAt?: string;
+      executionCompletedAt?: string;
+      cleanupStartedAt?: string;
+      cleanupCompletedAt?: string;
+      setupDuration?: number;
+      executionDuration?: number;
+      cleanupDuration?: number;
+      totalDuration?: number;
+      executionMetadata?: Record<string, unknown>;
     };
 
     // Convert date strings to Date objects
@@ -42,6 +54,30 @@ export async function PUT(
     if (body.output !== undefined) updateData.output = body.output;
     if (body.error !== undefined) updateData.error = body.error;
     if (body.metadata !== undefined) updateData.metadata = body.metadata;
+
+    // Phase-based timing fields
+    if (body.setupStartedAt !== undefined)
+      updateData.setupStartedAt = new Date(body.setupStartedAt);
+    if (body.setupCompletedAt !== undefined)
+      updateData.setupCompletedAt = new Date(body.setupCompletedAt);
+    if (body.executionStartedAt !== undefined)
+      updateData.executionStartedAt = new Date(body.executionStartedAt);
+    if (body.executionCompletedAt !== undefined)
+      updateData.executionCompletedAt = new Date(body.executionCompletedAt);
+    if (body.cleanupStartedAt !== undefined)
+      updateData.cleanupStartedAt = new Date(body.cleanupStartedAt);
+    if (body.cleanupCompletedAt !== undefined)
+      updateData.cleanupCompletedAt = new Date(body.cleanupCompletedAt);
+    if (body.setupDuration !== undefined)
+      updateData.setupDuration = body.setupDuration;
+    if (body.executionDuration !== undefined)
+      updateData.executionDuration = body.executionDuration;
+    if (body.cleanupDuration !== undefined)
+      updateData.cleanupDuration = body.cleanupDuration;
+    if (body.totalDuration !== undefined)
+      updateData.totalDuration = body.totalDuration;
+    if (body.executionMetadata !== undefined)
+      updateData.executionMetadata = body.executionMetadata;
 
     // Update the execution
     const execution = await executionService.updateExecution(
@@ -103,6 +139,18 @@ export async function PUT(
           jobUpdateData.exitCode = execution.exitCode;
         if (execution.completedAt)
           jobUpdateData.completedAt = execution.completedAt;
+
+        // Pass timing information to job update
+        if (
+          execution.executionDuration !== null &&
+          execution.executionDuration !== undefined
+        )
+          jobUpdateData.executionDuration = execution.executionDuration;
+        if (
+          execution.setupDuration !== null &&
+          execution.setupDuration !== undefined
+        )
+          jobUpdateData.setupDuration = execution.setupDuration;
 
         await jobService.updateJobStatus(
           execution.jobId,

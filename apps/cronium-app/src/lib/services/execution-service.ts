@@ -24,6 +24,18 @@ export interface UpdateExecutionInput {
   output?: string | null;
   error?: string | null;
   metadata?: Record<string, unknown>;
+  // Phase-based timing fields
+  setupStartedAt?: Date | null;
+  setupCompletedAt?: Date | null;
+  executionStartedAt?: Date | null;
+  executionCompletedAt?: Date | null;
+  cleanupStartedAt?: Date | null;
+  cleanupCompletedAt?: Date | null;
+  setupDuration?: number | null;
+  executionDuration?: number | null;
+  cleanupDuration?: number | null;
+  totalDuration?: number | null;
+  executionMetadata?: Record<string, unknown> | null;
 }
 
 export class ExecutionService {
