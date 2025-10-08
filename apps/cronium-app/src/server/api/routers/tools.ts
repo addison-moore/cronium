@@ -23,6 +23,7 @@ import {
 } from "@/lib/security/credential-encryption";
 import { auditLog } from "@/lib/security/audit-logger";
 import { buildPluginRouter } from "./plugin-router";
+import { slackRouter } from "./tools/slack-routes";
 
 // Use centralized authentication from trpc.ts
 
@@ -1686,6 +1687,9 @@ export const toolsRouter = createTRPCRouter({
       }
     }),
 
-  // Dynamic plugin routes
+  // Dynamic plugin routes (with TypeScript issues)
   plugins: buildPluginRouter(),
+
+  // Explicit plugin routes (with proper TypeScript types)
+  slack: slackRouter,
 });

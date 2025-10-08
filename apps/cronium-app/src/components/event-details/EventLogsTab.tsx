@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { RefreshCw, FileText } from "lucide-react";
+import React, { useState } from "react";
+import { RefreshCw, FileText, Eye } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import {
@@ -12,15 +12,10 @@ import {
   TableHeader,
   TableRow,
 } from "@cronium/ui";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@cronium/ui";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@cronium/ui";
 import { ScrollArea } from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { LogStatus } from "@/shared/schema";
 import { Pagination } from "@cronium/ui";
 import {
@@ -31,8 +26,7 @@ import {
   SelectValue,
 } from "@cronium/ui";
 import { useTranslations } from "next-intl";
-import { useParams } from "next/navigation";
-import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import { type Log } from "./types";
 import { formatDate as formatDateUtil } from "@/lib/utils";
 
@@ -61,6 +55,10 @@ export function EventLogsTab({
 }: EventLogsTabProps) {
   const t = useTranslations("Events");
   const params = useParams<{ lang: string }>();
+  const router = useRouter();
+  const [openQuickViewDialog, setOpenQuickViewDialog] = useState<number | null>(
+    null,
+  );
 
   const formatDate = (dateValue: string | Date | null | undefined) => {
     if (!dateValue) return t("never");
@@ -157,85 +155,127 @@ export function EventLogsTab({
                     <TableCell>{formatDate(log.startTime)}</TableCell>
                     <TableCell>{formatDuration(log.duration)}</TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" asChild>
-                          <Link
-                            href={`/${params.lang}/dashboard/logs/${log.id}`}
-                            className="hover:text-primary transition-colors"
-                          >
-                            View Details
-                          </Link>
-                        </Button>
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              Quick View
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-h-[80vh] max-w-4xl">
-                            <DialogHeader>
-                              <DialogTitle>
-                                Execution Log - {formatDate(log.startTime)}
-                              </DialogTitle>
-                            </DialogHeader>
-                            <ScrollArea className="max-h-[60vh]">
-                              <div className="space-y-4 p-4">
-                                <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-3">
-                                  <div>
-                                    <span className="font-medium">Status:</span>{" "}
-                                    {getStatusBadge(log.status)}
-                                  </div>
-                                  <div>
-                                    <span className="font-medium">
-                                      {t("started")}:
-                                    </span>{" "}
-                                    {formatDate(log.startTime)}
-                                  </div>
-                                  <div>
-                                    <span className="font-medium">
-                                      {t("ended")}:
-                                    </span>{" "}
-                                    {formatDate(log.endTime)}
-                                  </div>
-                                  <div>
-                                    <span className="font-medium">
-                                      {t("duration")}:
-                                    </span>{" "}
-                                    {formatDuration(log.duration)}
-                                  </div>
-                                </div>
-
-                                {log.output && (
-                                  <div className="space-y-2">
-                                    <h4 className="text-sm font-medium">
-                                      {t("output")}:
-                                    </h4>
-                                    <pre className="bg-muted max-h-[300px] overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
-                                      {log.output}
-                                    </pre>
-                                  </div>
-                                )}
-
-                                {log.error && (
-                                  <div className="space-y-2">
-                                    <h4 className="text-sm font-medium">
-                                      {t("error")}:
-                                    </h4>
-                                    <pre className="max-h-[300px] overflow-auto rounded-md border border-red-200 bg-red-50 p-3 text-xs whitespace-pre-wrap text-red-800">
-                                      {log.error}
-                                    </pre>
-                                  </div>
-                                )}
-                              </div>
-                            </ScrollArea>
-                          </DialogContent>
-                        </Dialog>
-                      </div>
+                      <ActionMenu
+                        actions={[
+                          {
+                            label: "Quick View",
+                            icon: <Eye className="h-4 w-4" />,
+                            onClick: () => setOpenQuickViewDialog(log.id),
+                          },
+                          {
+                            label: "View Details",
+                            icon: <FileText className="h-4 w-4" />,
+                            onClick: () =>
+                              router.push(
+                                `/${params.lang}/dashboard/logs/${log.id}`,
+                              ),
+                          },
+                        ]}
+                        menuButtonLabel="Actions"
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+
+            {/* Quick View Dialog */}
+            {openQuickViewDialog && (
+              <Dialog
+                open={!!openQuickViewDialog}
+                onOpenChange={(open) => !open && setOpenQuickViewDialog(null)}
+              >
+                <DialogContent className="max-h-[80vh] max-w-4xl">
+                  <DialogHeader>
+                    <DialogTitle>
+                      {(() => {
+                        const log = logs.find(
+                          (l) => l.id === openQuickViewDialog,
+                        );
+                        return log
+                          ? `Execution Log - ${formatDate(log.startTime)}`
+                          : "";
+                      })()}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <ScrollArea className="max-h-[60vh]">
+                    {(() => {
+                      const log = logs.find(
+                        (l) => l.id === openQuickViewDialog,
+                      );
+                      if (!log) return null;
+
+                      return (
+                        <div className="space-y-4 p-4">
+                          <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-3">
+                            <div>
+                              <span className="font-medium">Status:</span>{" "}
+                              {getStatusBadge(log.status)}
+                            </div>
+                            <div>
+                              <span className="font-medium">
+                                {t("started")}:
+                              </span>{" "}
+                              {formatDate(log.startTime)}
+                            </div>
+                            <div>
+                              <span className="font-medium">{t("ended")}:</span>{" "}
+                              {formatDate(log.endTime)}
+                            </div>
+                            <div>
+                              <span className="font-medium">
+                                {t("duration")}:
+                              </span>{" "}
+                              {formatDuration(log.duration)}
+                            </div>
+                          </div>
+
+                          {log.output && (
+                            <div className="space-y-2">
+                              <h4 className="text-sm font-medium">
+                                {t("output")}:
+                              </h4>
+                              <pre className="bg-muted max-h-[300px] overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
+                                {typeof log.output === "object" &&
+                                log.output !== null
+                                  ? ((
+                                      log.output as {
+                                        combined?: string;
+                                        stdout?: string;
+                                      }
+                                    ).combined ??
+                                    (
+                                      log.output as {
+                                        combined?: string;
+                                        stdout?: string;
+                                      }
+                                    ).stdout ??
+                                    JSON.stringify(log.output, null, 2))
+                                  : String(log.output)}
+                              </pre>
+                            </div>
+                          )}
+
+                          {log.error && (
+                            <div className="space-y-2">
+                              <h4 className="text-sm font-medium">
+                                {t("error")}:
+                              </h4>
+                              <pre className="max-h-[300px] overflow-auto rounded-md border border-red-200 bg-red-50 p-3 text-xs whitespace-pre-wrap text-red-800">
+                                {typeof log.error === "object" &&
+                                log.error !== null
+                                  ? JSON.stringify(log.error, null, 2)
+                                  : String(log.error)}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </ScrollArea>
+                </DialogContent>
+              </Dialog>
+            )}
 
             {totalLogs > 0 && (
               <div className="mt-4 space-y-4">

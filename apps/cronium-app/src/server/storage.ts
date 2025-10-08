@@ -1516,6 +1516,8 @@ class DatabaseStorage implements IStorage {
       startTime: logs.startTime,
       endTime: logs.endTime,
       duration: logs.duration,
+      executionDuration: logs.executionDuration,
+      setupDuration: logs.setupDuration,
       successful: logs.successful,
       eventName: logs.eventName,
       eventType: logs.eventType,

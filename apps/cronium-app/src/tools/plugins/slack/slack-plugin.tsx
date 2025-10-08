@@ -20,6 +20,7 @@ import { useToast } from "@cronium/ui";
 import { slackActions } from "./actions";
 import { ToolHealthBadge } from "@/tools/ToolHealthIndicator";
 import { slackCredentialsSchema, type SlackCredentials } from "./schemas";
+import { slackApiRoutes } from "./api-routes";
 
 const slackFormSchema = slackCredentialsSchema.extend({
   name: z.string().min(1, "Name is required"),
@@ -96,7 +97,7 @@ function SlackCredentialDisplay({
   const [testingTool, setTestingTool] = React.useState<number | null>(null);
   const { toast } = useToast();
 
-  const testConnectionMutation = trpc.integrations.testMessage.useMutation({
+  const testConnectionMutation = trpc.tools.slack.testConnection.useMutation({
     onSuccess: (result) => {
       toast({
         title: "Test Successful",
@@ -106,7 +107,7 @@ function SlackCredentialDisplay({
     },
   });
 
-  const sendTestMessageMutation = trpc.integrations.slack.send.useMutation({
+  const sendTestMessageMutation = trpc.tools.slack.send.useMutation({
     onSuccess: (result) => {
       toast({
         title: "Test Message Sent",
@@ -127,7 +128,6 @@ function SlackCredentialDisplay({
     setTestingTool(tool.id);
     await testConnectionMutation.mutateAsync({
       toolId: tool.id,
-      testType: "connection",
     });
   };
 
@@ -259,6 +259,9 @@ export const SlackPluginTrpc: ToolPlugin = {
     Object.values(slackActions).filter((action) => action.actionType === type),
   getConditionalAction: () =>
     Object.values(slackActions).find((action) => action.isSendMessageAction),
+
+  // API routes for this plugin
+  apiRoutes: slackApiRoutes,
 
   async validate(credentials: Record<string, unknown>) {
     const result = slackCredentialsSchema.safeParse(credentials);

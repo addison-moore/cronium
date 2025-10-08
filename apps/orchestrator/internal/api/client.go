@@ -157,6 +157,18 @@ type ExecutionStatusUpdate struct {
 	ExitCode    *int
 	Output      *string
 	Error       *string
+	// Phase-based timing fields
+	SetupStartedAt       *time.Time
+	SetupCompletedAt     *time.Time
+	ExecutionStartedAt   *time.Time
+	ExecutionCompletedAt *time.Time
+	CleanupStartedAt     *time.Time
+	CleanupCompletedAt   *time.Time
+	SetupDuration        *int64 // milliseconds
+	ExecutionDuration    *int64 // milliseconds
+	CleanupDuration      *int64 // milliseconds
+	TotalDuration        *int64 // milliseconds
+	ExecutionMetadata    map[string]interface{}
 }
 
 // UpdateExecution updates an execution's status
@@ -180,6 +192,40 @@ func (c *Client) UpdateExecution(ctx context.Context, executionID string, status
 		}
 		if details.Error != nil {
 			req["error"] = *details.Error
+		}
+		// Phase-based timing fields
+		if details.SetupStartedAt != nil {
+			req["setupStartedAt"] = details.SetupStartedAt.Format(time.RFC3339)
+		}
+		if details.SetupCompletedAt != nil {
+			req["setupCompletedAt"] = details.SetupCompletedAt.Format(time.RFC3339)
+		}
+		if details.ExecutionStartedAt != nil {
+			req["executionStartedAt"] = details.ExecutionStartedAt.Format(time.RFC3339)
+		}
+		if details.ExecutionCompletedAt != nil {
+			req["executionCompletedAt"] = details.ExecutionCompletedAt.Format(time.RFC3339)
+		}
+		if details.CleanupStartedAt != nil {
+			req["cleanupStartedAt"] = details.CleanupStartedAt.Format(time.RFC3339)
+		}
+		if details.CleanupCompletedAt != nil {
+			req["cleanupCompletedAt"] = details.CleanupCompletedAt.Format(time.RFC3339)
+		}
+		if details.SetupDuration != nil {
+			req["setupDuration"] = *details.SetupDuration
+		}
+		if details.ExecutionDuration != nil {
+			req["executionDuration"] = *details.ExecutionDuration
+		}
+		if details.CleanupDuration != nil {
+			req["cleanupDuration"] = *details.CleanupDuration
+		}
+		if details.TotalDuration != nil {
+			req["totalDuration"] = *details.TotalDuration
+		}
+		if details.ExecutionMetadata != nil && len(details.ExecutionMetadata) > 0 {
+			req["executionMetadata"] = details.ExecutionMetadata
 		}
 	}
 

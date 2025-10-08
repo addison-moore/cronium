@@ -26,10 +26,15 @@ class ClientEncryption {
       ["deriveKey"],
     );
 
+    // Ensure salt is a Uint8Array with ArrayBuffer (not ArrayBufferLike)
+    // Create a new Uint8Array from the salt to ensure compatibility
+    const saltBuffer = new Uint8Array(salt.length);
+    saltBuffer.set(salt);
+
     return crypto.subtle.deriveKey(
       {
         name: "PBKDF2",
-        salt: salt,
+        salt: saltBuffer as BufferSource,
         iterations: 100000,
         hash: "SHA-256",
       },

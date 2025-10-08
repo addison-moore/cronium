@@ -455,6 +455,13 @@ export const serversRouter = createTRPCRouter({
           .where(eq(servers.id, input.id))
           .returning();
 
+        if (!restoredServer) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to restore server",
+          });
+        }
+
         return {
           success: true,
           server: restoredServer,
@@ -551,9 +558,8 @@ export const serversRouter = createTRPCRouter({
 
         // Using direct database query (see workaround note at top of file)
         const { db } = await import("@/server/db");
-        const { servers, eventServers, events, executions } = await import(
-          "@shared/schema"
-        );
+        const { servers, eventServers, events, executions, RunLocation } =
+          await import("@shared/schema");
         const { eq } = await import("drizzle-orm");
 
         // Use the deleteServer logic directly (permanent deletion)
@@ -569,7 +575,7 @@ export const serversRouter = createTRPCRouter({
             .update(events)
             .set({
               serverId: null,
-              runLocation: "LOCAL",
+              runLocation: RunLocation.LOCAL,
               updatedAt: new Date(),
             })
             .where(eq(events.serverId, input.id));
@@ -624,9 +630,8 @@ export const serversRouter = createTRPCRouter({
 
         // Using direct database query (see workaround note at top of file)
         const { db } = await import("@/server/db");
-        const { servers, eventServers, events, executions } = await import(
-          "@shared/schema"
-        );
+        const { servers, eventServers, events, executions, RunLocation } =
+          await import("@shared/schema");
         const { eq } = await import("drizzle-orm");
 
         // Use a transaction to ensure all operations complete or none do
@@ -641,7 +646,7 @@ export const serversRouter = createTRPCRouter({
             .update(events)
             .set({
               serverId: null,
-              runLocation: "LOCAL",
+              runLocation: RunLocation.LOCAL,
               updatedAt: new Date(),
             })
             .where(eq(events.serverId, input.id));
@@ -863,8 +868,13 @@ export const serversRouter = createTRPCRouter({
               case "delete":
                 // Using direct database query (see workaround note at top of file)
                 const { db } = await import("@/server/db");
-                const { servers, eventServers, events, executions } =
-                  await import("@shared/schema");
+                const {
+                  servers,
+                  eventServers,
+                  events,
+                  executions,
+                  RunLocation,
+                } = await import("@shared/schema");
                 const { eq } = await import("drizzle-orm");
 
                 await db.transaction(async (tx) => {
@@ -875,7 +885,7 @@ export const serversRouter = createTRPCRouter({
                     .update(events)
                     .set({
                       serverId: null,
-                      runLocation: "LOCAL",
+                      runLocation: RunLocation.LOCAL,
                       updatedAt: new Date(),
                     })
                     .where(eq(events.serverId, serverId));

@@ -131,8 +131,9 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 	go func() {
 		defer close(updates)
 
-		// Track execution time
-		startTime := time.Now()
+		// Initialize phase timing
+		timing := NewExecutionTiming()
+		timing.ServerName = job.Execution.Target.ServerDetails.Name
 
 		// Send initial status
 		e.sendUpdate(updates, types.UpdateTypeStatus, &types.StatusUpdate{
@@ -166,32 +167,29 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 				}
 			}
 
-			// Mark execution as started
-			now := time.Now()
-			if err := e.apiClient.UpdateExecution(ctx, executionID, types.JobStatusRunning, &api.ExecutionStatusUpdate{
-				StartedAt: &now,
-			}); err != nil {
+			// Mark execution as started with setup phase timing
+			if err := e.apiClient.UpdateExecution(ctx, executionID, types.JobStatusRunning, timing.ToExecutionStatusUpdate()); err != nil {
 				e.log.WithError(err).Warn("Failed to update execution status to running")
 			}
 		}
 
-		// Get connection from pool
+		// SETUP PHASE: Get connection from pool
+		timing.ConnectionStart = time.Now()
 		serverKey := fmt.Sprintf("%s:%d", job.Execution.Target.ServerDetails.Host, job.Execution.Target.ServerDetails.Port)
 		conn, err := e.pool.Get(ctx, serverKey, job.Execution.Target.ServerDetails)
+		timing.ConnectionEnd = time.Now()
 		if err != nil {
 			connError := fmt.Errorf("SSH connection failed to %s: %w", serverKey, err)
 			e.sendError(updates, connError, true)
 
-			// Update execution record with connection failure
+			// Update execution record with connection failure and timing
 			if e.apiClient != nil {
-				now := time.Now()
+				timing.MarkCleanupComplete() // Mark all phases as complete on error
+				updateData := timing.ToExecutionStatusUpdate()
 				exitCode := -3 // Indicate connection failure
 				errorMsg := connError.Error()
-				updateData := &api.ExecutionStatusUpdate{
-					CompletedAt: &now,
-					ExitCode:    &exitCode,
-					Error:       &errorMsg,
-				}
+				updateData.ExitCode = &exitCode
+				updateData.Error = &errorMsg
 
 				apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer apiCancel()
@@ -215,16 +213,14 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 			sessionError := fmt.Errorf("failed to create SSH session: %w", err)
 			e.sendError(updates, sessionError, true)
 
-			// Update execution record with session failure
+			// Update execution record with session failure and timing
 			if e.apiClient != nil {
-				now := time.Now()
+				timing.MarkCleanupComplete() // Mark all phases as complete on error
+				updateData := timing.ToExecutionStatusUpdate()
 				exitCode := -4 // Indicate session failure
 				errorMsg := sessionError.Error()
-				updateData := &api.ExecutionStatusUpdate{
-					CompletedAt: &now,
-					ExitCode:    &exitCode,
-					Error:       &errorMsg,
-				}
+				updateData.ExitCode = &exitCode
+				updateData.Error = &errorMsg
 
 				apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer apiCancel()
@@ -276,31 +272,31 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 		}()
 
 		// Execute with runner
-		e.executeWithRunner(execCtx, sess, job, updates, startTime, timeout, executionID)
+		e.executeWithRunner(execCtx, sess, job, updates, timing, timeout, executionID)
 	}()
 
 	return updates, nil
 }
 
 // executeWithRunner executes the job using the runner binary
-func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *types.Job, updates chan<- types.ExecutionUpdate, startTime time.Time, timeout time.Duration, executionID string) {
+func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *types.Job, updates chan<- types.ExecutionUpdate, timing *ExecutionTiming, timeout time.Duration, executionID string) {
 
-	// Create or get payload path
+	// SETUP PHASE: Create or get payload path
+	timing.PayloadCreateStart = time.Now()
 	payloadPath, err := e.createPayloadForJob(job, executionID)
+	timing.PayloadCreateEnd = time.Now()
 	if err != nil {
 		payloadError := fmt.Errorf("failed to create payload: %w", err)
 		e.sendError(updates, payloadError, true)
 
-		// Update execution record with payload failure
+		// Update execution record with payload failure and timing
 		if e.apiClient != nil {
-			now := time.Now()
+			timing.MarkCleanupComplete() // Mark all phases as complete on error
+			updateData := timing.ToExecutionStatusUpdate()
 			exitCode := -5 // Indicate payload failure
 			errorMsg := payloadError.Error()
-			updateData := &api.ExecutionStatusUpdate{
-				CompletedAt: &now,
-				ExitCode:    &exitCode,
-				Error:       &errorMsg,
-			}
+			updateData.ExitCode = &exitCode
+			updateData.Error = &errorMsg
 
 			apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer apiCancel()
@@ -318,7 +314,8 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 	}
 	defer e.cleanupPayload(payloadPath, job)
 
-	// Ensure runner is deployed (create a new session for deployment)
+	// SETUP PHASE: Ensure runner is deployed (create a new session for deployment)
+	timing.RunnerDeployStart = time.Now()
 	runnerPath := fmt.Sprintf("/tmp/cronium-runner-%s", e.runnerInfo.Version)
 	deploySession, err := sess.conn.NewSession()
 	if err != nil {
@@ -328,19 +325,18 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 	defer deploySession.Close()
 
 	if err := e.ensureRunnerDeployed(ctx, deploySession, sess.conn, job.Execution.Target.ServerDetails, runnerPath); err != nil {
+		timing.RunnerDeployEnd = time.Now()
 		deployError := fmt.Errorf("failed to deploy runner: %w", err)
 		e.sendError(updates, deployError, true)
 
-		// Update execution record with deployment failure
+		// Update execution record with deployment failure and timing
 		if e.apiClient != nil {
-			now := time.Now()
+			timing.MarkCleanupComplete() // Mark all phases as complete on error
+			updateData := timing.ToExecutionStatusUpdate()
 			exitCode := -6 // Indicate deployment failure
 			errorMsg := deployError.Error()
-			updateData := &api.ExecutionStatusUpdate{
-				CompletedAt: &now,
-				ExitCode:    &exitCode,
-				Error:       &errorMsg,
-			}
+			updateData.ExitCode = &exitCode
+			updateData.Error = &errorMsg
 
 			apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer apiCancel()
@@ -356,6 +352,22 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		})
 		return
 	}
+	timing.RunnerDeployEnd = time.Now()
+
+	// SETUP PHASE: Verify runner is ready
+	timing.RunnerVerifyStart = time.Now()
+	verifySession, err := sess.conn.NewSession()
+	if err != nil {
+		e.sendError(updates, fmt.Errorf("failed to create verify session: %w", err), true)
+		return
+	}
+	defer verifySession.Close()
+	
+	if err := verifySession.Run(fmt.Sprintf("%s version", runnerPath)); err != nil {
+		e.sendError(updates, fmt.Errorf("failed to verify runner: %w", err), true)
+		return
+	}
+	timing.RunnerVerifyEnd = time.Now()
 
 	// Log runner version
 	e.sendUpdate(updates, types.UpdateTypeLog, &types.LogEntry{
@@ -371,7 +383,8 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 	var apiEndpoint, apiToken string
 
 	if useAPIMode {
-		// Try to set up reverse tunnel for API mode
+		// SETUP PHASE: Set up reverse tunnel for API mode
+		timing.TunnelSetupStart = time.Now()
 		e.log.Info("Setting up SSH reverse tunnel for API mode")
 
 		// Find an available remote port (starting from 9090)
@@ -379,9 +392,11 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		tunnelManager = NewTunnelManager(e.runtimeHost, e.runtimePort, remotePort, e.log)
 
 		if err := tunnelManager.Start(sess.conn); err != nil {
+			timing.TunnelSetupEnd = time.Now()
 			e.log.WithError(err).Warn("Failed to establish SSH tunnel, falling back to bundled mode")
 			useAPIMode = false
 		} else {
+			timing.TunnelSetupEnd = time.Now()
 			// Generate JWT token for this execution
 			jwtManager := auth.NewJWTManager(e.jwtSecret)
 			userID := ""  // Extract from job metadata if available
@@ -417,7 +432,8 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		defer tunnelManager.Stop()
 	}
 
-	// Copy payload to server (create a new session for file transfer)
+	// SETUP PHASE: Copy payload to server (create a new session for file transfer)
+	timing.PayloadTransferStart = time.Now()
 	remotePayloadPath := fmt.Sprintf("/tmp/cronium-payload-%s.tar.gz", job.ID)
 	copySession, err := sess.conn.NewSession()
 	if err != nil {
@@ -427,9 +443,11 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 	defer copySession.Close()
 
 	if err := e.copyPayloadToServer(copySession, sess.conn, payloadPath, remotePayloadPath); err != nil {
+		timing.PayloadTransferEnd = time.Now()
 		e.sendError(updates, fmt.Errorf("failed to copy payload: %w", err), true)
 		return
 	}
+	timing.PayloadTransferEnd = time.Now()
 
 	// Clean up payload after execution
 	defer func() {
@@ -487,6 +505,8 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		cmd = fmt.Sprintf("%s && %s", strings.Join(exports, " && "), cmd)
 	}
 
+	// EXECUTION PHASE: Mark setup complete and start execution
+	timing.MarkSetupComplete()
 	if err := sess.session.Start(cmd); err != nil {
 		e.sendError(updates, fmt.Errorf("failed to start runner: %w", err), true)
 		return
@@ -529,6 +549,9 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 	select {
 	case <-ctx.Done():
 		// Context cancelled or timed out
+		// Mark execution as complete and start cleanup
+		timing.MarkExecutionComplete()
+		
 		// First cancel the streaming goroutines
 		cancelStream()
 
@@ -538,7 +561,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		sess.session.Signal(ssh.SIGKILL)
 
 		// Determine if it was a timeout or cancellation
-		duration := time.Since(startTime)
+		duration := timing.GetTotalDuration()
 		var exitCode int
 		var finalStatus types.JobStatus
 		var statusMessage string
@@ -558,13 +581,11 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 			statusMessage = "SSH execution cancelled"
 		}
 
-		// Update execution record with timeout/cancellation status
+		// Update execution record with timeout/cancellation status and timing
 		if e.apiClient != nil {
-			now := time.Now()
-			updateData := &api.ExecutionStatusUpdate{
-				CompletedAt: &now,
-				ExitCode:    &exitCode,
-			}
+			timing.MarkCleanupComplete()
+			updateData := timing.ToExecutionStatusUpdate()
+			updateData.ExitCode = &exitCode
 
 			// Include output collected so far
 			outputMu.Lock()
@@ -598,20 +619,24 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		})
 
 	case err := <-done:
-		// Command completed
+		// Command completed - mark execution phase complete
+		timing.MarkExecutionComplete()
+		
 		exitCode := 0
 		if err != nil {
 			if exitErr, ok := err.(*ssh.ExitError); ok {
 				exitCode = exitErr.ExitStatus()
 			} else {
 				e.sendError(updates, fmt.Errorf("runner failed: %w", err), true)
-				e.metrics.RecordExecution(job.ID, false, time.Since(startTime), false)
+				totalSeconds := time.Duration(timing.GetTotalDuration()) * time.Millisecond
+				e.metrics.RecordExecution(job.ID, false, totalSeconds, false)
 				return
 			}
 		}
 
 		// Record execution metrics
-		e.metrics.RecordExecution(job.ID, exitCode == 0, time.Since(startTime), false)
+		totalSeconds := time.Duration(timing.GetTotalDuration()) * time.Millisecond
+		e.metrics.RecordExecution(job.ID, exitCode == 0, totalSeconds, false)
 
 		// Send completion update with appropriate status
 		status := types.JobStatusCompleted
@@ -619,13 +644,11 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 			status = types.JobStatusFailed
 		}
 
-		// Update execution record with completion status and output
+		// Update execution record with completion status, output and timing
 		if e.apiClient != nil {
-			now := time.Now()
-			updateData := &api.ExecutionStatusUpdate{
-				CompletedAt: &now,
-				ExitCode:    &exitCode,
-			}
+			timing.MarkCleanupComplete()
+			updateData := timing.ToExecutionStatusUpdate()
+			updateData.ExitCode = &exitCode
 
 			// Include output if available
 			outputMu.Lock()

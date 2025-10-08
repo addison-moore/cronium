@@ -280,7 +280,9 @@ export const logs = pgTable("logs", {
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),
   endTime: timestamp("end_time"),
-  duration: integer("duration"), // in milliseconds
+  duration: integer("duration"), // in milliseconds - total duration
+  executionDuration: integer("execution_duration"), // in milliseconds - actual script execution time
+  setupDuration: integer("setup_duration"), // in milliseconds - setup time (container/SSH)
   successful: boolean("successful").default(false),
   eventName: varchar("event_name", { length: 255 }),
   eventType: varchar("event_type", { length: 50 }).$type<EventType>(),
@@ -351,6 +353,18 @@ export const executions = pgTable("executions", {
   output: text("output"), // stdout/stderr combined
   error: text("error"), // Error message if failed
   metadata: jsonb("metadata").default("{}").notNull(), // Additional execution data
+  // Phase-based timing fields for separating setup/execution/cleanup
+  setupStartedAt: timestamp("setup_started_at"),
+  setupCompletedAt: timestamp("setup_completed_at"),
+  executionStartedAt: timestamp("execution_started_at"),
+  executionCompletedAt: timestamp("execution_completed_at"),
+  cleanupStartedAt: timestamp("cleanup_started_at"),
+  cleanupCompletedAt: timestamp("cleanup_completed_at"),
+  setupDuration: integer("setup_duration"), // milliseconds for setup phase
+  executionDuration: integer("execution_duration"), // milliseconds for actual script execution
+  cleanupDuration: integer("cleanup_duration"), // milliseconds for cleanup phase
+  totalDuration: integer("total_duration"), // total milliseconds (cached calculation)
+  executionMetadata: jsonb("execution_metadata"), // Detailed timing breakdown (imagePullTime, connectionTime, etc.)
   createdAt: timestamp("created_at")
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),
