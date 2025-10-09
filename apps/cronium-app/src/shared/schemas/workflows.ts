@@ -68,7 +68,7 @@ export const createWorkflowSchema = z
 
     // Trigger configuration
     triggerType: z.nativeEnum(WorkflowTriggerType, {
-      required_error: "Trigger type is required",
+      message: "Trigger type is required",
     }),
     webhookKey: z.string().optional(),
 
@@ -256,7 +256,7 @@ export const workflowIdSchema = z.object({
 export const executeWorkflowSchema = z.object({
   id: z.number().int().positive("Workflow ID must be a positive integer"),
   manual: z.boolean().default(true),
-  payload: z.record(z.any()).optional(),
+  payload: z.record(z.string(), z.any()).optional(),
 });
 
 // Workflow executions query schema
@@ -300,7 +300,7 @@ export const workflowDownloadSchema = z.object({
 // Webhook execution schema
 export const webhookExecutionSchema = z.object({
   key: z.string().min(1, "Webhook key is required"),
-  payload: z.record(z.any()).optional(),
+  payload: z.record(z.string(), z.any()).optional(),
 });
 
 // Workflow filter schema - for lightweight data used in dropdowns/filters

@@ -24,6 +24,12 @@ import {
 import { auditLog } from "@/lib/security/audit-logger";
 import { buildPluginRouter } from "./plugin-router";
 import { slackRouter } from "./tools/slack-routes";
+import { discordRouter } from "./tools/discord-routes";
+import { emailRouter } from "./tools/email-routes";
+import { googleSheetsRouter } from "./tools/google-sheets-routes";
+import { teamsRouter } from "./tools/teams-routes";
+import { notionRouter } from "./tools/notion-routes";
+import { trelloRouter } from "./tools/trello-routes";
 
 // Use centralized authentication from trpc.ts
 
@@ -1369,7 +1375,7 @@ export const toolsRouter = createTRPCRouter({
     .input(
       z.object({
         actionId: z.string(),
-        parameters: z.record(z.unknown()),
+        parameters: z.record(z.string(), z.unknown()),
       }),
     )
     .mutation(async ({ input }) => {
@@ -1398,8 +1404,8 @@ export const toolsRouter = createTRPCRouter({
           if (validationError instanceof z.ZodError) {
             return {
               valid: false,
-              errors: validationError.errors.map(
-                (err) => `${err.path.join(".")}: ${err.message}`,
+              errors: validationError.issues.map(
+                (issue) => `${issue.path.join(".")}: ${issue.message}`,
               ),
             };
           }
@@ -1421,7 +1427,7 @@ export const toolsRouter = createTRPCRouter({
       z.object({
         toolId: z.number(),
         actionId: z.string(),
-        parameters: z.record(z.unknown()),
+        parameters: z.record(z.string(), z.unknown()),
         isTest: z.boolean().default(false),
       }),
     )
@@ -1458,7 +1464,9 @@ export const toolsRouter = createTRPCRouter({
           if (validationError instanceof z.ZodError) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `Invalid parameters: ${validationError.errors.map((err) => `${err.path.join(".")}: ${err.message}`).join(", ")}`,
+              message: `Invalid parameters: ${validationError.issues
+                .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+                .join(", ")}`,
             });
           }
           throw validationError;
@@ -1692,4 +1700,10 @@ export const toolsRouter = createTRPCRouter({
 
   // Explicit plugin routes (with proper TypeScript types)
   slack: slackRouter,
+  discord: discordRouter,
+  email: emailRouter,
+  googleSheets: googleSheetsRouter,
+  teams: teamsRouter,
+  notion: notionRouter,
+  trello: trelloRouter,
 });

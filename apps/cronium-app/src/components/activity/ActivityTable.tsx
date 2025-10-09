@@ -155,7 +155,7 @@ export function ActivityTable({
         activity.duration && activity.executionDuration
           ? activity.duration -
             activity.executionDuration -
-            (activity.setupDuration || 0)
+            (activity.setupDuration ?? 0)
           : null;
 
       return (

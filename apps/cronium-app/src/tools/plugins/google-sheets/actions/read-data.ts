@@ -35,6 +35,7 @@ export const readDataAction: ToolAction = {
   description: "Read data from a Google Sheets spreadsheet",
   category: "Data Operations",
   actionType: "search",
+  actionTypeColor: "purple",
   developmentMode: "visual",
   inputSchema: readDataSchema,
   parameters: safeZodToParameters(readDataSchema),

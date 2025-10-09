@@ -13,7 +13,7 @@ export const adminQuerySchema = z.object({
 // User invitation schema
 export const inviteUserSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
-  role: z.nativeEnum(UserRole, { required_error: "User role is required" }),
+  role: z.nativeEnum(UserRole, { message: "User role is required" }),
 });
 
 // User update schema
@@ -32,7 +32,7 @@ export const userIdSchema = z.object({
 // User enable/disable schema
 export const toggleUserStatusSchema = z.object({
   id: z.string().min(1, "User ID is required"),
-  status: z.nativeEnum(UserStatus, { required_error: "Status is required" }),
+  status: z.nativeEnum(UserStatus, { message: "Status is required" }),
 });
 
 // Bulk user operations schema

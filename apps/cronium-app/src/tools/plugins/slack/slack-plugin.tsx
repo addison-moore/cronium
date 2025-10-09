@@ -9,7 +9,14 @@ import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
 import { Label } from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Edit, Trash2, Eye, EyeOff, TestTube } from "lucide-react";
+import {
+  Edit,
+  Trash2,
+  Eye,
+  EyeOff,
+  TestTube,
+  MessageSquare,
+} from "lucide-react";
 import {
   type ToolPlugin,
   type CredentialFormProps,
@@ -239,6 +246,7 @@ export const SlackPluginTrpc: ToolPlugin = {
   description: "Send notifications to Slack channels via webhook",
   icon: SlackIcon,
   category: "Communication",
+  categoryIcon: <MessageSquare className="h-4 w-4" />,
 
   schema: slackCredentialsSchema,
   defaultValues: {

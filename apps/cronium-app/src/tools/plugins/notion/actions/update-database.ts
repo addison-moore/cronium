@@ -101,6 +101,7 @@ export const updateDatabaseAction: ToolAction = {
   description: "Update an existing entry in a Notion database",
   category: "Content Management",
   actionType: "update",
+  actionTypeColor: "yellow",
   developmentMode: "visual",
   inputSchema: updateDatabaseSchema,
   parameters: safeZodToParameters(updateDatabaseSchema),

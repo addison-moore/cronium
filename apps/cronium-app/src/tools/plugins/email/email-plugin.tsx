@@ -281,6 +281,7 @@ const emailActions: ToolAction[] = [
     description: "Send an email message to one or more recipients",
     category: "Communication",
     actionType: "create",
+    actionTypeColor: "blue",
     developmentMode: "visual",
     isSendMessageAction: true,
     conditionalActionConfig: {
@@ -448,6 +449,7 @@ export const EmailPlugin: ToolPlugin = {
   description: "Send email notifications via SMTP",
   icon: EmailIcon,
   category: "Communication",
+  categoryIcon: "Mail",
 
   schema: emailCredentialsSchema,
   defaultValues: {

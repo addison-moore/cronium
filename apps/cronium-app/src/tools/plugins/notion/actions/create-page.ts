@@ -112,6 +112,7 @@ export const createPageAction: ToolAction = {
   description: "Create a new page in Notion",
   category: "Content Management",
   actionType: "create",
+  actionTypeColor: "blue",
   developmentMode: "visual",
   inputSchema: createPageSchema,
   parameters: safeZodToParameters(createPageSchema),

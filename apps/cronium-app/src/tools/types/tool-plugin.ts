@@ -31,6 +31,7 @@ export interface ToolAction {
   description: string;
   category: string;
   actionType: ActionType;
+  actionTypeColor?: string; // Tailwind color classes for action type badge (e.g., "bg-blue-500 text-white")
 
   // Development mode support
   developmentMode: DevelopmentMode;
@@ -227,6 +228,7 @@ export interface ToolPlugin {
   description: string;
   icon: LucideIcon | React.ComponentType<{ size?: number; className?: string }>;
   category: string;
+  categoryIcon?: React.ReactNode; // Icon to display for the category (e.g., <MessageSquare />)
   docsUrl?: string;
 
   // Plugin configuration

@@ -79,6 +79,27 @@ const TEST_DATA_PATTERNS = {
   }),
 };
 
+type InternalSchemaDef = {
+  description?: string;
+  checks?: CheckMetadata[];
+  type?: unknown;
+};
+
+const getInternalDef = (schema: z.ZodTypeAny): InternalSchemaDef =>
+  ((schema as { _def?: unknown })._def ?? {}) as InternalSchemaDef;
+
+const getSchemaDescription = (schema: z.ZodTypeAny) => {
+  const def = getInternalDef(schema);
+  return schema.description ?? def.description ?? "";
+};
+
+type CheckMetadata = { kind?: string; value?: unknown };
+
+const getSchemaChecks = (schema: z.ZodTypeAny): CheckMetadata[] => {
+  const def = getInternalDef(schema);
+  return def.checks ?? [];
+};
+
 export default function TestDataGenerator({
   action,
   onApply,
@@ -94,7 +115,7 @@ export default function TestDataGenerator({
   const generateTestData = (schema: z.ZodTypeAny): unknown => {
     if (schema instanceof z.ZodString) {
       // Try to match field patterns
-      const schemaDescription = schema._def.description?.toLowerCase() ?? "";
+      const schemaDescription = getSchemaDescription(schema).toLowerCase();
 
       for (const [pattern, generator] of Object.entries(TEST_DATA_PATTERNS)) {
         if (schemaDescription.includes(pattern)) {
@@ -103,10 +124,19 @@ export default function TestDataGenerator({
       }
 
       // Check for specific validations
-      if (schema._def.checks?.some((check) => check.kind === "email")) {
+      const checks = getSchemaChecks(schema);
+      if (
+        checks.some(
+          (check) => typeof check.kind === "string" && check.kind === "email",
+        )
+      ) {
         return TEST_DATA_PATTERNS.email();
       }
-      if (schema._def.checks?.some((check) => check.kind === "url")) {
+      if (
+        checks.some(
+          (check) => typeof check.kind === "string" && check.kind === "url",
+        )
+      ) {
         return TEST_DATA_PATTERNS.url();
       }
 
@@ -115,12 +145,12 @@ export default function TestDataGenerator({
     }
 
     if (schema instanceof z.ZodNumber) {
-      const checks = schema._def.checks || [];
+      const checks = getSchemaChecks(schema);
       const minCheck = checks.find((check) => check.kind === "min");
       const maxCheck = checks.find((check) => check.kind === "max");
 
-      const min = minCheck ? minCheck.value : 0;
-      const max = maxCheck ? maxCheck.value : 1000;
+      const min = typeof minCheck?.value === "number" ? minCheck.value : 0;
+      const max = typeof maxCheck?.value === "number" ? maxCheck.value : 1000;
 
       return faker.number.int({ min, max });
     }
@@ -130,7 +160,7 @@ export default function TestDataGenerator({
     }
 
     if (schema instanceof z.ZodArray) {
-      const itemSchema = schema._def.type as z.ZodTypeAny;
+      const itemSchema = schema.element as z.ZodTypeAny;
       const length = faker.number.int({ min: 1, max: 5 });
       return Array.from({ length }, () => generateTestData(itemSchema));
     }
@@ -149,7 +179,7 @@ export default function TestDataGenerator({
     }
 
     if (schema instanceof z.ZodEnum) {
-      const values = schema._def.values as string[];
+      const values = schema.options as ReadonlyArray<string>;
       return faker.helpers.arrayElement(values);
     }
 
@@ -206,19 +236,28 @@ export default function TestDataGenerator({
             // For edge case, use boundary values
             if (scenario.tags.includes("edge")) {
               if (fieldSchema instanceof z.ZodString) {
-                const checks = fieldSchema._def.checks || [];
+                const checks = getSchemaChecks(fieldSchema);
                 const minCheck = checks.find((c) => c.kind === "min");
                 const maxCheck = checks.find((c) => c.kind === "max");
 
-                if (minCheck) {
+                if (typeof minCheck?.value === "number") {
                   data[fieldName] = faker.string.alpha(minCheck.value);
-                } else if (maxCheck) {
+                } else if (typeof maxCheck?.value === "number") {
                   data[fieldName] = faker.string.alpha(maxCheck.value);
                 } else {
                   data[fieldName] = "";
                 }
               } else if (fieldSchema instanceof z.ZodNumber) {
-                data[fieldName] = 0;
+                const checks = getSchemaChecks(fieldSchema);
+                const minCheck = checks.find((c) => c.kind === "min");
+                const maxCheck = checks.find((c) => c.kind === "max");
+                if (typeof minCheck?.value === "number") {
+                  data[fieldName] = minCheck.value;
+                } else if (typeof maxCheck?.value === "number") {
+                  data[fieldName] = maxCheck.value;
+                } else {
+                  data[fieldName] = 0;
+                }
               } else if (fieldSchema instanceof z.ZodArray) {
                 data[fieldName] = [];
               } else {

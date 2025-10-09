@@ -1,84 +1,27 @@
-src/components/event-form/ActionParameterForm.tsx(347,28): error TS2339: Property 'values' does not exist on type '$ZodEnumDef<Readonly<Record<string, EnumValue>>>'.
-src/hooks/useClientEncryption.ts(37,9): error TS2769: No overload matches this call.
-  Overload 1 of 2, '(algorithm: AlgorithmIdentifier | EcdhKeyDeriveParams | HkdfParams | Pbkdf2Params, baseKey: CryptoKey, derivedKeyType: AlgorithmIdentifier | ... 3 more ... | AesDerivedKeyParams, extractable: boolean, keyUsages: Iterable<...>): Promise<...>', gave the following error.
-    Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BufferSource'.
-      Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
-        Types of property 'buffer' are incompatible.
-          Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
-            Type 'SharedArrayBuffer' is missing the following properties from type 'ArrayBuffer': resizable, resize, detached, transfer, transferToFixedLength
-  Overload 2 of 2, '(algorithm: AlgorithmIdentifier | EcdhKeyDeriveParams | HkdfParams | Pbkdf2Params, baseKey: CryptoKey, derivedKeyType: AlgorithmIdentifier | ... 3 more ... | AesDerivedKeyParams, extractable: boolean, keyUsages: KeyUsage[]): Promise<...>', gave the following error.
-    Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BufferSource'.
-      Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
-        Types of property 'buffer' are incompatible.
-          Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
-            Type 'SharedArrayBuffer' is missing the following properties from type 'ArrayBuffer': resizable, resize, detached, transfer, transferToFixedLength
-src/lib/auth-encryption.ts(43,9): error TS2769: No overload matches this call.
-  Overload 1 of 2, '(algorithm: AlgorithmIdentifier | EcdhKeyDeriveParams | HkdfParams | Pbkdf2Params, baseKey: CryptoKey, derivedKeyType: AlgorithmIdentifier | ... 3 more ... | AesDerivedKeyParams, extractable: boolean, keyUsages: Iterable<...>): Promise<...>', gave the following error.
-    Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BufferSource'.
-      Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
-        Types of property 'buffer' are incompatible.
-          Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
-            Type 'SharedArrayBuffer' is missing the following properties from type 'ArrayBuffer': resizable, resize, detached, transfer, transferToFixedLength
-  Overload 2 of 2, '(algorithm: AlgorithmIdentifier | EcdhKeyDeriveParams | HkdfParams | Pbkdf2Params, baseKey: CryptoKey, derivedKeyType: AlgorithmIdentifier | ... 3 more ... | AesDerivedKeyParams, extractable: boolean, keyUsages: KeyUsage[]): Promise<...>', gave the following error.
-    Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BufferSource'.
-      Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
-        Types of property 'buffer' are incompatible.
-          Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
-            Type 'SharedArrayBuffer' is missing the following properties from type 'ArrayBuffer': resizable, resize, detached, transfer, transferToFixedLength
+src/components/event-form/ActionParameterForm.tsx(351,29): error TS2339: Property 'values' does not exist on type '$ZodEnumDef<Readonly<Record<string, EnumValue>>>'.
 src/lib/oauth/types.ts(27,14): error TS2554: Expected 2-3 arguments, but got 1.
 src/lib/ssh.ts(1627,59): error TS2551: Property 'destroyed' does not exist on type 'Client'. Did you mean 'destroy'?
 src/lib/webhooks/WebhookManager.ts(17,14): error TS2554: Expected 2-3 arguments, but got 1.
 src/server/api/routers/integrations.ts(21,16): error TS2554: Expected 2-3 arguments, but got 1.
 src/server/api/routers/toolActionTemplates.ts(16,23): error TS2554: Expected 2-3 arguments, but got 1.
 src/server/api/routers/toolActionTemplates.ts(51,23): error TS2554: Expected 2-3 arguments, but got 1.
-src/server/api/routers/tools.ts(1371,23): error TS2554: Expected 2-3 arguments, but got 1.
-src/server/api/routers/tools.ts(1400,39): error TS2339: Property 'errors' does not exist on type 'ZodError<unknown>'.
-src/server/api/routers/tools.ts(1401,18): error TS7006: Parameter 'err' implicitly has an 'any' type.
-src/server/api/routers/tools.ts(1423,23): error TS2554: Expected 2-3 arguments, but got 1.
-src/server/api/routers/tools.ts(1460,63): error TS2339: Property 'errors' does not exist on type 'ZodError<unknown>'.
-src/server/api/routers/tools.ts(1460,75): error TS7006: Parameter 'err' implicitly has an 'any' type.
 src/server/api/routers/webhook-system.ts(371,21): error TS2554: Expected 2-3 arguments, but got 1.
-src/server/api/routers/webhooks.ts(450,30): error TS2339: Property 'includes' does not exist on type '{}'.
-src/server/api/routers/webhooks.ts(857,15): error TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'string | Record<string, string> | URLSearchParams | string[][] | undefined'.
-  Type 'Record<string, unknown>' is missing the following properties from type 'string[][]': length, pop, push, concat, and 35 more.
 src/server/api/routers/workflows.ts(438,22): error TS2365: Operator '>' cannot be applied to types '{}' and 'number'.
-src/server/storage.ts(1581,14): error TS2322: Type '{ id: number; eventId: number; workflowId: number | null; status: LogStatus; output: string | null; startTime: Date; endTime: Date | null; duration: number | null; ... 11 more ...; workflowName: string | null; }[]' is not assignable to type '{ output: string | null; error: string | null; duration: number | null; id: number; createdAt: Date; updatedAt: Date; status: LogStatus; userId: string | null; ... 12 more ...; eventType: EventType | null; }[]'.
-  Type '{ id: number; eventId: number; workflowId: number | null; status: LogStatus; output: string | null; startTime: Date; endTime: Date | null; duration: number | null; ... 11 more ...; workflowName: string | null; }' is missing the following properties from type '{ output: string | null; error: string | null; duration: number | null; id: number; createdAt: Date; updatedAt: Date; status: LogStatus; userId: string | null; ... 12 more ...; eventType: EventType | null; }': setupDuration, executionDuration
-src/server/storage/modules/logs.ts(313,14): error TS2322: Type '{ id: number; eventId: number; workflowId: number | null; status: LogStatus; output: string | null; startTime: Date; endTime: Date | null; duration: number | null; ... 11 more ...; workflowName: string | null; }[]' is not assignable to type '{ output: string | null; error: string | null; duration: number | null; id: number; createdAt: Date; updatedAt: Date; status: LogStatus; userId: string | null; ... 12 more ...; eventType: EventType | null; }[]'.
-  Type '{ id: number; eventId: number; workflowId: number | null; status: LogStatus; output: string | null; startTime: Date; endTime: Date | null; duration: number | null; ... 11 more ...; workflowName: string | null; }' is missing the following properties from type '{ output: string | null; error: string | null; duration: number | null; id: number; createdAt: Date; updatedAt: Date; status: LogStatus; userId: string | null; ... 12 more ...; eventType: EventType | null; }': setupDuration, executionDuration
 src/server/utils/db-patterns.ts(38,34): error TS2881: This expression is never nullish.
-src/shared/schemas/admin.ts(16,34): error TS2353: Object literal may only specify known properties, and 'required_error' does not exist in type '{ error?: string | $ZodErrorMap<$ZodIssueInvalidValue<unknown>> | undefined; message?: string | undefined; }'.
-src/shared/schemas/admin.ts(35,38): error TS2353: Object literal may only specify known properties, and 'required_error' does not exist in type '{ error?: string | $ZodErrorMap<$ZodIssueInvalidValue<unknown>> | undefined; message?: string | undefined; }'.
 src/shared/schemas/events.ts(66,37): error TS2353: Object literal may only specify known properties, and 'required_error' does not exist in type '{ error?: string | $ZodErrorMap<$ZodIssueInvalidValue<unknown>> | undefined; message?: string | undefined; }'.
 src/shared/schemas/integrations.ts(8,16): error TS2554: Expected 2-3 arguments, but got 1.
 src/shared/schemas/integrations.ts(19,14): error TS2554: Expected 2-3 arguments, but got 1.
 src/shared/schemas/integrations.ts(20,18): error TS2554: Expected 2-3 arguments, but got 1.
 src/shared/schemas/integrations.ts(21,11): error TS2554: Expected 2-3 arguments, but got 1.
 src/shared/schemas/integrations.ts(36,22): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/logs.ts(46,37): error TS2353: Object literal may only specify known properties, and 'required_error' does not exist in type '{ error?: string | $ZodErrorMap<$ZodIssueInvalidValue<unknown>> | undefined; message?: string | undefined; }'.
-src/shared/schemas/logs.ts(63,15): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/logs.ts(74,15): error TS2554: Expected 2-3 arguments, but got 1.
 src/shared/schemas/monitoring.ts(204,13): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/tools.ts(27,18): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/tools.ts(38,20): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/tools.ts(65,15): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/tools.ts(87,18): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/webhooks.ts(7,14): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/webhooks.ts(8,14): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/webhooks.ts(9,12): error TS2554: Expected 2-3 arguments, but got 1.
 src/shared/schemas/webhooks.ts(56,20): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/webhooks.ts(70,20): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/webhooks.ts(82,14): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/webhooks.ts(83,14): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/webhooks.ts(156,19): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/webhooks.ts(176,20): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/webhooks.ts(191,15): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/webhooks.ts(192,18): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/webhooks.ts(198,15): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/webhooks.ts(199,18): error TS2554: Expected 2-3 arguments, but got 1.
 src/shared/schemas/workflows.ts(71,7): error TS2353: Object literal may only specify known properties, and 'required_error' does not exist in type '{ error?: string | $ZodErrorMap<$ZodIssueInvalidValue<unknown>> | undefined; message?: string | undefined; }'.
 src/shared/schemas/workflows.ts(259,14): error TS2554: Expected 2-3 arguments, but got 1.
 src/shared/schemas/workflows.ts(303,14): error TS2554: Expected 2-3 arguments, but got 1.
+src/tools/IntegrationTestPanel.tsx(128,13): error TS2353: Object literal may only specify known properties, and 'toolId' does not exist in type '{ id: number; testData?: Record<string, any> | undefined; }'.
+src/tools/IntegrationTestPanel.tsx(133,13): error TS2353: Object literal may only specify known properties, and 'toolId' does not exist in type '{ id: number; testData?: Record<string, any> | undefined; }'.
+src/tools/IntegrationTestPanel.tsx(140,11): error TS2353: Object literal may only specify known properties, and 'toolId' does not exist in type '{ id: number; testData?: Record<string, any> | undefined; }'.
 src/tools/plugins/discord/api-routes.ts(162,24): error TS2554: Expected 2-3 arguments, but got 1.
 src/tools/plugins/discord/api-routes.ts(181,32): error TS2339: Property 'errors' does not exist on type 'ZodError<{ webhookUrl: string; username?: string | undefined; avatarUrl?: string | undefined; }>'.
 src/tools/plugins/discord/api-routes.ts(182,14): error TS7006: Parameter 'err' implicitly has an 'any' type.
@@ -113,17 +56,4 @@ src/tools/plugins/trello/api-routes.ts(77,32): error TS2339: Property 'errors' d
 src/tools/plugins/trello/api-routes.ts(78,14): error TS7006: Parameter 'err' implicitly has an 'any' type.
 src/tools/plugins/validation-registry.ts(45,28): error TS2339: Property 'errors' does not exist on type 'ZodError<unknown>'.
 src/tools/plugins/validation-registry.ts(46,10): error TS7006: Parameter 'e' implicitly has an 'any' type.
-src/tools/templates/TemplateActionParameterForm.tsx(383,28): error TS2339: Property 'values' does not exist on type '$ZodEnumDef<Readonly<Record<string, EnumValue>>>'.
-src/tools/TestDataGenerator.tsx(97,45): error TS2339: Property 'description' does not exist on type '$ZodStringDef'.
-src/tools/TestDataGenerator.tsx(106,53): error TS2339: Property 'kind' does not exist on type '$ZodCheck<string>'.
-src/tools/TestDataGenerator.tsx(109,53): error TS2339: Property 'kind' does not exist on type '$ZodCheck<string>'.
-src/tools/TestDataGenerator.tsx(119,53): error TS2339: Property 'kind' does not exist on type '$ZodCheck<never>'.
-src/tools/TestDataGenerator.tsx(120,53): error TS2339: Property 'kind' does not exist on type '$ZodCheck<never>'.
-src/tools/TestDataGenerator.tsx(122,39): error TS2339: Property 'value' does not exist on type '$ZodCheck<never>'.
-src/tools/TestDataGenerator.tsx(123,39): error TS2339: Property 'value' does not exist on type '$ZodCheck<never>'.
-src/tools/TestDataGenerator.tsx(133,26): error TS2352: Conversion of type 'string' to type 'ZodType<unknown, unknown, $ZodTypeInternals<unknown, unknown>>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
-src/tools/TestDataGenerator.tsx(152,34): error TS2339: Property 'values' does not exist on type '$ZodEnumDef<Readonly<Record<string, EnumValue>>>'.
-src/tools/TestDataGenerator.tsx(210,55): error TS2339: Property 'kind' does not exist on type '$ZodCheck<string>'.
-src/tools/TestDataGenerator.tsx(211,55): error TS2339: Property 'kind' does not exist on type '$ZodCheck<string>'.
-src/tools/TestDataGenerator.tsx(214,65): error TS2339: Property 'value' does not exist on type '$ZodCheck<string>'.
-src/tools/TestDataGenerator.tsx(216,65): error TS2339: Property 'value' does not exist on type '$ZodCheck<string>'.
+src/tools/templates/TemplateActionParameterForm.tsx(387,29): error TS2339: Property 'values' does not exist on type '$ZodEnumDef<Readonly<Record<string, EnumValue>>>'.
