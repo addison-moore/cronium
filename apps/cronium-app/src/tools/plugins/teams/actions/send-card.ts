@@ -121,6 +121,7 @@ export const sendCardAction: ToolAction = {
     "Send an Adaptive Card to a Microsoft Teams channel using a webhook",
   category: "Messaging",
   actionType: "create",
+  actionTypeColor: "blue",
   developmentMode: "visual",
   inputSchema: sendCardSchema,
   parameters: safeZodToParameters(sendCardSchema),

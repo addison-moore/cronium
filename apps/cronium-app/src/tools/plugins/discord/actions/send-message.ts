@@ -36,6 +36,7 @@ export const sendMessageAction: ToolAction = {
   description: "Send a message to a Discord channel via webhook",
   category: "Communication",
   actionType: "create",
+  actionTypeColor: "blue",
   developmentMode: "visual",
   isSendMessageAction: true,
   conditionalActionConfig: {

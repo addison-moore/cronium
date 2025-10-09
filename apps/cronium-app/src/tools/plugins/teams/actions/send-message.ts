@@ -74,6 +74,7 @@ export const sendMessageAction: ToolAction = {
   description: "Send a message to a Microsoft Teams channel using a webhook",
   category: "Messaging",
   actionType: "create",
+  actionTypeColor: "blue",
   developmentMode: "visual",
   inputSchema: sendMessageSchema,
   parameters: safeZodToParameters(sendMessageSchema),

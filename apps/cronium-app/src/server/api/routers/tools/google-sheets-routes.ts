@@ -9,26 +9,18 @@ import {
   type EncryptedData,
 } from "@/lib/security/credential-encryption";
 
-// Slack-specific schemas
-const slackSendSchema = z.object({
-  toolId: z.number().int().positive(),
-  message: z.string().min(1),
-  channel: z.string().optional(),
-  username: z.string().optional(),
-  iconEmoji: z.string().optional(),
-});
-
-const slackTestSchema = z.object({
+// Google Sheets-specific schemas
+const googleSheetsTestSchema = z.object({
   toolId: z.number().int().positive(),
 });
 
 // Helper to get and decrypt tool credentials
-async function getSlackTool(userId: string, toolId: number) {
+async function getGoogleSheetsTool(userId: string, toolId: number) {
   const tool = await db.query.toolCredentials.findFirst({
     where: and(
       eq(toolCredentials.userId, userId),
       eq(toolCredentials.id, toolId),
-      eq(toolCredentials.type, "SLACK"),
+      eq(toolCredentials.type, "GOOGLE_SHEETS"),
     ),
   });
 
@@ -47,7 +39,7 @@ async function getSlackTool(userId: string, toolId: number) {
           ? (JSON.parse(decrypted) as Record<string, unknown>)
           : (decrypted as Record<string, unknown>);
     } catch (error) {
-      console.error("Failed to decrypt Slack credentials:", error);
+      console.error("Failed to decrypt Google Sheets credentials:", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to decrypt credentials",
@@ -70,63 +62,35 @@ async function getSlackTool(userId: string, toolId: number) {
   };
 }
 
-export const slackRouter = createTRPCRouter({
-  send: protectedProcedure
-    .input(slackSendSchema)
-    .mutation(async ({ ctx, input }) => {
-      const tool = await getSlackTool(ctx.session.user.id, input.toolId);
-
-      if (!tool) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Slack tool not found",
-        });
-      }
-
-      if (!tool.isActive) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Slack tool is not active",
-        });
-      }
-
-      // Implementation would go here - for now return mock success
-      // In production, this would call the actual Slack API
-      return {
-        success: true,
-        message: "Message sent to Slack successfully",
-        messageId: `slack_${Date.now()}`,
-      };
-    }),
-
+export const googleSheetsRouter = createTRPCRouter({
   testConnection: protectedProcedure
-    .input(slackTestSchema)
+    .input(googleSheetsTestSchema)
     .mutation(async ({ ctx, input }) => {
-      const tool = await getSlackTool(ctx.session.user.id, input.toolId);
+      const tool = await getGoogleSheetsTool(ctx.session.user.id, input.toolId);
 
       if (!tool) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Slack tool not found",
+          message: "Google Sheets tool not found",
         });
       }
 
-      // Test the webhook URL
-      const webhookUrl = tool.credentials.webhookUrl as string | undefined;
-      if (!webhookUrl?.startsWith("https://hooks.slack.com/")) {
+      // Validate required credentials
+      if (!tool.credentials.clientId || !tool.credentials.clientSecret) {
         return {
           success: false,
-          message: "Invalid webhook URL",
+          message: "Missing required credentials (clientId or clientSecret)",
         };
       }
 
-      // In production, this would actually test the connection
       return {
         success: true,
-        message: "Slack connection test successful",
+        message: "Google Sheets credentials validated",
         details: {
-          workspace: "Example Workspace",
-          channel: tool.credentials.channel ?? "default",
+          hasRefreshToken: !!tool.credentials.refreshToken,
+          scope:
+            tool.credentials.scope ??
+            "https://www.googleapis.com/auth/spreadsheets",
         },
       };
     }),

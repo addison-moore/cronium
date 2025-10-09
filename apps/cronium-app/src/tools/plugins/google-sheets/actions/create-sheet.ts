@@ -41,6 +41,7 @@ export const createSheetAction: ToolAction = {
   description: "Create a new sheet within a Google Sheets spreadsheet",
   category: "Sheet Management",
   actionType: "create",
+  actionTypeColor: "blue",
   developmentMode: "visual",
   inputSchema: createSheetSchema,
   parameters: safeZodToParameters(createSheetSchema),

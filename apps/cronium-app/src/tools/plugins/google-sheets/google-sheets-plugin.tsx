@@ -258,6 +258,7 @@ export const GoogleSheetsPlugin: ToolPlugin = {
   description: "Read, write, and automate Google Sheets spreadsheets",
   icon: GoogleSheetsIcon,
   category: "Productivity",
+  categoryIcon: "FileText",
 
   schema: googleSheetsCredentialsSchema,
   defaultValues: {

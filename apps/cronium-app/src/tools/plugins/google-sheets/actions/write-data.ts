@@ -36,6 +36,7 @@ export const writeDataAction: ToolAction = {
   description: "Write data to a Google Sheets spreadsheet",
   category: "Data Operations",
   actionType: "update",
+  actionTypeColor: "yellow",
   developmentMode: "visual",
   inputSchema: writeDataSchema,
   parameters: safeZodToParameters(writeDataSchema),

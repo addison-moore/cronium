@@ -43,7 +43,7 @@ export const adminLogsQuerySchema = logsQuerySchema.extend({
 export const createLogSchema = z.object({
   eventId: z.number().int().positive("Event ID must be a positive integer"),
   eventName: z.string().min(1, "Event name is required").max(100),
-  status: z.nativeEnum(LogStatus, { required_error: "Status is required" }),
+  status: z.nativeEnum(LogStatus),
   output: z
     .string()
     .max(100000, "Output must be less than 100,000 characters")
@@ -60,7 +60,7 @@ export const createLogSchema = z.object({
   serverId: z.number().int().positive().optional(),
   serverName: z.string().max(100).optional(),
   triggerType: z.enum(["MANUAL", "SCHEDULE", "WEBHOOK", "WORKFLOW"]).optional(),
-  metadata: z.record(z.any()).optional(), // Additional metadata as JSON
+  metadata: z.record(z.string(), z.any()).optional(), // Additional metadata as JSON
 });
 
 // Update log schema
@@ -71,7 +71,7 @@ export const updateLogSchema = z.object({
   errorOutput: z.string().max(100000).optional(),
   endTime: z.string().datetime().optional(),
   duration: z.number().min(0).optional(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 // Log ID parameter schema

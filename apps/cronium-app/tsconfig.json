@@ -34,7 +34,6 @@
     "**/*.backup.ts",
     "**/*.backup.tsx",
     "**/deprecated/*",
-    "src/scripts/**/*",
     "src/scripts/migrations/archived/**/*"
   ]
 }

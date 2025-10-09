@@ -61,8 +61,8 @@ interface ToolActionSectionProps {
   availableTools: Tool[];
 }
 
-// Tool category icons
-const CATEGORY_ICONS: Record<string, React.ReactNode> = {
+// Default fallback icons for categories (used if plugin doesn't provide categoryIcon)
+const DEFAULT_CATEGORY_ICONS: Record<string, React.ReactNode> = {
   communication: <MessageSquare className="h-4 w-4" />,
   productivity: <FileText className="h-4 w-4" />,
   data: <Database className="h-4 w-4" />,
@@ -71,13 +71,35 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   team: <Users className="h-4 w-4" />,
 };
 
-// Action type colors
-const ACTION_TYPE_COLORS: Record<string, string> = {
+// Default fallback colors for action types (used if action doesn't provide actionTypeColor)
+const DEFAULT_ACTION_TYPE_COLORS: Record<string, string> = {
   message: "bg-blue-500 text-white",
   create: "bg-green-500 text-white",
   update: "bg-yellow-500 text-white",
   delete: "bg-red-500 text-white",
   query: "bg-purple-500 text-white",
+};
+
+// Helper function to get category icon from plugin or fallback
+const getCategoryIcon = (category: string): React.ReactNode => {
+  // Try to get from a plugin that has this category
+  const pluginsInCategory = ToolPluginRegistry.getByCategory(category);
+  if (pluginsInCategory.length > 0 && pluginsInCategory[0]?.categoryIcon) {
+    return pluginsInCategory[0].categoryIcon;
+  }
+  // Fallback to default icon
+  const categoryLower = category.toLowerCase();
+  return DEFAULT_CATEGORY_ICONS[categoryLower] ?? <Zap className="h-3 w-3" />;
+};
+
+// Helper function to get action type color from action or fallback
+const getActionTypeColor = (action: ToolAction): string => {
+  if (action.actionTypeColor) {
+    return action.actionTypeColor;
+  }
+  return (
+    DEFAULT_ACTION_TYPE_COLORS[action.actionType] ?? "bg-gray-500 text-white"
+  );
 };
 
 export default function ToolActionSection({
@@ -573,7 +595,7 @@ export default function ToolActionSection({
                     onClick={() => setSelectedCategory(cat)}
                     className="flex items-center gap-1"
                   >
-                    {CATEGORY_ICONS[cat] ?? <Zap className="h-3 w-3" />}
+                    {getCategoryIcon(cat)}
                     {cat.charAt(0).toUpperCase() + cat.slice(1)}
                   </Button>
                 ))}
@@ -695,8 +717,7 @@ export default function ToolActionSection({
                               variant="secondary"
                               className={cn(
                                 "ml-2 text-xs",
-                                ACTION_TYPE_COLORS[action.actionType] ??
-                                  "bg-gray-500 text-white",
+                                getActionTypeColor(action),
                               )}
                             >
                               {action.actionType}

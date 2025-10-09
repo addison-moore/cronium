@@ -30,6 +30,7 @@ export const sendMessageAction: ToolAction = {
   description: "Send a message to a Slack channel or direct message",
   category: "Communication",
   actionType: "create",
+  actionTypeColor: "bg-green-500 text-white",
   developmentMode: "visual",
   isSendMessageAction: true,
   conditionalActionConfig: {

@@ -4,9 +4,9 @@ import { EventStatus } from "../schema";
 // Webhook execution schema (for triggering workflows)
 export const executeWebhookSchema = z.object({
   key: z.string().min(1, "Webhook key is required"),
-  payload: z.record(z.any()).optional(),
-  headers: z.record(z.string()).optional(),
-  query: z.record(z.string()).optional(),
+  payload: z.record(z.string(), z.any()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
+  query: z.record(z.string(), z.string()).optional(),
   method: z.enum(["GET", "POST", "PUT", "PATCH"]).default("POST"),
   userAgent: z.string().optional(),
   sourceIp: z.string().optional(),
@@ -67,7 +67,7 @@ export const updateWebhookSchema = z.object({
   rateLimitPerMinute: z.number().int().min(1).max(1000).optional(),
   requireAuth: z.boolean().optional(),
   authToken: z.string().optional(),
-  customHeaders: z.record(z.string()).optional(),
+  customHeaders: z.record(z.string(), z.string()).optional(),
   responseFormat: z.enum(["json", "text", "xml"]).optional(),
 });
 
@@ -79,8 +79,8 @@ export const webhookKeySchema = z.object({
 // Webhook test schema
 export const testWebhookSchema = z.object({
   key: z.string().min(1, "Webhook key is required"),
-  payload: z.record(z.any()).optional(),
-  headers: z.record(z.string()).optional(),
+  payload: z.record(z.string(), z.any()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
   method: z.enum(["GET", "POST", "PUT", "PATCH"]).default("POST"),
 });
 
@@ -153,7 +153,7 @@ export const generateWebhookUrlSchema = z.object({
     .regex(/^[a-zA-Z0-9_-]+$/)
     .optional(),
   includeAuth: z.boolean().default(false),
-  includeQuery: z.record(z.string()).optional(),
+  includeQuery: z.record(z.string(), z.string()).optional(),
 });
 
 // Webhook monitoring schema
@@ -173,7 +173,7 @@ export const webhookMonitoringSchema = z.object({
 // Webhook payload validation schema
 export const webhookPayloadValidationSchema = z.object({
   key: z.string().min(1, "Webhook key is required"),
-  payloadSchema: z.record(z.any()).optional(), // JSON Schema for payload validation
+  payloadSchema: z.record(z.string(), z.any()).optional(), // JSON Schema for payload validation
   requireContentType: z.string().optional(), // Required Content-Type header
   maxPayloadSize: z.number().int().min(1).max(10485760).default(1048576), // Max 10MB, default 1MB
   validateSignature: z.boolean().default(false),
@@ -188,15 +188,15 @@ export const webhookResponseSchema = z.object({
   successResponse: z
     .object({
       statusCode: z.number().int().min(200).max(299).default(200),
-      body: z.record(z.any()).optional(),
-      headers: z.record(z.string()).optional(),
+      body: z.record(z.string(), z.any()).optional(),
+      headers: z.record(z.string(), z.string()).optional(),
     })
     .optional(),
   errorResponse: z
     .object({
       statusCode: z.number().int().min(400).max(599).default(400),
-      body: z.record(z.any()).optional(),
-      headers: z.record(z.string()).optional(),
+      body: z.record(z.string(), z.any()).optional(),
+      headers: z.record(z.string(), z.string()).optional(),
     })
     .optional(),
   includeExecutionId: z.boolean().default(true),

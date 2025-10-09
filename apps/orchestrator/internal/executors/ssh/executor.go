@@ -561,7 +561,6 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		sess.session.Signal(ssh.SIGKILL)
 
 		// Determine if it was a timeout or cancellation
-		duration := timing.GetTotalDuration()
 		var exitCode int
 		var finalStatus types.JobStatus
 		var statusMessage string
@@ -569,13 +568,15 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		if stderrors.Is(ctx.Err(), context.DeadlineExceeded) {
 			e.log.WithField("jobID", job.ID).Warn("Execution timed out")
 			e.sendError(updates, fmt.Errorf("execution timed out after %v", timeout), true)
-			e.metrics.RecordExecution(job.ID, false, duration, true)
+			totalDuration := time.Duration(timing.GetTotalDuration()) * time.Millisecond
+			e.metrics.RecordExecution(job.ID, false, totalDuration, true)
 			exitCode = -1 // Indicate timeout
 			finalStatus = types.JobStatusFailed
 			statusMessage = fmt.Sprintf("SSH execution timed out after %v", timeout)
 		} else {
 			e.sendError(updates, fmt.Errorf("execution cancelled"), true)
-			e.metrics.RecordExecution(job.ID, false, duration, false)
+			totalDuration := time.Duration(timing.GetTotalDuration()) * time.Millisecond
+			e.metrics.RecordExecution(job.ID, false, totalDuration, false)
 			exitCode = -2 // Indicate cancellation
 			finalStatus = types.JobStatusFailed
 			statusMessage = "SSH execution cancelled"

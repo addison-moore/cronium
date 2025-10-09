@@ -223,6 +223,7 @@ export const NotionPlugin: ToolPlugin = {
   description: "Create and manage content in your Notion workspace",
   icon: NotionIcon,
   category: "Productivity",
+  categoryIcon: "FileText",
 
   schema: notionCredentialsSchema,
   defaultValues: {

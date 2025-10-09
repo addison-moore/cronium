@@ -28,6 +28,7 @@ export const moveCardAction: ToolAction = {
   description: "Move a card to a different list or board",
   category: "Task Management",
   actionType: "update",
+  actionTypeColor: "yellow",
   developmentMode: "visual",
   inputSchema: moveCardSchema,
   parameters: safeZodToParameters(moveCardSchema),
