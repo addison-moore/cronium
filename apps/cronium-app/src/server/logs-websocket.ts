@@ -122,6 +122,9 @@ export class LogsWebSocketHandler {
               error: log.error,
               startTime: log.startTime,
               endTime: log.endTime,
+              duration: log.duration,
+              executionDuration: log.executionDuration,
+              setupDuration: log.setupDuration,
             });
 
             console.log(`Socket ${socket.id} subscribed to log ${logId}`);
@@ -185,10 +188,15 @@ export class LogsWebSocketHandler {
             | Date
             | undefined) ?? update.endTime,
         duration: update.duration,
+        executionDuration: update.executionDuration,
+        setupDuration: update.setupDuration,
       },
       // Include execution data if available
       execution: {
-        exitCode: (update as any).exitCode,
+        exitCode: (update as Record<string, unknown>).exitCode as
+          | number
+          | null
+          | undefined,
         status: update.status,
       },
       // Include output data

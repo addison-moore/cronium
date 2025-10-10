@@ -8,6 +8,7 @@ export const updateDatabaseSchema = z.object({
   pageId: z.string().describe("The ID of the page/entry to update"),
   properties: z
     .record(
+      z.string(),
       z.union([
         z.object({
           type: z.literal("title"),

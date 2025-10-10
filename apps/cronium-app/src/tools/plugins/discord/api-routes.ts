@@ -159,7 +159,7 @@ export const discordApiRoutes: PluginApiRoutes = {
     description: "Validate Discord credentials format",
     handler: {
       input: z.object({
-        credentials: z.record(z.unknown()),
+        credentials: z.record(z.string(), z.unknown()),
       }),
       output: z.object({
         valid: z.boolean(),
@@ -176,11 +176,15 @@ export const discordApiRoutes: PluginApiRoutes = {
           return { valid: true };
         }
 
+        const zodErrors = result.error.issues as z.ZodIssue[];
+        const errorMessages = zodErrors.map((err) => {
+          const path = err.path.join(".");
+          return `${path}: ${err.message}`;
+        });
+
         return {
           valid: false,
-          errors: result.error.errors.map(
-            (err) => `${err.path.join(".")}: ${err.message}`,
-          ),
+          errors: errorMessages,
         };
       },
     },

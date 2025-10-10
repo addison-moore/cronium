@@ -44,6 +44,7 @@ export const createPageSchema = z.object({
     .describe("Optional cover image for the page"),
   properties: z
     .record(
+      z.string(),
       z.union([
         z.object({
           type: z.literal("title"),
