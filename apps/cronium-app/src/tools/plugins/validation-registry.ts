@@ -1,7 +1,7 @@
 // Server-side validation registry for tool plugins
 // This file contains only the schemas and validation logic, no React components
 
-import { z } from "zod";
+import { type z } from "zod";
 
 // Import all plugin schemas
 import { emailCredentialsSchema } from "./email/schemas";
@@ -40,11 +40,15 @@ export function validateToolCredentials(
   const result = schema.safeParse(credentials);
 
   if (!result.success) {
+    const zodErrors = result.error.issues as z.ZodIssue[];
+    const errorMessages = zodErrors.map((e) => {
+      const path = e.path.join(".");
+      return `${path}: ${e.message}`;
+    });
+
     return {
       valid: false,
-      errors: result.error.errors.map(
-        (e) => `${e.path.join(".")}: ${e.message}`,
-      ),
+      errors: errorMessages,
     };
   }
 

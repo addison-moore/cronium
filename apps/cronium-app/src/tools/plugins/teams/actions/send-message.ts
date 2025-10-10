@@ -59,7 +59,7 @@ export const sendMessageSchema = z.object({
           )
           .optional(),
         body: z.string().optional(),
-        headers: z.record(z.string()).optional(),
+        headers: z.record(z.string(), z.string()).optional(),
       }),
     )
     .optional()
@@ -74,6 +74,7 @@ export const sendMessageAction: ToolAction = {
   description: "Send a message to a Microsoft Teams channel using a webhook",
   category: "Messaging",
   actionType: "create",
+  actionTypeColor: "blue",
   developmentMode: "visual",
   inputSchema: sendMessageSchema,
   parameters: safeZodToParameters(sendMessageSchema),

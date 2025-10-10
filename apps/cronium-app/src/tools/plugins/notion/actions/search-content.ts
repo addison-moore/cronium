@@ -40,6 +40,7 @@ export const searchContentAction: ToolAction = {
   description: "Search for pages and databases in Notion",
   category: "Search",
   actionType: "search",
+  actionTypeColor: "purple",
   developmentMode: "visual",
   inputSchema: searchContentSchema,
   parameters: safeZodToParameters(searchContentSchema),

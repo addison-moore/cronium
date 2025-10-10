@@ -329,6 +329,7 @@ export const TeamsPlugin: ToolPlugin = {
   description: "Send messages and manage Microsoft Teams",
   icon: TeamsIcon,
   category: "Communication",
+  categoryIcon: "MessageSquare",
 
   schema: teamsCredentialsSchema,
   defaultValues: {

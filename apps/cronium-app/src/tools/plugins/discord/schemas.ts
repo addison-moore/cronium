@@ -18,7 +18,7 @@ export const discordSendSchema = z.object({
   toolId: z.number().int().positive("Tool ID must be a positive integer"),
   message: z.string().min(1, "Message content is required"),
   templateId: z.number().int().positive().optional(),
-  variables: z.record(z.string()).optional(),
+  variables: z.record(z.string(), z.string()).optional(),
   username: z.string().optional(), // Override webhook username
   avatarUrl: z.string().url().optional(), // Override webhook avatar
   tts: z.boolean().default(false), // Text-to-speech

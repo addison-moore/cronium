@@ -9,7 +9,14 @@ import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
 import { Label } from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Edit, Trash2, Eye, EyeOff, TestTube } from "lucide-react";
+import {
+  Edit,
+  Trash2,
+  Eye,
+  EyeOff,
+  TestTube,
+  MessageSquare,
+} from "lucide-react";
 import {
   type ToolPlugin,
   type CredentialFormProps,
@@ -239,6 +246,7 @@ export const SlackPluginTrpc: ToolPlugin = {
   description: "Send notifications to Slack channels via webhook",
   icon: SlackIcon,
   category: "Communication",
+  categoryIcon: <MessageSquare className="h-4 w-4" />,
 
   schema: slackCredentialsSchema,
   defaultValues: {
@@ -299,7 +307,7 @@ export const SlackPluginTrpc: ToolPlugin = {
       }
 
       const typedClient = trpcClient as {
-        integrations: {
+        tools: {
           slack: {
             send: {
               mutate: (params: {
@@ -339,7 +347,10 @@ export const SlackPluginTrpc: ToolPlugin = {
       if (username) params.username = username;
       if (iconEmoji) params.iconEmoji = iconEmoji;
 
-      const result = await typedClient.integrations.slack.send.mutate(params);
+      const result = (await typedClient.tools.slack.send.mutate(params)) as {
+        success: boolean;
+        message?: string;
+      };
 
       return {
         success: result.success,
@@ -372,7 +383,7 @@ export const SlackPluginTrpc: ToolPlugin = {
     // Extract trpcClient with proper typing to avoid unsafe 'any' assignment
     const trpcClient = credentials.trpcClient as
       | {
-          integrations: {
+          tools: {
             slack: {
               send: {
                 mutate: (params: {
@@ -385,16 +396,13 @@ export const SlackPluginTrpc: ToolPlugin = {
                   details?: string;
                 }>;
               };
-            };
-            testMessage: {
-              mutate: (params: {
-                toolId: number;
-                testType: string;
-              }) => Promise<{
-                success: boolean;
-                message?: string;
-                details?: string;
-              }>;
+              testConnection: {
+                mutate: (params: { toolId: number }) => Promise<{
+                  success: boolean;
+                  message?: string;
+                  details?: unknown;
+                }>;
+              };
             };
           };
         }
@@ -412,22 +420,21 @@ export const SlackPluginTrpc: ToolPlugin = {
       const typedClient = trpcClient;
 
       if (testType === "send_test_message") {
-        const result = await typedClient.integrations.slack.send.mutate({
+        const result = (await typedClient.tools.slack.send.mutate({
           toolId: id,
           message:
             "🎉 Test message from Cronium! Your Slack integration is working correctly.",
           username: "Cronium Bot",
-        });
+        })) as { success: boolean; message?: string };
 
         return {
           success: result.success,
           message: result.message ?? "Test message sent successfully",
         };
       } else {
-        const result = await typedClient.integrations.testMessage.mutate({
+        const result = (await typedClient.tools.slack.testConnection.mutate({
           toolId: id,
-          testType: "connection",
-        });
+        })) as { success: boolean; message?: string; details?: unknown };
 
         return {
           success: result.success,

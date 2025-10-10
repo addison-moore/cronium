@@ -428,9 +428,11 @@ export const workflowsRouter = createTRPCRouter({
             .from(workflowExecutions)
             .where(eq(workflowExecutions.userId, ctx.session.user.id));
 
+          const totalCount = Number(totalResult?.count ?? 0);
+
           const userExecutions = {
             executions,
-            total: totalResult?.count ?? 0,
+            total: totalCount,
           };
 
           return {

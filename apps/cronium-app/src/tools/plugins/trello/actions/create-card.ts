@@ -56,6 +56,7 @@ export const createCardAction: ToolAction = {
   description: "Create a new card in a Trello list",
   category: "Task Management",
   actionType: "create",
+  actionTypeColor: "blue",
   developmentMode: "visual",
   inputSchema: createCardSchema,
   parameters: safeZodToParameters(createCardSchema),

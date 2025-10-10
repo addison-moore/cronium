@@ -82,6 +82,7 @@ export const manageBlocksAction: ToolAction = {
   description: "Append, update, delete, or retrieve blocks in Notion pages",
   category: "Content Management",
   actionType: "update",
+  actionTypeColor: "yellow",
   developmentMode: "visual",
   inputSchema: manageBlocksSchema,
   parameters: safeZodToParameters(manageBlocksSchema),

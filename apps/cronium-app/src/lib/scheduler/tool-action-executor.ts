@@ -17,6 +17,7 @@ import { rateLimiter } from "@/lib/security/rate-limiter";
 import { auditLog } from "@/lib/security/audit-logger";
 import { processToolActionTemplate } from "@/lib/tool-action-template-processor";
 import { createTemplateContext } from "@/lib/template-processor";
+import { type EncryptedData } from "@/lib/security/credential-encryption";
 
 export interface ToolActionConfig {
   toolType: string;
@@ -195,11 +196,13 @@ export async function executeToolAction(
 
         console.log(`[ToolAction] Decrypting credentials...`);
         // Decrypt using the credential encryption service
-        const decrypted = credentialEncryption.decrypt(encryptedData as any);
+        const decrypted = credentialEncryption.decrypt(
+          encryptedData as EncryptedData,
+        );
 
         // The decrypted value should be the credentials object
         if (typeof decrypted === "string") {
-          credentials = JSON.parse(decrypted);
+          credentials = JSON.parse(decrypted) as Record<string, unknown>;
         } else {
           credentials = decrypted as Record<string, unknown>;
         }
@@ -214,7 +217,10 @@ export async function executeToolAction(
       // Tool has unencrypted credentials
       if (typeof cachedTool.credentials === "string") {
         try {
-          credentials = JSON.parse(cachedTool.credentials);
+          credentials = JSON.parse(cachedTool.credentials) as Record<
+            string,
+            unknown
+          >;
         } catch (err) {
           console.error(
             `[ToolAction] Failed to parse unencrypted credentials:`,

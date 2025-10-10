@@ -8,6 +8,7 @@ export const updateDatabaseSchema = z.object({
   pageId: z.string().describe("The ID of the page/entry to update"),
   properties: z
     .record(
+      z.string(),
       z.union([
         z.object({
           type: z.literal("title"),
@@ -101,6 +102,7 @@ export const updateDatabaseAction: ToolAction = {
   description: "Update an existing entry in a Notion database",
   category: "Content Management",
   actionType: "update",
+  actionTypeColor: "yellow",
   developmentMode: "visual",
   inputSchema: updateDatabaseSchema,
   parameters: safeZodToParameters(updateDatabaseSchema),

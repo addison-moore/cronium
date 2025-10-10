@@ -44,7 +44,7 @@ async function getSlackTool(userId: string, toolId: number) {
       const decrypted = await credentialEncryption.decrypt(encryptedData);
       parsedCredentials =
         typeof decrypted === "string"
-          ? JSON.parse(decrypted)
+          ? (JSON.parse(decrypted) as Record<string, unknown>)
           : (decrypted as Record<string, unknown>);
     } catch (error) {
       console.error("Failed to decrypt Slack credentials:", error);
@@ -57,7 +57,7 @@ async function getSlackTool(userId: string, toolId: number) {
     try {
       parsedCredentials =
         typeof tool.credentials === "string"
-          ? JSON.parse(tool.credentials)
+          ? (JSON.parse(tool.credentials) as Record<string, unknown>)
           : (tool.credentials as Record<string, unknown>);
     } catch {
       parsedCredentials = {};
@@ -112,8 +112,8 @@ export const slackRouter = createTRPCRouter({
       }
 
       // Test the webhook URL
-      const webhookUrl = tool.credentials.webhookUrl as string;
-      if (!webhookUrl || !webhookUrl.startsWith("https://hooks.slack.com/")) {
+      const webhookUrl = tool.credentials.webhookUrl as string | undefined;
+      if (!webhookUrl?.startsWith("https://hooks.slack.com/")) {
         return {
           success: false,
           message: "Invalid webhook URL",
@@ -126,7 +126,7 @@ export const slackRouter = createTRPCRouter({
         message: "Slack connection test successful",
         details: {
           workspace: "Example Workspace",
-          channel: tool.credentials.channel || "default",
+          channel: tool.credentials.channel ?? "default",
         },
       };
     }),

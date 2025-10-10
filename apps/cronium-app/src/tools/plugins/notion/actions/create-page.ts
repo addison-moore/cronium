@@ -44,6 +44,7 @@ export const createPageSchema = z.object({
     .describe("Optional cover image for the page"),
   properties: z
     .record(
+      z.string(),
       z.union([
         z.object({
           type: z.literal("title"),
@@ -112,6 +113,7 @@ export const createPageAction: ToolAction = {
   description: "Create a new page in Notion",
   category: "Content Management",
   actionType: "create",
+  actionTypeColor: "blue",
   developmentMode: "visual",
   inputSchema: createPageSchema,
   parameters: safeZodToParameters(createPageSchema),

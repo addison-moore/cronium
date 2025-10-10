@@ -157,6 +157,7 @@ export const DiscordPlugin: ToolPlugin = {
   description: "Send messages to Discord channels via webhooks",
   icon: DiscordIcon,
   category: "Communication",
+  categoryIcon: "MessageSquare",
 
   schema: discordCredentialsSchema,
   defaultValues: {

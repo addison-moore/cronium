@@ -34,6 +34,8 @@ interface DashboardStats {
     status: string;
     duration: number;
     startTime: string;
+    executionDuration?: number | null;
+    setupDuration?: number | null;
     workflowId?: number | null;
     workflowName?: string | null;
   }>;
@@ -83,6 +85,8 @@ export default function DashboardStats() {
           status: string;
           duration: number;
           startTime: string;
+          executionDuration?: number | null;
+          setupDuration?: number | null;
           workflowId?: number | null;
           workflowName?: string | null;
         }>)
@@ -231,6 +235,8 @@ export default function DashboardStats() {
           startTime: activity.startTime || new Date().toISOString(),
           endTime: null,
           duration: activity.duration,
+          executionDuration: activity.executionDuration ?? null,
+          setupDuration: activity.setupDuration ?? null,
           workflowId: activity.workflowId ?? null,
           workflowName: activity.workflowName ?? null,
         }))}

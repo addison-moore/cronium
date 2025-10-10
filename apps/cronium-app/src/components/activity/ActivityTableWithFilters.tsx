@@ -317,6 +317,8 @@ export function ActivityTableWithFilters({
               : log.endTime.toISOString()
             : null,
           duration: log.duration,
+          executionDuration: log.executionDuration ?? null,
+          setupDuration: log.setupDuration ?? null,
           ...(log.workflowId ? { workflowId: log.workflowId } : {}),
         }))}
         isLoading={isLoading}

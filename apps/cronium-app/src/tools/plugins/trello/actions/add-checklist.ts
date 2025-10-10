@@ -36,6 +36,7 @@ export const addChecklistAction: ToolAction = {
   description: "Add a checklist to a Trello card",
   category: "Task Management",
   actionType: "update",
+  actionTypeColor: "yellow",
   developmentMode: "visual",
   inputSchema: addChecklistSchema,
   parameters: safeZodToParameters(addChecklistSchema),

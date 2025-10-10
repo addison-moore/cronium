@@ -20,7 +20,7 @@ export const slackSendSchema = z.object({
   toolId: z.number().int().positive("Tool ID must be a positive integer"),
   message: z.string().min(1, "Message content is required"),
   templateId: z.number().int().positive().optional(),
-  variables: z.record(z.string()).optional(),
+  variables: z.record(z.string(), z.string()).optional(),
   channel: z.string().optional(), // Override default channel
   username: z.string().optional(), // Override default username
   iconEmoji: z.string().optional(), // Override default emoji

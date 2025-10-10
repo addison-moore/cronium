@@ -281,6 +281,7 @@ const emailActions: ToolAction[] = [
     description: "Send an email message to one or more recipients",
     category: "Communication",
     actionType: "create",
+    actionTypeColor: "blue",
     developmentMode: "visual",
     isSendMessageAction: true,
     conditionalActionConfig: {
@@ -344,9 +345,9 @@ const emailActions: ToolAction[] = [
       // Validate email credentials
       const validationResult = emailCredentialsSchema.safeParse(credentials);
       if (!validationResult.success) {
-        throw new Error(
-          `Invalid email credentials: ${validationResult.error.errors.map((e) => e.message).join(", ")}`,
-        );
+        const zodErrors = validationResult.error.issues as z.ZodIssue[];
+        const errorMessages = zodErrors.map((e) => e.message).join(", ");
+        throw new Error(`Invalid email credentials: ${errorMessages}`);
       }
 
       const _emailCreds = validationResult.data;
@@ -396,13 +397,19 @@ const emailActions: ToolAction[] = [
     }),
     validate: (params: SendEmailParams) => {
       const result = emailActions[0]?.inputSchema.safeParse(params);
+      if (result?.success) {
+        return { isValid: true, errors: [] };
+      }
+
+      const zodErrors = (result?.error?.issues ?? []) as z.ZodIssue[];
+      const errorMessages = zodErrors.map((e) => {
+        const path = e.path.join(".");
+        return `${path}: ${e.message}`;
+      });
+
       return {
-        isValid: result?.success ?? false,
-        errors: result?.success
-          ? []
-          : (result?.error?.errors.map(
-              (e) => `${e.path.join(".")}: ${e.message}`,
-            ) ?? []),
+        isValid: false,
+        errors: errorMessages,
       };
     },
     helpText: "Send emails using SMTP credentials.",
@@ -448,6 +455,7 @@ export const EmailPlugin: ToolPlugin = {
   description: "Send email notifications via SMTP",
   icon: EmailIcon,
   category: "Communication",
+  categoryIcon: "Mail",
 
   schema: emailCredentialsSchema,
   defaultValues: {

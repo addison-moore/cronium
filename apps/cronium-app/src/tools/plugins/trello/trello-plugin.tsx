@@ -240,6 +240,7 @@ export const TrelloPlugin: ToolPlugin = {
   description: "Manage Trello boards, cards, and workflows",
   icon: TrelloIcon,
   category: "Productivity",
+  categoryIcon: "FileText",
 
   schema: trelloCredentialsSchema,
   defaultValues: {
