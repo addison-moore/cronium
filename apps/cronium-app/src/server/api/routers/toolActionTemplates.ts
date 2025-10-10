@@ -13,7 +13,7 @@ export const toolActionTemplatesRouter = createTRPCRouter({
         description: z.string().optional(),
         toolType: z.string().min(1).max(50),
         actionId: z.string().min(1).max(100),
-        parameters: z.record(z.unknown()),
+        parameters: z.record(z.string(), z.unknown()),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -48,7 +48,7 @@ export const toolActionTemplatesRouter = createTRPCRouter({
         id: z.number(),
         name: z.string().min(1).max(255).optional(),
         description: z.string().optional(),
-        parameters: z.record(z.unknown()).optional(),
+        parameters: z.record(z.string(), z.unknown()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

@@ -63,7 +63,7 @@ export const createEventSchema = z
     tags: z.array(z.string()).default([]),
 
     // Event type and content
-    type: z.nativeEnum(EventType, { required_error: "Event type is required" }),
+    type: z.nativeEnum(EventType, { message: "Event type is required" }),
     content: z.string().optional(),
 
     // HTTP Request specific fields

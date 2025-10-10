@@ -1,6 +1,17 @@
 import { type z } from "zod";
 import { ToolPluginRegistry } from "@/tools/plugins";
 
+// Log plugin initialization status
+console.log("[ServerActionExecutor] Initializing - checking plugin registry");
+console.log(
+  "[ServerActionExecutor] Actions registered:",
+  ToolPluginRegistry.getAllActions().length,
+);
+console.log(
+  "[ServerActionExecutor] Action IDs:",
+  ToolPluginRegistry.getAllActions().map((a) => a.id),
+);
+
 // Re-define the execution context type to avoid circular dependency
 export interface ToolActionExecutionContext {
   variables: {

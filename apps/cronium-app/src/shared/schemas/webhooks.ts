@@ -53,7 +53,7 @@ export const createWebhookSchema = z.object({
   rateLimitPerMinute: z.number().int().min(1).max(1000).default(60),
   requireAuth: z.boolean().default(false),
   authToken: z.string().optional(), // Bearer token for authentication
-  customHeaders: z.record(z.string()).optional(), // Required headers
+  customHeaders: z.record(z.string(), z.string()).optional(), // Required headers
   responseFormat: z.enum(["json", "text", "xml"]).default("json"),
 });
 

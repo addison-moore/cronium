@@ -384,7 +384,7 @@ export function TemplateActionParameterForm({
       // In Zod v4, enum values are in _def.entries
       const options = baseSchema._def.entries
         ? Object.values(baseSchema._def.entries as Record<string, string>)
-        : ((baseSchema._def.values as string[] | undefined) ?? []);
+        : [];
       return (
         <div key={key} className="space-y-2">
           <Label htmlFor={key}>

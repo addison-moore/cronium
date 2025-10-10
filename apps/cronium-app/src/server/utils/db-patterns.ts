@@ -35,7 +35,7 @@ export function normalizePagination(input: PaginationInput): {
   offset: number;
 } {
   const limit = input.limit ?? input.pageSize ?? 50;
-  const offset = input.offset ?? ((input.page ?? 1) - 1) * limit ?? 0;
+  const offset = input.offset ?? ((input.page ?? 1) - 1) * limit;
 
   // Enforce reasonable limits
   const safeLimit = Math.min(Math.max(1, limit), 1000);

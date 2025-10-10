@@ -14,7 +14,7 @@ export const WebhookConfigSchema = z.object({
   url: z.string().url(),
   events: z.array(z.string()),
   secret: z.string().optional(),
-  headers: z.record(z.string()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
   active: z.boolean().default(true),
   retryConfig: z
     .object({

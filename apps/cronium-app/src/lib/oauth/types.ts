@@ -24,7 +24,7 @@ export const oauthProviderConfigSchema = z.object({
   scope: z.string(),
   redirectUri: z.string().url(),
   // Provider-specific options
-  options: z.record(z.unknown()).optional(),
+  options: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type OAuthProviderConfig = z.infer<typeof oauthProviderConfigSchema>;
