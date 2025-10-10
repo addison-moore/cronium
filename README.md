@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="apps/cronium-info/public/logo.svg" alt="Cronium Logo" width="120" height="120" />
+  <img src="apps/cronium-info/public/assets/logo-icon.svg" alt="Cronium Logo" width="120" height="120" />
   
   # Cronium
   
