@@ -3,45 +3,9 @@
 import React from "react";
 import Link from "next/link";
 import { Github, Twitter, Mail, Heart } from "lucide-react";
-import { useTranslations } from "next-intl";
 import { Logo } from "@cronium/ui";
 
-export default function Footer({ lang = "en" }: { lang?: string }) {
-  // Using a safer approach to load translations
-  let translate;
-  try {
-    translate = useTranslations("Footer");
-  } catch (error) {
-    console.error("Translation error:", error);
-    // Provide fallbacks if translations fail to load
-    translate = (key: string) => {
-      const fallbacks: Record<string, string> = {
-        Product: "Product",
-        Features: "Features",
-        Pricing: "Pricing",
-        Changelog: "Changelog",
-        Roadmap: "Roadmap",
-        Documentation: "Documentation",
-        GettingStarted: "Getting Started",
-        APIReference: "API Reference",
-        Examples: "Examples",
-        FAQ: "FAQ",
-        Community: "Community",
-        About: "About",
-        Contact: "Contact",
-        Privacy: "Privacy Policy",
-        Terms: "Terms of Service",
-        Connect: "Connect",
-        GitHub: "GitHub",
-        Twitter: "Twitter",
-        ContactUs: "Contact Us",
-        Copyright: "All rights reserved.",
-        MadeWith: "Made with love for developers everywhere",
-      };
-      return fallbacks[key] ?? key;
-    };
-  }
-
+export default function Footer() {
   return (
     <footer className="bg-secondary-bg border-border border-t">
       <div className="mx-auto max-w-7xl overflow-hidden px-6 pt-12 pb-4 sm:py-12 lg:px-8">
@@ -55,39 +19,39 @@ export default function Footer({ lang = "en" }: { lang?: string }) {
         >
           <div className="mb-10 break-inside-avoid">
             <h3 className="text-primary dark:text-secondary text-sm leading-6 font-bold">
-              {translate("Product")}
+              Product
             </h3>
             <ul role="list" className="mt-4 space-y-3">
               <li>
                 <Link
-                  href={`/${lang}/features`}
+                  href="/features"
                   className="hover:text-primary dark:hover:text-secondary text-sm leading-6 text-gray-600 dark:text-gray-400"
                 >
-                  {translate("Features")}
+                  Features
                 </Link>
               </li>
               <li>
                 <Link
-                  href={`/${lang}/pricing`}
+                  href="/pricing"
                   className="hover:text-primary dark:hover:text-secondary text-sm leading-6 text-gray-600 dark:text-gray-400"
                 >
-                  {translate("Pricing")}
+                  Pricing
                 </Link>
               </li>
               <li>
                 <Link
-                  href={`/${lang}/changelog`}
+                  href="/changelog"
                   className="hover:text-primary dark:hover:text-secondary text-sm leading-6 text-gray-600 dark:text-gray-400"
                 >
-                  {translate("Changelog")}
+                  Changelog
                 </Link>
               </li>
               <li>
                 <Link
-                  href={`/${lang}/roadmap`}
+                  href="/roadmap"
                   className="hover:text-primary dark:hover:text-secondary text-sm leading-6 text-gray-600 dark:text-gray-400"
                 >
-                  {translate("Roadmap")}
+                  Roadmap
                 </Link>
               </li>
             </ul>
@@ -95,39 +59,39 @@ export default function Footer({ lang = "en" }: { lang?: string }) {
 
           <div className="mb-10 break-inside-avoid">
             <h3 className="text-primary dark:text-secondary text-sm leading-6 font-bold">
-              {translate("Documentation")}
+              Documentation
             </h3>
             <ul role="list" className="mt-4 space-y-3">
               <li>
                 <Link
-                  href={`/${lang}/docs`}
+                  href="/docs"
                   className="hover:text-primary dark:hover:text-secondary text-sm leading-6 text-gray-600 dark:text-gray-400"
                 >
-                  {translate("GettingStarted")}
+                  Getting Started
                 </Link>
               </li>
               <li>
                 <Link
-                  href={`/${lang}/docs/api`}
+                  href="/docs/api"
                   className="hover:text-primary dark:hover:text-secondary text-sm leading-6 text-gray-600 dark:text-gray-400"
                 >
-                  {translate("APIReference")}
+                  API Reference
                 </Link>
               </li>
               <li>
                 <Link
-                  href={`/${lang}/docs/examples`}
+                  href="/docs/examples"
                   className="hover:text-primary dark:hover:text-secondary text-sm leading-6 text-gray-600 dark:text-gray-400"
                 >
-                  {translate("Examples")}
+                  Examples
                 </Link>
               </li>
               <li>
                 <Link
-                  href={`/${lang}/docs/faq`}
+                  href="/docs/faq"
                   className="hover:text-primary dark:hover:text-secondary text-sm leading-6 text-gray-600 dark:text-gray-400"
                 >
-                  {translate("FAQ")}
+                  FAQ
                 </Link>
               </li>
             </ul>
@@ -135,39 +99,39 @@ export default function Footer({ lang = "en" }: { lang?: string }) {
 
           <div className="mb-10 break-inside-avoid">
             <h3 className="text-primary dark:text-secondary text-sm leading-6 font-bold">
-              {translate("Community")}
+              Community
             </h3>
             <ul role="list" className="mt-4 space-y-3">
               <li>
                 <Link
-                  href={`/${lang}/about`}
+                  href="/about"
                   className="hover:text-primary dark:hover:text-secondary text-sm leading-6 text-gray-600 dark:text-gray-400"
                 >
-                  {translate("About")}
+                  About
                 </Link>
               </li>
               <li>
                 <Link
-                  href={`/${lang}/contact`}
+                  href="/contact"
                   className="hover:text-primary dark:hover:text-secondary text-sm leading-6 text-gray-600 dark:text-gray-400"
                 >
-                  {translate("Contact")}
+                  Contact
                 </Link>
               </li>
               <li>
                 <Link
-                  href={`/${lang}/privacy`}
+                  href="/privacy"
                   className="hover:text-primary dark:hover:text-secondary text-sm leading-6 text-gray-600 dark:text-gray-400"
                 >
-                  {translate("Privacy")}
+                  Privacy Policy
                 </Link>
               </li>
               <li>
                 <Link
-                  href={`/${lang}/terms`}
+                  href="/terms"
                   className="hover:text-primary dark:hover:text-secondary text-sm leading-6 text-gray-600 dark:text-gray-400"
                 >
-                  {translate("Terms")}
+                  Terms of Service
                 </Link>
               </li>
             </ul>
@@ -175,7 +139,7 @@ export default function Footer({ lang = "en" }: { lang?: string }) {
 
           <div className="mb-10 break-inside-avoid">
             <h3 className="text-primary dark:text-secondary text-sm leading-6 font-bold">
-              {translate("Connect")}
+              Connect
             </h3>
             <ul role="list" className="mt-4 space-y-3">
               <li>
@@ -184,7 +148,7 @@ export default function Footer({ lang = "en" }: { lang?: string }) {
                   className="hover:text-primary dark:hover:text-secondary flex items-center text-sm leading-6 text-gray-600 dark:text-gray-400"
                 >
                   <Github className="mr-2 h-4 w-4" />
-                  {translate("GitHub")}
+                  GitHub
                 </a>
               </li>
               <li>
@@ -193,7 +157,7 @@ export default function Footer({ lang = "en" }: { lang?: string }) {
                   className="hover:text-primary dark:hover:text-secondary flex items-center text-sm leading-6 text-gray-600 dark:text-gray-400"
                 >
                   <Twitter className="mr-2 h-4 w-4" />
-                  {translate("Twitter")}
+                  Twitter
                 </a>
               </li>
               <li>
@@ -202,7 +166,7 @@ export default function Footer({ lang = "en" }: { lang?: string }) {
                   className="hover:text-primary dark:hover:text-secondary flex items-center text-sm leading-6 text-gray-600 dark:text-gray-400"
                 >
                   <Mail className="mr-2 h-4 w-4" />
-                  {translate("ContactUs")}
+                  Contact Us
                 </a>
               </li>
             </ul>
@@ -211,7 +175,7 @@ export default function Footer({ lang = "en" }: { lang?: string }) {
 
         <div className="mt-5 flex flex-col items-center justify-between pt-2 md:flex-row">
           <p className="mb-4 text-xs leading-5 text-gray-600 md:mb-0 dark:text-gray-400">
-            © {new Date().getFullYear()} Cronium. {translate("Copyright")}
+            © {new Date().getFullYear()} Cronium. All rights reserved.
           </p>
           <p className="flex items-center text-xs leading-5 text-gray-600 dark:text-gray-400">
             Made with <Heart className="mx-1 h-3 w-3 text-red-500" /> for

@@ -368,7 +368,7 @@ export const webhookSystemRouter = createTRPCRouter({
     .input(
       z.object({
         webhookId: z.number(),
-        testData: z.record(z.unknown()).default({}),
+        testData: z.record(z.string(), z.unknown()).default({}),
       }),
     )
     .mutation(async ({ ctx, input }) => {

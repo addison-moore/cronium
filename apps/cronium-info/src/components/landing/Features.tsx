@@ -14,18 +14,8 @@ import {
   Brain,
   Users,
 } from "lucide-react";
-import { useTranslations } from "next-intl";
 
 export default function Features() {
-  let t;
-  try {
-    t = useTranslations("Home.Features");
-  } catch (error) {
-    console.error("Translation error:", error);
-    // Fallback if translations not available
-    t = (key: string) => key;
-  }
-
   const coreFeatures = [
     {
       icon: <Workflow className="h-6 w-6" />,
@@ -36,14 +26,16 @@ export default function Features() {
     },
     {
       icon: <Server className="h-6 w-6" />,
-      title: t("Cards.RemoteExecution.Title"),
-      description: t("Cards.RemoteExecution.Description"),
+      title: "Remote Execution",
+      description:
+        "Run scripts locally or on remote servers via SSH connections.",
       category: "Execution",
     },
     {
       icon: <Clock className="h-6 w-6" />,
-      title: t("Cards.Scheduling.Title"),
-      description: t("Cards.Scheduling.Description"),
+      title: "Advanced Scheduling",
+      description:
+        "Schedule scripts to run at specific intervals or use custom cron expressions for complex timing needs.",
       category: "Scheduling",
     },
     {
@@ -55,8 +47,9 @@ export default function Features() {
     },
     {
       icon: <Code className="h-6 w-6" />,
-      title: t("Cards.EventTypes.Title"),
-      description: t("Cards.EventTypes.Description"),
+      title: "Multiple Script Types",
+      description:
+        "Support for Python, Node.js, and Bash scripts with a built-in code editor.",
       category: "Development",
     },
     {
@@ -96,14 +89,16 @@ export default function Features() {
     },
     {
       icon: <Bell className="h-6 w-6" />,
-      title: t("Cards.Notifications.Title"),
-      description: t("Cards.Notifications.Description"),
+      title: "Custom Notifications",
+      description:
+        "Configure webhooks and email notifications for script success or failure.",
       category: "Monitoring",
     },
     {
       icon: <BarChart className="h-6 w-6" />,
-      title: t("Cards.Logging.Title"),
-      description: t("Cards.Logging.Description"),
+      title: "Detailed Logging",
+      description:
+        "View comprehensive execution logs with timestamps and output details.",
       category: "Monitoring",
     },
   ];
@@ -128,10 +123,10 @@ export default function Features() {
         {/* Header */}
         <div className="mb-16 space-y-4 text-center">
           <h2 className="bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-3xl font-bold tracking-tight text-transparent sm:text-4xl md:text-5xl dark:from-white dark:to-gray-300">
-            {t("Title")}
+            Powerful Features
           </h2>
           <p className="mx-auto max-w-3xl text-lg text-gray-600 dark:text-gray-300">
-            {t("Subtitle")}
+            Everything you need to automate and manage your scripts in one place
           </p>
 
           {/* Category Pills */}

@@ -125,22 +125,24 @@ export function IntegrationTestPanel({
         const testMutation = getTestMutation(tool.type);
         if (testMutation) {
           result = (await testMutation.mutateAsync({
-            toolId: tool.id,
+            id: tool.id,
           })) as TestResponse;
         } else {
           // Fallback to legacy test connection
           result = (await testConnectionMutation.mutateAsync({
-            toolId: tool.id,
-            testType: "connection",
+            id: tool.id,
+            testData: {},
           })) as TestResponse;
         }
       } else {
         // Use the legacy test message endpoint for send tests
         result = (await testConnectionMutation.mutateAsync({
-          toolId: tool.id,
-          testType: "send_test_message",
-          message: testMessage,
-          recipient: testRecipient,
+          id: tool.id,
+          testData: {
+            type: "send_test_message",
+            message: testMessage,
+            recipient: testRecipient,
+          },
         })) as TestResponse;
       }
 

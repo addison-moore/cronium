@@ -3,24 +3,8 @@
 import React from "react";
 import Link from "next/link";
 import { Terminal, CheckCircle } from "lucide-react";
-import { useTranslations } from "next-intl";
 
-export default function Hero({ lang = "en" }: { lang?: string }) {
-  // Try to use next-intl's useTranslations first (this is server-side ready)
-  let t: (key: string) => string;
-  try {
-    const intlT = useTranslations();
-    t = (key: string) => {
-      try {
-        return intlT(key);
-      } catch {
-        return key;
-      }
-    };
-  } catch {
-    // Fallback if next-intl context is not available
-    t = (key: string) => key;
-  }
+export default function Hero() {
   return (
     <div className="relative overflow-hidden bg-gradient-to-b from-white to-gray-100 pt-10 pb-16 dark:from-slate-950 dark:to-slate-900">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
@@ -30,111 +14,29 @@ export default function Hero({ lang = "en" }: { lang?: string }) {
             style={{ animationDelay: "0.1s" }}
           >
             <span className="text-primary dark:text-secondary">
-              {t("Home.Hero.Title")}
+              Schedule and Automate with Confidence
             </span>
           </h1>
           <p
             className="animate-fadeIn mt-6 text-lg leading-8 text-gray-700 dark:text-gray-200"
             style={{ animationDelay: "0.3s" }}
           >
-            {t("Home.Hero.Subtitle")}
+            Powerful scheduling and automation platform for developers and
+            businesses
           </p>
           <div
             className="animate-fadeIn mt-10 flex items-center justify-center gap-x-6"
             style={{ animationDelay: "0.5s" }}
           >
             <Link
-              href={`/${lang}/docs`}
+              href="/docs"
               className="hover:text-primary dark:hover:text-secondary text-sm leading-6 font-semibold text-gray-700 dark:text-gray-200"
             >
-              {t("Home.Hero.ButtonSecondary")} <span aria-hidden="true">→</span>
+              Learn More <span aria-hidden="true">→</span>
             </Link>
           </div>
         </div>
-
-        <div
-          className="animate-fadeInUp mt-16 flow-root sm:mt-24"
-          style={{ animationDelay: "0.7s" }}
-        >
-          <div className="-m-2 rounded-xl bg-gray-100 p-2 ring-1 ring-gray-300 ring-inset lg:-m-4 lg:rounded-2xl lg:p-4 dark:bg-gray-800 dark:ring-gray-700">
-            <div className="rounded-md bg-white shadow-2xl ring-1 ring-gray-900/10 dark:bg-gray-900 dark:ring-gray-700/30">
-              <div className="flex items-center gap-1 rounded-t-md bg-zinc-800 p-2">
-                <div className="h-3 w-3 rounded-full bg-red-500"></div>
-                <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
-                <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                <div className="ml-4 text-xs text-gray-300">
-                  Cronium Dashboard
-                </div>
-              </div>
-              <div className="border border-gray-200 px-6 py-10 dark:border-gray-700">
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                  <div className="rounded-lg border border-gray-200 bg-gray-100 p-6 dark:border-gray-700 dark:bg-gray-800">
-                    <div className="mb-4 flex items-center justify-between">
-                      <h3 className="font-semibold text-gray-800 dark:text-gray-100">
-                        Daily Database Backup
-                      </h3>
-                      <span className="rounded-full border border-green-200 bg-green-100 px-2 py-1 text-xs text-green-600 dark:border-green-800 dark:bg-green-900 dark:text-green-400">
-                        Active
-                      </span>
-                    </div>
-                    <div className="mb-4 flex items-center space-x-3 text-sm text-gray-600 dark:text-gray-300">
-                      <div>Schedule: Every day at 03:00 AM</div>
-                    </div>
-                    <div className="rounded-md border border-gray-200 bg-white p-3 font-mono text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
-                      <div className="mb-1 flex items-center gap-2 text-green-600 dark:text-green-400">
-                        <Terminal className="h-3 w-3" />
-                        <span>Last execution: Success (2m 34s)</span>
-                      </div>
-                      <div>
-                        # Backup script for postgres database
-                        <br />
-                        pg_dump -U postgres -d myapp &gt; /backups/myapp_$(date
-                        +%Y%m%d).sql
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-gray-200 bg-gray-100 p-6 dark:border-gray-700 dark:bg-gray-800">
-                    <div className="mb-4 flex items-center justify-between">
-                      <h3 className="font-semibold text-gray-800 dark:text-gray-100">
-                        Server Monitoring
-                      </h3>
-                      <span className="rounded-full border border-green-200 bg-green-100 px-2 py-1 text-xs text-green-600 dark:border-green-800 dark:bg-green-900 dark:text-green-400">
-                        Active
-                      </span>
-                    </div>
-                    <div className="mb-4 flex items-center space-x-3 text-sm text-gray-600 dark:text-gray-300">
-                      <div>Schedule: Every 5 minutes</div>
-                    </div>
-                    <div className="rounded-md border border-gray-200 bg-white p-3 font-mono text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
-                      <div className="mb-1 flex items-center gap-2 text-green-600 dark:text-green-400">
-                        <Terminal className="h-3 w-3" />
-                        <span>Last execution: Success (0m 12s)</span>
-                      </div>
-                      <div>
-                        # Check server health and send alerts
-                        <br />
-                        free -m | grep Mem | grep "Memory Usage"
-                        <br /># Send alert if memory usage is above 90%
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div className="mt-16">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-primary dark:text-secondary text-base leading-7 font-semibold">
-              {t("Home.Features.Title")}
-            </h2>
-            <p className="mt-2 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl dark:text-white">
-              {t("Home.Features.Subtitle")}
-            </p>
-          </div>
-
           <div className="mx-auto mt-10 max-w-2xl sm:mt-12 lg:mt-16 lg:max-w-4xl">
             <dl className="grid max-w-xl grid-cols-1 gap-x-8 gap-y-10 lg:max-w-none lg:grid-cols-2 lg:gap-y-16">
               {features.map((feature) => (

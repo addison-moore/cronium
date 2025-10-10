@@ -18,6 +18,10 @@ import { auditLog } from "@/lib/security/audit-logger";
 import { processToolActionTemplate } from "@/lib/tool-action-template-processor";
 import { createTemplateContext } from "@/lib/template-processor";
 import { type EncryptedData } from "@/lib/security/credential-encryption";
+import {
+  getServerActionById,
+  getAllServerActionIds,
+} from "@/lib/tools/server-action-executor";
 
 export interface ToolActionConfig {
   toolType: string;
@@ -250,11 +254,6 @@ export async function executeToolAction(
     console.log(
       `[ToolAction] Pooled connection:`,
       pooledConnection ? "Found" : "Not found",
-    );
-
-    // Use server-side action executor instead of client-side registry
-    const { getServerActionById, getAllServerActionIds } = await import(
-      "@/lib/tools/server-action-executor"
     );
 
     // Get the action definition

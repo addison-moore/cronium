@@ -201,7 +201,7 @@ export const dashboardWidgetSchema = z.object({
     "gauge",
   ]),
   title: z.string().min(1).max(100),
-  config: z.record(z.any()), // Widget-specific configuration
+  config: z.record(z.string(), z.any()), // Widget-specific configuration
   position: z.object({
     x: z.number().min(0),
     y: z.number().min(0),

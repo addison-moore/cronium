@@ -1624,7 +1624,7 @@ module.exports = croniumInstance;`;
           // Schedule connection cleanup after a delay
           setTimeout(() => {
             try {
-              if (oldConnection.ssh && !oldConnection.ssh.destroyed) {
+              if (oldConnection.ssh) {
                 oldConnection.ssh.end();
               }
             } catch (e) {

@@ -28,11 +28,35 @@ export default defineConfig({
       }
     }
 
-    // Copy styles.css to dist
+    // Process styles.css through PostCSS to compile Tailwind
+    console.log("Processing styles.css through PostCSS...");
+    const { default: postcss } = await import("postcss");
+    const tailwindcssPlugin = await import("@tailwindcss/postcss");
+
     const srcStylesPath = path.join(process.cwd(), "src", "styles.css");
     const distStylesPath = path.join(distPath, "styles.css");
+
     if (fs.existsSync(srcStylesPath)) {
-      fs.copyFileSync(srcStylesPath, distStylesPath);
+      const css = fs.readFileSync(srcStylesPath, "utf-8");
+
+      try {
+        // Load Tailwind CSS v4 PostCSS plugin
+        const processor = postcss([tailwindcssPlugin.default()]);
+        const result = await processor.process(css, {
+          from: srcStylesPath,
+          to: distStylesPath,
+        });
+
+        fs.writeFileSync(distStylesPath, result.css);
+        if (result.map) {
+          fs.writeFileSync(distStylesPath + ".map", result.map.toString());
+        }
+        console.log("✓ styles.css processed successfully");
+      } catch (error) {
+        console.error("Error processing styles.css:", error);
+        // Fallback to copying if PostCSS fails
+        fs.copyFileSync(srcStylesPath, distStylesPath);
+      }
     }
   },
 });

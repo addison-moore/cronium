@@ -55,7 +55,7 @@ export function Modal({
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute top-0 right-0 h-6 w-6"
+                className="absolute -top-2 -right-2 h-8 w-8 rounded-md"
                 onClick={onClose}
               >
                 <X className="h-4 w-4" />

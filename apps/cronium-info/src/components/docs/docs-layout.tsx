@@ -16,7 +16,6 @@ interface NavItem {
 
 interface DocsLayoutProps {
   children: React.ReactNode;
-  lang: string;
   tableOfContents?: { title: string; href: string; level: number }[];
 }
 
@@ -52,17 +51,7 @@ const navigationItems: NavItem[] = [
   },
 ];
 
-function NavSection({
-  item,
-  lang,
-  level = 0,
-}: {
-  item: NavItem;
-  lang: string;
-  level?: number;
-}) {
-  // Ensure lang is a non-empty string
-  const safeLang = lang || "en";
+function NavSection({ item, level = 0 }: { item: NavItem; level?: number }) {
   const [isOpen, setIsOpen] = useState(true);
   const pathname = usePathname();
 
@@ -83,12 +72,7 @@ function NavSection({
         {isOpen && (
           <div className="ml-4 space-y-1">
             {item.items.map((subItem, index) => (
-              <NavSection
-                key={index}
-                item={subItem}
-                lang={safeLang}
-                level={level + 1}
-              />
+              <NavSection key={index} item={subItem} level={level + 1} />
             ))}
           </div>
         )}
@@ -96,11 +80,11 @@ function NavSection({
     );
   }
 
-  const isActive = pathname === `/${safeLang}${item.href ?? ""}`;
+  const isActive = pathname === item.href;
 
   return (
     <Link
-      href={`/${safeLang}${item.href ?? ""}`}
+      href={item.href ?? "#"}
       className={cn(
         "block rounded-md px-3 py-2 text-sm transition-colors",
         isActive
@@ -153,14 +137,13 @@ function TableOfContents({
 
 export default function DocsLayout({
   children,
-  lang,
   tableOfContents,
 }: DocsLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Navbar lang={lang} />
+      <Navbar />
 
       <div className="flex flex-1">
         {/* Mobile sidebar overlay */}
@@ -191,7 +174,7 @@ export default function DocsLayout({
 
             <nav className="space-y-2">
               {navigationItems.map((item, index) => (
-                <NavSection key={index} item={item} lang={lang} />
+                <NavSection key={index} item={item} />
               ))}
             </nav>
           </div>
@@ -221,7 +204,7 @@ export default function DocsLayout({
         </div>
       </div>
 
-      <Footer lang={lang} />
+      <Footer />
     </div>
   );
 }
