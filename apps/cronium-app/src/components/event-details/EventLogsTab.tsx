@@ -14,6 +14,12 @@ import {
 } from "@cronium/ui";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@cronium/ui";
 import { ScrollArea } from "@cronium/ui";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { LogStatus } from "@/shared/schema";
@@ -86,6 +92,74 @@ export function EventLogsTab({
     return `${hours}h ${remainingMinutes}m ${totalSeconds.toFixed(2)}s`;
   };
 
+  const formatDurationWithBreakdown = (log: Log) => {
+    // If we have execution timing, show both with a tooltip
+    if (log.executionDuration !== undefined && log.executionDuration !== null) {
+      const execTime = formatDuration(log.executionDuration);
+      const totalTime = formatDuration(log.duration);
+      const setupTime = log.setupDuration
+        ? formatDuration(log.setupDuration)
+        : null;
+
+      // Calculate other overhead (cleanup, etc.)
+      const otherOverhead =
+        log.duration && log.executionDuration
+          ? log.duration - log.executionDuration - (log.setupDuration ?? 0)
+          : null;
+
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="cursor-help space-y-1">
+                <div className="font-medium">{execTime}</div>
+                <div className="text-muted-foreground text-xs">
+                  Total: {totalTime}
+                </div>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">
+              <div className="space-y-2">
+                <div className="font-semibold">Execution Breakdown</div>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between gap-4">
+                    <span>Script Execution:</span>
+                    <span className="font-medium">{execTime}</span>
+                  </div>
+                  {setupTime && (
+                    <div className="flex justify-between gap-4">
+                      <span>Setup (container/SSH):</span>
+                      <span className="text-muted-foreground">{setupTime}</span>
+                    </div>
+                  )}
+                  {otherOverhead && otherOverhead > 0 && (
+                    <div className="flex justify-between gap-4">
+                      <span>Cleanup/Other:</span>
+                      <span className="text-muted-foreground">
+                        {formatDuration(otherOverhead)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between gap-4 border-t pt-1">
+                    <span>Total Duration:</span>
+                    <span className="font-medium">{totalTime}</span>
+                  </div>
+                </div>
+                <div className="text-muted-foreground text-xs italic">
+                  Setup includes container creation, image pulls, or SSH
+                  connection establishment
+                </div>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+
+    // Fall back to just showing total duration
+    return formatDuration(log.duration);
+  };
+
   const getStatusBadge = (status: string) => {
     const statusUpper = status.toUpperCase();
 
@@ -153,7 +227,7 @@ export function EventLogsTab({
                   <TableRow key={log.id}>
                     <TableCell>{getStatusBadge(log.status)}</TableCell>
                     <TableCell>{formatDate(log.startTime)}</TableCell>
-                    <TableCell>{formatDuration(log.duration)}</TableCell>
+                    <TableCell>{formatDurationWithBreakdown(log)}</TableCell>
                     <TableCell>
                       <ActionMenu
                         actions={[

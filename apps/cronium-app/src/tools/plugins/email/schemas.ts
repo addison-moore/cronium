@@ -21,7 +21,7 @@ export const emailSendSchema = z.object({
   toolId: z.number().int().positive("Tool ID must be a positive integer"),
   message: z.string().min(1, "Message content is required"),
   templateId: z.number().int().positive().optional(),
-  variables: z.record(z.string()).optional(),
+  variables: z.record(z.string(), z.string()).optional(),
   recipients: z.string().min(1, "Recipients are required"), // Comma-separated emails
   subject: z.string().min(1, "Subject is required"),
   cc: z.string().optional(), // Comma-separated emails

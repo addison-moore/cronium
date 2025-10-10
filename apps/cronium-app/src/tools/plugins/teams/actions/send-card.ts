@@ -86,7 +86,7 @@ const adaptiveCardSchema = z.object({
         z.object({
           type: z.literal("Action.Submit"),
           title: z.string(),
-          data: z.record(z.any()).optional(),
+          data: z.record(z.string(), z.any()).optional(),
         }),
         // ShowCard action
         z.object({

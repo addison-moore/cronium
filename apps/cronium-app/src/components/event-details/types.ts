@@ -16,6 +16,8 @@ export interface Log {
   startTime: string | Date;
   endTime?: string | Date | null;
   duration: number | null;
+  executionDuration?: number | null; // Actual script execution time in ms
+  setupDuration?: number | null; // Setup phase time in ms
   retries?: number | null;
   scriptType?: EventType | null;
 }

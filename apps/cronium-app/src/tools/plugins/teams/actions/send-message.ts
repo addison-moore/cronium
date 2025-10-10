@@ -59,7 +59,7 @@ export const sendMessageSchema = z.object({
           )
           .optional(),
         body: z.string().optional(),
-        headers: z.record(z.string()).optional(),
+        headers: z.record(z.string(), z.string()).optional(),
       }),
     )
     .optional()

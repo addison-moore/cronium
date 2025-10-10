@@ -1,59 +1,26 @@
 src/components/event-form/ActionParameterForm.tsx(351,29): error TS2339: Property 'values' does not exist on type '$ZodEnumDef<Readonly<Record<string, EnumValue>>>'.
 src/lib/oauth/types.ts(27,14): error TS2554: Expected 2-3 arguments, but got 1.
+src/lib/scheduler/tool-action-executor.ts(199,11): error TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'EncryptedData'.
+  Type 'Record<string, unknown>' is missing the following properties from type 'EncryptedData': encrypted, iv, authTag, algorithm, keyDerivation
+src/lib/scheduler/tool-action-executor.ts(413,61): error TS2379: Argument of type 'import("/Users/addison/Code/cronium/cronium/apps/cronium-app/src/lib/scheduler/tool-action-executor").ToolActionExecutionContext' is not assignable to parameter of type 'import("/Users/addison/Code/cronium/cronium/apps/cronium-app/src/lib/tools/server-action-executor").ToolActionExecutionContext' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  The types of 'variables.set' are incompatible between these types.
+    Type '(key: string, value: unknown) => void' is not assignable to type '(key: string) => void'.
+      Target signature provides too few arguments. Expected 2 or more, but got 1.
 src/lib/ssh.ts(1627,59): error TS2551: Property 'destroyed' does not exist on type 'Client'. Did you mean 'destroy'?
+src/lib/tools/server-action-executor.ts(54,3): error TS2375: Type '{ id: string; name: string; actionType: ActionType; inputSchema: z.ZodType<any, unknown, z.core.$ZodTypeInternals<any, unknown>>; features: ActionFeatures | undefined; execute: (credentials: any, params: any, context: ExecutionContext) => Promise<any>; }' is not assignable to type 'ServerActionDefinition' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'features' are incompatible.
+    Type 'ActionFeatures | undefined' is not assignable to type '{ webhookSupport?: boolean; }'.
+      Type 'undefined' is not assignable to type '{ webhookSupport?: boolean; }'.
 src/lib/webhooks/WebhookManager.ts(17,14): error TS2554: Expected 2-3 arguments, but got 1.
-src/server/api/routers/integrations.ts(21,16): error TS2554: Expected 2-3 arguments, but got 1.
 src/server/api/routers/toolActionTemplates.ts(16,23): error TS2554: Expected 2-3 arguments, but got 1.
 src/server/api/routers/toolActionTemplates.ts(51,23): error TS2554: Expected 2-3 arguments, but got 1.
 src/server/api/routers/webhook-system.ts(371,21): error TS2554: Expected 2-3 arguments, but got 1.
 src/server/api/routers/workflows.ts(438,22): error TS2365: Operator '>' cannot be applied to types '{}' and 'number'.
 src/server/utils/db-patterns.ts(38,34): error TS2881: This expression is never nullish.
 src/shared/schemas/events.ts(66,37): error TS2353: Object literal may only specify known properties, and 'required_error' does not exist in type '{ error?: string | $ZodErrorMap<$ZodIssueInvalidValue<unknown>> | undefined; message?: string | undefined; }'.
-src/shared/schemas/integrations.ts(8,16): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/integrations.ts(19,14): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/integrations.ts(20,18): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/integrations.ts(21,11): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/integrations.ts(36,22): error TS2554: Expected 2-3 arguments, but got 1.
 src/shared/schemas/monitoring.ts(204,13): error TS2554: Expected 2-3 arguments, but got 1.
 src/shared/schemas/webhooks.ts(56,20): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/workflows.ts(71,7): error TS2353: Object literal may only specify known properties, and 'required_error' does not exist in type '{ error?: string | $ZodErrorMap<$ZodIssueInvalidValue<unknown>> | undefined; message?: string | undefined; }'.
-src/shared/schemas/workflows.ts(259,14): error TS2554: Expected 2-3 arguments, but got 1.
-src/shared/schemas/workflows.ts(303,14): error TS2554: Expected 2-3 arguments, but got 1.
 src/tools/IntegrationTestPanel.tsx(128,13): error TS2353: Object literal may only specify known properties, and 'toolId' does not exist in type '{ id: number; testData?: Record<string, any> | undefined; }'.
 src/tools/IntegrationTestPanel.tsx(133,13): error TS2353: Object literal may only specify known properties, and 'toolId' does not exist in type '{ id: number; testData?: Record<string, any> | undefined; }'.
 src/tools/IntegrationTestPanel.tsx(140,11): error TS2353: Object literal may only specify known properties, and 'toolId' does not exist in type '{ id: number; testData?: Record<string, any> | undefined; }'.
-src/tools/plugins/discord/api-routes.ts(162,24): error TS2554: Expected 2-3 arguments, but got 1.
-src/tools/plugins/discord/api-routes.ts(181,32): error TS2339: Property 'errors' does not exist on type 'ZodError<{ webhookUrl: string; username?: string | undefined; avatarUrl?: string | undefined; }>'.
-src/tools/plugins/discord/api-routes.ts(182,14): error TS7006: Parameter 'err' implicitly has an 'any' type.
-src/tools/plugins/discord/schemas.ts(21,16): error TS2554: Expected 2-3 arguments, but got 1.
-src/tools/plugins/email/api-routes.ts(121,24): error TS2554: Expected 2-3 arguments, but got 1.
-src/tools/plugins/email/api-routes.ts(137,32): error TS2339: Property 'errors' does not exist on type 'ZodError<{ smtpHost: string; smtpPort: number; smtpUser: string; smtpPassword: string; fromEmail: string; enableTLS: boolean; enableSSL: boolean; fromName?: string | undefined; }>'.
-src/tools/plugins/email/api-routes.ts(138,14): error TS7006: Parameter 'err' implicitly has an 'any' type.
-src/tools/plugins/email/email-plugin.tsx(348,64): error TS2339: Property 'errors' does not exist on type 'ZodError<{ smtpHost: string; smtpPort: number; smtpUser: string; smtpPassword: string; fromEmail: string; enableTLS: boolean; enableSSL: boolean; fromName?: string | undefined; }>'.
-src/tools/plugins/email/email-plugin.tsx(348,76): error TS7006: Parameter 'e' implicitly has an 'any' type.
-src/tools/plugins/email/email-plugin.tsx(403,29): error TS2339: Property 'errors' does not exist on type 'ZodError<any>'.
-src/tools/plugins/email/email-plugin.tsx(404,16): error TS7006: Parameter 'e' implicitly has an 'any' type.
-src/tools/plugins/email/schemas.ts(24,16): error TS2554: Expected 2-3 arguments, but got 1.
-src/tools/plugins/google-sheets/api-routes.ts(59,24): error TS2554: Expected 2-3 arguments, but got 1.
-src/tools/plugins/google-sheets/api-routes.ts(78,32): error TS2339: Property 'errors' does not exist on type 'ZodError<{ clientId: string; clientSecret: string; scope: string; refreshToken?: string | undefined; spreadsheetId?: string | undefined; }>'.
-src/tools/plugins/google-sheets/api-routes.ts(79,14): error TS7006: Parameter 'err' implicitly has an 'any' type.
-src/tools/plugins/notion/actions/create-page.ts(46,6): error TS2554: Expected 2-3 arguments, but got 1.
-src/tools/plugins/notion/actions/update-database.ts(10,6): error TS2554: Expected 2-3 arguments, but got 1.
-src/tools/plugins/notion/api-routes.ts(59,24): error TS2554: Expected 2-3 arguments, but got 1.
-src/tools/plugins/notion/api-routes.ts(77,32): error TS2339: Property 'errors' does not exist on type 'ZodError<{ apiKey: string; workspaceId?: string | undefined; }>'.
-src/tools/plugins/notion/api-routes.ts(78,14): error TS7006: Parameter 'err' implicitly has an 'any' type.
-src/tools/plugins/slack/api-routes.ts(242,24): error TS2554: Expected 2-3 arguments, but got 1.
-src/tools/plugins/slack/api-routes.ts(260,32): error TS2339: Property 'errors' does not exist on type 'ZodError<{ webhookUrl: string; channel?: string | undefined; username?: string | undefined; iconEmoji?: string | undefined; iconUrl?: string | undefined; }>'.
-src/tools/plugins/slack/api-routes.ts(261,14): error TS7006: Parameter 'err' implicitly has an 'any' type.
-src/tools/plugins/slack/schemas.ts(23,16): error TS2554: Expected 2-3 arguments, but got 1.
-src/tools/plugins/teams/actions/send-card.ts(89,19): error TS2554: Expected 2-3 arguments, but got 1.
-src/tools/plugins/teams/actions/send-message.ts(62,20): error TS2554: Expected 2-3 arguments, but got 1.
-src/tools/plugins/teams/api-routes.ts(59,24): error TS2554: Expected 2-3 arguments, but got 1.
-src/tools/plugins/teams/api-routes.ts(77,32): error TS2339: Property 'errors' does not exist on type 'ZodError<{ scope: string; webhookUrl?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; tenantId?: string | undefined; refreshToken?: string | undefined; }>'.
-src/tools/plugins/teams/api-routes.ts(78,14): error TS7006: Parameter 'err' implicitly has an 'any' type.
-src/tools/plugins/trello/api-routes.ts(59,24): error TS2554: Expected 2-3 arguments, but got 1.
-src/tools/plugins/trello/api-routes.ts(77,32): error TS2339: Property 'errors' does not exist on type 'ZodError<{ apiKey: string; apiToken: string; boardId?: string | undefined; }>'.
-src/tools/plugins/trello/api-routes.ts(78,14): error TS7006: Parameter 'err' implicitly has an 'any' type.
-src/tools/plugins/validation-registry.ts(45,28): error TS2339: Property 'errors' does not exist on type 'ZodError<unknown>'.
-src/tools/plugins/validation-registry.ts(46,10): error TS7006: Parameter 'e' implicitly has an 'any' type.
 src/tools/templates/TemplateActionParameterForm.tsx(387,29): error TS2339: Property 'values' does not exist on type '$ZodEnumDef<Readonly<Record<string, EnumValue>>>'.
