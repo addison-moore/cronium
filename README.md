@@ -1,7 +1,6 @@
 <div align="center">
-  <img src="apps/cronium-info/public/assets/logo-icon.svg" alt="Cronium Logo" width="120" height="120" />
   
-  # Cronium
+# <img src="apps/cronium-info/public/assets/logo-icon.svg" alt="Cronium Logo" width="42" height="42" style="vertical-align: middle;" /> Cronium
   
   **Open-source automation platform for scheduled scripts and workflows**
   
