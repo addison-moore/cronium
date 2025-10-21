@@ -1,32 +1,88 @@
 "use client";
 
-import { useEffect } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+
+type Theme = "light" | "dark" | "system";
+
+type ThemeContextType = {
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+};
+
+const defaultThemeContext: ThemeContextType = {
+  theme: "system",
+  setTheme: (_theme: Theme) => {
+    // no-op: during SSR/build we skip mutating the theme
+  },
+};
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+export function useTheme(): ThemeContextType {
+  const context = useContext(ThemeContext);
+  if (!context) {
+    // Return default values during SSR/build time
+    return defaultThemeContext;
+  }
+  return context;
+}
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  const [theme, setTheme] = useState<Theme>("system");
+
   useEffect(() => {
-    // Function to update theme based on system preference
-    const updateTheme = (e: MediaQueryListEvent | MediaQueryList) => {
-      if (e.matches) {
-        document.documentElement.classList.add("dark");
+    setMounted(true);
+    // Get stored theme preference
+    const stored = localStorage.getItem("theme") as Theme | null;
+    if (stored) {
+      setTheme(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    const applyTheme = () => {
+      const root = document.documentElement;
+
+      if (theme === "system") {
+        const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
+          .matches
+          ? "dark"
+          : "light";
+        root.classList.toggle("dark", systemTheme === "dark");
       } else {
-        document.documentElement.classList.remove("dark");
+        root.classList.toggle("dark", theme === "dark");
       }
     };
 
-    // Check initial preference
-    const darkModeMediaQuery = window.matchMedia(
-      "(prefers-color-scheme: dark)",
-    );
-    updateTheme(darkModeMediaQuery);
+    applyTheme();
 
-    // Listen for changes
-    darkModeMediaQuery.addEventListener("change", updateTheme);
+    // Listen for system theme changes only if theme is "system"
+    if (theme === "system") {
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      const handler = () => applyTheme();
+      mediaQuery.addEventListener("change", handler);
+      return () => mediaQuery.removeEventListener("change", handler);
+    }
 
-    // Cleanup
-    return () => {
-      darkModeMediaQuery.removeEventListener("change", updateTheme);
-    };
-  }, []);
+    return undefined;
+  }, [theme]);
 
-  return <>{children}</>;
+  const handleSetTheme = (newTheme: Theme) => {
+    setTheme(newTheme);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("theme", newTheme);
+    }
+  };
+
+  // During SSR, don't provide context to avoid hydration issues
+  if (!mounted) {
+    return <>{children}</>;
+  }
+
+  return (
+    <ThemeContext.Provider value={{ theme, setTheme: handleSetTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
 }

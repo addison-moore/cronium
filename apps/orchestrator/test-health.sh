@@ -9,7 +9,7 @@ fi
 echo "Starting Cronium Agent..."
 
 # Start the agent in the background
-CRONIUM_API_ENDPOINT=http://localhost:5001/api/internal CRONIUM_API_TOKEN=test-token ./cronium-agent --config test-config.yaml > agent.log 2>&1 &
+CRONIUM_API_ENDPOINT=http://localhost:5001/api/internal CRONIUM_API_TOKEN=test-token ./cronium-orchestrator --config test-config.yaml > agent.log 2>&1 &
 PID=$!
 
 # Give it time to start

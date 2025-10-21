@@ -115,17 +115,14 @@ export default function Features() {
   ];
 
   return (
-    <section
-      id="features"
-      className="bg-gradient-to-br from-gray-50 via-white to-gray-50 py-16 md:py-24 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900"
-    >
+    <section id="features" className="bg-background py-16 md:py-24">
       <div className="container mx-auto max-w-7xl px-4 md:px-6">
         {/* Header */}
         <div className="mb-16 space-y-4 text-center">
-          <h2 className="bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-3xl font-bold tracking-tight text-transparent sm:text-4xl md:text-5xl dark:from-white dark:to-gray-300">
+          <h2 className="text-foreground text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
             Powerful Features
           </h2>
-          <p className="mx-auto max-w-3xl text-lg text-gray-600 dark:text-gray-300">
+          <p className="text-muted-foreground mx-auto max-w-3xl text-lg">
             Everything you need to automate and manage your scripts in one place
           </p>
 
@@ -151,7 +148,7 @@ export default function Features() {
             return (
               <div
                 key={index}
-                className="group relative rounded-2xl border border-gray-200 bg-white p-6 transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 hover:shadow-lg dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-gray-600"
+                className="group border-border bg-card hover:border-border relative rounded-2xl border p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
               >
                 {/* Category Badge */}
                 <div className="absolute top-4 right-4">
@@ -168,10 +165,10 @@ export default function Features() {
                 </div>
 
                 {/* Content */}
-                <h3 className="group-hover:text-primary mb-3 text-lg font-semibold text-gray-900 transition-colors dark:text-white">
+                <h3 className="group-hover:text-primary text-card-foreground mb-3 text-lg font-semibold transition-colors">
                   {feature.title}
                 </h3>
-                <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-300">
+                <p className="text-muted-foreground text-sm leading-relaxed">
                   {feature.description}
                 </p>
               </div>
@@ -182,7 +179,7 @@ export default function Features() {
         {/* Feature Highlights */}
         <div className="mt-20 grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
           <div className="space-y-6">
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <h3 className="text-foreground text-2xl font-bold">
               Enterprise-Grade Platform
             </h3>
             <div className="space-y-4">
@@ -191,10 +188,10 @@ export default function Features() {
                   <div className="h-2 w-2 rounded-full bg-green-600"></div>
                 </div>
                 <div>
-                  <h4 className="font-semibold text-gray-900 dark:text-white">
+                  <h4 className="text-foreground font-semibold">
                     Multi-Server Management
                   </h4>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                  <p className="text-muted-foreground text-sm">
                     Connect and manage multiple remote servers with encrypted
                     SSH connections and health monitoring.
                   </p>
@@ -206,10 +203,10 @@ export default function Features() {
                   <div className="h-2 w-2 rounded-full bg-blue-600"></div>
                 </div>
                 <div>
-                  <h4 className="font-semibold text-gray-900 dark:text-white">
+                  <h4 className="text-foreground font-semibold">
                     Advanced Workflow Engine
                   </h4>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                  <p className="text-muted-foreground text-sm">
                     Create sophisticated automation workflows with conditional
                     logic, error handling, and rollback capabilities.
                   </p>
@@ -221,10 +218,10 @@ export default function Features() {
                   <div className="h-2 w-2 rounded-full bg-purple-600"></div>
                 </div>
                 <div>
-                  <h4 className="font-semibold text-gray-900 dark:text-white">
+                  <h4 className="text-foreground font-semibold">
                     Security-First Design
                   </h4>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                  <p className="text-muted-foreground text-sm">
                     End-to-end encryption, role-based access control, and secure
                     credential management protect your data.
                   </p>
@@ -235,36 +232,36 @@ export default function Features() {
 
           <div className="relative">
             <div className="from-primary/20 to-secondary/20 absolute inset-0 rounded-2xl bg-gradient-to-r blur-3xl"></div>
-            <div className="relative rounded-2xl border border-gray-200 bg-white p-8 shadow-xl dark:border-gray-700 dark:bg-gray-800">
+            <div className="border-border bg-card relative rounded-2xl border p-8 shadow-xl">
               <div className="space-y-4">
                 <div className="flex items-center space-x-3">
                   <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  <span className="text-card-foreground text-sm font-medium">
                     System Status: Operational
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="text-gray-500 dark:text-gray-400">
+                    <span className="text-muted-foreground">
                       Active Scripts
                     </span>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <div className="text-card-foreground text-2xl font-bold">
                       247
                     </div>
                   </div>
                   <div>
-                    <span className="text-gray-500 dark:text-gray-400">
+                    <span className="text-muted-foreground">
                       Servers Connected
                     </span>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <div className="text-card-foreground text-2xl font-bold">
                       12
                     </div>
                   </div>
                   <div>
-                    <span className="text-gray-500 dark:text-gray-400">
+                    <span className="text-muted-foreground">
                       Workflows Running
                     </span>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <div className="text-card-foreground text-2xl font-bold">
                       38
                     </div>
                   </div>
@@ -277,8 +274,8 @@ export default function Features() {
                     </div>
                   </div>
                 </div>
-                <div className="border-t border-gray-200 pt-4 dark:border-gray-700">
-                  <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                <div className="border-border border-t pt-4">
+                  <div className="text-muted-foreground flex items-center justify-between text-xs">
                     <span>Last updated: 2 minutes ago</span>
                     <span>Uptime: 99.99%</span>
                   </div>

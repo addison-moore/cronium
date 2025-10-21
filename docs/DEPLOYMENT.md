@@ -78,7 +78,6 @@ pnpm dev
 - Hot reload for all services
 - Verbose logging
 - Uses external PostgreSQL (configure DATABASE_URL)
-- External monitoring support (Prometheus/Grafana)
 
 ### Using the Setup Script
 
@@ -173,20 +172,10 @@ Persistent data volumes:
 
 ## Monitoring
 
-### External Monitoring
+### Health Check Endpoints
 
-Cronium supports integration with external monitoring systems. Configure via environment variables:
-
-```bash
-# .env
-PROMETHEUS_URL=http://your-prometheus:9090
-GRAFANA_URL=http://your-grafana:3000
-```
-
-### Metrics Endpoints
-
-- Orchestrator: http://localhost:8080/metrics
-- Main App: http://localhost:5001/api/metrics
+- Orchestrator: http://localhost:8080/health
+- Main App: http://localhost:5001/api/health
 
 ## Scaling
 
@@ -196,7 +185,7 @@ Scale specific services:
 
 ```bash
 # Scale orchestrators
-docker-compose up -d --scale cronium-agent=3
+docker-compose up -d --scale cronium-orchestrator=3
 ```
 
 ### Load Balancing

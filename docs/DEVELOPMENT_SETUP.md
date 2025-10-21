@@ -199,7 +199,7 @@ pnpm typecheck        # Type checking
 pnpm docker:logs
 
 # Specific service
-docker logs cronium-agent-dev
+docker logs cronium-orchestrator-dev
 docker logs cronium-runtime-api-dev
 ```
 

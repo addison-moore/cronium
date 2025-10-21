@@ -26,11 +26,10 @@
     "db:studio": "turbo db:studio --filter=@cronium/app",
     "db:generate": "turbo db:generate --filter=@cronium/app",
     "clean": "turbo clean && rm -rf node_modules .turbo",
-    "docker:up": "./infra/scripts/dev-docker-local-app.sh",
-    "docker:down": "docker compose -f infra/docker/docker-compose.dev.local-app.yml down",
-    "docker:build": "./scripts/build-docker-images.sh",
-    "docker:build:simple": "docker compose -f infra/docker/docker-compose.dev.local-app.yml build",
-    "docker:logs": "docker compose -f infra/docker/docker-compose.dev.local-app.yml logs -f",
+    "dev:docker:up": "./infra/scripts/dev-docker-local-app.sh",
+    "dev:docker:down": "docker compose -f infra/docker/docker-compose.dev.local-app.yml down",
+    "dev:docker:build": "./scripts/build-docker-images.sh",
+    "dev:docker:logs": "docker compose -f infra/docker/docker-compose.dev.local-app.yml logs -f",
     "prepare": "husky"
   },
   "keywords": [],
@@ -41,16 +40,16 @@
     "@cronium/eslint-config": "workspace:*",
     "@cronium/tailwind-config": "workspace:*",
     "@cronium/typescript-config": "workspace:*",
-    "turbo": "^2.5.6",
+    "turbo": "^2.5.8",
     "husky": "^9.1.7",
-    "lint-staged": "^16.1.5",
+    "lint-staged": "^16.2.4",
     "prettier": "^3.6.2",
-    "prettier-plugin-tailwindcss": "^0.6.14"
+    "prettier-plugin-tailwindcss": "^0.7.1"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,json,md,yml,yaml}": [
       "prettier --write"
     ]
   },
-  "packageManager": "pnpm@10.15.0"
+  "packageManager": "pnpm@10.18.3"
 }

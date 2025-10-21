@@ -58,7 +58,7 @@ export interface OrchestratorJob {
 
 interface JobPayload {
   environment?: Record<string, string>;
-  timeout?: { value: number };
+  timeout?: { value: number; unit?: string };
   input?: Record<string, unknown>;
   target?: { serverId?: number };
   script?: {
@@ -81,13 +81,35 @@ interface JobPayload {
   retries?: number;
 }
 
+/**
+ * Convert timeout value to seconds based on unit
+ */
+function convertTimeoutToSeconds(value: number, unit?: string): number {
+  switch (unit) {
+    case "MINUTES":
+      return value * 60;
+    case "HOURS":
+      return value * 3600;
+    case "DAYS":
+      return value * 86400;
+    case "SECONDS":
+    default:
+      return value;
+  }
+}
+
 export function transformJobForOrchestrator(job: Job): OrchestratorJob {
   const payload = job.payload as JobPayload;
 
   // Build execution config from payload
+  // Convert timeout to seconds based on unit, then to nanoseconds for Go
+  const timeoutSeconds = payload.timeout
+    ? convertTimeoutToSeconds(payload.timeout.value, payload.timeout.unit)
+    : 3600; // Default to 1 hour if no timeout specified
+
   const execution: OrchestratorJob["execution"] = {
     environment: payload.environment ?? {},
-    timeout: (payload.timeout?.value ?? 3600) * 1000000000, // Convert seconds to nanoseconds for Go time.Duration
+    timeout: timeoutSeconds * 1000000000, // Convert seconds to nanoseconds for Go time.Duration
     inputData: payload.input ?? {},
     variables: {},
     target: { type: "local" }, // Initialize with default

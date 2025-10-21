@@ -50,7 +50,7 @@ else
 fi
 
 # Build the orchestrator image
-build_image "cronium-agent" "Orchestrator (cronium-agent)"
+build_image "cronium-orchestrator" "Orchestrator (cronium-orchestrator)"
 
 # List all built images
 echo -e "\n${GREEN}Successfully built images:${NC}"

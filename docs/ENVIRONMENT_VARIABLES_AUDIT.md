@@ -87,7 +87,6 @@ These variables are referenced in the codebase but not validated:
 - Services: `ORCHESTRATOR_URL`, `INTERNAL_API_KEY`
 - Ports: `APP_PORT`, `SOCKET_PORT`
 - Email: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`
-- Monitoring: `PROMETHEUS_URL`, `GRAFANA_URL`
 - Build: `BUILD_VERSION`, `NODE_ENV`, `LOG_LEVEL`
 - Orchestrator: `ORCHESTRATOR_ID`, `MAX_CONCURRENT_JOBS`, `JOB_POLL_INTERVAL`
 - Encryption: `ENCRYPTION_KEY`
@@ -142,7 +141,6 @@ Variables in .env.example but not found in code:
 - `RUNTIME_CACHE_TTL`
 - `MAX_REQUEST_SIZE`
 - `REQUEST_TIMEOUT`
-- `GRAFANA_USER` / `GRAFANA_PASSWORD`
 - `DOCKER_REGISTRY` / `DOCKER_USERNAME` / `DOCKER_PASSWORD`
 - `EMAIL_FROM` / `EMAIL_SERVER_*` (legacy naming)
 - `LOCAL_EXEC_CONTAINER` / `LOCAL_EXEC_NETWORK`

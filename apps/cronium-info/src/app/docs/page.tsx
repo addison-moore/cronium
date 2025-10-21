@@ -35,7 +35,7 @@ function DocSection({
   return (
     <Link
       href={link}
-      className="group hover:border-primary dark:hover:border-primary block rounded-lg border border-gray-200 bg-white p-6 transition-colors dark:border-slate-700 dark:bg-slate-800"
+      className="group hover:border-primary dark:hover:border-primary border-border bg-card block rounded-lg border p-6 transition-colors"
     >
       <div className="flex items-start space-x-4">
         <div className="flex-shrink-0">

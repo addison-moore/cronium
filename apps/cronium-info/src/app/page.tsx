@@ -15,7 +15,7 @@ export const dynamic = "force-static";
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col pt-16">
       <Navbar />
 
       <main className="flex-grow">
@@ -23,16 +23,13 @@ export default function Home() {
         <Hero />
 
         {/* How It Works Section */}
-        <section
-          id="how-it-works"
-          className="bg-gray-100 py-16 dark:bg-slate-900"
-        >
+        <section id="how-it-works" className="bg-muted py-16">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <div className="mb-12 text-center">
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+              <h2 className="text-foreground text-3xl font-bold">
                 How It Works
               </h2>
-              <p className="mx-auto mt-4 max-w-2xl text-gray-600 dark:text-gray-400">
+              <p className="text-muted-foreground mx-auto mt-4 max-w-2xl">
                 Get started with Cronium in three simple steps
               </p>
             </div>
@@ -42,25 +39,23 @@ export default function Home() {
                 <div className="bg-primary/10 dark:bg-primary/20 mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
                   <span className="text-primary text-xl font-bold">1</span>
                 </div>
-                <h3 className="mb-2 text-xl font-semibold text-gray-900 dark:text-gray-100">
+                <h3 className="text-foreground mb-2 text-xl font-semibold">
                   Create Your Events
                 </h3>
-                <p className="text-gray-600 dark:text-gray-400">
+                <p className="text-muted-foreground">
                   Write your code or set up HTTP requests to perform tasks. Use
                   any supported programming language.
                 </p>
               </div>
 
               <div className="text-center">
-                <div className="bg-secondary/20 dark:bg-secondary/20 mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
-                  <span className="text-secondary-foreground dark:text-secondary-foreground text-xl font-bold">
-                    2
-                  </span>
+                <div className="bg-secondary/20 dark:bg-secondary/30 mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
+                  <span className="text-secondary text-xl font-bold">2</span>
                 </div>
-                <h3 className="mb-2 text-xl font-semibold text-gray-900 dark:text-gray-100">
+                <h3 className="text-foreground mb-2 text-xl font-semibold">
                   Set Up Schedules
                 </h3>
-                <p className="text-gray-600 dark:text-gray-400">
+                <p className="text-muted-foreground">
                   Choose when and how often your events should run using
                   flexible scheduling options.
                 </p>
@@ -70,10 +65,10 @@ export default function Home() {
                 <div className="bg-primary/10 dark:bg-primary/20 mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
                   <span className="text-primary text-xl font-bold">3</span>
                 </div>
-                <h3 className="mb-2 text-xl font-semibold text-gray-900 dark:text-gray-100">
+                <h3 className="text-foreground mb-2 text-xl font-semibold">
                   Monitor Execution
                 </h3>
-                <p className="text-gray-600 dark:text-gray-400">
+                <p className="text-muted-foreground">
                   Track performance with detailed logs and receive notifications
                   for success or failure.
                 </p>
@@ -86,9 +81,9 @@ export default function Home() {
         <Features />
 
         {/* CTA Section */}
-        <section className="bg-white py-16 dark:bg-slate-950">
+        <section className="bg-background py-16">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-8 py-12 text-center text-white shadow-lg md:px-12 md:py-16 dark:from-violet-700 dark:to-indigo-600">
+            <div className="from-primary to-secondary rounded-xl bg-gradient-to-r px-8 py-12 text-center text-white shadow-lg md:px-12 md:py-16">
               <h2 className="mb-4 text-3xl font-bold">
                 Ready to start automating?
               </h2>
@@ -109,7 +104,7 @@ export default function Home() {
                   <Button
                     size="lg"
                     variant="outline"
-                    className="border-white/30 bg-blue-700/40 px-8 font-semibold text-white hover:bg-blue-700/50 dark:bg-violet-800/40 dark:hover:bg-violet-800/50"
+                    className="border-white/30 bg-white/10 px-8 font-semibold text-white hover:bg-white/20"
                   >
                     <svg
                       className="mr-2 h-5 w-5"
@@ -130,7 +125,7 @@ export default function Home() {
                   <Button
                     size="lg"
                     variant="outline"
-                    className="border-white/30 bg-blue-700/40 px-8 font-semibold text-white hover:bg-blue-700/50 dark:bg-violet-800/40 dark:hover:bg-violet-800/50"
+                    className="border-white/30 bg-white/10 px-8 font-semibold text-white hover:bg-white/20"
                   >
                     Read the Docs
                   </Button>

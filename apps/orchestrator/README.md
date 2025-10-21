@@ -44,7 +44,7 @@ cd orchestrator/cronium-orchestrator
 go mod download
 
 # Build the binary
-go build -o cronium-agent cmd/cronium-agent/*.go
+go build -o cronium-orchestrator cmd/cronium-orchestrator/*.go
 ```
 
 ### Running
@@ -55,13 +55,13 @@ export CRONIUM_API_URL=http://localhost:5001/api/internal
 export CRONIUM_SERVICE_TOKEN=your-service-token
 
 # Run with default configuration
-./cronium-agent
+./cronium-orchestrator
 
 # Run with custom config file
-./cronium-agent --config /path/to/config.yaml
+./cronium-orchestrator --config /path/to/config.yaml
 
 # Validate configuration
-./cronium-agent validate --config /path/to/config.yaml
+./cronium-orchestrator validate --config /path/to/config.yaml
 ```
 
 ## Configuration
@@ -185,7 +185,7 @@ Prometheus metrics are exposed at `http://localhost:9090/metrics`:
 
 ```
 cronium-orchestrator/
-├── cmd/cronium-agent/      # Main application entry point
+├── cmd/cronium-orchestrator/      # Main application entry point
 ├── internal/               # Internal packages
 │   ├── api/               # API client
 │   ├── config/            # Configuration management
@@ -225,7 +225,7 @@ BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 GIT_COMMIT=$(git rev-parse HEAD)
 
 go build -ldflags="-X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME -X main.GitCommit=$GIT_COMMIT" \
-  -o cronium-agent cmd/cronium-agent/*.go
+  -o cronium-orchestrator cmd/cronium-orchestrator/*.go
 ```
 
 ## Deployment
@@ -236,12 +236,12 @@ go build -ldflags="-X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME -X mai
 FROM golang:1.21-alpine AS builder
 WORKDIR /app
 COPY . .
-RUN go build -o cronium-agent cmd/cronium-agent/*.go
+RUN go build -o cronium-orchestrator cmd/cronium-orchestrator/*.go
 
 FROM alpine:3.19
 RUN apk add --no-cache ca-certificates
-COPY --from=builder /app/cronium-agent /usr/local/bin/
-ENTRYPOINT ["cronium-agent"]
+COPY --from=builder /app/cronium-orchestrator /usr/local/bin/
+ENTRYPOINT ["cronium-orchestrator"]
 ```
 
 ### Docker Compose
@@ -285,7 +285,7 @@ Enable debug logging:
 
 ```bash
 export CRONIUM_LOGGING_LEVEL=debug
-./cronium-agent
+./cronium-orchestrator
 ```
 
 ## License

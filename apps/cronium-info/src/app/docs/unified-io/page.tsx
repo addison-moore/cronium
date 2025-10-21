@@ -335,7 +335,7 @@ export default function UnifiedIOPage() {
                   pipelines and external system integration.
                 </p>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                  <div className="rounded-lg border p-4">
+                  <div className="border-border bg-tertiary-bg rounded-lg border p-4">
                     <h4 className="mb-2 font-semibold">
                       Cross-Language Support
                     </h4>
@@ -344,14 +344,14 @@ export default function UnifiedIOPage() {
                       scripts
                     </p>
                   </div>
-                  <div className="rounded-lg border p-4">
+                  <div className="border-border bg-tertiary-bg rounded-lg border p-4">
                     <h4 className="mb-2 font-semibold">API Integration</h4>
                     <p className="text-muted-foreground text-sm">
                       Accept input data via REST API endpoints for external
                       integrations
                     </p>
                   </div>
-                  <div className="rounded-lg border p-4">
+                  <div className="border-border bg-tertiary-bg rounded-lg border p-4">
                     <h4 className="mb-2 font-semibold">Workflow Chaining</h4>
                     <p className="text-muted-foreground text-sm">
                       Automatic data flow between connected workflow nodes

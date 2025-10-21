@@ -17,6 +17,9 @@ try {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    instrumentationHook: true,
+  },
   env: {
     PUBLIC_APP_URL: env.PUBLIC_APP_URL,
   },

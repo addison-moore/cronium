@@ -33,6 +33,7 @@ import type {
 import { ServerFilters } from "@/components/server-list/ServerFilters";
 import { ServerDeleteConfirmDialog } from "@/components/server-list/ServerDeleteConfirmDialog";
 import { trpc } from "@/lib/trpc";
+import { usePersistentPagination } from "@/hooks/use-persistent-pagination";
 
 interface ServerData {
   id: number;
@@ -69,8 +70,8 @@ export function ServersTableClient({
   const [archivedServers, setArchivedServers] = useState<ServerData[]>([]);
   const [hasLoadedArchived, setHasLoadedArchived] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState<number | null>(null);
+  const { itemsPerPage, setItemsPerPage } = usePersistentPagination(10);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Delete confirmation dialog state
   const [deleteDialogState, setDeleteDialogState] = useState<{

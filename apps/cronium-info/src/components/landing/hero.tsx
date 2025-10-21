@@ -2,15 +2,15 @@
 
 import React from "react";
 import Link from "next/link";
-import { Terminal, CheckCircle } from "lucide-react";
+import { CheckCircle } from "lucide-react";
 
 export default function Hero() {
   return (
-    <div className="relative overflow-hidden bg-gradient-to-b from-white to-gray-100 pt-10 pb-16 dark:from-slate-950 dark:to-slate-900">
+    <div className="dark:from-background dark:to-card relative overflow-hidden bg-gradient-to-b from-white to-gray-100 pt-10 pb-16">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <h1
-            className="animate-fadeIn text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl dark:text-white"
+            className="animate-fadeIn text-foreground text-4xl font-bold tracking-tight sm:text-6xl"
             style={{ animationDelay: "0.1s" }}
           >
             <span className="text-primary dark:text-secondary">
@@ -30,7 +30,7 @@ export default function Hero() {
           >
             <Link
               href="/docs"
-              className="hover:text-primary dark:hover:text-secondary text-sm leading-6 font-semibold text-gray-700 dark:text-gray-200"
+              className="hover:text-primary dark:hover:text-secondary text-foreground text-sm leading-6 font-semibold"
             >
               Learn More <span aria-hidden="true">→</span>
             </Link>
@@ -41,7 +41,7 @@ export default function Hero() {
             <dl className="grid max-w-xl grid-cols-1 gap-x-8 gap-y-10 lg:max-w-none lg:grid-cols-2 lg:gap-y-16">
               {features.map((feature) => (
                 <div key={feature.name} className="relative pl-12">
-                  <dt className="text-lg leading-7 font-semibold text-gray-900 dark:text-white">
+                  <dt className="text-foreground text-lg leading-7 font-semibold">
                     <div className="bg-primary dark:bg-primary absolute top-1 left-0 flex h-8 w-8 items-center justify-center rounded-lg">
                       <feature.icon
                         className="text-primary-foreground h-5 w-5"
@@ -50,14 +50,14 @@ export default function Hero() {
                     </div>
                     {feature.name}
                   </dt>
-                  <dd className="mt-2 text-base leading-7 text-gray-600 dark:text-gray-400">
+                  <dd className="text-muted-foreground mt-2 text-base leading-7">
                     {feature.description}
                   </dd>
                   <div className="mt-4">
                     {feature.benefits.map((benefit, i) => (
                       <div key={i} className="mt-2 flex items-center">
-                        <CheckCircle className="text-secondary dark:text-secondary mr-2 h-4 w-4" />
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                        <CheckCircle className="text-secondary mr-2 h-4 w-4" />
+                        <span className="text-muted-foreground text-sm">
                           {benefit}
                         </span>
                       </div>
@@ -149,7 +149,7 @@ const features = [
       "Run scripts on remote servers via secure SSH connections with credential management.",
     benefits: [
       "SSH key authentication",
-      "Multiple server management",
+      "Multi-server execution",
       "Health checks and monitoring",
       "Secure credential storage",
     ],

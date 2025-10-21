@@ -272,7 +272,9 @@ async function listCreatedJobs() {
   console.log(
     "\n✅ Jobs are now queued and ready for the orchestrator to process",
   );
-  console.log("📋 Monitor execution with: docker logs -f cronium-agent-dev");
+  console.log(
+    "📋 Monitor execution with: docker logs -f cronium-orchestrator-dev",
+  );
   console.log(
     "📊 Check job status with: pnpm tsx src/scripts/check-job-status.ts",
   );

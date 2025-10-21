@@ -38,7 +38,7 @@ func main() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "cronium-agent",
+	Use:   "cronium-orchestrator",
 	Short: "Cronium orchestrator agent for secure job execution",
 	Long: `Cronium Agent is a secure job orchestrator that executes scripts and commands
 in isolated Docker containers with real-time log streaming and comprehensive monitoring.`,

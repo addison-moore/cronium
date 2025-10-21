@@ -150,7 +150,7 @@ async function verifySidecarLifecycle() {
       // Try to access health endpoint from orchestrator container
       try {
         const { stdout: healthCheck } = await execAsync(
-          `docker exec cronium-agent-dev wget -q -O- http://runtime-api:8081/health 2>&1 || echo "Failed"`,
+          `docker exec cronium-orchestrator-dev wget -q -O- http://runtime-api:8081/health 2>&1 || echo "Failed"`,
         );
         console.log(
           `   Health check from orchestrator: ${healthCheck.includes("healthy") ? "✅ Accessible" : "❌ Not accessible"}`,
@@ -163,7 +163,7 @@ async function verifySidecarLifecycle() {
     // Check JWT token generation and injection
     console.log("\n🔐 Checking JWT token generation...");
     const { stdout: agentLogs } = await execAsync(
-      `docker logs cronium-agent-dev 2>&1 | grep "${execution.jobId}" | grep -E "(token|JWT)" | head -5`,
+      `docker logs cronium-orchestrator-dev 2>&1 | grep "${execution.jobId}" | grep -E "(token|JWT)" | head -5`,
     );
     console.log(
       `   Token generation logs: ${agentLogs ? "✅ Found" : "❌ Not found"}`,

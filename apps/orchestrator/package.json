@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "go build -o orchestrator ./cmd/cronium-agent",
-    "build:go": "go build -o orchestrator ./cmd/cronium-agent",
+    "build": "go build -o orchestrator ./cmd/cronium-orchestrator",
+    "build:go": "go build -o orchestrator ./cmd/cronium-orchestrator",
     "dev": "air -c .air.toml",
     "test": "go test ./...",
     "test:go": "go test ./...",

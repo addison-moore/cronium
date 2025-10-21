@@ -1,6 +1,7 @@
 # Git files
 .git
 .gitignore
+.gitmodules
 
 # Go build artifacts
 *.exe
@@ -12,30 +13,91 @@
 *.out
 orchestrator
 tmp/
+bin/
+dist/
+
+# Environment files - CRITICAL: Never include these
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+*.env
+env/
 
 # Development files
 .air.toml
-.env
-.env.local
 *.log
+logs/
 
 # IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
+*.swn
 *~
+.DS_Store
 
 # Test files
 *_test.go
 testdata/
+test/
+tests/
 coverage.txt
 coverage.html
+coverage.out
+*.cover
+benchmark/
 
 # Documentation
 *.md
 docs/
+README.md
+LICENSE
+CONTRIBUTING.md
+CHANGELOG.md
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+azure-pipelines.yml
 
 # Development data
 data/
-logs/
+uploads/
+downloads/
+
+# Docker files (not needed inside image)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Config files that will be mounted
+configs/
+config/
+
+# Private keys and certificates - CRITICAL
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+private/
+secrets/
+certs/
+
+# Backup files
+*.bak
+*.backup
+*.old
+backup/
+
+# Scripts
+scripts/
+hack/
+tools/
+
+# Vendor (if not using modules)
+vendor/

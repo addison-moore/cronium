@@ -171,7 +171,7 @@ environment:
 export CRONIUM_API_ENDPOINT=http://localhost:5001/api/internal
 export CRONIUM_API_TOKEN=your-service-token
 export CRONIUM_JOBS_MAX_CONCURRENT=5
-./cronium-agent
+./cronium-orchestrator
 ```
 
 ### Kubernetes ConfigMap

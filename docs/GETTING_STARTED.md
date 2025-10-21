@@ -139,7 +139,7 @@ docker-compose -f infra/docker/docker-compose.dev.yml --env-file .env.dev up -d
 This will start:
 
 - **cronium-app-dev**: Next.js application with hot reloading on port 5001
-- **cronium-agent-dev**: Orchestrator service with Air (Go hot reloading)
+- **cronium-orchestrator-dev**: Orchestrator service with Air (Go hot reloading)
 - **valkey**: Redis-compatible cache/queue service
 
 ### 7. Verify Services are Running
@@ -197,7 +197,7 @@ pnpm docker:logs
 
 # View specific service logs
 docker-compose -f infra/docker/docker-compose.dev.yml logs -f cronium-app-dev
-docker-compose -f infra/docker/docker-compose.dev.yml logs -f cronium-agent-dev
+docker-compose -f infra/docker/docker-compose.dev.yml logs -f cronium-orchestrator-dev
 ```
 
 ### Stopping Services
