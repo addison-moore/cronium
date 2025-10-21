@@ -6,7 +6,10 @@ FROM node:20-alpine AS deps
 RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
-# Copy package files
+# Enable pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Copy package files for all workspaces
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY turbo.json ./
 COPY apps/cronium-app/package.json ./apps/cronium-app/
@@ -15,8 +18,7 @@ COPY packages/config-typescript/package.json ./packages/config-typescript/
 COPY packages/config-eslint/package.json ./packages/config-eslint/
 COPY packages/config-tailwind/package.json ./packages/config-tailwind/
 
-# Install pnpm and dependencies
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Install dependencies
 RUN pnpm install --frozen-lockfile
 
 # Stage 2: Builder
@@ -24,12 +26,13 @@ FROM node:20-alpine AS builder
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/cronium-app/node_modules ./apps/cronium-app/node_modules
-COPY --from=deps /app/packages/ui/node_modules ./packages/ui/node_modules
+# Enable pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Copy source code (respecting .dockerignore)
+# Copy entire workspace with dependencies from deps
+COPY --from=deps /app ./
+
+# Copy all source files
 COPY . .
 
 # Set build-time environment variables
@@ -40,7 +43,6 @@ ENV NODE_ENV=production
 ENV SKIP_ENV_VALIDATION=true
 
 # Build the application
-RUN corepack enable && corepack prepare pnpm@latest --activate
 RUN pnpm build --filter @cronium/app
 
 # Stage 3: Runtime
