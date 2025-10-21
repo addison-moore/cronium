@@ -109,7 +109,7 @@ echo "🔨 Building Runtime API service..."
 
 # Build Orchestrator
 echo "🔨 Building Orchestrator service..."
-(cd apps/orchestrator && go mod download && go build -o orchestrator ./cmd/cronium-agent)
+(cd apps/orchestrator && go mod download && go build -o orchestrator ./cmd/cronium-orchestrator)
 
 # Build container images
 echo "🐳 Building container images..."

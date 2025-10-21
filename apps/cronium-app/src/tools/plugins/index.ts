@@ -7,8 +7,21 @@ import { GoogleSheetsPlugin } from "./google-sheets/google-sheets-plugin";
 import { TeamsPlugin } from "./teams/teams-plugin";
 import { NotionPlugin } from "./notion/notion-plugin";
 import { TrelloPlugin } from "./trello/trello-plugin";
+
+// Track initialization state globally
+declare global {
+  var __pluginsInitialized: boolean | undefined;
+}
+
 // Register all built-in plugins
 export function initializePlugins() {
+  // Check if already initialized
+  if (global.__pluginsInitialized) {
+    console.log("[initializePlugins] Plugins already initialized, skipping");
+    return;
+  }
+
+  console.log("[initializePlugins] Initializing plugins...");
   ToolPluginRegistry.register(EmailPlugin);
   ToolPluginRegistry.register(SlackPlugin);
   ToolPluginRegistry.register(DiscordPlugin);
@@ -16,6 +29,11 @@ export function initializePlugins() {
   ToolPluginRegistry.register(TeamsPlugin);
   ToolPluginRegistry.register(NotionPlugin);
   ToolPluginRegistry.register(TrelloPlugin);
+
+  global.__pluginsInitialized = true;
+  console.log(
+    `[initializePlugins] Initialized ${ToolPluginRegistry.getAllActions().length} actions`,
+  );
 }
 
 // Export plugins for manual registration if needed

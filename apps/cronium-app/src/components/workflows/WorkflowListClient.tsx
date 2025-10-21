@@ -41,6 +41,7 @@ import {
   type StandardizedTableAction,
 } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
+import { usePersistentPagination } from "@/hooks/use-persistent-pagination";
 
 interface WorkflowItem {
   id: number;
@@ -82,8 +83,8 @@ export function WorkflowListClient({
   const [tagFilter, setTagFilter] = useState<string>("all");
 
   // Pagination state
+  const { itemsPerPage, setItemsPerPage } = usePersistentPagination(10);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Bulk actions state
   const [selectedWorkflows, setSelectedWorkflows] = useState<Set<number>>(

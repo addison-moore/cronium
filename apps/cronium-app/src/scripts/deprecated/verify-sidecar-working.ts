@@ -110,7 +110,7 @@ async function verifySidecarWorking() {
     // Check orchestrator logs
     console.log("\n📋 Orchestrator logs for this job:");
     const { stdout: logs } = await execAsync(
-      `docker logs cronium-agent-dev 2>&1 | grep "${jobId}" | tail -10`,
+      `docker logs cronium-orchestrator-dev 2>&1 | grep "${jobId}" | tail -10`,
     );
     console.log(logs);
 

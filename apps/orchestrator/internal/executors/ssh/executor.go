@@ -31,9 +31,10 @@ type RunnerInfo struct {
 
 // Executor implements SSH-based job execution using the runner binary
 type Executor struct {
-	config    config.SSHConfig
-	log       *logrus.Logger
-	apiClient *api.Client
+	config        config.SSHConfig
+	timeoutConfig config.TimeoutConfig
+	log           *logrus.Logger
+	apiClient     *api.Client
 
 	// Connection pool
 	pool *ConnectionPool
@@ -84,17 +85,18 @@ func NewExecutor(cfg config.SSHConfig, apiClient *api.Client, runtimeHost string
 	metrics := NewExecutorMetrics(logrus.NewEntry(log).WithField("component", "ssh-executor"))
 
 	return &Executor{
-		config:      cfg,
-		log:         log,
-		apiClient:   apiClient,
-		pool:        pool,
-		runnerInfo:  runnerInfo,
-		runnerCache: runnerCache,
-		runtimeHost: runtimeHost,
-		runtimePort: runtimePort,
-		jwtSecret:   jwtSecret,
-		sessions:    make(map[string]*Session),
-		metrics:     metrics,
+		config:        cfg,
+		timeoutConfig: config.LoadTimeoutConfig(),
+		log:           log,
+		apiClient:     apiClient,
+		pool:          pool,
+		runnerInfo:    runnerInfo,
+		runnerCache:   runnerCache,
+		runtimeHost:   runtimeHost,
+		runtimePort:   runtimePort,
+		jwtSecret:     jwtSecret,
+		sessions:      make(map[string]*Session),
+		metrics:       metrics,
 	}, nil
 }
 

@@ -21,12 +21,12 @@ services:
     networks:
       - cronium-dev-network
 
-  # Orchestrator Service (cronium-agent)
-  cronium-agent:
+  # Orchestrator Service (cronium-orchestrator)
+  cronium-orchestrator:
     build:
       context: ../../apps/orchestrator
       dockerfile: Dockerfile.dev
-    container_name: cronium-agent-dev
+    container_name: cronium-orchestrator-dev
     environment:
       # Configuration file path
       CONFIG_FILE: /app/config/cronium-orchestrator.yaml
@@ -104,7 +104,7 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
 
       # Services
-      ORCHESTRATOR_URL: http://cronium-agent-dev:8080
+      ORCHESTRATOR_URL: http://cronium-orchestrator-dev:8080
       INTERNAL_API_KEY: ${INTERNAL_API_KEY}
       JWT_SECRET: ${JWT_SECRET}
 
@@ -131,9 +131,6 @@ services:
       # AI (optional)
       OPENAI_API_KEY: ${OPENAI_API_KEY}
 
-      # External monitoring (optional)
-      PROMETHEUS_URL: ${PROMETHEUS_URL}
-      GRAFANA_URL: ${GRAFANA_URL}
     volumes:
       - .:/app
       - /app/node_modules

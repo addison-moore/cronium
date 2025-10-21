@@ -7,7 +7,7 @@ This document provides comprehensive documentation for all environment variables
 Cronium consists of multiple services:
 
 - **Next.js Application** (`cronium-app`) - The main web application
-- **Orchestrator Service** (`cronium-agent`) - Handles job execution in containers
+- **Orchestrator Service** (`cronium-orchestrator`) - Handles job execution in containers
 - **Runtime Service** - Provides runtime API for executing containers
 - **WebSocket Server** - Real-time communication service
 - **Valkey/Redis** - Caching and job queue service
@@ -30,12 +30,11 @@ Variables are marked with service indicators:
 - [Optional Variables](#optional-variables)
   - [Email Configuration](#email-configuration)
   - [AI Integration](#ai-integration)
-  - [External Monitoring](#external-monitoring)
   - [Docker Registry](#docker-registry)
 - [Service-Specific Configuration](#service-specific-configuration)
   - [Main Application (cronium-app)](#main-application-cronium-app)
   - [WebSocket Server](#websocket-server)
-  - [Orchestrator Service (cronium-agent)](#orchestrator-service-cronium-agent)
+  - [Orchestrator Service (cronium-orchestrator)](#orchestrator-service-cronium-orchestrator)
   - [Valkey/Redis](#valkeyredis)
 - [Development Variables](#development-variables)
 - [Future Container Execution Variables](#future-container-execution-variables)
@@ -134,13 +133,6 @@ postgresql://user:password@localhost:5432/cronium?sslmode=require
 | `GEMINI_MODEL`         | Google Gemini model identifier | `string` | -       | No       |
 | `GOOGLE_CLOUD_PROJECT` | Google Cloud project ID        | `string` | -       | No       |
 
-### External Monitoring
-
-| Variable         | Description             | Type           | Default | Required |
-| ---------------- | ----------------------- | -------------- | ------- | -------- |
-| `PROMETHEUS_URL` | External Prometheus URL | `string` (URL) | -       | No       |
-| `GRAFANA_URL`    | External Grafana URL    | `string` (URL) | -       | No       |
-
 ### Docker Registry
 
 | Variable          | Description                 | Type           | Default | Required |
@@ -165,7 +157,7 @@ postgresql://user:password@localhost:5432/cronium?sslmode=require
 | `NEXT_PUBLIC_SOCKET_PORT` | Client-side WebSocket port | `number`       | `5002`                  | No       |
 | `NEXT_PUBLIC_SOCKET_URL`  | Client-side WebSocket URL  | `string` (URL) | `http://localhost:5002` | No       |
 
-### Orchestrator Service (cronium-agent)
+### Orchestrator Service (cronium-orchestrator)
 
 #### Orchestrator-Only Variables
 
@@ -180,6 +172,14 @@ These variables are only used by the orchestrator service and should NOT be incl
 | `DOCKER_HOST`         | Docker daemon socket              | `string`            | `unix:///var/run/docker.sock`           | Yes      |
 | `JWT_SECRET`          | JWT secret for container auth     | `string` (32 chars) | -                                       | Yes      |
 | `INTERNAL_API_KEY`    | Internal service auth key         | `string`            | -                                       | Yes      |
+
+#### Timeout Configuration
+
+| Variable                        | Description                         | Type     | Default | Required |
+| ------------------------------- | ----------------------------------- | -------- | ------- | -------- |
+| `CRONIUM_SETUP_TIMEOUT`         | Setup phase timeout (seconds)       | `number` | `300`   | No       |
+| `CRONIUM_CLEANUP_TIMEOUT`       | Cleanup phase timeout (seconds)     | `number` | `60`    | No       |
+| `CRONIUM_MAX_EXECUTION_TIMEOUT` | Maximum execution timeout (seconds) | `number` | `86400` | No       |
 
 **Note:** The orchestrator expects environment variables with `CRONIUM_` prefix. Docker Compose should map unprefixed variables to prefixed ones (e.g., `CRONIUM_POSTGRES_URL: ${POSTGRES_URL}`).
 
@@ -341,7 +341,7 @@ POSTGRES_MAX_CONNECTIONS="50"
 DB_SSL_MODE="require"
 
 # Services
-ORCHESTRATOR_URL="http://cronium-agent:8080"
+ORCHESTRATOR_URL="http://cronium-orchestrator:8080"
 VALKEY_URL="valkey://valkey:6379"
 BACKEND_URL="http://cronium-app:5001"
 
@@ -364,8 +364,6 @@ MAX_CONCURRENT_JOBS="20"
 DOCKER_HOST="unix:///var/run/docker.sock"
 
 # Optional - Monitoring
-PROMETHEUS_URL="http://prometheus:9090"
-GRAFANA_URL="http://grafana:3000"
 ```
 
 ### Docker Compose Environment

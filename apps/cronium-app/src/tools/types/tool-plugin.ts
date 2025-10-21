@@ -297,11 +297,28 @@ export interface TemplateManagerProps {
   onDeleteTemplate?: (templateId: number) => void;
 }
 
+// Store registry on global to persist across hot reloads and serverless invocations
+declare global {
+  var __toolPluginRegistry: Map<string, ToolPlugin> | undefined;
+}
+
+// Get or create the global plugin registry
+function getGlobalPluginRegistry(): Map<string, ToolPlugin> {
+  if (!global.__toolPluginRegistry) {
+    console.log("[ToolPluginRegistry] Creating new global plugin registry");
+    global.__toolPluginRegistry = new Map<string, ToolPlugin>();
+  }
+  return global.__toolPluginRegistry;
+}
+
 // Registry for tool plugins
 export class ToolPluginRegistry {
-  private static plugins = new Map<string, ToolPlugin>();
+  private static get plugins(): Map<string, ToolPlugin> {
+    return getGlobalPluginRegistry();
+  }
 
   static register(plugin: ToolPlugin) {
+    console.log(`[ToolPluginRegistry] Registering plugin: ${plugin.id}`);
     this.plugins.set(plugin.id, plugin);
   }
 

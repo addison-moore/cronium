@@ -22,10 +22,7 @@ interface DocsLayoutProps {
 const navigationItems: NavItem[] = [
   {
     title: "Getting Started",
-    items: [
-      { title: "Overview", href: "/docs/getting-started" },
-      { title: "Quick Start", href: "/docs/quick-start" },
-    ],
+    items: [{ title: "Quick Start", href: "/docs/quick-start" }],
   },
   {
     title: "Features",
@@ -106,7 +103,7 @@ function TableOfContents({
 
   return (
     <aside className="hidden w-64 shrink-0 xl:block">
-      <div className="sticky top-24 p-4">
+      <div className="p-4">
         <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
           <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">
             On this page
@@ -142,10 +139,10 @@ export default function DocsLayout({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="min-h-screen pt-16">
       <Navbar />
 
-      <div className="flex flex-1">
+      <div className="flex">
         {/* Mobile sidebar overlay */}
         {isSidebarOpen && (
           <div
@@ -157,11 +154,12 @@ export default function DocsLayout({
         {/* Sidebar */}
         <aside
           className={cn(
-            "fixed top-16 left-0 z-50 h-[calc(100vh-4rem)] w-72 transform overflow-y-auto border-r border-gray-200 bg-white transition-transform duration-200 ease-in-out lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:translate-x-0 dark:border-gray-800 dark:bg-gray-900",
+            "fixed top-16 left-0 z-40 h-[calc(100vh-4rem)] w-72 transform overflow-y-auto border-r border-gray-200 bg-white transition-transform duration-200 ease-in-out dark:border-gray-800 dark:bg-gray-900",
+            "lg:fixed lg:z-10 lg:block lg:h-[calc(100vh-4rem)] lg:w-72 lg:translate-x-0",
             isSidebarOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >
-          <div className="p-6">
+          <div className="p-6 lg:px-8 lg:py-8">
             <div className="mb-6 flex items-center justify-between lg:hidden">
               <h2 className="text-lg font-semibold">Documentation</h2>
               <button
@@ -180,31 +178,37 @@ export default function DocsLayout({
           </div>
         </aside>
 
-        {/* Main content area with table of contents */}
-        <div className="flex flex-1 lg:ml-0">
-          {/* Main content */}
-          <main className="min-w-0 flex-1">
-            {/* Mobile menu button */}
-            <div className="fixed top-20 left-4 z-30 lg:hidden">
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="rounded-md border border-gray-200 bg-white p-2 shadow-sm hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800"
-              >
-                <Menu className="h-5 w-5" />
-              </button>
-            </div>
+        {/* Main content area - offset by sidebar width on desktop */}
+        <div className="min-w-0 flex-1 lg:ml-72">
+          <div className="flex min-h-screen flex-col">
+            {/* Main content */}
+            <main className="flex-1">
+              {/* Mobile menu button */}
+              <div className="fixed top-20 left-4 z-30 lg:hidden">
+                <button
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="rounded-md border border-gray-200 bg-white p-2 shadow-sm hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800"
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+              </div>
 
-            <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8 xl:mx-0 xl:max-w-none xl:pr-0">
-              {children}
-            </div>
-          </main>
+              <div className="flex lg:gap-8 lg:px-8 lg:py-8">
+                <div className="min-w-0 flex-1">
+                  <div className="mx-auto max-w-4xl px-4 py-8 pb-16 sm:px-6 lg:px-0 lg:py-0 xl:mx-0 xl:max-w-none xl:pr-0">
+                    {children}
+                  </div>
+                </div>
 
-          {/* Table of contents */}
-          {tableOfContents && <TableOfContents items={tableOfContents} />}
+                {/* Table of contents */}
+                {tableOfContents && <TableOfContents items={tableOfContents} />}
+              </div>
+            </main>
+
+            <Footer />
+          </div>
         </div>
       </div>
-
-      <Footer />
     </div>
   );
 }

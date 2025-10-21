@@ -1,58 +1,51 @@
 # Production Dockerfile for Cronium Orchestrator
+# Multi-stage build for security and minimal image size
+
+# Build stage
 FROM golang:1.23-alpine AS builder
 
 # Install build dependencies
-RUN apk add --no-cache git ca-certificates
+RUN apk add --no-cache git ca-certificates tzdata
 
 # Set working directory
 WORKDIR /build
 
-# Copy go mod files
+# Copy go mod files first for better caching
 COPY go.mod go.sum ./
 
 # Download dependencies
-RUN go mod download
+RUN go mod download && go mod verify
 
 # Copy source code
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o orchestrator ./cmd/orchestrator
+# Build with security flags and version info
+ARG BUILD_VERSION=latest
+ARG BUILD_TIME
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-w -s -X main.Version=${BUILD_VERSION} -X main.BuildTime=${BUILD_TIME}" \
+    -a -installsuffix cgo \
+    -o orchestrator ./cmd/orchestrator
 
-# Final stage
-FROM alpine:3.19
-
-# Install runtime dependencies
-RUN apk --no-cache add ca-certificates tzdata tini
-
-# Create non-root user
-RUN addgroup -g 1000 cronium && \
-    adduser -u 1000 -G cronium -s /bin/sh -D cronium
+# Runtime stage - using distroless for maximum security
+FROM gcr.io/distroless/static:nonroot
 
 # Set working directory
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /build/orchestrator /app/orchestrator
+COPY --from=builder --chown=nonroot:nonroot /build/orchestrator /app/orchestrator
 
-# Copy config directory
-COPY --from=builder /build/configs /app/configs
-
-# Create data directory
-RUN mkdir -p /app/data && chown -R cronium:cronium /app
-
-# Switch to non-root user
-USER cronium
+# Copy timezone data
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 
 # Expose ports
 EXPOSE 8080 9090
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+# Labels for metadata
+LABEL org.opencontainers.image.source="https://github.com/addison-moore/cronium"
+LABEL org.opencontainers.image.description="Cronium Orchestrator - Job execution orchestrator"
+LABEL org.opencontainers.image.licenses="MIT"
 
-# Use tini as entrypoint for proper signal handling
-ENTRYPOINT ["/sbin/tini", "--"]
-
-# Run the application
-CMD ["/app/orchestrator"]
+# Run the application (distroless has no shell, so direct execution)
+ENTRYPOINT ["/app/orchestrator"]

@@ -10,38 +10,50 @@
 
 /* Tailwind CSS 4 Theme Configuration */
 @theme inline {
-  /* Colors */
-  --color-border: var(--border-color);
-  --color-input: var(--input-color);
-  --color-ring: var(--ring-color);
-  --color-background: var(--background-color);
-  --color-foreground: var(--foreground-color);
-  --color-primary: var(--primary-color);
-  --color-primary-foreground: var(--primary-foreground-color);
-  --color-secondary: var(--secondary-color);
-  --color-secondary-foreground: var(--secondary-foreground-color);
-  --color-destructive: var(--destructive-color);
-  --color-destructive-foreground: var(--destructive-foreground-color);
-  --color-muted: var(--muted-color);
-  --color-muted-foreground: var(--muted-foreground-color);
-  --color-accent: var(--accent-color);
-  --color-accent-foreground: var(--accent-foreground-color);
-  --color-card: var(--card-color);
-  --color-card-foreground: var(--card-foreground-color);
-  --color-popover: var(--popover-color);
-  --color-popover-foreground: var(--popover-foreground-color);
-
+  /* Core colors using light-dark() for automatic theme switching */
+  --color-background: light-dark(#feffff, #1f2937);
+  --color-foreground: light-dark(#1f2937, #f9fafb);
+  
+  /* UI element colors */
+  --color-card: light-dark(#f8fafc, #111827);
+  --color-card-foreground: light-dark(#1f2937, #f9fafb);
+  
+  --color-popover: light-dark(#ffffff, #1f2937);
+  --color-popover-foreground: light-dark(#1f2937, #f9fafb);
+  
+  --color-primary: #7c3aed;
+  --color-primary-foreground: #ffffff;
+  
+  --color-secondary: #06b6d4;
+  --color-secondary-foreground: #ffffff;
+  
+  --color-muted: light-dark(#f3f4f6, #374151);
+  --color-muted-foreground: light-dark(#6b7280, #9ca3af);
+  
+  --color-accent: light-dark(#6c28eb, #342255);
+  --color-accent-foreground: light-dark(#1f2937, #f9fafb);
+  
   /* Status colors */
-  --color-success: var(--success-color);
-  --color-success-foreground: var(--success-foreground-color);
-  --color-warning: var(--warning-color);
-  --color-warning-foreground: var(--warning-foreground-color);
-  --color-info: var(--info-color);
-  --color-info-foreground: var(--info-foreground-color);
-
+  --color-destructive: light-dark(#ef4444, #b91c1c);
+  --color-destructive-foreground: light-dark(#ffffff, #fef2f2);
+  
+  --color-success: #10b981;
+  --color-success-foreground: #ffffff;
+  
+  --color-warning: light-dark(#f59e0b, #d97706);
+  --color-warning-foreground: #ffffff;
+  
+  --color-info: light-dark(#3b82f6, #2563eb);
+  --color-info-foreground: #ffffff;
+  
+  /* UI elements */
+  --color-border: light-dark(#e5e7eb, #374151);
+  --color-input: light-dark(#ffffff, #1f2937);
+  --color-ring: #6c28eb;
+  
   /* Additional theme variables for components */
-  --color-secondary-bg: var(--secondary-bg-color);
-  --color-tertiary-bg: var(--tertiary-bg-color);
+  --color-secondary-bg: light-dark(#f8fafc, #111827);
+  --color-tertiary-bg: light-dark(#f1f5f9, #1c253b);
 
   /* Typography */
   --font-sans:
@@ -221,6 +233,14 @@
 
 /* Base styles using Tailwind 4 layers */
 @layer base {
+  :root {
+    color-scheme: light;
+  }
+  
+  .dark {
+    color-scheme: dark;
+  }
+  
   * {
     box-sizing: border-box;
   }

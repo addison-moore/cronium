@@ -362,7 +362,7 @@ async function runLoggingTests() {
   }
 
   console.log("\n✅ All logging test jobs created and queued");
-  console.log("📋 Monitor logs: docker logs -f cronium-agent-dev");
+  console.log("📋 Monitor logs: docker logs -f cronium-orchestrator-dev");
   console.log(
     "📊 Check results: pnpm tsx src/scripts/check-logging-results.ts",
   );

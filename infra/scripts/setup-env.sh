@@ -113,9 +113,6 @@ SMTP_FROM_EMAIL=
 # AI Configuration (optional)
 OPENAI_API_KEY=
 
-# External Monitoring (optional)
-PROMETHEUS_URL=
-GRAFANA_URL=
 
 # Docker Registry (optional - for private images)
 DOCKER_REGISTRY=

@@ -22,6 +22,7 @@ import {
 } from "@/shared/schema";
 import type { LogsResponse } from "@/types/api";
 import { ActivityTable } from "./ActivityTable";
+import { usePersistentPagination } from "@/hooks/use-persistent-pagination";
 
 interface ActivityWithFiltersProps {
   title: string;
@@ -42,6 +43,7 @@ export function ActivityTableWithFilters({
   pageSize = 20,
   className = "",
 }: ActivityWithFiltersProps) {
+  const { itemsPerPage, setItemsPerPage } = usePersistentPagination(pageSize);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [logs, setLogs] = useState<Log[]>([]);
@@ -54,7 +56,6 @@ export function ActivityTableWithFilters({
   const [filterWorkflowId, setFilterWorkflowId] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(pageSize);
   const [totalItems, setTotalItems] = useState(0);
 
   useEffect(() => {
@@ -184,7 +185,7 @@ export function ActivityTableWithFilters({
     <div className={className}>
       <Card className="bg-secondary-bg mb-6">
         <CardContent>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div className="w-full">
               <Label htmlFor="scriptFilter">Event</Label>
               <ComboBox

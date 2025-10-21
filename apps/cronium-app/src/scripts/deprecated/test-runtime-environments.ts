@@ -351,7 +351,7 @@ async function runTests() {
   }
 
   console.log("\n✅ All test jobs created and queued for execution");
-  console.log("📋 Monitor execution: docker logs -f cronium-agent-dev");
+  console.log("📋 Monitor execution: docker logs -f cronium-orchestrator-dev");
   console.log(
     "📊 Check results: pnpm tsx src/scripts/check-runtime-test-results.ts",
   );

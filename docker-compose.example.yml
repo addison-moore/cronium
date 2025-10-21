@@ -1,0 +1,165 @@
+# Cronium Self-Hosted Docker Compose Configuration
+#
+# This is an example configuration for running Cronium using pre-built images from GitHub Container Registry.
+# Copy this file to docker-compose.yml and update the environment variables according to your needs.
+#
+# Quick Start:
+# 1. Copy this file: cp docker-compose.example.yml docker-compose.yml
+# 2. Create a .env file with your configuration (see .env.example)
+# 3. Run: docker-compose up -d
+# 4. Access Cronium at http://localhost:3000
+
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: cronium-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cronium}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeMe123!}
+      POSTGRES_DB: ${POSTGRES_DB:-cronium}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cronium}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cronium-network
+
+  # Redis-compatible cache (Valkey)
+  valkey:
+    image: valkey/valkey:7-alpine
+    container_name: cronium-valkey
+    command: valkey-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "${VALKEY_PORT:-6379}:6379"
+    volumes:
+      - valkey_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cronium-network
+
+  # Cronium Orchestrator (Job Executor)
+  cronium-orchestrator:
+    image: ghcr.io/addison-moore/cronium-orchestrator:latest
+    container_name: cronium-orchestrator
+    environment:
+      # API Configuration
+      CRONIUM_API_ENDPOINT: http://cronium-app:3000
+      CRONIUM_API_TOKEN: ${INTERNAL_API_KEY}
+
+      # Server Configuration
+      CRONIUM_SERVER_ID: ${ORCHESTRATOR_ID:-orchestrator-01}
+      CRONIUM_SERVER_PORT: 8080
+
+      # Job Configuration
+      CRONIUM_JOBS_MAX_CONCURRENT: ${MAX_CONCURRENT_JOBS:-10}
+      CRONIUM_JOBS_POLL_INTERVAL: 5s
+
+      # Container Runtime
+      CRONIUM_CONTAINER_DOCKER_ENDPOINT: unix:///var/run/docker.sock
+      CRONIUM_CONTAINER_RUNTIME_JWT_SECRET: ${JWT_SECRET}
+
+      # Logging
+      CRONIUM_LOGGING_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - orchestrator_data:/app/data
+    depends_on:
+      - valkey
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - cronium-network
+    security_opt:
+      - no-new-privileges:true
+
+  # Cronium Application (Web UI & API)
+  cronium-app:
+    # Replace 'yourusername' with the actual GitHub username/organization
+    image: ghcr.io/yourusername/cronium-app:latest
+    container_name: cronium-app
+    ports:
+      - "${APP_PORT:-3000}:3000"
+      - "${SOCKET_PORT:-5002}:5002"
+    environment:
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cronium}:${POSTGRES_PASSWORD:-changeMe123!}@postgres:5432/${POSTGRES_DB:-cronium}?sslmode=disable
+
+      # Authentication (REQUIRED - Generate secure keys!)
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
+      AUTH_SECRET: ${AUTH_SECRET} # Generate: openssl rand -hex 32
+
+      # Encryption (REQUIRED - Generate secure key!)
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY} # Generate: openssl rand -hex 32
+
+      # Internal Services
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY} # Generate: openssl rand -hex 32
+      JWT_SECRET: ${JWT_SECRET} # Generate: openssl rand -hex 32
+
+      # WebSocket Configuration
+      NEXT_PUBLIC_SOCKET_URL: ${SOCKET_URL:-ws://localhost:5002}
+
+      # Cache
+      VALKEY_URL: valkey://valkey:6379
+
+      # Application Settings
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+      # Optional: Email Configuration
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL}
+
+      # Optional: AI Features
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:3000/api/health', (r) => {if (r.statusCode !== 200) process.exit(1)})",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - cronium-network
+
+volumes:
+  postgres_data:
+    driver: local
+  valkey_data:
+    driver: local
+  orchestrator_data:
+    driver: local
+
+networks:
+  cronium-network:
+    driver: bridge

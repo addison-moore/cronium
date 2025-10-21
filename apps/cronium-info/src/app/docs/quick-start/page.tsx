@@ -275,9 +275,6 @@ echo "Hello from Cronium!"
 echo "Current date: $(date)"
 echo "Server hostname: $(hostname)"
 
-# Create a log file
-echo "Script executed at $(date)" >> /tmp/cronium-test.log
-
 # Show system information
 echo "System uptime:"
 uptime`}</CodeBlock>

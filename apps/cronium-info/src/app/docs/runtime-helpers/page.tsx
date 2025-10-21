@@ -527,13 +527,7 @@ export default function RuntimeHelpersPage() {
 
           <section id="overview" className="mb-12">
             <h2 className="mb-4 text-2xl font-bold">Overview</h2>
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5" />
-                  Runtime Helper Functions
-                </CardTitle>
-              </CardHeader>
+            <Card className="bg-secondary-bg mb-6">
               <CardContent className="space-y-4">
                 <p>
                   Cronium provides a consistent set of runtime helper functions
@@ -543,7 +537,7 @@ export default function RuntimeHelpersPage() {
                   access.
                 </p>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="rounded-lg border p-4">
+                  <div className="border-border bg-tertiary-bg rounded-lg border p-4">
                     <h4 className="mb-2 flex items-center gap-2 font-semibold">
                       <ArrowRight className="h-4 w-4" />
                       Data Flow
@@ -554,7 +548,7 @@ export default function RuntimeHelpersPage() {
                       between workflow nodes
                     </p>
                   </div>
-                  <div className="rounded-lg border p-4">
+                  <div className="border-border bg-tertiary-bg rounded-lg border p-4">
                     <h4 className="mb-2 flex items-center gap-2 font-semibold">
                       <Database className="h-4 w-4" />
                       State Management
@@ -565,7 +559,7 @@ export default function RuntimeHelpersPage() {
                       data storage
                     </p>
                   </div>
-                  <div className="rounded-lg border p-4">
+                  <div className="border-border bg-tertiary-bg rounded-lg border p-4">
                     <h4 className="mb-2 flex items-center gap-2 font-semibold">
                       <FlaskConical className="h-4 w-4" />
                       Conditional Logic
@@ -576,7 +570,7 @@ export default function RuntimeHelpersPage() {
                       control
                     </p>
                   </div>
-                  <div className="rounded-lg border p-4">
+                  <div className="border-border bg-tertiary-bg rounded-lg border p-4">
                     <h4 className="mb-2 flex items-center gap-2 font-semibold">
                       <Settings className="h-4 w-4" />
                       Event Metadata

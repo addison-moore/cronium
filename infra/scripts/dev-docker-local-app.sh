@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script for running Valkey and cronium-agent containers while running the app locally
+# Script for running Valkey and cronium-orchestrator containers while running the app locally
 # This allows for faster development by avoiding frequent Docker builds of the main app
 
 # Change to project root
@@ -20,7 +20,7 @@ else
 fi
 
 # Display helpful information
-echo "Starting Valkey and cronium-agent containers..."
+echo "Starting Valkey and cronium-orchestrator containers..."
 echo "Make sure to run 'pnpm dev' in a separate terminal to start the Next.js app locally"
 echo ""
 echo "The local app should have these environment variables set:"

@@ -1,4 +1,4 @@
-# Development environment for running only Valkey and cronium-agent in Docker
+# Development environment for running only Valkey and cronium-orchestrator in Docker
 # while running the Cronium Next.js app locally
 # Usage: ./scripts/dev-docker-local-app.sh up
 
@@ -21,12 +21,12 @@ services:
     networks:
       - cronium-dev-network
 
-  # Orchestrator Service (cronium-agent)
-  cronium-agent:
+  # Orchestrator Service (cronium-orchestrator)
+  cronium-orchestrator:
     build:
       context: ../../apps/orchestrator
       dockerfile: Dockerfile.dev
-    container_name: cronium-agent-dev
+    container_name: cronium-orchestrator-dev
     environment:
       # Configuration file path
       CONFIG_FILE: /app/config/cronium-orchestrator.yaml
@@ -122,7 +122,7 @@ services:
       valkey:
         condition: service_healthy
     links:
-      - cronium-agent:cronium-agent
+      - cronium-orchestrator:cronium-orchestrator
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8089/health"]

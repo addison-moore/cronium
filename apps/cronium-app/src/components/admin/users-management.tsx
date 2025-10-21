@@ -24,6 +24,7 @@ import { useToast } from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StandardizedTableLink } from "@cronium/ui";
 import { Pagination } from "@cronium/ui";
+import { usePersistentPagination } from "@/hooks/use-persistent-pagination";
 import {
   Table,
   TableBody,
@@ -121,8 +122,8 @@ export function UsersManagement({
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Pagination state
+  const { itemsPerPage, setItemsPerPage } = usePersistentPagination(20);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // Calculate pagination
   const totalItems = filteredUsers.length;

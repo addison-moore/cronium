@@ -260,13 +260,17 @@ export async function executeToolAction(
     console.log(
       `[ToolAction] Looking for action: ${toolActionConfig.actionId}`,
     );
+    console.log(
+      `[ToolAction] Available actions before lookup:`,
+      getAllServerActionIds(),
+    );
     const action = getServerActionById(toolActionConfig.actionId);
     if (!action) {
       console.error(
         `[ToolAction] Action not found in server registry: ${toolActionConfig.actionId}`,
       );
       console.log(
-        `[ToolAction] Available server actions:`,
+        `[ToolAction] Available server actions after lookup attempt:`,
         getAllServerActionIds(),
       );
       throw new Error(`Action not found: ${toolActionConfig.actionId}`);

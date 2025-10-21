@@ -25,12 +25,13 @@ import (
 
 // Executor implements container-based job execution
 type Executor struct {
-	config       config.ContainerConfig
-	dockerClient *client.Client
-	log          *logrus.Logger
-	apiClient    *api.Client
-	sidecar      *SidecarManager
-	cleanup      *CleanupManager
+	config         config.ContainerConfig
+	timeoutConfig  config.TimeoutConfig
+	dockerClient   *client.Client
+	log            *logrus.Logger
+	apiClient      *api.Client
+	sidecar        *SidecarManager
+	cleanup        *CleanupManager
 
 	// Track active containers and resources
 	mu         sync.RWMutex
@@ -60,14 +61,15 @@ func NewExecutor(cfg config.ContainerConfig, apiClient *api.Client, log *logrus.
 	}
 
 	executor := &Executor{
-		config:       cfg,
-		dockerClient: dockerClient,
-		log:          log,
-		apiClient:    apiClient,
-		containers:   make(map[string]string),
-		sidecars:     make(map[string]string),
-		networks:     make(map[string]string),
-		tokens:       make(map[string]string),
+		config:        cfg,
+		timeoutConfig: config.LoadTimeoutConfig(),
+		dockerClient:  dockerClient,
+		log:           log,
+		apiClient:     apiClient,
+		containers:    make(map[string]string),
+		sidecars:      make(map[string]string),
+		networks:      make(map[string]string),
+		tokens:        make(map[string]string),
 	}
 
 	// Create sidecar manager
@@ -109,11 +111,11 @@ func (e *Executor) Validate(job *types.Job) error {
 	return nil
 }
 
-// Execute runs the job in a container
+// Execute runs the job in a container with phase-based timeouts
 func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.ExecutionUpdate, error) {
 	updates := make(chan types.ExecutionUpdate, 100)
 
-	// Generate execution ID with underscore separator to avoid double dash issues
+	// Generate execution ID
 	executionID := fmt.Sprintf("exec_%s_%d", job.ID, time.Now().Unix())
 
 	// Store execution ID for later use
@@ -134,303 +136,24 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 		if e.apiClient != nil {
 			if err := e.apiClient.CreateExecution(ctx, executionID, job.ID, nil, nil); err != nil {
 				e.log.WithError(err).Warn("Failed to create execution record")
-				// Continue anyway - execution tracking is not critical for job success
 			}
 
-			// Mark execution as started with setup phase timing
+			// Mark execution as started
 			if err := e.apiClient.UpdateExecution(ctx, executionID, types.JobStatusRunning, timing.ToExecutionStatusUpdate()); err != nil {
 				e.log.WithError(err).Warn("Failed to update execution status to running")
 			}
 		}
 
-		// Ensure cleanup happens no matter what
-		defer func() {
-			timing.MarkExecutionComplete()
-			timing.MarkCleanupComplete()
-			
-			// Update final timing before cleanup
-			if e.apiClient != nil {
-				finalUpdate := timing.ToExecutionStatusUpdate()
-				if err := e.apiClient.UpdateExecution(ctx, executionID, types.JobStatusCompleted, finalUpdate); err != nil {
-					e.log.WithError(err).Warn("Failed to update final execution timing")
-				}
-			}
-			
-			if err := e.cleanup.CleanupJobResources(ctx, job.ID); err != nil {
-				e.log.WithError(err).Error("Failed to cleanup job resources")
-			}
-		}()
+		// Log phase timeouts being used
+		e.log.WithFields(logrus.Fields{
+			"jobID":            job.ID,
+			"setupTimeout":     e.timeoutConfig.SetupTimeout.String(),
+			"executionTimeout": job.GetTimeout().String(),
+			"cleanupTimeout":   e.timeoutConfig.CleanupTimeout.String(),
+		}).Info("Starting job execution with phase-based timeouts")
 
-		// Send initial status
-		e.sendUpdate(updates, types.UpdateTypeStatus, &types.StatusUpdate{
-			Status:  types.JobStatusRunning,
-			Message: "Preparing execution environment",
-		})
-
-		// SETUP PHASE: Create isolated network for this job
-		timing.NetworkCreateStart = time.Now()
-		networkID, err := e.sidecar.CreateJobNetwork(ctx, job.ID)
-		timing.NetworkCreateEnd = time.Now()
-		if err != nil {
-			dockerErr := errors.NewDockerError(
-				"NETWORK_CREATE_FAILED",
-				fmt.Sprintf("failed to create job network: %v", err),
-				"CreateNetwork",
-			)
-			e.sendError(updates, dockerErr, true)
-			e.updateExecutionError(ctx, executionID, dockerErr)
-			e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
-				Status:  types.JobStatusFailed,
-				Message: dockerErr.Error(),
-			})
-			return
-		}
-
-		// Track network
-		e.mu.Lock()
-		e.networks[job.ID] = networkID
-		e.mu.Unlock()
-
-		// Clean up network when done
-		defer func() {
-			e.mu.Lock()
-			delete(e.networks, job.ID)
-			e.mu.Unlock()
-
-			if err := e.sidecar.RemoveJobNetwork(ctx, networkID); err != nil {
-				e.log.WithError(err).WithField("networkID", networkID).Error("Failed to remove job network")
-			}
-		}()
-
-		// SETUP PHASE: Create and start runtime sidecar
-		timing.SidecarCreateStart = time.Now()
-		sidecarID, err := e.sidecar.CreateRuntimeSidecar(ctx, job, networkID)
-		timing.SidecarCreateEnd = time.Now()
-		if err != nil {
-			dockerErr := errors.NewDockerError(
-				"SIDECAR_CREATE_FAILED",
-				fmt.Sprintf("failed to create runtime sidecar: %v", err),
-				"CreateSidecar",
-			)
-			e.sendError(updates, dockerErr, true)
-			e.updateExecutionError(ctx, executionID, dockerErr)
-			e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
-				Status:  types.JobStatusFailed,
-				Message: dockerErr.Error(),
-			})
-			return
-		}
-
-		// Track sidecar
-		e.mu.Lock()
-		e.sidecars[job.ID] = sidecarID
-		e.mu.Unlock()
-
-		// Clean up sidecar when done
-		defer func() {
-			e.mu.Lock()
-			delete(e.sidecars, job.ID)
-			e.mu.Unlock()
-
-			if err := e.sidecar.StopSidecar(ctx, sidecarID); err != nil {
-				e.log.WithError(err).WithField("sidecarID", sidecarID).Error("Failed to stop sidecar")
-			}
-		}()
-
-		// SETUP PHASE: Create and run main container
-		timing.ContainerCreateStart = time.Now()
-		containerID, err := e.createContainer(ctx, job, networkID, timing)
-		timing.ContainerCreateEnd = time.Now()
-		if err != nil {
-			e.sendError(updates, err, true)
-			e.updateExecutionError(ctx, executionID, err)
-			e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
-				Status:  types.JobStatusFailed,
-				Message: fmt.Sprintf("Failed to create container: %v", err),
-			})
-			return
-		}
-
-		// Track container
-		e.mu.Lock()
-		e.containers[job.ID] = containerID
-		e.mu.Unlock()
-
-		// Clean up container when done
-		defer func() {
-			e.mu.Lock()
-			delete(e.containers, job.ID)
-			e.mu.Unlock()
-
-			if err := e.removeContainer(ctx, containerID); err != nil {
-				e.log.WithError(err).WithField("containerID", containerID).Error("Failed to remove container")
-			}
-		}()
-
-		// Start container - marks end of setup phase and beginning of execution phase
-		timing.MarkSetupComplete()
-		if err := e.dockerClient.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
-			dockerErr := errors.NewDockerError(
-				"CONTAINER_START_FAILED",
-				fmt.Sprintf("failed to start container: %v", err),
-				"StartContainer",
-			)
-			dockerErr.ContainerID = containerID
-			e.sendError(updates, dockerErr, true)
-			e.updateExecutionError(ctx, executionID, dockerErr)
-			e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
-				Status:  types.JobStatusFailed,
-				Message: dockerErr.Error(),
-			})
-			return
-		}
-
-		// Create a WaitGroup to track log streaming completion
-		var logWg sync.WaitGroup
-
-		// Stream logs with synchronization
-		logWg.Add(1)
-		go func() {
-			defer logWg.Done()
-			e.streamLogs(ctx, containerID, updates)
-		}()
-
-		// Wait for container to finish
-		statusCh, errCh := e.dockerClient.ContainerWait(ctx, containerID, container.WaitConditionNotRunning)
-		var exitCode int
-		var timedOut bool
-
-		select {
-		case <-ctx.Done():
-			// Context cancelled or timed out
-			timedOut = true
-			if ctx.Err() == context.DeadlineExceeded {
-				e.sendError(updates, fmt.Errorf("job execution timed out"), true)
-				// Try to stop the container
-				timeout := 10
-				e.dockerClient.ContainerStop(context.Background(), containerID, container.StopOptions{
-					Timeout: &timeout,
-				})
-				// Get container info to get exit code
-				if inspect, err := e.dockerClient.ContainerInspect(context.Background(), containerID); err == nil {
-					exitCode = inspect.State.ExitCode
-					// Check if container was OOMKilled
-					if inspect.State.OOMKilled {
-						e.sendError(updates, fmt.Errorf("container killed due to out of memory"), true)
-					}
-				} else {
-					exitCode = -1 // Indicate timeout
-				}
-			} else {
-				e.sendError(updates, fmt.Errorf("job execution cancelled"), true)
-				exitCode = -2 // Indicate cancellation
-			}
-			// Wait for logs to finish streaming before returning
-			logWg.Wait()
-		case err := <-errCh:
-			if err != nil {
-				e.sendError(updates, fmt.Errorf("container wait error: %w", err), true)
-				// Wait for logs to finish streaming before returning
-				logWg.Wait()
-				return
-			}
-		case status := <-statusCh:
-			exitCode = int(status.StatusCode)
-			// Check container state for additional error info
-			if inspect, err := e.dockerClient.ContainerInspect(context.Background(), containerID); err == nil {
-				if inspect.State.OOMKilled {
-					e.sendError(updates, fmt.Errorf("container killed due to out of memory"), false)
-				}
-			}
-		}
-
-		// IMPORTANT: Wait for all logs to be read before sending completion
-		logWg.Wait()
-
-		// Check if container was OOM killed
-		var oomKilled bool
-		if inspect, err := e.dockerClient.ContainerInspect(context.Background(), containerID); err == nil {
-			oomKilled = inspect.State.OOMKilled
-		}
-
-		// Determine final status based on exit code and timeout
-		var finalStatus types.JobStatus
-		var statusMessage string
-
-		if timedOut {
-			finalStatus = types.JobStatusFailed
-			if exitCode == -1 {
-				statusMessage = "Container execution timed out"
-			} else {
-				statusMessage = "Container execution cancelled"
-			}
-		} else if oomKilled {
-			finalStatus = types.JobStatusFailed
-			statusMessage = "Container killed due to out of memory"
-		} else if exitCode != 0 {
-			finalStatus = types.JobStatusFailed
-			statusMessage = fmt.Sprintf("Container exited with code %d", exitCode)
-		} else {
-			finalStatus = types.JobStatusCompleted
-			statusMessage = "Container completed successfully"
-		}
-
-		// Collect output from logs (we already have it in memory from streaming)
-		// Try to get logs one more time for the execution record
-		// Use a fresh context in case the original timed out
-		var outputStr string
-		var errorStr string
-		logsCtx, logsCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer logsCancel()
-		logsReader, err := e.dockerClient.ContainerLogs(logsCtx, containerID, container.LogsOptions{
-			ShowStdout: true,
-			ShowStderr: true,
-			Timestamps: false,
-		})
-		if err == nil {
-			defer logsReader.Close()
-			var stdoutBuf, stderrBuf bytes.Buffer
-			_, err = stdcopy.StdCopy(&stdoutBuf, &stderrBuf, logsReader)
-			if err == nil {
-				outputStr = stdoutBuf.String()
-				if stderrBuf.Len() > 0 {
-					errorStr = stderrBuf.String()
-				}
-			}
-		}
-
-		// Mark execution phase complete
-		timing.MarkExecutionComplete()
-		
-		// Update execution record with final status, output, and phase timing
-		if e.apiClient != nil {
-			updateData := timing.ToExecutionStatusUpdate()
-			updateData.ExitCode = &exitCode
-			
-			if outputStr != "" {
-				updateData.Output = &outputStr
-			}
-			if errorStr != "" {
-				updateData.Error = &errorStr
-			} else if timedOut {
-				// Add timeout error if no stderr captured
-				errMsg := statusMessage
-				updateData.Error = &errMsg
-			}
-			// Use a fresh context for the API call
-			apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer apiCancel()
-			if err := e.apiClient.UpdateExecution(apiCtx, executionID, finalStatus, updateData); err != nil {
-				e.log.WithError(err).Warn("Failed to update execution completion status")
-			}
-		}
-
-		// Now send completion update after all logs have been processed
-		e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
-			Status:   finalStatus,
-			ExitCode: &exitCode,
-			Message:  statusMessage,
-		})
+		// Execute with phase-based timeouts
+		e.executeWithPhaseTimeouts(ctx, job, updates, executionID, timing)
 	}()
 
 	return updates, nil

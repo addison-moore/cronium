@@ -81,27 +81,6 @@
         "interval": 30,
         "timeout": 10
       }
-    },
-    "prometheus": {
-      "host": "prometheus",
-      "port": 9090,
-      "protocol": "http",
-      "endpoints": {
-        "base": "http://prometheus:9090",
-        "api": "/api/v1",
-        "query": "/api/v1/query",
-        "health": "/-/healthy"
-      }
-    },
-    "grafana": {
-      "host": "grafana",
-      "port": 3000,
-      "protocol": "http",
-      "endpoints": {
-        "base": "http://grafana:3000",
-        "api": "/api",
-        "health": "/api/health"
-      }
     }
   },
   "networks": {

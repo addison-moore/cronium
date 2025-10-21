@@ -27,6 +27,7 @@ import type {
   ServerData,
 } from "@/components/event-list";
 import { trpc } from "@/lib/trpc";
+import { usePersistentPagination } from "@/hooks/use-persistent-pagination";
 
 interface EventsListClientProps {
   initialEvents: Event[];
@@ -41,6 +42,8 @@ export function EventsListClient({
   workflows,
   onRefresh,
 }: EventsListClientProps) {
+  const { itemsPerPage, setItemsPerPage } = usePersistentPagination(10);
+
   // Filter state
   const [filters, setFilters] = useState<EventListFilters>({
     searchTerm: "",
@@ -56,7 +59,7 @@ export function EventsListClient({
   // Component state
   const [state, setState] = useState<EventListState>({
     currentPage: 1,
-    itemsPerPage: 10,
+    itemsPerPage: itemsPerPage,
     selectedEvents: new Set(),
     bulkActionLoading: null,
     isRunning: {},
@@ -68,6 +71,14 @@ export function EventsListClient({
 
   const t = useTranslations("Events");
   const { toast } = useToast();
+
+  // Sync itemsPerPage from localStorage when it loads
+  useEffect(() => {
+    setState((prev) => ({
+      ...prev,
+      itemsPerPage: itemsPerPage,
+    }));
+  }, [itemsPerPage]);
 
   // For workflow-event relationships, we'll need to extract from events or implement a separate endpoint
   const workflowEvents: { workflowId: number; eventId: number }[] = [];
@@ -301,14 +312,18 @@ export function EventsListClient({
   }, [events]); // Remove onRefresh from dependencies to prevent infinite loop
 
   // Handle page size change
-  const handlePageSizeChange = useCallback((newSize: number) => {
-    setState((prev) => ({
-      ...prev,
-      itemsPerPage: newSize,
-      currentPage: 1,
-      selectedEvents: new Set(),
-    }));
-  }, []);
+  const handlePageSizeChange = useCallback(
+    (newSize: number) => {
+      setItemsPerPage(newSize);
+      setState((prev) => ({
+        ...prev,
+        itemsPerPage: newSize,
+        currentPage: 1,
+        selectedEvents: new Set(),
+      }));
+    },
+    [setItemsPerPage],
+  );
 
   // Handle page change
   const handlePageChange = useCallback((page: number) => {

@@ -1,16 +1,8 @@
 import { type z } from "zod";
-import { ToolPluginRegistry } from "@/tools/plugins";
+import { ToolPluginRegistry, initializePlugins } from "@/tools/plugins";
 
-// Log plugin initialization status
-console.log("[ServerActionExecutor] Initializing - checking plugin registry");
-console.log(
-  "[ServerActionExecutor] Actions registered:",
-  ToolPluginRegistry.getAllActions().length,
-);
-console.log(
-  "[ServerActionExecutor] Action IDs:",
-  ToolPluginRegistry.getAllActions().map((a) => a.id),
-);
+// Ensure plugins are initialized (will check global flag and skip if already done)
+initializePlugins();
 
 // Re-define the execution context type to avoid circular dependency
 export interface ToolActionExecutionContext {
@@ -54,6 +46,9 @@ interface ServerActionDefinition {
 export function getServerActionById(
   actionId: string,
 ): ServerActionDefinition | null {
+  // Ensure plugins are initialized before lookup
+  initializePlugins();
+
   // Get action from plugin registry
   const action = ToolPluginRegistry.getActionById(actionId);
 
@@ -81,6 +76,9 @@ export function getServerActionById(
  * Get all available server action IDs from the plugin registry
  */
 export function getAllServerActionIds(): string[] {
+  // Ensure plugins are initialized before getting all actions
+  initializePlugins();
+
   const actions = ToolPluginRegistry.getAllActions();
   return actions.map((action) => action.id);
 }

@@ -290,98 +290,7 @@ export function ModularToolsManager() {
 
   return (
     <div className="space-y-4">
-      <div className="flex min-h-[calc(100vh-200px)] flex-col gap-3 lg:flex-row">
-        {/* Integration List - Top on small screens, Right Side on large screens */}
-        <div className="order-1 w-full flex-shrink-0 overflow-hidden lg:order-2 lg:w-80">
-          <Card className="h-60 lg:h-full lg:min-h-[calc(100vh-200px)]">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Settings size={20} />
-                Available Tools
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {/* Search bar */}
-              <div className="relative">
-                <Input
-                  placeholder="Search tools..."
-                  value={toolSearchQuery}
-                  onChange={(e) => setToolSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                  <Search className="text-muted-foreground h-4 w-4" />
-                </div>
-              </div>
-              {/* Tools list */}
-              <div className="h-40 space-y-1 overflow-y-auto lg:h-[calc(100vh-380px)]">
-                {filteredPlugins.map((plugin) => {
-                  const Icon = plugin.icon;
-                  const pluginTools = getFilteredTools(plugin.id);
-                  const isSelected = selectedTool === plugin.id;
-
-                  const actionCount = plugin.actions?.length || 0;
-
-                  return (
-                    <div
-                      key={plugin.id}
-                      className={cn(
-                        "hover:bg-muted/50 flex cursor-pointer items-center gap-3 border-l-2 p-4 transition-all",
-                        isSelected
-                          ? "border-l-primary bg-muted/50"
-                          : "border-l-transparent",
-                      )}
-                      onClick={() => {
-                        setSelectedTool(plugin.id);
-                        // Close any open forms when switching tools
-                        setEditingTool(null);
-                        setShowAddForm(false);
-                        // Close template form when switching tools
-                        setShowAddTemplateForm(false);
-                        setEditingTemplateId(null);
-                        // Reset action type filter
-                        setSelectedActionType("all");
-                      }}
-                    >
-                      <Icon size={20} className="text-primary flex-shrink-0" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium">
-                          {plugin.name}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="text-muted-foreground text-xs">
-                            {pluginTools.length} credential
-                            {pluginTools.length !== 1 ? "s" : ""}
-                          </div>
-                          {actionCount > 0 && (
-                            <Badge variant="secondary" className="text-xs">
-                              {actionCount} action{actionCount !== 1 ? "s" : ""}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      {isSelected && (
-                        <ChevronRight
-                          size={16}
-                          className="text-muted-foreground flex-shrink-0"
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-                {filteredPlugins.length === 0 && toolSearchQuery && (
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <Search className="text-muted-foreground mb-2 h-8 w-8" />
-                    <p className="text-muted-foreground text-sm">
-                      No tools found matching "{toolSearchQuery}"
-                    </p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
+      <div className="grid min-h-[calc(100vh-200px)] gap-4 lg:grid-cols-[1fr_320px]">
         {/* Integration Details Panel - Bottom on small screens, Left Side on large screens */}
         <div className="order-2 min-h-0 flex-1 lg:order-1">
           {selectedPluginInstance ? (
@@ -816,6 +725,92 @@ export function ModularToolsManager() {
               </CardContent>
             </Card>
           )}
+        </div>
+
+        {/* Available Tools - Top on small screens, Right Side on large screens */}
+        <div className="order-1 lg:order-2">
+          <Card className="flex h-full flex-col lg:min-h-[calc(100vh-200px)]">
+            <CardHeader className="flex-shrink-0 pb-3">
+              <CardTitle className="text-lg">Available Tools</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {/* Search bar */}
+              <div className="relative">
+                <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                <Input
+                  placeholder="Search tools..."
+                  value={toolSearchQuery}
+                  onChange={(e) => setToolSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              {/* Tools list */}
+              <div className="h-40 space-y-1 overflow-y-auto lg:h-[calc(100vh-380px)]">
+                {filteredPlugins.map((plugin) => {
+                  const Icon = plugin.icon;
+                  const pluginTools = getFilteredTools(plugin.id);
+                  const isSelected = selectedTool === plugin.id;
+
+                  const actionCount = plugin.actions?.length || 0;
+
+                  return (
+                    <div
+                      key={plugin.id}
+                      className={cn(
+                        "hover:bg-muted/50 flex cursor-pointer items-center gap-3 border-l-2 p-4 transition-all",
+                        isSelected
+                          ? "border-l-primary bg-muted/50"
+                          : "border-l-transparent",
+                      )}
+                      onClick={() => {
+                        setSelectedTool(plugin.id);
+                        // Close any open forms when switching tools
+                        setEditingTool(null);
+                        setShowAddForm(false);
+                        // Close template form when switching tools
+                        setShowAddTemplateForm(false);
+                        setEditingTemplateId(null);
+                        // Reset action type filter
+                        setSelectedActionType("all");
+                      }}
+                    >
+                      <Icon size={20} className="text-primary flex-shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium">
+                          {plugin.name}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-muted-foreground text-xs">
+                            {pluginTools.length} credential
+                            {pluginTools.length !== 1 ? "s" : ""}
+                          </div>
+                          {actionCount > 0 && (
+                            <Badge variant="secondary" className="text-xs">
+                              {actionCount} action{actionCount !== 1 ? "s" : ""}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      {isSelected && (
+                        <ChevronRight
+                          size={16}
+                          className="text-muted-foreground flex-shrink-0"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+                {filteredPlugins.length === 0 && toolSearchQuery && (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <Search className="text-muted-foreground mb-2 h-8 w-8" />
+                    <p className="text-muted-foreground text-sm">
+                      No tools found matching "{toolSearchQuery}"
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <AlertDialog

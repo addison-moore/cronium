@@ -61,9 +61,12 @@ export function TableSkeleton({
             </div>
           </div>
         )}
-        <div className="divide-y">
+        <div>
           {Array.from({ length: rows }).map((_, rowIndex) => (
-            <div key={rowIndex} className="flex items-center p-4">
+            <div
+              key={rowIndex}
+              className="border-border flex items-center border-b p-4 last:border-b-0"
+            >
               {showCheckbox && (
                 <div className="mr-4">
                   <Skeleton className="h-4 w-4" />
