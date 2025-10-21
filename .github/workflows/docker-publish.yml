@@ -134,30 +134,31 @@ jobs:
           echo "Signing image with digest: $DIGEST"
           cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ORCHESTRATOR }}@${{ steps.build-orchestrator.outputs.digest }}
 
-      # Scan images for vulnerabilities
+      # Scan images for vulnerabilities (only if push was successful)
       - name: Run Trivy vulnerability scanner on Cronium App
+        if: github.event_name != 'pull_request' && steps.build-app.outputs.digest != ''
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_APP }}:${{ steps.meta-app.outputs.version }}
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_APP }}@${{ steps.build-app.outputs.digest }}
           format: "sarif"
           output: "trivy-app.sarif"
         continue-on-error: true
 
       - name: Run Trivy vulnerability scanner on Orchestrator
+        if: github.event_name != 'pull_request' && steps.build-orchestrator.outputs.digest != ''
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ORCHESTRATOR }}:${{ steps.meta-orchestrator.outputs.version }}
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ORCHESTRATOR }}@${{ steps.build-orchestrator.outputs.digest }}
           format: "sarif"
           output: "trivy-orchestrator.sarif"
         continue-on-error: true
 
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v2
-        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        if: github.event_name != 'pull_request'
         with:
-          sarif_file: |
-            trivy-app.sarif
-            trivy-orchestrator.sarif
+          sarif_file: "trivy-*.sarif"
+          wait-for-processing: false
         continue-on-error: true
 
       # Output image information
