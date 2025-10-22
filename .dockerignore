@@ -1,0 +1,76 @@
+# Node modules
+node_modules
+**/node_modules
+**/.pnpm-store
+
+# Build outputs
+dist
+build
+.next
+**/.next
+**/dist
+**/build
+.turbo
+**/.turbo
+
+# Environment files
+.env
+.env.*
+!.env.example
+**/env
+env/
+
+# Git
+.git
+.github
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Testing
+coverage
+.nyc_output
+**/__tests__
+**/*.test.*
+**/*.spec.*
+
+# Documentation
+*.md
+docs
+LICENSE
+
+# Development files
+.eslintrc.*
+.prettierrc.*
+*.config.js
+tsconfig.tsbuildinfo
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Temporary files
+tmp
+temp
+*.tmp
+
+# Go build artifacts
+apps/orchestrator/tmp
+apps/orchestrator/orchestrator
+apps/runtime/cronium-runtime/cronium-runtime
+**/*.exe
