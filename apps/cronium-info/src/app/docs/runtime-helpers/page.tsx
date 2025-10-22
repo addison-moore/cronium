@@ -1,13 +1,7 @@
 import React from "react";
 import DocsLayout from "@/components/docs/docs-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
-import {
-  Database,
-  ArrowRight,
-  Zap,
-  Settings,
-  FlaskConical,
-} from "lucide-react";
+import { Database, ArrowRight, Settings, FlaskConical } from "lucide-react";
 import ApiCodeExamples, {
   CodeBlock,
 } from "@/components/docs/api-code-examples";
