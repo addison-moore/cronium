@@ -31,11 +31,13 @@
     "@cronium/eslint-config": "workspace:*",
     "@cronium/tailwind-config": "workspace:*",
     "@cronium/typescript-config": "workspace:*",
+    "@tailwindcss/postcss": "^4.1.14",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.6",
     "react": "^19.1.0",
+    "tailwindcss": "^4.1.14",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3"
   },
