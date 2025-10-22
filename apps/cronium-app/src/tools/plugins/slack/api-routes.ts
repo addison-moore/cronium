@@ -255,7 +255,7 @@ export const slackApiRoutes: PluginApiRoutes = {
           return { valid: true };
         }
 
-        const zodErrors = result.error.issues as z.ZodIssue[];
+        const zodErrors = result.error.issues;
         const errorMessages = zodErrors.map((err) => {
           const path = err.path.join(".");
           return `${path}: ${err.message}`;

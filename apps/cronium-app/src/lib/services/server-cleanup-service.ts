@@ -50,9 +50,7 @@ export class ServerCleanupService {
   static getInstance(
     config?: Partial<CleanupServiceConfig>,
   ): ServerCleanupService {
-    if (!ServerCleanupService.instance) {
-      ServerCleanupService.instance = new ServerCleanupService(config);
-    }
+    ServerCleanupService.instance ??= new ServerCleanupService(config);
     return ServerCleanupService.instance;
   }
 

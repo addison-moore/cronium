@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@cronium/ui";
 import { Badge } from "@cronium/ui";
-import { ComboBox, type ComboBoxOption } from "@cronium/ui";
+import { ComboBox } from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { MonacoEditor } from "@cronium/ui";
 import {
@@ -626,7 +626,7 @@ export default function ConditionalActionsSection({
       ) {
         // Get the tool type from the toolId if not already set
         const tool = allTools.find((t) => t.id === action.toolId);
-        const toolType = action.toolType || tool?.type || null;
+        const toolType = action.toolType ?? tool?.type ?? null;
         setSelectedToolType(toolType);
       } else {
         setSelectedToolType(action.toolType ?? null);
@@ -1293,13 +1293,7 @@ export default function ConditionalActionsSection({
               >
                 <div className="flex items-center space-x-3">
                   <StatusBadge
-                    status={
-                      getConditionalActionStatus(action.type) as
-                        | "success"
-                        | "failure"
-                        | "info"
-                        | "active"
-                    }
+                    status={getConditionalActionStatus(action.type)}
                     label={
                       action.type === "ON_SUCCESS"
                         ? "On Success"

@@ -154,7 +154,7 @@ export function ArchivedServersTable({
                 </div>
               </TableCell>
               <TableCell>
-                {server.archiveReason || (
+                {server.archiveReason ?? (
                   <span className="text-muted-foreground">
                     No reason provided
                   </span>

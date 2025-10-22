@@ -612,7 +612,7 @@ export default function WorkflowCanvas({
           ? {
               ...edge.data,
               type:
-                ((edge.data?.type ||
+                ((edge.data?.type ??
                   edge.data?.connectionType) as ConnectionType) ??
                 ConnectionType.ALWAYS,
             }

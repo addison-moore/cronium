@@ -17,11 +17,9 @@ declare global {
 export function initializePlugins() {
   // Check if already initialized
   if (global.__pluginsInitialized) {
-    console.log("[initializePlugins] Plugins already initialized, skipping");
     return;
   }
 
-  console.log("[initializePlugins] Initializing plugins...");
   ToolPluginRegistry.register(EmailPlugin);
   ToolPluginRegistry.register(SlackPlugin);
   ToolPluginRegistry.register(DiscordPlugin);
@@ -31,9 +29,6 @@ export function initializePlugins() {
   ToolPluginRegistry.register(TrelloPlugin);
 
   global.__pluginsInitialized = true;
-  console.log(
-    `[initializePlugins] Initialized ${ToolPluginRegistry.getAllActions().length} actions`,
-  );
 }
 
 // Export plugins for manual registration if needed

@@ -741,7 +741,7 @@ export function ModularToolsManager() {
                   placeholder="Search tools..."
                   value={toolSearchQuery}
                   onChange={(e) => setToolSearchQuery(e.target.value)}
-                  className="pl-10"
+                  className="pl-[2.5rem]"
                 />
               </div>
               {/* Tools list */}

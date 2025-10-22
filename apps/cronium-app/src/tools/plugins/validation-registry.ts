@@ -40,7 +40,7 @@ export function validateToolCredentials(
   const result = schema.safeParse(credentials);
 
   if (!result.success) {
-    const zodErrors = result.error.issues as z.ZodIssue[];
+    const zodErrors = result.error.issues;
     const errorMessages = zodErrors.map((e) => {
       const path = e.path.join(".");
       return `${path}: ${e.message}`;

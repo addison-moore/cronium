@@ -40,6 +40,7 @@ import {
   RunLocation,
   TimeUnit,
   EventTriggerType,
+  ConditionalActionType,
   type Event,
   type Tool,
 } from "@/shared/schema";
@@ -478,15 +479,14 @@ export default function EventForm({
           ...baseData
         } = data;
 
-        // Import ConditionalActionType at the top of the file
-        const { ConditionalActionType } = await import("@/shared/schema");
+        // ConditionalActionType types are already defined in the schema
 
         // Separate conditional actions by type
         const successActions = conditionalActions
           .filter((action) => action.type === "ON_SUCCESS")
           .map((action) => ({
             type: action.type,
-            action: action.action as any,
+            action: action.action as ConditionalActionType,
             details: {
               emailAddresses: action.emailAddresses ?? "",
               emailSubject: action.emailSubject ?? "",
@@ -500,7 +500,7 @@ export default function EventForm({
           .filter((action) => action.type === "ON_FAILURE")
           .map((action) => ({
             type: action.type,
-            action: action.action as any,
+            action: action.action as ConditionalActionType,
             details: {
               emailAddresses: action.emailAddresses ?? "",
               emailSubject: action.emailSubject ?? "",
@@ -514,7 +514,7 @@ export default function EventForm({
           .filter((action) => action.type === "ALWAYS")
           .map((action) => ({
             type: action.type,
-            action: action.action as any,
+            action: action.action as ConditionalActionType,
             details: {
               emailAddresses: action.emailAddresses ?? "",
               emailSubject: action.emailSubject ?? "",
@@ -528,7 +528,7 @@ export default function EventForm({
           .filter((action) => action.type === "ON_CONDITION")
           .map((action) => ({
             type: action.type,
-            action: action.action as any,
+            action: action.action as ConditionalActionType,
             details: {
               emailAddresses: action.emailAddresses ?? "",
               emailSubject: action.emailSubject ?? "",

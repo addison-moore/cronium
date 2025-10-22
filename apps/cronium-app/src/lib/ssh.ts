@@ -1606,7 +1606,7 @@ module.exports = croniumInstance;`;
     const connectionKey = this.getConnectionKey(host, username, port);
 
     // Check if we've hit the channel limit for this connection
-    const currentChannels = this.channelCounts.get(connectionKey) || 0;
+    const currentChannels = this.channelCounts.get(connectionKey) ?? 0;
 
     // Lower the threshold to prevent hitting server limits (use maxChannelsPerConnection)
     const shouldForceNew = currentChannels >= this.maxChannelsPerConnection;
@@ -1705,7 +1705,7 @@ module.exports = croniumInstance;`;
 
             // Track channel count
             const key = freshConnection.host;
-            const newCount = (this.channelCounts.get(key) || 0) + 1;
+            const newCount = (this.channelCounts.get(key) ?? 0) + 1;
             this.channelCounts.set(key, newCount);
             console.log(
               `Channel opened for ${key}, total channels: ${newCount}`,
@@ -1718,7 +1718,7 @@ module.exports = croniumInstance;`;
             const handleClose = () => {
               if (!cleanupCalled) {
                 cleanupCalled = true;
-                const count = this.channelCounts.get(key) || 1;
+                const count = this.channelCounts.get(key) ?? 1;
                 if (count <= 1) {
                   this.channelCounts.delete(key);
                 } else {
@@ -1746,7 +1746,7 @@ module.exports = croniumInstance;`;
       // Create manual cleanup function
       const cleanup = () => {
         const key = freshConnection.host;
-        const count = this.channelCounts.get(key) || 0;
+        const count = this.channelCounts.get(key) ?? 0;
         if (count > 0) {
           const newCount = count - 1;
           if (newCount <= 0) {
@@ -1799,7 +1799,7 @@ module.exports = croniumInstance;`;
 
           // Track channel count
           const key = connection.host;
-          const newCount = (this.channelCounts.get(key) || 0) + 1;
+          const newCount = (this.channelCounts.get(key) ?? 0) + 1;
           this.channelCounts.set(key, newCount);
           console.log(`Channel opened for ${key}, total channels: ${newCount}`);
 
@@ -1810,7 +1810,7 @@ module.exports = croniumInstance;`;
           const handleClose = () => {
             if (!cleanupCalled) {
               cleanupCalled = true;
-              const count = this.channelCounts.get(key) || 1;
+              const count = this.channelCounts.get(key) ?? 1;
               if (count <= 1) {
                 this.channelCounts.delete(key);
               } else {
@@ -1831,14 +1831,14 @@ module.exports = croniumInstance;`;
     });
 
     console.log(
-      `Opened interactive shell for ${connection.host}, channels: ${this.channelCounts.get(connection.host) || 1}`,
+      `Opened interactive shell for ${connection.host}, channels: ${this.channelCounts.get(connection.host) ?? 1}`,
     );
     connection.lastUsed = Date.now(); // Update last used time
 
     // Create manual cleanup function
     const cleanup = () => {
       const key = connection.host;
-      const count = this.channelCounts.get(key) || 0;
+      const count = this.channelCounts.get(key) ?? 0;
       if (count > 0) {
         const newCount = count - 1;
         if (newCount <= 0) {

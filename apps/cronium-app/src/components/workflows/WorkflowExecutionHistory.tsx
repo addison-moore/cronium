@@ -209,7 +209,7 @@ export default function WorkflowExecutionHistory({
   // Apply filters to executions
   const filteredExecutions = executions.filter((execution) => {
     const workflowDisplayName =
-      execution.workflowName || `Workflow ${String(execution.workflowId)}`;
+      execution.workflowName ?? `Workflow ${String(execution.workflowId)}`;
     const matchesSearch =
       workflowDisplayName?.toLowerCase().includes(searchTerm.toLowerCase()) ??
       true;
@@ -545,7 +545,7 @@ export default function WorkflowExecutionHistory({
                           className="hover:underline"
                         >
                           <div className="font-medium">
-                            {execution.workflowName ||
+                            {execution.workflowName ??
                               `Workflow ${String(execution.workflowId)}`}
                           </div>
                         </Link>
@@ -589,7 +589,7 @@ export default function WorkflowExecutionHistory({
                           <DialogHeader>
                             <DialogTitle>
                               Execution Details -{" "}
-                              {execution.workflowName ||
+                              {execution.workflowName ??
                                 `Workflow ${String(execution.workflowId)}`}{" "}
                               - {formatDate(execution.startedAt)}
                             </DialogTitle>

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { type z } from "zod";
 import type { ActionParameter } from "../types/tool-plugin";
 
 /**
@@ -46,7 +46,7 @@ export function zodToParameters(schema: z.ZodSchema<any>): ActionParameter[] {
     currentDef?.typeName === "ZodEffects"
   ) {
     const innerSchema =
-      (unwrappedSchema as any)._def?.schema || currentDef.schema;
+      (unwrappedSchema as any)._def?.schema ?? currentDef.schema;
     if (!innerSchema) break;
     unwrappedSchema = innerSchema;
     currentDef = innerSchema._def;
@@ -56,8 +56,8 @@ export function zodToParameters(schema: z.ZodSchema<any>): ActionParameter[] {
   if (currentDef?.type === "object" || currentDef?.typeName === "ZodObject") {
     // Try to get shape from multiple possible locations
     const shape =
-      currentDef.shape ||
-      (unwrappedSchema as any).shape ||
+      currentDef.shape ??
+      (unwrappedSchema as any).shape ??
       (unwrappedSchema as any)._shape;
 
     if (shape && typeof shape === "object") {
@@ -91,12 +91,12 @@ function parseZodType(
   // Unwrap modifiers - check both old and new formats
   while (baseSchema && (baseSchema as any)._def) {
     const def = (baseSchema as any)._def;
-    const type = def.type || def.typeName;
+    const type = def.type ?? def.typeName;
 
     if (type === "optional" || type === "ZodOptional") {
       required = false;
       const innerType =
-        def.innerType || def.unwrap?.() || (baseSchema as any).unwrap?.();
+        def.innerType ?? def.unwrap?.() ?? (baseSchema as any).unwrap?.();
       if (!innerType) break;
       baseSchema = innerType;
     } else if (type === "default" || type === "ZodDefault") {
@@ -107,13 +107,13 @@ function parseZodType(
             : def.defaultValue;
       }
       const innerType =
-        def.innerType || def.unwrap?.() || (baseSchema as any).unwrap?.();
+        def.innerType ?? def.unwrap?.() ?? (baseSchema as any).unwrap?.();
       if (!innerType) break;
       baseSchema = innerType;
     } else if (type === "nullable" || type === "ZodNullable") {
       required = false;
       const innerType =
-        def.innerType || def.unwrap?.() || (baseSchema as any).unwrap?.();
+        def.innerType ?? def.unwrap?.() ?? (baseSchema as any).unwrap?.();
       if (!innerType) break;
       baseSchema = innerType;
     } else {
@@ -135,7 +135,7 @@ function parseZodType(
   let paramType = "string";
 
   if (baseDef) {
-    const defType = baseDef.type || baseDef.typeName;
+    const defType = baseDef.type ?? baseDef.typeName;
 
     if (defType === "string" || defType === "ZodString") {
       paramType = "string";

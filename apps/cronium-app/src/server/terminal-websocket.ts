@@ -5,7 +5,9 @@ import { sshService } from "@/lib/ssh";
 import type { ClientChannel } from "ssh2";
 
 interface TerminalSession {
-  ptyProcess: ClientChannel;
+  ptyProcess: ClientChannel & {
+    resize?: (columns: number, rows: number) => void;
+  };
   userId: string;
   serverId: number;
   createdAt: number;
@@ -151,11 +153,10 @@ export class TerminalWebSocketHandler {
         if (session) {
           session.lastActivity = Date.now(); // Update last activity on resize
           // Check if it's a node-pty process or node-ssh shell stream
-          if (
-            "resize" in session.ptyProcess &&
-            typeof session.ptyProcess.resize === "function"
-          ) {
-            (session.ptyProcess as any).resize(cols, rows);
+          if (typeof session.ptyProcess.resize === "function") {
+            session.ptyProcess.resize(cols, rows);
+          } else if (typeof session.ptyProcess.setWindow === "function") {
+            session.ptyProcess.setWindow(rows, cols, 0, 0);
           }
         } else {
           console.warn(
@@ -290,7 +291,7 @@ export class TerminalWebSocketHandler {
     this.activeSessions.set(sessionId, session);
 
     // Handle SSH shell output (ClientChannel)
-    const shellProcess = ptyProcess as ClientChannel;
+    const shellProcess = ptyProcess;
     shellProcess.on("data", (data: Buffer) => {
       // console.log(`Server: Remote shell output for sessionId ${sessionId}, data length: ${data.length}`);
       socket.emit("terminal-output", { sessionId, data: data.toString() });
