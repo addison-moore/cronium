@@ -568,6 +568,9 @@ importers:
       next-themes:
         specifier: ^0.4.4
         version: 0.4.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      prismjs:
+        specifier: ^1.29.0
+        version: 1.30.0
       react-day-picker:
         specifier: ^9.8.0
         version: 9.8.0(react@19.1.0)
@@ -593,6 +596,9 @@ importers:
       '@tailwindcss/postcss':
         specifier: ^4.1.14
         version: 4.1.14
+      '@types/prismjs':
+        specifier: ^1.26.5
+        version: 1.26.5
       '@types/react':
         specifier: ^19.1.8
         version: 19.1.8
