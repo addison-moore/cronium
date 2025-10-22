@@ -80,16 +80,24 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        PreviousMonthButton: (props) => (
-          <button {...props}>
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-        ),
-        NextMonthButton: (props) => (
-          <button {...props}>
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        ),
+        PreviousMonthButton: (props) => {
+          // Remove popover prop to avoid TypeScript error with newer React types
+          const { popover, ...buttonProps } = props as any;
+          return (
+            <button {...buttonProps}>
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          );
+        },
+        NextMonthButton: (props) => {
+          // Remove popover prop to avoid TypeScript error with newer React types
+          const { popover, ...buttonProps } = props as any;
+          return (
+            <button {...buttonProps}>
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          );
+        },
       }}
       {...props}
     />
