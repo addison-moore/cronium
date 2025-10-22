@@ -35,5 +35,8 @@ build/
 GEMINI.md
 .claude
 
+# TypeScript build info
+tsconfig.tsbuildinfo
+
 # Orchestrator
 apps/orchestrator/tmp/

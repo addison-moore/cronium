@@ -6,7 +6,7 @@
 
 import { transformJobForOrchestrator } from "@/lib/services/job-transformer";
 import type { Job } from "@/shared/schema";
-import { JobType, JobPriority } from "@/shared/schema";
+import { JobType, JobPriority, JobStatus } from "@/shared/schema";
 
 // Test cases with different timeout units
 const testCases = [
@@ -72,7 +72,7 @@ function runTests() {
       userId: "test-user",
       type: JobType.SCRIPT,
       priority: JobPriority.NORMAL,
-      status: "pending",
+      status: JobStatus.QUEUED,
       attempts: 0,
       scheduledFor: new Date(),
       payload: testCase.payload,
@@ -81,11 +81,8 @@ function runTests() {
       startedAt: null,
       completedAt: null,
       result: null,
-      error: null,
       lastError: null,
-      metadata: null,
-      exitCode: null,
-      output: null,
+      metadata: {},
       orchestratorId: null,
     };
 

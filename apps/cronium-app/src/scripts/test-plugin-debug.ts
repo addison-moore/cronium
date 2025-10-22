@@ -1,5 +1,5 @@
 import { db } from "../server/db";
-import { jobs } from "../shared/schema";
+import { jobs, JobType, JobStatus } from "../shared/schema";
 import { nanoid } from "nanoid";
 
 console.log("🔍 Creating test job to trigger plugin debugging...");
@@ -11,8 +11,8 @@ console.log("🔍 Creating test job to trigger plugin debugging...");
     id: jobId,
     eventId: 575,
     userId: "IvJTPTUE4yrKs_sNVZjWl",
-    status: "queued" as const,
-    type: "SCRIPT" as const,
+    status: JobStatus.QUEUED,
+    type: JobType.SCRIPT,
     priority: 1,
     attempts: 0,
     scheduledFor: new Date(),

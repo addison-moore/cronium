@@ -39,12 +39,10 @@ app.get("/health", (_req, res) => {
   if (isHealthy) {
     return res.json({ status: "healthy", timestamp: new Date().toISOString() });
   } else {
-    return res
-      .status(503)
-      .json({
-        status: "unhealthy",
-        error: "WebSocket handler not initialized",
-      });
+    return res.status(503).json({
+      status: "unhealthy",
+      error: "WebSocket handler not initialized",
+    });
   }
 });
 
