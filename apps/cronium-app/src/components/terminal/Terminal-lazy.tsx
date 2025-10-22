@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { TerminalSkeleton } from "@cronium/ui";
+import { Skeleton } from "@cronium/ui";
 
 const Terminal = dynamic(
   () =>
@@ -13,7 +13,7 @@ const Terminal = dynamic(
     }),
   {
     ssr: false,
-    loading: () => <TerminalSkeleton />,
+    loading: () => <Skeleton className="h-[500px] w-full" />,
   },
 );
 
