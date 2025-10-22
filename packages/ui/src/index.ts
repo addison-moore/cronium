@@ -3,7 +3,6 @@
 
 // UI Components
 export * from "./components/accordion";
-export * from "./components/action-button";
 export * from "./components/action-menu";
 export * from "./components/alert-dialog";
 export * from "./components/alert";
