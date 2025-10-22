@@ -1,11 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { CodeEditorSkeleton } from "@cronium/ui";
+import { Skeleton } from "@cronium/ui";
 
 const CodeEditor = dynamic(() => import("./CodeEditor"), {
   ssr: false,
-  loading: () => <CodeEditorSkeleton />,
+  loading: () => <Skeleton className="h-[400px] w-full" />,
 });
 
 export default CodeEditor;

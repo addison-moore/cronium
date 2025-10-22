@@ -1,14 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { ActionBuilderSkeleton } from "@cronium/ui";
+import { Skeleton } from "@cronium/ui";
 
 const ActionBuilder = dynamic(
   () =>
     import("./ActionBuilder").then((mod) => ({ default: mod.ActionBuilder })),
   {
     ssr: false,
-    loading: () => <ActionBuilderSkeleton />,
+    loading: () => <Skeleton className="h-[400px] w-full" />,
   },
 );
 
