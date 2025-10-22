@@ -3,9 +3,6 @@
  * These styles must be imported by any app using the UI package
  */
 
-/* Import Tailwind base - this includes all default utilities */
-@import "tailwindcss";
-
 /* Dark mode variant for Tailwind CSS 4 */
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -46,8 +43,10 @@
 }
 
 /* Define base spacing value for Tailwind CSS 4 */
-:root {
-  --spacing: 0.25rem; /* Base unit - 1 = 0.25rem = 4px */
+@layer theme {
+  :root {
+    --spacing: 0.25rem; /* Base unit - 1 = 0.25rem = 4px */
+  }
 }
 
 /**
@@ -59,20 +58,22 @@
  * Special utility classes for components that need CSS variables
  * Tailwind CSS 4 generates these automatically when we define the colors in @theme
  */
-/* Data state utilities for Switch and Checkbox - these need explicit definition */
-.data-\[state\=checked\]\:translate-x-5[data-state="checked"] { 
-  transform: translateX(1.25rem); 
-}
-.data-\[state\=unchecked\]\:translate-x-0[data-state="unchecked"] { 
-  transform: translateX(0); 
-}
-
-/* Padding utilities for Badge component */
-.px-2\.5 { 
-  padding-left: 0.625rem; 
-  padding-right: 0.625rem; 
-}
-.py-0\.5 { 
-  padding-top: 0.125rem; 
-  padding-bottom: 0.125rem; 
+@layer utilities {
+  /* Data state utilities for Switch and Checkbox - these need explicit definition */
+  .data-\[state\=checked\]\:translate-x-5[data-state="checked"] { 
+    transform: translateX(1.25rem); 
+  }
+  .data-\[state\=unchecked\]\:translate-x-0[data-state="unchecked"] { 
+    transform: translateX(0); 
+  }
+  
+  /* Padding utilities for Badge component */
+  .px-2\.5 { 
+    padding-left: 0.625rem; 
+    padding-right: 0.625rem; 
+  }
+  .py-0\.5 { 
+    padding-top: 0.125rem; 
+    padding-bottom: 0.125rem; 
+  }
 }
