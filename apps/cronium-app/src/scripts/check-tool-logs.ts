@@ -30,4 +30,7 @@ import { desc } from "drizzle-orm";
   });
 
   process.exit(0);
-})();
+})().catch((error) => {
+  console.error("Failed to fetch tool action logs:", error);
+  process.exit(1);
+});

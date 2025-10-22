@@ -73,7 +73,7 @@ function ConnectionEdge({
   // Get connection type from edge data or default to ALWAYS
   // Support both 'type' and 'connectionType' for backwards compatibility
   const connectionType =
-    ((data?.type || data?.connectionType) as ConnectionType) ||
+    ((data?.type ?? data?.connectionType) as ConnectionType) ??
     ConnectionType.ALWAYS;
   const connectionStyle = connectionStyles[connectionType];
   const { label } = connectionStyle;

@@ -40,4 +40,7 @@ import { nanoid } from "nanoid";
   );
 
   process.exit(0);
-})();
+})().catch((error) => {
+  console.error("❌ Failed to create test job:", error);
+  process.exit(1);
+});

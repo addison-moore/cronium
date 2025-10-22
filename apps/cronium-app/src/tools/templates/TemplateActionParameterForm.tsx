@@ -61,7 +61,7 @@ export function TemplateActionParameterForm({
         def.type === "effects" ||
         def.typeName === "ZodEffects"
       ) {
-        const innerSchema = def.in || def.schema;
+        const innerSchema = def.in ?? def.schema;
         if (!innerSchema) break;
         schema = innerSchema as z.ZodTypeAny;
       } else {

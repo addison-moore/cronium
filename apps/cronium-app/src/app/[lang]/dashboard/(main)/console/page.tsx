@@ -25,11 +25,7 @@ interface ServerData {
   online?: boolean | null;
 }
 
-interface ServersResponse {
-  servers: ServerData[];
-  total: number;
-  hasMore: boolean;
-}
+// Removed unused ServersResponse interface
 
 export default function ConsolePage() {
   const t = useTranslations("Console");

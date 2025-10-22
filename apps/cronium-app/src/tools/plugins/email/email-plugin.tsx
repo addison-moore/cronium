@@ -345,7 +345,7 @@ const emailActions: ToolAction[] = [
       // Validate email credentials
       const validationResult = emailCredentialsSchema.safeParse(credentials);
       if (!validationResult.success) {
-        const zodErrors = validationResult.error.issues as z.ZodIssue[];
+        const zodErrors = validationResult.error.issues;
         const errorMessages = zodErrors.map((e) => e.message).join(", ");
         throw new Error(`Invalid email credentials: ${errorMessages}`);
       }
@@ -401,7 +401,7 @@ const emailActions: ToolAction[] = [
         return { isValid: true, errors: [] };
       }
 
-      const zodErrors = (result?.error?.issues ?? []) as z.ZodIssue[];
+      const zodErrors = result?.error?.issues ?? [];
       const errorMessages = zodErrors.map((e) => {
         const path = e.path.join(".");
         return `${path}: ${e.message}`;

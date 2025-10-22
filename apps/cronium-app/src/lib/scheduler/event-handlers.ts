@@ -318,7 +318,7 @@ export async function processEvent(
 
         // Map based on tool type
         if (tool.type.toLowerCase() === "email") {
-          actionParameters.to = conditional_event.emailAddresses || "";
+          actionParameters.to = conditional_event.emailAddresses ?? "";
           actionParameters.subject = conditional_event.emailSubject
             ? templateProcessor.processTemplate(
                 conditional_event.emailSubject,
@@ -328,14 +328,14 @@ export async function processEvent(
           actionParameters.body = processedMessage;
           actionParameters.isHtml = true;
         } else if (tool.type.toLowerCase() === "slack") {
-          actionParameters.channel = conditional_event.emailAddresses || ""; // Channel stored in emailAddresses field
+          actionParameters.channel = conditional_event.emailAddresses ?? ""; // Channel stored in emailAddresses field
           actionParameters.text = processedMessage;
         } else if (tool.type.toLowerCase() === "discord") {
           actionParameters.content = processedMessage;
         } else if (tool.type.toLowerCase() === "teams") {
           actionParameters.message = processedMessage;
           actionParameters.title =
-            conditional_event.emailSubject || `Event ${event.name ?? ""}`;
+            conditional_event.emailSubject ?? `Event ${event.name ?? ""}`;
         } else {
           // Generic message parameter
           actionParameters.message = processedMessage;

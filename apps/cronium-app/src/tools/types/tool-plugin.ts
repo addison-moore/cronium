@@ -318,7 +318,6 @@ export class ToolPluginRegistry {
   }
 
   static register(plugin: ToolPlugin) {
-    console.log(`[ToolPluginRegistry] Registering plugin: ${plugin.id}`);
     this.plugins.set(plugin.id, plugin);
   }
 
