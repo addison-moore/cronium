@@ -42,8 +42,21 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 ENV SKIP_ENV_VALIDATION=true
 
+# Set placeholder values for required environment variables during build
+# These will be overridden at runtime with actual values
+ENV AUTH_SECRET=build-placeholder
+ENV AUTH_URL=http://localhost:3000
+ENV DATABASE_URL=postgresql://user:pass@localhost:5432/db
+ENV PUBLIC_APP_URL=http://localhost:3000
+ENV ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000
+
 # Build the application
-RUN pnpm build --filter @cronium/app
+# First build dependencies, then the app
+RUN pnpm --filter @cronium/ui build
+# Use next build directly to avoid dotenv dependency on missing .env.local file  
+WORKDIR /app/apps/cronium-app
+RUN pnpm exec next build
+WORKDIR /app
 
 # Stage 3: Runtime
 FROM node:20-alpine AS runner

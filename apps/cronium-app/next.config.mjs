@@ -144,9 +144,8 @@ const nextConfig = {
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
   experimental: {
-    // Enable Partial Prerendering (PPR) only in production
-    // PPR causes severe performance issues in development
-    ppr: process.env.NODE_ENV === "production",
+    // PPR requires Next.js canary version, disabled for stable builds
+    // ppr: process.env.NODE_ENV === "production",
     // Optimize package imports
     optimizePackageImports: [
       "@radix-ui/react-*",
