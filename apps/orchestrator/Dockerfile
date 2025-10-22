@@ -25,7 +25,7 @@ ARG BUILD_TIME
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-w -s -X main.Version=${BUILD_VERSION} -X main.BuildTime=${BUILD_TIME}" \
     -a -installsuffix cgo \
-    -o orchestrator ./cmd/orchestrator
+    -o orchestrator ./cmd/cronium-orchestrator
 
 # Runtime stage - using distroless for maximum security
 FROM gcr.io/distroless/static:nonroot

@@ -293,28 +293,44 @@
   /* Dark mode toast styles */
   .dark .toast.info-toast {
     background-color: #1e293b; /* slate-800 with blue tint */
-    background-image: linear-gradient(to right, rgba(59, 130, 246, 0.05), rgba(59, 130, 246, 0.05));
+    background-image: linear-gradient(
+      to right,
+      rgba(59, 130, 246, 0.05),
+      rgba(59, 130, 246, 0.05)
+    );
     color: #93c5fd; /* blue-300 */
     border-color: #1e40af; /* blue-800 */
   }
 
   .dark .toast.destructive-toast {
     background-color: #1e293b; /* slate-800 base */
-    background-image: linear-gradient(to right, rgba(239, 68, 68, 0.05), rgba(239, 68, 68, 0.05));
+    background-image: linear-gradient(
+      to right,
+      rgba(239, 68, 68, 0.05),
+      rgba(239, 68, 68, 0.05)
+    );
     color: #fca5a5; /* red-300 */
     border-color: #991b1b; /* red-800 */
   }
 
   .dark .toast.success-toast {
     background-color: #1e293b; /* slate-800 base */
-    background-image: linear-gradient(to right, rgba(34, 197, 94, 0.05), rgba(34, 197, 94, 0.05));
+    background-image: linear-gradient(
+      to right,
+      rgba(34, 197, 94, 0.05),
+      rgba(34, 197, 94, 0.05)
+    );
     color: #86efac; /* green-300 */
     border-color: #166534; /* green-800 */
   }
 
   .dark .toast.warning-toast {
     background-color: #1e293b; /* slate-800 base */
-    background-image: linear-gradient(to right, rgba(251, 146, 60, 0.05), rgba(251, 146, 60, 0.05));
+    background-image: linear-gradient(
+      to right,
+      rgba(251, 146, 60, 0.05),
+      rgba(251, 146, 60, 0.05)
+    );
     color: #fdba74; /* orange-300 */
     border-color: #9a3412; /* orange-800 */
   }
