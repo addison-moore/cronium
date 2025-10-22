@@ -8,12 +8,14 @@ import {
   type FieldValues,
   FormProvider,
   useFormContext,
+  type UseFormReturn,
 } from "react-hook-form";
 
 import { cn } from "../lib/utils";
 import { Label } from "./label";
 
-const Form = FormProvider;
+// Explicitly type Form to avoid inference issues
+const Form: typeof FormProvider = FormProvider;
 
 type FormFieldContextValue<
   TFieldValues extends FieldValues = FieldValues,
