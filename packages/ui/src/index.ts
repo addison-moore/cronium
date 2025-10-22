@@ -17,7 +17,6 @@ export * from "./components/code-viewer";
 export * from "./components/code";
 export * from "./components/collapsible";
 export * from "./components/combo-box";
-export * from "./components/command";
 export * from "./components/confirmation-dialog";
 export * from "./components/dashboard-card";
 export * from "./components/dialog";
