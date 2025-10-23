@@ -480,7 +480,7 @@ export const eventsRouter = createTRPCRouter({
           try {
             // Just clean up old payloads without generating new ones
             await payloadService.removeOldPayloads(id, 0); // Remove all payloads
-          } catch (_error) {
+          } catch {
             // Ignore cleanup errors
           }
         }

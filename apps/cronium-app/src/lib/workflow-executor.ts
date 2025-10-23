@@ -646,7 +646,7 @@ export class WorkflowExecutor {
         `[DEBUG] executeNode - Calling scheduler.executeEvent with waitForCompletion=true for event ${event.id}, workflow ${workflow.id}`,
       );
       console.log(
-        `[DEBUG] executeNode - Parameters: eventId=${event.id}, workflowExecutionId=${workflowExecutionId ? String(workflowExecutionId) : "undefined"}, sequenceOrder=${sequenceOrder}, workflowId=${workflow.id ? String(workflow.id) : "undefined"}, waitForCompletion=true`,
+        `[DEBUG] executeNode - Parameters: eventId=${event.id}, workflowExecutionId=${workflowExecutionId ? String(workflowExecutionId) : "undefined"}, sequenceOrder=${sequenceOrder ?? "undefined"}, workflowId=${workflow.id ? String(workflow.id) : "undefined"}, waitForCompletion=true`,
       );
 
       const executionResult = await scheduler.executeEvent(
@@ -796,7 +796,9 @@ export class WorkflowExecutor {
           // For parallel branches from this node, create new branch IDs
           // If there's only one outgoing connection, keep the same branch ID
           const newBranchId =
-            connectionsToFollow.length > 1 ? `${branchId}_${index}` : branchId;
+            connectionsToFollow.length > 1
+              ? `${branchId ?? "main"}_${index}`
+              : branchId;
           const newParallelGroupId =
             connectionsToFollow.length > 1
               ? `group_${node.id}_${Date.now()}`

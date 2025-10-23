@@ -15,7 +15,15 @@ interface LogUpdate {
   metadata?: Record<string, unknown>;
 }
 
-export function useLogsSocket() {
+export function useLogsSocket(): {
+  socket: Socket | null;
+  isConnected: boolean;
+  subscribeToLog: (logId: number) => void;
+  unsubscribeFromLog: (logId: number) => void;
+  subscribeToLogUpdates: (
+    onUpdate: (update: LogUpdate) => void,
+  ) => (() => void) | undefined;
+} {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const { user } = useAuth();

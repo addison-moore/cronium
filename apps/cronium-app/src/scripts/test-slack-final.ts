@@ -44,44 +44,46 @@ console.log("");
   console.log("⏳ Waiting 30 seconds for execution...");
 
   // Wait and check
-  setTimeout(async () => {
-    // Check job status
-    const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId));
-    console.log("\n📊 Job Status:", job?.status);
+  setTimeout(() => {
+    void (async () => {
+      // Check job status
+      const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId));
+      console.log("\n📊 Job Status:", job?.status);
 
-    // Check for new tool action logs
-    const oneMinuteAgo = new Date(Date.now() - 60000);
-    const logs = await db
-      .select()
-      .from(toolActionLogs)
-      .where(eq(toolActionLogs.eventId, 575))
-      .orderBy(desc(toolActionLogs.createdAt))
-      .limit(5);
+      // Check for new tool action logs
+      const oneMinuteAgo = new Date(Date.now() - 60000);
+      const logs = await db
+        .select()
+        .from(toolActionLogs)
+        .where(eq(toolActionLogs.eventId, 575))
+        .orderBy(desc(toolActionLogs.createdAt))
+        .limit(5);
 
-    const newLogs = logs.filter(
-      (log) => new Date(log.createdAt) > oneMinuteAgo,
-    );
+      const newLogs = logs.filter(
+        (log) => new Date(log.createdAt) > oneMinuteAgo,
+      );
 
-    if (newLogs.length > 0) {
-      console.log("\n✅ NEW Tool Action Logs Found:");
-      newLogs.forEach((log, i) => {
-        console.log(`  Log #${i + 1}:`);
-        console.log("    Status:", log.status);
-        console.log("    Action ID:", log.actionId);
-        console.log("    Created:", new Date(log.createdAt).toISOString());
+      if (newLogs.length > 0) {
+        console.log("\n✅ NEW Tool Action Logs Found:");
+        newLogs.forEach((log, i) => {
+          console.log(`  Log #${i + 1}:`);
+          console.log("    Status:", log.status);
+          console.log("    Action ID:", log.actionId);
+          console.log("    Created:", new Date(log.createdAt).toISOString());
 
-        if (log.status === "SUCCESS") {
-          console.log("\n🎉🎉🎉 SUCCESS! SLACK MESSAGE SENT! 🎉🎉🎉");
-          console.log("✅ All fixes working correctly!");
-        } else if (log.errorMessage) {
-          console.log("    Error:", log.errorMessage);
-        }
-      });
-    } else {
-      console.log("\n⚠️ No new tool action logs found");
-      console.log("📋 Most recent log was:", logs[0]?.createdAt);
-    }
+          if (log.status === "SUCCESS") {
+            console.log("\n🎉🎉🎉 SUCCESS! SLACK MESSAGE SENT! 🎉🎉🎉");
+            console.log("✅ All fixes working correctly!");
+          } else if (log.errorMessage) {
+            console.log("    Error:", log.errorMessage);
+          }
+        });
+      } else {
+        console.log("\n⚠️ No new tool action logs found");
+        console.log("📋 Most recent log was:", logs[0]?.createdAt);
+      }
 
-    process.exit(0);
+      process.exit(0);
+    })();
   }, 30000);
 })().catch(console.error);

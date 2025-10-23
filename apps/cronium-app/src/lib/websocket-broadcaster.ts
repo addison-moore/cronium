@@ -4,6 +4,44 @@
 
 import type { Log, Job } from "@/shared/schema";
 
+type BroadcastType = "log" | "job" | "execution" | "log-line";
+
+interface LogUpdatePayload {
+  logId: number;
+  update: Partial<Log>;
+}
+
+interface ExecutionUpdatePayload {
+  executionId: string;
+  status: string;
+  output?: string;
+  error?: string;
+  exitCode?: number;
+  startedAt?: Date;
+  completedAt?: Date;
+  timestamp: string;
+}
+
+interface LogLinePayload {
+  logId: number;
+  line: string;
+  stream: "stdout" | "stderr";
+  timestamp: string;
+}
+
+type BroadcastPayloads = {
+  log: LogUpdatePayload;
+  job: Job;
+  execution: ExecutionUpdatePayload;
+  "log-line": LogLinePayload;
+};
+
+type BroadcastQueueItem<T extends BroadcastType = BroadcastType> = {
+  type: T;
+  data: BroadcastPayloads[T];
+  retries: number;
+};
+
 interface BroadcastConfig {
   maxRetries: number;
   retryDelay: number;
@@ -21,11 +59,7 @@ export class WebSocketBroadcaster {
   private config: BroadcastConfig;
   private healthCheckInterval: NodeJS.Timeout | null = null;
   private isHealthy = false;
-  private broadcastQueue: Array<{
-    type: "log" | "job" | "execution" | "log-line";
-    data: any;
-    retries: number;
-  }> = [];
+  private broadcastQueue: BroadcastQueueItem[] = [];
 
   constructor(config?: Partial<BroadcastConfig>) {
     this.config = {
@@ -47,7 +81,7 @@ export class WebSocketBroadcaster {
     logId: number,
     update: Partial<Log>,
   ): Promise<BroadcastResult> {
-    const data = { logId, update };
+    const data: LogUpdatePayload = { logId, update };
     return this.broadcastWithRetry("log", data);
   }
 
@@ -72,7 +106,7 @@ export class WebSocketBroadcaster {
       completedAt?: Date;
     },
   ): Promise<BroadcastResult> {
-    const update = {
+    const update: ExecutionUpdatePayload = {
       executionId,
       status,
       ...data,
@@ -89,7 +123,7 @@ export class WebSocketBroadcaster {
     line: string,
     stream: "stdout" | "stderr" = "stdout",
   ): Promise<BroadcastResult> {
-    const data = {
+    const data: LogLinePayload = {
       logId,
       line,
       stream,
@@ -101,9 +135,9 @@ export class WebSocketBroadcaster {
   /**
    * Core broadcast function with retry logic
    */
-  private async broadcastWithRetry(
-    type: "log" | "job" | "execution" | "log-line",
-    data: any,
+  private async broadcastWithRetry<T extends BroadcastType>(
+    type: T,
+    data: BroadcastPayloads[T],
   ): Promise<BroadcastResult> {
     let attempts = 0;
     let lastError: string | undefined;
@@ -150,9 +184,9 @@ export class WebSocketBroadcaster {
   /**
    * Send a single broadcast attempt
    */
-  private async sendBroadcast(
-    type: "log" | "job" | "execution" | "log-line",
-    data: any,
+  private async sendBroadcast<T extends BroadcastType>(
+    type: T,
+    data: BroadcastPayloads[T],
   ): Promise<boolean> {
     const endpoint = this.getEndpointForType(type);
     const url = `http://localhost:${this.config.socketPort}${endpoint}`;
@@ -197,9 +231,9 @@ export class WebSocketBroadcaster {
   /**
    * Queue broadcast for later retry
    */
-  private queueBroadcast(
-    type: "log" | "job" | "execution" | "log-line",
-    data: any,
+  private queueBroadcast<T extends BroadcastType>(
+    type: T,
+    data: BroadcastPayloads[T],
   ): void {
     // Avoid duplicate entries
     const exists = this.broadcastQueue.some(
@@ -211,7 +245,7 @@ export class WebSocketBroadcaster {
     if (!exists) {
       this.broadcastQueue.push({
         type,
-        data: data as Record<string, unknown>,
+        data,
         retries: 0,
       });
       console.log(`[WebSocketBroadcaster] Queued broadcast for later: ${type}`);
@@ -221,9 +255,9 @@ export class WebSocketBroadcaster {
   /**
    * Clear queued broadcast
    */
-  private clearQueuedBroadcast(
-    type: "log" | "job" | "execution" | "log-line",
-    data: any,
+  private clearQueuedBroadcast<T extends BroadcastType>(
+    type: T,
+    data: BroadcastPayloads[T],
   ): void {
     this.broadcastQueue = this.broadcastQueue.filter(
       (item) =>

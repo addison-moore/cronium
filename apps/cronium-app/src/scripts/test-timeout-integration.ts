@@ -75,7 +75,7 @@ let allPassed = true;
 for (const test of unitTests) {
   const job: Job = {
     ...testJob,
-    id: `test-job-${test.unit}`,
+    id: `test-job-${test.unit ?? "unknown"}`,
     payload: {
       script: {
         type: "BASH",
@@ -89,7 +89,7 @@ for (const test of unitTests) {
   const result = transformJobForOrchestrator(job);
   const seconds = result.execution.timeout / 1000000000;
 
-  const unitStr = test.unit || "SECONDS (default)";
+  const unitStr = test.unit ?? "SECONDS (default)";
   console.log(
     `  ${test.value} ${unitStr}: ${seconds}s (expected ${test.expected}s)`,
   );
@@ -120,7 +120,7 @@ const jobWithTimeout: Job = {
 
 const orchestratorJob = transformJobForOrchestrator(jobWithTimeout);
 
-if (orchestratorJob.execution && orchestratorJob.execution.timeout) {
+if (orchestratorJob.execution?.timeout) {
   console.log("✅ PASSED: Timeout is in execution block");
   console.log(
     `  Execution timeout: ${orchestratorJob.execution.timeout / 1000000000}s`,

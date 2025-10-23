@@ -155,6 +155,7 @@ export async function sendInvitationEmail(email: string, inviteToken: string) {
   const baseUrl = env.PUBLIC_APP_URL ?? `http://localhost:5000`;
 
   // Create invitation URL
+  // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
   const inviteUrl = `${baseUrl}/auth/activate?token=${inviteToken}`;
 
   // Get system name for personalization
@@ -194,6 +195,7 @@ export async function sendPasswordResetEmail(
   const baseUrl = env.PUBLIC_APP_URL ?? `http://localhost:5000`;
 
   // Create reset URL
+  // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
   const resetUrl = `${baseUrl}/en/auth/reset-password?token=${resetToken}`;
 
   // Get system name for personalization
