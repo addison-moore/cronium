@@ -1,12 +1,33 @@
 import { type z } from "zod";
 import type { ActionParameter } from "../types/tool-plugin";
 
+// Type definitions for Zod internal structures
+interface ZodDef {
+  typeName?: string;
+  type?: string;
+  schema?: z.ZodTypeAny;
+  shape?: Record<string, z.ZodTypeAny>;
+  innerType?: z.ZodTypeAny;
+  unwrap?: () => z.ZodTypeAny;
+  defaultValue?: (() => unknown) | string | number | boolean | null;
+  description?: string;
+  values?: unknown[];
+}
+
+interface ZodSchemaWithDef extends z.ZodTypeAny {
+  _def: ZodDef;
+  shape?: Record<string, z.ZodTypeAny>;
+  _shape?: Record<string, z.ZodTypeAny>;
+  description?: string;
+  unwrap?: () => z.ZodTypeAny;
+}
+
 /**
  * Safely convert a Zod schema to ActionParameter array
  * Wraps zodToParameters with error handling for use in module initialization
  */
 export function safeZodToParameters(
-  schema: z.ZodSchema<any>,
+  schema: z.ZodSchema<unknown>,
 ): ActionParameter[] {
   try {
     return zodToParameters(schema);
@@ -20,8 +41,9 @@ export function safeZodToParameters(
  * Convert a Zod schema to ActionParameter array
  * This utility helps maintain consistency between Zod schemas and parameter definitions
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function zodToParameters(schema: z.ZodSchema<any>): ActionParameter[] {
+export function zodToParameters(
+  schema: z.ZodSchema<unknown>,
+): ActionParameter[] {
   const parameters: ActionParameter[] = [];
 
   // Check if schema is undefined or null
@@ -30,39 +52,38 @@ export function zodToParameters(schema: z.ZodSchema<any>): ActionParameter[] {
     return parameters;
   }
 
+  const schemaWithDef = schema as ZodSchemaWithDef;
+
   // Get the definition
-  const def = (schema as any)._def;
+  const def = schemaWithDef._def;
   if (!def) {
     console.warn("zodToParameters: schema._def is undefined");
     return parameters;
   }
 
   // Unwrap ZodEffects (from .refine(), .transform(), etc.)
-  let unwrappedSchema = schema;
-  let currentDef = def;
+  let unwrappedSchema: ZodSchemaWithDef = schemaWithDef;
+  let currentDef: ZodDef = def;
 
   while (
     currentDef?.type === "effects" ||
     currentDef?.typeName === "ZodEffects"
   ) {
-    const innerSchema =
-      (unwrappedSchema as any)._def?.schema ?? currentDef.schema;
+    const innerSchema = currentDef.schema ?? unwrappedSchema._def?.schema;
     if (!innerSchema) break;
-    unwrappedSchema = innerSchema;
-    currentDef = innerSchema._def;
+    unwrappedSchema = innerSchema as ZodSchemaWithDef;
+    currentDef = unwrappedSchema._def;
   }
 
   // Handle ZodObject
   if (currentDef?.type === "object" || currentDef?.typeName === "ZodObject") {
     // Try to get shape from multiple possible locations
     const shape =
-      currentDef.shape ??
-      (unwrappedSchema as any).shape ??
-      (unwrappedSchema as any)._shape;
+      currentDef.shape ?? unwrappedSchema.shape ?? unwrappedSchema._shape;
 
     if (shape && typeof shape === "object") {
       for (const [key, value] of Object.entries(shape)) {
-        const param = parseZodType(key, value as any);
+        const param = parseZodType(key, value);
         if (param) {
           parameters.push(param);
         }
@@ -82,52 +103,58 @@ function parseZodType(
     return null;
   }
 
-  let baseSchema = schema;
+  let baseSchema = schema as ZodSchemaWithDef;
   let required = true;
   let description: string | undefined;
   let defaultValue: unknown;
   let enumValues: string[] | undefined;
 
   // Unwrap modifiers - check both old and new formats
-  while (baseSchema && (baseSchema as any)._def) {
-    const def = (baseSchema as any)._def;
+  while (baseSchema?._def) {
+    const def = baseSchema._def;
     const type = def.type ?? def.typeName;
 
     if (type === "optional" || type === "ZodOptional") {
       required = false;
       const innerType =
-        def.innerType ?? def.unwrap?.() ?? (baseSchema as any).unwrap?.();
+        def.innerType ??
+        (def.unwrap ? def.unwrap() : undefined) ??
+        (baseSchema.unwrap ? baseSchema.unwrap() : undefined);
       if (!innerType) break;
-      baseSchema = innerType;
+      baseSchema = innerType as ZodSchemaWithDef;
     } else if (type === "default" || type === "ZodDefault") {
-      if (def.defaultValue) {
+      if (def.defaultValue !== undefined) {
         defaultValue =
           typeof def.defaultValue === "function"
-            ? def.defaultValue()
+            ? (def.defaultValue as () => unknown)()
             : def.defaultValue;
       }
       const innerType =
-        def.innerType ?? def.unwrap?.() ?? (baseSchema as any).unwrap?.();
+        def.innerType ??
+        (def.unwrap ? def.unwrap() : undefined) ??
+        (baseSchema.unwrap ? baseSchema.unwrap() : undefined);
       if (!innerType) break;
-      baseSchema = innerType;
+      baseSchema = innerType as ZodSchemaWithDef;
     } else if (type === "nullable" || type === "ZodNullable") {
       required = false;
       const innerType =
-        def.innerType ?? def.unwrap?.() ?? (baseSchema as any).unwrap?.();
+        def.innerType ??
+        (def.unwrap ? def.unwrap() : undefined) ??
+        (baseSchema.unwrap ? baseSchema.unwrap() : undefined);
       if (!innerType) break;
-      baseSchema = innerType;
+      baseSchema = innerType as ZodSchemaWithDef;
     } else {
       break;
     }
   }
 
   // Get description if available
-  const baseDef = (baseSchema as any)._def;
+  const baseDef = baseSchema._def;
   if (baseDef && typeof baseDef === "object") {
-    if ("description" in baseDef) {
+    if (baseDef.description !== undefined) {
       description = baseDef.description;
-    } else if ((baseSchema as any).description) {
-      description = (baseSchema as any).description;
+    } else if (baseSchema.description !== undefined) {
+      description = baseSchema.description;
     }
   }
 
@@ -149,8 +176,8 @@ function parseZodType(
       paramType = "object";
     } else if (defType === "enum" || defType === "ZodEnum") {
       paramType = "string";
-      if (baseDef.values) {
-        enumValues = baseDef.values as string[];
+      if (baseDef.values && Array.isArray(baseDef.values)) {
+        enumValues = baseDef.values.map((v) => String(v));
       }
     }
   }

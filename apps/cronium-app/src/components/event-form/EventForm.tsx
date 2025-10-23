@@ -40,7 +40,7 @@ import {
   RunLocation,
   TimeUnit,
   EventTriggerType,
-  ConditionalActionType,
+  type ConditionalActionType,
   type Event,
   type Tool,
 } from "@/shared/schema";

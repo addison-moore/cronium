@@ -52,18 +52,19 @@ export function TemplateActionParameterForm({
   const getSchemaShape = () => {
     let schema: z.ZodTypeAny = action.inputSchema;
 
-    // Unwrap ZodEffects/ZodPipeline (from .refine(), .transform(), etc.)
-    // In Zod v4, effects are represented with type 'pipe' or 'effects'
-    while (schema && (schema as any)._def) {
-      const def = (schema as any)._def;
-      if (
-        def.type === "pipe" ||
-        def.type === "effects" ||
-        def.typeName === "ZodEffects"
-      ) {
-        const innerSchema = def.in ?? def.schema;
-        if (!innerSchema) break;
-        schema = innerSchema as z.ZodTypeAny;
+    // Unwrap effects and pipelines to get the base schema
+    // In Zod v4, we need to check _def.typeName
+    while (schema._def) {
+      const def = schema._def as {
+        typeName?: string;
+        schema?: z.ZodTypeAny;
+        in?: z.ZodTypeAny;
+      };
+      const typeName = def.typeName;
+      if (typeName === "ZodEffects" && "schema" in def) {
+        schema = def.schema!;
+      } else if (typeName === "ZodPipeline" && "in" in def) {
+        schema = def.in!;
       } else {
         break;
       }
@@ -254,12 +255,14 @@ export function TemplateActionParameterForm({
     // Render based on type
     if (baseSchema instanceof z.ZodString) {
       // Check if it's an email field
-      if (
+      const isEmailField =
         key.toLowerCase().includes("email") ||
-        baseSchema._def.checks?.some(
-          (check: any) => check.format === "email" || check.kind === "email",
-        )
-      ) {
+        (baseSchema instanceof z.ZodString &&
+          baseSchema._def.checks?.some(
+            (check) => "kind" in check && check.kind === "email",
+          ));
+
+      if (isEmailField) {
         return (
           <div key={key} className="space-y-2">
             <Label htmlFor={key}>

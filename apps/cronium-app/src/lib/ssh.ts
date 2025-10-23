@@ -1628,11 +1628,11 @@ module.exports = croniumInstance;`;
                 oldConnection.ssh.end();
               }
             } catch (e) {
-              console.error(`Error cleaning up old connection: ${e}`);
+              console.error(`Error cleaning up old connection: ${String(e)}`);
             }
           }, 5000);
         } catch (e) {
-          console.error(`Error handling old connection: ${e}`);
+          console.error(`Error handling old connection: ${String(e)}`);
         }
       }
     }
@@ -1652,8 +1652,13 @@ module.exports = croniumInstance;`;
     }
 
     // Check if the ssh2 Client is actually connected
-    // @ts-ignore - accessing private property for debugging
-    if (!connection.ssh._sock || connection.ssh._sock.destroyed) {
+    // @ts-expect-error - accessing private property for debugging
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const sock = connection.ssh._sock;
+    // @ts-expect-error - accessing destroyed property on sock
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    const isDestroyed = sock?.destroyed;
+    if (!sock || isDestroyed) {
       console.error(
         `SSH client socket is not connected or destroyed for ${host}`,
       );
@@ -1693,7 +1698,7 @@ module.exports = croniumInstance;`;
               this.channelCounts.delete(freshConnection.host);
               try {
                 freshConnection.ssh.end();
-              } catch (e) {
+              } catch {
                 // Ignore cleanup errors
               }
               return reject(
@@ -1780,7 +1785,7 @@ module.exports = croniumInstance;`;
           if (err) {
             // If shell creation fails, it might be due to channel limits
             // Remove this connection from the pool to force a fresh one next time
-            if (err.message && err.message.includes("Channel open failure")) {
+            if (err.message?.includes("Channel open failure")) {
               console.error(
                 `Shell creation failed due to channel limits, removing connection from pool`,
               );
@@ -1790,7 +1795,7 @@ module.exports = croniumInstance;`;
               // Try to gracefully close the connection
               try {
                 connection.ssh.end();
-              } catch (e) {
+              } catch {
                 // Ignore cleanup errors
               }
             }

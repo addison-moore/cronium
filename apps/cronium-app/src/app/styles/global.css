@@ -40,7 +40,6 @@
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 2px);
 
-
   /* Additional theme variables for components */
   --color-secondary-bg: var(--secondary-bg-color);
   --color-tertiary-bg: var(--tertiary-bg-color);

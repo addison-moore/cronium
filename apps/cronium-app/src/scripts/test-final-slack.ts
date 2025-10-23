@@ -39,4 +39,7 @@ import { nanoid } from "nanoid";
   console.log("📋 Check logs with: pnpm tsx src/scripts/check-tool-logs.ts");
 
   process.exit(0);
-})();
+})().catch((error) => {
+  console.error("❌ Failed to create test job:", error);
+  process.exit(1);
+});

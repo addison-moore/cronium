@@ -253,8 +253,10 @@ export default function Terminal({ serverId, serverName }: TerminalProps) {
         console.error("Terminal initialization failed:", error);
         setLoading(false);
         if (termRef.current) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
           termRef.current.write(
-            `\r\nFailed to initialize terminal: ${error}\r\n`,
+            `\r\nFailed to initialize terminal: ${errorMessage}\r\n`,
           );
         }
         return null;
@@ -265,11 +267,12 @@ export default function Terminal({ serverId, serverName }: TerminalProps) {
 
     // Initialize terminal with a delay and mark as initialized immediately
     hasInitializedRef.current = true;
-    initializationTimeoutRef.current = setTimeout(async () => {
-      const cleanup = await initTerminal();
-      if (!cleanupExecuted) {
-        cleanupFn = cleanup;
-      }
+    initializationTimeoutRef.current = setTimeout(() => {
+      void initTerminal().then((cleanup) => {
+        if (!cleanupExecuted) {
+          cleanupFn = cleanup;
+        }
+      });
     }, 500);
 
     // Cleanup function

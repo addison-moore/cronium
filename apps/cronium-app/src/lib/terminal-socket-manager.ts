@@ -1,4 +1,4 @@
-import { io, Socket } from "socket.io-client";
+import { io, type Socket } from "socket.io-client";
 
 interface TerminalSocketManager {
   socket: Socket | null;
@@ -29,8 +29,9 @@ export const terminalSocketManager = {
 
     // If we have an existing socket for a different server, clean it up
     if (manager.socket && manager.lastServerId !== serverId) {
+      const previousServerId = manager.lastServerId ?? "unknown";
       console.log(
-        `Terminal Socket Manager: Server changed from ${manager.lastServerId} to ${serverId}, cleaning up...`,
+        `Terminal Socket Manager: Server changed from ${previousServerId} to ${serverId}, cleaning up...`,
       );
       await this.cleanup();
     }
@@ -109,7 +110,9 @@ export const terminalSocketManager = {
   },
 
   setSessionId(sessionId: string | null) {
-    console.log(`Terminal Socket Manager: Setting session ID: ${sessionId}`);
+    console.log(
+      `Terminal Socket Manager: Setting session ID: ${sessionId ?? "none"}`,
+    );
     manager.sessionId = sessionId;
     // Clear creating flag when session is set or cleared
     if (!sessionId) {
