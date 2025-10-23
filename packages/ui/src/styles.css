@@ -66,14 +66,4 @@
   .data-\[state\=unchecked\]\:translate-x-0[data-state="unchecked"] { 
     transform: translateX(0); 
   }
-  
-  /* Padding utilities for Badge component */
-  .px-2\.5 { 
-    padding-left: 0.625rem; 
-    padding-right: 0.625rem; 
-  }
-  .py-0\.5 { 
-    padding-top: 0.125rem; 
-    padding-bottom: 0.125rem; 
-  }
 }
