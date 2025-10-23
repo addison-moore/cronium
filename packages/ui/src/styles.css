@@ -42,13 +42,6 @@
   --radius-lg: calc(var(--radius) + 2px);
 }
 
-/* Define base spacing value for Tailwind CSS 4 */
-@layer theme {
-  :root {
-    --spacing: 0.25rem; /* Base unit - 1 = 0.25rem = 4px */
-  }
-}
-
 /**
  * Note: Default theme values should be defined by the consuming apps
  * The UI package only maps the semantic tokens to CSS variables
