@@ -3,7 +3,7 @@ import { io, type Socket } from "socket.io-client";
 
 let socket: Socket | null = null;
 
-export function useSocket() {
+export function useSocket(): Socket | null {
   const [, setIsConnected] = useState(false);
 
   useEffect(() => {
@@ -42,7 +42,10 @@ export function useSocket() {
   return socket;
 }
 
-export function useSocketConnection() {
+export function useSocketConnection(): {
+  socket: Socket | null;
+  isConnected: boolean;
+} {
   const socket = useSocket();
   const [isConnected, setIsConnected] = useState(false);
 
