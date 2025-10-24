@@ -29,6 +29,7 @@ jobs:
       contents: read
       packages: write
       id-token: write # For signing images with cosign
+      security-events: write # For uploading Trivy results to GitHub Security
 
     steps:
       - name: Checkout repository
@@ -153,9 +154,19 @@ jobs:
           output: "trivy-orchestrator.sarif"
         continue-on-error: true
 
+      - name: Check if SARIF files exist
+        id: check-sarif
+        if: github.event_name != 'pull_request'
+        run: |
+          if ls trivy-*.sarif 1> /dev/null 2>&1; then
+            echo "files_exist=true" >> $GITHUB_OUTPUT
+          else
+            echo "files_exist=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && steps.check-sarif.outputs.files_exist == 'true'
         with:
           sarif_file: "trivy-*.sarif"
           wait-for-processing: false

@@ -1,10 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
-import {
-  normalizePagination,
-  createPaginatedResult,
-} from "@/server/utils/db-patterns";
+import { normalizePagination } from "@/server/utils/db-patterns";
 import { withErrorHandling } from "@/server/utils/error-utils";
 import {
   serverQuerySchema,
@@ -41,45 +38,8 @@ export const serversRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       return withErrorHandling(
         async () => {
-          const pagination = normalizePagination(input);
-          const servers = await storage.getAllServers(ctx.session.user.id);
+          const result = await storage.queryServers(ctx.session.user.id, input);
 
-          // Apply filters
-          let filteredServers = servers;
-
-          if (input.search) {
-            const searchLower = input.search.toLowerCase();
-            filteredServers = filteredServers.filter(
-              (server) =>
-                server.name.toLowerCase().includes(searchLower) ||
-                server.address.toLowerCase().includes(searchLower),
-            );
-          }
-
-          if (input.online !== undefined) {
-            filteredServers = filteredServers.filter(
-              (server) => server.online === input.online,
-            );
-          }
-
-          if (input.shared !== undefined) {
-            filteredServers = filteredServers.filter(
-              (server) => server.shared === input.shared,
-            );
-          }
-
-          // Apply pagination
-          const paginatedServers = filteredServers.slice(
-            pagination.offset,
-            pagination.offset + pagination.limit,
-          );
-          const result = createPaginatedResult(
-            paginatedServers,
-            filteredServers.length,
-            pagination,
-          );
-
-          // Return in the format the frontend expects
           return {
             servers: result.items,
             total: result.total,

@@ -49,47 +49,8 @@ export const adminRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       return withErrorHandling(
         async () => {
-          const users = await storage.getAllUsers();
+          const result = await storage.queryUsers(input);
 
-          // Apply filters
-          let filteredUsers = users;
-
-          if (input.search) {
-            const searchLower = input.search.toLowerCase();
-            filteredUsers = filteredUsers.filter(
-              (user) =>
-                (user.email?.toLowerCase() ?? "").includes(searchLower) ||
-                (user.firstName?.toLowerCase() ?? "").includes(searchLower) ||
-                (user.lastName?.toLowerCase() ?? "").includes(searchLower),
-            );
-          }
-
-          if (input.role) {
-            filteredUsers = filteredUsers.filter(
-              (user) => user.role === input.role,
-            );
-          }
-
-          if (input.status) {
-            filteredUsers = filteredUsers.filter(
-              (user) => user.status === input.status,
-            );
-          }
-
-          // Use standardized pagination
-          const pagination = normalizePagination(input);
-          const paginatedUsers = filteredUsers.slice(
-            pagination.offset,
-            pagination.offset + pagination.limit,
-          );
-
-          const result = createPaginatedResult(
-            paginatedUsers,
-            filteredUsers.length,
-            pagination,
-          );
-
-          // Return in the format the frontend expects
           return {
             users: result.items,
             total: result.total,

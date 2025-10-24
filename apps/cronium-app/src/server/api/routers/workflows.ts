@@ -6,11 +6,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
-import {
-  normalizePagination,
-  createPaginatedResult,
-  checkResourceAccess,
-} from "@/server/utils/db-patterns";
+import { checkResourceAccess } from "@/server/utils/db-patterns";
 import { withErrorHandling } from "@/server/utils/error-utils";
 import {
   mutationResponse,
@@ -48,55 +44,11 @@ export const workflowsRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       return withErrorHandling(
         async () => {
-          const userId = ctx.session.user.id;
-          const pagination = normalizePagination(input);
-
-          // Direct storage call without caching
-          const workflows = await storage.getAllWorkflows(userId);
-
-          // Apply filters
-          let filteredWorkflows = workflows;
-
-          if (input.search) {
-            const searchLower = input.search.toLowerCase();
-            filteredWorkflows = filteredWorkflows.filter(
-              (workflow) =>
-                workflow.name.toLowerCase().includes(searchLower) ||
-                workflow.description?.toLowerCase().includes(searchLower),
-            );
-          }
-
-          if (input.status) {
-            filteredWorkflows = filteredWorkflows.filter(
-              (workflow) => workflow.status === input.status,
-            );
-          }
-
-          if (input.triggerType) {
-            filteredWorkflows = filteredWorkflows.filter(
-              (workflow) => workflow.triggerType === input.triggerType,
-            );
-          }
-
-          if (input.shared !== undefined) {
-            filteredWorkflows = filteredWorkflows.filter(
-              (workflow) => workflow.shared === input.shared,
-            );
-          }
-
-          // Apply pagination in memory (should be moved to database level)
-          const paginatedWorkflows = filteredWorkflows.slice(
-            pagination.offset,
-            pagination.offset + pagination.limit,
+          const result = await storage.queryWorkflows(
+            ctx.session.user.id,
+            input,
           );
 
-          const result = createPaginatedResult(
-            paginatedWorkflows,
-            filteredWorkflows.length,
-            pagination,
-          );
-
-          // Return in the format the frontend expects
           return {
             workflows: result.items,
             total: result.total,
