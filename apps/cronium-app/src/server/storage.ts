@@ -71,12 +71,25 @@ import {
   lt,
   inArray,
 } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import {
   encryptSensitiveData,
   decryptSensitiveData,
   encryptionService,
   isSystemSettingSensitive,
 } from "../lib/encryption-service";
+import {
+  normalizePagination,
+  createPaginatedResult,
+  buildSearchConditions,
+  buildUserAccessConditions,
+} from "./utils/db-patterns";
+import type { PaginatedResult } from "./utils/db-patterns";
+import type { EventQueryInput } from "../shared/schemas/events";
+import type { WorkflowQueryInput } from "../shared/schemas/workflows";
+import type { VariableQueryInput } from "../shared/schemas/variables";
+import type { ServerQueryInput } from "../shared/schemas/servers";
+import type { AdminQueryInput } from "../shared/schemas/admin";
 
 // Re-export types from schema for convenience
 export type { WorkflowExecution } from "../shared/schema";
@@ -141,6 +154,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByInviteToken(token: string): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
+  queryUsers(query: AdminQueryInput): Promise<PaginatedResult<User>>;
   createUser(
     userData: InsertUser & { skipPasswordHashing?: boolean },
   ): Promise<User>;
@@ -154,6 +168,10 @@ export interface IStorage {
   getEventWithRelations(id: number): Promise<EventWithRelations | undefined>;
   getActiveEventsWithRelations(): Promise<EventWithRelations[]>;
   getAllEvents(userId: string): Promise<Event[]>;
+  queryEvents(
+    userId: string,
+    query: EventQueryInput,
+  ): Promise<PaginatedResult<Event>>;
   getEventsByServerId(serverId: number, userId: string): Promise<Event[]>;
   canViewEvent(eventId: number, userId: string): Promise<boolean>;
   canEditEvent(eventId: number, userId: string): Promise<boolean>;
@@ -212,6 +230,10 @@ export interface IStorage {
   // Server methods
   getServer(id: number): Promise<Server | undefined>;
   getAllServers(userId: string): Promise<Server[]>;
+  queryServers(
+    userId: string,
+    query: ServerQueryInput,
+  ): Promise<PaginatedResult<Server>>;
   canUserAccessServer(serverId: number, userId: string): Promise<boolean>;
   createServer(insertServer: InsertServer): Promise<Server>;
   updateServer(id: number, updateData: Partial<InsertServer>): Promise<Server>;
@@ -252,6 +274,10 @@ export interface IStorage {
   getWorkflow(id: number): Promise<Workflow | undefined>;
   getWorkflowWithRelations(id: number): Promise<WorkflowWithRelations | null>;
   getAllWorkflows(userId: string): Promise<Workflow[]>;
+  queryWorkflows(
+    userId: string,
+    query: WorkflowQueryInput,
+  ): Promise<PaginatedResult<Workflow>>;
   getWorkflowsUsingEvent(eventId: number, userId: string): Promise<Workflow[]>;
   createWorkflow(insertWorkflow: InsertWorkflow): Promise<Workflow>;
   updateWorkflow(
@@ -334,6 +360,10 @@ export interface IStorage {
     description?: string,
   ): Promise<UserVariable>;
   getUserVariables(userId: string): Promise<UserVariable[]>;
+  queryUserVariables(
+    userId: string,
+    query: VariableQueryInput,
+  ): Promise<PaginatedResult<UserVariable>>;
   createUserVariable(insertVariable: InsertUserVariable): Promise<UserVariable>;
   updateUserVariable(
     id: number,
@@ -401,6 +431,56 @@ class DatabaseStorage implements IStorage {
   async getAllUsers(): Promise<User[]> {
     const allUsers = await db.select().from(users).orderBy(users.firstName);
     return allUsers;
+  }
+
+  async queryUsers(query: AdminQueryInput): Promise<PaginatedResult<User>> {
+    const pagination = normalizePagination(query);
+    const conditions: SQL[] = [];
+
+    if (query.role) {
+      conditions.push(eq(users.role, query.role));
+    }
+
+    if (query.status) {
+      conditions.push(eq(users.status, query.status));
+    }
+
+    const searchCondition = buildSearchConditions(query.search, [
+      users.email,
+      users.firstName,
+      users.lastName,
+      users.username,
+    ]);
+
+    if (searchCondition) {
+      conditions.push(searchCondition);
+    }
+
+    const whereClause =
+      conditions.length === 0
+        ? undefined
+        : conditions.length === 1
+          ? conditions[0]!
+          : and(...conditions);
+
+    const countRows = whereClause
+      ? await db
+          .select({ count: sql<number>`count(*)` })
+          .from(users)
+          .where(whereClause)
+      : await db.select({ count: sql<number>`count(*)` }).from(users);
+    const [countResult] = countRows;
+    const total = countResult?.count ?? 0;
+
+    const listQuery = whereClause
+      ? db.select().from(users).where(whereClause)
+      : db.select().from(users);
+    const rows = await listQuery
+      .orderBy(asc(users.firstName))
+      .limit(pagination.limit)
+      .offset(pagination.offset);
+
+    return createPaginatedResult(rows, total, pagination);
   }
 
   async createUser(
@@ -1032,6 +1112,70 @@ class DatabaseStorage implements IStorage {
       // Re-throw other errors
       throw error;
     }
+  }
+
+  async queryEvents(
+    userId: string,
+    query: EventQueryInput,
+  ): Promise<PaginatedResult<Event>> {
+    const pagination = normalizePagination(query);
+    const conditions: SQL[] = [
+      buildUserAccessConditions(userId, events.userId, events.shared),
+    ];
+
+    if (query.status) {
+      conditions.push(eq(events.status, query.status));
+    }
+
+    if (query.type) {
+      conditions.push(eq(events.type, query.type));
+    }
+
+    if (typeof query.shared === "boolean") {
+      conditions.push(eq(events.shared, query.shared));
+    }
+
+    const searchCondition = buildSearchConditions(query.search, [
+      events.name,
+      events.description,
+    ]);
+
+    if (searchCondition) {
+      conditions.push(searchCondition);
+    }
+
+    const whereClause =
+      conditions.length > 1 ? and(...conditions) : conditions[0]!;
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(events)
+      .where(whereClause);
+
+    const total = countResult?.count ?? 0;
+
+    const rows = await db.query.events.findMany({
+      where: whereClause,
+      orderBy: [desc(events.updatedAt)],
+      limit: pagination.limit,
+      offset: pagination.offset,
+      with: {
+        eventServers: {
+          columns: {
+            serverId: true,
+          },
+        },
+      },
+    });
+
+    const items = rows.map((event) => ({
+      ...event,
+      eventServers: event.eventServers.map((es) => es.serverId),
+      payloadVersion:
+        ((event as Record<string, unknown>).payloadVersion as number) ?? 1,
+    }));
+
+    return createPaginatedResult(items, total, pagination);
   }
 
   async getEventsByServerId(
@@ -1691,6 +1835,57 @@ class DatabaseStorage implements IStorage {
     );
   }
 
+  async queryServers(
+    userId: string,
+    query: ServerQueryInput,
+  ): Promise<PaginatedResult<Server>> {
+    const pagination = normalizePagination(query);
+    const conditions: SQL[] = [
+      buildUserAccessConditions(userId, servers.userId, servers.shared),
+    ];
+
+    if (typeof query.shared === "boolean") {
+      conditions.push(eq(servers.shared, query.shared));
+    }
+
+    if (typeof query.online === "boolean") {
+      conditions.push(eq(servers.online, query.online));
+    }
+
+    const searchCondition = buildSearchConditions(query.search, [
+      servers.name,
+      servers.address,
+    ]);
+
+    if (searchCondition) {
+      conditions.push(searchCondition);
+    }
+
+    const whereClause =
+      conditions.length > 1 ? and(...conditions) : conditions[0]!;
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(servers)
+      .where(whereClause);
+
+    const total = countResult?.count ?? 0;
+
+    const rows = await db
+      .select()
+      .from(servers)
+      .where(whereClause)
+      .orderBy(asc(servers.name))
+      .limit(pagination.limit)
+      .offset(pagination.offset);
+
+    const decrypted = rows.map((server) =>
+      decryptSensitiveData<Server>(server, "servers"),
+    );
+
+    return createPaginatedResult(decrypted, total, pagination);
+  }
+
   async canUserAccessServer(
     serverId: number,
     userId: string,
@@ -1945,6 +2140,54 @@ class DatabaseStorage implements IStorage {
       .orderBy(workflows.name);
 
     return userWorkflows;
+  }
+
+  async queryWorkflows(
+    userId: string,
+    query: WorkflowQueryInput,
+  ): Promise<PaginatedResult<Workflow>> {
+    const pagination = normalizePagination(query);
+    const conditions: SQL[] = [eq(workflows.userId, userId)];
+
+    if (query.status) {
+      conditions.push(eq(workflows.status, query.status));
+    }
+
+    if (query.triggerType) {
+      conditions.push(eq(workflows.triggerType, query.triggerType));
+    }
+
+    if (typeof query.shared === "boolean") {
+      conditions.push(eq(workflows.shared, query.shared));
+    }
+
+    const searchCondition = buildSearchConditions(query.search, [
+      workflows.name,
+      workflows.description,
+    ]);
+
+    if (searchCondition) {
+      conditions.push(searchCondition);
+    }
+
+    const whereClause =
+      conditions.length > 1 ? and(...conditions) : conditions[0]!;
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(workflows)
+      .where(whereClause);
+
+    const total = countResult?.count ?? 0;
+
+    const rows = await db.query.workflows.findMany({
+      where: whereClause,
+      orderBy: [asc(workflows.name)],
+      limit: pagination.limit,
+      offset: pagination.offset,
+    });
+
+    return createPaginatedResult(rows, total, pagination);
   }
 
   async getWorkflowsUsingEvent(
@@ -2744,6 +2987,56 @@ class DatabaseStorage implements IStorage {
       .orderBy(asc(userVariables.key));
 
     return variables;
+  }
+
+  async queryUserVariables(
+    userId: string,
+    query: VariableQueryInput,
+  ): Promise<PaginatedResult<UserVariable>> {
+    const pagination = normalizePagination(query);
+    const conditions: SQL[] = [eq(userVariables.userId, userId)];
+
+    const searchCondition = buildSearchConditions(query.search, [
+      userVariables.key,
+      userVariables.description,
+      userVariables.value,
+    ]);
+
+    if (searchCondition) {
+      conditions.push(searchCondition);
+    }
+
+    const whereClause =
+      conditions.length > 1 ? and(...conditions) : conditions[0]!;
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(userVariables)
+      .where(whereClause);
+
+    const total = countResult?.count ?? 0;
+
+    const sortFieldMap = {
+      key: userVariables.key,
+      createdAt: userVariables.createdAt,
+      updatedAt: userVariables.updatedAt,
+    } as const;
+
+    const sortColumn = sortFieldMap[query.sortBy ?? "key"] ?? userVariables.key;
+
+    const orderByClause =
+      (query.sortOrder ?? "asc") === "desc"
+        ? desc(sortColumn)
+        : asc(sortColumn);
+
+    const rows = await db.query.userVariables.findMany({
+      where: whereClause,
+      orderBy: [orderByClause],
+      limit: pagination.limit,
+      offset: pagination.offset,
+    });
+
+    return createPaginatedResult(rows, total, pagination);
   }
 
   async createUserVariable(

@@ -1,6 +1,5 @@
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
-import { normalizePagination } from "@/server/utils/db-patterns";
 import { type EventType, type EventStatus } from "@/shared/schema";
 import {
   variableQuerySchema,
@@ -23,67 +22,15 @@ export const variablesRouter = createTRPCRouter({
     .input(variableQuerySchema)
     .query(async ({ ctx, input }) => {
       try {
-        const variables = await storage.getUserVariables(ctx.session.user.id);
-        const pagination = normalizePagination(input);
-
-        // Apply search filter
-        let filteredVariables = variables;
-        if (input.search) {
-          const searchLower = input.search.toLowerCase();
-          filteredVariables = variables.filter(
-            (variable) =>
-              variable.key.toLowerCase().includes(searchLower) ??
-              variable.description?.toLowerCase().includes(searchLower) ??
-              variable.value.toLowerCase().includes(searchLower),
-          );
-        }
-
-        // Apply sorting
-        filteredVariables.sort((a, b) => {
-          let aValue: string | Date | null;
-          let bValue: string | Date | null;
-
-          switch (input.sortBy) {
-            case "key":
-              aValue = a.key;
-              bValue = b.key;
-              break;
-            case "createdAt":
-              aValue = a.createdAt;
-              bValue = b.createdAt;
-              break;
-            case "updatedAt":
-              aValue = a.updatedAt;
-              bValue = b.updatedAt;
-              break;
-            default:
-              aValue = a.key;
-              bValue = b.key;
-          }
-
-          // Handle null values
-          if (aValue === null && bValue === null) return 0;
-          if (aValue === null) return 1;
-          if (bValue === null) return -1;
-
-          if (input.sortOrder === "desc") {
-            return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
-          } else {
-            return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
-          }
-        });
-
-        // Apply pagination
-        const paginatedVariables = filteredVariables.slice(
-          pagination.offset,
-          pagination.offset + pagination.limit,
+        const result = await storage.queryUserVariables(
+          ctx.session.user.id,
+          input,
         );
 
         return {
-          variables: paginatedVariables,
-          total: filteredVariables.length,
-          hasMore:
-            pagination.offset + pagination.limit < filteredVariables.length,
+          variables: result.items,
+          total: result.total,
+          hasMore: result.hasMore,
         };
       } catch (error) {
         throw new TRPCError({

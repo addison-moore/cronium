@@ -39,49 +39,12 @@ export const eventsRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       try {
-        // Direct storage call without caching
-        const events = await storage.getAllEvents(userId);
-
-        // Apply filters
-        let filteredEvents = events;
-
-        if (input.search) {
-          const searchLower = input.search.toLowerCase();
-          filteredEvents = filteredEvents.filter(
-            (event) =>
-              (event.name?.toLowerCase().includes(searchLower) ?? false) ||
-              (event.description?.toLowerCase().includes(searchLower) ?? false),
-          );
-        }
-
-        if (input.status) {
-          filteredEvents = filteredEvents.filter(
-            (event) => event.status === input.status,
-          );
-        }
-
-        if (input.type) {
-          filteredEvents = filteredEvents.filter(
-            (event) => event.type === input.type,
-          );
-        }
-
-        if (input.shared !== undefined) {
-          filteredEvents = filteredEvents.filter(
-            (event) => event.shared === input.shared,
-          );
-        }
-
-        // Apply pagination
-        const paginatedEvents = filteredEvents.slice(
-          input.offset,
-          input.offset + input.limit,
-        );
+        const result = await storage.queryEvents(userId, input);
 
         return {
-          events: paginatedEvents,
-          total: filteredEvents.length,
-          hasMore: input.offset + input.limit < filteredEvents.length,
+          events: result.items,
+          total: result.total,
+          hasMore: result.hasMore,
         };
       } catch (error) {
         throw new TRPCError({

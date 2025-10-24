@@ -3,7 +3,7 @@
  */
 
 import { or, eq, ilike, desc, asc, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import type { SQL, AnyColumn } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 /**
@@ -66,7 +66,7 @@ export function createPaginatedResult<T>(
  */
 export function buildSearchConditions(
   search: string | undefined,
-  fields: Array<SQL | undefined>,
+  fields: Array<AnyColumn | SQL | undefined>,
 ): SQL | undefined {
   if (!search || search.trim().length === 0) {
     return undefined;
@@ -74,7 +74,7 @@ export function buildSearchConditions(
 
   const searchPattern = `%${search.trim()}%`;
   const conditions = fields
-    .filter((field): field is SQL => field !== undefined)
+    .filter((field): field is AnyColumn | SQL => field !== undefined)
     .map((field) => ilike(field, searchPattern));
 
   if (conditions.length === 0) {
@@ -89,8 +89,8 @@ export function buildSearchConditions(
  */
 export function buildUserAccessConditions(
   userId: string,
-  userIdField: SQL,
-  sharedField?: SQL,
+  userIdField: AnyColumn,
+  sharedField?: AnyColumn,
 ): SQL {
   if (sharedField) {
     return or(eq(userIdField, userId), eq(sharedField, true))!;
