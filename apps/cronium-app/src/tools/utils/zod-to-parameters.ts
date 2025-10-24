@@ -14,13 +14,13 @@ interface ZodDef {
   values?: unknown[];
 }
 
-interface ZodSchemaWithDef extends z.ZodTypeAny {
+type ZodSchemaWithDef = z.ZodTypeAny & {
   _def: ZodDef;
   shape?: Record<string, z.ZodTypeAny>;
   _shape?: Record<string, z.ZodTypeAny>;
   description?: string;
   unwrap?: () => z.ZodTypeAny;
-}
+};
 
 /**
  * Safely convert a Zod schema to ActionParameter array
@@ -112,7 +112,7 @@ function parseZodType(
   // Unwrap modifiers - check both old and new formats
   while (baseSchema?._def) {
     const def = baseSchema._def;
-    const type = def.type ?? def.typeName;
+    const type = String(def.type ?? def.typeName);
 
     if (type === "optional" || type === "ZodOptional") {
       required = false;
@@ -162,7 +162,7 @@ function parseZodType(
   let paramType = "string";
 
   if (baseDef) {
-    const defType = baseDef.type ?? baseDef.typeName;
+    const defType = String(baseDef.type ?? baseDef.typeName);
 
     if (defType === "string" || defType === "ZodString") {
       paramType = "string";

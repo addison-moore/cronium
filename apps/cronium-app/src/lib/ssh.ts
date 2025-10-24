@@ -1655,7 +1655,6 @@ module.exports = croniumInstance;`;
     // @ts-expect-error - accessing private property for debugging
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const sock = connection.ssh._sock;
-    // @ts-expect-error - accessing destroyed property on sock
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const isDestroyed = sock?.destroyed;
     if (!sock || isDestroyed) {
