@@ -22,7 +22,10 @@ interface DocsLayoutProps {
 const navigationItems: NavItem[] = [
   {
     title: "Getting Started",
-    items: [{ title: "Quick Start", href: "/docs/quick-start" }],
+    items: [
+      { title: "Self-Hosting", href: "/docs/self-hosting" },
+      { title: "Quick Start", href: "/docs/quick-start" },
+    ],
   },
   {
     title: "Features",

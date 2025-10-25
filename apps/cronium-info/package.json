@@ -6,6 +6,7 @@
     "dev": "next dev --port 3001",
     "build": "next build",
     "start": "next start",
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "lint:log": "SKIP_ENV_VALIDATION=1 next lint > ../../logs/info-lint.log 2>&1",
