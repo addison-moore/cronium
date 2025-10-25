@@ -119,8 +119,11 @@ export function ActivityTableWithFilters({
       if (filterStatus && filterStatus !== "all")
         queryParams.set("status", filterStatus);
       if (filterDate) queryParams.set("date", filterDate);
-      if (filterWorkflowId && filterWorkflowId !== "all")
-        queryParams.set("workflowId", filterWorkflowId);
+      if (filterWorkflowId && filterWorkflowId !== "all") {
+        const workflowParam =
+          filterWorkflowId === "none" ? "-1" : filterWorkflowId;
+        queryParams.set("workflowId", workflowParam);
+      }
 
       // Handle event ownership filtering
       if (filterEventOwnership === "own") {
@@ -320,7 +323,8 @@ export function ActivityTableWithFilters({
           duration: log.duration,
           executionDuration: log.executionDuration ?? null,
           setupDuration: log.setupDuration ?? null,
-          ...(log.workflowId ? { workflowId: log.workflowId } : {}),
+          workflowId: log.workflowId ?? null,
+          workflowName: log.workflowName ?? null,
         }))}
         isLoading={isLoading}
         isRefreshing={isRefreshing}
