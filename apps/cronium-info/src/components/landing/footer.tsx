@@ -1,10 +1,162 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
-import { Github, Mail, Heart } from "lucide-react";
+import { Github, Mail, Heart, X } from "lucide-react";
+import {
+  Input,
+  Textarea,
+  Button,
+  Label,
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "@cronium/ui";
+
+interface ContactFormModalProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+function ContactFormModal({ open, onClose }: ContactFormModalProps) {
+  const [subject, setSubject] = useState("");
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  const [statusMessage, setStatusMessage] = useState<string>("");
+
+  if (!open) return null;
+
+  const resetForm = () => {
+    setSubject("");
+    setEmail("");
+    setMessage("");
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setStatus("idle");
+    setStatusMessage("");
+
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ subject, email, message }),
+      });
+
+      const data = (await response.json()) as {
+        success?: boolean;
+        error?: string;
+      };
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error ?? "Unable to send message.");
+      }
+
+      setStatus("success");
+      setStatusMessage(
+        "Thanks! We received your message and will get back to you soon.",
+      );
+      resetForm();
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "An unexpected error occurred.";
+      setStatus("error");
+      setStatusMessage(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="pointer-events-none fixed inset-0 z-50 flex items-end justify-end p-4 sm:p-6">
+      <Card className="pointer-events-auto w-full max-w-md shadow-xl sm:max-w-lg lg:max-w-xl">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <CardTitle>Contact Us</CardTitle>
+          <button
+            type="button"
+            onClick={() => {
+              setStatus("idle");
+              setStatusMessage("");
+              onClose();
+            }}
+            className="cursor-pointer text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            aria-label="Close contact form"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </CardHeader>
+        <CardContent>
+          <form className="space-y-5" onSubmit={handleSubmit}>
+            <div className="space-y-2">
+              <Label htmlFor="contact-subject">Subject</Label>
+              <Input
+                id="contact-subject"
+                value={subject}
+                onChange={(event) => setSubject(event.target.value)}
+                required
+                placeholder="How can we help?"
+                className="bg-muted/50 text-foreground dark:bg-muted/20"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="contact-email">Email address</Label>
+              <Input
+                id="contact-email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+                placeholder="you@example.com"
+                className="bg-muted/50 text-foreground dark:bg-muted/20"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="contact-message">Message</Label>
+              <Textarea
+                id="contact-message"
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
+                required
+                rows={4}
+                placeholder="Share some details so we can assist you."
+                className="bg-muted/40 text-foreground dark:bg-muted/20 border-border border"
+              />
+            </div>
+
+            {status !== "idle" && (
+              <Alert variant={status === "error" ? "destructive" : "default"}>
+                <AlertTitle>
+                  {status === "error" ? "Something went wrong" : "Message sent"}
+                </AlertTitle>
+                <AlertDescription>{statusMessage}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? "Sending..." : "Send message"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export default function Footer() {
+  const [isContactOpen, setIsContactOpen] = useState(false);
+
   return (
     <footer className="bg-secondary-bg border-border border-t">
       <div className="mx-auto max-w-7xl px-6 py-8 lg:px-8">
@@ -38,30 +190,6 @@ export default function Footer() {
 
           <div>
             <h3 className="text-primary dark:text-secondary text-sm font-bold">
-              Community
-            </h3>
-            <ul role="list" className="mt-2 space-y-2">
-              <li>
-                <Link
-                  href="/about"
-                  className="hover:text-primary dark:hover:text-secondary text-sm text-gray-600 dark:text-gray-400"
-                >
-                  About
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/contact"
-                  className="hover:text-primary dark:hover:text-secondary text-sm text-gray-600 dark:text-gray-400"
-                >
-                  Contact
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="text-primary dark:text-secondary text-sm font-bold">
               Connect
             </h3>
             <ul role="list" className="mt-2 space-y-2">
@@ -75,13 +203,14 @@ export default function Footer() {
                 </a>
               </li>
               <li>
-                <a
-                  href="mailto:support@cronium.app"
-                  className="hover:text-primary dark:hover:text-secondary flex items-center text-sm text-gray-600 dark:text-gray-400"
+                <button
+                  type="button"
+                  onClick={() => setIsContactOpen(true)}
+                  className="hover:text-primary dark:hover:text-secondary flex cursor-pointer items-center text-sm text-gray-600 transition-colors dark:text-gray-400"
                 >
                   <Mail className="mr-2 h-4 w-4" />
                   Contact Us
-                </a>
+                </button>
               </li>
             </ul>
           </div>
@@ -97,6 +226,10 @@ export default function Footer() {
           </p>
         </div>
       </div>
+      <ContactFormModal
+        open={isContactOpen}
+        onClose={() => setIsContactOpen(false)}
+      />
     </footer>
   );
 }

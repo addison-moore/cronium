@@ -1,7 +1,6 @@
 import React from "react";
 import DocsLayout from "@/components/docs/docs-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
-import { Badge } from "@cronium/ui";
 import { CheckCircle, Terminal, Server, Play, AlertCircle } from "lucide-react";
 
 const tableOfContents = [
@@ -58,15 +57,6 @@ export default function FirstEventPage() {
     <DocsLayout tableOfContents={tableOfContents}>
       <div className="mx-auto max-w-4xl">
         <div className="mb-8">
-          <div className="mb-4 flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-            >
-              Beginner
-            </Badge>
-            <Badge variant="outline">10 minutes</Badge>
-          </div>
           <h1 className="mb-4 text-4xl font-bold">Create Your First Event</h1>
           <p className="text-muted-foreground text-xl">
             Learn how to create and run your first automated script in Cronium.

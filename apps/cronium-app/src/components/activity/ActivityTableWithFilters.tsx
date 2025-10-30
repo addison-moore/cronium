@@ -324,7 +324,7 @@ export function ActivityTableWithFilters({
           executionDuration: log.executionDuration ?? null,
           setupDuration: log.setupDuration ?? null,
           workflowId: log.workflowId ?? null,
-          workflowName: log.workflowName ?? null,
+          workflowName: (log as any).workflowName ?? null,
         }))}
         isLoading={isLoading}
         isRefreshing={isRefreshing}

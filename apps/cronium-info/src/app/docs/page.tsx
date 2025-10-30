@@ -7,9 +7,11 @@ import {
   Code,
   Terminal,
   Server,
-  Shield,
   Clock,
   Database,
+  Workflow,
+  Activity,
+  Shield,
 } from "lucide-react";
 import DocsLayout from "@/components/docs/docs-layout";
 
@@ -92,6 +94,13 @@ export default function DocsPage() {
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <DocSection
+              title="Self-Hosting Deployment"
+              description="Install Cronium with Docker Compose and GitHub Container Registry"
+              icon={Server}
+              link={`/docs/self-hosting`}
+            />
+
+            <DocSection
               title="Quick Start"
               description="Get up and running with Cronium in minutes"
               icon={BookOpen}
@@ -100,78 +109,64 @@ export default function DocsPage() {
 
             <DocSection
               title="Features"
-              description="Explore all the powerful features Cronium offers"
+              description="Explore the core capabilities of Cronium"
               icon={FileText}
               link={`/docs/features`}
             />
 
             <DocSection
-              title="Events & Scripts"
-              description="Create and manage automated events and scripts"
-              icon={Clock}
-              link={`/docs/events`}
-            />
-
-            <DocSection
-              title="Workflows"
-              description="Build complex automation workflows with multiple steps"
+              title="Runtime Helpers"
+              description="Interact with Cronium from your scripts with helper utilities"
               icon={Terminal}
-              link={`/docs/workflows`}
+              link={`/docs/runtime-helpers`}
             />
 
             <DocSection
               title="Unified Input/Output"
-              description="Pass data between events and workflows across Python, Node.js, and Bash"
+              description="Exchange data between events and workflows across languages"
               icon={Database}
               link={`/docs/unified-io`}
             />
 
             <DocSection
               title="Conditional Actions"
-              description="Automate responses to event outcomes with powerful conditional actions"
+              description="Respond to success, failure, or custom conditions"
               icon={Clock}
               link={`/docs/conditional-actions`}
             />
 
             <DocSection
+              title="Workflows"
+              description="Design multi-step automation flows"
+              icon={Workflow}
+              link={`/docs/features`}
+            />
+
+            <DocSection
               title="Tools"
-              description="Configure communication tools and manage credentials for automated notifications"
+              description="Integrate Slack, email, and other messaging providers"
               icon={FileText}
               link={`/docs/tools`}
             />
 
             <DocSection
               title="Templates"
-              description="Create dynamic message templates with Handlebars syntax and runtime variables"
+              description="Build reusable message templates"
               icon={FileText}
               link={`/docs/templates`}
             />
 
             <DocSection
-              title="Remote Execution"
-              description="Execute scripts on remote servers via SSH"
-              icon={Server}
-              link={`/docs/remote-execution`}
-            />
-
-            <DocSection
-              title="Security"
-              description="Learn about Cronium's security features and best practices"
-              icon={Shield}
-              link={`/docs/security`}
-            />
-
-            <DocSection
               title="API Reference"
-              description="Complete API documentation with examples"
-              icon={Terminal}
+              description="REST endpoints with request and response examples"
+              icon={Code}
               link={`/docs/api`}
             />
 
             <DocSection
               title="How-to Guides"
-              description="Step-by-step guides for common tasks"
-              icon={FileText}
+              description="Step-by-step tutorials for common tasks"
+              icon={Activity}
               link={`/docs/how-to`}
             />
           </div>

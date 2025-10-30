@@ -58,7 +58,7 @@ export default function Navbar() {
             {mounted && (
               <button
                 onClick={toggleTheme}
-                className="hover:text-primary dark:hover:text-secondary text-foreground flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium"
+                className="hover:text-primary dark:hover:text-secondary text-foreground flex cursor-pointer items-center gap-1 rounded-md px-3 py-2 text-sm font-medium"
                 aria-label="Toggle theme"
               >
                 {theme === "dark" ? (
@@ -116,7 +116,7 @@ export default function Navbar() {
                 toggleTheme();
                 setIsMenuOpen(false);
               }}
-              className="hover:text-primary dark:hover:text-secondary text-foreground hover:bg-muted flex items-center gap-2 rounded-md px-3 py-2 text-base font-medium"
+              className="hover:text-primary dark:hover:text-secondary text-foreground hover:bg-muted flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-base font-medium"
             >
               {theme === "dark" ? (
                 <>

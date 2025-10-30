@@ -388,9 +388,8 @@ export const workflowsRouter = createTRPCRouter({
           };
 
           return {
-            executions: userExecutions.executions,
+            executions: userExecutions,
             hasMore: userExecutions.total > input.offset + input.limit,
-            total: userExecutions.total,
           };
         }
       } catch (error: unknown) {

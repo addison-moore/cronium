@@ -68,15 +68,6 @@ export default function SelfHostingPage() {
             persistence and Valkey/Redis for caching). Docker Compose offers a
             simple way to run these services together.
           </p>
-          <Alert>
-            <AlertTitle>Images required</AlertTitle>
-            <AlertDescription>
-              Build or pull the&nbsp;
-              <code>cronium-app</code> and <code>cronium-orchestrator</code>{" "}
-              images before continuing. If you have a registry, push the images
-              there and update the sample Compose file accordingly.
-            </AlertDescription>
-          </Alert>
         </section>
 
         <section id="prerequisites" className="space-y-6">
@@ -120,21 +111,50 @@ export default function SelfHostingPage() {
           </p>
           <ul className="text-muted-foreground list-disc space-y-2 pl-6">
             <li>
-              <code>cronium-app:latest</code> – Next.js control plane
+              <code>cronium-app</code> – Next.js control plane UI & API
             </li>
             <li>
-              <code>cronium-orchestrator:latest</code> – Go daemon that executes
-              jobs
+              <code>cronium-orchestrator</code> – Go daemon that executes jobs
             </li>
             <li>
-              <code>cronium-runtime:latest</code> – Runtime API for container
+              <code>cronium-runtime</code> – Runtime API for container
               executions (optional if you only use SSH targets)
             </li>
           </ul>
           <p>
-            Replace these tags with registry-qualified image references if you
-            publish them to a private or public registry.
+            The repository’s <code>docker-publish</code> workflow builds and
+            pushes images to GitHub Container Registry (GHCR) using the naming
+            scheme <code>ghcr.io/&lt;owner&gt;/&lt;repo&gt;-app</code> and{" "}
+            <code>ghcr.io/&lt;owner&gt;/&lt;repo&gt;-orchestrator</code>. Pull
+            them with:
           </p>
+          <SimpleCodeBlock language="bash">
+            {`docker pull ghcr.io/addison-moore/cronium-app:latest
+docker pull ghcr.io/addison-moore/cronium-orchestrator:latest`}
+          </SimpleCodeBlock>
+          <p>
+            Replace <code>&lt;owner&gt;</code> and <code>&lt;repo&gt;</code>
+            with your GitHub namespace. If you do not publish to GHCR, build the
+            images locally (for example,
+            <code>
+              docker build -t cronium-app:latest -f apps/cronium-app/Dockerfile
+              .
+            </code>
+            ) and update the Compose file to reference your tags.
+          </p>
+          <Alert>
+            <AlertTitle>Runtime image</AlertTitle>
+            <AlertDescription>
+              The runtime service is not published by default. Build it locally
+              before deploying:
+              <pre className="mt-3 overflow-x-auto rounded bg-gray-900 p-3 text-xs text-gray-100">
+                <code>
+                  docker build -t cronium-runtime:latest
+                  apps/runtime/cronium-runtime
+                </code>
+              </pre>
+            </AlertDescription>
+          </Alert>
         </section>
 
         <section id="docker-compose-example" className="space-y-6">
@@ -146,8 +166,7 @@ export default function SelfHostingPage() {
             Cronium app, the orchestrator, and the runtime service.
           </p>
           <SimpleCodeBlock language="yaml">
-            {`version: "3.9"
-
+            {`
 services:
   postgres:
     image: postgres:16
@@ -175,7 +194,7 @@ services:
       retries: 5
 
   cronium-app:
-    image: cronium-app:latest
+    image: ghcr.io/addison-moore/cronium-app:latest
     depends_on:
       postgres:
         condition: service_healthy
@@ -196,7 +215,7 @@ services:
     command: ["node", "server.js"]
 
   cronium-orchestrator:
-    image: cronium-orchestrator:latest
+    image: ghcr.io/addison-moore/cronium-orchestrator:latest
     depends_on:
       - cronium-app
       - valkey

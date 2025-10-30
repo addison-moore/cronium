@@ -8,7 +8,9 @@ logs/
 .next/
 .config/
 .cache/
-.env*
+.env
+.env.local
+.env.build
 .local/
 .pythonlibs/
 .upm/

@@ -11,6 +11,7 @@ import "prismjs/components/prism-bash";
 import "prismjs/components/prism-python";
 import "prismjs/components/prism-javascript";
 import "prismjs/components/prism-json";
+import "prismjs/components/prism-yaml";
 
 type Language = "python" | "nodejs" | "curl";
 
@@ -171,7 +172,7 @@ export function SimpleCodeBlock({
   return (
     <div className="relative">
       <pre
-        className={`bg-grey-800 overflow-x-auto rounded-lg p-4 text-sm text-gray-100 ${className ?? ""}`}
+        className={`border-border overflow-x-auto rounded-lg border bg-stone-900 p-4 text-sm text-gray-100 ${className ?? ""}`}
         suppressHydrationWarning
       >
         {mounted && highlightedCode !== children ? (

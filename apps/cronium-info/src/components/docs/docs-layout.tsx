@@ -47,6 +47,8 @@ const navigationItems: NavItem[] = [
     items: [
       { title: "Overview", href: "/docs/how-to" },
       { title: "Create Your First Event", href: "/docs/how-to/first-event" },
+      { title: "Connect a Server", href: "/docs/how-to/connect-server" },
+      { title: "Build a Workflow", href: "/docs/how-to/build-workflow" },
     ],
   },
 ];
