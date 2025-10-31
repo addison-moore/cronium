@@ -47,8 +47,8 @@ export const dynamic = "force-static";
 export default function SelfHostingPage() {
   return (
     <DocsLayout tableOfContents={tableOfContents}>
-      <div className="mx-auto max-w-4xl space-y-12">
-        <header>
+      <div className="mx-auto max-w-4xl">
+        <div className="mb-12">
           <h1 className="mb-4 text-4xl font-bold">Self-Hosting Cronium</h1>
           <p className="text-muted-foreground text-xl">
             Deploy the Cronium application stack with Docker Compose. This guide
@@ -56,10 +56,10 @@ export default function SelfHostingPage() {
             environment variables needed to run Cronium in your own
             infrastructure.
           </p>
-        </header>
+        </div>
 
-        <section id="overview" className="space-y-4">
-          <h2 className="text-2xl font-bold">Overview</h2>
+        <section id="overview" className="mb-12">
+          <h2 className="mb-6 text-3xl font-bold">Overview</h2>
           <p>
             A production Cronium deployment consists of the Next.js control
             plane (<code>cronium-app</code>), the secure job orchestrator (
@@ -70,8 +70,8 @@ export default function SelfHostingPage() {
           </p>
         </section>
 
-        <section id="prerequisites" className="space-y-6">
-          <h2 className="text-2xl font-bold">Prerequisites</h2>
+        <section id="prerequisites" className="mb-12">
+          <h2 className="mb-6 text-3xl font-bold">Prerequisites</h2>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -103,70 +103,53 @@ export default function SelfHostingPage() {
           </Card>
         </section>
 
-        <section id="container-images" className="space-y-4">
-          <h2 className="text-2xl font-bold">Container Images</h2>
-          <p>
-            The Compose example below assumes the following images are available
-            locally or in a registry you can pull from:
-          </p>
-          <ul className="text-muted-foreground list-disc space-y-2 pl-6">
-            <li>
-              <code>cronium-app</code> – Next.js control plane UI & API
-            </li>
-            <li>
-              <code>cronium-orchestrator</code> – Go daemon that executes jobs
-            </li>
-            <li>
-              <code>cronium-runtime</code> – Runtime API for container
-              executions (optional if you only use SSH targets)
-            </li>
-          </ul>
-          <p>
-            The repository’s <code>docker-publish</code> workflow builds and
-            pushes images to GitHub Container Registry (GHCR) using the naming
-            scheme <code>ghcr.io/&lt;owner&gt;/&lt;repo&gt;-app</code> and{" "}
-            <code>ghcr.io/&lt;owner&gt;/&lt;repo&gt;-orchestrator</code>. Pull
-            them with:
-          </p>
-          <SimpleCodeBlock language="bash">
-            {`docker pull ghcr.io/addison-moore/cronium-app:latest
-docker pull ghcr.io/addison-moore/cronium-orchestrator:latest`}
-          </SimpleCodeBlock>
-          <p>
-            Replace <code>&lt;owner&gt;</code> and <code>&lt;repo&gt;</code>
-            with your GitHub namespace. If you do not publish to GHCR, build the
-            images locally (for example,
-            <code>
-              docker build -t cronium-app:latest -f apps/cronium-app/Dockerfile
-              .
-            </code>
-            ) and update the Compose file to reference your tags.
-          </p>
-          <Alert>
-            <AlertTitle>Runtime image</AlertTitle>
-            <AlertDescription>
-              The runtime service is not published by default. Build it locally
-              before deploying:
-              <pre className="mt-3 overflow-x-auto rounded bg-gray-900 p-3 text-xs text-gray-100">
-                <code>
-                  docker build -t cronium-runtime:latest
-                  apps/runtime/cronium-runtime
-                </code>
-              </pre>
-            </AlertDescription>
-          </Alert>
+        <section id="container-images" className="mb-12">
+          <h2 className="mb-6 text-3xl font-bold">Container Images</h2>
+          <div className="space-y-6">
+            <p>
+              The Compose example below assumes the following images are
+              available locally or in a registry you can pull from:
+            </p>
+            <ul className="text-muted-foreground list-disc space-y-2 pl-6">
+              <li>
+                <code>cronium-app</code> – Next.js control plane UI & API
+              </li>
+              <li>
+                <code>cronium-orchestrator</code> – Go daemon that executes jobs
+              </li>
+              <li>
+                <code>cronium-runtime</code> – Runtime API for container
+                executions (optional if you only use SSH targets)
+              </li>
+            </ul>
+
+            <Alert className="bg-card text-card-foreground">
+              <AlertTitle>Local Builds</AlertTitle>
+              <AlertDescription>
+                If you prefer to build the images locally:
+                <SimpleCodeBlock language="bash" className="my-2">
+                  {`docker build -t cronium-app:latest -f apps/cronium-app/Dockerfile . 
+docker build -t cronium-orchestrator:latest apps/orchestrator 
+docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
+                </SimpleCodeBlock>
+                Then update the Compose file to reference your local tags.
+              </AlertDescription>
+            </Alert>
+          </div>
         </section>
 
-        <section id="docker-compose-example" className="space-y-6">
-          <h2 className="text-2xl font-bold">Docker Compose Example</h2>
-          <p>
-            Copy the following Compose file into <code>docker-compose.yml</code>{" "}
-            and adjust environment variables and volume mounts for your
-            environment. The compose file deploys PostgreSQL, Valkey, the
-            Cronium app, the orchestrator, and the runtime service.
-          </p>
-          <SimpleCodeBlock language="yaml">
-            {`
+        <section id="docker-compose-example" className="mb-12">
+          <h2 className="mb-6 text-3xl font-bold">Docker Compose Example</h2>
+          <div className="space-y-6">
+            <p>
+              Copy the following Compose file into{" "}
+              <code>docker-compose.yml</code> and adjust environment variables
+              and volume mounts for your environment. The compose file deploys
+              PostgreSQL, Valkey, the Cronium app, the orchestrator, and the
+              runtime service.
+            </p>
+            <SimpleCodeBlock language="yaml">
+              {`
 services:
   postgres:
     image: postgres:16
@@ -230,7 +213,7 @@ services:
       - ./config/cronium-orchestrator.yaml:/app/config/cronium-orchestrator.yaml:ro
 
   cronium-runtime:
-    image: cronium-runtime:latest
+    image: ghcr.io/addison-moore/cronium-runtime:latest
     depends_on:
       - cronium-app
       - valkey
@@ -246,308 +229,314 @@ services:
 volumes:
   postgres-data: {}
   valkey-data: {}`}
-          </SimpleCodeBlock>
-          <p className="text-muted-foreground text-sm">
-            The example mounts an orchestrator configuration file from{" "}
-            <code>./config/cronium-orchestrator.yaml</code>. Generate this file
-            from the sample provided in the repository and update it for your
-            environment (metrics, logging, SSH executor options, etc.).
-          </p>
-        </section>
-
-        <section id="environment-variables" className="space-y-6">
-          <h2 className="text-2xl font-bold">Environment Variables</h2>
-          <p>
-            The tables below summarise the key variables per service. Values
-            marked as <strong>required</strong> must be set for a production
-            deployment.
-          </p>
-
-          <div id="app-env" className="space-y-3">
-            <h3 className="text-xl font-semibold">Cronium App</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Variable</TableHead>
-                  <TableHead>Required</TableHead>
-                  <TableHead>Description</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow>
-                  <TableCell>
-                    <code>PUBLIC_APP_URL</code>
-                  </TableCell>
-                  <TableCell>Yes</TableCell>
-                  <TableCell>
-                    Public base URL of the Next.js application (used by links,
-                    auth callbacks, emails).
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <code>AUTH_URL</code>
-                  </TableCell>
-                  <TableCell>Yes</TableCell>
-                  <TableCell>
-                    URL that NextAuth should consider as the canonical origin
-                    for authentication.
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <code>AUTH_SECRET</code>
-                  </TableCell>
-                  <TableCell>Yes</TableCell>
-                  <TableCell>
-                    Random string used by NextAuth to sign session cookies.
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <code>DATABASE_URL</code>
-                  </TableCell>
-                  <TableCell>Yes</TableCell>
-                  <TableCell>
-                    PostgreSQL connection string in the format{" "}
-                    <code>postgres://user:pass@host:5432/db</code>.
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <code>ENCRYPTION_KEY</code>
-                  </TableCell>
-                  <TableCell>Yes</TableCell>
-                  <TableCell>
-                    32-byte key (Base64 or hex) used to encrypt stored secrets.
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <code>INTERNAL_API_KEY</code>
-                  </TableCell>
-                  <TableCell>Yes</TableCell>
-                  <TableCell>
-                    Shared token that internal services (orchestrator, runtime)
-                    must present when calling the app&apos;s internal APIs.
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <code>ORCHESTRATOR_URL</code>
-                  </TableCell>
-                  <TableCell>Optional</TableCell>
-                  <TableCell>
-                    Base URL for the orchestrator health endpoints. Defaults to{" "}
-                    <code>http://orchestrator:8080</code>.
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <code>VALKEY_URL</code>
-                  </TableCell>
-                  <TableCell>Optional</TableCell>
-                  <TableCell>
-                    Connection string for Valkey if you want to offload caching.
-                    Defaults to in-memory if omitted.
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <code>SMTP_*</code>
-                  </TableCell>
-                  <TableCell>Optional</TableCell>
-                  <TableCell>
-                    Configure SMTP credentials when enabling email
-                    notifications.
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
-
-          <div id="orchestrator-env" className="space-y-3">
-            <h3 className="text-xl font-semibold">Orchestrator</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Variable</TableHead>
-                  <TableHead>Required</TableHead>
-                  <TableHead>Description</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow>
-                  <TableCell>
-                    <code>CRONIUM_API_ENDPOINT</code>
-                  </TableCell>
-                  <TableCell>Yes</TableCell>
-                  <TableCell>
-                    Base URL of the Cronium app (internal service-to-service
-                    address).
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <code>CRONIUM_API_TOKEN</code>
-                  </TableCell>
-                  <TableCell>Yes</TableCell>
-                  <TableCell>
-                    Must match <code>INTERNAL_API_KEY</code> so the orchestrator
-                    can authenticate with the app.
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <code>CRONIUM_ORCHESTRATOR_ID</code>
-                  </TableCell>
-                  <TableCell>Yes</TableCell>
-                  <TableCell>
-                    Unique identifier for this orchestrator instance (used for
-                    logging and job claims).
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <code>CRONIUM_CONTAINER_RUNTIME_JWT_SECRET</code>
-                  </TableCell>
-                  <TableCell>Yes*</TableCell>
-                  <TableCell>
-                    Shared secret between the orchestrator and the runtime API
-                    for container job authentication. Required if you enable the
-                    container executor.
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <code>CRONIUM_CONTAINER_RUNTIME_BACKEND_URL</code>
-                  </TableCell>
-                  <TableCell>Optional</TableCell>
-                  <TableCell>
-                    URL that the runtime API should use to call back into the
-                    Cronium app (defaults to{" "}
-                    <code>http://cronium-app:3000</code>
-                    ).
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <code>CRONIUM_CONTAINER_RUNTIME_VALKEY_URL</code>
-                  </TableCell>
-                  <TableCell>Optional</TableCell>
-                  <TableCell>
-                    Valkey URL used for runtime job coordination.
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-            <p className="text-muted-foreground text-xs">
-              *Required when using container-based execution. For SSH-only
-              environments you may omit the runtime service and related secrets.
+            </SimpleCodeBlock>
+            <p className="text-muted-foreground text-sm">
+              The example mounts an orchestrator configuration file from{" "}
+              <code>./config/cronium-orchestrator.yaml</code>. Generate this
+              file from the sample provided in the repository and update it for
+              your environment (metrics, logging, SSH executor options, etc.).
             </p>
           </div>
+        </section>
 
-          <div id="runtime-env" className="space-y-3">
-            <h3 className="text-xl font-semibold">Runtime Service</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Variable</TableHead>
-                  <TableHead>Required</TableHead>
-                  <TableHead>Description</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow>
-                  <TableCell>
-                    <code>BACKEND_URL</code>
-                  </TableCell>
-                  <TableCell>Yes</TableCell>
-                  <TableCell>
-                    Internal URL the runtime service should use to reach the
-                    Cronium app.
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <code>BACKEND_TOKEN</code>
-                  </TableCell>
-                  <TableCell>Yes</TableCell>
-                  <TableCell>
-                    Must match <code>INTERNAL_API_KEY</code> to authenticate
-                    runtime calls.
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <code>VALKEY_URL</code>
-                  </TableCell>
-                  <TableCell>Yes</TableCell>
-                  <TableCell>
-                    Valkey connection string used for caching workflow state.
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <code>JWT_SECRET</code>
-                  </TableCell>
-                  <TableCell>Yes</TableCell>
-                  <TableCell>
-                    Same value as{" "}
-                    <code>CRONIUM_CONTAINER_RUNTIME_JWT_SECRET</code>; used to
-                    validate execution tokens.
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    <code>PORT</code>
-                  </TableCell>
-                  <TableCell>Optional</TableCell>
-                  <TableCell>
-                    Port for the runtime API (defaults to <code>8089</code>).
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
+        <section id="environment-variables" className="mb-12">
+          <h2 className="mb-6 text-3xl font-bold">Environment Variables</h2>
+          <div className="space-y-6">
+            <p>
+              The tables below summarise the key variables per service. Values
+              marked as <strong>required</strong> must be set for a production
+              deployment.
+            </p>
 
-          <div id="backing-services-env" className="space-y-3">
-            <h3 className="text-xl font-semibold">Backing Services</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Service</TableHead>
-                  <TableHead>Variable</TableHead>
-                  <TableHead>Description</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow>
-                  <TableCell>PostgreSQL</TableCell>
-                  <TableCell>
-                    <code>POSTGRES_USER</code>,<code>POSTGRES_PASSWORD</code>,
-                    <code>POSTGRES_DB</code>
-                  </TableCell>
-                  <TableCell>
-                    Standard PostgreSQL variables. Ensure they align with the
-                    <code>DATABASE_URL</code> provided to the app.
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>Valkey</TableCell>
-                  <TableCell>-</TableCell>
-                  <TableCell>
-                    No special variables required. Persistent volumes are
-                    recommended for durability.
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+            <div id="app-env" className="space-y-3">
+              <h3 className="text-xl font-semibold">Cronium App</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Variable</TableHead>
+                    <TableHead>Required</TableHead>
+                    <TableHead>Description</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>
+                      <code>PUBLIC_APP_URL</code>
+                    </TableCell>
+                    <TableCell>Yes</TableCell>
+                    <TableCell>
+                      Public base URL of the Next.js application (used by links,
+                      auth callbacks, emails).
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>AUTH_URL</code>
+                    </TableCell>
+                    <TableCell>Yes</TableCell>
+                    <TableCell>
+                      URL that NextAuth should consider as the canonical origin
+                      for authentication.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>AUTH_SECRET</code>
+                    </TableCell>
+                    <TableCell>Yes</TableCell>
+                    <TableCell>
+                      Random string used by NextAuth to sign session cookies.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>DATABASE_URL</code>
+                    </TableCell>
+                    <TableCell>Yes</TableCell>
+                    <TableCell>
+                      PostgreSQL connection string in the format{" "}
+                      <code>postgres://user:pass@host:5432/db</code>.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>ENCRYPTION_KEY</code>
+                    </TableCell>
+                    <TableCell>Yes</TableCell>
+                    <TableCell>
+                      32-byte key (Base64 or hex) used to encrypt stored
+                      secrets.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>INTERNAL_API_KEY</code>
+                    </TableCell>
+                    <TableCell>Yes</TableCell>
+                    <TableCell>
+                      Shared token that internal services (orchestrator,
+                      runtime) must present when calling the app&apos;s internal
+                      APIs.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>ORCHESTRATOR_URL</code>
+                    </TableCell>
+                    <TableCell>Optional</TableCell>
+                    <TableCell>
+                      Base URL for the orchestrator health endpoints. Defaults
+                      to <code>http://orchestrator:8080</code>.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>VALKEY_URL</code>
+                    </TableCell>
+                    <TableCell>Optional</TableCell>
+                    <TableCell>
+                      Connection string for Valkey if you want to offload
+                      caching. Defaults to in-memory if omitted.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>SMTP_*</code>
+                    </TableCell>
+                    <TableCell>Optional</TableCell>
+                    <TableCell>
+                      Configure SMTP credentials when enabling email
+                      notifications.
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+
+            <div id="orchestrator-env" className="space-y-3">
+              <h3 className="text-xl font-semibold">Orchestrator</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Variable</TableHead>
+                    <TableHead>Required</TableHead>
+                    <TableHead>Description</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>
+                      <code>CRONIUM_API_ENDPOINT</code>
+                    </TableCell>
+                    <TableCell>Yes</TableCell>
+                    <TableCell>
+                      Base URL of the Cronium app (internal service-to-service
+                      address).
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>CRONIUM_API_TOKEN</code>
+                    </TableCell>
+                    <TableCell>Yes</TableCell>
+                    <TableCell>
+                      Must match <code>INTERNAL_API_KEY</code> so the
+                      orchestrator can authenticate with the app.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>CRONIUM_ORCHESTRATOR_ID</code>
+                    </TableCell>
+                    <TableCell>Yes</TableCell>
+                    <TableCell>
+                      Unique identifier for this orchestrator instance (used for
+                      logging and job claims).
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>CRONIUM_CONTAINER_RUNTIME_JWT_SECRET</code>
+                    </TableCell>
+                    <TableCell>Yes*</TableCell>
+                    <TableCell>
+                      Shared secret between the orchestrator and the runtime API
+                      for container job authentication. Required if you enable
+                      the container executor.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>CRONIUM_CONTAINER_RUNTIME_BACKEND_URL</code>
+                    </TableCell>
+                    <TableCell>Optional</TableCell>
+                    <TableCell>
+                      URL that the runtime API should use to call back into the
+                      Cronium app (defaults to{" "}
+                      <code>http://cronium-app:3000</code>
+                      ).
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>CRONIUM_CONTAINER_RUNTIME_VALKEY_URL</code>
+                    </TableCell>
+                    <TableCell>Optional</TableCell>
+                    <TableCell>
+                      Valkey URL used for runtime job coordination.
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+              <p className="text-muted-foreground text-xs">
+                *Required when using container-based execution. For SSH-only
+                environments you may omit the runtime service and related
+                secrets.
+              </p>
+            </div>
+
+            <div id="runtime-env" className="space-y-3">
+              <h3 className="text-xl font-semibold">Runtime Service</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Variable</TableHead>
+                    <TableHead>Required</TableHead>
+                    <TableHead>Description</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>
+                      <code>BACKEND_URL</code>
+                    </TableCell>
+                    <TableCell>Yes</TableCell>
+                    <TableCell>
+                      Internal URL the runtime service should use to reach the
+                      Cronium app.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>BACKEND_TOKEN</code>
+                    </TableCell>
+                    <TableCell>Yes</TableCell>
+                    <TableCell>
+                      Must match <code>INTERNAL_API_KEY</code> to authenticate
+                      runtime calls.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>VALKEY_URL</code>
+                    </TableCell>
+                    <TableCell>Yes</TableCell>
+                    <TableCell>
+                      Valkey connection string used for caching workflow state.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>JWT_SECRET</code>
+                    </TableCell>
+                    <TableCell>Yes</TableCell>
+                    <TableCell>
+                      Same value as{" "}
+                      <code>CRONIUM_CONTAINER_RUNTIME_JWT_SECRET</code>; used to
+                      validate execution tokens.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>PORT</code>
+                    </TableCell>
+                    <TableCell>Optional</TableCell>
+                    <TableCell>
+                      Port for the runtime API (defaults to <code>8089</code>).
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+
+            <div id="backing-services-env" className="space-y-3">
+              <h3 className="text-xl font-semibold">Backing Services</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Service</TableHead>
+                    <TableHead>Variable</TableHead>
+                    <TableHead>Description</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>PostgreSQL</TableCell>
+                    <TableCell>
+                      <code>POSTGRES_USER</code>,<code>POSTGRES_PASSWORD</code>,
+                      <code>POSTGRES_DB</code>
+                    </TableCell>
+                    <TableCell>
+                      Standard PostgreSQL variables. Ensure they align with the
+                      <code>DATABASE_URL</code> provided to the app.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Valkey</TableCell>
+                    <TableCell>-</TableCell>
+                    <TableCell>
+                      No special variables required. Persistent volumes are
+                      recommended for durability.
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
           </div>
         </section>
 
-        <section id="deployment-workflow" className="space-y-4">
-          <h2 className="text-2xl font-bold">Deployment Workflow</h2>
+        <section id="deployment-workflow" className="mb-12">
+          <h2 className="mb-6 text-3xl font-bold">Deployment Workflow</h2>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -563,9 +552,10 @@ volumes:
                   workload.
                 </li>
                 <li>
-                  Build or pull the <code>cronium-app</code>,
-                  <code>cronium-orchestrator</code>, and
-                  <code>cronium-runtime</code> images.
+                  Pull the <code>cronium-app</code>,{" "}
+                  <code>cronium-orchestrator</code>, and{" "}
+                  <code>cronium-runtime</code> images from GHCR, or build them
+                  locally.
                 </li>
                 <li>
                   Generate secrets (<code>AUTH_SECRET</code>,
@@ -598,74 +588,95 @@ volumes:
           </Card>
         </section>
 
-        <section id="post-deployment" className="space-y-4">
-          <h2 className="text-2xl font-bold">Post-Deployment Checklist</h2>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShieldCheck className="text-primary h-5 w-5" />
-                Validate your installation
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="text-muted-foreground list-disc space-y-2 pl-6">
-                <li>
-                  Visit <code>https://cronium.example.com</code> and create the
-                  first admin account.
-                </li>
-                <li>
-                  Monitor the orchestrator logs to ensure it is polling jobs
-                  successfully.
-                </li>
-                <li>
-                  Trigger a sample job from the dashboard and confirm the
-                  workflow name appears in the Recent Activity table.
-                </li>
-                <li>
-                  Configure SMTP credentials to enable password resets and
-                  invitations.
-                </li>
-                <li>Set up TLS termination and rate limiting at the edge.</li>
-                <li>
-                  Back up the PostgreSQL volume and orchestrator configuration
-                  regularly.
-                </li>
-              </ul>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Wrench className="text-primary h-5 w-5" />
-                Next steps
-              </CardTitle>
-              <CardDescription>
-                Keep your deployment healthy and secure.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="text-muted-foreground list-disc space-y-2 pl-6">
-                <li>
-                  Set up monitoring for container health, orchestrator metrics,
-                  and database performance.
-                </li>
-                <li>
-                  Rotate secrets periodically and store them in a secrets
-                  manager.
-                </li>
-                <li>
-                  Configure automated rebuilds when new images of the app or
-                  orchestrator are published.
-                </li>
-              </ul>
-            </CardContent>
-          </Card>
+        <section id="post-deployment" className="mb-12">
+          <h2 className="mb-6 text-3xl font-bold">Post-Deployment Checklist</h2>
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShieldCheck className="text-primary h-5 w-5" />
+                  Validate your installation
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="text-muted-foreground list-disc space-y-2 pl-6">
+                  <li>
+                    Visit <code>https://cronium.example.com</code> and create
+                    the first admin account.
+                  </li>
+                  <li>
+                    Monitor the orchestrator logs to ensure it is polling jobs
+                    successfully.
+                  </li>
+                  <li>
+                    Trigger a sample job from the dashboard and confirm the
+                    workflow name appears in the Recent Activity table.
+                  </li>
+                  <li>
+                    Configure SMTP credentials to enable password resets and
+                    invitations.
+                  </li>
+                  <li>Set up TLS termination and rate limiting at the edge.</li>
+                  <li>
+                    Back up the PostgreSQL volume and orchestrator configuration
+                    regularly.
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wrench className="text-primary h-5 w-5" />
+                  Next steps
+                </CardTitle>
+                <CardDescription>
+                  Keep your deployment healthy and secure.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="text-muted-foreground list-disc space-y-2 pl-6">
+                  <li>
+                    Set up monitoring for container health, orchestrator
+                    metrics, and database performance.
+                  </li>
+                  <li>
+                    Rotate secrets periodically and store them in a secrets
+                    manager.
+                  </li>
+                  <li>
+                    Configure automated rebuilds when new images of the app or
+                    orchestrator are published.
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
         </section>
 
-        <footer className="text-muted-foreground border-t border-gray-200 pt-6 text-sm dark:border-gray-800">
-          Need help? Reach out to the Cronium community or open a discussion in
-          the repository.
-        </footer>
+        <div className="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 dark:border-blue-800 dark:from-blue-950 dark:to-indigo-950">
+          <h3 className="mb-2 font-semibold">Need Help?</h3>
+          <p className="text-muted-foreground mb-4 text-sm">
+            Reach out to the Cronium community or open a discussion in the
+            repository for assistance with your self-hosted deployment.
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <a
+              href="/docs/quick-start"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center justify-center rounded-md px-4 py-2 text-sm transition-colors"
+            >
+              Quick Start Guide
+            </a>
+            <a
+              href="https://github.com/addison-moore/cronium/discussions"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"
+            >
+              Community Discussions
+            </a>
+          </div>
+        </div>
       </div>
     </DocsLayout>
   );

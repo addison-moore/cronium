@@ -11,7 +11,6 @@ import {
   Database,
   Workflow,
   Activity,
-  Shield,
 } from "lucide-react";
 import DocsLayout from "@/components/docs/docs-layout";
 
@@ -94,7 +93,7 @@ export default function DocsPage() {
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <DocSection
-              title="Self-Hosting Deployment"
+              title="Self-Hosting"
               description="Install Cronium with Docker Compose and GitHub Container Registry"
               icon={Server}
               link={`/docs/self-hosting`}

@@ -280,7 +280,7 @@ export default function ToolsPage() {
               <CardContent>
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                    <div className="flex flex-col items-center rounded-lg border p-4 text-center">
+                    <div className="border-border flex flex-col items-center rounded-lg border p-4 text-center">
                       <div className="bg-primary/10 text-primary mb-2 flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold">
                         1
                       </div>
@@ -289,7 +289,7 @@ export default function ToolsPage() {
                         Choose Email, Slack, or Discord
                       </p>
                     </div>
-                    <div className="flex flex-col items-center rounded-lg border p-4 text-center">
+                    <div className="border-border flex flex-col items-center rounded-lg border p-4 text-center">
                       <div className="bg-primary/10 text-primary mb-2 flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold">
                         2
                       </div>
@@ -298,7 +298,7 @@ export default function ToolsPage() {
                         Click "Add New" button
                       </p>
                     </div>
-                    <div className="flex flex-col items-center rounded-lg border p-4 text-center">
+                    <div className="border-border flex flex-col items-center rounded-lg border p-4 text-center">
                       <div className="bg-primary/10 text-primary mb-2 flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold">
                         3
                       </div>
@@ -307,7 +307,7 @@ export default function ToolsPage() {
                         Enter authentication information
                       </p>
                     </div>
-                    <div className="flex flex-col items-center rounded-lg border p-4 text-center">
+                    <div className="border-border flex flex-col items-center rounded-lg border p-4 text-center">
                       <div className="bg-primary/10 text-primary mb-2 flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold">
                         4
                       </div>
@@ -377,7 +377,7 @@ export default function ToolsPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                  <div className="rounded-lg border p-4">
+                  <div className="border-border rounded-lg border p-4">
                     <div className="mb-3 flex items-center gap-2">
                       <Edit className="h-5 w-5 text-blue-500" />
                       <h4 className="font-medium">Edit</h4>
@@ -386,7 +386,7 @@ export default function ToolsPage() {
                       Update authentication details and connection settings
                     </p>
                   </div>
-                  <div className="rounded-lg border p-4">
+                  <div className="border-border rounded-lg border p-4">
                     <div className="mb-3 flex items-center gap-2">
                       <TestTube className="h-5 w-5 text-green-500" />
                       <h4 className="font-medium">Test</h4>
@@ -395,7 +395,7 @@ export default function ToolsPage() {
                       Verify connectivity and send test messages
                     </p>
                   </div>
-                  <div className="rounded-lg border p-4">
+                  <div className="border-border rounded-lg border p-4">
                     <div className="mb-3 flex items-center gap-2">
                       <Trash2 className="h-5 w-5 text-red-500" />
                       <h4 className="font-medium">Delete</h4>
@@ -433,7 +433,7 @@ export default function ToolsPage() {
               <CardContent>
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                    <div className="rounded-lg border p-4">
+                    <div className="border-border rounded-lg border p-4">
                       <div className="mb-3 flex items-center gap-2">
                         <Mail className="h-5 w-5 text-blue-500" />
                         <h4 className="font-medium">Email Templates</h4>
@@ -445,7 +445,7 @@ export default function ToolsPage() {
                         <div>• Email-specific variables</div>
                       </div>
                     </div>
-                    <div className="rounded-lg border p-4">
+                    <div className="border-border rounded-lg border p-4">
                       <div className="mb-3 flex items-center gap-2">
                         <MessageSquare className="h-5 w-5 text-green-500" />
                         <h4 className="font-medium">Slack Templates</h4>
@@ -457,7 +457,7 @@ export default function ToolsPage() {
                         <div>• Rich formatting options</div>
                       </div>
                     </div>
-                    <div className="rounded-lg border p-4">
+                    <div className="border-border rounded-lg border p-4">
                       <div className="mb-3 flex items-center gap-2">
                         <MessageSquare className="h-5 w-5 text-purple-500" />
                         <h4 className="font-medium">Discord Templates</h4>

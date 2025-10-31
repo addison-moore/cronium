@@ -21,6 +21,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME_APP: ${{ github.repository }}-app
   IMAGE_NAME_ORCHESTRATOR: ${{ github.repository }}-orchestrator
+  IMAGE_NAME_RUNTIME: ${{ github.repository }}-runtime
 
 jobs:
   build-and-push:
@@ -84,6 +85,21 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=${{ github.event.inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
 
+      - name: Extract metadata for Runtime
+        id: meta-runtime
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_RUNTIME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ github.event.inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
+
       # Build and push Cronium App
       - name: Build and push Cronium App
         id: build-app
@@ -118,6 +134,23 @@ jobs:
             BUILD_VERSION=${{ github.ref_name }}
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
 
+      # Build and push Runtime
+      - name: Build and push Runtime
+        id: build-runtime
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/runtime/cronium-runtime
+          file: ./apps/runtime/cronium-runtime/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-runtime.outputs.tags }}
+          labels: ${{ steps.meta-runtime.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_VERSION=${{ github.ref_name }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
+
       # Sign images with cosign
       - name: Sign Cronium App image
         if: github.event_name != 'pull_request'
@@ -134,6 +167,14 @@ jobs:
         run: |
           echo "Signing image with digest: $DIGEST"
           cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ORCHESTRATOR }}@${{ steps.build-orchestrator.outputs.digest }}
+
+      - name: Sign Runtime image
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build-runtime.outputs.digest }}
+        run: |
+          echo "Signing image with digest: $DIGEST"
+          cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_RUNTIME }}@${{ steps.build-runtime.outputs.digest }}
 
       # Scan images for vulnerabilities (only if push was successful)
       - name: Run Trivy vulnerability scanner on Cronium App
@@ -152,6 +193,15 @@ jobs:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ORCHESTRATOR }}@${{ steps.build-orchestrator.outputs.digest }}
           format: "sarif"
           output: "trivy-orchestrator.sarif"
+        continue-on-error: true
+
+      - name: Run Trivy vulnerability scanner on Runtime
+        if: github.event_name != 'pull_request' && steps.build-runtime.outputs.digest != ''
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_RUNTIME }}@${{ steps.build-runtime.outputs.digest }}
+          format: "sarif"
+          output: "trivy-runtime.sarif"
         continue-on-error: true
 
       - name: Check if SARIF files exist
@@ -189,3 +239,9 @@ jobs:
           echo "- Image: \`${{ env.IMAGE_NAME_ORCHESTRATOR }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Tags: \`${{ steps.meta-orchestrator.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Digest: \`${{ steps.build-orchestrator.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Runtime" >> $GITHUB_STEP_SUMMARY
+          echo "- Registry: \`${{ env.REGISTRY }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: \`${{ env.IMAGE_NAME_RUNTIME }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Tags: \`${{ steps.meta-runtime.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Digest: \`${{ steps.build-runtime.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY

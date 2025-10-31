@@ -130,7 +130,7 @@ export function CodeBlock({
           className="absolute top-2 right-2 p-2 text-gray-400 transition-colors hover:text-gray-200"
           title="Copy to clipboard"
         >
-          <Copy className="h-4 w-4" />
+          <Copy className="h-4 w-4 cursor-pointer" />
         </button>
       </div>
     </div>
