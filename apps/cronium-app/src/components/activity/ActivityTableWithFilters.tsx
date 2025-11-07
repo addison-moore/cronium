@@ -2,10 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
-import { Card, CardContent } from "@cronium/ui";
-import { Label } from "@cronium/ui";
-import { Input } from "@cronium/ui";
-import { Button } from "@cronium/ui";
+import { Card, CardContent, Label, Input, Button } from "@cronium/ui";
 import {
   Select,
   SelectContent,
@@ -23,6 +20,14 @@ import {
 import type { LogsResponse } from "@/types/api";
 import { ActivityTable } from "./ActivityTable";
 import { usePersistentPagination } from "@/hooks/use-persistent-pagination";
+
+type LogWithWorkflowName = Log & { workflowName?: string | null };
+
+const hasWorkflowName = (
+  log: Log | LogWithWorkflowName,
+): log is LogWithWorkflowName => {
+  return "workflowName" in log;
+};
 
 interface ActivityWithFiltersProps {
   title: string;
@@ -324,7 +329,9 @@ export function ActivityTableWithFilters({
           executionDuration: log.executionDuration ?? null,
           setupDuration: log.setupDuration ?? null,
           workflowId: log.workflowId ?? null,
-          workflowName: (log as any).workflowName ?? null,
+          workflowName: hasWorkflowName(log)
+            ? (log.workflowName ?? null)
+            : null,
         }))}
         isLoading={isLoading}
         isRefreshing={isRefreshing}

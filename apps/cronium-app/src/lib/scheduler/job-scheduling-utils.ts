@@ -1,4 +1,4 @@
-import { parseExpression } from "cron-parser";
+import CronExpressionParser from "cron-parser";
 import { jobService } from "@/lib/services/job-service";
 import type { CreateJobInput } from "@/lib/services/job-service";
 import { storage } from "@/server/storage";
@@ -14,9 +14,12 @@ export function calculateNextExecutionTime(
   try {
     if (event.customSchedule) {
       // Parse cron expression
-      const interval = parseExpression(String(event.customSchedule), {
-        currentDate: new Date(),
-      });
+      const interval = CronExpressionParser.parse(
+        String(event.customSchedule),
+        {
+          currentDate: new Date(),
+        },
+      );
       return interval.next().toDate();
     }
 
@@ -211,7 +214,7 @@ export function validateCronExpression(expression: string): {
   nextExecutions?: Date[];
 } {
   try {
-    const interval = parseExpression(expression);
+    const interval = CronExpressionParser.parse(expression);
     const nextExecutions = [];
 
     // Get next 5 execution times
