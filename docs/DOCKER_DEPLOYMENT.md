@@ -30,34 +30,42 @@ This guide explains how to deploy Cronium using Docker containers from GitHub Co
    # Create a deployment directory
    mkdir cronium-deploy && cd cronium-deploy
 
-   # Download docker-compose and env examples
-   curl -O https://raw.githubusercontent.com/yourusername/cronium/main/docker-compose.example.yml
-   curl -O https://raw.githubusercontent.com/yourusername/cronium/main/.env.example
+   # Download the sample Compose file
+   curl -O https://raw.githubusercontent.com/addison-moore/cronium/main/docker-compose.example.yml
 
-   # Copy to actual files
+   # Copy it into place
    cp docker-compose.example.yml docker-compose.yml
-   cp .env.example .env
    ```
 
 2. **Generate secure secrets:**
 
    ```bash
-   # Generate all required secrets
-   echo "AUTH_SECRET=$(openssl rand -hex 32)" >> .env
-   echo "ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env
-   echo "INTERNAL_API_KEY=$(openssl rand -hex 32)" >> .env
-   echo "JWT_SECRET=$(openssl rand -hex 32)" >> .env
+   # Generate secrets (store these values somewhere safe)
+   AUTH_SECRET=$(openssl rand -hex 32)
+   ENCRYPTION_KEY=$(openssl rand -hex 32)
+   INTERNAL_API_KEY=$(openssl rand -base64 32)
+   JWT_SECRET=$(openssl rand -hex 32)
+
+   # Save them to .env (you can append additional variables later)
+   cat <<ENV > .env
+   AUTH_URL=http://localhost:3000
+   PUBLIC_APP_URL=http://localhost:3000
+   AUTH_SECRET=$AUTH_SECRET
+   ENCRYPTION_KEY=$ENCRYPTION_KEY
+   INTERNAL_API_KEY=$INTERNAL_API_KEY
+   JWT_SECRET=$JWT_SECRET
+   ENV
    ```
 
-3. **Update the docker-compose.yml file:**
-   - Replace `yourusername` with the actual GitHub organization/username
+3. **Update the docker compose.yml file:**
+   - Review the image tags (they already point at `ghcr.io/addison-moore/...`)
    - Adjust ports if needed
    - Configure volumes for persistence
 
 4. **Start the services:**
 
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 5. **Access Cronium:**
@@ -116,7 +124,7 @@ volumes:
 
 ## Image Architecture
 
-### Cronium App (`ghcr.io/yourusername/cronium-app`)
+### Cronium App (`ghcr.io/addison-moore/cronium-app`)
 
 **Build Process:**
 
@@ -131,7 +139,7 @@ volumes:
 - Health checks enabled
 - Tini for proper signal handling
 
-### Orchestrator (`ghcr.io/yourusername/cronium-orchestrator`)
+### Orchestrator (`ghcr.io/addison-moore/cronium-orchestrator`)
 
 **Build Process:**
 
@@ -212,7 +220,7 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 
-    location /socket.io/ {
+    location /api/socketio/ {
         proxy_pass http://localhost:5002;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -225,16 +233,16 @@ server {
 
 ```bash
 # Pull latest images
-docker-compose pull
+docker compose pull
 
 # Start services
-docker-compose up -d
+docker compose up -d
 
 # Check status
-docker-compose ps
+docker compose ps
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 ```
 
 ### 4. Initialize the Database
@@ -242,18 +250,13 @@ docker-compose logs -f
 The database is automatically initialized on first start. To manually run migrations:
 
 ```bash
-docker-compose exec cronium-app npm run db:push
+# From a local checkout of the Cronium repo
+pnpm --filter @cronium/app db:push
 ```
 
 ### 5. Create Admin User
 
-```bash
-# Access the container
-docker-compose exec cronium-app sh
-
-# Create admin user (follow prompts)
-npm run seed:admin
-```
+Open your browser to `http://localhost:3000`, choose **Sign Up**, and create the first admin account. Cronium automatically grants admin privileges to the first user.
 
 ## Verification
 
@@ -267,7 +270,7 @@ curl http://localhost:3000/api/health
 curl http://localhost:8080/health
 
 # Check all services
-docker-compose ps
+docker compose ps
 ```
 
 ### Verify Image Signatures
@@ -277,12 +280,12 @@ docker-compose ps
 brew install cosign  # or your package manager
 
 # Verify app image
-cosign verify ghcr.io/yourusername/cronium-app:latest \
+cosign verify ghcr.io/addison-moore/cronium-app:latest \
   --certificate-identity-regexp=".*" \
   --certificate-oidc-issuer=https://token.actions.githubusercontent.com
 
 # Verify orchestrator image
-cosign verify ghcr.io/yourusername/cronium-orchestrator:latest \
+cosign verify ghcr.io/addison-moore/cronium-orchestrator:latest \
   --certificate-identity-regexp=".*" \
   --certificate-oidc-issuer=https://token.actions.githubusercontent.com
 ```
@@ -295,21 +298,21 @@ cosign verify ghcr.io/yourusername/cronium-orchestrator:latest \
 
 ```bash
 # Check logs
-docker-compose logs cronium-app
-docker-compose logs cronium-orchestrator
+docker compose logs cronium-app
+docker compose logs cronium-orchestrator
 
 # Verify environment variables
-docker-compose config
+docker compose config
 ```
 
 **2. Database connection issues:**
 
 ```bash
 # Test database connection
-docker-compose exec postgres psql -U cronium -d cronium -c "SELECT 1;"
+docker compose exec postgres psql -U cronium -d cronium -c "SELECT 1;"
 
 # Check database logs
-docker-compose logs postgres
+docker compose logs postgres
 ```
 
 **3. Permission denied on Docker socket:**
@@ -344,10 +347,10 @@ environment:
 
 ```bash
 # Pull latest images
-docker-compose pull
+docker compose pull
 
 # Recreate containers with new images
-docker-compose up -d --force-recreate
+docker compose up -d --force-recreate
 
 # Remove old images
 docker image prune -a
@@ -359,10 +362,10 @@ docker image prune -a
 
 ```bash
 # Backup database
-docker-compose exec postgres pg_dump -U cronium cronium > backup.sql
+docker compose exec postgres pg_dump -U cronium cronium > backup.sql
 
 # Restore database
-docker-compose exec -T postgres psql -U cronium cronium < backup.sql
+docker compose exec -T postgres psql -U cronium cronium < backup.sql
 ```
 
 **Volume Backup:**
@@ -389,10 +392,10 @@ docker system df
 
 ```bash
 # Follow all logs
-docker-compose logs -f
+docker compose logs -f
 
 # Export logs
-docker-compose logs > cronium.log
+docker compose logs > cronium.log
 ```
 
 ### Security Updates
@@ -401,8 +404,8 @@ docker-compose logs > cronium.log
 
    ```bash
    # Update images weekly
-   docker-compose pull
-   docker-compose up -d
+   docker compose pull
+   docker compose up -d
    ```
 
 2. **Vulnerability Scanning:**
@@ -410,7 +413,7 @@ docker-compose logs > cronium.log
    ```bash
    # Scan images with Trivy
    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-     aquasec/trivy image ghcr.io/yourusername/cronium-app:latest
+     aquasec/trivy image ghcr.io/addison-moore/cronium-app:latest
    ```
 
 3. **Secret Rotation:**
@@ -423,6 +426,6 @@ docker-compose logs > cronium.log
 
 For issues or questions:
 
-- GitHub Issues: https://github.com/yourusername/cronium/issues
+- GitHub Issues: https://github.com/addison-moore/cronium/issues
 - Documentation: https://docs.cronium.io
 - Discord: https://discord.gg/cronium

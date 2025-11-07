@@ -50,7 +50,7 @@ These environment variables must be set for the application to function correctl
 | Variable         | Description                   | Type           | Default      | Example                             | Service  |
 | ---------------- | ----------------------------- | -------------- | ------------ | ----------------------------------- | -------- |
 | `NODE_ENV`       | Node.js environment           | `string`       | `production` | `development`, `test`, `production` | 📱 🎯 🏃 |
-| `PUBLIC_APP_URL` | Public URL of the application | `string` (URL) | -            | `http://localhost:5001`             | 📱       |
+| `PUBLIC_APP_URL` | Public URL of the application | `string` (URL) | -            | `http://localhost:3000`             | 📱       |
 | `BUILD_VERSION`  | Docker image version tag      | `string`       | `latest`     | `1.2.3`                             | 📱 🎯    |
 | `LOG_LEVEL`      | Logging level                 | `string`       | `info`       | `debug`, `info`, `warn`, `error`    | 📱 🎯 🏃 |
 
@@ -61,20 +61,18 @@ These environment variables must be set for the application to function correctl
 
 ### Authentication & Security
 
-| Variable                | Description                              | Type                    | Required | Example                                               | Service |
-| ----------------------- | ---------------------------------------- | ----------------------- | -------- | ----------------------------------------------------- | ------- |
-| `AUTH_URL`              | NextAuth base URL                        | `string` (URL)          | Yes      | `http://localhost:5001`                               | 📱      |
-| `AUTH_SECRET`           | NextAuth encryption secret               | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32`               | 📱      |
-| `ENCRYPTION_KEY`        | Data encryption key                      | `string` (32 chars)     | Yes      | Generate with `openssl rand -hex 16`                  | 📱      |
-| `ENCRYPTION_MASTER_KEY` | Master key for encrypting sensitive data | `string` (32 chars)     | Yes      | Generate with `openssl rand -base64 24 \| head -c 32` |
-| `JWT_SECRET`            | JWT signing secret                       | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32`               |
-| `INTERNAL_API_KEY`      | Internal service authentication key      | `string`                | Yes      | Generate with `openssl rand -base64 32`               |
+| Variable           | Description                         | Type                    | Required | Example                                 | Service |
+| ------------------ | ----------------------------------- | ----------------------- | -------- | --------------------------------------- | ------- |
+| `AUTH_URL`         | NextAuth base URL                   | `string` (URL)          | Yes      | `http://localhost:3000`                 | 📱      |
+| `AUTH_SECRET`      | NextAuth encryption secret          | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` | 📱      |
+| `ENCRYPTION_KEY`   | Data encryption key                 | `string` (32 chars)     | Yes      | Generate with `openssl rand -hex 32`    | 📱      |
+| `JWT_SECRET`       | JWT signing secret                  | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` |
+| `INTERNAL_API_KEY` | Internal service authentication key | `string`                | Yes      | Generate with `openssl rand -base64 32` |
 
 **Notes:**
 
 - Never commit secrets to version control
 - Use strong, randomly generated secrets
-- `ENCRYPTION_KEY` and `ENCRYPTION_MASTER_KEY` serve similar purposes - consolidate in production
 - The app is migrating from `NEXTAUTH_*` to `AUTH_*` prefixed variables
 
 ### Database
@@ -106,7 +104,7 @@ postgresql://user:password@localhost:5432/cronium?sslmode=require
 | ------------------ | --------------------------------------------------------------------------------------- | -------------- | -------------------------- | -------- | ------- |
 | `ORCHESTRATOR_URL` | Orchestrator service URL                                                                | `string` (URL) | `http://orchestrator:8080` | Yes      | 📱      |
 | `VALKEY_URL`       | Valkey/Redis connection URL (for caching static resources, sessions, and rate limiting) | `string` (URL) | `valkey://valkey:6379`     | Yes      | 📱 🎯   |
-| `BACKEND_URL`      | Backend service URL (for orchestrator)                                                  | `string` (URL) | `http://cronium-app:5001`  | Yes      | 🎯      |
+| `BACKEND_URL`      | Backend service URL (for orchestrator)                                                  | `string` (URL) | `http://cronium-app:3000`  | Yes      | 🎯      |
 
 ## Optional Variables
 
@@ -127,11 +125,9 @@ postgresql://user:password@localhost:5432/cronium?sslmode=require
 
 ### AI Integration
 
-| Variable               | Description                    | Type     | Default | Required |
-| ---------------------- | ------------------------------ | -------- | ------- | -------- |
-| `OPENAI_API_KEY`       | OpenAI API key for AI features | `string` | -       | No       |
-| `GEMINI_MODEL`         | Google Gemini model identifier | `string` | -       | No       |
-| `GOOGLE_CLOUD_PROJECT` | Google Cloud project ID        | `string` | -       | No       |
+| Variable         | Description                    | Type     | Default | Required |
+| ---------------- | ------------------------------ | -------- | ------- | -------- |
+| `OPENAI_API_KEY` | OpenAI API key for AI features | `string` | -       | No       |
 
 ### Docker Registry
 

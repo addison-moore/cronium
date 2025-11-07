@@ -33,17 +33,22 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      PUBLIC_APP_URL: https://cronium.example.com
-      AUTH_URL: https://cronium.example.com
-      AUTH_SECRET: replace-with-random-string
+      AUTH_URL: ${AUTH_URL}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL}
+      NEXT_PUBLIC_APP_URL: ${PUBLIC_APP_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: postgres://cronium:super-secure-password@postgres:5432/cronium
-      ENCRYPTION_KEY: replace-with-32-byte-key
-      INTERNAL_API_KEY: replace-with-shared-internal-key
       ORCHESTRATOR_URL: http://cronium-orchestrator:8080
-      VALKEY_URL: redis://valkey:6379
+      VALKEY_URL: valkey://valkey:6379
+      NEXT_PUBLIC_SOCKET_URL: http://cronium-app:5002
+      NEXT_PUBLIC_SOCKET_PORT: 5002
     ports:
       - "3000:3000"
-    command: ["node", "server.js"]
+      - "5002:5002"
+    command: ["sh", "-c", "node server.js & node .next/standalone/server.js"]
 
   cronium-orchestrator:
     image: ghcr.io/addison-moore/cronium-orchestrator:latest
@@ -52,27 +57,29 @@ services:
       - valkey
     environment:
       CRONIUM_API_ENDPOINT: http://cronium-app:3000
-      CRONIUM_API_TOKEN: replace-with-shared-internal-key
+      CRONIUM_API_TOKEN: ${INTERNAL_API_KEY}
       CRONIUM_ORCHESTRATOR_ID: orchestrator-1
-      CRONIUM_CONTAINER_RUNTIME_JWT_SECRET: replace-with-runtime-jwt-secret
+      CRONIUM_CONTAINER_RUNTIME_JWT_SECRET: ${JWT_SECRET}
       CRONIUM_CONTAINER_RUNTIME_BACKEND_URL: http://cronium-app:3000
-      CRONIUM_CONTAINER_RUNTIME_VALKEY_URL: redis://valkey:6379
-    volumes:
-      - ./config/cronium-orchestrator.yaml:/app/config/cronium-orchestrator.yaml:ro
+      CRONIUM_CONTAINER_RUNTIME_VALKEY_URL: valkey://valkey:6379
+      LOG_LEVEL: info
+    ports:
+      - "8080:8080"
 
   cronium-runtime:
-    image: cronium-runtime:latest
+    image: ghcr.io/addison-moore/cronium-runtime:latest
     depends_on:
       - cronium-app
       - valkey
     environment:
-      PORT: 8089
-      BACKEND_URL: http://cronium-app:3000
-      BACKEND_TOKEN: replace-with-shared-internal-key
-      VALKEY_URL: redis://valkey:6379
-      JWT_SECRET: replace-with-runtime-jwt-secret
+      RUNTIME_PORT: 8081
+      RUNTIME_JWT_SECRET: ${JWT_SECRET}
+      RUNTIME_BACKEND_URL: http://cronium-app:3000
+      RUNTIME_BACKEND_TOKEN: ${INTERNAL_API_KEY}
+      RUNTIME_VALKEY_URL: valkey://valkey:6379
+      RUNTIME_LOG_LEVEL: info
     ports:
-      - "8089:8089"
+      - "8081:8081"
 
 volumes:
   postgres-data: {}

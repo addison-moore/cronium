@@ -103,6 +103,68 @@ export default function SelfHostingPage() {
           </Card>
         </section>
 
+        <section id="env-setup" className="mb-12">
+          <h2 className="mb-6 text-3xl font-bold">Prepare Your Environment</h2>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Wrench className="text-primary h-5 w-5" />
+                Generate secrets & configure .env
+              </CardTitle>
+              <CardDescription>
+                You only need a few long, random strings and a minimal{" "}
+                <code>.env</code> file to get started.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ol className="text-muted-foreground list-decimal space-y-3 pl-6 text-sm">
+                <li>
+                  <strong>Create a working directory</strong>:
+                  <SimpleCodeBlock language="bash" className="mt-2">
+                    {`mkdir cronium-self-host && cd cronium-self-host
+curl -O https://raw.githubusercontent.com/addison-moore/cronium/main/docker-compose.example.yml`}
+                  </SimpleCodeBlock>
+                </li>
+                <li>
+                  <strong>Generate secrets</strong> (repeat for each variable).
+                  If <code>openssl</code> is not installed, use a password
+                  manager with a 64-character random string:
+                  <SimpleCodeBlock language="bash" className="mt-2">
+                    {`# macOS / Linux / WSL
+openssl rand -hex 32  # paste into AUTH_SECRET, ENCRYPTION_KEY, JWT_SECRET
+openssl rand -base64 32  # paste into INTERNAL_API_KEY`}
+                  </SimpleCodeBlock>
+                </li>
+                <li>
+                  <strong>
+                    Create a minimal <code>.env</code> file
+                  </strong>{" "}
+                  with the secrets you generated and your public domain (use{" "}
+                  <code>http://localhost:3000</code> if you are testing
+                  locally). Paste these values into the Compose file
+                  placeholders or add <code>env_file: ['.env']</code> to reuse
+                  them automatically:
+                  <SimpleCodeBlock language="env" className="mt-2">
+                    {`AUTH_URL=https://cronium.example.com
+PUBLIC_APP_URL=https://cronium.example.com
+AUTH_SECRET=<paste value>
+ENCRYPTION_KEY=<paste value>
+INTERNAL_API_KEY=<paste value>
+JWT_SECRET=<paste value>`}
+                  </SimpleCodeBlock>
+                </li>
+              </ol>
+              <Alert className="bg-card text-card-foreground">
+                <AlertTitle>Tip</AlertTitle>
+                <AlertDescription>
+                  Store the generated secrets in a password manager so you can
+                  reuse them when redeploying or scaling additional services.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+        </section>
+
         <section id="container-images" className="mb-12">
           <h2 className="mb-6 text-3xl font-bold">Container Images</h2>
           <div className="space-y-6">
@@ -185,17 +247,22 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      PUBLIC_APP_URL: https://cronium.example.com
       AUTH_URL: https://cronium.example.com
+      PUBLIC_APP_URL: https://cronium.example.com
+      NEXT_PUBLIC_APP_URL: https://cronium.example.com
       AUTH_SECRET: replace-with-random-string
-      DATABASE_URL: postgres://cronium:super-secure-password@postgres:5432/cronium
       ENCRYPTION_KEY: replace-with-32-byte-key
       INTERNAL_API_KEY: replace-with-shared-internal-key
+      JWT_SECRET: replace-with-runtime-jwt-secret
+      DATABASE_URL: postgres://cronium:super-secure-password@postgres:5432/cronium
       ORCHESTRATOR_URL: http://cronium-orchestrator:8080
-      VALKEY_URL: redis://valkey:6379
+      VALKEY_URL: valkey://valkey:6379
+      NEXT_PUBLIC_SOCKET_URL: http://cronium-app:5002
+      NEXT_PUBLIC_SOCKET_PORT: 5002
     ports:
       - "3000:3000"
-    command: ["node", "server.js"]
+      - "5002:5002"
+    command: ["sh", "-c", "node server.js & node .next/standalone/server.js"]
 
   cronium-orchestrator:
     image: ghcr.io/addison-moore/cronium-orchestrator:latest
@@ -208,9 +275,10 @@ services:
       CRONIUM_ORCHESTRATOR_ID: orchestrator-1
       CRONIUM_CONTAINER_RUNTIME_JWT_SECRET: replace-with-runtime-jwt-secret
       CRONIUM_CONTAINER_RUNTIME_BACKEND_URL: http://cronium-app:3000
-      CRONIUM_CONTAINER_RUNTIME_VALKEY_URL: redis://valkey:6379
-    volumes:
-      - ./config/cronium-orchestrator.yaml:/app/config/cronium-orchestrator.yaml:ro
+      CRONIUM_CONTAINER_RUNTIME_VALKEY_URL: valkey://valkey:6379
+      LOG_LEVEL: info
+    ports:
+      - "8080:8080"
 
   cronium-runtime:
     image: ghcr.io/addison-moore/cronium-runtime:latest
@@ -218,23 +286,26 @@ services:
       - cronium-app
       - valkey
     environment:
-      PORT: 8089
-      BACKEND_URL: http://cronium-app:3000
-      BACKEND_TOKEN: replace-with-shared-internal-key
-      VALKEY_URL: redis://valkey:6379
-      JWT_SECRET: replace-with-runtime-jwt-secret
+      RUNTIME_PORT: 8081
+      RUNTIME_JWT_SECRET: replace-with-runtime-jwt-secret
+      RUNTIME_BACKEND_URL: http://cronium-app:3000
+      RUNTIME_BACKEND_TOKEN: replace-with-shared-internal-key
+      RUNTIME_VALKEY_URL: valkey://valkey:6379
+      RUNTIME_LOG_LEVEL: info
     ports:
-      - "8089:8089"
+      - "8081:8081"
 
 volumes:
   postgres-data: {}
-  valkey-data: {}`}
+  valkey-data: {}
+`}
             </SimpleCodeBlock>
             <p className="text-muted-foreground text-sm">
-              The example mounts an orchestrator configuration file from{" "}
-              <code>./config/cronium-orchestrator.yaml</code>. Generate this
-              file from the sample provided in the repository and update it for
-              your environment (metrics, logging, SSH executor options, etc.).
+              Replace the placeholder secrets in the example with the values you
+              generated (or add <code>env_file: ['.env']</code> to each service
+              if you prefer to keep sensitive values outside the Compose file).
+              You can still provide a custom orchestrator config later if you
+              need to tweak polling cadence, metrics, or SSH executors.
             </p>
           </div>
         </section>
@@ -271,6 +342,16 @@ volumes:
                   </TableRow>
                   <TableRow>
                     <TableCell>
+                      <code>NEXT_PUBLIC_APP_URL</code>
+                    </TableCell>
+                    <TableCell>Optional</TableCell>
+                    <TableCell>
+                      Mirror of <code>PUBLIC_APP_URL</code> exposed to the
+                      browser; set when serving the UI behind a proxy.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
                       <code>AUTH_URL</code>
                     </TableCell>
                     <TableCell>Yes</TableCell>
@@ -285,7 +366,8 @@ volumes:
                     </TableCell>
                     <TableCell>Yes</TableCell>
                     <TableCell>
-                      Random string used by NextAuth to sign session cookies.
+                      Random 32-character string used by NextAuth to sign
+                      session cookies (e.g. <code>openssl rand -hex 32</code>).
                     </TableCell>
                   </TableRow>
                   <TableRow>
@@ -295,7 +377,8 @@ volumes:
                     <TableCell>Yes</TableCell>
                     <TableCell>
                       PostgreSQL connection string in the format{" "}
-                      <code>postgres://user:pass@host:5432/db</code>.
+                      <code>postgres://user:pass@host:5432/db</code>; see the
+                      Compose example for defaults.
                     </TableCell>
                   </TableRow>
                   <TableRow>
@@ -305,7 +388,8 @@ volumes:
                     <TableCell>Yes</TableCell>
                     <TableCell>
                       32-byte key (Base64 or hex) used to encrypt stored
-                      secrets.
+                      secrets; generate with <code>openssl rand -hex 32</code>{" "}
+                      or a password manager.
                     </TableCell>
                   </TableRow>
                   <TableRow>
@@ -316,7 +400,18 @@ volumes:
                     <TableCell>
                       Shared token that internal services (orchestrator,
                       runtime) must present when calling the app&apos;s internal
-                      APIs.
+                      APIs; generate with <code>openssl rand -base64 32</code>.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>JWT_SECRET</code>
+                    </TableCell>
+                    <TableCell>Yes</TableCell>
+                    <TableCell>
+                      Token used for signing internal service-auth tokens and
+                      WebSocket payloads; reuse this for the runtime service
+                      (e.g. <code>openssl rand -hex 32</code>).
                     </TableCell>
                   </TableRow>
                   <TableRow>
@@ -326,7 +421,8 @@ volumes:
                     <TableCell>Optional</TableCell>
                     <TableCell>
                       Base URL for the orchestrator health endpoints. Defaults
-                      to <code>http://orchestrator:8080</code>.
+                      to <code>http://cronium-orchestrator:8080</code> inside
+                      Docker.
                     </TableCell>
                   </TableRow>
                   <TableRow>
@@ -335,8 +431,9 @@ volumes:
                     </TableCell>
                     <TableCell>Optional</TableCell>
                     <TableCell>
-                      Connection string for Valkey if you want to offload
-                      caching. Defaults to in-memory if omitted.
+                      Connection string for Valkey (use the
+                      <code>valkey://</code> scheme). Falls back to in-memory
+                      caching if omitted.
                     </TableCell>
                   </TableRow>
                   <TableRow>
@@ -411,8 +508,8 @@ volumes:
                     </TableCell>
                     <TableCell>Optional</TableCell>
                     <TableCell>
-                      URL that the runtime API should use to call back into the
-                      Cronium app (defaults to{" "}
+                      Internal URL the runtime API should use to call back into
+                      the Cronium app (defaults to{" "}
                       <code>http://cronium-app:3000</code>
                       ).
                     </TableCell>
@@ -423,7 +520,18 @@ volumes:
                     </TableCell>
                     <TableCell>Optional</TableCell>
                     <TableCell>
-                      Valkey URL used for runtime job coordination.
+                      Valkey connection string for coordinating container job
+                      state (supports the <code>valkey://</code> scheme).
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>LOG_LEVEL</code>
+                    </TableCell>
+                    <TableCell>Optional</TableCell>
+                    <TableCell>
+                      Overrides orchestrator logging verbosity. Defaults to
+                      <code>info</code>.
                     </TableCell>
                   </TableRow>
                 </TableBody>
@@ -448,17 +556,18 @@ volumes:
                 <TableBody>
                   <TableRow>
                     <TableCell>
-                      <code>BACKEND_URL</code>
+                      <code>RUNTIME_BACKEND_URL</code>
                     </TableCell>
                     <TableCell>Yes</TableCell>
                     <TableCell>
                       Internal URL the runtime service should use to reach the
-                      Cronium app.
+                      Cronium app (typically{" "}
+                      <code>http://cronium-app:3000</code>).
                     </TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell>
-                      <code>BACKEND_TOKEN</code>
+                      <code>RUNTIME_BACKEND_TOKEN</code>
                     </TableCell>
                     <TableCell>Yes</TableCell>
                     <TableCell>
@@ -468,7 +577,7 @@ volumes:
                   </TableRow>
                   <TableRow>
                     <TableCell>
-                      <code>VALKEY_URL</code>
+                      <code>RUNTIME_VALKEY_URL</code>
                     </TableCell>
                     <TableCell>Yes</TableCell>
                     <TableCell>
@@ -477,7 +586,7 @@ volumes:
                   </TableRow>
                   <TableRow>
                     <TableCell>
-                      <code>JWT_SECRET</code>
+                      <code>RUNTIME_JWT_SECRET</code>
                     </TableCell>
                     <TableCell>Yes</TableCell>
                     <TableCell>
@@ -488,11 +597,21 @@ volumes:
                   </TableRow>
                   <TableRow>
                     <TableCell>
-                      <code>PORT</code>
+                      <code>RUNTIME_PORT</code>
                     </TableCell>
                     <TableCell>Optional</TableCell>
                     <TableCell>
-                      Port for the runtime API (defaults to <code>8089</code>).
+                      Port for the runtime API (defaults to <code>8081</code>).
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>RUNTIME_LOG_LEVEL</code>
+                    </TableCell>
+                    <TableCell>Optional</TableCell>
+                    <TableCell>
+                      Sets runtime logging verbosity. Defaults to{" "}
+                      <code>info</code>.
                     </TableCell>
                   </TableRow>
                 </TableBody>
@@ -552,36 +671,38 @@ volumes:
                   workload.
                 </li>
                 <li>
+                  Complete the steps in{" "}
+                  <a href="#env-setup" className="underline">
+                    Prepare Your Environment
+                  </a>{" "}
+                  so you have a populated <code>.env</code> and the sample
+                  Compose file ready to use.
+                </li>
+                <li>
                   Pull the <code>cronium-app</code>,{" "}
                   <code>cronium-orchestrator</code>, and{" "}
                   <code>cronium-runtime</code> images from GHCR, or build them
                   locally.
                 </li>
                 <li>
-                  Generate secrets (<code>AUTH_SECRET</code>,
-                  <code>ENCRYPTION_KEY</code>, <code>INTERNAL_API_KEY</code>,
-                  runtime JWT secret) and store them securely.
-                </li>
-                <li>
-                  Update the Compose file with the generated secrets, domain,
-                  and registry image names.
-                </li>
-                <li>
-                  Create the orchestrator config file (copy
-                  <code>
-                    apps/orchestrator/configs/cronium-orchestrator.yaml
-                  </code>{" "}
-                  as a starting point) and mount it into the orchestrator
-                  container.
-                </li>
-                <li>
                   Run <code>docker compose up -d</code> and wait for all
                   containers to report healthy states.
                 </li>
                 <li>
-                  Apply database migrations by running{" "}
-                  <code>pnpm --filter @cronium/app db:push</code> inside the app
-                  container, or execute the equivalent command through your CI.
+                  Apply database migrations from your workstation (requires
+                  Node.js and pnpm): clone the Cronium repository, run{" "}
+                  <code>pnpm install</code>, then execute{" "}
+                  <code>pnpm --filter @cronium/app db:push</code>. The published
+                  app image does not bundle pnpm, so migrations should run
+                  outside the container or via your CI pipeline.
+                </li>
+                <li>
+                  Optional: add a custom orchestrator config (copy{" "}
+                  <code>
+                    apps/orchestrator/configs/cronium-orchestrator.yaml
+                  </code>{" "}
+                  from the repo) if you need advanced tuning for metrics, SSH
+                  executors, or polling cadence.
                 </li>
               </ol>
             </CardContent>
@@ -591,6 +712,46 @@ volumes:
         <section id="post-deployment" className="mb-12">
           <h2 className="mb-6 text-3xl font-bold">Post-Deployment Checklist</h2>
           <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Server className="text-primary h-5 w-5" />
+                  Quick health checks
+                </CardTitle>
+                <CardDescription>
+                  Confirm each service is reachable before inviting teammates.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="text-muted-foreground list-disc space-y-2 pl-6">
+                  <li>
+                    Web UI: visit <code>{`https://cronium.example.com`}</code>{" "}
+                    (or your configured domain) – you should see the login
+                    screen.
+                  </li>
+                  <li>
+                    API health: run{" "}
+                    <code>curl http://localhost:3000/api/health</code> from the
+                    host running Docker.
+                  </li>
+                  <li>
+                    Orchestrator health:{" "}
+                    <code>curl http://localhost:8080/health</code>; expect a
+                    JSON payload with <code>status: "healthy"</code>.
+                  </li>
+                  <li>
+                    Runtime API: <code>curl http://localhost:8081/health</code>{" "}
+                    for a simple heartbeat.
+                  </li>
+                  <li>
+                    Logs/WebSocket: tail{" "}
+                    <code>docker compose logs cronium-app</code> while
+                    triggering a job to verify live log streaming on port{" "}
+                    <code>5002</code>.
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

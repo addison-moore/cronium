@@ -29,46 +29,51 @@ This guide covers deploying Cronium using Docker Compose in various environments
    cd cronium
    ```
 
-2. **Set up environment**:
+2. **Copy the sample Compose file**:
 
    ```bash
-   # Copy environment template
-   cp .env.example .env
-
-   # Generate secure secrets
-   ./scripts/setup-secrets.sh
+   cp docker-compose.example.yml docker-compose.yml
    ```
 
-3. **Start services**:
+3. **Create a deployment `.env`**:
 
    ```bash
-   # Production mode (includes PostgreSQL)
-   docker-compose up -d
+   AUTH_SECRET=$(openssl rand -hex 32)
+   ENCRYPTION_KEY=$(openssl rand -hex 32)
+   INTERNAL_API_KEY=$(openssl rand -base64 32)
+   JWT_SECRET=$(openssl rand -hex 32)
 
-   # Development mode (requires external PostgreSQL)
-   pnpm dev:docker
+   cat <<ENV > .env
+   AUTH_URL=http://localhost:3000
+   PUBLIC_APP_URL=http://localhost:3000
+   AUTH_SECRET=$AUTH_SECRET
+   ENCRYPTION_KEY=$ENCRYPTION_KEY
+   INTERNAL_API_KEY=$INTERNAL_API_KEY
+   JWT_SECRET=$JWT_SECRET
+   ENV
    ```
 
-4. **Access Cronium**:
-   - Main App: http://localhost:5001
-   - Jobs Dashboard: http://localhost:5001/dashboard/jobs
+4. **Start services**:
+
+   ```bash
+   docker compose up -d
+   ```
+
+5. **Access Cronium**:
+   - Web UI: http://localhost:3000
    - WebSocket: ws://localhost:5002
+   - Orchestrator health: http://localhost:8080/health
+   - Runtime health: http://localhost:8081/health
 
 ## Development Deployment
 
 ### Using Docker Compose
 
 ```bash
-# Start development services (uses external PostgreSQL)
-pnpm dev:docker
+# Start infrastructure services (Valkey + PostgreSQL)
+docker compose -f infra/docker/docker-compose.dev.yml up -d valkey postgres
 
-# Or manually:
-docker-compose -f docker-compose.dev.yml up
-
-# If you need PostgreSQL included:
-docker-compose up postgres valkey
-
-# Then run app locally
+# Then run the app from your workstation
 pnpm install
 pnpm dev
 ```
@@ -84,7 +89,7 @@ pnpm dev
 For automated setup:
 
 ```bash
-./scripts/setup-dev.sh
+./infra/scripts/setup-dev.sh
 ```
 
 This script will:
@@ -105,7 +110,7 @@ This script will:
 
    ```bash
    # Generate production secrets
-   ./scripts/setup-secrets.sh
+   ./infra/scripts/setup-secrets.sh
 
    # Edit production values
    vim .env
@@ -114,12 +119,12 @@ This script will:
 2. **Build images**:
 
    ```bash
-   docker-compose build --no-cache
+   docker compose build --no-cache
    ```
 
 3. **Start services**:
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 ### Using Docker Secrets
@@ -128,10 +133,10 @@ For enhanced security:
 
 ```bash
 # Generate secret files
-./scripts/setup-secrets.sh
+./infra/scripts/setup-secrets.sh
 
 # Deploy with Docker secrets
-docker-compose -f docker-compose.yml -f docker-compose.secrets.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.secrets.yml up -d
 ```
 
 ### Production Checklist
@@ -153,7 +158,7 @@ Each service can be configured via:
 
 1. **Environment variables** (see [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md))
 2. **Configuration files**:
-   - `orchestrator/cronium-orchestrator/configs/cronium-orchestrator.yaml`
+   - `apps/orchestrator/configs/cronium-orchestrator.yaml`
 
 ### Network Configuration
 
@@ -166,16 +171,16 @@ Services communicate via internal Docker network:
 
 Persistent data volumes:
 
-- `postgres_data`: Database files (production only)
-- `valkey_data`: Cache data
-- `orchestrator_data`: Job execution data
+- `postgres-data`: Database files (production only)
+- `valkey-data`: Cache data
+- `orchestrator-data`: Job execution data
 
 ## Monitoring
 
 ### Health Check Endpoints
 
 - Orchestrator: http://localhost:8080/health
-- Main App: http://localhost:5001/api/health
+- Main App: http://localhost:3000/api/health
 
 ## Scaling
 
@@ -185,7 +190,7 @@ Scale specific services:
 
 ```bash
 # Scale orchestrators
-docker-compose up -d --scale cronium-orchestrator=3
+docker compose up -d --scale cronium-orchestrator=3
 ```
 
 ### Load Balancing
@@ -194,7 +199,7 @@ Add nginx for load balancing:
 
 ```bash
 # Enable nginx profile
-docker-compose --profile production up -d
+docker compose --profile production up -d
 ```
 
 ## Troubleshooting
@@ -203,13 +208,13 @@ docker-compose --profile production up -d
 
 ```bash
 # All services
-docker-compose logs -f
+docker compose logs -f
 
 # Specific service
-docker-compose logs -f orchestrator
+docker compose logs -f orchestrator
 
 # Last 100 lines
-docker-compose logs --tail 100 cronium-app
+docker compose logs --tail 100 cronium-app
 ```
 
 ### Common Issues
@@ -218,10 +223,10 @@ docker-compose logs --tail 100 cronium-app
 
    ```bash
    # Check database is running
-   docker-compose ps postgres
+   docker compose ps postgres
 
    # Check database logs
-   docker-compose logs postgres
+   docker compose logs postgres
    ```
 
 2. **Port conflicts**:
@@ -248,23 +253,23 @@ docker-compose logs --tail 100 cronium-app
    ```bash
    # Check service health
    curl http://localhost:8080/health  # Orchestrator
-   curl http://localhost:5001/api/health  # Main app
+   curl http://localhost:3000/api/health  # Main app
    ```
 
 ### Reset Everything
 
 ```bash
 # Stop all services
-docker-compose down
+docker compose down
 
 # Remove volumes (WARNING: deletes all data)
-docker-compose down -v
+docker compose down -v
 
 # Remove images
-docker-compose down --rmi all
+docker compose down --rmi all
 
 # Fresh start
-docker-compose up -d
+docker compose up -d
 ```
 
 ## Backup and Restore

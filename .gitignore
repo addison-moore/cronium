@@ -42,3 +42,8 @@ tsconfig.tsbuildinfo
 
 # Orchestrator
 apps/orchestrator/tmp/
+
+# Agents
+AGENTS.md
+CLAUDE.md
+GEMINI.md
