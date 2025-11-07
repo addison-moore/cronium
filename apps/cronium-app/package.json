@@ -18,8 +18,7 @@
     "test": "jest",
     "clear": "rm -rf .next",
     "clear-logs": "tsx src/scripts/clear-all-logs.ts",
-    "dev:socket": "tsx --env-file=../../env/.env.local server.ts",
-    "docker:test": "docker build -f ../../apps/cronium-app/Dockerfile -t cronium-app:test ."
+    "dev:socket": "tsx --env-file=../../env/.env.local server.ts"
   },
   "dependencies": {
     "@cronium/ui": "workspace:*",

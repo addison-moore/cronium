@@ -30,6 +30,8 @@
     "dev:docker:down": "docker compose -f infra/docker/docker-compose.dev.local-app.yml down",
     "dev:docker:build": "./scripts/build-docker-images.sh",
     "dev:docker:logs": "docker compose -f infra/docker/docker-compose.dev.local-app.yml logs -f",
+    "docker:test:app": "docker build -f apps/cronium-app/Dockerfile -t cronium-app:test .",
+    "docker:test:orchestrator": "docker build -f apps/orchestrator/Dockerfile -t cronium-orchestrator:test .",
     "prepare": "husky"
   },
   "keywords": [],
