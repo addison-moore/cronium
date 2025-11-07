@@ -262,7 +262,7 @@ services:
     ports:
       - "3000:3000"
       - "5002:5002"
-    command: ["sh", "-c", "node server.js & node .next/standalone/server.js"]
+    command: ["sh", "-c", "node apps/cronium-app/server.js & node server.js"]
 
   cronium-orchestrator:
     image: ghcr.io/addison-moore/cronium-orchestrator:latest
@@ -279,6 +279,8 @@ services:
       LOG_LEVEL: info
     ports:
       - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
 
   cronium-runtime:
     image: ghcr.io/addison-moore/cronium-runtime:latest
@@ -306,6 +308,12 @@ volumes:
               if you prefer to keep sensitive values outside the Compose file).
               You can still provide a custom orchestrator config later if you
               need to tweak polling cadence, metrics, or SSH executors.
+            </p>
+            <p className="text-muted-foreground text-xs">
+              Leave the <code>/var/run/docker.sock</code> mount in place if you
+              plan to run container jobs—the orchestrator needs access to the
+              host Docker daemon. Remove it only when you exclusively use SSH
+              runners.
             </p>
           </div>
         </section>

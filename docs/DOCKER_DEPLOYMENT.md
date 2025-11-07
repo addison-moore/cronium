@@ -60,12 +60,12 @@ This guide explains how to deploy Cronium using Docker containers from GitHub Co
 3. **Update the docker compose.yml file:**
    - Review the image tags (they already point at `ghcr.io/addison-moore/...`)
    - Adjust ports if needed
-   - Configure volumes for persistence
+   - Configure volumes for persistence (leave the `/var/run/docker.sock` mount in place unless you only use SSH runners, because the orchestrator needs access to the host Docker daemon)
 
 4. **Start the services:**
 
    ```bash
-   docker compose up -d
+   docker compose up -d  # Uses values from your .env file automatically
    ```
 
 5. **Access Cronium:**
@@ -244,6 +244,11 @@ docker compose ps
 # View logs
 docker compose logs -f
 ```
+
+The Cronium app image already bundles the compiled Next.js server and
+WebSocket process; the sample Compose file starts both by running
+`node apps/cronium-app/server.js & node server.js`. Do not change that command
+unless you are building custom images.
 
 ### 4. Initialize the Database
 

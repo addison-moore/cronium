@@ -48,7 +48,7 @@ services:
     ports:
       - "3000:3000"
       - "5002:5002"
-    command: ["sh", "-c", "node server.js & node .next/standalone/server.js"]
+    command: ["sh", "-c", "node apps/cronium-app/server.js & node server.js"]
 
   cronium-orchestrator:
     image: ghcr.io/addison-moore/cronium-orchestrator:latest
@@ -65,6 +65,8 @@ services:
       LOG_LEVEL: info
     ports:
       - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
 
   cronium-runtime:
     image: ghcr.io/addison-moore/cronium-runtime:latest
