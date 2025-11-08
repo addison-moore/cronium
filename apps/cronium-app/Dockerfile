@@ -73,6 +73,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/.next/standalone
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/.next/static ./apps/cronium-app/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/drizzle ./apps/cronium-app/drizzle
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/scripts ./apps/cronium-app/scripts
+# Provide node_modules needed for migration/bootstrap scripts
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 
 # Copy package.json for version info
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/package.json ./package.json
