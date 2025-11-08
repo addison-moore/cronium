@@ -59,6 +59,9 @@ This guide covers deploying Cronium using Docker Compose in various environments
    docker compose up -d
    ```
 
+   Database migrations run automatically on startup. Leave `AUTO_MIGRATE=true`
+   unless you need to control schema changes manually.
+
 5. **Access Cronium**:
    - Web UI: http://localhost:3000
    - WebSocket: ws://localhost:5002

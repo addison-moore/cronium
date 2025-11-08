@@ -309,6 +309,12 @@ volumes:
               You can still provide a custom orchestrator config later if you
               need to tweak polling cadence, metrics, or SSH executors.
             </p>
+            <p className="text-muted-foreground text-sm">
+              The Cronium app automatically runs database migrations on start.
+              You can disable this behaviour by setting{" "}
+              <code>AUTO_MIGRATE=false</code> if you prefer to manage the schema
+              yourself.
+            </p>
             <p className="text-muted-foreground text-xs">
               Leave the <code>/var/run/docker.sock</code> mount in place if you
               plan to run container jobs—the orchestrator needs access to the
@@ -420,6 +426,17 @@ volumes:
                       Token used for signing internal service-auth tokens and
                       WebSocket payloads; reuse this for the runtime service
                       (e.g. <code>openssl rand -hex 32</code>).
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>AUTO_MIGRATE</code>
+                    </TableCell>
+                    <TableCell>Optional</TableCell>
+                    <TableCell>
+                      Defaults to <code>true</code>. Leave enabled unless you
+                      plan to run migrations yourself; set to <code>false</code>
+                      if you need to manage schema updates manually.
                     </TableCell>
                   </TableRow>
                   <TableRow>

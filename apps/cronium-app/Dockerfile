@@ -71,13 +71,16 @@ RUN apk add --no-cache libc6-compat tini && \
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/.next/static ./apps/cronium-app/.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/drizzle ./apps/cronium-app/drizzle
+COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/scripts ./apps/cronium-app/scripts
 
 # Copy package.json for version info
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/package.json ./package.json
 
 # Create necessary directories
 RUN mkdir -p /app/logs /app/uploads /app/tmp && \
-    chown -R nextjs:nodejs /app/logs /app/uploads /app/tmp
+    chown -R nextjs:nodejs /app/logs /app/uploads /app/tmp && \
+    chmod +x /app/apps/cronium-app/scripts/start.sh
 
 # Switch to non-root user
 USER nextjs
@@ -98,5 +101,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # Use tini for proper signal handling
 ENTRYPOINT ["/sbin/tini", "--"]
 
-# Start the application
-CMD ["node", "apps/cronium-app/server.js"]
+# Start the application bootstrap (runs migrations + servers)
+CMD ["apps/cronium-app/scripts/start.sh"]

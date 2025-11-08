@@ -68,6 +68,10 @@ This guide explains how to deploy Cronium using Docker containers from GitHub Co
    docker compose up -d  # Uses values from your .env file automatically
    ```
 
+   The Cronium app automatically runs any pending database migrations on startup.
+   Leave `AUTO_MIGRATE` at its default (`true`) unless you prefer to manage the
+   schema yourself.
+
 5. **Access Cronium:**
    - Web UI: http://localhost:3000
    - WebSocket: ws://localhost:5002
@@ -166,12 +170,13 @@ volumes:
 
 ### Optional Configuration
 
-| Variable              | Description         | Default |
-| --------------------- | ------------------- | ------- |
-| `LOG_LEVEL`           | Logging verbosity   | `info`  |
-| `MAX_CONCURRENT_JOBS` | Parallel job limit  | `10`    |
-| `SMTP_*`              | Email configuration | Not set |
-| `OPENAI_API_KEY`      | AI features         | Not set |
+| Variable              | Description                           | Default |
+| --------------------- | ------------------------------------- | ------- |
+| `LOG_LEVEL`           | Logging verbosity                     | `info`  |
+| `MAX_CONCURRENT_JOBS` | Parallel job limit                    | `10`    |
+| `SMTP_*`              | Email configuration                   | Not set |
+| `OPENAI_API_KEY`      | AI features                           | Not set |
+| `AUTO_MIGRATE`        | Run database migrations automatically | `true`  |
 
 ### Database Configuration
 

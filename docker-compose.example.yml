@@ -48,7 +48,6 @@ services:
     ports:
       - "3000:3000"
       - "5002:5002"
-    command: ["sh", "-c", "node apps/cronium-app/server.js & node server.js"]
 
   cronium-orchestrator:
     image: ghcr.io/addison-moore/cronium-orchestrator:latest
