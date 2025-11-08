@@ -79,6 +79,7 @@ COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 # Copy package.json for version info
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/package.json ./package.json
 
+# Install runtime dependencies for Cronium app (ensures migrations have access to drizzle-orm, etc.)
 # Create necessary directories
 RUN mkdir -p /app/logs /app/uploads /app/tmp && \
     chown -R nextjs:nodejs /app/logs /app/uploads /app/tmp && \
@@ -95,6 +96,7 @@ ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_PATH=/app/node_modules
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
