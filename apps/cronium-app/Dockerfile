@@ -10,7 +10,7 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # Copy package files for all workspaces
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY turbo.json ./
 COPY apps/cronium-app/package.json ./apps/cronium-app/
 COPY packages/ui/package.json ./packages/ui/
@@ -73,8 +73,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/.next/standalone
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/.next/static ./apps/cronium-app/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/drizzle ./apps/cronium-app/drizzle
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/scripts ./apps/cronium-app/scripts
+COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/drizzle.config.ts ./apps/cronium-app/drizzle.config.ts
+COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/src/shared ./apps/cronium-app/src/shared
 # Provide runtime dependencies required for migration/bootstrap scripts
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+# Provide workspace-level dependencies for scripts that rely on the monorepo install
+COPY --from=deps --chown=nextjs:nodejs /app/apps/cronium-app/node_modules ./apps/cronium-app/node_modules
 
 # Copy package.json for version info
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/package.json ./package.json

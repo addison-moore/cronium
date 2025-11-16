@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Run database migrations (script handles AUTO_MIGRATE flag)
-node apps/cronium-app/scripts/run-migrations.mjs
+node apps/cronium-app/scripts/run-migrations.cjs
 
 SOCKET_ENTRY="server.js"
 SOCKET_PID=""

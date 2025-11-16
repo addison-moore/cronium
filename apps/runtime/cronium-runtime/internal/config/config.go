@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
@@ -12,7 +13,7 @@ import (
 // Config represents the runtime service configuration
 type Config struct {
 	Version string `yaml:"version" envconfig:"VERSION" default:"1.0.0"`
-	
+
 	Server   ServerConfig   `yaml:"server"`
 	Cache    CacheConfig    `yaml:"cache"`
 	Backend  BackendConfig  `yaml:"backend"`
@@ -31,26 +32,26 @@ type ServerConfig struct {
 
 // CacheConfig defines Valkey cache settings
 type CacheConfig struct {
-	URL            string        `yaml:"url" envconfig:"VALKEY_URL" default:"valkey://localhost:6379"`
-	Password       string        `yaml:"password" envconfig:"VALKEY_PASSWORD"`
-	DB             int           `yaml:"db" envconfig:"VALKEY_DB" default:"0"`
-	MaxRetries     int           `yaml:"maxRetries" envconfig:"VALKEY_MAX_RETRIES" default:"3"`
-	DialTimeout    time.Duration `yaml:"dialTimeout" envconfig:"VALKEY_DIAL_TIMEOUT" default:"5s"`
-	ReadTimeout    time.Duration `yaml:"readTimeout" envconfig:"VALKEY_READ_TIMEOUT" default:"3s"`
-	WriteTimeout   time.Duration `yaml:"writeTimeout" envconfig:"VALKEY_WRITE_TIMEOUT" default:"3s"`
-	PoolSize       int           `yaml:"poolSize" envconfig:"VALKEY_POOL_SIZE" default:"10"`
-	MinIdleConns   int           `yaml:"minIdleConns" envconfig:"VALKEY_MIN_IDLE_CONNS" default:"2"`
-	MaxConnAge     time.Duration `yaml:"maxConnAge" envconfig:"VALKEY_MAX_CONN_AGE" default:"30m"`
-	TTL            time.Duration `yaml:"ttl" envconfig:"CACHE_TTL" default:"5m"`
+	URL          string        `yaml:"url" envconfig:"VALKEY_URL" default:"valkey://localhost:6379"`
+	Password     string        `yaml:"password" envconfig:"VALKEY_PASSWORD"`
+	DB           int           `yaml:"db" envconfig:"VALKEY_DB" default:"0"`
+	MaxRetries   int           `yaml:"maxRetries" envconfig:"VALKEY_MAX_RETRIES" default:"3"`
+	DialTimeout  time.Duration `yaml:"dialTimeout" envconfig:"VALKEY_DIAL_TIMEOUT" default:"5s"`
+	ReadTimeout  time.Duration `yaml:"readTimeout" envconfig:"VALKEY_READ_TIMEOUT" default:"3s"`
+	WriteTimeout time.Duration `yaml:"writeTimeout" envconfig:"VALKEY_WRITE_TIMEOUT" default:"3s"`
+	PoolSize     int           `yaml:"poolSize" envconfig:"VALKEY_POOL_SIZE" default:"10"`
+	MinIdleConns int           `yaml:"minIdleConns" envconfig:"VALKEY_MIN_IDLE_CONNS" default:"2"`
+	MaxConnAge   time.Duration `yaml:"maxConnAge" envconfig:"VALKEY_MAX_CONN_AGE" default:"30m"`
+	TTL          time.Duration `yaml:"ttl" envconfig:"CACHE_TTL" default:"5m"`
 }
 
 // BackendConfig defines backend API settings
 type BackendConfig struct {
-	URL          string        `yaml:"url" envconfig:"BACKEND_URL" default:"http://localhost:5001"`
-	Token        string        `yaml:"token" envconfig:"BACKEND_TOKEN"`
-	Timeout      time.Duration `yaml:"timeout" envconfig:"BACKEND_TIMEOUT" default:"30s"`
-	MaxRetries   int           `yaml:"maxRetries" envconfig:"BACKEND_MAX_RETRIES" default:"3"`
-	RetryDelay   time.Duration `yaml:"retryDelay" envconfig:"BACKEND_RETRY_DELAY" default:"1s"`
+	URL        string        `yaml:"url" envconfig:"BACKEND_URL" default:"http://localhost:5001"`
+	Token      string        `yaml:"token" envconfig:"BACKEND_TOKEN"`
+	Timeout    time.Duration `yaml:"timeout" envconfig:"BACKEND_TIMEOUT" default:"30s"`
+	MaxRetries int           `yaml:"maxRetries" envconfig:"BACKEND_MAX_RETRIES" default:"3"`
+	RetryDelay time.Duration `yaml:"retryDelay" envconfig:"BACKEND_RETRY_DELAY" default:"1s"`
 }
 
 // AuthConfig defines authentication settings
@@ -104,6 +105,10 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to process env vars: %w", err)
 	}
 
+	if err := applyLegacyEnvOverrides(cfg); err != nil {
+		return nil, err
+	}
+
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
@@ -124,6 +129,42 @@ func (c *Config) Validate() error {
 
 	if c.Backend.URL == "" {
 		return fmt.Errorf("backend URL is required")
+	}
+
+	return nil
+}
+
+func applyLegacyEnvOverrides(cfg *Config) error {
+	if portStr := os.Getenv("RUNTIME_PORT"); portStr != "" {
+		port, err := strconv.Atoi(portStr)
+		if err != nil {
+			return fmt.Errorf("invalid RUNTIME_PORT: %w", err)
+		}
+		cfg.Server.Port = port
+	}
+
+	if val := os.Getenv("RUNTIME_VALKEY_URL"); val != "" {
+		cfg.Cache.URL = val
+	}
+
+	if val := os.Getenv("RUNTIME_VALKEY_PASSWORD"); val != "" {
+		cfg.Cache.Password = val
+	}
+
+	if val := os.Getenv("RUNTIME_BACKEND_URL"); val != "" {
+		cfg.Backend.URL = val
+	}
+
+	if val := os.Getenv("RUNTIME_BACKEND_TOKEN"); val != "" {
+		cfg.Backend.Token = val
+	}
+
+	if val := os.Getenv("RUNTIME_JWT_SECRET"); val != "" {
+		cfg.Auth.JWTSecret = val
+	}
+
+	if val := os.Getenv("RUNTIME_LOG_LEVEL"); val != "" {
+		cfg.Logging.Level = val
 	}
 
 	return nil
