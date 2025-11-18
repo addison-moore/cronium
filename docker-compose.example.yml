@@ -34,6 +34,15 @@ services:
       valkey:
         condition: service_healthy
     environment:
+      AUTO_SEED_ADMIN: "false"
+      ADMIN_USERNAME: admin
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: admin
+      SMTP_HOST: smtp.example.com
+      SMTP_PORT: 587
+      SMTP_USER: smtp_user
+      SMTP_PASSWORD: smtp_password
+      SMTP_FROM_EMAIL: admin@example.com
       NODE_ENV: production
       AUTH_URL: ${AUTH_URL}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL}

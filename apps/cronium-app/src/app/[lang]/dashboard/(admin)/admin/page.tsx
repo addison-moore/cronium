@@ -30,10 +30,6 @@ interface SystemSettings {
   aiEnabled?: boolean;
   aiModel?: string;
   openaiApiKey?: string;
-  maxUsers?: number;
-  maxEventsPerUser?: number;
-  maxWorkflowsPerUser?: number;
-  maxServersPerUser?: number;
   enableRegistration?: boolean;
   enableGuestAccess?: boolean;
   defaultUserRole?: UserRole;

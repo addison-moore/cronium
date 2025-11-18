@@ -4,6 +4,9 @@ set -euo pipefail
 # Run database migrations (script handles AUTO_MIGRATE flag)
 node apps/cronium-app/scripts/run-migrations.cjs
 
+# Seed bootstrap admin/settings when enabled
+node apps/cronium-app/scripts/bootstrap-seed.cjs
+
 SOCKET_ENTRY="server.js"
 SOCKET_PID=""
 

@@ -108,6 +108,15 @@ postgresql://user:password@localhost:5432/cronium?sslmode=require
 
 ## Optional Variables
 
+### Bootstrap Seeding (opt-in)
+
+| Variable          | Description                                                         | Type     | Default             | Required |
+| ----------------- | ------------------------------------------------------------------- | -------- | ------------------- | -------- |
+| `AUTO_SEED_ADMIN` | When `true`, seeds an admin user and default settings on first boot | `bool`   | `false`             | No       |
+| `ADMIN_USERNAME`  | Admin username for bootstrap                                        | `string` | `admin`             | No       |
+| `ADMIN_EMAIL`     | Admin email for bootstrap                                           | `string` | `admin@example.com` | No       |
+| `ADMIN_PASSWORD`  | Admin password for bootstrap                                        | `string` | `admin`             | No       |
+
 ### Email Configuration
 
 | Variable          | Description          | Type     | Default                 | Required |

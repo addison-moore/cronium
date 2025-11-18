@@ -257,7 +257,9 @@ unless you are building custom images.
 
 ### 4. Initialize the Database
 
-The database is automatically initialized on first start. To manually run migrations:
+The database is automatically initialized on first start. By default, we do **not** auto-seed an admin. You can opt into bootstrap seeding by setting `AUTO_SEED_ADMIN=true` and providing `ADMIN_USERNAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` (defaults to `admin`/`admin@example.com`/`admin`). SMTP values (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`) can also be seeded when provided.
+
+To manually run migrations:
 
 ```bash
 # From a local checkout of the Cronium repo

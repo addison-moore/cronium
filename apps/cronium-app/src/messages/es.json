@@ -443,10 +443,6 @@
       "SystemNamePlaceholder": "Cronium",
       "SystemLogo": "URL del logo del sistema",
       "SystemLogoPlaceholder": "URL de su imagen de logo",
-      "MaxScriptsPerUser": "Máximo de scripts por usuario",
-      "MaxScriptsPerUserPlaceholder": "50",
-      "MaxServersPerUser": "Máximo de servidores por usuario",
-      "MaxServersPerUserPlaceholder": "5",
       "SaveButton": "Guardar configuración del sistema"
     },
     "AISettings": {

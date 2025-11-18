@@ -240,12 +240,23 @@ services:
 
   cronium-app:
     image: ghcr.io/addison-moore/cronium-app:latest
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
       valkey:
         condition: service_healthy
     environment:
+      AUTO_SEED_ADMIN: "true"
+      ADMIN_USERNAME: admin
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: admin
+      SMTP_HOST: smtp.example.com
+      SMTP_PORT: 587
+      SMTP_USER: smtp_user
+      SMTP_PASSWORD: smtp_password
+      SMTP_FROM_EMAIL: admin@example.com
       NODE_ENV: production
       AUTH_URL: https://cronium.example.com
       PUBLIC_APP_URL: https://cronium.example.com
@@ -262,10 +273,11 @@ services:
     ports:
       - "3000:3000"
       - "5002:5002"
-    command: ["sh", "-c", "node apps/cronium-app/server.js & node server.js"]
 
   cronium-orchestrator:
     image: ghcr.io/addison-moore/cronium-orchestrator:latest
+    env_file:
+      - .env
     depends_on:
       - cronium-app
       - valkey
@@ -280,10 +292,13 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    user: "0:0"
 
   cronium-runtime:
     image: ghcr.io/addison-moore/cronium-runtime:latest
+    env_file:
+      - .env
     depends_on:
       - cronium-app
       - valkey
@@ -303,11 +318,12 @@ volumes:
 `}
             </SimpleCodeBlock>
             <p className="text-muted-foreground text-sm">
-              Replace the placeholder secrets in the example with the values you
-              generated (or add <code>env_file: ['.env']</code> to each service
-              if you prefer to keep sensitive values outside the Compose file).
-              You can still provide a custom orchestrator config later if you
-              need to tweak polling cadence, metrics, or SSH executors.
+              Replace the placeholder secrets in <code>.env</code> (or inline
+              them if you prefer). The example already loads <code>.env</code>{" "}
+              for each service. Setting <code>AUTO_SEED_ADMIN=true</code> seeds
+              an admin user and default settings on first boot; change the
+              <code>ADMIN_*</code> and SMTP values to your desired bootstrap
+              credentials before deploying.
             </p>
             <p className="text-muted-foreground text-sm">
               The Cronium app automatically runs database migrations on start.

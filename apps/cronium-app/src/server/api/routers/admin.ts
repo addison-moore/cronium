@@ -519,10 +519,6 @@ export const adminRouter = createTRPCRouter({
         // Return settings with default values for any missing keys
         const systemSettings = {
           // Basic system settings
-          maxUsers: settingsObject.maxUsers ?? 100,
-          maxEventsPerUser: settingsObject.maxEventsPerUser ?? 1000,
-          maxWorkflowsPerUser: settingsObject.maxWorkflowsPerUser ?? 100,
-          maxServersPerUser: settingsObject.maxServersPerUser ?? 10,
           enableRegistration: settingsObject.enableRegistration ?? false,
           enableGuestAccess: settingsObject.enableGuestAccess ?? false,
           defaultUserRole: settingsObject.defaultUserRole ?? UserRole.USER,
@@ -537,12 +533,7 @@ export const adminRouter = createTRPCRouter({
           smtpFromEmail: settingsObject.smtpFromEmail ?? "",
           smtpFromName: settingsObject.smtpFromName ?? "Cronium",
           smtpEnabled: settingsObject.smtpEnabled ?? false,
-
-          // Registration settings (handle legacy openRegistration field)
-          allowRegistration:
-            settingsObject.allowRegistration ??
-            settingsObject.openRegistration ??
-            false,
+          allowRegistration: settingsObject.allowRegistration ?? false,
           requireAdminApproval: settingsObject.requireAdminApproval ?? true,
 
           // AI settings

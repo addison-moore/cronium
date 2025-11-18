@@ -95,7 +95,6 @@ export interface UpdateSettingsInput {
   smtpFromAddress?: string;
   smtpUser?: string;
   smtpPassword?: string;
-  openRegistration?: boolean;
   webhookUrl?: string;
 }
 

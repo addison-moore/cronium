@@ -91,10 +91,6 @@ export const variableQuerySchema = z.object({
 
 // System settings schemas
 export const systemSettingsSchema = z.object({
-  maxUsers: z.number().min(1).max(1000).optional(),
-  maxEventsPerUser: z.number().min(1).max(10000).optional(),
-  maxWorkflowsPerUser: z.number().min(1).max(1000).optional(),
-  maxServersPerUser: z.number().min(1).max(100).optional(),
   enableRegistration: z.boolean().optional(),
   enableGuestAccess: z.boolean().optional(),
   defaultUserRole: z.nativeEnum(UserRole).optional(),
