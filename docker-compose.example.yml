@@ -26,6 +26,8 @@ services:
 
   cronium-app:
     image: ghcr.io/addison-moore/cronium-app:latest
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
@@ -51,6 +53,8 @@ services:
 
   cronium-orchestrator:
     image: ghcr.io/addison-moore/cronium-orchestrator:latest
+    env_file:
+      - .env
     depends_on:
       - cronium-app
       - valkey
@@ -65,10 +69,13 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    user: "0:0"
 
   cronium-runtime:
     image: ghcr.io/addison-moore/cronium-runtime:latest
+    env_file:
+      - .env
     depends_on:
       - cronium-app
       - valkey
