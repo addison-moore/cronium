@@ -318,8 +318,7 @@
       "FromEmailPlaceholder": "notifications@example.com",
       "FromName": "From Name",
       "FromNamePlaceholder": "Cronium Notifications",
-      "EnableEmail": "Enable email notifications",
-      "EnableEmailNotifications": "Enable email notifications",
+      "EnableEmailDescription": "Emails are sent automatically when SMTP credentials are configured. Provide valid credentials to enable notifications.",
       "SmtpUser": "SMTP Username",
       "SaveButton": "Save Email Settings"
     },

@@ -532,9 +532,8 @@ export const adminRouter = createTRPCRouter({
           smtpPassword: settingsObject.smtpPassword ?? "",
           smtpFromEmail: settingsObject.smtpFromEmail ?? "",
           smtpFromName: settingsObject.smtpFromName ?? "Cronium",
-          smtpEnabled: settingsObject.smtpEnabled ?? false,
           allowRegistration: settingsObject.allowRegistration ?? false,
-          requireAdminApproval: settingsObject.requireAdminApproval ?? true,
+          requireAdminApproval: settingsObject.requireAdminApproval ?? false,
 
           // AI settings
           aiEnabled: settingsObject.aiEnabled ?? false,

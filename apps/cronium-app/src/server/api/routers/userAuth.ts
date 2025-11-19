@@ -184,7 +184,21 @@ export const userAuthRouter = createTRPCRouter({
         });
 
         // Send password reset email
-        await sendPasswordResetEmail(email, resetToken);
+        try {
+          await sendPasswordResetEmail(email, resetToken);
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            error.message === "SMTP_CONFIG_MISSING"
+          ) {
+            throw new TRPCError({
+              code: "FAILED_PRECONDITION",
+              message:
+                "Email is not configured. Please contact your administrator.",
+            });
+          }
+          throw error;
+        }
 
         return {
           success: true,
@@ -192,6 +206,9 @@ export const userAuthRouter = createTRPCRouter({
             "If an account with that email exists, we've sent a password reset link.",
         };
       } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "An error occurred. Please try again.",

@@ -24,7 +24,6 @@ interface SystemSettings {
   smtpPassword?: string;
   smtpFromEmail?: string;
   smtpFromName?: string;
-  smtpEnabled?: boolean;
   allowRegistration?: boolean;
   requireAdminApproval?: boolean;
   aiEnabled?: boolean;
@@ -45,7 +44,6 @@ const smtpSettingsSchema = z.object({
   smtpPassword: z.string().optional(),
   smtpFromEmail: z.string().email("Invalid email address").or(z.literal("")),
   smtpFromName: z.string().optional(),
-  smtpEnabled: z.boolean().optional(),
 });
 type SmtpSettingsData = z.infer<typeof smtpSettingsSchema>;
 

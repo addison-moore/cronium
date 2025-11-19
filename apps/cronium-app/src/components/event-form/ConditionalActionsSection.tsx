@@ -377,9 +377,17 @@ export default function ConditionalActionsSection({
 
   // Update system SMTP settings when data loads
   useEffect(() => {
-    if (systemSettings) {
-      const smtpEnabled = systemSettings.data.smtpEnabled === "true";
-      setSystemSmtpEnabled(smtpEnabled);
+    if (systemSettings?.data) {
+      const settings = systemSettings.data as Record<string, unknown>;
+      const hasSystemSmtp =
+        Boolean(settings.smtpHost) &&
+        Boolean(settings.smtpPort) &&
+        Boolean(settings.smtpUser) &&
+        Boolean(settings.smtpPassword) &&
+        Boolean(settings.smtpFromEmail);
+      setSystemSmtpEnabled(hasSystemSmtp);
+    } else {
+      setSystemSmtpEnabled(false);
     }
   }, [systemSettings]);
 

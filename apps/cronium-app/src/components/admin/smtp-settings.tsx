@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTranslations } from "next-intl";
@@ -9,39 +9,16 @@ import { Mail, Save, Eye, EyeOff } from "lucide-react";
 import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
 import { Label } from "@cronium/ui";
-import { Switch } from "@cronium/ui";
 import { SettingsSection } from "./settings-section";
 
-const smtpSettingsSchema = z
-  .object({
-    smtpHost: z.string().optional(),
-    smtpPort: z.string().regex(/^\d+$/, "Port must be a number").optional(),
-    smtpUser: z.string().optional(),
-    smtpPassword: z.string().optional(),
-    smtpFromEmail: z.string().email("Invalid email address").or(z.literal("")),
-    smtpFromName: z.string().optional(),
-    smtpEnabled: z.boolean().optional(),
-  })
-  .refine(
-    (data) => {
-      // If SMTP is enabled, all fields are required
-      if (data.smtpEnabled) {
-        return (
-          data.smtpHost &&
-          data.smtpPort &&
-          data.smtpUser &&
-          data.smtpPassword &&
-          data.smtpFromEmail &&
-          data.smtpFromName
-        );
-      }
-      return true;
-    },
-    {
-      message: "All SMTP fields are required when email is enabled",
-      path: ["smtpEnabled"],
-    },
-  );
+const smtpSettingsSchema = z.object({
+  smtpHost: z.string().optional(),
+  smtpPort: z.string().regex(/^\d+$/, "Port must be a number").optional(),
+  smtpUser: z.string().optional(),
+  smtpPassword: z.string().optional(),
+  smtpFromEmail: z.string().email("Invalid email address").or(z.literal("")),
+  smtpFromName: z.string().optional(),
+});
 
 interface SystemSettings {
   smtpHost?: string;
@@ -50,7 +27,6 @@ interface SystemSettings {
   smtpPassword?: string;
   smtpFromEmail?: string;
   smtpFromName?: string;
-  smtpEnabled?: boolean;
 }
 
 interface SmtpSettingsProps {
@@ -72,7 +48,6 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
       smtpPassword: settings.smtpPassword ?? "",
       smtpFromEmail: settings.smtpFromEmail ?? "",
       smtpFromName: settings.smtpFromName ?? "",
-      smtpEnabled: settings.smtpEnabled ?? false,
     },
   });
 
@@ -85,7 +60,6 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
       smtpPassword: settings.smtpPassword ?? "",
       smtpFromEmail: settings.smtpFromEmail ?? "",
       smtpFromName: settings.smtpFromName ?? "",
-      smtpEnabled: settings.smtpEnabled ?? false,
     });
   }, [settings, form]);
 
@@ -229,20 +203,9 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
           </div>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <Controller
-            name="smtpEnabled"
-            control={form.control}
-            render={({ field }) => (
-              <Switch
-                id="smtpEnabled"
-                checked={field.value ?? false}
-                onCheckedChange={field.onChange}
-              />
-            )}
-          />
-          <Label htmlFor="smtpEnabled">{t("EmailSettings.EnableEmail")}</Label>
-        </div>
+        <p className="text-muted-foreground text-sm">
+          {t("EmailSettings.EnableEmailDescription")}
+        </p>
 
         <Button type="submit" className="flex items-center gap-2">
           <Save className="h-4 w-4" />

@@ -50,8 +50,6 @@ export async function getSmtpSettings() {
   });
 
   // Extract SMTP settings
-  const smtpEnabled =
-    decryptedSettings.find((s) => s.key === "smtpEnabled")?.value === "true";
   const smtpHost = decryptedSettings.find((s) => s.key === "smtpHost")?.value;
   const smtpPort = Number(
     decryptedSettings.find((s) => s.key === "smtpPort")?.value ?? 587,
@@ -72,7 +70,6 @@ export async function getSmtpSettings() {
     decryptedSettings.find((s) => s.key === "systemName")?.value ?? "Cronium";
 
   return {
-    enabled: smtpEnabled,
     host: smtpHost,
     port: smtpPort,
     user: smtpUser,
@@ -104,22 +101,17 @@ export async function sendEmail(
     } else {
       // Use system SMTP settings
       smtp = await getSmtpSettings();
-
-      // If SMTP is not enabled, log and return
-      if (!smtp.enabled) {
-        console.log(
-          "SMTP is not enabled. Skipping sending email to:",
-          message.to,
-        );
-        console.log("Email would have contained:", message.subject);
-        return false;
-      }
     }
 
     // Ensure we have required SMTP settings
-    if (!smtp.host || !smtp.user || !smtp.password) {
-      console.error("Missing required SMTP settings");
-      return false;
+    if (
+      !smtp.host ||
+      !smtp.port ||
+      !smtp.user ||
+      !smtp.password ||
+      !smtp.fromEmail
+    ) {
+      throw new Error("SMTP_CONFIG_MISSING");
     }
 
     // Create transport
@@ -145,6 +137,9 @@ export async function sendEmail(
     console.log("Email sent:", info.messageId);
     return true;
   } catch (error) {
+    if (error instanceof Error && error.message === "SMTP_CONFIG_MISSING") {
+      throw error;
+    }
     console.error("Error sending email:", error);
     return false;
   }

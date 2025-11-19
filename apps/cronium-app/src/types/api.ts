@@ -150,7 +150,6 @@ export interface DashboardStatsResponse extends ApiResponse {
 // Settings API Types
 export interface SystemSettingsResponse extends ApiResponse {
   settings: {
-    smtpEnabled: boolean;
     smtpHost?: string;
     smtpPort?: number;
     smtpUser?: string;

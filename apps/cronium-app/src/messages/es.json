@@ -404,7 +404,7 @@
       "SmtpPasswordPlaceholder": "Su contraseña de correo o contraseña de aplicación",
       "FromName": "Nombre del remitente",
       "FromNamePlaceholder": "Notificaciones del sistema",
-      "EnableEmailNotifications": "Activar notificaciones por correo",
+      "EnableEmailDescription": "Los correos se envían automáticamente cuando las credenciales SMTP están configuradas. Proporcione credenciales válidas para habilitar las notificaciones.",
       "SaveButton": "Guardar configuración de correo"
     },
     "SMTPSettings": "Configuración SMTP",

@@ -103,7 +103,6 @@ export const systemSettingsSchema = z.object({
   smtpPassword: z.string().optional(),
   smtpFromEmail: z.string().email().optional(),
   smtpFromName: z.string().optional(),
-  smtpEnabled: z.boolean().optional(),
   // Registration settings
   allowRegistration: z.boolean().optional(),
   requireAdminApproval: z.boolean().optional(),

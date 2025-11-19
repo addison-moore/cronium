@@ -18,6 +18,7 @@ import { Input } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useToast } from "@cronium/ui";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -29,6 +30,7 @@ export default function ForgotPassword() {
   const { locale } = useLanguage();
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submittedEmail, setSubmittedEmail] = useState("");
+  const { toast } = useToast();
 
   const form = useForm<FormData>({
     resolver: zodResolver(forgotPasswordSchema),
@@ -45,6 +47,12 @@ export default function ForgotPassword() {
       }
     },
     onError: (error) => {
+      toast({
+        title: "Unable to send email",
+        description:
+          error.message ?? "Email settings are not configured correctly.",
+        variant: "destructive",
+      });
       form.setError("root.general", {
         type: "manual",
         message: error.message ?? "An error occurred. Please try again.",
