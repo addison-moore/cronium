@@ -119,10 +119,9 @@ export default function SelfHostingPage() {
             <CardContent className="space-y-4">
               <ol className="text-muted-foreground list-decimal space-y-3 pl-6 text-sm">
                 <li>
-                  <strong>Create a working directory</strong>:
+                  <strong>Download the example Docker compose file</strong>:
                   <SimpleCodeBlock language="bash" className="mt-2">
-                    {`mkdir cronium-self-host && cd cronium-self-host
-curl -O https://raw.githubusercontent.com/addison-moore/cronium/main/docker-compose.example.yml`}
+                    {`curl -O https://raw.githubusercontent.com/addison-moore/cronium/main/docker-compose.example.yml`}
                   </SimpleCodeBlock>
                 </li>
                 <li>

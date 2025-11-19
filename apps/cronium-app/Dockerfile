@@ -67,8 +67,9 @@ RUN apk add --no-cache libc6-compat tini && \
     addgroup -g 1001 nodejs && \
     adduser -S nextjs -u 1001 -G nodejs
 
-# Copy built application
+# Copy built application assets (ensure public available at both root and app paths)
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/public ./apps/cronium-app/public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/.next/static ./apps/cronium-app/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/drizzle ./apps/cronium-app/drizzle
