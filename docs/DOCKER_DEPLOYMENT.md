@@ -268,7 +268,7 @@ pnpm --filter @cronium/app db:push
 
 ### 5. Create Admin User
 
-Open your browser to `http://localhost:3000`, choose **Sign Up**, and create the first admin account. Cronium automatically grants admin privileges to the first user.
+Open your browser to `http://localhost:3000`, choose **Sign Up**, and create the first admin account (if you didn’t opt into `AUTO_SEED_ADMIN`). Cronium automatically grants admin privileges to the first user. If you enabled bootstrap seeding, log in with the seeded credentials and immediately change the email/password once inside the dashboard.
 
 ## Verification
 

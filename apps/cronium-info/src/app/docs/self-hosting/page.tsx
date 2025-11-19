@@ -207,7 +207,9 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
               <code>docker-compose.yml</code> and adjust environment variables
               and volume mounts for your environment. The compose file deploys
               PostgreSQL, Valkey, the Cronium app, the orchestrator, and the
-              runtime service.
+              runtime service. SMTP is automatically used whenever credentials
+              are provided; missing credentials will disable outbound email and
+              surface warnings in the UI.
             </p>
             <SimpleCodeBlock language="yaml">
               {`

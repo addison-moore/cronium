@@ -127,6 +127,8 @@ postgresql://user:password@localhost:5432/cronium?sslmode=require
 | `SMTP_PASSWORD`   | SMTP password        | `string` | -                       | No       |
 | `SMTP_FROM_EMAIL` | Default sender email | `string` | `noreply@cronium.local` | No       |
 
+> Email is automatically enabled whenever valid SMTP credentials exist. If any of the above values are missing, Cronium will warn the user when an email action (e.g. password reset) is triggered.
+
 **Example configurations:**
 
 - Gmail: Port `465` (SSL) or `587` (TLS), use app-specific password
