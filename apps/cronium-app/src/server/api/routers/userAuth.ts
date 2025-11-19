@@ -192,7 +192,7 @@ export const userAuthRouter = createTRPCRouter({
             error.message === "SMTP_CONFIG_MISSING"
           ) {
             throw new TRPCError({
-              code: "FAILED_PRECONDITION",
+              code: "BAD_REQUEST",
               message:
                 "Email is not configured. Please contact your administrator.",
             });
