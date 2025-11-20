@@ -10,7 +10,6 @@ import { TimeUnit, RunLocation, type ConditionalAction } from "@/shared/schema";
 
 interface EventEditTabProps {
   event: Event;
-  langParam: string;
   onEventUpdate: (event: Event) => void;
   onRefreshLogs: () => void;
 }

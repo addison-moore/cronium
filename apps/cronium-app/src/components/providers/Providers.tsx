@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { NextAuthProvider } from "./NextAuthProvider";
 import { TrpcProvider } from "./TrpcProvider";
 import { ThemeProvider } from "./ThemeProvider";
-import { LanguageProvider } from "./language-provider";
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -15,7 +14,7 @@ export function Providers({ children }: { children: ReactNode }) {
           defaultTheme="system"
           enableSystem={true}
         >
-          <LanguageProvider>{children}</LanguageProvider>
+          {children}
         </ThemeProvider>
       </TrpcProvider>
     </NextAuthProvider>

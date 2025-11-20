@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useState } from "react";
 import { RefreshCw, FileText, Eye } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
@@ -31,10 +30,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@cronium/ui";
-import { useTranslations } from "next-intl";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { type Log } from "./types";
 import { formatDate as formatDateUtil } from "@/lib/utils";
+
+const copy = {
+  never: "Never",
+  executionLogs: "Execution Logs",
+  noLogsFound: "No logs found",
+  started: "Started",
+  ended: "Ended",
+  duration: "Duration",
+  output: "Output",
+  error: "Error",
+} as const;
 
 interface EventLogsTabProps {
   logs: Log[];
@@ -59,15 +68,13 @@ export function EventLogsTab({
   itemsPerPage,
   onPageSizeChange,
 }: EventLogsTabProps) {
-  const t = useTranslations("Events");
-  const params = useParams<{ lang: string }>();
   const router = useRouter();
   const [openQuickViewDialog, setOpenQuickViewDialog] = useState<number | null>(
     null,
   );
 
   const formatDate = (dateValue: string | Date | null | undefined) => {
-    if (!dateValue) return t("never");
+    if (!dateValue) return copy.never;
     return formatDateUtil(dateValue);
   };
 
@@ -186,7 +193,7 @@ export function EventLogsTab({
     <Card className="bg-secondary-bg">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
-          <CardTitle>{t("executionLogs")}</CardTitle>
+          <CardTitle>{copy.executionLogs}</CardTitle>
         </div>
         {onRefresh && (
           <Button
@@ -208,7 +215,7 @@ export function EventLogsTab({
           <div className="flex flex-col items-center justify-center py-10">
             <FileText className="text-muted-foreground mb-4 h-16 w-16" />
             <p className="text-muted-foreground text-center">
-              {t("noLogsFound")}
+              {copy.noLogsFound}
             </p>
           </div>
         ) : (
@@ -240,9 +247,7 @@ export function EventLogsTab({
                             label: "View Details",
                             icon: <FileText className="h-4 w-4" />,
                             onClick: () =>
-                              router.push(
-                                `/${params.lang}/dashboard/logs/${log.id}`,
-                              ),
+                              router.push(`/dashboard/logs/${log.id}`),
                           },
                         ]}
                         menuButtonLabel="Actions"
@@ -288,17 +293,17 @@ export function EventLogsTab({
                             </div>
                             <div>
                               <span className="font-medium">
-                                {t("started")}:
+                                {copy.started}:
                               </span>{" "}
                               {formatDate(log.startTime)}
                             </div>
                             <div>
-                              <span className="font-medium">{t("ended")}:</span>{" "}
+                              <span className="font-medium">{copy.ended}:</span>{" "}
                               {formatDate(log.endTime)}
                             </div>
                             <div>
                               <span className="font-medium">
-                                {t("duration")}:
+                                {copy.duration}:
                               </span>{" "}
                               {formatDuration(log.duration)}
                             </div>
@@ -307,7 +312,7 @@ export function EventLogsTab({
                           {log.output && (
                             <div className="space-y-2">
                               <h4 className="text-sm font-medium">
-                                {t("output")}:
+                                {copy.output}:
                               </h4>
                               <pre className="bg-muted max-h-[300px] overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
                                 {typeof log.output === "object" &&
@@ -333,7 +338,7 @@ export function EventLogsTab({
                           {log.error && (
                             <div className="space-y-2">
                               <h4 className="text-sm font-medium">
-                                {t("error")}:
+                                {copy.error}:
                               </h4>
                               <pre className="max-h-[300px] overflow-auto rounded-md border border-red-200 bg-red-50 p-3 text-xs whitespace-pre-wrap text-red-800">
                                 {typeof log.error === "object" &&

@@ -1,7 +1,5 @@
 "use client";
-
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useTranslations } from "next-intl";
 import { EventStatus } from "@/shared/schema";
 import type { TimeUnit, RunLocation, EventType } from "@/shared/schema";
 import { useToast } from "@cronium/ui";
@@ -28,6 +26,15 @@ import type {
 } from "@/components/event-list";
 import { trpc } from "@/lib/trpc";
 import { usePersistentPagination } from "@/hooks/use-persistent-pagination";
+
+const copy = {
+  eventExecutedTitle: "Event Executed",
+  deleteTitle: "Delete Event",
+  deleteDescription: "Are you sure you want to delete this event?",
+  cancel: "Cancel",
+  delete: "Delete",
+  deleting: "Deleting...",
+} as const;
 
 interface EventsListClientProps {
   initialEvents: Event[];
@@ -69,7 +76,6 @@ export function EventsListClient({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deleteEventId, setDeleteEventId] = useState<number | null>(null);
 
-  const t = useTranslations("Events");
   const { toast } = useToast();
 
   // Sync itemsPerPage from localStorage when it loads
@@ -105,7 +111,7 @@ export function EventsListClient({
   const executeEventMutation = trpc.events.execute.useMutation({
     onSuccess: () => {
       toast({
-        title: t("EventExecuted"),
+        title: copy.eventExecutedTitle,
         description: "Event execution initiated successfully.",
         variant: "success",
       });
@@ -847,14 +853,14 @@ export function EventsListClient({
       )}
 
       <ConfirmationDialog
-        title={t("DeleteEventConfirmation")}
-        description={t("DeleteEventDescription")}
+        title={copy.deleteTitle}
+        description={copy.deleteDescription}
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
         onConfirm={handleDelete}
-        cancelText={t("Cancel")}
-        confirmText={t("Delete")}
-        loadingText={t("Deleting")}
+        cancelText={copy.cancel}
+        confirmText={copy.delete}
+        loadingText={copy.deleting}
         variant="destructive"
       />
     </div>

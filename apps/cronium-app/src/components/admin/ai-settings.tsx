@@ -1,10 +1,8 @@
 "use client";
-
 import React from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useTranslations } from "next-intl";
 import { Sparkles, Save } from "lucide-react";
 import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
@@ -18,6 +16,15 @@ import {
   SelectValue,
 } from "@cronium/ui";
 import { SettingsSection } from "./settings-section";
+
+const copy = {
+  title: "AI Settings",
+  description: "Configure AI-assisted script generation features",
+  enableAi: "Enable AI features",
+  model: "AI Model",
+  apiKey: "OpenAI API Key",
+  save: "Save",
+} as const;
 
 const aiSettingsSchema = z
   .object({
@@ -56,9 +63,6 @@ interface AiSettingsProps {
 }
 
 export function AiSettings({ settings, onSave }: AiSettingsProps) {
-  const t = useTranslations("Admin");
-  const tCommon = useTranslations("Common");
-
   const form = useForm<z.infer<typeof aiSettingsSchema>>({
     resolver: zodResolver(aiSettingsSchema),
     defaultValues: {
@@ -79,8 +83,8 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
 
   return (
     <SettingsSection
-      title={t("AiSettings.Title")}
-      description={t("AiSettings.Description")}
+      title={copy.title}
+      description={copy.description}
       icon={Sparkles}
     >
       <form onSubmit={form.handleSubmit(onSave)} className="space-y-6">
@@ -96,7 +100,7 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
               />
             )}
           />
-          <Label htmlFor="aiEnabled">{t("AiSettings.EnableAi")}</Label>
+          <Label htmlFor="aiEnabled">{copy.enableAi}</Label>
         </div>
 
         {form.watch("aiEnabled") && (
@@ -106,7 +110,7 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
               control={form.control}
               render={({ field, fieldState }) => (
                 <div className="space-y-2">
-                  <Label htmlFor="aiModel">{t("AiSettings.Model")}</Label>
+                  <Label htmlFor="aiModel">{copy.model}</Label>
                   <Select
                     value={field.value ?? ""}
                     onValueChange={field.onChange}
@@ -140,7 +144,7 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
               control={form.control}
               render={({ field, fieldState }) => (
                 <div className="space-y-2">
-                  <Label htmlFor="openaiApiKey">{t("AiSettings.ApiKey")}</Label>
+                  <Label htmlFor="openaiApiKey">{copy.apiKey}</Label>
                   <Input
                     id="openaiApiKey"
                     type="password"
@@ -163,7 +167,7 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
 
         <Button type="submit" className="flex items-center gap-2">
           <Save className="h-4 w-4" />
-          {tCommon("Save")}
+          {copy.save}
         </Button>
       </form>
     </SettingsSection>

@@ -191,7 +191,7 @@ export async function sendPasswordResetEmail(
 
   // Create reset URL
   // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-  const resetUrl = `${baseUrl}/en/auth/reset-password?token=${resetToken}`;
+  const resetUrl = `${baseUrl}/auth/reset-password?token=${resetToken}`;
 
   // Get system name for personalization
   const allSettings = await db.select().from(systemSettings);

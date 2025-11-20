@@ -1,7 +1,5 @@
 "use client";
-
 import { useState } from "react";
-import { useTranslations } from "next-intl";
 import {
   EventStatus,
   TimeUnit,
@@ -28,6 +26,17 @@ import type {
 } from "@/components/event-list";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
+
+const copy = {
+  runSuccessTitle: "Event Triggered",
+  runSuccessDescription: "The event has been triggered successfully.",
+  errorTitle: "Error",
+  runError: "Failed to run event. Please try again.",
+  alphabetical: "Alphabetical",
+  dateCreated: "Date Created",
+  lastExecution: "Last Execution",
+  searchPlaceholder: "Search events...",
+} as const;
 
 interface ServerEventsListProps {
   serverId: number;
@@ -81,7 +90,6 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deleteEventId, setDeleteEventId] = useState<number | null>(null);
-  const t = useTranslations("Events");
   const { toast } = useToast();
 
   // tRPC queries for all events (will filter by server client-side)
@@ -103,16 +111,15 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
   const runEventMutation = trpc.events.execute.useMutation({
     onSuccess: () => {
       toast({
-        title: t("EventTriggered"),
-        description: t("EventTriggeredDescription"),
+        title: copy.runSuccessTitle,
+        description: copy.runSuccessDescription,
       });
       void refetchEvents();
     },
     onError: (error) => {
       toast({
-        title: t("Error"),
-        description:
-          error instanceof Error ? error.message : t("RunEventError"),
+        title: copy.errorTitle,
+        description: error instanceof Error ? error.message : copy.runError,
         variant: "destructive",
       });
     },
@@ -461,9 +468,9 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
 
   // Sort options for the sort dropdown
   const sortOptions = [
-    { value: "name", label: t("Alphabetical") ?? "Alphabetical" },
-    { value: "createdAt", label: t("DateCreated") ?? "Date Created" },
-    { value: "lastRunAt", label: t("LastExecution") ?? "Last Execution" },
+    { value: "name", label: copy.alphabetical },
+    { value: "createdAt", label: copy.dateCreated },
+    { value: "lastRunAt", label: copy.lastExecution },
   ];
 
   if (sortedEvents.length === 0 && !isLoading) {
@@ -487,7 +494,7 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
           <div className="relative">
             <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
             <Input
-              placeholder={t("SearchPlaceholder") ?? "Search events..."}
+              placeholder={copy.searchPlaceholder}
               value={filters.searchTerm}
               onChange={(e) => updateFilters({ searchTerm: e.target.value })}
               className="pl-10"

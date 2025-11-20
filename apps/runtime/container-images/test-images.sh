@@ -212,8 +212,8 @@ if [ "${BUILD_IMAGES}" = "true" ]; then
     
     # Build language images
     for lang in python nodejs bash; do
-        if [ -f "${SCRIPT_DIR}/${lang}/Dockerfile" ]; then
-            docker build -t "${IMAGE_PREFIX}/${lang}:${TAG}" "${SCRIPT_DIR}/${lang}" || test_fail "Failed to build $lang image"
+        if [ -f "${SCRIPT_DIR}/Dockerfile" ]; then
+            docker build -t "${IMAGE_PREFIX}:${TAG}" "${SCRIPT_DIR}" || test_fail "Failed to build $lang image"
         fi
     done
 fi

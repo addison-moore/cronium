@@ -1,8 +1,5 @@
-import createNextIntlPlugin from "next-intl/plugin";
 import { env } from "./src/env.mjs";
 import crypto from "crypto";
-
-const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 // Bundle analyzer configuration (optional)
 let withBundleAnalyzer = (config) => config;
@@ -18,7 +15,11 @@ try {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    instrumentationHook: true,
+    optimizePackageImports: [
+      "@radix-ui/react-*",
+      "lucide-react",
+      "@/components/ui/*",
+    ],
   },
   env: {
     PUBLIC_APP_URL: env.PUBLIC_APP_URL,
@@ -143,16 +144,6 @@ const nextConfig = {
     contentDispositionType: "attachment",
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
-  experimental: {
-    // PPR requires Next.js canary version, disabled for stable builds
-    // ppr: process.env.NODE_ENV === "production",
-    // Optimize package imports
-    optimizePackageImports: [
-      "@radix-ui/react-*",
-      "lucide-react",
-      "@/components/ui/*",
-    ],
-  },
   async headers() {
     return [
       {
@@ -167,7 +158,7 @@ const nextConfig = {
       },
       {
         // Cache documentation pages (with PPR)
-        source: "/:lang/docs/:path*",
+        source: "/docs/:path*",
         headers: [
           {
             key: "Cache-Control",
@@ -177,7 +168,7 @@ const nextConfig = {
       },
       {
         // Cache landing page (with PPR)
-        source: "/:lang",
+        source: "/",
         headers: [
           {
             key: "Cache-Control",
@@ -187,7 +178,7 @@ const nextConfig = {
       },
       {
         // No cache for dynamic pages (dashboard, auth, etc.)
-        source: "/:lang/(dashboard|auth)/:path*",
+        source: "/(dashboard|auth)/:path*",
         headers: [
           {
             key: "Cache-Control",
@@ -217,4 +208,4 @@ const nextConfig = {
   },
 };
 
-export default withBundleAnalyzer(withNextIntl(nextConfig));
+export default withBundleAnalyzer(nextConfig);

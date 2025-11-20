@@ -34,7 +34,6 @@ import { ComboBox } from "@cronium/ui";
 import { formatDate } from "@/lib/utils";
 import { Play, Search, X, ArrowUp, ArrowDown, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import { LogStatus } from "@/shared/schema";
 import type {
   WorkflowExecution,
@@ -65,7 +64,6 @@ export default function WorkflowExecutionHistory({
   workflowId,
   refreshTrigger,
 }: WorkflowExecutionHistoryProps) {
-  const params = useParams();
   const { toast } = useToast();
   const [selectedExecution, setSelectedExecution] =
     useState<ExecutionWithEvents | null>(null);
@@ -541,7 +539,7 @@ export default function WorkflowExecutionHistory({
                     {!workflowId && (
                       <TableCell>
                         <Link
-                          href={`/${String(params.lang)}/dashboard/workflows/${String(execution.workflowId)}`}
+                          href={`/dashboard/workflows/${String(execution.workflowId)}`}
                           className="hover:underline"
                         >
                           <div className="font-medium">
@@ -640,7 +638,7 @@ export default function WorkflowExecutionHistory({
                                         <div className="flex items-center justify-between">
                                           <div className="flex items-center gap-2">
                                             <Link
-                                              href={`/${String(params.lang)}/dashboard/events/${String(event.eventId)}`}
+                                              href={`/dashboard/events/${String(event.eventId)}`}
                                               className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
                                             >
                                               {(

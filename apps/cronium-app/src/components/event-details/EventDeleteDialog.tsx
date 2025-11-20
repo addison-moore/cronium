@@ -1,5 +1,4 @@
 "use client";
-
 import React from "react";
 import {
   AlertDialog,
@@ -11,7 +10,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@cronium/ui";
-import { useTranslations } from "next-intl";
+
+const copy = {
+  title: "Delete Event",
+  warning: "Are you sure you want to delete",
+  cancel: "Cancel",
+  delete: "Delete",
+  deleting: "Deleting...",
+} as const;
 
 interface EventDeleteDialogProps {
   isOpen: boolean;
@@ -28,20 +34,19 @@ export function EventDeleteDialog({
   isDeleting,
   eventName,
 }: EventDeleteDialogProps) {
-  const t = useTranslations("Events");
-
   return (
     <AlertDialog open={isOpen} onOpenChange={onClose}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{t("deleteEventConfirmation")}</AlertDialogTitle>
+          <AlertDialogTitle>{copy.title}</AlertDialogTitle>
           <AlertDialogDescription>
-            {t("deleteEventWarning", { eventName })}
+            {copy.warning} <strong>{eventName}</strong>? This action cannot be
+            undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isDeleting}>
-            {t("cancel")}
+            {copy.cancel}
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={(e) => {
@@ -51,7 +56,7 @@ export function EventDeleteDialog({
             className="bg-destructive hover:bg-destructive/90"
             disabled={isDeleting}
           >
-            {isDeleting ? t("deleting") : t("delete")}
+            {isDeleting ? copy.deleting : copy.delete}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

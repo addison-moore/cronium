@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useState } from "react";
 import { MonacoEditor, CodeViewer } from "@cronium/ui";
 import { EventType } from "@/shared/schema";
@@ -20,12 +19,33 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@cronium/ui";
-import { useTranslations } from "next-intl";
 import type { Event } from "./types";
 import { Save, Edit, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@cronium/ui";
 import { formatDate } from "@/lib/utils";
+
+const copy = {
+  method: "Method",
+  headers: "Headers",
+  key: "Key",
+  value: "Value",
+  body: "Body",
+  script: "Script",
+  name: "Name",
+  description: "Description",
+  type: "Type",
+  status: "Status",
+  active: "Active",
+  inactive: "Inactive",
+  schedule: "Schedule",
+  created: "Created",
+  updated: "Updated",
+  executions: "Executions",
+  scriptContent: "Script Content",
+  httpRequestDetails: "HTTP Request Details",
+  conditionalActions: "Conditional Actions",
+} as const;
 
 interface EventDetailsTabProps {
   event: Event;
@@ -40,7 +60,6 @@ export function EventDetailsTab({
   toggleAccordionItem,
   onEventUpdate,
 }: EventDetailsTabProps) {
-  const t = useTranslations("Events");
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(event.content ?? "");
@@ -126,7 +145,7 @@ export function EventDetailsTab({
     return (
       <div className="mt-5 space-y-4">
         <div className="flex items-center">
-          <span className="w-24 text-sm font-medium">{t("method")}:</span>
+          <span className="w-24 text-sm font-medium">{copy.method}:</span>
           <Badge className="border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100">
             {event.httpRequest.method}
           </Badge>
@@ -141,13 +160,13 @@ export function EventDetailsTab({
 
         {event.httpRequest.headers && event.httpRequest.headers.length > 0 && (
           <div className="space-y-2">
-            <span className="text-sm font-medium">{t("headers")}:</span>
+            <span className="text-sm font-medium">{copy.headers}:</span>
             <div className="border-border overflow-hidden rounded border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-1/3">{t("key")}</TableHead>
-                    <TableHead>{t("value")}</TableHead>
+                    <TableHead className="w-1/3">{copy.key}</TableHead>
+                    <TableHead>{copy.value}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -169,7 +188,7 @@ export function EventDetailsTab({
 
         {event.httpRequest.body && (
           <div className="space-y-2">
-            <span className="text-sm font-medium">{t("body")}:</span>
+            <span className="text-sm font-medium">{copy.body}:</span>
             <div className="border-border overflow-hidden rounded border">
               <CodeViewer
                 code={event.httpRequest.body}
@@ -196,7 +215,7 @@ export function EventDetailsTab({
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-sm font-medium">{t("script")}:</span>
+            <span className="text-sm font-medium">{copy.script}:</span>
             <div className="flex items-center space-x-2">
               <Badge variant="secondary">{event.type}</Badge>
               {event.servers && event.servers.length > 0 && (
@@ -290,13 +309,13 @@ export function EventDetailsTab({
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div className="space-y-4">
             <div>
-              <span className="text-sm font-medium">{t("name")}:</span>
+              <span className="text-sm font-medium">{copy.name}:</span>
               <p className="mt-1">{event.name}</p>
             </div>
 
             {Event.description && (
               <div>
-                <span className="text-sm font-medium">{t("description")}:</span>
+                <span className="text-sm font-medium">{copy.description}:</span>
                 <p className="text-muted-foreground mt-1">
                   {Event.description}
                 </p>
@@ -304,20 +323,20 @@ export function EventDetailsTab({
             )}
 
             <div>
-              <span className="text-sm font-medium">{t("type")}:</span>
+              <span className="text-sm font-medium">{copy.type}:</span>
               <div className="mt-1">
                 <Badge variant="secondary">{event.type}</Badge>
               </div>
             </div>
 
             <div>
-              <span className="text-sm font-medium">{t("status")}:</span>
+              <span className="text-sm font-medium">{copy.status}:</span>
               <div className="mt-1">
                 <Badge
                   variant={Event.active ? "default" : "secondary"}
                   className={Event.active ? "bg-green-100 text-green-800" : ""}
                 >
-                  {Event.active ? t("active") : t("inactive")}
+                  {Event.active ? copy.active : copy.inactive}
                 </Badge>
               </div>
             </div>
@@ -326,24 +345,24 @@ export function EventDetailsTab({
           <div className="space-y-4">
             {Event.schedule && (
               <div>
-                <span className="text-sm font-medium">{t("schedule")}:</span>
+                <span className="text-sm font-medium">{copy.schedule}:</span>
                 <p className="mt-1 font-mono text-sm">{Event.schedule}</p>
               </div>
             )}
 
             <div>
-              <span className="text-sm font-medium">{t("created")}:</span>
+              <span className="text-sm font-medium">{copy.created}:</span>
               <p className="mt-1 text-sm">{formatDate(event.createdAt)}</p>
             </div>
 
             <div>
-              <span className="text-sm font-medium">{t("updated")}:</span>
+              <span className="text-sm font-medium">{copy.updated}:</span>
               <p className="mt-1 text-sm">{formatDate(event.updatedAt)}</p>
             </div>
 
             {event.executionCount !== undefined && (
               <div>
-                <span className="text-sm font-medium">{t("executions")}:</span>
+                <span className="text-sm font-medium">{copy.executions}:</span>
                 <p className="mt-1">{event.executionCount}</p>
               </div>
             )}
@@ -368,21 +387,21 @@ export function EventDetailsTab({
           event.type,
         ) && (
           <AccordionItem value="script-content">
-            <AccordionTrigger>{t("scriptContent")}</AccordionTrigger>
+            <AccordionTrigger>{copy.scriptContent}</AccordionTrigger>
             <AccordionContent>{renderScriptDetails()}</AccordionContent>
           </AccordionItem>
         )}
 
         {event.type === EventType.HTTP_REQUEST && (
           <AccordionItem value="http-details">
-            <AccordionTrigger>{t("httpRequestDetails")}</AccordionTrigger>
+            <AccordionTrigger>{copy.httpRequestDetails}</AccordionTrigger>
             <AccordionContent>{renderHttpRequestDetails()}</AccordionContent>
           </AccordionItem>
         )}
 
         {Event.conditionalActions && Event.conditionalActions.length > 0 && (
           <AccordionItem value="conditional-actions">
-            <AccordionTrigger>{t("conditionalActions")}</AccordionTrigger>
+            <AccordionTrigger>{copy.conditionalActions}</AccordionTrigger>
             <AccordionContent>
               <div className="space-y-3">
                 {Event.conditionalActions.map((action, index) => (

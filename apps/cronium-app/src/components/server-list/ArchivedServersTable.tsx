@@ -30,12 +30,10 @@ import type { Server } from "@/shared/schema";
 
 interface ArchivedServersTableProps {
   servers: Server[];
-  lang: string;
 }
 
 export function ArchivedServersTable({
   servers: initialServers,
-  lang,
 }: ArchivedServersTableProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -57,7 +55,7 @@ export function ArchivedServersTable({
 
       // If needs reconfiguration, redirect to edit page
       if (data.requiresCredentials) {
-        router.push(`/${lang}/dashboard/servers/${variables.id}/edit`);
+        router.push(`/dashboard/servers/${variables.id}/edit`);
       }
     },
     onError: (error) => {

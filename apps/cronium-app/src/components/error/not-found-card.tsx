@@ -17,7 +17,6 @@ interface NotFoundCardProps {
   description?: string;
   showHomeButton?: boolean;
   showBackButton?: boolean;
-  lang?: string;
 }
 
 export function NotFoundCard({
@@ -25,9 +24,8 @@ export function NotFoundCard({
   description = "The page you're looking for doesn't exist or has been moved.",
   showHomeButton = true,
   showBackButton = true,
-  lang = "en",
 }: NotFoundCardProps) {
-  const homeHref = lang !== "en" ? `/${lang}/dashboard` : "/dashboard";
+  const homeHref = "/dashboard";
 
   return (
     <div className="flex min-h-[400px] items-center justify-center p-4">

@@ -25,7 +25,6 @@ export default function GlobalError({
             title="Critical Application Error"
             description="A critical error has occurred. This may be due to a system issue or an unexpected problem. Please try refreshing the page or contact support if the issue persists."
             showHomeButton={true}
-            lang="en"
           />
         </div>
       </body>

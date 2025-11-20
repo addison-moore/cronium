@@ -11,20 +11,18 @@ interface ServerDetailsHeaderProps {
     name: string;
     online?: boolean;
   };
-  langParam: string;
   onDelete: () => void;
 }
 
 export function ServerDetailsHeader({
   server,
-  langParam,
   onDelete,
 }: ServerDetailsHeaderProps) {
   return (
     <div className="mb-6 flex flex-col justify-between gap-4 lg:flex-row">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <Button variant="ghost" size="sm" asChild className="h-8 w-fit">
-          <Link href={`/${langParam}/dashboard/servers`}>
+          <Link href="/dashboard/servers">
             <ArrowLeft className="mr-1 h-4 w-4" />
             Back to Servers
           </Link>

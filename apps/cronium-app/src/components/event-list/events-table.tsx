@@ -1,8 +1,6 @@
 "use client";
-
 import { useState, useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { EventStatus } from "@/shared/schema";
 import { Button } from "@cronium/ui";
 import { Checkbox } from "@cronium/ui";
@@ -35,6 +33,29 @@ import { type Event, type ServerData } from "./types";
 import { formatDate } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 
+const copy = {
+  notScheduled: "Not Scheduled",
+  overdue: "Overdue",
+  lessThanMinute: "Less than a minute",
+  never: "Never",
+  eventName: "Event Name",
+  sharedEvent: "Shared Event",
+  server: "Server",
+  nextRun: "Next Run",
+  lastRun: "Last Run",
+  status: "Status",
+  runEvent: "Run Event",
+  viewDetails: "View Details",
+  fork: "Fork",
+  editEvent: "Edit Event",
+  duplicate: "Duplicate",
+  unarchive: "Unarchive",
+  archive: "Archive",
+  delete: "Delete",
+  noEventsFound: "No events found",
+  noEventsDescription: "There are no events matching your filters.",
+} as const;
+
 interface EventsTableProps {
   events: Event[];
   servers: ServerData[];
@@ -64,9 +85,7 @@ export function EventsTable({
   isLoading,
   searchTerm,
 }: EventsTableProps) {
-  const params = useParams<{ lang: string }>();
   const router = useRouter();
-  const t = useTranslations("Events");
   const { user } = useAuth();
   const [isClient, setIsClient] = useState(false);
 
@@ -75,7 +94,7 @@ export function EventsTable({
   }, []);
 
   const formatNextRunTime = (nextRunAt: string | null): string => {
-    if (!nextRunAt) return t("NotScheduled");
+    if (!nextRunAt) return copy.notScheduled;
 
     // Only calculate relative time on the client to avoid hydration mismatches
     if (!isClient) {
@@ -86,31 +105,27 @@ export function EventsTable({
     const now = new Date();
 
     // If it's in the past, show "Overdue"
-    if (nextRun < now) return t("Status.Overdue");
+    if (nextRun < now) return copy.overdue;
 
     const diffMs = nextRun.getTime() - now.getTime();
     const diffMins = Math.floor(diffMs / 60000);
 
-    if (diffMins < 1) return t("LessThanMinute");
-    if (diffMins < 60)
-      return diffMins > 1
-        ? t("MinutesPlural", { count: diffMins })
-        : t("MinuteSingular", { count: diffMins });
+    if (diffMins < 1) return copy.lessThanMinute;
+    if (diffMins < 60) {
+      return diffMins === 1 ? "1 minute" : `${diffMins} minutes`;
+    }
 
     const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24)
-      return diffHours > 1
-        ? t("HoursPlural", { count: diffHours })
-        : t("HourSingular", { count: diffHours });
+    if (diffHours < 24) {
+      return diffHours === 1 ? "1 hour" : `${diffHours} hours`;
+    }
 
     const diffDays = Math.floor(diffHours / 24);
-    return diffDays > 1
-      ? t("DaysPlural", { count: diffDays })
-      : t("DaySingular", { count: diffDays });
+    return diffDays === 1 ? "1 day" : `${diffDays} days`;
   };
 
   const formatLastRunTime = (lastRunAt: string | null): string => {
-    if (!lastRunAt) return t("Never");
+    if (!lastRunAt) return copy.never;
     return formatDate(lastRunAt);
   };
 
@@ -183,7 +198,7 @@ export function EventsTable({
     },
     {
       key: "name",
-      header: t("EventName"),
+      header: copy.eventName,
       cell: (event) => {
         const isSharedEvent = event.userId !== user?.id;
         return (
@@ -191,9 +206,7 @@ export function EventsTable({
             <div className="mr-2">
               <EventTypeIcon type={event.type} size={16} />
             </div>
-            <StandardizedTableLink
-              href={`/${params.lang}/dashboard/events/${event.id}`}
-            >
+            <StandardizedTableLink href={`/dashboard/events/${event.id}`}>
               {event.name}
             </StandardizedTableLink>
             {isClient && isSharedEvent && (
@@ -203,7 +216,7 @@ export function EventsTable({
                     <Share2 className="text-muted-foreground ml-2 h-4 w-4" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>{t("SharedEvent")}</p>
+                    <p>{copy.sharedEvent}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -214,7 +227,7 @@ export function EventsTable({
     },
     {
       key: "server",
-      header: t("Server"),
+      header: copy.server,
       cell: (event) => (
         <span className="text-muted-foreground text-sm">
           {formatServerLocation(event)}
@@ -223,17 +236,17 @@ export function EventsTable({
     },
     {
       key: "schedule",
-      header: t("NextRun"),
+      header: copy.nextRun,
       cell: (event) => formatNextRunTime(event.nextRunAt),
     },
     {
       key: "lastRun",
-      header: t("LastRun"),
+      header: copy.lastRun,
       cell: (event) => formatLastRunTime(event.lastRunAt),
     },
     {
       key: "status",
-      header: t("StatusLabel"),
+      header: copy.status,
       cell: (event) => (
         <ClickableStatusBadge
           currentStatus={event.status}
@@ -253,14 +266,14 @@ export function EventsTable({
           className="h-8 w-8 cursor-pointer rounded-full border-green-500 p-0 transition-colors hover:bg-green-50 hover:text-green-600 dark:border-green-600 dark:hover:bg-green-900/30 dark:hover:text-green-500"
           onClick={() => onEventRun(event.id)}
           disabled={isRunning[event.id]}
-          title={t("RunEvent")}
+          title={copy.runEvent}
         >
           {isRunning[event.id] ? (
             <RefreshCw className="h-4 w-4 animate-spin text-green-500" />
           ) : (
             <Play className="h-4 w-4 text-green-500" />
           )}
-          <span className="sr-only">{t("RunEvent")}</span>
+          <span className="sr-only">{copy.runEvent}</span>
         </Button>
       ),
       className: "text-right w-[60px]",
@@ -279,13 +292,12 @@ export function EventsTable({
             // Limited actions for shared events
             return [
               {
-                label: t("ViewDetails"),
+                label: copy.viewDetails,
                 icon: <Eye className="h-4 w-4" />,
-                onClick: () =>
-                  router.push(`/${params.lang}/dashboard/events/${event.id}`),
+                onClick: () => router.push(`/dashboard/events/${event.id}`),
               },
               {
-                label: t("Fork"),
+                label: copy.fork,
                 icon: <GitBranch className="h-4 w-4" />,
                 onClick: () => onEventFork(event.id),
               },
@@ -295,28 +307,24 @@ export function EventsTable({
           // Full actions for owned events
           return [
             {
-              label: t("ViewDetails"),
+              label: copy.viewDetails,
               icon: <Eye className="h-4 w-4" />,
-              onClick: () =>
-                router.push(`/${params.lang}/dashboard/events/${event.id}`),
+              onClick: () => router.push(`/dashboard/events/${event.id}`),
             },
             {
-              label: t("EditEvent"),
+              label: copy.editEvent,
               icon: <Edit className="h-4 w-4" />,
-              onClick: () =>
-                router.push(
-                  `/${params.lang}/dashboard/events/${event.id}#edit`,
-                ),
+              onClick: () => router.push(`/dashboard/events/${event.id}#edit`),
             },
             {
-              label: t("Duplicate"),
+              label: copy.duplicate,
               icon: <Copy className="h-4 w-4" />,
               onClick: () => onEventDuplicate(event.id),
             },
             ...(event.status === EventStatus.ARCHIVED
               ? [
                   {
-                    label: t("UnarchiveEvent"),
+                    label: copy.unarchive,
                     icon: <RefreshCw className="h-4 w-4" />,
                     onClick: () =>
                       onEventStatusChange(event.id, EventStatus.ACTIVE),
@@ -324,14 +332,14 @@ export function EventsTable({
                 ]
               : [
                   {
-                    label: t("ArchiveEvent"),
+                    label: copy.archive,
                     icon: <Archive className="h-4 w-4" />,
                     onClick: () =>
                       onEventStatusChange(event.id, EventStatus.ARCHIVED),
                   } as StandardizedTableAction,
                 ]),
             {
-              label: t("DeleteEvent"),
+              label: copy.delete,
               icon: <Trash2 className="h-4 w-4" />,
               onClick: () => onEventDelete(event.id),
               variant: "destructive" as const,
@@ -341,7 +349,7 @@ export function EventsTable({
         }}
         isLoading={isLoading}
         emptyMessage={
-          searchTerm ? t("NoEventsFound") : t("NoEventsDescription")
+          searchTerm ? copy.noEventsFound : copy.noEventsDescription
         }
       />
     </div>

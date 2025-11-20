@@ -4,7 +4,7 @@ _backups/
 _packages/
 _duplicates/
 _plans/
-logs/
+/logs/
 .next/
 .config/
 .cache/
@@ -34,11 +34,8 @@ data/orchestrator/
 dist/
 build/
 
-GEMINI.md
-.claude
-
 # TypeScript build info
-tsconfig.tsbuildinfo
+*/tsconfig.tsbuildinfo
 
 # Orchestrator
 apps/orchestrator/tmp/
@@ -47,3 +44,4 @@ apps/orchestrator/tmp/
 AGENTS.md
 CLAUDE.md
 GEMINI.md
+.claude

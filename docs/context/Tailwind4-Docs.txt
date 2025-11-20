@@ -2998,7 +2998,7 @@ If you just want to set some defaults for the page (like the text color, backgro
 
 HTML
 <!doctype html>
-<html lang="en" class="bg-gray-100 font-serif text-gray-900">
+<html class="bg-gray-100 font-serif text-gray-900">
   <!-- ... -->
 </html>
 This keeps your base styling decisions in your markup alongside all of your other styles, instead of hiding them in a separate file.

@@ -1,15 +1,27 @@
 "use client";
-
 import React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useTranslations } from "next-intl";
 import { Mail, Save, Eye, EyeOff } from "lucide-react";
 import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
 import { Label } from "@cronium/ui";
 import { SettingsSection } from "./settings-section";
+
+const copy = {
+  title: "Email Settings",
+  description: "Configure SMTP details for transactional emails.",
+  hostLabel: "SMTP Host",
+  portLabel: "SMTP Port",
+  userLabel: "SMTP Username",
+  passwordLabel: "SMTP Password",
+  fromEmailLabel: "From Email",
+  fromNameLabel: "From Name",
+  enableDescription:
+    "Provide valid SMTP credentials to enable email notifications.",
+  save: "Save",
+} as const;
 
 const smtpSettingsSchema = z.object({
   smtpHost: z.string().optional(),
@@ -35,8 +47,6 @@ interface SmtpSettingsProps {
 }
 
 export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
-  const t = useTranslations("Admin");
-  const tCommon = useTranslations("Common");
   const [showPassword, setShowPassword] = React.useState(false);
 
   const form = useForm<z.infer<typeof smtpSettingsSchema>>({
@@ -65,14 +75,14 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
 
   return (
     <SettingsSection
-      title={t("EmailSettings.Title")}
-      description={t("EmailSettings.Description")}
+      title={copy.title}
+      description={copy.description}
       icon={Mail}
     >
       <form onSubmit={form.handleSubmit(onSave)} className="space-y-6">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="smtpHost">{t("EmailSettings.SmtpHost")}</Label>
+            <Label htmlFor="smtpHost">{copy.hostLabel}</Label>
             <Input
               id="smtpHost"
               placeholder="smtp.gmail.com"
@@ -89,7 +99,7 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="smtpPort">{t("EmailSettings.SmtpPort")}</Label>
+            <Label htmlFor="smtpPort">{copy.portLabel}</Label>
             <Input
               id="smtpPort"
               placeholder="587"
@@ -106,7 +116,7 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="smtpUser">{t("EmailSettings.SmtpUser")}</Label>
+            <Label htmlFor="smtpUser">{copy.userLabel}</Label>
             <Input
               id="smtpUser"
               placeholder="your-email@gmail.com"
@@ -123,9 +133,7 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="smtpPassword">
-              {t("EmailSettings.SmtpPassword")}
-            </Label>
+            <Label htmlFor="smtpPassword">{copy.passwordLabel}</Label>
             <div className="relative">
               <Input
                 id="smtpPassword"
@@ -162,9 +170,7 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="smtpFromEmail">
-              {t("EmailSettings.FromEmail")}
-            </Label>
+            <Label htmlFor="smtpFromEmail">{copy.fromEmailLabel}</Label>
             <Input
               id="smtpFromEmail"
               type="email"
@@ -184,7 +190,7 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="smtpFromName">{t("EmailSettings.FromName")}</Label>
+            <Label htmlFor="smtpFromName">{copy.fromNameLabel}</Label>
             <Input
               id="smtpFromName"
               placeholder="Your Company"
@@ -204,12 +210,12 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
         </div>
 
         <p className="text-muted-foreground text-sm">
-          {t("EmailSettings.EnableEmailDescription")}
+          {copy.enableDescription}
         </p>
 
         <Button type="submit" className="flex items-center gap-2">
           <Save className="h-4 w-4" />
-          {tCommon("Save")}
+          {copy.save}
         </Button>
       </form>
     </SettingsSection>

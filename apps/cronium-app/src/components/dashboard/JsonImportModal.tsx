@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -79,7 +79,6 @@ export function JsonImportModal({ isOpen, onClose }: JsonImportModalProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const router = useRouter();
-  const params = useParams();
   const createEventMutation = trpc.events.create.useMutation();
 
   const handleSubmit = async () => {
@@ -318,8 +317,7 @@ export function JsonImportModal({ isOpen, onClose }: JsonImportModalProps) {
       onClose();
 
       // Redirect to the newly created event's details page
-      const lang = params.lang as string;
-      router.push(`/${lang}/dashboard/events/${newEvent?.id ?? ""}`);
+      router.push(`/dashboard/events/${newEvent?.id ?? ""}`);
     } catch (error) {
       console.error("Error creating event from JSON:", error);
       toast({

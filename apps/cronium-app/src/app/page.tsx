@@ -1,7 +1,13 @@
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
-// Root page - middleware will handle the redirect
-export default function RootPage() {
-  // This should never be reached due to middleware redirects
-  return notFound();
+export default async function RootPage() {
+  const session = await getServerSession(authOptions);
+
+  if (session) {
+    redirect("/dashboard");
+  }
+
+  redirect("/auth/signin");
 }

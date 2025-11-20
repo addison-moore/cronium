@@ -9,7 +9,6 @@ import { ClickableStatusBadge } from "@/components/ui/clickable-status-badge";
 
 interface WorkflowDetailsHeaderProps {
   workflow: Workflow;
-  langParam: string;
   onDelete: () => void;
   onRun: () => void;
   onStatusChange: (newStatus: EventStatus) => Promise<void>;
@@ -18,7 +17,6 @@ interface WorkflowDetailsHeaderProps {
 
 export function WorkflowDetailsHeader({
   workflow,
-  langParam,
   onDelete,
   onRun,
   onStatusChange,
@@ -28,7 +26,7 @@ export function WorkflowDetailsHeader({
     <div className="mb-6 flex justify-between gap-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <Button variant="ghost" size="sm" asChild className="h-8 w-fit">
-          <Link href={`/${langParam}/dashboard/workflows`}>
+          <Link href="/dashboard/workflows">
             <ArrowLeft className="mr-1 h-4 w-4" />
             Back to Workflows
           </Link>

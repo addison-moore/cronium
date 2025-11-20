@@ -17,9 +17,7 @@ const customJestConfig = {
     "^@server/(.*)$": "<rootDir>/src/server/$1",
     "^@lib/(.*)$": "<rootDir>/src/lib/$1",
   },
-  transformIgnorePatterns: [
-    "/node_modules/(?!next-intl|@hookform|next-auth|superjson)",
-  ],
+  transformIgnorePatterns: ["/node_modules/(?!@hookform|next-auth|superjson)"],
 };
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async

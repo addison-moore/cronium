@@ -1,12 +1,10 @@
 "use client";
-
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Activity, AlertCircle, Edit, Logs, Lock } from "lucide-react";
 import { Tabs, TabsContent, TabsList, Tab } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { toast } from "@cronium/ui";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
 import { useAuth } from "@/hooks/useAuth";
@@ -25,12 +23,22 @@ import { EventStatus, type Log } from "@/shared/schema";
 import type { Event } from "./types";
 import { Spinner } from "@cronium/ui";
 
+const copy = {
+  loading: "Loading event details...",
+  notFoundTitle: "Event Not Found",
+  notFoundDescription: "This event either does not exist or you lack access.",
+  overviewTab: "Overview",
+  editTab: "Edit",
+  logsTab: "Logs",
+  cannotEditShared: "You can't edit this shared event",
+  sharedDescription: "Only the event owner can make changes to shared events.",
+} as const;
+
 interface EventDetailsProps {
   eventId: string;
-  langParam: string;
 }
 
-export function EventDetails({ eventId, langParam }: EventDetailsProps) {
+export function EventDetails({ eventId }: EventDetailsProps) {
   // Convert eventId to number for tRPC
   const parsedId = parseInt(eventId);
   // Ensure we have a valid number, not NaN
@@ -63,7 +71,6 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
   });
 
   const router = useRouter();
-  const t = useTranslations("Events");
 
   // tRPC queries
   const {
@@ -102,7 +109,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
         description: "Event has been successfully deleted.",
         variant: "success",
       });
-      router.push(`/${langParam}/dashboard/events`);
+      router.push("/dashboard/events");
     },
   });
 
@@ -408,7 +415,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
           <p className="mb-4 text-gray-600 dark:text-gray-400">
             The provided event ID is not valid.
           </p>
-          <Link href={`/${langParam}/dashboard/events`}>
+          <Link href="/dashboard/events">
             <Button>Back to Events</Button>
           </Link>
         </div>
@@ -422,7 +429,7 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
       <div className="container mx-auto py-6">
         <div className="flex items-center justify-center">
           <Spinner size="lg" />
-          <span className="ml-2">{t("LoadingEvent")}</span>
+          <span className="ml-2">{copy.loading}</span>
         </div>
       </div>
     );
@@ -435,12 +442,12 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
         <div className="text-center">
           <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-500" />
           <h1 className="mb-2 text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {t("EventNotFound")}
+            {copy.notFoundTitle}
           </h1>
           <p className="mb-4 text-gray-600 dark:text-gray-400">
-            {t("EventNotFoundDescription")}
+            {copy.notFoundDescription}
           </p>
-          <Link href={`/${langParam}/dashboard/events`}>
+          <Link href="/dashboard/events">
             <Button>Back to Events</Button>
           </Link>
         </div>
@@ -509,7 +516,6 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
           onRun={handleRunEvent}
           onStatusChange={handleStatusChange}
           isRunning={isRunning}
-          langParam={langParam}
         />
       )}
 
@@ -521,21 +527,21 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
           <Tab
             value="overview"
             icon={Activity}
-            label={t("Overview")}
+            label={copy.overviewTab}
             className="flex items-center gap-2"
           />
           {event.userId === user?.id && (
             <Tab
               value="edit"
               icon={Edit}
-              label={t("Edit")}
+              label={copy.editTab}
               className="flex items-center gap-2"
             />
           )}
           <Tab
             value="logs"
             icon={Logs}
-            label={t("Logs")}
+            label={copy.logsTab}
             className="flex items-center gap-2"
           />
         </TabsList>
@@ -547,7 +553,6 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
               onRefresh={async (): Promise<void> => {
                 await refetchEvent();
               }}
-              langParam={langParam}
               onResetCounter={handleResetCounter}
               isResettingCounter={isResettingCounter}
             />
@@ -558,7 +563,6 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
           {transformedEvent && event.userId === user?.id ? (
             <EventEditTab
               event={transformedEvent}
-              langParam={langParam}
               onEventUpdate={handleEventUpdateSuccess}
               onRefreshLogs={(): void => {
                 void refetchEvent();
@@ -568,11 +572,9 @@ export function EventDetails({ eventId, langParam }: EventDetailsProps) {
             <div className="bg-muted/50 rounded-lg p-8 text-center">
               <Lock className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
               <h3 className="mb-2 text-lg font-semibold">
-                {t("CannotEditSharedEvent")}
+                {copy.cannotEditShared}
               </h3>
-              <p className="text-muted-foreground">
-                {t("SharedEventEditDescription")}
-              </p>
+              <p className="text-muted-foreground">{copy.sharedDescription}</p>
             </div>
           )}
         </TabsContent>

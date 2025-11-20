@@ -98,12 +98,6 @@ Object.defineProperty(global, "crypto", {
   },
 });
 
-// Mock next-intl
-jest.mock("next-intl", () => ({
-  NextIntlClientProvider: ({ children }) => children,
-  useTranslations: () => (key) => key,
-}));
-
 // Suppress console warnings in tests
 const originalError = console.error;
 beforeAll(() => {

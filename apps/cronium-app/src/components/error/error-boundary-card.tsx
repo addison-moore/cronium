@@ -18,7 +18,6 @@ interface ErrorBoundaryCardProps {
   title?: string;
   description?: string;
   showHomeButton?: boolean;
-  lang?: string;
 }
 
 export function ErrorBoundaryCard({
@@ -27,7 +26,6 @@ export function ErrorBoundaryCard({
   title = "Something went wrong!",
   description = "An error occurred while loading this page. Please try again.",
   showHomeButton = false,
-  lang = "en",
 }: ErrorBoundaryCardProps) {
   useEffect(() => {
     // Log the error to an error reporting service
@@ -62,7 +60,7 @@ export function ErrorBoundaryCard({
             </Button>
             {showHomeButton && (
               <Button asChild variant="outline" className="flex-1">
-                <Link href={`/${lang}`}>
+                <Link href="/">
                   <Home className="mr-2 h-4 w-4" />
                   Go home
                 </Link>

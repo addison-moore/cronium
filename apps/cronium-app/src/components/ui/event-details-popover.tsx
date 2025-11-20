@@ -69,7 +69,7 @@ export function EventDetailsPopover({
             <div className="flex items-center gap-2">
               <EventTypeIcon type={eventType} size={20} />
               <Link
-                href={`/en/dashboard/events/${eventId}`}
+                href={`/dashboard/events/${eventId}`}
                 className="hover:text-primary flex items-center gap-1 text-lg font-semibold transition-colors"
                 onClick={() => setOpen(false)}
               >
@@ -179,7 +179,7 @@ export function EventDetailsPopover({
               size="sm"
               onClick={() => setOpen(false)}
             >
-              <Link href={`/en/dashboard/events/${eventId}`}>
+              <Link href={`/dashboard/events/${eventId}`}>
                 <ExternalLink className="mr-2 h-4 w-4" />
                 View Full Details
               </Link>

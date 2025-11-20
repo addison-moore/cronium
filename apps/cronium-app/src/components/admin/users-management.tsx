@@ -434,7 +434,7 @@ export function UsersManagement({
                   <TableCell>
                     <div>
                       <StandardizedTableLink
-                        href={`/en/dashboard/admin/users/${user.id}`}
+                        href={`/dashboard/admin/users/${user.id}`}
                       >
                         {user.email}
                       </StandardizedTableLink>

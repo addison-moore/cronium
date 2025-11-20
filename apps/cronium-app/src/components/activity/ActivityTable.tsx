@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { FileText, RefreshCw, Eye } from "lucide-react";
 import {
   Card,
@@ -100,7 +100,6 @@ export function ActivityTable({
   onPageSizeChange,
   className = "",
 }: ActivityTableProps) {
-  const params = useParams<{ lang: string }>();
   const router = useRouter();
   const [internalIsRefreshing, setInternalIsRefreshing] = useState(false);
   const [openQuickViewDialog, setOpenQuickViewDialog] = useState<number | null>(
@@ -274,7 +273,7 @@ export function ActivityTable({
                   <TableRow key={activity.id}>
                     <TableCell className="font-medium">
                       <StandardizedTableLink
-                        href={`/${params.lang}/dashboard/events/${activity.eventId}`}
+                        href={`/dashboard/events/${activity.eventId}`}
                       >
                         {activity.eventName}
                       </StandardizedTableLink>
@@ -307,9 +306,7 @@ export function ActivityTable({
                             label: "View Details",
                             icon: <FileText className="h-4 w-4" />,
                             onClick: () =>
-                              router.push(
-                                `/${params.lang}/dashboard/logs/${activity.id}`,
-                              ),
+                              router.push(`/dashboard/logs/${activity.id}`),
                           },
                         ]}
                         menuButtonLabel="Actions"

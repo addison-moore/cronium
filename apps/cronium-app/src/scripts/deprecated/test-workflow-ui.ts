@@ -348,7 +348,7 @@ async function runWorkflowTests() {
   console.log("   - Error messages for failed steps");
   console.log("   - Execution history tracking");
   console.log("\n✅ Test workflows created successfully!");
-  console.log("🔗 Access at: http://localhost:5001/en/dashboard/workflows");
+  console.log("🔗 Access at: http://localhost:5001/dashboard/workflows");
 }
 
 // Run the tests

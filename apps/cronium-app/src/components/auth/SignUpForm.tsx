@@ -6,8 +6,7 @@ import Link from "next/link";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { registerUser } from "@/app/[lang]/(auth)/auth/signup/actions";
-import { useLanguage } from "@/components/providers/language-provider";
+import { registerUser } from "@/app/(auth)/auth/signup/actions";
 import {
   Form,
   FormControl,
@@ -38,9 +37,28 @@ const signupSchema = z
 
 type FormData = z.infer<typeof signupSchema>;
 
+const copy = {
+  successTitle: "Registration Successful",
+  redirectMessage: "Redirecting you to the sign-in page...",
+  signInNow: "Sign in now",
+  formTitle: "Create a new account",
+  alreadyHaveAccount: "Already have an account?",
+  signInLink: "Sign In",
+  errorHeading: "Error",
+  usernameLabel: "Username",
+  usernamePlaceholder: "username",
+  emailLabel: "Email address",
+  emailPlaceholder: "you@example.com",
+  passwordLabel: "Password",
+  confirmPasswordLabel: "Confirm Password",
+  submitIdle: "Create Account",
+  submitBusy: "Creating account...",
+  registrationFailed: "Registration failed. Please try again.",
+  unexpectedError: "An unexpected error occurred. Please try again.",
+};
+
 export default function SignUpForm() {
   const router = useRouter();
-  const { locale, t } = useLanguage();
 
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
@@ -73,24 +91,24 @@ export default function SignUpForm() {
       if (!result.success) {
         setError("root.serverError", {
           type: "manual",
-          message: result.error ?? t("Auth.RegistrationFailed"),
+          message: result.error ?? copy.registrationFailed,
         });
         return;
       }
 
       // Registration successful
-      setSuccessMessage(result.message ?? t("Auth.RegistrationSuccessful"));
+      setSuccessMessage(result.message ?? copy.successTitle);
       setRegistrationComplete(true);
 
       // After a delay, redirect to sign in page
       setTimeout(() => {
-        router.push(`/${locale}/auth/signin`);
+        router.push("/auth/signin");
       }, 3000);
     } catch (error) {
       console.error("Registration error:", error);
       setError("root.serverError", {
         type: "manual",
-        message: t("Auth.UnexpectedError"),
+        message: copy.unexpectedError,
       });
     }
   };
@@ -107,17 +125,15 @@ export default function SignUpForm() {
               Cronium
             </h1>
             <h2 className="mt-6 text-3xl font-bold tracking-tight text-green-600">
-              {t("Auth.RegistrationSuccessful")}
+              {copy.successTitle}
             </h2>
             <p className="mt-2 text-sm text-gray-600">{successMessage}</p>
-            <p className="mt-2 text-sm text-gray-500">
-              {t("Auth.AccountCreatedRedirect")}
-            </p>
+            <p className="mt-2 text-sm text-gray-500">{copy.redirectMessage}</p>
             <Link
-              href={`/${locale}/auth/signin`}
+              href="/auth/signin"
               className="bg-primary dark:bg-secondary text-primary-foreground dark:text-secondary-foreground hover:bg-primary/90 dark:hover:bg-secondary/90 mt-4 inline-block rounded-md border border-transparent px-4 py-2 text-sm font-medium"
             >
-              {t("Auth.SignInNow")}
+              {copy.signInNow}
             </Link>
           </div>
         </div>
@@ -133,15 +149,15 @@ export default function SignUpForm() {
             Cronium
           </h1>
           <h2 className="mt-6 text-3xl font-bold tracking-tight">
-            {t("Auth.CreateAccount")}
+            {copy.formTitle}
           </h2>
           <p className="mt-2 text-sm text-gray-500">
-            {t("Auth.AlreadyHaveAccount")}{" "}
+            {copy.alreadyHaveAccount}{" "}
             <Link
-              href={`/${locale}/auth/signin`}
+              href="/auth/signin"
               className="text-primary hover:text-primary/80 dark:text-secondary dark:hover:text-secondary/80 font-medium"
             >
-              {t("Auth.SignIn")}
+              {copy.signInLink}
             </Link>
           </p>
         </div>
@@ -151,7 +167,7 @@ export default function SignUpForm() {
             <div className="flex">
               <div className="ml-3">
                 <h3 className="text-sm font-medium text-red-800">
-                  {t("Common.Error")}
+                  {copy.errorHeading}
                 </h3>
                 <div className="mt-2 text-sm text-red-700">
                   <p>{errors.root.serverError.message}</p>
@@ -170,7 +186,7 @@ export default function SignUpForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel htmlFor="username">
-                      {t("Auth.Username")}
+                      {copy.usernameLabel}
                     </FormLabel>
                     <FormControl>
                       <Input
@@ -179,7 +195,7 @@ export default function SignUpForm() {
                         type="text"
                         autoComplete="username"
                         required
-                        placeholder={t("Auth.UsernamePlaceholder")}
+                        placeholder={copy.usernamePlaceholder}
                       />
                     </FormControl>
                     <FormMessage />
@@ -192,9 +208,7 @@ export default function SignUpForm() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel htmlFor="email">
-                      {t("Auth.EmailAddress")}
-                    </FormLabel>
+                    <FormLabel htmlFor="email">{copy.emailLabel}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -202,7 +216,7 @@ export default function SignUpForm() {
                         type="email"
                         autoComplete="email"
                         required
-                        placeholder={t("Auth.EmailPlaceholder")}
+                        placeholder={copy.emailPlaceholder}
                       />
                     </FormControl>
                     <FormMessage />
@@ -216,7 +230,7 @@ export default function SignUpForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel htmlFor="password">
-                      {t("Auth.Password")}
+                      {copy.passwordLabel}
                     </FormLabel>
                     <FormControl>
                       <Input
@@ -239,7 +253,7 @@ export default function SignUpForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel htmlFor="confirmPassword">
-                      {t("Auth.ConfirmPassword")}
+                      {copy.confirmPasswordLabel}
                     </FormLabel>
                     <FormControl>
                       <Input
@@ -259,9 +273,7 @@ export default function SignUpForm() {
 
             <div>
               <Button type="submit" disabled={isSubmitting} className="w-full">
-                {isSubmitting
-                  ? t("Auth.CreatingAccount")
-                  : t("Auth.CreateAccount")}
+                {isSubmitting ? copy.submitBusy : copy.submitIdle}
               </Button>
             </div>
           </form>

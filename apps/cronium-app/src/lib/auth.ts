@@ -4,15 +4,6 @@ import { compare } from "bcrypt";
 import { storage } from "@/server/storage";
 import { UserStatus } from "@/shared/schema";
 
-// Helper function to get the locale from a URL path
-const getLocaleFromPath = (path: string | null): string => {
-  if (!path) return "en"; // Default to English if no path
-
-  // Extract locale from the path (e.g., "/es/dashboard" -> "es")
-  const match = /^\/([a-z]{2})(?:\/|$)/.exec(path);
-  return match?.[1] ?? "en";
-};
-
 export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/auth/signin",
@@ -112,25 +103,14 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
     async redirect({ url, baseUrl }) {
-      // If the url is absolute and from our site (starts with baseUrl)
-      // or is a relative url (starts with /)
-      if (url.startsWith(baseUrl) || url.startsWith("/")) {
-        // Check if the URL is a default dashboard URL without a locale
-        if (url === "/dashboard" || url.startsWith("/dashboard/")) {
-          // If this is a callback from signin page, check the referer to get the locale
-          const referer =
-            typeof window !== "undefined" ? document.referrer : null;
-          const locale = getLocaleFromPath(referer);
-
-          // Add the locale to the URL
-          return `/${locale}${url}`;
-        }
-
-        // Return the URL as-is if it already has a locale or it's not a dashboard URL
+      if (url.startsWith(baseUrl)) {
         return url;
       }
 
-      // For external URLs, return the baseUrl (don't allow redirecting to external sites)
+      if (url.startsWith("/")) {
+        return url;
+      }
+
       return baseUrl;
     },
   },

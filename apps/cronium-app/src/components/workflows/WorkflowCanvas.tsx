@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
   ReactFlow,
@@ -38,7 +37,6 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { useTranslations } from "next-intl";
 import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
 import {
@@ -51,6 +49,17 @@ import { toast } from "@cronium/ui";
 import { ConnectionType } from "@/shared/schema";
 import { EventTypeIcon } from "@/components/ui/event-type-icon";
 import { EventDetailsPopover } from "@/components/ui/event-details-popover";
+
+const copy = {
+  emptyTitle: "Build your workflow",
+  emptyDescription:
+    "Drag events from the right sidebar onto the canvas to define execution order.",
+  noEventsHint:
+    "You can reuse the same event multiple times or connect different nodes with success/failure paths.",
+  availableEvents: "Available Events",
+  noEventsAvailable: "No events available",
+  createEventsFirst: "Create an event before building a workflow.",
+} as const;
 
 // Validation functions for workflow integrity
 const validateWorkflowStructure = (
@@ -190,7 +199,6 @@ export default function WorkflowCanvas({
   isSaving = false,
   hasUnsavedChanges = false,
 }: WorkflowCanvasProps) {
-  const t = useTranslations("Workflows");
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -874,15 +882,13 @@ export default function WorkflowCanvas({
                 <div className="bg-primary/10 mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full">
                   <Plus className="text-primary h-6 w-6" />
                 </div>
-                <h3 className="mb-2 text-lg font-medium">
-                  {t("EmptyCanvasTitle")}
-                </h3>
+                <h3 className="mb-2 text-lg font-medium">{copy.emptyTitle}</h3>
                 <p className="text-muted-foreground mb-4">
-                  {t("EmptyCanvasDescription")}
+                  {copy.emptyDescription}
                 </p>
                 {availableEvents.length === 0 && (
                   <p className="text-muted-foreground border-border mt-4 border-t pt-4 text-xs">
-                    {t("NoEventsHint")}
+                    {copy.noEventsHint}
                   </p>
                 )}
               </div>
@@ -1022,7 +1028,7 @@ export default function WorkflowCanvas({
                     className={`flex items-center ${sidebarOpen ? "justify-between" : "justify-center"}`}
                   >
                     {sidebarOpen && (
-                      <h3 className="font-medium">{t("AvailableEvents")}</h3>
+                      <h3 className="font-medium">{copy.availableEvents}</h3>
                     )}
                     <Button
                       variant="ghost"
@@ -1140,8 +1146,8 @@ export default function WorkflowCanvas({
                     ) : (
                       <div className="text-muted-foreground p-4 text-center text-sm">
                         <AlertCircle className="mx-auto mb-2 h-4 w-4" />
-                        <p>{t("NoEventsAvailable")}</p>
-                        <p className="mt-1 text-xs">{t("CreateEventsFirst")}</p>
+                        <p>{copy.noEventsAvailable}</p>
+                        <p className="mt-1 text-xs">{copy.createEventsFirst}</p>
                       </div>
                     )}
                   </div>

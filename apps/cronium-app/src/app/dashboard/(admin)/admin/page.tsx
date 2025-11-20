@@ -1,0 +1,368 @@
+"use client";
+import { Tabs, TabsContent, TabsList, Tab } from "@cronium/ui";
+import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
+import { Mail, Users, Sparkles, UserCog, Shield } from "lucide-react";
+import { z } from "zod";
+import { UserStatus } from "@/shared/schema";
+import type { UserRole } from "@/shared/schema";
+import {
+  SmtpSettings,
+  RegistrationSettings,
+  AiSettings,
+  UsersManagement,
+  RolesManagement,
+} from "@/components/admin";
+import { trpc } from "@/lib/trpc";
+import { QUERY_OPTIONS } from "@/trpc/shared";
+import { toast } from "@cronium/ui";
+
+interface SystemSettings {
+  smtpHost?: string;
+  smtpPort?: string;
+  smtpUser?: string;
+  smtpPassword?: string;
+  smtpFromEmail?: string;
+  smtpFromName?: string;
+  allowRegistration?: boolean;
+  requireAdminApproval?: boolean;
+  aiEnabled?: boolean;
+  aiModel?: string;
+  openaiApiKey?: string;
+  enableRegistration?: boolean;
+  enableGuestAccess?: boolean;
+  defaultUserRole?: UserRole;
+  sessionTimeout?: number;
+  logRetentionDays?: number;
+}
+
+// Validation schemas
+const smtpSettingsSchema = z.object({
+  smtpHost: z.string().optional(),
+  smtpPort: z.string().regex(/^\d+$/, "Port must be a number").optional(),
+  smtpUser: z.string().optional(),
+  smtpPassword: z.string().optional(),
+  smtpFromEmail: z.string().email("Invalid email address").or(z.literal("")),
+  smtpFromName: z.string().optional(),
+});
+type SmtpSettingsData = z.infer<typeof smtpSettingsSchema>;
+
+const registrationSettingsSchema = z.object({
+  allowRegistration: z.boolean().optional(),
+  requireAdminApproval: z.boolean().optional(),
+});
+type RegistrationSettingsData = z.infer<typeof registrationSettingsSchema>;
+
+const aiSettingsSchema = z.object({
+  aiEnabled: z.boolean().optional(),
+  aiModel: z.string().optional(),
+  openaiApiKey: z.string().optional(),
+});
+type AiSettingsData = z.infer<typeof aiSettingsSchema>;
+
+const adminCopy = {
+  title: "Administration",
+  description:
+    "Configure system settings, manage users, and adjust access controls.",
+  tabs: {
+    email: "Email Settings",
+    registration: "Registration",
+    ai: "AI Assistant",
+    users: "Users",
+    roles: "Roles",
+  },
+};
+
+export default function AdminPage() {
+  // Hash-based tab navigation
+  const { activeTab, changeTab } = useHashTabNavigation({
+    defaultTab: "smtp",
+    validTabs: ["smtp", "registration", "ai", "users", "roles"],
+  });
+
+  // tRPC queries and mutations
+  const { data: systemSettings, refetch: refetchSettings } =
+    trpc.admin.getSystemSettings.useQuery(undefined, QUERY_OPTIONS.static);
+
+  const {
+    data: usersData,
+    isLoading: isUsersLoading,
+    refetch: refetchUsers,
+  } = trpc.admin.getUsers.useQuery(
+    {
+      limit: 100,
+      offset: 0,
+    },
+    QUERY_OPTIONS.dynamic,
+  );
+
+  const updateSystemSettingsMutation =
+    trpc.admin.updateSystemSettings.useMutation({
+      onSuccess: () => {
+        toast({
+          title: "Settings saved",
+          description: "System settings have been updated successfully.",
+        });
+        void refetchSettings();
+      },
+    });
+
+  const inviteUserMutation = trpc.admin.inviteUser.useMutation({
+    onSuccess: (response) => {
+      toast({
+        title: "Success",
+        description: `Invitation sent to ${String(response.data.email ?? "user")}`,
+      });
+      void refetchUsers();
+    },
+  });
+
+  const updateUserMutation = trpc.admin.updateUser.useMutation({
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "User updated successfully",
+      });
+      void refetchUsers();
+    },
+  });
+
+  const toggleUserStatusMutation = trpc.admin.toggleUserStatus.useMutation({
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "User status updated successfully",
+      });
+      void refetchUsers();
+    },
+  });
+
+  const bulkUserOperationMutation = trpc.admin.bulkUserOperation.useMutation({
+    onSuccess: (data) => {
+      const successCount = data.results.filter((r) => r.success).length;
+      const failureCount = data.results.filter((r) => !r.success).length;
+
+      if (failureCount === 0) {
+        toast({
+          title: "Success",
+          description: `Operation completed successfully on ${successCount} users`,
+        });
+      } else {
+        toast({
+          title: "Partial Success",
+          description: `${successCount} successful, ${failureCount} failed`,
+          variant: "destructive",
+        });
+      }
+      void refetchUsers();
+    },
+  });
+
+  const resendInvitationMutation = trpc.admin.resendInvitation.useMutation({
+    onSuccess: (response) => {
+      toast({
+        title: "Success",
+        description: `Invitation sent to ${response.email ?? "user"}`,
+      });
+      void refetchUsers();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message ?? "Failed to resend invitation",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const users = usersData?.users ?? [];
+  // Extract settings from the response wrapper
+  const settings =
+    (systemSettings?.data as SystemSettings) ?? ({} as SystemSettings);
+
+  // Fetch roles using tRPC
+  const {
+    data: roles,
+    isLoading: isRolesLoading,
+    refetch: refetchRoles,
+  } = trpc.admin.getRoles.useQuery(undefined, QUERY_OPTIONS.stable);
+
+  const updateRolePermissionsMutation =
+    trpc.admin.updateRolePermissions.useMutation({
+      onSuccess: () => {
+        toast({
+          title: "Success",
+          description: "Role permissions updated successfully",
+        });
+        void refetchRoles();
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: error.message ?? "Failed to update role permissions",
+          variant: "destructive",
+        });
+      },
+    });
+
+  async function saveSmtpSettings(data: SmtpSettingsData): Promise<void> {
+    // Validate the data using the schema
+    const validatedData = smtpSettingsSchema.parse(data);
+    // Ensure smtpPort is always a string
+    updateSystemSettingsMutation.mutate({
+      ...settings,
+      ...validatedData,
+      smtpPort: validatedData.smtpPort
+        ? String(validatedData.smtpPort)
+        : undefined,
+    });
+  }
+
+  async function saveRegistrationSettings(
+    data: RegistrationSettingsData,
+  ): Promise<void> {
+    // Validate the data using the schema
+    const validatedData = registrationSettingsSchema.parse(data);
+    updateSystemSettingsMutation.mutate({
+      ...settings,
+      ...validatedData,
+    });
+  }
+
+  async function saveAiSettings(data: AiSettingsData): Promise<void> {
+    // Validate the data using the schema
+    const validatedData = aiSettingsSchema.parse(data);
+    updateSystemSettingsMutation.mutate({
+      ...settings,
+      ...validatedData,
+    });
+  }
+
+  async function handleInviteUser(data: {
+    email: string;
+    role: UserRole;
+  }): Promise<void> {
+    inviteUserMutation.mutate(data);
+  }
+
+  async function handleDeleteUser(userId: string): Promise<void> {
+    // Using bulk operation for delete
+    bulkUserOperationMutation.mutate({
+      userIds: [userId],
+      operation: "delete",
+    });
+  }
+
+  async function handleUpdateUserStatus(
+    userId: string,
+    status: UserStatus,
+  ): Promise<void> {
+    toggleUserStatusMutation.mutate({ id: userId, status });
+  }
+
+  async function handleUpdateUserRole(
+    userId: string,
+    role: UserRole,
+  ): Promise<void> {
+    updateUserMutation.mutate({ id: userId, role });
+  }
+
+  async function handleResendInvitation(userId: string): Promise<void> {
+    resendInvitationMutation.mutate({ id: userId });
+  }
+
+  async function handleApproveUser(userId: string): Promise<void> {
+    toggleUserStatusMutation.mutate({ id: userId, status: UserStatus.ACTIVE });
+  }
+
+  async function handleDenyUser(userId: string): Promise<void> {
+    bulkUserOperationMutation.mutate({
+      userIds: [userId],
+      operation: "delete",
+    });
+  }
+
+  async function handleUpdateRole(
+    roleId: number,
+    permissions: {
+      console: boolean;
+      monitoring: boolean;
+      localServerAccess: boolean;
+    },
+  ): Promise<void> {
+    updateRolePermissionsMutation.mutate({ roleId, permissions });
+  }
+
+  return (
+    <div className="container mx-auto space-y-8 py-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">{adminCopy.title}</h1>
+          <p className="text-gray-500">{adminCopy.description}</p>
+        </div>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={changeTab} className="w-full">
+        <TabsList>
+          <Tab value="smtp" icon={Mail} label={adminCopy.tabs.email} />
+          <Tab
+            value="registration"
+            icon={Users}
+            label={adminCopy.tabs.registration}
+          />
+          <Tab value="ai" icon={Sparkles} label={adminCopy.tabs.ai} />
+          <Tab value="users" icon={UserCog} label={adminCopy.tabs.users} />
+          <Tab value="roles" icon={Shield} label={adminCopy.tabs.roles} />
+        </TabsList>
+
+        <TabsContent value="smtp">
+          <SmtpSettings settings={settings} onSave={saveSmtpSettings} />
+        </TabsContent>
+
+        <TabsContent value="registration">
+          <RegistrationSettings
+            settings={settings}
+            onSave={saveRegistrationSettings}
+          />
+        </TabsContent>
+
+        <TabsContent value="ai">
+          <AiSettings settings={settings} onSave={saveAiSettings} />
+        </TabsContent>
+
+        <TabsContent value="users">
+          <UsersManagement
+            users={users.map((user) => ({
+              ...user,
+              email: user.email ?? "",
+              createdAt: user.createdAt.toISOString(),
+              updatedAt: user.updatedAt.toISOString(),
+              lastLogin: user.lastLogin?.toISOString() ?? null,
+            }))}
+            isLoading={isUsersLoading}
+            onRefresh={async () => {
+              await refetchUsers();
+            }}
+            onInviteUser={handleInviteUser}
+            onDeleteUser={handleDeleteUser}
+            onUpdateUserStatus={handleUpdateUserStatus}
+            onUpdateUserRole={handleUpdateUserRole}
+            onResendInvitation={handleResendInvitation}
+            onApproveUser={handleApproveUser}
+            onDenyUser={handleDenyUser}
+          />
+        </TabsContent>
+
+        <TabsContent value="roles">
+          <RolesManagement
+            roles={roles?.items ?? []}
+            isLoading={isRolesLoading}
+            onRefresh={async () => {
+              await refetchRoles();
+            }}
+            onUpdateRole={handleUpdateRole}
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

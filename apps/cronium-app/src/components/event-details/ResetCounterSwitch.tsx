@@ -11,13 +11,11 @@ import { trpc } from "@/lib/trpc";
 interface ResetCounterSwitchProps {
   eventId: number;
   initialValue: boolean;
-  langParam: string;
 }
 
 export function ResetCounterSwitch({
   eventId,
   initialValue,
-  langParam,
 }: ResetCounterSwitchProps) {
   const [isChecked, setIsChecked] = useState(initialValue);
   const router = useRouter();
@@ -36,7 +34,7 @@ export function ResetCounterSwitch({
       router.refresh();
 
       // Navigate back to the event detail page
-      router.push(`/${langParam}/dashboard/events/${eventId}`);
+      router.push(`/dashboard/events/${eventId}`);
     },
     onError: (error) => {
       console.error("Error saving reset counter setting:", error);

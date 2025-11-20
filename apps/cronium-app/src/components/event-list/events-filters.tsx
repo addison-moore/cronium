@@ -1,6 +1,4 @@
 "use client";
-
-import { useTranslations } from "next-intl";
 import { EventStatus, EventType } from "@/shared/schema";
 import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
@@ -21,6 +19,25 @@ import {
   type EventListFilters,
 } from "./types";
 
+const copy = {
+  allTags: "All Tags",
+  alphabetical: "Alphabetical",
+  dateCreated: "Date Created",
+  lastExecution: "Last Execution",
+  searchPlaceholder: "Search events...",
+  allTypes: "All Types",
+  node: "Node.js",
+  python: "Python",
+  bash: "Bash",
+  httpRequest: "HTTP Request",
+  allStatuses: "All Statuses",
+  statusActive: "Active",
+  statusPaused: "Paused",
+  statusDraft: "Draft",
+  statusArchived: "Archived",
+  allServers: "All Servers",
+} as const;
+
 interface EventsFiltersProps {
   filters: EventListFilters;
   onFiltersChange: (filters: Partial<EventListFilters>) => void;
@@ -38,8 +55,6 @@ export function EventsFilters({
   servers,
   workflows,
 }: EventsFiltersProps) {
-  const t = useTranslations("Events");
-
   // Extract all unique tags from events for filter options
   const allTags = Array.from(
     new Set(
@@ -51,7 +66,7 @@ export function EventsFilters({
 
   // Prepare tag options for ComboBox
   const tagOptions = [
-    { label: t("AllTags"), value: "all" },
+    { label: copy.allTags, value: "all" },
     ...allTags.map((tag) => ({ label: tag, value: tag })),
   ];
 
@@ -66,9 +81,9 @@ export function EventsFilters({
 
   // Define filter options for the filter bar
   const sortOptions = [
-    { value: "name", label: t("Alphabetical") || "Alphabetical" },
-    { value: "createdAt", label: t("DateCreated") || "Date Created" },
-    { value: "lastRunAt", label: t("LastExecution") || "Last Execution" },
+    { value: "name", label: copy.alphabetical },
+    { value: "createdAt", label: copy.dateCreated },
+    { value: "lastRunAt", label: copy.lastExecution },
   ];
 
   return (
@@ -80,7 +95,7 @@ export function EventsFilters({
           <div className="relative">
             <Search className="text-muted-foreground absolute top-2.5 left-2.5 h-4 w-4" />
             <Input
-              placeholder={t("SearchPlaceholder")}
+              placeholder={copy.searchPlaceholder}
               value={filters.searchTerm}
               onChange={(e) => {
                 onFiltersChange({ searchTerm: e.target.value });
@@ -158,14 +173,14 @@ export function EventsFilters({
             }}
           >
             <SelectTrigger className="focus:ring-primary/20 text-foreground h-10 w-full rounded-md transition-all focus:ring-2">
-              <SelectValue placeholder={t("AllTypes")} />
+              <SelectValue placeholder={copy.allTypes} />
             </SelectTrigger>
             <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
               <SelectItem
                 value="all"
                 className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm font-medium"
               >
-                {t("AllTypes")}
+                {copy.allTypes}
               </SelectItem>
               <SelectItem
                 value={EventType.NODEJS}
@@ -177,7 +192,7 @@ export function EventsFilters({
                     size={16}
                     className="mr-2"
                   />
-                  {t("NodeJS")}
+                  {copy.node}
                 </div>
               </SelectItem>
               <SelectItem
@@ -190,7 +205,7 @@ export function EventsFilters({
                     size={16}
                     className="mr-2"
                   />
-                  {t("Python")}
+                  {copy.python}
                 </div>
               </SelectItem>
               <SelectItem
@@ -203,7 +218,7 @@ export function EventsFilters({
                     size={16}
                     className="mr-2"
                   />
-                  {t("Bash")}
+                  {copy.bash}
                 </div>
               </SelectItem>
               <SelectItem
@@ -216,7 +231,7 @@ export function EventsFilters({
                     size={16}
                     className="mr-2"
                   />
-                  {t("HttpRequest")}
+                  {copy.httpRequest}
                 </div>
               </SelectItem>
             </SelectContent>
@@ -232,14 +247,14 @@ export function EventsFilters({
             }}
           >
             <SelectTrigger className="focus:ring-primary/20 text-foreground h-10 w-full rounded-md transition-all focus:ring-2">
-              <SelectValue placeholder={t("AllStatuses")} />
+              <SelectValue placeholder={copy.allStatuses} />
             </SelectTrigger>
             <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
               <SelectItem
                 value="all"
                 className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm font-medium"
               >
-                {t("AllStatuses")}
+                {copy.allStatuses}
               </SelectItem>
               <SelectItem
                 value={EventStatus.ACTIVE}
@@ -247,7 +262,7 @@ export function EventsFilters({
               >
                 <div className="flex items-center">
                   <span className="mr-2 flex h-2 w-2 rounded-full bg-green-500"></span>
-                  {t("StatusActive")}
+                  {copy.statusActive}
                 </div>
               </SelectItem>
               <SelectItem
@@ -256,7 +271,7 @@ export function EventsFilters({
               >
                 <div className="flex items-center">
                   <span className="mr-2 flex h-2 w-2 rounded-full bg-yellow-500"></span>
-                  {t("StatusPaused")}
+                  {copy.statusPaused}
                 </div>
               </SelectItem>
               <SelectItem
@@ -265,7 +280,7 @@ export function EventsFilters({
               >
                 <div className="flex items-center">
                   <span className="mr-2 flex h-2 w-2 rounded-full bg-gray-500"></span>
-                  {t("StatusDraft")}
+                  {copy.statusDraft}
                 </div>
               </SelectItem>
               <div className="border-border my-1 border-t"></div>
@@ -275,7 +290,7 @@ export function EventsFilters({
               >
                 <div className="flex items-center">
                   <span className="mr-2 flex h-2 w-2 rounded-full bg-slate-400"></span>
-                  {t("StatusArchived")}
+                  {copy.statusArchived}
                 </div>
               </SelectItem>
             </SelectContent>
@@ -291,14 +306,14 @@ export function EventsFilters({
             }}
           >
             <SelectTrigger className="focus:ring-primary/20 text-foreground h-10 w-full rounded-md transition-all focus:ring-2">
-              <SelectValue placeholder={t("AllServers")} />
+              <SelectValue placeholder={copy.allServers} />
             </SelectTrigger>
             <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
               <SelectItem
                 value="all"
                 className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm font-medium"
               >
-                {t("AllServers")}
+                {copy.allServers}
               </SelectItem>
               <SelectItem
                 value="local"
@@ -347,7 +362,7 @@ export function EventsFilters({
             onChange={(value) => {
               onFiltersChange({ tagFilter: value });
             }}
-            placeholder={t("AllTags")}
+            placeholder={copy.allTags}
             emptyMessage="No tags found"
             className="w-full"
           />

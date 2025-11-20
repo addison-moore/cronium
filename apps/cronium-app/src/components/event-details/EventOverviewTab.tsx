@@ -1,15 +1,43 @@
 "use client";
-
 import React from "react";
 import { Server, CheckCircle2, RefreshCw, Info, Tag } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { Badge } from "@cronium/ui";
-import { useTranslations } from "next-intl";
 import { type Event } from "./types";
 import { EventTypeIcon } from "@/components/ui/event-type-icon";
 import WorkflowsCard from "./WorkflowsCard";
 import { formatDate as formatDateUtil } from "@/lib/utils";
+
+const copy = {
+  never: "Never",
+  every: "Every",
+  eventInfo: "Event Information",
+  eventName: "Event Name",
+  eventId: "Event ID",
+  tags: "Tags",
+  scriptType: "Event Type",
+  scheduleInfo: "Schedule Information",
+  schedule: "Schedule",
+  lastRun: "Last Run",
+  nextRun: "Next Run",
+  timeout: "Timeout",
+  executionInfo: "Execution Information",
+  executionLocation: "Execution Location",
+  retryAttempts: "Retry Attempts",
+  executionStats: "Execution Stats",
+  successful: "Successful",
+  failed: "Failed",
+  total: "Total",
+  executionCounter: "Execution Counter",
+  resetting: "Resetting...",
+  resetCounter: "Reset Counter",
+  maxExecutions: "Max Executions",
+  unlimited: "Unlimited",
+  resetCounterOnActive: "Reset Counter on Activation",
+  enabled: "Enabled",
+  disabled: "Disabled",
+} as const;
 
 interface EventOverviewTabProps {
   event: Event;
@@ -17,7 +45,6 @@ interface EventOverviewTabProps {
   isResettingCounter: boolean;
   isEventLoaded?: boolean;
   onRefresh?: () => Promise<void>;
-  langParam?: string;
 }
 
 export function EventOverviewTab({
@@ -26,12 +53,9 @@ export function EventOverviewTab({
   isResettingCounter,
   isEventLoaded = true,
   onRefresh: _onRefresh,
-  langParam: _langParam,
 }: EventOverviewTabProps) {
-  const t = useTranslations("Events");
-
   const formatDate = (dateString: string | null) => {
-    if (!dateString) return t("never");
+    if (!dateString) return copy.never;
     return formatDateUtil(dateString);
   };
 
@@ -44,7 +68,7 @@ export function EventOverviewTab({
       );
     }
 
-    return `${t("every")} ${event.scheduleNumber} ${event.scheduleUnit.toLowerCase()}`;
+    return `${copy.every} ${event.scheduleNumber} ${event.scheduleUnit.toLowerCase()}`;
   };
 
   return (
@@ -56,7 +80,7 @@ export function EventOverviewTab({
             <CardTitle className="text-base">
               <div className="flex items-center">
                 <Info className="mr-2 h-5 w-5 text-blue-500" />
-                {t("eventInfo")}
+                {copy.eventInfo}
               </div>
             </CardTitle>
           </CardHeader>
@@ -65,12 +89,12 @@ export function EventOverviewTab({
             <div className="border-border space-y-3 border-b pb-3">
               <div className="text-sm">
                 <span className="text-muted-foreground">
-                  {t("eventName")}:{" "}
+                  {copy.eventName}:{" "}
                 </span>
                 <span className="font-medium">{event.name}</span>
               </div>
               <div className="text-sm">
-                <span className="text-muted-foreground">{t("eventId")}: </span>
+                <span className="text-muted-foreground">{copy.eventId}: </span>
                 <span className="bg-muted rounded p-1 font-mono text-xs">
                   {event.id}
                 </span>
@@ -79,7 +103,7 @@ export function EventOverviewTab({
                 Array.isArray(event.tags) &&
                 event.tags.length > 0 && (
                   <div className="text-sm">
-                    <span className="text-muted-foreground">{t("tags")}: </span>
+                    <span className="text-muted-foreground">{copy.tags}: </span>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {event.tags.map((tag: string, index: number) => (
                         <Badge
@@ -96,7 +120,7 @@ export function EventOverviewTab({
                 )}
               <div className="text-sm">
                 <span className="text-muted-foreground">
-                  {t("scriptType")}:{" "}
+                  {copy.scriptType}:{" "}
                 </span>
                 <span className="flex items-center gap-1.5 font-medium">
                   <EventTypeIcon type={event.type} size={16} />
@@ -109,26 +133,26 @@ export function EventOverviewTab({
             <div className="space-y-3 pb-3">
               <h4 className="text-muted-foreground flex items-center text-sm font-medium">
                 <RefreshCw className="mr-1.5 h-4 w-4" />
-                {t("scheduleInfo")}
+                {copy.scheduleInfo}
               </h4>
               <div className="text-sm">
-                <span className="text-muted-foreground">{t("schedule")}: </span>
+                <span className="text-muted-foreground">{copy.schedule}: </span>
                 <span className="font-medium">{formatSchedule()}</span>
               </div>
               <div className="text-sm">
-                <span className="text-muted-foreground">{t("lastRun")}: </span>
+                <span className="text-muted-foreground">{copy.lastRun}: </span>
                 <span className="font-medium">
                   {formatDate(event.lastRunAt)}
                 </span>
               </div>
               <div className="text-sm">
-                <span className="text-muted-foreground">{t("nextRun")}: </span>
+                <span className="text-muted-foreground">{copy.nextRun}: </span>
                 <span className="font-medium">
                   {formatDate(event.nextRunAt)}
                 </span>
               </div>
               <div className="text-sm">
-                <span className="text-muted-foreground">{t("timeout")}: </span>
+                <span className="text-muted-foreground">{copy.timeout}: </span>
                 <span className="font-medium">
                   {event.timeoutValue} {event.timeoutUnit.toLowerCase()}
                 </span>
@@ -143,7 +167,7 @@ export function EventOverviewTab({
             <CardTitle className="text-base">
               <div className="flex items-center">
                 <Server className="mr-2 h-5 w-5 text-purple-500" />
-                {t("executionInfo")}
+                {copy.executionInfo}
               </div>
             </CardTitle>
           </CardHeader>
@@ -152,7 +176,7 @@ export function EventOverviewTab({
             <div className="border-border space-y-3 border-b pb-3">
               <div className="text-sm">
                 <span className="text-muted-foreground">
-                  {t("executionLocation")}:{" "}
+                  {copy.executionLocation}:{" "}
                 </span>
                 {event.runLocation === "REMOTE" &&
                 event.servers &&
@@ -180,7 +204,7 @@ export function EventOverviewTab({
               </div>
               <div className="text-sm">
                 <span className="text-muted-foreground">
-                  {t("retryAttempts")}:{" "}
+                  {copy.retryAttempts}:{" "}
                 </span>
                 <span className="font-medium">{event.retries}</span>
               </div>
@@ -190,7 +214,7 @@ export function EventOverviewTab({
             <div className="space-y-3">
               <h4 className="text-muted-foreground flex items-center text-sm font-medium">
                 <CheckCircle2 className="mr-1.5 h-4 w-4" />
-                {t("executionStats")}
+                {copy.executionStats}
               </h4>
               <div className="mt-1 flex items-center gap-4">
                 <div className="flex items-center">
@@ -198,7 +222,7 @@ export function EventOverviewTab({
                     {event.successCount ?? 0}
                   </span>
                   <span className="text-muted-foreground text-xs">
-                    {t("successful")}
+                    {copy.successful}
                   </span>
                 </div>
                 <div className="flex items-center">
@@ -206,7 +230,7 @@ export function EventOverviewTab({
                     {event.failureCount ?? 0}
                   </span>
                   <span className="text-muted-foreground text-xs">
-                    {t("failed")}
+                    {copy.failed}
                   </span>
                 </div>
                 <div className="flex items-center">
@@ -214,7 +238,7 @@ export function EventOverviewTab({
                     {(event.successCount ?? 0) + (event.failureCount ?? 0)}
                   </span>
                   <span className="text-muted-foreground text-xs">
-                    {t("total")}
+                    {copy.total}
                   </span>
                 </div>
               </div>
@@ -224,7 +248,7 @@ export function EventOverviewTab({
                     {event.executionCount ?? 0}
                   </span>
                   <span className="text-muted-foreground text-xs">
-                    {t("executionCounter")}
+                    {copy.executionCounter}
                   </span>
                 </div>
               </div>
@@ -239,37 +263,37 @@ export function EventOverviewTab({
                   {isResettingCounter ? (
                     <>
                       <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
-                      <span className="sm:inline">{t("resetting")}</span>
+                      <span className="sm:inline">{copy.resetting}</span>
                     </>
                   ) : (
                     <>
                       <RefreshCw className="mr-1.5 h-4 w-4" />
-                      <span className="sm:inline">{t("resetCounter")}</span>
+                      <span className="sm:inline">{copy.resetCounter}</span>
                     </>
                   )}
                 </Button>
               </div>
               <div className="text-sm">
                 <span className="text-muted-foreground">
-                  {t("maxExecutions")}:{" "}
+                  {copy.maxExecutions}:{" "}
                 </span>
                 <span className="font-medium">
                   {event.maxExecutions === 0
-                    ? t("unlimited")
+                    ? copy.unlimited
                     : event.maxExecutions}
                 </span>
               </div>
               <div className="text-sm">
                 <span className="text-muted-foreground">
-                  {t("resetCounterOnActive")}:{" "}
+                  {copy.resetCounterOnActive}:{" "}
                 </span>
                 <span className="font-medium">
                   {event.resetCounterOnActive === true ||
                   (typeof event.resetCounterOnActive === "string" &&
                     event.resetCounterOnActive === "t") ? (
-                    <span className="text-green-500">{t("enabled")}</span>
+                    <span className="text-green-500">{copy.enabled}</span>
                   ) : (
-                    <span className="text-gray-500">{t("disabled")}</span>
+                    <span className="text-gray-500">{copy.disabled}</span>
                   )}
                 </span>
               </div>

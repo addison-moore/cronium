@@ -6,13 +6,18 @@ import { ArrowLeft, Trash2, Play, RefreshCw } from "lucide-react";
 import { type EventStatus } from "@/shared/schema";
 import { Button } from "@cronium/ui";
 import { ClickableStatusBadge } from "@/components/ui/clickable-status-badge";
-import { useTranslations } from "next-intl";
 import { type Event } from "./types";
 import { EventTypeIcon } from "@/components/ui/event-type-icon";
 
+const copy = {
+  backToEvents: "Back to Events",
+  running: "Running...",
+  runNow: "Run Now",
+  delete: "Delete",
+} as const;
+
 interface EventDetailsHeaderProps {
   event: Event;
-  langParam: string;
   onDelete: () => void;
   onRun: () => Promise<void>;
   onStatusChange: (newStatus: EventStatus) => Promise<void>;
@@ -21,21 +26,18 @@ interface EventDetailsHeaderProps {
 
 export function EventDetailsHeader({
   event,
-  langParam,
   onDelete,
   onRun,
   onStatusChange,
   isRunning,
 }: EventDetailsHeaderProps) {
-  const t = useTranslations("Events");
-
   return (
     <div className="mb-6">
       <div className="mb-4">
         <Button variant="ghost" size="sm" asChild className="h-8 w-fit">
-          <Link href={`/${langParam}/dashboard/events`}>
+          <Link href="/dashboard/events">
             <ArrowLeft className="mr-1 h-4 w-4" />
-            {t("backToEvents")}
+            {copy.backToEvents}
           </Link>
         </Button>
       </div>
@@ -64,12 +66,12 @@ export function EventDetailsHeader({
             {isRunning ? (
               <>
                 <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
-                <span className="sm:inline">{t("running")}</span>
+                <span className="sm:inline">{copy.running}</span>
               </>
             ) : (
               <>
                 <Play className="mr-1.5 h-4 w-4" />
-                <span className="sm:inline">{t("runNow")}</span>
+                <span className="sm:inline">{copy.runNow}</span>
               </>
             )}
           </Button>
@@ -82,7 +84,7 @@ export function EventDetailsHeader({
             className="border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-300 dark:hover:bg-red-900 dark:hover:text-red-200"
           >
             <Trash2 className="mr-1.5 h-4 w-4" />
-            <span className="sm:inline">{t("delete")}</span>
+            <span className="sm:inline">{copy.delete}</span>
           </Button>
         </div>
       </div>

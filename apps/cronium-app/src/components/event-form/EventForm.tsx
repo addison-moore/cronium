@@ -1,10 +1,8 @@
 "use client";
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useTranslations } from "next-intl";
 import { useToast } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
@@ -88,6 +86,83 @@ interface EventFormInitialData extends Partial<Event> {
     message?: string;
   }>;
 }
+
+const eventsCopy = {
+  basicInformation: "Basic Information",
+  Fields: {
+    Name: "Event Name",
+    Description: "Description",
+    DescriptionPlaceholder: "Describe what this event does",
+    Tags: "Tags",
+    TagsPlaceholder: "Add tags to organize your events...",
+    Shared: "Make this event shared with all users",
+    Type: "Event Type",
+    TypeHTTPRequest: "HTTP Request",
+    Content: "Script Content",
+    EnvironmentVariables: "Environment Variables",
+    Key: "Key",
+    KeyPlaceholder: "EXAMPLE_API_KEY",
+    Value: "Value",
+    ValuePlaceholder: "your_secret_value",
+    AddVariable: "Add Variable",
+    Security: "Security",
+    SecurityNote:
+      "Environment variables are securely encrypted on your device.",
+    ScheduleInterval: "Interval",
+    IntervalUnit: "Interval Unit",
+    RunLocations: {
+      Label: "Execution Location",
+      Local: "Local Server",
+      Remote: "Remote Server",
+    },
+    Servers: "Servers",
+    NoServersAvailable: "No servers available",
+    Timeout: "Timeout (seconds)",
+    TimeoutUnit: "Timeout Unit",
+    Retries: "Retries on Failure",
+    MaxExecutions: "Max Executions",
+    MaxExecutionsHelp: "Set to 0 for unlimited executions",
+    ResetCounterOnActive: "Reset Counter on Activation",
+    ResetCounterHelp:
+      "Reset the execution counter whenever the event is activated",
+  },
+  Status: {
+    Label: "Status",
+    Placeholder: "Select status",
+    Active: "Active",
+    Paused: "Paused",
+    Draft: "Draft",
+  },
+  Placeholders: {
+    EventName: "My Event",
+    SelectType: "Select event type",
+    SelectLocation: "Select execution location",
+  },
+  Languages: {
+    Python: "Python",
+    Bash: "Bash",
+    Node: "Node.js",
+  },
+  ScheduleSettings: "Schedule Settings",
+  ExecutionSettings: "Execution Settings",
+  Seconds: "Seconds",
+  Minutes: "Minutes",
+  Hours: "Hours",
+  DaysPlural: "Days",
+  httpUrl: "Request URL",
+  httpHeaders: "Headers",
+  headerName: "Header Name",
+  headerValue: "Header Value",
+  addHeader: "Add Header",
+  httpBody: "Request Body",
+  httpBodyDescription:
+    "Provide the JSON payload that will be sent with this request.",
+  Cancel: "Cancel",
+  Updating: "Updating...",
+  Creating: "Creating...",
+  UpdateEvent: "Update Event",
+  CreateEvent: "Create Event",
+} as const;
 
 // Form schema using Zod
 const eventFormSchema = z
@@ -234,7 +309,6 @@ export default function EventForm({
   showFooter = true,
 }: EventFormProps) {
   const { toast } = useToast();
-  const t = useTranslations("Events");
 
   // Editor settings state
   const [editorSettings, setEditorSettings] = useState<EditorSettings>({
@@ -641,12 +715,12 @@ export default function EventForm({
       {/* Basic Info Section */}
       <Card>
         <CardHeader>
-          <CardTitle>{t("basicInformation")}</CardTitle>
+          <CardTitle>{eventsCopy.basicInformation}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Name Field */}
           <div className="space-y-2">
-            <Label htmlFor="name">{t("Fields.Name")}</Label>
+            <Label htmlFor="name">{eventsCopy.Fields.Name}</Label>
             <Controller
               name="name"
               control={control}
@@ -654,7 +728,7 @@ export default function EventForm({
                 <Input
                   {...field}
                   id="name"
-                  placeholder={t("Placeholders.EventName")}
+                  placeholder={eventsCopy.Placeholders.EventName}
                   aria-invalid={!!errors.name}
                 />
               )}
@@ -666,7 +740,7 @@ export default function EventForm({
 
           {/* Description Field */}
           <div className="space-y-2">
-            <Label htmlFor="description">{t("Fields.Description")}</Label>
+            <Label htmlFor="description">{eventsCopy.Fields.Description}</Label>
             <Controller
               name="description"
               control={control}
@@ -674,7 +748,7 @@ export default function EventForm({
                 <Input
                   {...field}
                   id="description"
-                  placeholder={t("Fields.DescriptionPlaceholder")}
+                  placeholder={eventsCopy.Fields.DescriptionPlaceholder}
                 />
               )}
             />
@@ -684,7 +758,7 @@ export default function EventForm({
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {/* Tags Field */}
             <div className="space-y-2">
-              <Label htmlFor="tags">{t("Fields.Tags")}</Label>
+              <Label htmlFor="tags">{eventsCopy.Fields.Tags}</Label>
               <Controller
                 name="tags"
                 control={control}
@@ -692,7 +766,7 @@ export default function EventForm({
                   <TagsInput
                     value={field.value}
                     onChange={field.onChange}
-                    placeholder={t("Fields.TagsPlaceholder")}
+                    placeholder={eventsCopy.Fields.TagsPlaceholder}
                     maxTags={10}
                   />
                 )}
@@ -701,24 +775,26 @@ export default function EventForm({
 
             {/* Status Field */}
             <div className="space-y-2">
-              <Label htmlFor="status">{t("Status.Label")}</Label>
+              <Label htmlFor="status">{eventsCopy.Status.Label}</Label>
               <Controller
                 name="status"
                 control={control}
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger id="status">
-                      <SelectValue placeholder={t("Status.Placeholder")} />
+                      <SelectValue
+                        placeholder={eventsCopy.Status.Placeholder}
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={EventStatus.ACTIVE}>
-                        {t("Status.Active")}
+                        {eventsCopy.Status.Active}
                       </SelectItem>
                       <SelectItem value={EventStatus.PAUSED}>
-                        {t("Status.Paused")}
+                        {eventsCopy.Status.Paused}
                       </SelectItem>
                       <SelectItem value={EventStatus.DRAFT}>
-                        {t("Status.Draft")}
+                        {eventsCopy.Status.Draft}
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -728,27 +804,29 @@ export default function EventForm({
 
             {/* Event Type Field */}
             <div className="space-y-2">
-              <Label htmlFor="type">{t("Fields.Type")}</Label>
+              <Label htmlFor="type">{eventsCopy.Fields.Type}</Label>
               <Controller
                 name="type"
                 control={control}
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger id="type">
-                      <SelectValue placeholder={t("Placeholders.SelectType")} />
+                      <SelectValue
+                        placeholder={eventsCopy.Placeholders.SelectType}
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={EventType.PYTHON}>
-                        {t("Languages.Python")}
+                        {eventsCopy.Languages.Python}
                       </SelectItem>
                       <SelectItem value={EventType.BASH}>
-                        {t("Languages.Bash")}
+                        {eventsCopy.Languages.Bash}
                       </SelectItem>
                       <SelectItem value={EventType.NODEJS}>
-                        {t("Languages.Node")}
+                        {eventsCopy.Languages.Node}
                       </SelectItem>
                       <SelectItem value={EventType.HTTP_REQUEST}>
-                        {t("Fields.TypeHTTPRequest")}
+                        {eventsCopy.Fields.TypeHTTPRequest}
                       </SelectItem>
                       {isToolActionsUIEnabled() && (
                         <SelectItem value={EventType.TOOL_ACTION}>
@@ -800,7 +878,7 @@ export default function EventForm({
               )}
             />
             <Label htmlFor="shared" className="cursor-pointer">
-              {t("Fields.Shared")}
+              {eventsCopy.Fields.Shared}
             </Label>
           </div>
         </CardContent>
@@ -833,7 +911,7 @@ export default function EventForm({
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>{t("Fields.Content")}</CardTitle>
+                <CardTitle>{eventsCopy.Fields.Content}</CardTitle>
                 <div className="flex items-center gap-2">
                   <Button
                     type="button"
@@ -923,7 +1001,7 @@ export default function EventForm({
 
             {/* URL */}
             <div className="space-y-2">
-              <Label htmlFor="httpUrl">{t("httpUrl")}</Label>
+              <Label htmlFor="httpUrl">{eventsCopy.httpUrl}</Label>
               <Controller
                 name="httpUrl"
                 control={control}
@@ -942,7 +1020,7 @@ export default function EventForm({
 
             {/* Headers */}
             <div className="space-y-2">
-              <Label>{t("httpHeaders")}</Label>
+              <Label>{eventsCopy.httpHeaders}</Label>
               <Controller
                 name="httpHeaders"
                 control={control}
@@ -962,7 +1040,7 @@ export default function EventForm({
                               };
                               field.onChange(updatedHeaders);
                             }}
-                            placeholder={t("headerName")}
+                            placeholder={eventsCopy.headerName}
                             className="flex-1"
                           />
                           <Input
@@ -975,7 +1053,7 @@ export default function EventForm({
                               };
                               field.onChange(updatedHeaders);
                             }}
-                            placeholder={t("headerValue")}
+                            placeholder={eventsCopy.headerValue}
                             className="flex-1"
                           />
                           <Button
@@ -1000,7 +1078,7 @@ export default function EventForm({
                           field.onChange([...headers, { key: "", value: "" }]);
                         }}
                       >
-                        {t("addHeader")}
+                        {eventsCopy.addHeader}
                       </Button>
                     </div>
                   );
@@ -1011,7 +1089,7 @@ export default function EventForm({
             {/* Body */}
             {["POST", "PUT", "PATCH"].includes(watch("httpMethod") ?? "") && (
               <div className="space-y-2">
-                <Label htmlFor="httpBody">{t("httpBody")}</Label>
+                <Label htmlFor="httpBody">{eventsCopy.httpBody}</Label>
                 <Controller
                   name="httpBody"
                   control={control}
@@ -1025,7 +1103,7 @@ export default function EventForm({
                   )}
                 />
                 <p className="text-sm text-gray-500">
-                  {t("httpBodyDescription")}
+                  {eventsCopy.httpBodyDescription}
                 </p>
               </div>
             )}
@@ -1036,7 +1114,7 @@ export default function EventForm({
       {/* Environment Variables Section */}
       <Card>
         <CardHeader>
-          <CardTitle>{t("Fields.EnvironmentVariables")}</CardTitle>
+          <CardTitle>{eventsCopy.Fields.EnvironmentVariables}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <Controller
@@ -1050,7 +1128,7 @@ export default function EventForm({
                     <div key={index} className="flex items-end gap-2">
                       <div className="flex-1">
                         <Label htmlFor={`envKey-${index}`}>
-                          {t("Fields.Key")}
+                          {eventsCopy.Fields.Key}
                         </Label>
                         <Input
                           id={`envKey-${index}`}
@@ -1063,12 +1141,12 @@ export default function EventForm({
                             };
                             field.onChange(updatedEnvVars);
                           }}
-                          placeholder={t("Fields.KeyPlaceholder")}
+                          placeholder={eventsCopy.Fields.KeyPlaceholder}
                         />
                       </div>
                       <div className="flex-1">
                         <Label htmlFor={`envValue-${index}`}>
-                          {t("Fields.Value")}
+                          {eventsCopy.Fields.Value}
                         </Label>
                         <div className="relative">
                           <Input
@@ -1085,7 +1163,7 @@ export default function EventForm({
                               };
                               field.onChange(updatedEnvVars);
                             }}
-                            placeholder={t("Fields.ValuePlaceholder")}
+                            placeholder={eventsCopy.Fields.ValuePlaceholder}
                             className="pr-10"
                           />
                           <Button
@@ -1125,7 +1203,7 @@ export default function EventForm({
                       field.onChange([...envVars, { key: "", value: "" }]);
                     }}
                   >
-                    {t("Fields.AddVariable")}
+                    {eventsCopy.Fields.AddVariable}
                   </Button>
                 </>
               );
@@ -1134,8 +1212,8 @@ export default function EventForm({
 
           <div className="rounded-md bg-blue-50 p-3 dark:bg-blue-950">
             <p className="text-sm text-blue-800 dark:text-blue-200">
-              <strong>🔒 {t("Fields.Security")}:</strong>{" "}
-              {t("Fields.SecurityNote")}
+              <strong>🔒 {eventsCopy.Fields.Security}:</strong>{" "}
+              {eventsCopy.Fields.SecurityNote}
             </p>
           </div>
         </CardContent>
@@ -1145,7 +1223,7 @@ export default function EventForm({
       {isScheduled && (
         <Card>
           <CardHeader>
-            <CardTitle>{t("ScheduleSettings")}</CardTitle>
+            <CardTitle>{eventsCopy.ScheduleSettings}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Start Time */}
@@ -1197,7 +1275,7 @@ export default function EventForm({
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="scheduleNumber">
-                    {t("Fields.ScheduleInterval")}
+                    {eventsCopy.Fields.ScheduleInterval}
                   </Label>
                   <Controller
                     name="scheduleNumber"
@@ -1217,7 +1295,7 @@ export default function EventForm({
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="scheduleUnit">
-                    {t("Fields.IntervalUnit")}
+                    {eventsCopy.Fields.IntervalUnit}
                   </Label>
                   <Controller
                     name="scheduleUnit"
@@ -1228,20 +1306,22 @@ export default function EventForm({
                         onValueChange={field.onChange}
                       >
                         <SelectTrigger id="scheduleUnit">
-                          <SelectValue placeholder={t("Fields.IntervalUnit")} />
+                          <SelectValue
+                            placeholder={eventsCopy.Fields.IntervalUnit}
+                          />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value={TimeUnit.SECONDS}>
-                            {t("Seconds")}
+                            {eventsCopy.Seconds}
                           </SelectItem>
                           <SelectItem value={TimeUnit.MINUTES}>
-                            {t("Minutes")}
+                            {eventsCopy.Minutes}
                           </SelectItem>
                           <SelectItem value={TimeUnit.HOURS}>
-                            {t("Hours")}
+                            {eventsCopy.Hours}
                           </SelectItem>
                           <SelectItem value={TimeUnit.DAYS}>
-                            {t("DaysPlural")}
+                            {eventsCopy.DaysPlural}
                           </SelectItem>
                         </SelectContent>
                       </Select>
@@ -1279,13 +1359,13 @@ export default function EventForm({
       {/* Execution Settings */}
       <Card>
         <CardHeader>
-          <CardTitle>{t("ExecutionSettings")}</CardTitle>
+          <CardTitle>{eventsCopy.ExecutionSettings}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Run Location */}
           <div className="space-y-2">
             <Label htmlFor="runLocation">
-              {t("Fields.RunLocations.Label")}
+              {eventsCopy.Fields.RunLocations.Label}
             </Label>
             <Controller
               name="runLocation"
@@ -1298,15 +1378,15 @@ export default function EventForm({
                 >
                   <SelectTrigger id="runLocation" disabled={isToolAction}>
                     <SelectValue
-                      placeholder={t("Placeholders.SelectLocation")}
+                      placeholder={eventsCopy.Placeholders.SelectLocation}
                     />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={RunLocation.LOCAL}>
-                      {t("Fields.RunLocations.Local")}
+                      {eventsCopy.Fields.RunLocations.Local}
                     </SelectItem>
                     <SelectItem value={RunLocation.REMOTE}>
-                      {t("Fields.RunLocations.Remote")}
+                      {eventsCopy.Fields.RunLocations.Remote}
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -1322,7 +1402,7 @@ export default function EventForm({
           {/* Server Selection */}
           {isRemote && !isToolAction && (
             <div className="space-y-4">
-              <Label>{t("Fields.Servers") || "Servers"}</Label>
+              <Label>{eventsCopy.Fields.Servers || "Servers"}</Label>
               <Controller
                 name="selectedServerIds"
                 control={control}
@@ -1330,7 +1410,7 @@ export default function EventForm({
                   <div className="border-border max-h-40 space-y-2 overflow-y-auto rounded-md border p-3">
                     {servers.length === 0 ? (
                       <p className="text-sm text-gray-500">
-                        {t("Fields.NoServersAvailable") ||
+                        {eventsCopy.Fields.NoServersAvailable ||
                           "No servers available. Please add a server first."}
                       </p>
                     ) : (
@@ -1380,7 +1460,7 @@ export default function EventForm({
           {/* Timeout Settings */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="timeoutValue">{t("Fields.Timeout")}</Label>
+              <Label htmlFor="timeoutValue">{eventsCopy.Fields.Timeout}</Label>
               <Controller
                 name="timeoutValue"
                 control={control}
@@ -1398,21 +1478,25 @@ export default function EventForm({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="timeoutUnit">{t("Fields.TimeoutUnit")}</Label>
+              <Label htmlFor="timeoutUnit">
+                {eventsCopy.Fields.TimeoutUnit}
+              </Label>
               <Controller
                 name="timeoutUnit"
                 control={control}
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger id="timeoutUnit">
-                      <SelectValue placeholder={t("Fields.TimeoutUnit")} />
+                      <SelectValue
+                        placeholder={eventsCopy.Fields.TimeoutUnit}
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={TimeUnit.SECONDS}>
-                        {t("Seconds")}
+                        {eventsCopy.Seconds}
                       </SelectItem>
                       <SelectItem value={TimeUnit.MINUTES}>
-                        {t("Minutes")}
+                        {eventsCopy.Minutes}
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -1423,7 +1507,7 @@ export default function EventForm({
 
           {/* Retries */}
           <div className="space-y-2">
-            <Label htmlFor="retries">{t("Fields.Retries")}</Label>
+            <Label htmlFor="retries">{eventsCopy.Fields.Retries}</Label>
             <Controller
               name="retries"
               control={control}
@@ -1444,7 +1528,9 @@ export default function EventForm({
 
           {/* Max Executions */}
           <div className="space-y-2">
-            <Label htmlFor="maxExecutions">{t("Fields.MaxExecutions")}</Label>
+            <Label htmlFor="maxExecutions">
+              {eventsCopy.Fields.MaxExecutions}
+            </Label>
             <Controller
               name="maxExecutions"
               control={control}
@@ -1461,7 +1547,7 @@ export default function EventForm({
               )}
             />
             <p className="text-muted-foreground text-sm">
-              {t("Fields.MaxExecutionsHelp")}
+              {eventsCopy.Fields.MaxExecutionsHelp}
             </p>
           </div>
 
@@ -1469,10 +1555,10 @@ export default function EventForm({
           <div className="flex items-center justify-between space-y-1">
             <div>
               <Label htmlFor="resetCounterOnActive" className="font-medium">
-                {t("Fields.ResetCounterOnActive")}
+                {eventsCopy.Fields.ResetCounterOnActive}
               </Label>
               <p className="text-muted-foreground text-sm">
-                {t("Fields.ResetCounterHelp")}
+                {eventsCopy.Fields.ResetCounterHelp}
               </p>
             </div>
             <Controller
@@ -1521,17 +1607,17 @@ export default function EventForm({
         >
           {onCancel && (
             <Button type="button" variant="outline" onClick={onCancel}>
-              {t("Cancel")}
+              {eventsCopy.Cancel}
             </Button>
           )}
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting
               ? isEditing
-                ? t("Updating")
-                : t("Creating")
+                ? eventsCopy.Updating
+                : eventsCopy.Creating
               : isEditing
-                ? t("UpdateEvent")
-                : t("CreateEvent")}
+                ? eventsCopy.UpdateEvent
+                : eventsCopy.CreateEvent}
           </Button>
         </div>
       )}

@@ -24,9 +24,9 @@ This guide catalogues the major capabilities exposed across the Cronium platform
 
 ## Remote Servers & Console _(Production Ready)_
 
-- Server management UI (`src/app/[lang]/dashboard/(main)/servers`) with validation via SSH test connections before persistence.
+- Server management UI (`src/app/dashboard/(main)/servers`) with validation via SSH test connections before persistence.
 - `serversRouter` enforces ownership checks, archives/restores servers, and serves aggregated usage metadata.
-- Live console (`src/app/[lang]/dashboard/(main)/console/page.tsx`) opens SSH terminal sessions through the WebSocket terminal manager.
+- Live console (`src/app/dashboard/(main)/console/page.tsx`) opens SSH terminal sessions through the WebSocket terminal manager.
 
 ## Variables & Secrets _(Production Ready)_
 
@@ -60,7 +60,7 @@ This guide catalogues the major capabilities exposed across the Cronium platform
 
 ## Admin & System Settings _(Production Ready)_
 
-- Admin area (`src/app/[lang]/dashboard/(admin)`) covers SMTP setup, registration policies, AI controls, user management, and role changes.
+- Admin area (`src/app/dashboard/(admin)`) covers SMTP setup, registration policies, AI controls, user management, and role changes.
 - System settings stored in Postgres with encryption for sensitive values (`src/lib/email.ts`, `src/lib/encryption-service.ts`).
 - Bulk operations (invite/resend/disable/promote) leverage `adminRouter` with tRPC admin guard.
 

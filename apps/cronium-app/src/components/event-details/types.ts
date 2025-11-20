@@ -78,7 +78,6 @@ export interface Event {
 
 export interface EventDetailsProps {
   event: Event;
-  langParam: string;
   onDelete?: () => void;
   onRun?: () => void;
   onToggleStatus?: () => void;

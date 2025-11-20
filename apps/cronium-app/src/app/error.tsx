@@ -16,7 +16,6 @@ export default function Error({
       title="Application Error"
       description="An unexpected error occurred. Please refresh the page or try again later."
       showHomeButton={true}
-      lang="en"
     />
   );
 }

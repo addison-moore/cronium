@@ -1,9 +1,6 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useTranslations } from "next-intl";
 import {
   Server,
   Plus,
@@ -35,6 +32,27 @@ import { ServerDeleteConfirmDialog } from "@/components/server-list/ServerDelete
 import { trpc } from "@/lib/trpc";
 import { usePersistentPagination } from "@/hooks/use-persistent-pagination";
 
+const copy = {
+  serverOnline: "Server Online",
+  serverOffline: "Server Offline",
+  name: "Name",
+  address: "Address",
+  ssh: "SSH Connection",
+  statusTitle: "Status",
+  statusUnknown: "Unknown",
+  statusOnline: "Online",
+  statusOffline: "Offline",
+  added: "Added",
+  lastChecked: "Last Checked",
+  viewDetails: "View Details",
+  editServer: "Edit Server",
+  checkStatus: "Check Status",
+  checking: "Checking...",
+  noServersFound: "No servers found",
+  noServersMessage: "Add your first server to get started.",
+  addFirstServer: "Add Your First Server",
+} as const;
+
 interface ServerData {
   id: number;
   name: string;
@@ -62,10 +80,6 @@ interface ServersTableClientProps {
 export function ServersTableClient({
   initialServers,
 }: ServersTableClientProps) {
-  const t = useTranslations("Servers");
-  const params = useParams();
-  const lang = params.lang as string;
-
   const [servers, setServers] = useState<ServerData[]>(initialServers);
   const [archivedServers, setArchivedServers] = useState<ServerData[]>([]);
   const [hasLoadedArchived, setHasLoadedArchived] = useState(false);
@@ -117,7 +131,7 @@ export function ServersTableClient({
   const checkHealthMutation = trpc.servers.checkHealth.useMutation({
     onSuccess: (data, variables) => {
       toast({
-        title: data.online ? t("ServerOnline") : t("ServerOffline"),
+        title: data.online ? copy.serverOnline : copy.serverOffline,
         description: `Health check completed at ${new Date(data.lastChecked).toLocaleString()}`,
         variant: data.online ? "default" : "destructive",
       });
@@ -338,26 +352,26 @@ export function ServersTableClient({
   const columns: StandardizedTableColumn<ServerData>[] = [
     {
       key: "name",
-      header: t("Name"),
+      header: copy.name,
       cell: (server) => (
-        <StandardizedTableLink href={`/${lang}/dashboard/servers/${server.id}`}>
+        <StandardizedTableLink href={`/dashboard/servers/${server.id}`}>
           {server.name}
         </StandardizedTableLink>
       ),
     },
     {
       key: "address",
-      header: t("Address"),
+      header: copy.address,
       cell: (server) => server.address,
     },
     {
       key: "ssh",
-      header: t("SSH"),
+      header: copy.ssh,
       cell: (server) => `${server.username}@${server.address}:${server.port}`,
     },
     {
       key: "status",
-      header: t("Status.Title"),
+      header: copy.statusTitle,
       cell: (server) => {
         // Show archived status if server is archived
         if (server.isArchived) {
@@ -368,19 +382,19 @@ export function ServersTableClient({
           return (
             <StatusBadge
               status="pending"
-              label={t("Status.Unknown")}
+              label={copy.statusUnknown}
               size="sm"
             />
           );
         } else if (server.online) {
           return (
-            <StatusBadge status="online" label={t("Status.Online")} size="sm" />
+            <StatusBadge status="online" label={copy.statusOnline} size="sm" />
           );
         } else {
           return (
             <StatusBadge
               status="offline"
-              label={t("Status.Offline")}
+              label={copy.statusOffline}
               size="sm"
             />
           );
@@ -389,12 +403,12 @@ export function ServersTableClient({
     },
     {
       key: "added",
-      header: t("Added"),
+      header: copy.added,
       cell: (server) => formatDate(server.createdAt),
     },
     {
       key: "lastChecked",
-      header: t("LastChecked"),
+      header: copy.lastChecked,
       cell: (server) =>
         server.lastChecked ? formatDate(server.lastChecked) : "-",
     },
@@ -411,10 +425,10 @@ export function ServersTableClient({
           disabled: restoreServerMutation.isPending,
         },
         {
-          label: t("ViewDetails"),
+          label: copy.viewDetails,
           icon: <Eye className="h-4 w-4" />,
           onClick: () =>
-            (window.location.href = `/${lang}/dashboard/servers/${server.id}`),
+            (window.location.href = `/dashboard/servers/${server.id}`),
         },
         {
           label: "Permanently Delete",
@@ -431,23 +445,23 @@ export function ServersTableClient({
     return [
       {
         label:
-          isCheckingStatus === server.id ? t("Checking") : t("CheckStatus"),
+          isCheckingStatus === server.id ? copy.checking : copy.checkStatus,
         icon: <CheckCircle className="h-4 w-4" />,
         onClick: () => void checkServerStatus(server.id),
         disabled:
           isCheckingStatus === server.id || checkHealthMutation.isPending,
       },
       {
-        label: t("ViewDetails"),
+        label: copy.viewDetails,
         icon: <Eye className="h-4 w-4" />,
         onClick: () =>
-          (window.location.href = `/${lang}/dashboard/servers/${server.id}`),
+          (window.location.href = `/dashboard/servers/${server.id}`),
       },
       {
-        label: t("EditServer"),
+        label: copy.editServer,
         icon: <Edit className="h-4 w-4" />,
         onClick: () =>
-          (window.location.href = `/${lang}/dashboard/servers/${server.id}#edit`),
+          (window.location.href = `/dashboard/servers/${server.id}#edit`),
         separator: true,
       },
       {
@@ -494,15 +508,15 @@ export function ServersTableClient({
           <div className="flex flex-col items-center justify-center p-8">
             <Server className="mb-4 h-16 w-16 text-gray-300" />
             <h2 className="mb-2 text-xl font-semibold">
-              {t("NoServersFound")}
+              {copy.noServersFound}
             </h2>
             <p className="mb-4 text-center text-gray-500">
-              {t("NoServersMessage")}
+              {copy.noServersMessage}
             </p>
             <Button asChild>
-              <Link href={`/${lang}/dashboard/servers/new`}>
+              <Link href="/dashboard/servers/new">
                 <Plus className="mr-2 h-4 w-4" />
-                {t("AddYourFirstServer")}
+                {copy.addFirstServer}
               </Link>
             </Button>
           </div>
@@ -527,7 +541,7 @@ export function ServersTableClient({
         emptyMessage={
           sortedServers.length === 0
             ? "No servers match your filters."
-            : t("NoServersFound")
+            : copy.noServersFound
         }
       />
 

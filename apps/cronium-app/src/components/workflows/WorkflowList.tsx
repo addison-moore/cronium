@@ -1,8 +1,6 @@
 "use client";
-
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
 import { Badge } from "@cronium/ui";
@@ -42,6 +40,40 @@ import {
 } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
 
+const copy = {
+  deleteConfirmation:
+    "Are you sure you want to delete this workflow? This cannot be undone.",
+  bulkDeleteConfirmation:
+    "Delete all selected workflows? This action cannot be undone.",
+  name: "Name",
+  sharedLabel: "Shared",
+  statusLabel: "Status",
+  lastRun: "Last Run",
+  never: "Never",
+  updated: "Updated",
+  execute: "Execute",
+  view: "View",
+  edit: "Edit",
+  unarchive: "Unarchive",
+  archive: "Archive",
+  delete: "Delete",
+  searchPlaceholder: "Search workflows...",
+  allStatuses: "All Statuses",
+  statusActive: "Active",
+  statusPaused: "Paused",
+  statusDraft: "Draft",
+  statusArchived: "Archived",
+  allTags: "All Tags",
+  clearFilters: "Clear Filters",
+  refresh: "Refresh",
+  activate: "Activate",
+  pause: "Pause",
+  clearSelection: "Clear Selection",
+  noWorkflowsFound: "No workflows found",
+  noWorkflowsDescription: "There are no workflows matching your filters.",
+  itemsPerPage: "Items per page",
+} as const;
+
 interface WorkflowItem {
   id: number;
   name: string;
@@ -61,11 +93,8 @@ interface WorkflowListProps {
 }
 
 export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
-  const params = useParams<{ lang: string }>();
   const router = useRouter();
-  const t = useTranslations("Workflows");
   // const { data: session } = useSession(); // Removed - unused
-  const lang = params.lang;
 
   const [filteredWorkflows, setFilteredWorkflows] = useState<WorkflowItem[]>(
     [],
@@ -266,7 +295,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
   }, []);
 
   const handleDelete = async (workflowId: number) => {
-    if (!confirm(t("DeleteConfirmation"))) return;
+    if (!confirm(copy.deleteConfirmation)) return;
 
     try {
       await deleteWorkflowMutation.mutateAsync({ id: workflowId });
@@ -311,7 +340,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
   const handleBulkDelete = async () => {
     if (selectedWorkflows.size === 0) return;
 
-    if (!confirm(t("BulkDeleteConfirmation"))) return;
+    if (!confirm(copy.bulkDeleteConfirmation)) return;
 
     setBulkActionLoading("delete");
     try {
@@ -462,18 +491,16 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
     },
     {
       key: "name",
-      header: t("Name"),
+      header: copy.name,
       cell: (workflow) => (
         <div className="flex items-center gap-2">
           {getTriggerIcon(workflow.triggerType)}
-          <StandardizedTableLink
-            href={`/${lang}/dashboard/workflows/${workflow.id}`}
-          >
+          <StandardizedTableLink href={`/dashboard/workflows/${workflow.id}`}>
             {workflow.name}
           </StandardizedTableLink>
           {workflow.shared && (
             <Badge variant="secondary" className="text-xs">
-              {t("Shared")}
+              {copy.sharedLabel}
             </Badge>
           )}
         </div>
@@ -481,7 +508,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
     },
     {
       key: "status",
-      header: t("Status.Label"),
+      header: copy.statusLabel,
       cell: (workflow) => (
         <ClickableStatusBadge
           currentStatus={workflow.status}
@@ -493,18 +520,18 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
     },
     {
       key: "lastRun",
-      header: t("LastRun"),
+      header: copy.lastRun,
       cell: (workflow) => (
         <span className="text-muted-foreground text-sm">
           {workflow.lastRunAt
             ? format(new Date(workflow.lastRunAt), "MMM dd, yyyy HH:mm")
-            : t("Never")}
+            : copy.never}
         </span>
       ),
     },
     {
       key: "updated",
-      header: t("Updated"),
+      header: copy.updated,
       cell: (workflow) => (
         <span className="text-muted-foreground text-sm">
           {format(new Date(workflow.updatedAt), "MMM dd, yyyy")}
@@ -521,14 +548,14 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
           className="h-8 w-8 cursor-pointer rounded-full border-green-500 p-0 transition-colors hover:bg-green-50 hover:text-green-600 dark:border-green-600 dark:hover:bg-green-900/30 dark:hover:text-green-500"
           onClick={() => handleExecute(workflow.id)}
           disabled={executingWorkflows.has(workflow.id)}
-          title={t("Execute")}
+          title={copy.execute}
         >
           {executingWorkflows.has(workflow.id) ? (
             <RefreshCw className="h-4 w-4 animate-spin text-green-500" />
           ) : (
             <Play className="h-4 w-4 text-green-500" />
           )}
-          <span className="sr-only">{t("Execute")}</span>
+          <span className="sr-only">{copy.execute}</span>
         </Button>
       ),
       className: "w-[60px]",
@@ -540,18 +567,18 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
     workflow: WorkflowItem,
   ): StandardizedTableAction[] => [
     {
-      label: t("View"),
+      label: copy.view,
       icon: <Eye className="h-4 w-4" />,
-      onClick: () => router.push(`/${lang}/dashboard/workflows/${workflow.id}`),
+      onClick: () => router.push(`/dashboard/workflows/${workflow.id}`),
     },
     {
-      label: t("Edit"),
+      label: copy.edit,
       icon: <Edit className="h-4 w-4" />,
       onClick: () =>
-        router.push(`/${lang}/dashboard/workflows/${workflow.id}?tab=canvas`),
+        router.push(`/dashboard/workflows/${workflow.id}?tab=canvas`),
     },
     {
-      label: t("Execute"),
+      label: copy.execute,
       icon: <Play className="h-4 w-4" />,
       onClick: () => {
         void handleExecute(workflow.id);
@@ -560,7 +587,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
     ...(workflow.status === EventStatus.ARCHIVED
       ? [
           {
-            label: t("Unarchive"),
+            label: copy.unarchive,
             icon: <RefreshCw className="h-4 w-4" />,
             onClick: () => {
               void handleStatusChange(workflow.id, EventStatus.ACTIVE);
@@ -569,7 +596,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
         ]
       : [
           {
-            label: t("Archive"),
+            label: copy.archive,
             icon: <Archive className="h-4 w-4" />,
             onClick: () => {
               void handleStatusChange(workflow.id, EventStatus.ARCHIVED);
@@ -577,7 +604,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
           } as StandardizedTableAction,
         ]),
     {
-      label: t("Delete"),
+      label: copy.delete,
       icon: <Trash2 className="h-4 w-4" />,
       onClick: () => {
         void handleDelete(workflow.id);
@@ -591,7 +618,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
   //   return (
   //     <div className="flex items-center justify-center p-8">
   //       <Spinner size="lg" />
-  //       <span className="ml-2">{t("Loading")}</span>
+  //       <span className="ml-2">{copy.refresh}</span>
   //     </div>
   //   );
   // }
@@ -605,7 +632,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
           <div className="relative">
             <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform" />
             <Input
-              placeholder={t("SearchWorkflows")}
+              placeholder={copy.searchPlaceholder}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -616,21 +643,21 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
         {/* Status Filter */}
         <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
           <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder={t("AllStatuses")} />
+            <SelectValue placeholder={copy.allStatuses} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{t("AllStatuses")}</SelectItem>
+            <SelectItem value="all">{copy.allStatuses}</SelectItem>
             <SelectItem value={EventStatus.ACTIVE}>
-              {t("Status.Active")}
+              {copy.statusActive}
             </SelectItem>
             <SelectItem value={EventStatus.PAUSED}>
-              {t("Status.Paused")}
+              {copy.statusPaused}
             </SelectItem>
             <SelectItem value={EventStatus.DRAFT}>
-              {t("Status.Draft")}
+              {copy.statusDraft}
             </SelectItem>
             <SelectItem value={EventStatus.ARCHIVED}>
-              {t("Status.Archived")}
+              {copy.statusArchived}
             </SelectItem>
           </SelectContent>
         </Select>
@@ -638,10 +665,10 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
         {/* Tag Filter */}
         <Select value={tagFilter} onValueChange={handleTagFilterChange}>
           <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder={t("AllTags")} />
+            <SelectValue placeholder={copy.allTags} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{t("AllTags")}</SelectItem>
+            <SelectItem value="all">{copy.allTags}</SelectItem>
             {availableTags.map((tag) => (
               <SelectItem key={tag} value={tag}>
                 {tag}
@@ -654,7 +681,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
         {(searchTerm || statusFilter !== "all" || tagFilter !== "all") && (
           <Button variant="outline" onClick={clearFilters}>
             <X className="mr-2 h-4 w-4" />
-            {t("ClearFilters")}
+            {copy.clearFilters}
           </Button>
         )}
 
@@ -667,7 +694,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
           <RefreshCw
             className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
           />
-          {t("Refresh")}
+          {copy.refresh}
         </Button>
       </div>
 
@@ -675,7 +702,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
       {selectedWorkflows.size > 0 && (
         <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/20">
           <span className="text-sm font-medium">
-            {t("SelectedCount", { count: selectedWorkflows.size })}
+            Selected workflows: {selectedWorkflows.size}
           </span>
           <div className="flex gap-2">
             <Button
@@ -685,7 +712,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
               disabled={bulkActionLoading === "activate"}
             >
               <Play className="mr-1 h-4 w-4" />
-              {t("Activate")}
+              {copy.activate}
             </Button>
             <Button
               size="sm"
@@ -694,7 +721,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
               disabled={bulkActionLoading === "pause"}
             >
               <Pause className="mr-1 h-4 w-4" />
-              {t("Pause")}
+              {copy.pause}
             </Button>
             <Button
               size="sm"
@@ -703,7 +730,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
               disabled={bulkActionLoading === "archive"}
             >
               <Archive className="mr-1 h-4 w-4" />
-              {t("Archive")}
+              {copy.archive}
             </Button>
             <Button
               size="sm"
@@ -712,14 +739,14 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
               disabled={bulkActionLoading === "delete"}
             >
               <Trash2 className="mr-1 h-4 w-4" />
-              {t("Delete")}
+              {copy.delete}
             </Button>
             <Button
               size="sm"
               variant="ghost"
               onClick={() => setSelectedWorkflows(new Set())}
             >
-              {t("ClearSelection")}
+              {copy.clearSelection}
             </Button>
           </div>
         </div>
@@ -733,8 +760,8 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
         isLoading={isLoading}
         emptyMessage={
           searchTerm || statusFilter !== "all" || tagFilter !== "all"
-            ? t("NoWorkflowsFound")
-            : t("NoWorkflowsDescription")
+            ? copy.noWorkflowsFound
+            : copy.noWorkflowsDescription
         }
       />
 
@@ -743,7 +770,7 @@ export default function WorkflowListTrpc({ onRefresh }: WorkflowListProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground text-sm">
-              {t("ItemsPerPage")}:
+              {copy.itemsPerPage}:
             </span>
             <Select
               value={itemsPerPage.toString()}

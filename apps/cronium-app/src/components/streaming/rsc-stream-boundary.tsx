@@ -72,7 +72,6 @@ export function RSCStreamBoundary({
   errorDescription,
   maxRetries = 3,
   showHomeButton: _showHomeButton = false,
-  lang: _lang = "en",
 }: RSCStreamBoundaryProps) {
   return (
     <SuspenseErrorBoundary

@@ -17,7 +17,7 @@ Cronium ships as a polyglot mono-repository with four primary runtime components
 
 The control plane in `apps/cronium-app` is responsible for both rendering the dashboard and exposing API endpoints:
 
-- **Routing & Localisation** – Leverages the App Router (`src/app/[lang]/...`) with `next-intl` for locale-aware routes and translations.
+- **Routing** – Uses the App Router rooted at `src/app`, with grouped segments like `(auth)` and `(dashboard)` and hard-coded English copy (translations removed along with `next-intl`).
 - **Authentication** – `src/lib/auth.ts` wires NextAuth credential logins, updates last-login timestamps, and surfaces roles for access checks.
 - **tRPC Routers** – Defined under `src/server/api/routers`, covering domains such as events, workflows, tools, monitoring, servers, admin, quota management, and AI. Each procedure validates input with Zod schemas from `src/shared/schemas` before calling storage services.
 - **Database Access** – Drizzle ORM models defined in `src/shared/schema.ts` map to Postgres tables. `src/server/storage` wraps these models with domain-specific modules, centralising CRUD logic.

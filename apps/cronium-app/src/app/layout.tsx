@@ -2,6 +2,8 @@ import "./styles/global.css";
 import type { Metadata } from "next";
 import React from "react";
 import { Inter } from "next/font/google";
+import { Providers } from "@/components/providers/Providers";
+import { Toaster } from "@cronium/ui";
 
 export const runtime = "nodejs";
 
@@ -35,7 +37,14 @@ export default function RootLayout({
 }) {
   return (
     <html suppressHydrationWarning>
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        <React.Suspense fallback={null}>
+          <Providers>
+            <main className="min-h-screen">{children}</main>
+            <Toaster />
+          </Providers>
+        </React.Suspense>
+      </body>
     </html>
   );
 }

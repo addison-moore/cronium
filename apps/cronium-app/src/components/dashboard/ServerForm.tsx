@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useTranslations } from "next-intl";
 import {
   Server,
   Key,
@@ -27,6 +26,8 @@ import { Button } from "@cronium/ui";
 import { Textarea } from "@cronium/ui";
 import { Checkbox } from "@cronium/ui";
 import { Alert, AlertDescription, AlertTitle } from "@cronium/ui";
+import { Spinner } from "@cronium/ui";
+import { toast } from "@cronium/ui";
 import {
   Select,
   SelectContent,
@@ -37,6 +38,7 @@ import {
 import { type UpdateServerInput } from "@shared/schemas/servers";
 import { z } from "zod";
 import { AuthType } from "@/lib/validations/server";
+import { trpc } from "@/lib/trpc";
 
 // Create a form schema that matches the update schema structure
 const serverFormSchema = z
@@ -70,15 +72,11 @@ const serverFormSchema = z
 
 // Create form type from the schema
 type ServerFormInput = z.infer<typeof serverFormSchema>;
-import { Spinner } from "@cronium/ui";
-import { trpc } from "@/lib/trpc";
-import { toast } from "@cronium/ui";
 
 interface ServerFormProps {
   initialServer?: Partial<UpdateServerInput>;
   isEditing: boolean;
   onSuccess: (serverId?: number) => void;
-  lang?: string;
 }
 
 export default function ServerForm({
@@ -86,7 +84,6 @@ export default function ServerForm({
   isEditing,
   onSuccess,
 }: ServerFormProps) {
-  const t = useTranslations("Servers.Form");
   const [sshKeyWarning, setSshKeyWarning] = useState<string | null>(null);
 
   // Determine initial auth type based on existing server data
@@ -299,13 +296,13 @@ export default function ServerForm({
             name="name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t("ServerName")}</FormLabel>
+                <FormLabel>Server Name</FormLabel>
                 <FormControl>
                   <div className="relative">
                     <Server className="text-muted-foreground absolute top-2.5 left-2 h-4 w-4" />
                     <Input
                       className="pl-8"
-                      placeholder={t("ServerNamePlaceholder")}
+                      placeholder="Production Server"
                       name={field.name}
                       onChange={field.onChange}
                       onBlur={field.onBlur}
@@ -324,13 +321,13 @@ export default function ServerForm({
             name="address"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t("ServerAddress")}</FormLabel>
+                <FormLabel>Server Address</FormLabel>
                 <FormControl>
                   <div className="relative">
                     <Globe className="text-muted-foreground absolute top-2.5 left-2 h-4 w-4" />
                     <Input
                       className="pl-8"
-                      placeholder={t("ServerAddressPlaceholder")}
+                      placeholder="example.com or 192.168.1.100"
                       name={field.name}
                       onChange={field.onChange}
                       onBlur={field.onBlur}
@@ -350,13 +347,13 @@ export default function ServerForm({
               name="username"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t("Username")}</FormLabel>
+                  <FormLabel>SSH Username</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <User className="text-muted-foreground absolute top-2.5 left-2 h-4 w-4" />
                       <Input
                         className="pl-8"
-                        placeholder={t("UsernamePlaceholder")}
+                        placeholder="root"
                         name={field.name}
                         onChange={field.onChange}
                         onBlur={field.onBlur}
@@ -375,7 +372,7 @@ export default function ServerForm({
               name="port"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t("Port")}</FormLabel>
+                  <FormLabel>SSH Port</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <Hash className="text-muted-foreground absolute top-2.5 left-2 h-4 w-4" />
@@ -384,7 +381,7 @@ export default function ServerForm({
                         type="number"
                         min={1}
                         max={65535}
-                        placeholder={t("PortPlaceholder")}
+                        placeholder="22"
                         name={field.name}
                         onBlur={field.onBlur}
                         value={(field.value as number) ?? 22}
@@ -452,8 +449,8 @@ export default function ServerForm({
                 <FormItem>
                   <FormLabel>
                     {isEditing
-                      ? t("SSHKey") + " (" + t("KeepExistingKey") + ")"
-                      : t("SSHKey")}
+                      ? "SSH Private Key (Leave empty to keep the existing SSH key)"
+                      : "SSH Private Key"}
                   </FormLabel>
 
                   {sshKeyWarning && (
@@ -535,9 +532,10 @@ MIIEpAIBAAKCAQEAxyz...
                   />
                 </FormControl>
                 <div className="space-y-1 leading-none">
-                  <FormLabel>{t("SharedServer")}</FormLabel>
+                  <FormLabel>Shared Server</FormLabel>
                   <p className="text-muted-foreground text-sm">
-                    {t("SharedServerDescription")}
+                    Allow other users to access this server for their events and
+                    workflows
                   </p>
                 </div>
               </FormItem>
@@ -547,7 +545,8 @@ MIIEpAIBAAKCAQEAxyz...
 
         <div className="rounded-md bg-blue-50 p-3 dark:bg-blue-950">
           <p className="text-sm text-blue-800 dark:text-blue-200">
-            <strong>🔒 {t("Security")}:</strong> {t("SecurityNote")}
+            <strong>🔒 Security:</strong> Your SSH key is encrypted on your
+            device and securely stored.
           </p>
         </div>
 
@@ -560,12 +559,12 @@ MIIEpAIBAAKCAQEAxyz...
             {isSubmitting ? (
               <>
                 <Spinner size="lg" />
-                {isEditing ? t("Updating") : t("Creating")}
+                {isEditing ? "Updating..." : "Creating..."}
               </>
             ) : (
               <>
                 <Save className="mr-2 h-4 w-4" />
-                {isEditing ? t("UpdateServer") : t("SaveButton")}
+                {isEditing ? "Update Server" : "Save Server"}
               </>
             )}
           </Button>

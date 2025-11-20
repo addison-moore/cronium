@@ -1,6 +1,5 @@
 "use client";
 
-import { useTranslations, useLocale } from "next-intl";
 import { StatCard } from "@cronium/ui";
 import { ActivityTable } from "@/components/activity";
 import { type LogStatus } from "@/shared/schema";
@@ -41,10 +40,38 @@ interface DashboardStats {
   }>;
 }
 
-export default function DashboardStats() {
-  const t = useTranslations();
-  const locale = useLocale();
+const statsCopy = {
+  totalEvents: {
+    title: "Events",
+    active: "Active",
+    paused: "Paused",
+    draft: "Draft",
+    href: "/dashboard/events",
+  },
+  executions: {
+    title: "Executions",
+    successRate: "Success Rate",
+    failureRate: "Failure Rate",
+    href: "/dashboard/logs",
+  },
+  workflows: {
+    title: "Workflows",
+    description: "Workflow automations connecting multiple events",
+    href: "/dashboard/workflows",
+  },
+  servers: {
+    title: "Remote Servers",
+    description: "Servers configured for remote execution",
+    href: "/dashboard/servers",
+  },
+  activity: {
+    title: "Recent Activity",
+    description: "Latest executions across events and workflows",
+    empty: "No recent activity",
+  },
+};
 
+export default function DashboardStats() {
   // Pagination state for Recent Activity
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -126,44 +153,44 @@ export default function DashboardStats() {
   // Stat cards for displaying statistics
   const statsCards = [
     {
-      title: t("Dashboard.Stats.TotalScripts"),
+      title: statsCopy.totalEvents.title,
       value: stats.totalScripts,
       icon: <Code className="h-5 w-5" />,
-      href: `/${locale}/dashboard/events`,
+      href: statsCopy.totalEvents.href,
       footer: (
         <div className="flex text-xs">
           <div className="mr-4 flex items-center">
             <div className="mr-1 h-2 w-2 rounded-full bg-green-500"></div>
             <span>
-              {t("Dashboard.Stats.Active")}: {stats.activeScripts}
+              {statsCopy.totalEvents.active}: {stats.activeScripts}
             </span>
           </div>
           <div className="mr-4 flex items-center">
             <div className="mr-1 h-2 w-2 rounded-full bg-yellow-500"></div>
             <span>
-              {t("Dashboard.Stats.Paused")}: {stats.pausedScripts}
+              {statsCopy.totalEvents.paused}: {stats.pausedScripts}
             </span>
           </div>
           <div className="flex items-center">
             <div className="mr-1 h-2 w-2 rounded-full bg-gray-300 dark:bg-gray-600"></div>
             <span>
-              {t("Dashboard.Stats.Draft")}: {stats.draftScripts}
+              {statsCopy.totalEvents.draft}: {stats.draftScripts}
             </span>
           </div>
         </div>
       ),
     },
     {
-      title: t("Dashboard.Stats.Executions"),
+      title: statsCopy.executions.title,
       value: stats.recentExecutions,
       icon: <Clock className="h-5 w-5" />,
-      href: `/${locale}/dashboard/logs`,
+      href: statsCopy.executions.href,
       footer: (
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs">
             <span className="flex items-center">
               <Check className="mr-1 h-3 w-3 text-green-500" />
-              {t("Dashboard.Stats.SuccessRate")}
+              {statsCopy.executions.successRate}
             </span>
             <span>{stats.successRate}%</span>
           </div>
@@ -176,7 +203,7 @@ export default function DashboardStats() {
           <div className="flex items-center justify-between text-xs">
             <span className="flex items-center">
               <AlertTriangle className="mr-1 h-3 w-3 text-red-500" />
-              {t("Dashboard.Stats.FailureRate")}
+              {statsCopy.executions.failureRate}
             </span>
             <span>{stats.failureRate}%</span>
           </div>
@@ -190,18 +217,18 @@ export default function DashboardStats() {
       ),
     },
     {
-      title: t("Dashboard.Stats.Workflows"),
+      title: statsCopy.workflows.title,
       value: stats.workflowsCount,
       icon: <GitFork className="h-5 w-5 rotate-90" />,
-      href: `/${locale}/dashboard/workflows`,
-      footer: t("Dashboard.Stats.WorkflowsDescription"),
+      href: statsCopy.workflows.href,
+      footer: statsCopy.workflows.description,
     },
     {
-      title: t("Dashboard.Stats.RemoteServers"),
+      title: statsCopy.servers.title,
       value: stats.serversCount,
       icon: <Server className="h-5 w-5" />,
-      href: `/${locale}/dashboard/servers`,
-      footer: t("Dashboard.Stats.ServersDescription"),
+      href: statsCopy.servers.href,
+      footer: statsCopy.servers.description,
     },
   ];
 
@@ -222,11 +249,8 @@ export default function DashboardStats() {
       </div>
 
       <ActivityTable
-        title={t("Dashboard.RecentActivity.Title") ?? "Recent Activity"}
-        description={
-          t("Dashboard.RecentActivity.Description") ??
-          "Recent event and workflow executions"
-        }
+        title={statsCopy.activity.title}
+        description={statsCopy.activity.description}
         data={paginatedActivity.map((activity) => ({
           id: activity.id,
           eventId: activity.eventId,
@@ -242,9 +266,7 @@ export default function DashboardStats() {
         }))}
         isLoading={isLoading || isLoadingActivity}
         onRefresh={refreshData}
-        emptyStateMessage={
-          t("Dashboard.RecentActivity.EmptyState") ?? "No recent activity"
-        }
+        emptyStateMessage={statsCopy.activity.empty}
         showPagination={true}
         currentPage={currentPage}
         totalPages={totalPages}

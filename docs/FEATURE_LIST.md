@@ -173,7 +173,7 @@ Modern, responsive interface designed for ease of use.
 
 - **Responsive Design**: Works on desktop and mobile
 - **Dark Mode**: Full dark mode support
-- **Internationalization**: Multi-language support with next-intl
+- **English Copy**: Hard-coded English UI for consistent messaging
 - **Real-time Updates**: Live activity feeds and status updates
 - **Interactive Elements**: Charts, progress bars, and visual indicators
 - **Toast Notifications**: User feedback for all actions

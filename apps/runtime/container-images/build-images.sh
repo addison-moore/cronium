@@ -63,17 +63,17 @@ build_image "${SCRIPT_DIR}/base" "${IMAGE_PREFIX}/base:${TAG}"
 
 # Build language-specific images
 for lang in python nodejs bash; do
-    if [ -d "${SCRIPT_DIR}/${lang}" ]; then
+    if [ -d "${SCRIPT_DIR}" ]; then
         # Build standard image
-        build_image "${SCRIPT_DIR}/${lang}" "${IMAGE_PREFIX}/${lang}:${TAG}"
+        build_image "${SCRIPT_DIR}" "${IMAGE_PREFIX}:${TAG}"
         
         # Build optimized versions if they exist
-        if [ -f "${SCRIPT_DIR}/${lang}/Dockerfile.multistage" ]; then
-            build_image "${SCRIPT_DIR}/${lang}" "${IMAGE_PREFIX}/${lang}:${TAG}-slim" "Dockerfile.multistage"
+        if [ -f "${SCRIPT_DIR}/Dockerfile.multistage" ]; then
+            build_image "${SCRIPT_DIR}" "${IMAGE_PREFIX}:${TAG}-slim" "Dockerfile.multistage"
         fi
         
-        if [ -f "${SCRIPT_DIR}/${lang}/Dockerfile.minimal" ]; then
-            build_image "${SCRIPT_DIR}/${lang}" "${IMAGE_PREFIX}/${lang}:${TAG}-minimal" "Dockerfile.minimal"
+        if [ -f "${SCRIPT_DIR}/Dockerfile.minimal" ]; then
+            build_image "${SCRIPT_DIR}" "${IMAGE_PREFIX}:${TAG}-minimal" "Dockerfile.minimal"
         fi
     fi
 done
