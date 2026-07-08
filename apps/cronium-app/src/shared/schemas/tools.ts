@@ -93,7 +93,7 @@ export const toolExportSchema = z.object({
   toolIds: z
     .array(z.number().int().positive())
     .min(1, "At least one tool must be selected"),
-  format: z.enum(["json", "yaml"]).default("json"),
+  format: z.enum(["json"]).default("json"),
   includeCredentials: z.boolean().default(false), // Security consideration
   includeInactive: z.boolean().default(false),
 });

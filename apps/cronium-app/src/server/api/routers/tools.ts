@@ -7,8 +7,6 @@ import {
   createToolSchema,
   updateToolSchema,
   toolIdSchema,
-  bulkToolOperationSchema,
-  toolUsageSchema,
   validateToolCredentialsSchema,
   toolExportSchema,
   toolStatsSchema,
@@ -913,10 +911,12 @@ export const toolsRouter = createTRPCRouter({
           suggestions: [] as string[],
         };
 
-        // Add type-specific warnings and suggestions
+        // A real connection test is available via tools.testConnection; this
+        // procedure only validates credential shape.
         if (validation.valid && input.testConnection) {
-          // Mock connection test
-          result.suggestions.push("Connection test would be performed here");
+          result.suggestions.push(
+            "Credentials are well-formed. Use Test Connection to verify against the provider.",
+          );
         }
 
         return result;
@@ -924,114 +924,6 @@ export const toolsRouter = createTRPCRouter({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to validate credentials",
-          cause: error,
-        });
-      }
-    }),
-
-  // Get tool usage in events and workflows
-  getUsage: protectedProcedure
-    .input(toolUsageSchema)
-    .query(async ({ ctx, input }) => {
-      try {
-        const tools = await getUserTools(ctx.session.user.id);
-        const tool = tools.find((t) => t.id === input.toolId);
-
-        if (!tool) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Tool not found" });
-        }
-
-        // Mock usage data
-        const usage = {
-          events: input.includeEvents
-            ? [
-                {
-                  id: 1,
-                  name: "Daily Report Email",
-                  type: "email",
-                  status: "ACTIVE",
-                },
-                {
-                  id: 2,
-                  name: "Alert Notifications",
-                  type: "script",
-                  status: "ACTIVE",
-                },
-              ]
-            : [],
-          workflows: input.includeWorkflows
-            ? [{ id: 1, name: "Deployment Pipeline", status: "ACTIVE" }]
-            : [],
-          totalUsages: 0,
-        };
-
-        usage.totalUsages = usage.events.length + usage.workflows.length;
-
-        return usage;
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to get tool usage",
-          cause: error,
-        });
-      }
-    }),
-
-  // Bulk operations on tools
-  bulkOperation: protectedProcedure
-    .input(bulkToolOperationSchema)
-    .mutation(async ({ ctx, input }) => {
-      try {
-        const results = [];
-        const tools = await getUserTools(ctx.session.user.id);
-
-        for (const toolId of input.toolIds) {
-          try {
-            const tool = tools.find((t) => t.id === toolId);
-            if (!tool) {
-              results.push({
-                id: toolId,
-                success: false,
-                error: "Tool not found",
-              });
-              continue;
-            }
-
-            switch (input.operation) {
-              case "delete":
-                // Mock delete
-                results.push({ id: toolId, success: true });
-                break;
-              case "activate":
-                // Mock activate
-                results.push({ id: toolId, success: true });
-                break;
-              case "deactivate":
-                // Mock deactivate
-                results.push({ id: toolId, success: true });
-                break;
-              case "test":
-                // Mock test
-                results.push({
-                  id: toolId,
-                  success: true,
-                  message: `${tool.type} connection test successful`,
-                });
-                break;
-            }
-          } catch (error: unknown) {
-            const errorMessage =
-              error instanceof Error ? error.message : String(error);
-            results.push({ id: toolId, success: false, error: errorMessage });
-          }
-        }
-
-        return { results };
-      } catch (error: unknown) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to perform bulk operation",
           cause: error,
         });
       }
@@ -1062,25 +954,8 @@ export const toolsRouter = createTRPCRouter({
           credentials: input.includeCredentials ? tool.credentials : undefined,
         }));
 
-        let fileContent: string;
-        let filename: string;
-
-        switch (input.format) {
-          case "json":
-            fileContent = JSON.stringify(exportData, null, 2);
-            filename = `tools_${new Date().toISOString().split("T")[0] ?? "export"}.json`;
-            break;
-          case "yaml":
-            // Mock YAML export - in real implementation, use a YAML library
-            fileContent = `# Tools Export\ntools:\n${exportData.map((tool) => `  - name: "${tool.name}"\n    type: "${tool.type}"`).join("\n")}`;
-            filename = `tools_${new Date().toISOString().split("T")[0] ?? "export"}.yaml`;
-            break;
-          default:
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "Invalid export format",
-            });
-        }
+        const fileContent = JSON.stringify(exportData, null, 2);
+        const filename = `tools_${new Date().toISOString().split("T")[0] ?? "export"}.json`;
 
         return {
           data: fileContent,
@@ -1411,11 +1286,12 @@ export const toolsRouter = createTRPCRouter({
           throw validationError;
         }
 
-        // Create execution context
+        // Create execution context. Variables are handled via runtime
+        // helpers, not this in-process context (no action uses these).
         const context = {
           variables: {
-            get: (_key: string) => null, // TODO: Implement variable access
-            set: (_key: string, _value: unknown) => null, // TODO: Implement variable setting
+            get: () => null,
+            set: () => null,
           },
           logger: {
             info: (message: string) => console.log(`[INFO] ${message}`),

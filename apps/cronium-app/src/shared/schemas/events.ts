@@ -250,7 +250,7 @@ export const eventDownloadSchema = z.object({
   eventIds: z
     .array(z.number().int().positive())
     .min(1, "At least one event must be selected"),
-  format: z.enum(["json", "zip"]).default("json"),
+  format: z.enum(["json"]).default("json"),
 });
 
 // Event filter schema - for lightweight data used in dropdowns/filters

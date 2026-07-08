@@ -72,8 +72,8 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 	}
 	executorMgr.Register(types.JobTypeContainer, containerExec)
 
-	// Register SSH executor (with multi-server support)
-	// TODO: Make runtime host and port configurable
+	// Register SSH executor (with multi-server support).
+	// Runtime host/port are configured via RUNTIME_HOST / RUNTIME_PORT.
 	runtimeHost := os.Getenv("RUNTIME_HOST")
 	if runtimeHost == "" {
 		runtimeHost = "runtime-api" // Default to Docker service name

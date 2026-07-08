@@ -47,15 +47,14 @@ async function testEmail(
     return failure("Missing required SMTP configuration");
   }
 
-  const nodemailer = (await import("nodemailer")).default;
-  const transporter = nodemailer.createTransport({
+  const { buildSmtpTransport } = await import("@/lib/email");
+  const transporter = buildSmtpTransport({
     host: smtpHost,
     port: smtpPort,
+    user: smtpUser,
+    password: smtpPassword,
     secure: (credentials.enableSSL as boolean | undefined) ?? false,
-    auth: { user: smtpUser, pass: smtpPassword },
-    connectionTimeout: REQUEST_TIMEOUT_MS,
-    greetingTimeout: REQUEST_TIMEOUT_MS,
-    tls: { rejectUnauthorized: false },
+    allowSelfSigned: true,
   });
   await transporter.verify();
   return {

@@ -290,16 +290,12 @@ export async function executeToolAction(
 
     // Create execution context
     const context: ToolActionExecutionContext = {
+      // Tool actions read/write variables via runtime helpers, not this
+      // in-process context. No registered action uses context.variables;
+      // these are intentional no-ops rather than a wired variable store.
       variables: {
-        get: (key: string) => {
-          // TODO: Implement proper variable access
-          console.log(`Getting variable: ${key}`);
-          return null;
-        },
-        set: (key: string, value: unknown) => {
-          // TODO: Implement proper variable setting
-          console.log(`Setting variable: ${key} = ${JSON.stringify(value)}`);
-        },
+        get: () => null,
+        set: () => undefined,
       },
       logger: {
         info: (message: string) => console.log(`[INFO] ${message}`),

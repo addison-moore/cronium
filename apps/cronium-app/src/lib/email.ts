@@ -90,6 +90,29 @@ export async function getSmtpSettings() {
   };
 }
 
+// Build a configured nodemailer transport. Single source of truth for SMTP
+// connection options (secure flag, timeouts, self-signed handling) shared by
+// the send paths and the connection tests.
+export function buildSmtpTransport(opts: {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  secure?: boolean | undefined;
+  allowSelfSigned?: boolean | undefined;
+}) {
+  return nodemailer.createTransport({
+    host: opts.host,
+    port: opts.port,
+    secure: opts.secure ?? opts.port === 465, // true for 465, false otherwise
+    auth: { user: opts.user, pass: opts.password },
+    // Bound connection attempts so scheduled executions don't hang
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    ...(opts.allowSelfSigned ? { tls: { rejectUnauthorized: false } } : {}),
+  });
+}
+
 // Send an email and return the SMTP server's delivery info. Throws on
 // missing config or send failure (callers that need a boolean use sendEmail).
 export async function sendEmailDetailed(
@@ -118,20 +141,13 @@ export async function sendEmailDetailed(
   }
 
   // Create transport
-  const transporter = nodemailer.createTransport({
+  const transporter = buildSmtpTransport({
     host: smtp.host,
     port: smtp.port,
-    secure: customSmtp?.secure ?? smtp.port === 465, // true for 465, false for other ports
-    auth: {
-      user: smtp.user,
-      pass: smtp.password,
-    },
-    // Bound connection attempts so scheduled executions don't hang
-    connectionTimeout: 10_000,
-    greetingTimeout: 10_000,
-    ...(customSmtp?.allowSelfSigned
-      ? { tls: { rejectUnauthorized: false } }
-      : {}),
+    user: smtp.user,
+    password: smtp.password,
+    secure: customSmtp?.secure,
+    allowSelfSigned: customSmtp?.allowSelfSigned,
   });
 
   // Send mail

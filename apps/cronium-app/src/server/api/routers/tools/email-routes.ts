@@ -9,7 +9,8 @@ import {
   type EncryptedData,
 } from "@/lib/security/credential-encryption";
 import { emailSendSchema } from "@/tools/plugins/email/schemas";
-import nodemailer from "nodemailer";
+import { buildSmtpTransport } from "@/lib/email";
+import type nodemailer from "nodemailer";
 
 // Email-specific schemas
 const emailTestSchema = z.object({
@@ -86,17 +87,13 @@ export const emailRouter = createTRPCRouter({
 
       try {
         // Create transporter
-        const transporter = nodemailer.createTransport({
+        const transporter = buildSmtpTransport({
           host: tool.credentials.smtpHost as string,
           port: tool.credentials.smtpPort as number,
-          secure: tool.credentials.enableSSL as boolean, // true for 465, false for other ports
-          auth: {
-            user: tool.credentials.smtpUser as string,
-            pass: tool.credentials.smtpPassword as string,
-          },
-          tls: {
-            rejectUnauthorized: false, // Accept self-signed certificates
-          },
+          user: tool.credentials.smtpUser as string,
+          password: tool.credentials.smtpPassword as string,
+          secure: tool.credentials.enableSSL as boolean,
+          allowSelfSigned: true,
         });
 
         // Build mail options
@@ -157,17 +154,13 @@ export const emailRouter = createTRPCRouter({
 
       try {
         // Create transporter
-        const transporter = nodemailer.createTransport({
+        const transporter = buildSmtpTransport({
           host: tool.credentials.smtpHost as string,
           port: tool.credentials.smtpPort as number,
+          user: tool.credentials.smtpUser as string,
+          password: tool.credentials.smtpPassword as string,
           secure: tool.credentials.enableSSL as boolean,
-          auth: {
-            user: tool.credentials.smtpUser as string,
-            pass: tool.credentials.smtpPassword as string,
-          },
-          tls: {
-            rejectUnauthorized: false,
-          },
+          allowSelfSigned: true,
         });
 
         // Verify connection

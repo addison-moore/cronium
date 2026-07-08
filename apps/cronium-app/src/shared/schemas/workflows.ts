@@ -292,7 +292,7 @@ export const workflowDownloadSchema = z.object({
   workflowIds: z
     .array(z.number().int().positive())
     .min(1, "At least one workflow must be selected"),
-  format: z.enum(["json", "zip"]).default("json"),
+  format: z.enum(["json"]).default("json"),
   includeNodes: z.boolean().default(true),
   includeConnections: z.boolean().default(true),
 });

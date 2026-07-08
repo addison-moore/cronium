@@ -426,11 +426,16 @@ export class QuotaManager extends EventEmitter {
       threshold?: number;
     }
   > {
+    // enforce is true only for resources with a real usage query
+    // (see calculateActualUsage). Storage, API-request, and webhook-event
+    // usage are not yet computed (always 0), so their limits are not
+    // enforced — enforcing would silently never trigger, which is worse than
+    // an honest "not enforced".
     return {
       toolActionsPerMonth: { enforce: true, action: "block" },
       toolActionsPerDay: { enforce: true, action: "throttle" },
       webhooksPerUser: { enforce: true, action: "block" },
-      webhookEventsPerMonth: { enforce: true, action: "warn", threshold: 0.9 },
+      webhookEventsPerMonth: { enforce: false, action: "warn", threshold: 0.9 },
       eventsPerUser: { enforce: true, action: "block" },
       eventExecutionsPerMonth: {
         enforce: true,
@@ -439,10 +444,10 @@ export class QuotaManager extends EventEmitter {
       },
       workflowsPerUser: { enforce: true, action: "block" },
       workflowExecutionsPerMonth: { enforce: true, action: "throttle" },
-      totalStorageMB: { enforce: true, action: "warn", threshold: 0.95 },
+      totalStorageMB: { enforce: false, action: "warn", threshold: 0.95 },
       logRetentionDays: { enforce: false, action: "warn" },
-      apiRequestsPerMonth: { enforce: true, action: "throttle" },
-      apiRequestsPerMinute: { enforce: true, action: "block" },
+      apiRequestsPerMonth: { enforce: false, action: "throttle" },
+      apiRequestsPerMinute: { enforce: false, action: "block" },
     };
   }
 

@@ -14,17 +14,24 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       executionId: string;
       action: string;
+      // The runtime sends this as `metadata`; accept both for compatibility.
+      metadata?: Record<string, unknown>;
       details?: Record<string, unknown>;
     };
 
-    // For now, just log the audit event
-    // In production, this would go to a proper audit log storage
-    console.log("Audit Log:", {
-      timestamp: new Date().toISOString(),
-      executionId: body.executionId,
-      action: body.action,
-      details: body.details,
-    });
+    // Execution audit events are structured-logged (captured by the container
+    // log pipeline). These are runtime-fired, fire-and-forget, and carry no
+    // userId/toolId, so they don't fit the tool_audit_logs table; a dedicated
+    // execution-audit table is future work.
+    console.info(
+      "[audit]",
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        executionId: body.executionId,
+        action: body.action,
+        metadata: body.metadata ?? body.details ?? {},
+      }),
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {

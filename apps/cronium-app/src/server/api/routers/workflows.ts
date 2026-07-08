@@ -636,53 +636,43 @@ export const workflowsRouter = createTRPCRouter({
           });
         }
 
-        if (input.format === "json") {
-          // Single workflow JSON download
-          if (allowedWorkflowIds.length === 1) {
-            const workflow = await storage.getWorkflowWithRelations(
-              allowedWorkflowIds[0]!,
-            );
-            if (!workflow) {
-              throw new TRPCError({
-                code: "NOT_FOUND",
-                message: "Workflow not found",
-              });
-            }
-            return {
-              format: "json",
-              filename: `${workflow.name}.json`,
-              data: JSON.stringify(workflow, null, 2),
-            };
-          }
-
-          // Multiple workflows JSON download
-          const workflows = await Promise.all(
-            allowedWorkflowIds.map((id) =>
-              storage.getWorkflowWithRelations(id),
-            ),
+        // Single workflow JSON download
+        if (allowedWorkflowIds.length === 1) {
+          const workflow = await storage.getWorkflowWithRelations(
+            allowedWorkflowIds[0]!,
           );
-          // Filter out any null workflows
-          const validWorkflows = workflows.filter(
-            (workflow): workflow is WorkflowWithRelations => workflow !== null,
-          );
-          if (validWorkflows.length === 0) {
+          if (!workflow) {
             throw new TRPCError({
               code: "NOT_FOUND",
-              message: "No workflows found",
+              message: "Workflow not found",
             });
           }
           return {
             format: "json",
-            filename: "workflows.json",
-            data: JSON.stringify(validWorkflows, null, 2),
+            filename: `${workflow.name}.json`,
+            data: JSON.stringify(workflow, null, 2),
           };
-        } else {
-          // ZIP download
+        }
+
+        // Multiple workflows JSON download
+        const workflows = await Promise.all(
+          allowedWorkflowIds.map((id) => storage.getWorkflowWithRelations(id)),
+        );
+        // Filter out any null workflows
+        const validWorkflows = workflows.filter(
+          (workflow): workflow is WorkflowWithRelations => workflow !== null,
+        );
+        if (validWorkflows.length === 0) {
           throw new TRPCError({
-            code: "NOT_IMPLEMENTED",
-            message: "ZIP download not implemented in tRPC - use REST endpoint",
+            code: "NOT_FOUND",
+            message: "No workflows found",
           });
         }
+        return {
+          format: "json",
+          filename: "workflows.json",
+          data: JSON.stringify(validWorkflows, null, 2),
+        };
       } catch (error: unknown) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({

@@ -117,17 +117,6 @@ export const LazyRetryManager = dynamic(() => import("../RetryManager"), {
   ssr: false,
 });
 
-export const LazyExecutionLogsViewer = dynamic(
-  () =>
-    import("../ExecutionLogsViewer").then((mod) => ({
-      default: mod.ExecutionLogsViewer,
-    })),
-  {
-    loading: () => <DefaultSkeleton />,
-    ssr: false,
-  },
-);
-
 export const LazyErrorRecoverySuggestions = dynamic(
   () => import("../ErrorRecoverySuggestions"),
   {
@@ -153,6 +142,5 @@ export const preloadErrorComponents = () => {
 
 export const preloadMonitoringComponents = () => {
   // Preload monitoring components
-  void import("../ExecutionLogsViewer");
   void import("../CredentialHealthIndicator");
 };

@@ -5,12 +5,6 @@
 
 import { storage } from "@/server/storage";
 import type { Server } from "@/shared/schema";
-import type { ServerStorage } from "@/server/storage/modules/servers";
-
-// Cast storage to include servers property
-const storageWithServers = storage as typeof storage & {
-  servers: ServerStorage;
-};
 
 interface CleanupServiceConfig {
   enabled: boolean;
@@ -175,10 +169,9 @@ export class ServerCleanupService {
 
     try {
       // Get servers that are past their deletion date
-      const serversToDelete =
-        await storageWithServers.servers.getServersScheduledForDeletion(
-          this.config.batchSize,
-        );
+      const serversToDelete = await storage.getServersScheduledForDeletion(
+        this.config.batchSize,
+      );
 
       result.processedCount = serversToDelete.length;
 
@@ -189,7 +182,7 @@ export class ServerCleanupService {
           );
 
           // Permanently delete the server
-          await storageWithServers.servers.permanentlyDeleteServer(server.id);
+          await storage.permanentlyDeleteServer(server.id);
 
           result.deletedCount++;
 
@@ -232,20 +225,19 @@ export class ServerCleanupService {
       // Check for each notification period
       for (const days of this.config.notificationDays) {
         const serversApproaching =
-          await storageWithServers.servers.getServersApproachingDeletion(days);
+          await storage.getServersApproachingDeletion(days);
 
         for (const server of serversApproaching) {
           try {
             // Check if we've already sent this notification
-            const notificationExists =
-              await storageWithServers.servers.hasNotificationBeenSent(
-                server.id,
-                `${days}_day_warning`,
-              );
+            const notificationExists = await storage.hasNotificationBeenSent(
+              server.id,
+              `${days}_day_warning`,
+            );
 
             if (!notificationExists) {
               // Create notification record
-              await storageWithServers.servers.createDeletionNotification(
+              await storage.createDeletionNotification(
                 server.id,
                 server.userId,
                 `${days}_day_warning`,
@@ -281,21 +273,10 @@ export class ServerCleanupService {
    * Clean up orphaned resources
    */
   private async cleanupOrphanedResources(): Promise<void> {
-    try {
-      // This could include:
-      // - Cleaning up SSH keys from remote servers
-      // - Removing runner binaries
-      // - Clearing cached data
-      // For now, we'll just log
-      console.log(
-        "[ServerCleanupService] Checking for orphaned resources (not implemented yet)",
-      );
-    } catch (error) {
-      console.error(
-        "[ServerCleanupService] Error cleaning orphaned resources:",
-        error,
-      );
-    }
+    // Intentional no-op for now. Future scope: remove deployed runner binaries
+    // and cached SSH keys from remote servers after a server is purged. Deployed
+    // runners/payloads are already cleaned up per-execution by the orchestrator,
+    // so there is nothing to reclaim here yet. Left as a hook, not a stub.
   }
 
   /**
@@ -306,10 +287,7 @@ export class ServerCleanupService {
     daysAhead = 30,
   ): Promise<Server[]> {
     try {
-      const servers =
-        await storageWithServers.servers.getServersApproachingDeletion(
-          daysAhead,
-        );
+      const servers = await storage.getServersApproachingDeletion(daysAhead);
 
       // Filter by user if specified
       if (userId) {
@@ -334,7 +312,7 @@ export class ServerCleanupService {
       console.log(
         `[ServerCleanupService] Manual deletion requested for server ${serverId}`,
       );
-      await storageWithServers.servers.permanentlyDeleteServer(serverId);
+      await storage.permanentlyDeleteServer(serverId);
     } catch (error) {
       console.error(
         `[ServerCleanupService] Error deleting server ${serverId}:`,

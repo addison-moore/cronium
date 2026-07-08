@@ -828,46 +828,38 @@ export const eventsRouter = createTRPCRouter({
           });
         }
 
-        if (input.format === "json") {
-          // Single event JSON download
-          if (allowedEventIds.length === 1) {
-            const eventId = allowedEventIds[0];
-            if (!eventId) {
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: "Invalid event ID",
-              });
-            }
-            const event = await storage.getEventWithRelations(eventId);
-            if (!event) {
-              throw new TRPCError({
-                code: "NOT_FOUND",
-                message: "Event not found",
-              });
-            }
-            return {
-              format: "json",
-              filename: `${String(event.name ?? "event")}.json`,
-              data: JSON.stringify(event, null, 2),
-            };
+        // Single event JSON download
+        if (allowedEventIds.length === 1) {
+          const eventId = allowedEventIds[0];
+          if (!eventId) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Invalid event ID",
+            });
           }
-
-          // Multiple events JSON download
-          const events = await Promise.all(
-            allowedEventIds.map((id) => storage.getEventWithRelations(id)),
-          );
+          const event = await storage.getEventWithRelations(eventId);
+          if (!event) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Event not found",
+            });
+          }
           return {
             format: "json",
-            filename: "events.json",
-            data: JSON.stringify(events, null, 2),
+            filename: `${String(event.name ?? "event")}.json`,
+            data: JSON.stringify(event, null, 2),
           };
-        } else {
-          // ZIP download
-          throw new TRPCError({
-            code: "NOT_IMPLEMENTED",
-            message: "ZIP download not implemented in tRPC - use REST endpoint",
-          });
         }
+
+        // Multiple events JSON download
+        const events = await Promise.all(
+          allowedEventIds.map((id) => storage.getEventWithRelations(id)),
+        );
+        return {
+          format: "json",
+          filename: "events.json",
+          data: JSON.stringify(events, null, 2),
+        };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({

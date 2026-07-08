@@ -19,6 +19,7 @@ import {
   webhooks,
   webhookEvents,
   webhookDeliveries,
+  serverDeletionNotifications,
   type ConditionalActionType,
   type User,
   type InsertUser,
@@ -269,6 +270,18 @@ export interface IStorage {
     lastChecked: Date,
   ): Promise<Server>;
   deleteServer(id: number): Promise<void>;
+  permanentlyDeleteServer(id: number): Promise<void>;
+  getServersScheduledForDeletion(limit?: number): Promise<Server[]>;
+  getServersApproachingDeletion(daysAhead: number): Promise<Server[]>;
+  hasNotificationBeenSent(
+    serverId: number,
+    notificationType: string,
+  ): Promise<boolean>;
+  createDeletionNotification(
+    serverId: number,
+    userId: string,
+    notificationType: string,
+  ): Promise<void>;
 
   // Event-Server relationship methods
   getEventServers(eventId: number): Promise<EventServer[]>;
@@ -2064,6 +2077,96 @@ class DatabaseStorage implements IStorage {
 
     // Then delete the server
     await db.delete(servers).where(eq(servers.id, id));
+  }
+
+  // Server soft-delete cleanup methods (used by serverCleanupService)
+  async permanentlyDeleteServer(id: number): Promise<void> {
+    const server = await this.getServer(id);
+    if (!server) {
+      throw new Error(`Server ${id} not found`);
+    }
+    if (!server.isArchived) {
+      throw new Error(
+        `Server ${id} must be archived before permanent deletion`,
+      );
+    }
+    await this.deleteServer(id);
+  }
+
+  async getServersScheduledForDeletion(limit = 10): Promise<Server[]> {
+    const now = new Date();
+    const serversToDelete = await db
+      .select()
+      .from(servers)
+      .where(
+        and(
+          eq(servers.isArchived, true),
+          lte(servers.deletionScheduledAt, now),
+        ),
+      )
+      .limit(limit);
+
+    return serversToDelete.map((server) => {
+      if (server.sshKeyPurged) server.sshKey = null;
+      if (server.passwordPurged) server.password = null;
+      return server;
+    });
+  }
+
+  async getServersApproachingDeletion(daysAhead: number): Promise<Server[]> {
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() + daysAhead);
+
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const serversApproaching = await db
+      .select()
+      .from(servers)
+      .where(
+        and(
+          eq(servers.isArchived, true),
+          gte(servers.deletionScheduledAt, startOfDay),
+          lte(servers.deletionScheduledAt, endOfDay),
+        ),
+      );
+
+    return serversApproaching.map((server) => {
+      if (server.sshKeyPurged) server.sshKey = null;
+      if (server.passwordPurged) server.password = null;
+      return server;
+    });
+  }
+
+  async hasNotificationBeenSent(
+    serverId: number,
+    notificationType: string,
+  ): Promise<boolean> {
+    const [notification] = await db
+      .select()
+      .from(serverDeletionNotifications)
+      .where(
+        and(
+          eq(serverDeletionNotifications.serverId, serverId),
+          eq(serverDeletionNotifications.notificationType, notificationType),
+        ),
+      )
+      .limit(1);
+    return !!notification;
+  }
+
+  async createDeletionNotification(
+    serverId: number,
+    userId: string,
+    notificationType: string,
+  ): Promise<void> {
+    await db.insert(serverDeletionNotifications).values({
+      serverId,
+      userId,
+      notificationType,
+    });
   }
 
   // Settings methods

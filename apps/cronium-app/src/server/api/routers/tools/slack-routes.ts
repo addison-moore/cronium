@@ -90,13 +90,53 @@ export const slackRouter = createTRPCRouter({
         });
       }
 
-      // Implementation would go here - for now return mock success
-      // In production, this would call the actual Slack API
-      return {
-        success: true,
-        message: "Message sent to Slack successfully",
-        messageId: `slack_${Date.now()}`,
-      };
+      const webhookUrl = tool.credentials.webhookUrl as string | undefined;
+      if (!webhookUrl?.startsWith("https://hooks.slack.com/")) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Slack tool has no valid webhook URL configured",
+        });
+      }
+
+      const payload: Record<string, unknown> = { text: input.message };
+      if (input.channel) payload.channel = input.channel;
+      if (input.username) payload.username = input.username;
+      if (input.iconEmoji) payload.icon_emoji = input.iconEmoji;
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10_000);
+      try {
+        const response = await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        const responseText = await response.text();
+        if (!response.ok || responseText !== "ok") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Slack API error: ${response.status} ${responseText}`,
+          });
+        }
+        return {
+          success: true,
+          message: "Message sent to Slack successfully",
+          messageId: `slack_${Date.now()}`,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error && error.name === "AbortError"
+              ? "Slack request timed out"
+              : "Failed to send Slack message",
+          cause: error,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
     }),
 
   testConnection: protectedProcedure

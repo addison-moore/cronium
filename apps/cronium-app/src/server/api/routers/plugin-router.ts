@@ -161,18 +161,14 @@ function createPluginProcedure(
             }
 
             // Real SMTP handshake, not just field presence
-            const nodemailer = (await import("nodemailer")).default;
-            const transporter = nodemailer.createTransport({
+            const { buildSmtpTransport } = await import("@/lib/email");
+            const transporter = buildSmtpTransport({
               host: creds.smtpHost as string,
               port: creds.smtpPort as number,
+              user: creds.smtpUser as string,
+              password: creds.smtpPassword as string,
               secure: (creds.enableSSL as boolean | undefined) ?? false,
-              auth: {
-                user: creds.smtpUser as string,
-                pass: creds.smtpPassword as string,
-              },
-              connectionTimeout: 10_000,
-              greetingTimeout: 10_000,
-              tls: { rejectUnauthorized: false },
+              allowSelfSigned: true,
             });
             await transporter.verify();
 
