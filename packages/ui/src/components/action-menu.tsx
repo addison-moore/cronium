@@ -53,9 +53,8 @@ export function ActionMenu({
       <DropdownMenuContent align="end">
         {menuItems.map((item, index) => (
           <div key={`div-${index}`}>
-            {(separatorIndices?.includes(index) || item.separator) && (
-              <DropdownMenuSeparator key={`sep-${index}`} />
-            )}
+            {((separatorIndices?.includes(index) ?? false) ||
+              item.separator) && <DropdownMenuSeparator key={`sep-${index}`} />}
             <DropdownMenuItem
               key={`item-${index}`}
               onSelect={() => {

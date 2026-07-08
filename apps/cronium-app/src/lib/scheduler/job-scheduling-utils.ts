@@ -116,9 +116,8 @@ export async function createNextRecurringJob(
   }
 
   // Build job payload (reuse from job-payload-builder)
-  const { buildJobPayload } = await import(
-    "@/lib/scheduler/job-payload-builder"
-  );
+  const { buildJobPayload } =
+    await import("@/lib/scheduler/job-payload-builder");
 
   const { LogStatus } = await import("@/shared/schema");
 

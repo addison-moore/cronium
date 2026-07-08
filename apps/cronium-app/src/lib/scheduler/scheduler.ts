@@ -350,17 +350,14 @@ export class ScriptScheduler {
             break;
           }
           case TimeUnit.DAYS: {
-            // For day-based schedules, define specific days
-            const daysArray = [];
-            for (let i = 0; i < 7; i += event.scheduleNumber) {
-              daysArray.push(i);
-            }
-            rule.dayOfWeek = daysArray;
-            rule.hour = 0; // At midnight
-            rule.minute = 0; // At the start of the hour
-            rule.second = 0; // At the start of the minute
+            // "Every N days" at midnight. RecurrenceRule cannot express an
+            // N-day interval (the old dayOfWeek mapping fired on fixed
+            // weekdays and never fired for N>=8); use a cron day-of-month
+            // step expression, which node-schedule accepts as a string rule.
+            const n = Math.max(1, event.scheduleNumber);
+            rule = `0 0 */${n} * *`;
             console.log(
-              `[${setupId}] For ${String(event.scheduleNumber)}-day schedule, using days: ${daysArray.join(", ")}`,
+              `[${setupId}] For ${String(event.scheduleNumber)}-day schedule, using cron ${rule}`,
             );
             break;
           }
@@ -636,9 +633,8 @@ export class ScriptScheduler {
       });
 
       // Import job payload builder
-      const { buildJobPayload } = await import(
-        "@/lib/scheduler/job-payload-builder"
-      );
+      const { buildJobPayload } =
+        await import("@/lib/scheduler/job-payload-builder");
 
       // Build comprehensive job payload
       const jobPayload = buildJobPayload(event, log.id, inputData);
@@ -767,9 +763,8 @@ export class ScriptScheduler {
     });
 
     // Import job payload builder
-    const { buildJobPayload } = await import(
-      "@/lib/scheduler/job-payload-builder"
-    );
+    const { buildJobPayload } =
+      await import("@/lib/scheduler/job-payload-builder");
 
     // Build comprehensive job payload
     const basePayload = buildJobPayload(event, log.id, input);
@@ -825,9 +820,8 @@ export class ScriptScheduler {
         `[DEBUG] executeEvent - Entering wait block for job ${job.id}`,
       );
 
-      const { waitForJobCompletion } = await import(
-        "@/lib/services/job-polling-service"
-      );
+      const { waitForJobCompletion } =
+        await import("@/lib/services/job-polling-service");
 
       console.log(
         `Waiting for job ${job.id} to complete for workflow execution...`,

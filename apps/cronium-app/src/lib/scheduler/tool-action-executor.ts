@@ -181,9 +181,8 @@ export async function executeToolAction(
     // Handle credential decryption based on encryption status
     if (cachedTool.encrypted) {
       // Tool has encrypted credentials
-      const { credentialEncryption } = await import(
-        "@/lib/security/credential-encryption"
-      );
+      const { credentialEncryption } =
+        await import("@/lib/security/credential-encryption");
 
       if (!credentialEncryption.isAvailable()) {
         throw new Error("Encryption key not configured");
@@ -244,6 +243,18 @@ export async function executeToolAction(
       `[ToolAction] Tool ID: ${cachedTool.id}, Active: ${cachedTool.isActive}`,
     );
     console.log(`[ToolAction] Credentials loaded:`, credentials ? "Yes" : "No");
+
+    // Inject a fresh OAuth access token for plugins that require it
+    // (e.g. Google Sheets reads credentials.oauthToken)
+    {
+      const { injectOAuthToken } =
+        await import("@/lib/oauth/credential-bridge");
+      credentials = await injectOAuthToken(credentials ?? {}, {
+        userId,
+        toolId: toolActionConfig.toolId,
+        toolType: cachedTool.type,
+      });
+    }
 
     // Check for pooled connection
     const pooledConnection = connectionPool.getConnection(

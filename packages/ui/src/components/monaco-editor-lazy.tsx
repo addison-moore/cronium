@@ -13,6 +13,6 @@ export const MonacoEditor: ComponentType<MonacoEditorProps> = dynamic(
     ssr: false,
     loading: () => <Skeleton className="h-[400px] w-full" />,
   },
-) as ComponentType<MonacoEditorProps>;
+);
 
 export type { EditorLanguage, MonacoEditorProps } from "./monaco-editor";

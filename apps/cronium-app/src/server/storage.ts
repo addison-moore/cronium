@@ -56,6 +56,7 @@ import {
   UserStatus,
   TokenStatus,
   LogStatus,
+  roles,
 } from "../shared/schema";
 import { db } from "./db";
 import {
@@ -70,6 +71,8 @@ import {
   lte,
   lt,
   inArray,
+  ilike,
+  like,
 } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import {
@@ -93,6 +96,14 @@ import type { AdminQueryInput } from "../shared/schemas/admin";
 
 // Re-export types from schema for convenience
 export type { WorkflowExecution } from "../shared/schema";
+
+// Role types
+export type Role = typeof roles.$inferSelect;
+export interface RolePermissions {
+  console: boolean;
+  monitoring: boolean;
+  localServerAccess: boolean;
+}
 
 // Type alias for backward compatibility
 type Script = Event;
@@ -135,14 +146,19 @@ export interface LogFilters {
   eventId?: string;
   status?: LogStatus;
   date?: string;
+  startDate?: string;
+  endDate?: string;
   workflowId?: number | null;
   userId?: string;
   ownEventsOnly?: boolean;
   sharedOnly?: boolean;
+  // Free-text search over output/error/eventName
+  search?: string;
+  searchFields?: Array<"output" | "errorOutput" | "eventName">;
+  caseSensitive?: boolean;
 }
 
-export interface WorkflowExecutionEventWithDetails
-  extends WorkflowExecutionEvent {
+export interface WorkflowExecutionEventWithDetails extends WorkflowExecutionEvent {
   eventName: string | null;
   eventType: string | null;
 }
@@ -162,6 +178,16 @@ export interface IStorage {
   upsertUser(userData: InsertUser): Promise<User>;
   disableUser(id: string): Promise<User>;
   deleteUser(id: string): Promise<void>;
+
+  // Role methods
+  listRoles(): Promise<Role[]>;
+  getRoleById(id: number): Promise<Role | undefined>;
+  getRoleByName(name: string): Promise<Role | undefined>;
+  getDefaultRole(): Promise<Role | undefined>;
+  updateRolePermissions(
+    id: number,
+    permissions: RolePermissions,
+  ): Promise<Role | undefined>;
 
   // Script methods
   getEvent(id: number): Promise<Event | undefined>;
@@ -613,6 +639,44 @@ class DatabaseStorage implements IStorage {
 
     // Delete the user
     await db.delete(users).where(eq(users.id, id));
+  }
+
+  // Role methods
+  async listRoles(): Promise<Role[]> {
+    return db.select().from(roles).orderBy(roles.id);
+  }
+
+  async getRoleById(id: number): Promise<Role | undefined> {
+    const [role] = await db.select().from(roles).where(eq(roles.id, id));
+    return role;
+  }
+
+  async getRoleByName(name: string): Promise<Role | undefined> {
+    const [role] = await db
+      .select()
+      .from(roles)
+      .where(sql`lower(${roles.name}) = ${name.toLowerCase()}`);
+    return role;
+  }
+
+  async getDefaultRole(): Promise<Role | undefined> {
+    const [role] = await db
+      .select()
+      .from(roles)
+      .where(eq(roles.isDefault, true));
+    return role;
+  }
+
+  async updateRolePermissions(
+    id: number,
+    permissions: RolePermissions,
+  ): Promise<Role | undefined> {
+    const [updated] = await db
+      .update(roles)
+      .set({ permissions, updatedAt: new Date() })
+      .where(eq(roles.id, id))
+      .returning();
+    return updated;
   }
 
   // Script methods (now renamed to events)
@@ -1582,6 +1646,37 @@ class DatabaseStorage implements IStorage {
       conditions.push(
         and(gte(logs.startTime, startOfDay), lte(logs.startTime, endOfDay)),
       );
+    }
+
+    // Date-range filter (independent of the single-day `date` filter)
+    if (filters.startDate) {
+      conditions.push(gte(logs.startTime, new Date(filters.startDate)));
+    }
+    if (filters.endDate) {
+      conditions.push(lte(logs.startTime, new Date(filters.endDate)));
+    }
+
+    // Free-text search across the selected columns (ILIKE, case-insensitive
+    // by default). The schema's "errorOutput" field maps to the `error` column.
+    if (filters.search) {
+      const fields = filters.searchFields?.length
+        ? filters.searchFields
+        : (["output", "errorOutput", "eventName"] as const);
+      const term = `%${filters.search}%`;
+      const likeOp = filters.caseSensitive ? like : ilike;
+      const columnFor = (field: "output" | "errorOutput" | "eventName") =>
+        field === "output"
+          ? logs.output
+          : field === "errorOutput"
+            ? logs.error
+            : logs.eventName;
+      const searchConditions = fields.map((field) =>
+        likeOp(columnFor(field), term),
+      );
+      const combined = or(...searchConditions);
+      if (combined) {
+        conditions.push(combined);
+      }
     }
 
     if (filters.workflowId !== undefined) {

@@ -41,9 +41,8 @@ export async function POST(
 
     // Broadcast execution creation via WebSocket
     try {
-      const { getWebSocketBroadcaster } = await import(
-        "@/lib/websocket-broadcaster"
-      );
+      const { getWebSocketBroadcaster } =
+        await import("@/lib/websocket-broadcaster");
       const broadcaster = getWebSocketBroadcaster();
 
       await broadcaster.broadcastExecutionUpdate(executionId, "created", {

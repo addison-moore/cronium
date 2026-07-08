@@ -7,9 +7,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { Badge } from "@cronium/ui";
 import { Activity, Server, Database, Cpu } from "lucide-react";
 
+const SERVICE_LABELS: Record<string, string> = {
+  database: "Database",
+  memory: "Memory",
+  cpu: "CPU",
+  cache: "Cache (Valkey/Redis)",
+};
+
 export default function MonitoringClient() {
   const { data: stats, isLoading } =
     api.monitoring.getSystemMonitoring.useQuery({});
+  const { data: health } = api.monitoring.getHealthCheck.useQuery({});
+  const { data: activityData } = api.monitoring.getActivityFeed.useQuery({
+    limit: 10,
+    offset: 0,
+  });
 
   if (isLoading) {
     return <MonitoringPageSkeleton />;
@@ -17,6 +29,8 @@ export default function MonitoringClient() {
 
   // Type safe access to metrics
   const metrics = stats?.metrics;
+  const services = health?.services ?? {};
+  const activities = activityData?.items ?? [];
 
   return (
     <div className="container mx-auto p-4">
@@ -92,9 +106,34 @@ export default function MonitoringClient() {
             <CardTitle>Recent Activity</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">
-              No recent activity to display
-            </p>
+            {activities.length === 0 ? (
+              <p className="text-muted-foreground">
+                No recent activity to display
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {activities.map((activity) => (
+                  <div
+                    key={activity.id}
+                    className="flex items-start justify-between gap-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {activity.title}
+                      </p>
+                      <p className="text-muted-foreground truncate text-xs">
+                        {activity.description}
+                      </p>
+                    </div>
+                    <span className="text-muted-foreground shrink-0 text-xs">
+                      {activity.timestamp
+                        ? new Date(activity.timestamp).toLocaleString()
+                        : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -103,20 +142,33 @@ export default function MonitoringClient() {
             <CardTitle>System Health</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span>Database</span>
-                <Badge variant="default">Healthy</Badge>
+            {Object.keys(services).length === 0 ? (
+              <p className="text-muted-foreground">
+                Health information unavailable
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {Object.entries(services).map(([name, service]) => (
+                  <div key={name} className="flex items-center justify-between">
+                    <span>{SERVICE_LABELS[name] ?? name}</span>
+                    <div className="flex items-center gap-2">
+                      {service.latency !== undefined && (
+                        <span className="text-muted-foreground text-xs">
+                          {Math.round(service.latency)}ms
+                        </span>
+                      )}
+                      <Badge
+                        variant={
+                          service.status === "up" ? "default" : "destructive"
+                        }
+                      >
+                        {service.status === "up" ? "Healthy" : "Down"}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="flex items-center justify-between">
-                <span>Queue Service</span>
-                <Badge variant="default">Healthy</Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>WebSocket Server</span>
-                <Badge variant="default">Healthy</Badge>
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>

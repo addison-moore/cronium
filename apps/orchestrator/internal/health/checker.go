@@ -22,11 +22,16 @@ const (
 	StatusDegraded  Status = "degraded"
 )
 
+// APIPinger probes backend API connectivity (returns error when unreachable).
+// The orchestrator's api.Client.HealthCheck satisfies this.
+type APIPinger func(ctx context.Context) error
+
 // Checker performs health checks on system components
 type Checker struct {
 	config       config.MonitoringConfig
 	dockerClient *client.Client
 	log          *logrus.Logger
+	apiPinger    APIPinger
 
 	mu         sync.RWMutex
 	lastCheck  time.Time
@@ -55,6 +60,11 @@ func NewChecker(cfg config.MonitoringConfig, log *logrus.Logger) *Checker {
 		log:        log,
 		components: make(map[string]ComponentStatus),
 	}
+}
+
+// SetAPIPinger wires a backend API connectivity probe used by checkAPI
+func (c *Checker) SetAPIPinger(pinger APIPinger) {
+	c.apiPinger = pinger
 }
 
 // Start begins periodic health checks
@@ -166,12 +176,30 @@ func (c *Checker) checkDocker(ctx context.Context) {
 
 // checkAPI checks backend API connectivity
 func (c *Checker) checkAPI(ctx context.Context) {
-	// This would normally check the actual API
-	// For now, we'll just mark it as healthy
+	// Without a configured pinger we cannot verify connectivity; report
+	// unknown as degraded rather than falsely healthy.
+	if c.apiPinger == nil {
+		c.components["api"] = ComponentStatus{
+			Status:    StatusDegraded,
+			LastCheck: time.Now(),
+			Message:   "API connectivity probe not configured",
+		}
+		return
+	}
+
+	if err := c.apiPinger(ctx); err != nil {
+		c.components["api"] = ComponentStatus{
+			Status:    StatusUnhealthy,
+			LastCheck: time.Now(),
+			Message:   fmt.Sprintf("API unreachable: %v", err),
+		}
+		return
+	}
+
 	c.components["api"] = ComponentStatus{
 		Status:    StatusHealthy,
 		LastCheck: time.Now(),
-		Message:   "API connectivity check not implemented",
+		Message:   "API reachable",
 	}
 }
 

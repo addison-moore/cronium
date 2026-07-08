@@ -17,7 +17,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@cronium/ui";
-import { Edit, Trash2, Eye, EyeOff, AlertTriangle } from "lucide-react";
+import { Edit, Trash2, AlertTriangle, Link2, Unlink } from "lucide-react";
 import {
   type ToolPlugin,
   type CredentialFormProps,
@@ -28,12 +28,12 @@ import { ToolHealthBadge } from "@/tools/ToolHealthIndicator";
 import { Badge } from "@cronium/ui";
 import { googleSheetsCredentialsSchema } from "./schemas";
 import { googleSheetsApiRoutes } from "./api-routes";
+import { trpc } from "@/lib/trpc";
+
+const GOOGLE_SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 
 const googleSheetsFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  clientId: z.string().min(1, "Client ID is required"),
-  clientSecret: z.string().min(1, "Client secret is required"),
-  refreshToken: z.string().optional(),
   scope: z.string().min(1, "Scope is required"),
   spreadsheetId: z.string().optional(),
 });
@@ -46,26 +46,34 @@ function GoogleSheetsCredentialForm({
   onSubmit,
   onCancel,
 }: CredentialFormProps) {
+  const existingCredentials: Partial<GoogleSheetsCredentials> = tool
+    ? typeof tool.credentials === "string"
+      ? (JSON.parse(tool.credentials) as GoogleSheetsCredentials)
+      : (tool.credentials as GoogleSheetsCredentials)
+    : {};
+
   const form = useForm<GoogleSheetsFormData>({
     resolver: zodResolver(googleSheetsFormSchema),
     defaultValues: tool
       ? {
           name: tool.name,
-          ...(typeof tool.credentials === "string"
-            ? (JSON.parse(tool.credentials) as GoogleSheetsCredentials)
-            : (tool.credentials as GoogleSheetsCredentials)),
+          scope: existingCredentials.scope ?? GOOGLE_SHEETS_SCOPE,
+          spreadsheetId: existingCredentials.spreadsheetId ?? "",
         }
       : {
           name: "",
-          clientId: "",
-          clientSecret: "",
-          scope: "https://www.googleapis.com/auth/spreadsheets",
+          scope: GOOGLE_SHEETS_SCOPE,
+          spreadsheetId: "",
         },
   });
 
   const handleSubmit = form.handleSubmit(async (data) => {
     const { name, ...credentials } = data;
-    await onSubmit({ name, credentials });
+    // Preserve legacy credential fields for existing tools
+    await onSubmit({
+      name,
+      credentials: { ...existingCredentials, ...credentials },
+    });
     form.reset();
   });
 
@@ -74,17 +82,10 @@ function GoogleSheetsCredentialForm({
       <Alert>
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>
-          To use Google Sheets integration, you need to set up OAuth2
-          credentials in the Google Cloud Console. Visit the{" "}
-          <a
-            href="https://console.cloud.google.com/apis/credentials"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium underline"
-          >
-            Google Cloud Console
-          </a>{" "}
-          to create credentials.
+          Google Sheets uses your server&apos;s Google OAuth app (configured by
+          the administrator via <code>OAUTH_GOOGLE_CLIENT_ID</code> /{" "}
+          <code>OAUTH_GOOGLE_CLIENT_SECRET</code>). After saving, click{" "}
+          <strong>Connect Google Account</strong> to authorize access.
         </AlertDescription>
       </Alert>
 
@@ -98,27 +99,14 @@ function GoogleSheetsCredentialForm({
       </div>
 
       <div>
-        <Label htmlFor="clientId">Client ID</Label>
+        <Label htmlFor="spreadsheetId">Default Spreadsheet ID (optional)</Label>
         <Input
-          id="clientId"
-          placeholder="your-client-id.apps.googleusercontent.com"
-          {...form.register("clientId")}
+          id="spreadsheetId"
+          placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+          {...form.register("spreadsheetId")}
         />
         <p className="text-muted-foreground mt-1 text-xs">
-          From your OAuth2 credentials
-        </p>
-      </div>
-
-      <div>
-        <Label htmlFor="clientSecret">Client Secret</Label>
-        <Input
-          id="clientSecret"
-          type="password"
-          placeholder="your-client-secret"
-          {...form.register("clientSecret")}
-        />
-        <p className="text-muted-foreground mt-1 text-xs">
-          Keep this secret and never share it
+          Used when an action does not specify a spreadsheet
         </p>
       </div>
 
@@ -132,22 +120,95 @@ function GoogleSheetsCredentialForm({
   );
 }
 
+// Connect/disconnect state for a Google Sheets tool, driven by the real
+// OAuth token status (not stored credential fields)
+function GoogleConnectSection({ toolId }: { toolId: number }) {
+  const { data: oauthStatus, refetch } = trpc.tools.checkOAuthStatus.useQuery({
+    toolId,
+    providerId: "google",
+  });
+  const revokeMutation = trpc.tools.revokeOAuthTokens.useMutation({
+    onSettled: () => void refetch(),
+  });
+  const [isConnecting, setIsConnecting] = React.useState(false);
+
+  const handleConnect = async () => {
+    setIsConnecting(true);
+    try {
+      const response = await fetch("/api/oauth/authorize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toolId,
+          providerId: "google",
+          scope: GOOGLE_SHEETS_SCOPE,
+        }),
+      });
+      const data = (await response.json()) as {
+        authUrl?: string;
+        error?: string;
+      };
+      if (!response.ok || !data.authUrl) {
+        throw new Error(data.error ?? "Failed to start Google authorization");
+      }
+      window.location.href = data.authUrl;
+    } catch (error) {
+      console.error("Google connect failed:", error);
+      setIsConnecting(false);
+    }
+  };
+
+  if (!oauthStatus) {
+    return null;
+  }
+
+  if (!oauthStatus.configured) {
+    return (
+      <Badge variant="outline" className="text-orange-600">
+        Google OAuth not configured on this server
+      </Badge>
+    );
+  }
+
+  if (oauthStatus.hasTokens) {
+    return (
+      <div className="flex items-center gap-2">
+        <Badge variant="outline" className="text-green-600">
+          Google account connected
+        </Badge>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            revokeMutation.mutate({ toolId, providerId: "google" })
+          }
+          disabled={revokeMutation.isPending}
+        >
+          <Unlink size={14} className="mr-1" />
+          Disconnect
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleConnect}
+      disabled={isConnecting}
+    >
+      <Link2 size={14} className="mr-1" />
+      Connect Google Account
+    </Button>
+  );
+}
+
 function GoogleSheetsCredentialDisplay({
   tools,
   onEdit,
   onDelete,
 }: CredentialDisplayProps) {
-  const [showSecrets, setShowSecrets] = React.useState<Record<number, boolean>>(
-    {},
-  );
-
-  const toggleSecretVisibility = (toolId: number) => {
-    setShowSecrets((prev) => ({
-      ...prev,
-      [toolId]: !prev[toolId],
-    }));
-  };
-
   return (
     <div className="space-y-3">
       {tools.map((tool) => {
@@ -155,7 +216,6 @@ function GoogleSheetsCredentialDisplay({
           typeof tool.credentials === "string"
             ? (JSON.parse(tool.credentials) as GoogleSheetsCredentials)
             : (tool.credentials as GoogleSheetsCredentials);
-        const isSecretVisible = showSecrets[tool.id];
 
         return (
           <div
@@ -167,48 +227,26 @@ function GoogleSheetsCredentialDisplay({
                 <h4 className="font-medium">{tool.name}</h4>
                 <StatusBadge status={tool.isActive ? "active" : "offline"} />
                 <ToolHealthBadge toolId={tool.id} />
-                {!credentials.refreshToken && (
-                  <Badge variant="outline" className="text-orange-600">
-                    Authorization Required
-                  </Badge>
-                )}
               </div>
               <div className="text-muted-foreground grid grid-cols-1 gap-2 text-sm">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">Client ID:</span>
+                  <span className="font-medium">Scope:</span>
                   <span className="font-mono text-xs">
-                    {credentials.clientId?.substring(0, 20)}...
+                    {credentials.scope ?? GOOGLE_SHEETS_SCOPE}
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">Client Secret:</span>
-                  <span className="font-mono text-xs">
-                    {isSecretVisible
-                      ? credentials.clientSecret
-                      : "••••••••••••••••"}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toggleSecretVisibility(tool.id)}
-                  >
-                    {isSecretVisible ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </Button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">Status:</span>
-                  <span>
-                    {credentials.refreshToken ? "Authorized" : "Not Authorized"}
-                  </span>
-                </div>
+                {credentials.spreadsheetId && (
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Default Spreadsheet:</span>
+                    <span className="font-mono text-xs">
+                      {credentials.spreadsheetId}
+                    </span>
+                  </div>
+                )}
               </div>
-              {!credentials.refreshToken && tool.isActive && (
-                <div className="mt-3">
-                  <Button variant="outline" size="sm" disabled>
-                    Authorize Access (OAuth2 coming soon)
-                  </Button>
-                </div>
-              )}
+              <div className="mt-3">
+                <GoogleConnectSection toolId={tool.id} />
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => onEdit(tool)}>
@@ -263,8 +301,12 @@ export const GoogleSheetsPlugin: ToolPlugin = {
   schema: googleSheetsCredentialsSchema,
   defaultValues: {
     name: "",
-    clientId: "",
-    clientSecret: "",
+    scope: "https://www.googleapis.com/auth/spreadsheets",
+  },
+
+  // The server injects credentials.oauthToken before executing actions
+  requiresOAuth: {
+    providerId: "google",
     scope: "https://www.googleapis.com/auth/spreadsheets",
   },
 

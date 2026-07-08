@@ -25,6 +25,17 @@ interface SmtpCredentials {
   password: string;
   fromEmail: string;
   fromName: string;
+  // Explicit TLS-on-connect override; defaults to port === 465
+  secure?: boolean;
+  // Accept self-signed certificates (private SMTP servers)
+  allowSelfSigned?: boolean;
+}
+
+// Result of a detailed send (real delivery info from the SMTP server)
+export interface EmailSendResult {
+  messageId: string;
+  accepted: string[];
+  rejected: string[];
 }
 
 // Get SMTP settings from database
@@ -79,62 +90,74 @@ export async function getSmtpSettings() {
   };
 }
 
+// Send an email and return the SMTP server's delivery info. Throws on
+// missing config or send failure (callers that need a boolean use sendEmail).
+export async function sendEmailDetailed(
+  message: EmailMessage,
+  customSmtp?: SmtpCredentials,
+): Promise<EmailSendResult> {
+  let smtp;
+
+  if (customSmtp) {
+    // Use provided custom SMTP credentials
+    smtp = customSmtp;
+  } else {
+    // Use system SMTP settings
+    smtp = await getSmtpSettings();
+  }
+
+  // Ensure we have required SMTP settings
+  if (
+    !smtp.host ||
+    !smtp.port ||
+    !smtp.user ||
+    !smtp.password ||
+    !smtp.fromEmail
+  ) {
+    throw new Error("SMTP_CONFIG_MISSING");
+  }
+
+  // Create transport
+  const transporter = nodemailer.createTransport({
+    host: smtp.host,
+    port: smtp.port,
+    secure: customSmtp?.secure ?? smtp.port === 465, // true for 465, false for other ports
+    auth: {
+      user: smtp.user,
+      pass: smtp.password,
+    },
+    // Bound connection attempts so scheduled executions don't hang
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    ...(customSmtp?.allowSelfSigned
+      ? { tls: { rejectUnauthorized: false } }
+      : {}),
+  });
+
+  // Send mail
+  const info = await transporter.sendMail({
+    from: `"${smtp.fromName}" <${smtp.fromEmail}>`,
+    to: message.to,
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+  });
+
+  console.log("Email sent:", info.messageId);
+  return {
+    messageId: info.messageId,
+    accepted: info.accepted.map(String),
+    rejected: info.rejected.map(String),
+  };
+}
+
 // Send an email using system SMTP settings or custom credentials
 export async function sendEmail(
   message: EmailMessage,
   customSmtp?: SmtpCredentials,
 ): Promise<boolean> {
   try {
-    let smtp;
-
-    if (customSmtp) {
-      // Use provided custom SMTP credentials
-      smtp = {
-        enabled: true,
-        host: customSmtp.host,
-        port: customSmtp.port,
-        user: customSmtp.user,
-        password: customSmtp.password,
-        fromEmail: customSmtp.fromEmail,
-        fromName: customSmtp.fromName,
-      };
-    } else {
-      // Use system SMTP settings
-      smtp = await getSmtpSettings();
-    }
-
-    // Ensure we have required SMTP settings
-    if (
-      !smtp.host ||
-      !smtp.port ||
-      !smtp.user ||
-      !smtp.password ||
-      !smtp.fromEmail
-    ) {
-      throw new Error("SMTP_CONFIG_MISSING");
-    }
-
-    // Create transport
-    const transporter = nodemailer.createTransport({
-      host: smtp.host,
-      port: smtp.port,
-      secure: smtp.port === 465, // true for 465, false for other ports
-      auth: {
-        user: smtp.user,
-        pass: smtp.password,
-      },
-    });
-
-    // Send mail
-    const info = await transporter.sendMail({
-      from: `"${smtp.fromName}" <${smtp.fromEmail}>`,
-      to: message.to,
-      subject: message.subject,
-      text: message.text,
-      html: message.html,
-    });
-
-    console.log("Email sent:", info.messageId);
+    await sendEmailDetailed(message, customSmtp);
     return true;
   } catch (error) {
     if (error instanceof Error && error.message === "SMTP_CONFIG_MISSING") {

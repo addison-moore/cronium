@@ -113,6 +113,38 @@ export class RateLimitService {
   }
 
   /**
+   * Non-throwing variant of checkLimit for non-tRPC callers (route handlers,
+   * webhook processing). Returns a result object instead of throwing
+   * TOO_MANY_REQUESTS.
+   */
+  static async tryCheckLimit(
+    identifier: string,
+    path: string,
+    config: RateLimitConfig,
+  ): Promise<{ allowed: boolean; remaining: number; resetAt: Date }> {
+    try {
+      const info = await RateLimitService.checkLimit(identifier, path, config);
+      return { allowed: true, remaining: info.remaining, resetAt: info.reset };
+    } catch (error) {
+      if (error instanceof TRPCError && error.code === "TOO_MANY_REQUESTS") {
+        const status = await RateLimitService.getStatus(
+          identifier,
+          path,
+          config,
+        );
+        return { allowed: false, remaining: 0, resetAt: status.reset };
+      }
+      // Unexpected error: fail open, matching checkLimit's behavior
+      console.error("Rate limiting error (fail-open):", error);
+      return {
+        allowed: true,
+        remaining: config.maxRequests,
+        resetAt: new Date(Date.now() + config.windowMs),
+      };
+    }
+  }
+
+  /**
    * Reset rate limit for a specific identifier
    * @param identifier - Unique identifier
    * @param path - API path (optional, if not provided, resets all paths)

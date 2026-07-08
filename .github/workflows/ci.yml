@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  node:
+    name: Lint, Typecheck & Test (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.25.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+  go:
+    name: Vet & Test (Go)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: |
+            apps/orchestrator/go.sum
+            apps/runtime/cronium-runtime/go.sum
+            apps/runner/cronium-runner/go.sum
+
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin"
+
+      - name: Vet & test orchestrator
+        working-directory: apps/orchestrator
+        run: |
+          go vet ./...
+          go test ./...
+
+      - name: Vet & test runtime
+        working-directory: apps/runtime/cronium-runtime
+        run: |
+          go vet ./...
+          go test ./...
+
+      - name: Vet & test runner
+        working-directory: apps/runner/cronium-runner
+        run: |
+          go vet ./...
+          go test ./...
+
+      - name: Lint (golangci-lint) orchestrator
+        working-directory: apps/orchestrator
+        run: ../../infra/scripts/lint-go.sh
+
+      - name: Lint (golangci-lint) runtime
+        working-directory: apps/runtime/cronium-runtime
+        run: ../../../infra/scripts/lint-go.sh

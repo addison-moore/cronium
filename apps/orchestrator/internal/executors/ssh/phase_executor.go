@@ -155,7 +155,7 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 		
 		cleanupSession, _ := conn.NewSession()
 		if cleanupSession != nil {
-			cleanupSession.Run(fmt.Sprintf("rm -f %s", remotePayloadPath))
+			cleanupSession.Run(fmt.Sprintf("rm -f %s %s.sig", remotePayloadPath, remotePayloadPath))
 			cleanupSession.Close()
 		}
 		
@@ -195,7 +195,7 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 		"payload":    remotePayloadPath,
 	}).Info("Starting script execution phase")
 
-	exitCode := e.runScriptWithTimeout(execCtx, session, conn, runnerPath, remotePayloadPath, job, updates, executionID, timing, execTimeout)
+	exitCode := e.runScriptWithTimeout(execCtx, session, conn, runnerPath, remotePayloadPath, e.payloadVerifyKey(payloadPath), job, updates, executionID, timing, execTimeout)
 
 	// Mark execution as complete
 	timing.MarkExecutionComplete()
@@ -235,7 +235,7 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 }
 
 // runScriptWithTimeout executes the script with the given timeout
-func (e *Executor) runScriptWithTimeout(ctx context.Context, session *ssh.Session, conn *ssh.Client, runnerPath, payloadPath string, job *types.Job, updates chan types.ExecutionUpdate, executionID string, timing *ExecutionTiming, timeout time.Duration) int {
+func (e *Executor) runScriptWithTimeout(ctx context.Context, session *ssh.Session, conn *ssh.Client, runnerPath, payloadPath, verifyKey string, job *types.Job, updates chan types.ExecutionUpdate, executionID string, timing *ExecutionTiming, timeout time.Duration) int {
 	// Set up pipes for stdout and stderr
 	stdout, err := session.StdoutPipe()
 	if err != nil {
@@ -257,6 +257,11 @@ func (e *Executor) runScriptWithTimeout(ctx context.Context, session *ssh.Sessio
 		fmt.Sprintf("CRONIUM_JOB_ID=%s", job.ID),
 		fmt.Sprintf("CRONIUM_EXECUTION_ID=%s", executionID),
 	)
+
+	// Pass the payload verification key so the runner enforces the signature
+	if verifyKey != "" {
+		envVars = append(envVars, fmt.Sprintf("CRONIUM_VERIFY_KEY=%s", verifyKey))
+	}
 
 	// Check if we should use API mode
 	useAPIMode := e.runtimePort > 0 && e.jwtSecret != ""

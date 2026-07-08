@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-// import { jobService } from "@/lib/services/job-service";
+import { storage } from "@/server/storage";
 
 // Orchestrator heartbeat
 export async function POST(request: NextRequest) {
@@ -31,18 +31,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update job heartbeats for running jobs
-    if (body.runningJobs && body.runningJobs.length > 0) {
-      // TODO: Implement heartbeat update for jobs
-      // This would update a last_heartbeat timestamp on running jobs
-      // to detect stalled jobs
-      for (const _jobId of body.runningJobs) {
-        // await jobService.updateHeartbeat(_jobId);
-      }
-    }
-
-    // TODO: Store orchestrator last seen timestamp
-    // This helps detect offline orchestrators
+    // Persist the latest heartbeat so offline orchestrators can be detected.
+    // Stored as a system_settings row (no dedicated table needed).
+    await storage.upsertSetting(
+      `orchestrator:${body.orchestratorId}:heartbeat`,
+      JSON.stringify({
+        orchestratorId: body.orchestratorId,
+        lastSeenAt: new Date().toISOString(),
+        runningJobs: body.runningJobs ?? [],
+        capacity: body.capacity ?? null,
+      }),
+    );
 
     return NextResponse.json({
       success: true,

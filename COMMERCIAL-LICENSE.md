@@ -12,7 +12,7 @@ If you only use Cronium under the AGPL-3.0, this document does not apply to you.
 
 ## 1. Definitions
 
-- **"Cronium"** refers to the Cronium software, including its source code, object code, related documentation, and other files, as distributed in the public repository at https://github.com/cronium/cronium.
+- **"Cronium"** refers to the Cronium software, including its source code, object code, related documentation, and other files, as distributed in the public repository at https://github.com/addison-moore/cronium.
 - **"You"** refers to the individual or legal entity exercising permissions granted by this License.
 - **"Commercial Use"** means use of Cronium:
   - As part of a closed-source or proprietary product;

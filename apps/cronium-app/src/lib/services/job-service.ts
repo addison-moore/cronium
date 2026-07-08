@@ -69,7 +69,8 @@ export interface UpdateJobInput {
     metrics?: Record<string, unknown>;
   };
   attempts?: number;
-  lastError?: string;
+  lastError?: string | undefined;
+  scheduledFor?: Date;
 }
 
 export interface JobFilter {
@@ -222,7 +223,9 @@ export class JobService {
       updateData.completedAt = update.completedAt ?? null;
     if ("result" in update) updateData.result = update.result;
     if ("attempts" in update) updateData.attempts = update.attempts;
-    if ("lastError" in update) updateData.lastError = update.lastError;
+    if ("lastError" in update) updateData.lastError = update.lastError ?? null;
+    if ("scheduledFor" in update && update.scheduledFor)
+      updateData.scheduledFor = update.scheduledFor;
 
     const [updated] = await this.db
       .update(jobsTable)
@@ -444,6 +447,70 @@ export class JobService {
   }
 
   /**
+   * If a failed job still has retry budget (payload.retries), requeue it with
+   * an exponential backoff delay and return the updated job. Otherwise return
+   * null so the caller finalizes it as FAILED. Backoff: 5s · 2^attempts,
+   * capped at 5 minutes.
+   */
+  private async maybeRequeueFailedJob(
+    jobId: string,
+    error?: string,
+  ): Promise<Job | null> {
+    const job = await this.getJob(jobId);
+    if (!job) return null;
+
+    const payload = job.payload as { retries?: number } | undefined;
+    const maxAttempts = payload?.retries ?? 0;
+    const currentAttempts = job.attempts ?? 0;
+
+    // attempts counts prior tries; allow up to maxAttempts retries
+    if (maxAttempts <= 0 || currentAttempts >= maxAttempts) {
+      return null;
+    }
+
+    const nextAttempt = currentAttempts + 1;
+    const backoffMs = Math.min(5000 * 2 ** currentAttempts, 5 * 60 * 1000);
+    const scheduledFor = new Date(Date.now() + backoffMs);
+
+    const requeued = await this.updateJob(jobId, {
+      status: JobStatus.QUEUED,
+      orchestratorId: undefined,
+      startedAt: undefined,
+      completedAt: undefined,
+      attempts: nextAttempt,
+      lastError: error,
+      scheduledFor,
+    });
+
+    console.log(
+      `[JobService] Job ${jobId} failed (attempt ${nextAttempt}/${maxAttempts}); ` +
+        `requeued for retry in ${Math.round(backoffMs / 1000)}s`,
+    );
+
+    // Record the retry on the execution log without finalizing it
+    const meta = job.payload as { executionLogId?: number } | undefined;
+    const metadata = job.metadata as { executionLogId?: number } | undefined;
+    const executionLogId = meta?.executionLogId ?? metadata?.executionLogId;
+    if (executionLogId) {
+      try {
+        await storage.updateLog(executionLogId, {
+          status: LogStatus.RUNNING,
+          error: `Attempt ${currentAttempts + 1} failed, retrying in ${Math.round(
+            backoffMs / 1000,
+          )}s: ${error ?? "unknown error"}`,
+        });
+      } catch (logError) {
+        console.error(
+          "[JobService] Failed to record retry on execution log:",
+          logError,
+        );
+      }
+    }
+
+    return requeued;
+  }
+
+  /**
    * Update job status and associated log status
    */
   async updateJobStatus(
@@ -461,6 +528,16 @@ export class JobService {
       setupDuration?: number; // Setup time in milliseconds
     },
   ): Promise<Job | null> {
+    // Retry-with-backoff: when a job fails but has retry budget left, requeue
+    // it with an exponential backoff delay instead of finalizing as FAILED.
+    // This runs before any log finalization / conditional-action side effects.
+    if (status === JobStatus.FAILED) {
+      const retried = await this.maybeRequeueFailedJob(jobId, data?.error);
+      if (retried) {
+        return retried;
+      }
+    }
+
     // Update the job
     const updateInput: UpdateJobInput = {
       status,
@@ -553,9 +630,8 @@ export class JobService {
 
       // Broadcast the update via enhanced broadcaster
       try {
-        const { getWebSocketBroadcaster } = await import(
-          "@/lib/websocket-broadcaster"
-        );
+        const { getWebSocketBroadcaster } =
+          await import("@/lib/websocket-broadcaster");
         const broadcaster = getWebSocketBroadcaster();
 
         const result = await broadcaster.broadcastLogUpdate(executionLogId, {

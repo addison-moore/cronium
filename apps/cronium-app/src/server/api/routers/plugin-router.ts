@@ -122,6 +122,16 @@ function createPluginProcedure(
         });
       }
 
+      // Inject a fresh OAuth access token for plugins that require it
+      // (e.g. Google Sheets routes read credentials.oauthToken)
+      const { injectOAuthToken } =
+        await import("@/lib/oauth/credential-bridge");
+      tool.credentials = await injectOAuthToken(tool.credentials, {
+        userId: ctx.session.user.id,
+        toolId,
+        toolType: tool.type,
+      });
+
       // Create the plugin route context
       const pluginContext: PluginRouteContext = {
         userId: ctx.session.user.id,
@@ -150,14 +160,30 @@ function createPluginProcedure(
               throw new Error("Missing required SMTP configuration");
             }
 
+            // Real SMTP handshake, not just field presence
+            const nodemailer = (await import("nodemailer")).default;
+            const transporter = nodemailer.createTransport({
+              host: creds.smtpHost as string,
+              port: creds.smtpPort as number,
+              secure: (creds.enableSSL as boolean | undefined) ?? false,
+              auth: {
+                user: creds.smtpUser as string,
+                pass: creds.smtpPassword as string,
+              },
+              connectionTimeout: 10_000,
+              greetingTimeout: 10_000,
+              tls: { rejectUnauthorized: false },
+            });
+            await transporter.verify();
+
             const latency = Date.now() - startTime;
 
             result = {
               success: true,
-              message: "SMTP configuration validated successfully",
+              message: "SMTP connection verified successfully",
               details: {
                 latency,
-                serverInfo: `Configuration for ${String(creds.smtpHost)}:${String(creds.smtpPort)} is valid`,
+                serverInfo: `Connected to ${String(creds.smtpHost)}:${String(creds.smtpPort)}`,
               },
             };
           } catch (error) {

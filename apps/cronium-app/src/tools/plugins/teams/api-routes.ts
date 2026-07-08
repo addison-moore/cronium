@@ -23,27 +23,16 @@ export const teamsApiRoutes: PluginApiRoutes = {
         toolId: z.number().int().positive(),
       }),
       output: testConnectionResponseSchema,
-      handler: async () => {
-        // Mock implementation for now
-        // TODO: Implement actual Teams API test
-        try {
-          await new Promise((resolve) => setTimeout(resolve, 500));
-
-          return {
-            success: true,
-            message: "Successfully connected to Microsoft Teams",
-            details: {
-              tenantName: "Mock Organization",
-              permissions: ["Chat.ReadWrite", "ChannelMessage.Send"],
-            },
-          };
-        } catch (error) {
-          return {
-            success: false,
-            message:
-              error instanceof Error ? error.message : "Connection failed",
-          };
-        }
+      handler: async ({ ctx }) => {
+        // Dynamic import: this file is shared with the client bundle, but
+        // handlers only run server-side via the plugin router.
+        const { testToolConnection } =
+          await import("@/server/api/routers/tools/connection-tests");
+        const result = await testToolConnection("teams", ctx.tool.credentials);
+        return {
+          success: result.success,
+          message: result.message,
+        };
       },
     },
     requiresAuth: true,

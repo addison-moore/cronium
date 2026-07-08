@@ -84,7 +84,7 @@ export const bulkLogOperationSchema = z.object({
   logIds: z
     .array(z.number().int().positive())
     .min(1, "At least one log must be selected"),
-  operation: z.enum(["delete", "export", "archive"]),
+  operation: z.enum(["delete", "export"]),
 });
 
 // Log export schema

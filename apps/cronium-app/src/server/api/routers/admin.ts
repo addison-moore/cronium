@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createTRPCRouter, adminProcedure } from "../trpc";
+import { createTRPCRouter, adminProcedure, protectedProcedure } from "../trpc";
 import {
   normalizePagination,
   createPaginatedResult,
@@ -27,7 +27,7 @@ import {
 } from "@/shared/schemas/admin";
 import { storage } from "@/server/storage";
 import { UserRole, UserStatus } from "@/shared/schema";
-import { sendInvitationEmail } from "@/lib/email";
+import { sendInvitationEmail, sendEmailDetailed } from "@/lib/email";
 
 // Define Log interface for proper typing
 export interface Log {
@@ -580,6 +580,47 @@ export const adminRouter = createTRPCRouter({
       );
     }),
 
+  // Send a test email using the saved system SMTP settings
+  sendTestEmail: adminProcedure
+    .input(z.object({ to: z.string().email().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const recipient = input.to ?? ctx.session.user.email;
+      if (!recipient) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "No recipient email address available",
+        });
+      }
+
+      try {
+        const result = await sendEmailDetailed({
+          to: recipient,
+          subject: "Cronium test email",
+          text: "This is a test email from Cronium. Your SMTP settings are working.",
+          html: "<p>This is a test email from Cronium. Your SMTP settings are working.</p>",
+        });
+        return {
+          success: true,
+          message: `Test email sent to ${recipient} (message ID: ${result.messageId})`,
+        };
+      } catch (error) {
+        if (error instanceof Error && error.message === "SMTP_CONFIG_MISSING") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "SMTP is not configured. Save your SMTP settings first, then send a test email.",
+          });
+        }
+        return {
+          success: false,
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to send test email",
+        };
+      }
+    }),
+
   // Get system statistics
   getSystemStats: adminProcedure
     .input(systemStatsSchema)
@@ -634,98 +675,41 @@ export const adminRouter = createTRPCRouter({
       );
     }),
 
-  // Log Management
-  // Get system logs
-  getLogs: adminProcedure
-    .input(adminLogsSchema)
-    .query(async ({ ctx, input }) => {
-      return withErrorHandling(
-        async () => {
-          // TODO: Implement log retrieval from storage
-          const logs: Log[] = [];
-
-          const pagination = normalizePagination(input);
-          const result = createPaginatedResult(logs, 0, pagination);
-
-          return listResponse(result);
-        },
-        {
-          component: "adminRouter",
-          operationName: "getLogs",
-          userId: ctx.session.user.id,
-        },
-      );
-    }),
-
-  // Get single log entry
-  getLog: adminProcedure.input(logIdSchema).query(async ({ ctx }) => {
-    return withErrorHandling(
-      async () => {
-        // TODO: Implement single log retrieval
-        throw notFoundError("Log");
-      },
-      {
-        component: "adminRouter",
-        operationName: "getLog",
-        userId: ctx.session.user.id,
-      },
-    );
-  }),
-
   // Role Management
-  // Get all roles
-  getRoles: adminProcedure.query(async ({ ctx }) => {
+  // Get all roles. protectedProcedure (not admin): role definitions aren't
+  // sensitive, and every user's client needs them to resolve nav permissions
+  // (usePermissions).
+  getRoles: protectedProcedure.query(async ({ ctx }) => {
     return withErrorHandling(
       async () => {
-        // Define default roles with permissions
-        const defaultRoles = [
-          {
-            id: 1,
-            name: "Admin",
-            description: "Full system access",
-            permissions: {
-              console: true,
-              monitoring: true,
-              localServerAccess: true,
-            },
-            isDefault: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          {
-            id: 2,
-            name: "User",
-            description: "Standard user access",
-            permissions: {
-              console: true,
-              monitoring: true,
-              localServerAccess: false,
-            },
-            isDefault: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          {
-            id: 3,
-            name: "Viewer",
-            description: "Read-only access",
-            permissions: {
-              console: false,
-              monitoring: true,
-              localServerAccess: false,
-            },
-            isDefault: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ];
+        const storedRoles = await storage.listRoles();
 
-        // TODO: In the future, fetch custom roles from storage
+        const items = storedRoles.map((role) => {
+          const permissions = (role.permissions ?? {}) as Partial<{
+            console: boolean;
+            monitoring: boolean;
+            localServerAccess: boolean;
+          }>;
+          return {
+            id: role.id,
+            name: role.name,
+            description: role.description ?? "",
+            permissions: {
+              console: permissions.console ?? false,
+              monitoring: permissions.monitoring ?? false,
+              localServerAccess: permissions.localServerAccess ?? false,
+            },
+            isDefault: role.isDefault,
+            createdAt: role.createdAt.toISOString(),
+            updatedAt: role.updatedAt.toISOString(),
+          };
+        });
+
         return listResponse({
-          items: defaultRoles,
-          total: defaultRoles.length,
+          items,
+          total: items.length,
           hasMore: false,
-          limit: defaultRoles.length,
+          limit: items.length,
           offset: 0,
         });
       },
@@ -752,12 +736,29 @@ export const adminRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       return withErrorHandling(
         async () => {
-          // TODO: Implement role permission updates in storage
-          // For now, return success
+          const role = await storage.getRoleById(input.roleId);
+          if (!role) {
+            throw notFoundError("Role");
+          }
+
+          // The Admin role bypasses granular checks everywhere; persisting
+          // reduced permissions for it would make the UI lie
+          if (role.name.toLowerCase() === "admin") {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "The Admin role's permissions cannot be changed",
+            });
+          }
+
+          const updated = await storage.updateRolePermissions(
+            input.roleId,
+            input.permissions,
+          );
+
           return mutationResponse(
             {
               roleId: input.roleId,
-              permissions: input.permissions,
+              permissions: updated?.permissions ?? input.permissions,
             },
             "Role permissions updated successfully",
           );
@@ -824,141 +825,6 @@ export const adminRouter = createTRPCRouter({
         {
           component: "adminRouter",
           operationName: "resendInvitation",
-          userId: ctx.session.user.id,
-        },
-      );
-    }),
-
-  // Admin Logs Management
-  getAdminLogs: adminProcedure
-    .input(adminLogsSchema)
-    .query(async ({ ctx, input }) => {
-      return withErrorHandling(
-        async () => {
-          // For now, use the existing getLogs operation
-          // TODO: Implement proper admin log retrieval from storage
-          const logs: Log[] = [];
-
-          const pagination = normalizePagination(input);
-          const result = createPaginatedResult(logs, 0, pagination);
-
-          return listResponse(result);
-        },
-        {
-          component: "adminRouter",
-          operationName: "getAdminLogs",
-          userId: ctx.session.user.id,
-        },
-      );
-    }),
-
-  // Get admin log by ID
-  getAdminLog: adminProcedure.input(logIdSchema).query(async ({ ctx }) => {
-    return withErrorHandling(
-      async () => {
-        // TODO: Implement single admin log retrieval
-        throw notFoundError("Admin log");
-      },
-      {
-        component: "adminRouter",
-        operationName: "getAdminLog",
-        userId: ctx.session.user.id,
-      },
-    );
-  }),
-
-  // Enhanced Roles Management
-  getAdminRoles: adminProcedure.query(async ({ ctx }) => {
-    return withErrorHandling(
-      async () => {
-        // Use the existing getRoles implementation but with admin prefix for clarity
-        const defaultRoles = [
-          {
-            id: 1,
-            name: "Admin",
-            description: "Full system access",
-            permissions: {
-              console: true,
-              monitoring: true,
-              localServerAccess: true,
-            },
-            isDefault: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          {
-            id: 2,
-            name: "User",
-            description: "Standard user access",
-            permissions: {
-              console: true,
-              monitoring: true,
-              localServerAccess: false,
-            },
-            isDefault: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          {
-            id: 3,
-            name: "Viewer",
-            description: "Read-only access",
-            permissions: {
-              console: false,
-              monitoring: true,
-              localServerAccess: false,
-            },
-            isDefault: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ];
-
-        // TODO: In the future, fetch custom roles from storage
-        return listResponse({
-          items: defaultRoles,
-          total: defaultRoles.length,
-          hasMore: false,
-          limit: defaultRoles.length,
-          offset: 0,
-        });
-      },
-      {
-        component: "adminRouter",
-        operationName: "getAdminRoles",
-        userId: ctx.session.user.id,
-      },
-    );
-  }),
-
-  // Update admin role permissions
-  updateAdminRolePermissions: adminProcedure
-    .input(
-      z.object({
-        roleId: z.number(),
-        permissions: z.object({
-          console: z.boolean(),
-          monitoring: z.boolean(),
-          localServerAccess: z.boolean(),
-        }),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      return withErrorHandling(
-        async () => {
-          // TODO: Implement role permission updates in storage
-          // For now, return success
-          return mutationResponse(
-            {
-              roleId: input.roleId,
-              permissions: input.permissions,
-            },
-            "Admin role permissions updated successfully",
-          );
-        },
-        {
-          component: "adminRouter",
-          operationName: "updateAdminRolePermissions",
           userId: ctx.session.user.id,
         },
       );

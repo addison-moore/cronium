@@ -111,23 +111,15 @@ export const slackRouter = createTRPCRouter({
         });
       }
 
-      // Test the webhook URL
-      const webhookUrl = tool.credentials.webhookUrl as string | undefined;
-      if (!webhookUrl?.startsWith("https://hooks.slack.com/")) {
-        return {
-          success: false,
-          message: "Invalid webhook URL",
-        };
-      }
-
-      // In production, this would actually test the connection
+      // Real webhook test (posts a visible test message to the channel)
+      const { testToolConnection } = await import("./connection-tests");
+      const result = await testToolConnection("slack", tool.credentials);
       return {
-        success: true,
-        message: "Slack connection test successful",
-        details: {
-          workspace: "Example Workspace",
-          channel: tool.credentials.channel ?? "default",
-        },
+        success: result.success,
+        message: result.message,
+        details: result.success
+          ? { channel: tool.credentials.channel ?? "default" }
+          : undefined,
       };
     }),
 });

@@ -106,6 +106,23 @@ export default function AdminPage() {
       },
     });
 
+  const sendTestEmailMutation = trpc.admin.sendTestEmail.useMutation({
+    onSuccess: (result) => {
+      toast({
+        title: result.success ? "Test email sent" : "Test email failed",
+        description: result.message,
+        variant: result.success ? "default" : "destructive",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Test email failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const inviteUserMutation = trpc.admin.inviteUser.useMutation({
     onSuccess: (response) => {
       toast({
@@ -315,7 +332,12 @@ export default function AdminPage() {
         </TabsList>
 
         <TabsContent value="smtp">
-          <SmtpSettings settings={settings} onSave={saveSmtpSettings} />
+          <SmtpSettings
+            settings={settings}
+            onSave={saveSmtpSettings}
+            onSendTest={() => sendTestEmailMutation.mutate({})}
+            isSendingTest={sendTestEmailMutation.isPending}
+          />
         </TabsContent>
 
         <TabsContent value="registration">

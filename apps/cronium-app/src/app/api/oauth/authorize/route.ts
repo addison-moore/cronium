@@ -3,11 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { z } from "zod";
 import { OAuthFlow } from "@/lib/oauth/OAuthFlow";
-import {
-  GoogleOAuthProvider,
-  MicrosoftOAuthProvider,
-  SlackOAuthProvider,
-} from "@/lib/oauth/providers";
+import { createProviderFromEnv } from "@/lib/oauth/providers";
 import { db } from "@/server/db";
 import { toolCredentials } from "@/shared/schema";
 import { eq } from "drizzle-orm";
@@ -44,60 +40,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get OAuth configuration from environment
-    const clientId = process.env[`OAUTH_${providerId.toUpperCase()}_CLIENT_ID`];
-    const clientSecret =
-      process.env[`OAUTH_${providerId.toUpperCase()}_CLIENT_SECRET`];
-
-    if (!clientId || !clientSecret) {
+    // Create provider from OAUTH_<PROVIDER>_CLIENT_ID/SECRET env config
+    const provider = createProviderFromEnv(providerId, scope);
+    if (!provider) {
       return NextResponse.json(
         { error: `OAuth not configured for ${providerId}` },
         { status: 400 },
       );
     }
 
-    // Create redirect URI
+    // Redirect URI must match the one registered with the provider
     const baseUrl = process.env.AUTH_URL ?? "http://localhost:5001";
     const redirectUri = `${baseUrl}/api/oauth/callback`;
-
-    // Create provider
-    let provider;
-    switch (providerId) {
-      case "google":
-        provider = new GoogleOAuthProvider({
-          clientId,
-          clientSecret,
-          redirectUri,
-          scope: scope ?? "openid email profile",
-        });
-        break;
-
-      case "microsoft":
-        const tenantId = process.env.OAUTH_MICROSOFT_TENANT_ID;
-        provider = new MicrosoftOAuthProvider({
-          clientId,
-          clientSecret,
-          redirectUri,
-          scope: scope ?? "offline_access User.Read",
-          ...(tenantId && { tenantId }),
-        });
-        break;
-
-      case "slack":
-        provider = new SlackOAuthProvider({
-          clientId,
-          clientSecret,
-          redirectUri,
-          scope: scope ?? "channels:read,chat:write",
-        });
-        break;
-
-      default:
-        return NextResponse.json(
-          { error: "Invalid provider" },
-          { status: 400 },
-        );
-    }
 
     // Initialize OAuth flow
     const flow = new OAuthFlow(provider);

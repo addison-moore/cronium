@@ -249,6 +249,13 @@ export interface ToolPlugin {
   // API Routes (new)
   apiRoutes?: PluginApiRoutes;
 
+  // OAuth requirement: when set, the server injects a fresh access token as
+  // credentials.oauthToken before executing actions (metadata only)
+  requiresOAuth?: {
+    providerId: "google" | "microsoft" | "slack";
+    scope: string;
+  };
+
   // Credentials
   credentials?: ToolCredentials;
 

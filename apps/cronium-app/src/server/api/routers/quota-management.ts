@@ -186,12 +186,10 @@ export const quotaManagementRouter = createTRPCRouter({
   // Get all quotas and limits configuration
   getConfiguration: protectedProcedure.query(async ({ ctx }) => {
     const userQuota = await quotaManager.getQuotaStatus(ctx.session.user.id);
-    // TODO: Implement getEnforcementRules method in QuotaEnforcer
-    // const enforcementRules = quotaEnforcer.getEnforcementRules();
 
     return {
       quotas: userQuota,
-      rules: {}, // TODO: Add enforcement rules when implemented
+      rules: quotaManager.getEnforcementRules(),
       features: {
         toolActions: {
           name: "Tool Actions",

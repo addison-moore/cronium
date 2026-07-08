@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { MonitoringPageSkeleton } from "@/components/dashboard/DashboardStatsSkeleton";
-import { UserRole } from "@/shared/schema";
+import { hasServerPermission } from "@/server/permissions";
 import MonitoringClient from "@/components/monitoring/MonitoringClient";
 
 export async function generateMetadata() {
@@ -21,8 +21,8 @@ export default async function MonitoringPage() {
     redirect("/auth/signin");
   }
 
-  // Check admin role
-  if (session.user.role !== UserRole.ADMIN) {
+  // Check monitoring permission (admins always pass)
+  if (!(await hasServerPermission(session.user.id, "monitoring"))) {
     redirect("/dashboard");
   }
 

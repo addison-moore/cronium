@@ -7,7 +7,6 @@ import {
   createToolSchema,
   updateToolSchema,
   toolIdSchema,
-  testToolSchema,
   bulkToolOperationSchema,
   toolUsageSchema,
   validateToolCredentialsSchema,
@@ -23,6 +22,7 @@ import {
 } from "@/lib/security/credential-encryption";
 import { auditLog } from "@/lib/security/audit-logger";
 import { buildPluginRouter } from "./plugin-router";
+import { testToolConnection } from "./tools/connection-tests";
 import { slackRouter } from "./tools/slack-routes";
 import { discordRouter } from "./tools/discord-routes";
 import { emailRouter } from "./tools/email-routes";
@@ -284,9 +284,8 @@ async function validateCredentialsForType(
 ): Promise<{ valid: boolean; errors: string[] }> {
   try {
     // Import server-side validation registry (no React components)
-    const { validateToolCredentials } = await import(
-      "@/tools/plugins/validation-registry"
-    );
+    const { validateToolCredentials } =
+      await import("@/tools/plugins/validation-registry");
 
     // Validate using the server-side registry
     return validateToolCredentials(type, credentials);
@@ -393,40 +392,33 @@ export const toolsRouter = createTRPCRouter({
         }
 
         const startTime = Date.now();
+
+        // Real provider check (SMTP verify, API auth call, webhook POST, ...)
+        const connectionResult = await testToolConnection(
+          tool.type,
+          tool.credentials,
+        );
+
         const testResult = {
-          success: true,
-          message: `${tool.type} connection test successful`,
+          success: connectionResult.success,
+          message: connectionResult.message,
           duration: 0,
-          details: {} as Record<string, unknown>,
+          details: {
+            ...(connectionResult.details ?? {}),
+            authenticated: connectionResult.success,
+          } as Record<string, unknown>,
         };
 
-        // Plugin-based health checks are handled via the plugin router
-        // This is just a fallback for legacy tools
+        // Check if this is being used in any tool actions
         try {
-          // Default health check details
-          testResult.details.authenticated = true;
-          testResult.details.permissions = [];
-          testResult.details.latency = Math.floor(Math.random() * 500) + 100;
-
-          // Add quota information (mock for now)
-          testResult.details.quota = {
-            used: Math.floor(Math.random() * 800),
-            limit: 1000,
-            resetAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-          };
-
-          // Check if this is being used in any tool actions
           const toolActionUsage = await checkToolActionUsage(tool.id);
           testResult.details.toolActionUsage = toolActionUsage;
-        } catch (checkError) {
-          testResult.success = false;
-          testResult.message =
-            checkError instanceof Error
-              ? checkError.message
-              : "Health check failed";
+        } catch {
+          // Usage lookup is informational; don't fail the test over it
         }
 
         testResult.duration = Date.now() - startTime;
+        testResult.details.latency = testResult.duration;
 
         return testResult;
       } catch (error) {
@@ -904,55 +896,6 @@ export const toolsRouter = createTRPCRouter({
       }
     }),
 
-  // Test tool connection
-  test: protectedProcedure
-    .input(testToolSchema)
-    .mutation(async ({ ctx, input }) => {
-      try {
-        const tools = await getUserTools(ctx.session.user.id);
-        const tool = tools.find((t) => t.id === input.id);
-
-        if (!tool) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Tool not found" });
-        }
-
-        // Mock testing tool connection
-        const testResults = {
-          success: true,
-          message: `${tool.type} connection test successful`,
-          details: {
-            toolType: tool.type,
-            toolName: tool.name,
-            testDuration: Math.floor(Math.random() * 1000) + 100, // 100-1100ms
-            timestamp: new Date().toISOString(),
-          } as {
-            toolType: string;
-            toolName: string;
-            testDuration: number;
-            timestamp: string;
-            [key: string]: unknown; // Allow additional properties
-          },
-        };
-
-        // Plugin-specific test details are handled via the plugin router
-        // This provides generic details for all tools
-        testResults.details = {
-          ...testResults.details,
-          toolType: tool.type,
-          isActive: tool.isActive,
-        };
-
-        return testResults;
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to test tool",
-          cause: error,
-        });
-      }
-    }),
-
   // Validate tool credentials
   validateCredentials: protectedProcedure
     .input(validateToolCredentialsSchema)
@@ -1261,9 +1204,8 @@ export const toolsRouter = createTRPCRouter({
     .query(async ({ input }) => {
       try {
         // Import tool plugin registry
-        const { ToolPluginRegistry } = await import(
-          "@/tools/types/tool-plugin"
-        );
+        const { ToolPluginRegistry } =
+          await import("@/tools/types/tool-plugin");
 
         if (input.toolType) {
           const plugin = ToolPluginRegistry.get(input.toolType);
@@ -1301,9 +1243,8 @@ export const toolsRouter = createTRPCRouter({
     )
     .query(async ({ input }) => {
       try {
-        const { toolActionHealthMonitor } = await import(
-          "@/lib/scheduler/tool-action-health-monitor"
-        );
+        const { toolActionHealthMonitor } =
+          await import("@/lib/scheduler/tool-action-health-monitor");
 
         if (input?.toolId && input?.actionId) {
           // Get health for specific tool action
@@ -1381,9 +1322,8 @@ export const toolsRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       try {
         // Import tool plugin registry
-        const { ToolPluginRegistry } = await import(
-          "@/tools/types/tool-plugin"
-        );
+        const { ToolPluginRegistry } =
+          await import("@/tools/types/tool-plugin");
 
         const action = ToolPluginRegistry.getActionById(input.actionId);
         if (!action) {
@@ -1445,9 +1385,8 @@ export const toolsRouter = createTRPCRouter({
         }
 
         // Import tool plugin registry
-        const { ToolPluginRegistry } = await import(
-          "@/tools/types/tool-plugin"
-        );
+        const { ToolPluginRegistry } =
+          await import("@/tools/types/tool-plugin");
 
         const action = ToolPluginRegistry.getActionById(input.actionId);
         if (!action) {
@@ -1493,10 +1432,19 @@ export const toolsRouter = createTRPCRouter({
           },
         };
 
+        // Inject a fresh OAuth access token for plugins that require it
+        const { injectOAuthToken } =
+          await import("@/lib/oauth/credential-bridge");
+        const credentials = await injectOAuthToken(tool.credentials, {
+          userId: ctx.session.user.id,
+          toolId: tool.id,
+          toolType: tool.type,
+        });
+
         // Execute the action
         const startTime = Date.now();
         const result = (await action.execute(
-          tool.credentials,
+          credentials,
           input.parameters,
           context,
         )) as unknown;

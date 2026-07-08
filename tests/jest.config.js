@@ -8,10 +8,10 @@ module.exports = {
   roots: ["<rootDir>"],
   testMatch: ["**/*.test.ts", "**/*.test.tsx"],
   moduleNameMapper: {
-    "^@/(.*)$": "<rootDir>/../src/$1",
-    "^@shared/(.*)$": "<rootDir>/../src/shared/$1",
-    "^@server/(.*)$": "<rootDir>/../src/server/$1",
-    "^@lib/(.*)$": "<rootDir>/../src/lib/$1",
+    "^@/(.*)$": "<rootDir>/../apps/cronium-app/src/$1",
+    "^@shared/(.*)$": "<rootDir>/../apps/cronium-app/src/shared/$1",
+    "^@server/(.*)$": "<rootDir>/../apps/cronium-app/src/server/$1",
+    "^@lib/(.*)$": "<rootDir>/../apps/cronium-app/src/lib/$1",
   },
   transform: {
     "^.+\\.tsx?$": [

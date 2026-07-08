@@ -78,16 +78,16 @@ export function IntegrationTestPanel({
     { enabled: !!toolId },
   );
 
-  // Note: This component appears to be deprecated - consider removing
-  // Using a default plugin mutation for now
-  const testConnectionMutation = trpc.tools.test.useMutation();
+  const testConnectionMutation = trpc.tools.testConnection.useMutation();
 
   // Dynamic access to plugin mutations
   const pluginRoutes = trpc.tools.plugins as Record<
     string,
     {
       testConnection?: {
-        useMutation: () => ReturnType<typeof trpc.tools.test.useMutation>;
+        useMutation: () => ReturnType<
+          typeof trpc.tools.testConnection.useMutation
+        >;
       };
     }
   >;
@@ -128,21 +128,15 @@ export function IntegrationTestPanel({
             id: tool.id,
           })) as TestResponse;
         } else {
-          // Fallback to legacy test connection
           result = (await testConnectionMutation.mutateAsync({
             id: tool.id,
-            testData: {},
           })) as TestResponse;
         }
       } else {
-        // Use the legacy test message endpoint for send tests
+        // Send tests run the real connection test (which posts a test
+        // message for webhook-based tools)
         result = (await testConnectionMutation.mutateAsync({
           id: tool.id,
-          testData: {
-            type: "send_test_message",
-            message: testMessage,
-            recipient: testRecipient,
-          },
         })) as TestResponse;
       }
 

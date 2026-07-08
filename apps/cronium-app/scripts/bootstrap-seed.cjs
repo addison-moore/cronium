@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
 const { nanoid } = require("nanoid");
@@ -28,6 +29,29 @@ const smtpConfig = {
 };
 
 const pool = new Pool({ connectionString: databaseUrl });
+
+// Mirrors EncryptionService.encrypt in src/lib/encryption-service.ts so seeded
+// sensitive settings (smtpPassword) match what the admin UI stores.
+function encryptSensitiveValue(plaintext) {
+  const masterKeyHex = process.env.ENCRYPTION_KEY;
+  if (!masterKeyHex || masterKeyHex.length !== 64) {
+    console.warn(
+      "[SEED] ENCRYPTION_KEY missing or invalid; storing sensitive setting unencrypted",
+    );
+    return plaintext;
+  }
+  const masterKey = Buffer.from(masterKeyHex, "hex");
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv("aes-256-gcm", masterKey, iv);
+  cipher.setAAD(Buffer.from("cronium-server-encryption"));
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, "utf8"),
+    cipher.final(),
+  ]);
+  return Buffer.concat([iv, encrypted, cipher.getAuthTag()]).toString(
+    "base64",
+  );
+}
 
 async function ensureAdmin() {
   const client = await pool.connect();
@@ -85,7 +109,8 @@ async function ensureSetting(key, value) {
        values ($1, $2, $3, $3)`,
       [key, value, now],
     );
-    console.log(`[SEED] Set default system setting ${key}=${value}`);
+    const loggedValue = key === "smtpPassword" ? "[redacted]" : value;
+    console.log(`[SEED] Set default system setting ${key}=${loggedValue}`);
   } finally {
     client.release();
   }
@@ -111,7 +136,12 @@ async function ensureSmtpDefaults() {
     ["smtpHost", smtpConfig.host],
     ["smtpPort", smtpConfig.port],
     ["smtpUser", smtpConfig.user],
-    ["smtpPassword", smtpConfig.password],
+    [
+      "smtpPassword",
+      smtpConfig.password
+        ? encryptSensitiveValue(String(smtpConfig.password))
+        : smtpConfig.password,
+    ],
     ["smtpFromEmail", smtpConfig.fromEmail],
   ];
 
@@ -119,6 +149,65 @@ async function ensureSmtpDefaults() {
     if (value !== undefined && value !== null && value !== "") {
       await ensureSetting(key, String(value));
     }
+  }
+}
+
+// Mirror of src/scripts/seed-roles.ts for container boots: insert-if-missing
+// only, so admin-customized permissions are never overwritten.
+const DEFAULT_ROLES = [
+  {
+    name: "Admin",
+    description: "Administrators with full access",
+    permissions: { console: true, monitoring: true, localServerAccess: true },
+    isDefault: false,
+  },
+  {
+    name: "User",
+    description: "Default role for regular users",
+    permissions: { console: true, monitoring: true, localServerAccess: false },
+    isDefault: true,
+  },
+  {
+    name: "Viewer",
+    description: "Read-only users",
+    permissions: { console: false, monitoring: true, localServerAccess: false },
+    isDefault: false,
+  },
+];
+
+async function ensureRoles() {
+  const client = await pool.connect();
+  try {
+    for (const role of DEFAULT_ROLES) {
+      const existing = await client.query(
+        `select id from roles where lower(name) = lower($1) limit 1`,
+        [role.name],
+      );
+      if (existing.rows.length > 0) {
+        continue;
+      }
+      const now = new Date();
+      await client.query(
+        `insert into roles (name, description, permissions, is_default, created_at, updated_at)
+         values ($1, $2, $3, $4, $5, $5)`,
+        [
+          role.name,
+          role.description,
+          JSON.stringify(role.permissions),
+          role.isDefault,
+          now,
+        ],
+      );
+      console.log(`[SEED] Created role ${role.name}`);
+    }
+
+    // Assign the default role to users without one
+    await client.query(
+      `update users set role_id = (select id from roles where is_default = true limit 1)
+       where role_id is null`,
+    );
+  } finally {
+    client.release();
   }
 }
 
@@ -130,6 +219,7 @@ async function main() {
   try {
     console.log("[SEED] Bootstrap seeding enabled (AUTO_SEED_ADMIN=true)");
     await ensureAdmin();
+    await ensureRoles();
     await ensureRegistrationDefaults();
     await ensureSmtpDefaults();
     await ensureSeedMarker();

@@ -34,7 +34,10 @@ services:
       valkey:
         condition: service_healthy
     environment:
-      AUTO_SEED_ADMIN: "false"
+      # Seeds the first admin user on boot so you can log in immediately.
+      # Change ADMIN_PASSWORD before deploying, and change the password again
+      # after first login. Set AUTO_SEED_ADMIN to "false" once set up.
+      AUTO_SEED_ADMIN: "true"
       ADMIN_USERNAME: admin
       ADMIN_EMAIL: admin@example.com
       ADMIN_PASSWORD: admin

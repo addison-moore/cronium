@@ -75,23 +75,22 @@ export const googleSheetsRouter = createTRPCRouter({
         });
       }
 
-      // Validate required credentials
-      if (!tool.credentials.clientId || !tool.credentials.clientSecret) {
-        return {
-          success: false,
-          message: "Missing required credentials (clientId or clientSecret)",
-        };
-      }
+      // Real token check; the OAuth credential bridge injects
+      // credentials.oauthToken when the user's Google account is connected
+      const { injectOAuthToken } =
+        await import("@/lib/oauth/credential-bridge");
+      const credentials = await injectOAuthToken(tool.credentials, {
+        userId: ctx.session.user.id,
+        toolId: tool.id,
+        toolType: tool.type,
+      });
 
+      const { testToolConnection } = await import("./connection-tests");
+      const result = await testToolConnection("google-sheets", credentials);
       return {
-        success: true,
-        message: "Google Sheets credentials validated",
-        details: {
-          hasRefreshToken: !!tool.credentials.refreshToken,
-          scope:
-            tool.credentials.scope ??
-            "https://www.googleapis.com/auth/spreadsheets",
-        },
+        success: result.success,
+        message: result.message,
+        details: result.details,
       };
     }),
 });

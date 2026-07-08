@@ -7,7 +7,6 @@ import { variablesRouter } from "./routers/variables";
 import { logsRouter } from "./routers/logs";
 import { monitoringRouter } from "./routers/monitoring";
 import { toolsRouter } from "./routers/tools";
-import { webhooksRouter } from "./routers/webhooks";
 import { settingsRouter } from "./routers/settings";
 import { authRouter } from "./routers/auth";
 import { aiRouter } from "./routers/ai";
@@ -36,7 +35,6 @@ export const appRouter = createTRPCRouter({
   logs: logsRouter,
   monitoring: monitoringRouter,
   tools: toolsRouter,
-  webhooks: webhooksRouter,
   settings: settingsRouter,
   auth: authRouter,
   ai: aiRouter,

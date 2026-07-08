@@ -14,6 +14,7 @@ func (e *Executor) createPayloadForJob(job *types.Job, executionID string) (stri
 	if existingPath, ok := job.Metadata["payloadPath"].(string); ok && existingPath != "" {
 		// Legacy mode: payload created by cronium-app
 		e.log.WithField("jobID", job.ID).Debug("Using existing payload from cronium-app")
+		e.signPayload(existingPath)
 		return existingPath, nil
 	}
 
@@ -85,7 +86,33 @@ func (e *Executor) createPayloadForJob(job *types.Job, executionID string) (stri
 		"payloadPath": payloadPath,
 	}).Debug("Created payload for job")
 
+	e.signPayload(payloadPath)
+
 	return payloadPath, nil
+}
+
+// signPayload writes a detached signature next to the payload when signing is
+// available. Failures are logged but non-fatal; the runner only enforces
+// verification when it receives a verification key for the payload.
+func (e *Executor) signPayload(payloadPath string) {
+	if e.signer == nil {
+		return
+	}
+	if err := e.signer.SignFile(payloadPath); err != nil {
+		e.log.WithError(err).WithField("payloadPath", payloadPath).Warn("Failed to sign payload")
+	}
+}
+
+// payloadVerifyKey returns the base64 public key the runner should use to
+// verify the payload signature, or "" when the payload is not signed.
+func (e *Executor) payloadVerifyKey(payloadPath string) string {
+	if e.signer == nil {
+		return ""
+	}
+	if _, err := os.Stat(payloadPath + ".sig"); err != nil {
+		return ""
+	}
+	return e.signer.PublicKeyBase64()
 }
 
 // cleanupPayload removes the payload file after job completion
@@ -116,6 +143,12 @@ func (e *Executor) cleanupPayload(payloadPath string, job *types.Job) {
 		checksumPath := payloadPath + ".sha256"
 		if err := os.Remove(checksumPath); err != nil && !os.IsNotExist(err) {
 			e.log.WithError(err).WithField("checksumPath", checksumPath).Debug("Failed to cleanup checksum file")
+		}
+
+		// Also remove the signature file
+		sigPath := payloadPath + ".sig"
+		if err := os.Remove(sigPath); err != nil && !os.IsNotExist(err) {
+			e.log.WithError(err).WithField("sigPath", sigPath).Debug("Failed to cleanup signature file")
 		}
 	} else {
 		e.log.WithField("payloadPath", payloadPath).Debug("Keeping payload (cleanup disabled)")

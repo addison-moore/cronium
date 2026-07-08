@@ -15,6 +15,7 @@ import (
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/api"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/auth"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/config"
+	"github.com/addison-moore/cronium/apps/orchestrator/internal/payload"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/errors"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/retry"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
@@ -45,6 +46,10 @@ type Executor struct {
 	// Runner cache
 	runnerCache *RunnerCache
 
+	// Payload signer (nil when signing is unavailable; runner falls back to
+	// legacy unverified mode)
+	signer *payload.Signer
+
 	// Runtime API settings
 	runtimeHost string
 	runtimePort int
@@ -69,7 +74,7 @@ type Session struct {
 // NewExecutor creates a new SSH executor
 func NewExecutor(cfg config.SSHConfig, apiClient *api.Client, runtimeHost string, runtimePort int, jwtSecret string, log *logrus.Logger) (*Executor, error) {
 	// Create connection pool
-	pool := NewConnectionPool(cfg.ConnectionPool, log)
+	pool := NewConnectionPool(cfg.ConnectionPool, cfg.Security, log)
 
 	// Get runner binary info
 	runnerInfo := RunnerInfo{
@@ -80,6 +85,16 @@ func NewExecutor(cfg config.SSHConfig, apiClient *api.Client, runtimeHost string
 
 	// Create runner cache
 	runnerCache := NewRunnerCache(log)
+
+	// Load or create the payload signing key. Signing is best-effort: when the
+	// key is unavailable (e.g. read-only filesystem) payloads are deployed
+	// unsigned and the runner skips verification.
+	signer, err := payload.LoadOrCreateSigner(cfg.Security.PayloadSigningKeyFile)
+	if err != nil {
+		log.WithError(err).WithField("keyFile", cfg.Security.PayloadSigningKeyFile).
+			Warn("Payload signing disabled: could not load or create signing key")
+		signer = nil
+	}
 
 	// Create metrics tracker
 	metrics := NewExecutorMetrics(logrus.NewEntry(log).WithField("component", "ssh-executor"))
@@ -92,6 +107,7 @@ func NewExecutor(cfg config.SSHConfig, apiClient *api.Client, runtimeHost string
 		pool:          pool,
 		runnerInfo:    runnerInfo,
 		runnerCache:   runnerCache,
+		signer:        signer,
 		runtimeHost:   runtimeHost,
 		runtimePort:   runtimePort,
 		jwtSecret:     jwtSecret,
@@ -455,7 +471,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 	defer func() {
 		cleanupSession, _ := sess.conn.NewSession()
 		if cleanupSession != nil {
-			cleanupSession.Run(fmt.Sprintf("rm -f %s", remotePayloadPath))
+			cleanupSession.Run(fmt.Sprintf("rm -f %s %s.sig", remotePayloadPath, remotePayloadPath))
 			cleanupSession.Close()
 		}
 	}()
@@ -481,6 +497,11 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		fmt.Sprintf("CRONIUM_JOB_ID=%s", job.ID),
 		fmt.Sprintf("CRONIUM_EXECUTION_ID=%s", executionID),
 	)
+
+	// Pass the payload verification key so the runner enforces the signature
+	if verifyKey := e.payloadVerifyKey(payloadPath); verifyKey != "" {
+		envVars = append(envVars, fmt.Sprintf("CRONIUM_VERIFY_KEY=%s", verifyKey))
+	}
 
 	if useAPIMode {
 		envVars = append(envVars,
@@ -865,8 +886,26 @@ func (e *Executor) deployRunnerWithRetry(ctx context.Context, session *ssh.Sessi
 	return nil
 }
 
-// copyPayloadToServer copies a payload file to the server
+// copyPayloadToServer copies a payload file (and its detached signature, when
+// present) to the server
 func (e *Executor) copyPayloadToServer(session *ssh.Session, conn *ssh.Client, localPath, remotePath string) error {
+	if err := e.copyLocalFile(conn, localPath, remotePath); err != nil {
+		return err
+	}
+
+	// Copy the payload signature alongside the payload when it exists
+	sigLocal := localPath + ".sig"
+	if _, err := os.Stat(sigLocal); err == nil {
+		if err := e.copyLocalFile(conn, sigLocal, remotePath+".sig"); err != nil {
+			return fmt.Errorf("failed to copy payload signature: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// copyLocalFile streams a local file to the server over a new SSH session
+func (e *Executor) copyLocalFile(conn *ssh.Client, localPath, remotePath string) error {
 	// Read local file
 	data, err := os.ReadFile(localPath)
 	if err != nil {
@@ -907,7 +946,7 @@ func (e *Executor) copyPayloadToServer(session *ssh.Session, conn *ssh.Client, l
 
 // copyFileToServer copies a file to the server using scp-like functionality
 func (e *Executor) copyFileToServer(session *ssh.Session, conn *ssh.Client, localPath, remotePath string) error {
-	return e.copyPayloadToServer(session, conn, localPath, remotePath)
+	return e.copyLocalFile(conn, localPath, remotePath)
 }
 
 // streamOutputWithContextAndCollect reads from a reader, sends log updates, and collects output
@@ -1007,7 +1046,7 @@ func (e *Executor) Cleanup(ctx context.Context, job *types.Job) error {
 			cleanupSession, err := sess.conn.NewSession()
 			if err == nil {
 				e.log.WithField("jobID", job.ID).Debug("Cleaning up remote payload file")
-				cleanupCmd := fmt.Sprintf("rm -f %s", payloadPath)
+				cleanupCmd := fmt.Sprintf("rm -f %s %s.sig", payloadPath, payloadPath)
 				if err := cleanupSession.Run(cleanupCmd); err != nil {
 					e.log.WithError(err).Warn("Failed to clean up payload file")
 				}

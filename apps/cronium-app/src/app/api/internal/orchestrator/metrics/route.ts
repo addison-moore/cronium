@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { storage } from "@/server/storage";
 
 // Report orchestrator metrics
 export async function POST(request: NextRequest) {
@@ -40,9 +41,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Metrics required" }, { status: 400 });
     }
 
-    // TODO: Store metrics in time-series database or aggregate in cache
-    // For now, just log them
-    console.log("Orchestrator metrics:", body);
+    // Persist the latest metrics snapshot (system_settings row). A full
+    // time-series store is future work; this powers a current-state view.
+    await storage.upsertSetting(
+      `orchestrator:${body.orchestratorId}:metrics`,
+      JSON.stringify({
+        orchestratorId: body.orchestratorId,
+        reportedAt: new Date().toISOString(),
+        period: body.period,
+        metrics: body.metrics,
+      }),
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -140,6 +140,22 @@ postgresql://user:password@localhost:5432/cronium?sslmode=require
 | ---------------- | ------------------------------ | -------- | ------- | -------- |
 | `OPENAI_API_KEY` | OpenAI API key for AI features | `string` | -       | No       |
 
+### OAuth Tool Integrations (optional)
+
+OAuth apps used by tool integrations (currently Google Sheets). Register the
+redirect URI `{AUTH_URL}/api/oauth/callback` with the provider. Users then
+click "Connect" on the tool's credential card to authorize their account.
+
+| Variable                        | Description                                    | Type     | Default | Required |
+| ------------------------------- | ---------------------------------------------- | -------- | ------- | -------- |
+| `OAUTH_GOOGLE_CLIENT_ID`        | Google OAuth client ID (Google Sheets)         | `string` | -       | No       |
+| `OAUTH_GOOGLE_CLIENT_SECRET`    | Google OAuth client secret                     | `string` | -       | No       |
+| `OAUTH_MICROSOFT_CLIENT_ID`     | Microsoft OAuth client ID                      | `string` | -       | No       |
+| `OAUTH_MICROSOFT_CLIENT_SECRET` | Microsoft OAuth client secret                  | `string` | -       | No       |
+| `OAUTH_MICROSOFT_TENANT_ID`     | Microsoft tenant ID (defaults to multi-tenant) | `string` | -       | No       |
+| `OAUTH_SLACK_CLIENT_ID`         | Slack OAuth client ID                          | `string` | -       | No       |
+| `OAUTH_SLACK_CLIENT_SECRET`     | Slack OAuth client secret                      | `string` | -       | No       |
+
 ### Docker Registry
 
 | Variable          | Description                 | Type           | Default | Required |
@@ -187,6 +203,15 @@ These variables are only used by the orchestrator service and should NOT be incl
 | `CRONIUM_SETUP_TIMEOUT`         | Setup phase timeout (seconds)       | `number` | `300`   | No       |
 | `CRONIUM_CLEANUP_TIMEOUT`       | Cleanup phase timeout (seconds)     | `number` | `60`    | No       |
 | `CRONIUM_MAX_EXECUTION_TIMEOUT` | Maximum execution timeout (seconds) | `number` | `86400` | No       |
+
+#### SSH Security
+
+| Variable                                        | Description                                                                                                                                                      | Type     | Default                         | Required |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------- | -------- |
+| `CRONIUM_SSH_SECURITY_HOST_KEY_POLICY`          | Host key verification policy: `accept-new` (record unknown hosts on first connect, reject changed keys), `strict` (reject unknown hosts), `insecure` (no checks) | `string` | `accept-new`                    | No       |
+| `CRONIUM_SSH_SECURITY_KNOWN_HOSTS_FILE`         | Path to the known_hosts file used for host key verification                                                                                                      | `string` | `/app/data/known_hosts`         | No       |
+| `CRONIUM_SSH_SECURITY_STRICT_HOST_KEY_CHECKING` | Legacy switch; setting `false` disables host key verification entirely (same as `insecure` policy)                                                               | `bool`   | `true`                          | No       |
+| `CRONIUM_SSH_SECURITY_PAYLOAD_SIGNING_KEY_FILE` | Path to the Ed25519 payload signing key (auto-generated on first boot if missing)                                                                                | `string` | `/app/data/payload_signing.key` | No       |
 
 **Note:** The orchestrator expects environment variables with `CRONIUM_` prefix. Docker Compose should map unprefixed variables to prefixed ones (e.g., `CRONIUM_POSTGRES_URL: ${POSTGRES_URL}`).
 

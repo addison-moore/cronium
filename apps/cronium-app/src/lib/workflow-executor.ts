@@ -16,6 +16,7 @@ import {
 } from "@shared/schema";
 import { scheduleJob, RecurrenceRule } from "node-schedule";
 import type { Job } from "node-schedule";
+import { EventEmitter } from "events";
 
 // Type definitions
 interface NodeResult {
@@ -25,12 +26,43 @@ interface NodeResult {
   condition?: boolean;
 }
 
+// Per-execution coordination state, keyed by the execution's nodeResults map.
+// Lets prerequisite waits be event-driven instead of polling, and prevents a
+// merge node from being started by more than one incoming branch.
+interface ExecutionState {
+  emitter: EventEmitter;
+  startedNodes: Set<number>;
+}
+
 export class WorkflowExecutor {
   private jobs = new Map<number, Job>();
   private isInitialized = false;
+  // Coordination state per execution (keyed by its nodeResults map instance)
+  private execStates = new WeakMap<Map<number, NodeResult>, ExecutionState>();
 
   constructor() {
     // WorkflowExecutor initialization
+  }
+
+  private getExecState(nodeResults: Map<number, NodeResult>): ExecutionState {
+    let state = this.execStates.get(nodeResults);
+    if (!state) {
+      const emitter = new EventEmitter();
+      emitter.setMaxListeners(0); // many nodes may wait concurrently
+      state = { emitter, startedNodes: new Set<number>() };
+      this.execStates.set(nodeResults, state);
+    }
+    return state;
+  }
+
+  // Record a node's result and wake any nodes waiting on it
+  private recordNodeResult(
+    nodeResults: Map<number, NodeResult>,
+    nodeId: number,
+    result: NodeResult,
+  ): void {
+    nodeResults.set(nodeId, result);
+    this.getExecState(nodeResults).emitter.emit("nodeCompleted", nodeId);
   }
 
   async initialize() {
@@ -109,6 +141,16 @@ export class WorkflowExecutor {
         return;
       }
 
+      const runWorkflow = () => {
+        console.log(`Executing scheduled workflow: ${workflow.name}`);
+        void this.executeWorkflow(
+          workflowId,
+          undefined,
+          {},
+          WorkflowTriggerType.SCHEDULE,
+        );
+      };
+
       // Create the schedule based on the workflow configuration
       let rule: RecurrenceRule | string;
 
@@ -116,28 +158,36 @@ export class WorkflowExecutor {
         // Use custom cron schedule if provided
         rule = workflow.customSchedule;
       } else if (workflow.scheduleNumber && workflow.scheduleUnit) {
-        // Create a recurrence rule based on the schedule number and unit
-        rule = new RecurrenceRule();
+        const scheduleNum = Math.max(1, workflow.scheduleNumber ?? 1);
+        const unit = String(workflow.scheduleUnit);
 
-        const scheduleNum = workflow.scheduleNumber ?? 1; // Default to 1 if null
-        switch (String(workflow.scheduleUnit)) {
+        // "Every N days" cannot be expressed as a RecurrenceRule; use a
+        // self-re-arming one-shot (base midnight + N days).
+        if (unit === "DAYS") {
+          this.scheduleDailyInterval(workflowId, scheduleNum, runWorkflow);
+          console.log(
+            `Scheduled workflow ${workflowId} every ${scheduleNum} day(s): ${workflow.name}`,
+          );
+          return;
+        }
+
+        rule = new RecurrenceRule();
+        switch (unit) {
           case "SECONDS":
             rule.second = new Array(Math.floor(60 / scheduleNum))
               .fill(null)
               .map((_, i) => i * scheduleNum);
             break;
           case "MINUTES":
+            rule.second = 0;
             rule.minute = new Array(Math.floor(60 / scheduleNum))
               .fill(null)
               .map((_, i) => i * scheduleNum);
             break;
           case "HOURS":
+            rule.second = 0;
+            rule.minute = 0;
             rule.hour = new Array(Math.floor(24 / scheduleNum))
-              .fill(null)
-              .map((_, i) => i * scheduleNum);
-            break;
-          case "DAYS":
-            rule.dayOfWeek = new Array(Math.floor(7 / scheduleNum))
               .fill(null)
               .map((_, i) => i * scheduleNum);
             break;
@@ -154,10 +204,7 @@ export class WorkflowExecutor {
       }
 
       // Schedule the job
-      const job = scheduleJob(rule, () => {
-        console.log(`Executing scheduled workflow: ${workflow.name}`);
-        void this.executeWorkflow(workflowId);
-      });
+      const job = scheduleJob(rule, runWorkflow);
 
       this.jobs.set(workflowId, job);
       console.log(`Scheduled workflow ${workflowId}: ${workflow.name}`);
@@ -170,10 +217,36 @@ export class WorkflowExecutor {
     }
   }
 
+  /**
+   * Schedule a workflow to run every N days at midnight via a self-re-arming
+   * one-shot (node-schedule's RecurrenceRule cannot express "every N days").
+   * Each fire re-arms the next occurrence and updates the jobs map so
+   * updateWorkflow/deleteWorkflow can still cancel it.
+   */
+  private scheduleDailyInterval(
+    workflowId: number,
+    days: number,
+    run: () => void,
+  ) {
+    const armNext = (from: Date) => {
+      const next = new Date(from);
+      next.setHours(0, 0, 0, 0);
+      next.setDate(next.getDate() + days);
+      const job = scheduleJob(next, () => {
+        run();
+        // Re-arm relative to the intended fire time
+        armNext(next);
+      });
+      this.jobs.set(workflowId, job);
+    };
+    armNext(new Date());
+  }
+
   async executeWorkflow(
     workflowId: number,
     userId?: string,
     inputData: Record<string, unknown> = {},
+    triggerType: WorkflowTriggerType = WorkflowTriggerType.MANUAL,
   ) {
     console.log(`Executing workflow ${workflowId} with input:`, inputData);
 
@@ -194,10 +267,10 @@ export class WorkflowExecutor {
         workflowId: workflow.id,
         userId: executionUserId,
         status: LogStatus.RUNNING,
-        triggerType: "MANUAL",
+        triggerType,
         startedAt: startTime,
         executionData: {
-          triggerType: "MANUAL",
+          triggerType,
           triggeredAt: startTime.toISOString(),
           inputData: inputData,
         },
@@ -488,13 +561,17 @@ export class WorkflowExecutor {
       `[Workflow ${workflow.id}] Starting execution of node ${node.id}`,
     );
 
-    // Check if this node has already been executed
-    if (nodeResults.has(node.id)) {
+    // Claim the node so a merge node reached by multiple incoming branches is
+    // only started once (nodeResults isn't set until completion, so it can't
+    // guard the start).
+    const execState = this.getExecState(nodeResults);
+    if (nodeResults.has(node.id) || execState.startedNodes.has(node.id)) {
       console.log(
-        `[Workflow ${workflow.id}] Node ${node.id} already executed, skipping`,
+        `[Workflow ${workflow.id}] Node ${node.id} already started, skipping`,
       );
       return;
     }
+    execState.startedNodes.add(node.id);
 
     try {
       // Check if all prerequisite nodes have been completed
@@ -504,19 +581,10 @@ export class WorkflowExecutor {
 
       // Wait for all prerequisite nodes to complete
       if (incomingConnections.length > 0) {
-        // Poll for prerequisites to be ready (with timeout to prevent infinite waiting)
         const maxWaitTime = 30 * 60 * 1000; // 30 minutes max wait
-        const startWaitTime = Date.now();
-        const pollInterval = 100; // Check every 100ms
 
-        let prerequisiteCompleted = false;
-        let hasLoggedWaiting = false;
-
-        while (
-          !prerequisiteCompleted &&
-          Date.now() - startWaitTime < maxWaitTime
-        ) {
-          prerequisiteCompleted = incomingConnections.every((conn) => {
+        const prerequisitesMet = () =>
+          incomingConnections.every((conn) => {
             const sourceNodeResult = nodeResults.get(conn.sourceNodeId);
             if (!sourceNodeResult) return false;
 
@@ -534,30 +602,43 @@ export class WorkflowExecutor {
             }
           });
 
-          if (!prerequisiteCompleted) {
-            // Log once that this node is waiting
-            if (!hasLoggedWaiting) {
-              const waitingLogData: InsertWorkflowLog = {
-                workflowId: workflow.id,
-                userId: workflow.userId,
-                level: WorkflowLogLevel.INFO,
-                message: `Node ${node.id} waiting for prerequisite nodes to complete`,
-                timestamp: new Date(),
-                status: LogStatus.PENDING,
-              };
-              await storage.createWorkflowLog(waitingLogData);
-              hasLoggedWaiting = true;
-            }
+        if (!prerequisitesMet()) {
+          const waitingLogData: InsertWorkflowLog = {
+            workflowId: workflow.id,
+            userId: workflow.userId,
+            level: WorkflowLogLevel.INFO,
+            message: `Node ${node.id} waiting for prerequisite nodes to complete`,
+            timestamp: new Date(),
+            status: LogStatus.PENDING,
+          };
+          await storage.createWorkflowLog(waitingLogData);
 
-            // Wait before checking again
-            await new Promise((resolve) => setTimeout(resolve, pollInterval));
-          }
+          // Event-driven wait: wake on each node completion, bounded by the
+          // 30-minute deadline (no busy-polling).
+          await new Promise<void>((resolve) => {
+            let settled = false;
+            const finish = () => {
+              if (settled) return;
+              settled = true;
+              execState.emitter.off("nodeCompleted", onCompleted);
+              clearTimeout(timer);
+              resolve();
+            };
+            const onCompleted = () => {
+              if (prerequisitesMet()) finish();
+            };
+            const timer = setTimeout(finish, maxWaitTime);
+            execState.emitter.on("nodeCompleted", onCompleted);
+            // Re-check in case a prerequisite completed between the check above
+            // and attaching the listener
+            if (prerequisitesMet()) finish();
+          });
         }
 
-        // If we timed out waiting for prerequisites
-        if (!prerequisiteCompleted) {
+        // If prerequisites still aren't met, we timed out
+        if (!prerequisitesMet()) {
           const timeoutMessage = `Node ${node.id} timed out waiting for prerequisites after ${maxWaitTime / 1000} seconds`;
-          nodeResults.set(node.id, {
+          this.recordNodeResult(nodeResults, node.id, {
             success: false,
             output: timeoutMessage,
             condition: false,
@@ -580,7 +661,7 @@ export class WorkflowExecutor {
       const event = await storage.getEvent(node.eventId);
       if (!event) {
         const errorMessage = `Event ${node.eventId} not found for node ${node.id}`;
-        nodeResults.set(node.id, {
+        this.recordNodeResult(nodeResults, node.id, {
           success: false,
           output: errorMessage,
           condition: false,
@@ -680,7 +761,7 @@ export class WorkflowExecutor {
         },
       );
 
-      nodeResults.set(node.id, {
+      this.recordNodeResult(nodeResults, node.id, {
         success: executionResult.success,
         output: executionResult.output ?? "",
         ...(executionResult.scriptOutput !== undefined && {
@@ -828,7 +909,7 @@ export class WorkflowExecutor {
       console.error(`Error executing node ${node.id}:`, error);
 
       // Store the error result
-      nodeResults.set(node.id, {
+      this.recordNodeResult(nodeResults, node.id, {
         success: false,
         output: errorMessage,
         condition: false,
@@ -906,8 +987,17 @@ export class WorkflowExecutor {
       : {};
   }
 
-  async runWorkflowImmediately(workflowId: number) {
-    return await this.executeWorkflow(workflowId);
+  async runWorkflowImmediately(
+    workflowId: number,
+    inputData: Record<string, unknown> = {},
+    triggerType: WorkflowTriggerType = WorkflowTriggerType.WEBHOOK,
+  ) {
+    return await this.executeWorkflow(
+      workflowId,
+      undefined,
+      inputData,
+      triggerType,
+    );
   }
 
   async updateWorkflow(workflowId: number) {

@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { sql } from "drizzle-orm";
+import { storage } from "@/server/storage";
 
 // Health check endpoint
 export async function GET(request: NextRequest) {
@@ -66,9 +67,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // TODO: Store health report in database or cache
-    // For now, just log it
-    console.log("Orchestrator health report:", body);
+    // Persist the latest health report (system_settings row)
+    await storage.upsertSetting(
+      `orchestrator:${body.orchestratorId}:health`,
+      JSON.stringify({
+        orchestratorId: body.orchestratorId,
+        status: body.status,
+        reportedAt: new Date().toISOString(),
+        metrics: body.metrics ?? null,
+        errors: body.errors ?? [],
+      }),
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {

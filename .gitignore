@@ -35,7 +35,8 @@ dist/
 build/
 
 # TypeScript build info
-*/tsconfig.tsbuildinfo
+**/tsconfig.tsbuildinfo
+*.tsbuildinfo
 
 # Orchestrator
 apps/orchestrator/tmp/

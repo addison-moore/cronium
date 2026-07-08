@@ -257,7 +257,7 @@ unless you are building custom images.
 
 ### 4. Initialize the Database
 
-The database is automatically initialized on first start. By default, we do **not** auto-seed an admin. You can opt into bootstrap seeding by setting `AUTO_SEED_ADMIN=true` and providing `ADMIN_USERNAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` (defaults to `admin`/`admin@example.com`/`admin`). SMTP values (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`) can also be seeded when provided.
+The database is automatically initialized on first start. The image itself defaults to **not** auto-seeding an admin, but the sample `docker-compose.example.yml` enables it (`AUTO_SEED_ADMIN=true`) so a fresh install is immediately loginable with `ADMIN_USERNAME`/`ADMIN_EMAIL`/`ADMIN_PASSWORD` (defaults `admin`/`admin@example.com`/`admin`). Change `ADMIN_PASSWORD` before deploying, change the password again after first login, and set `AUTO_SEED_ADMIN=false` once set up. SMTP values (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`) can also be seeded when provided.
 
 To manually run migrations:
 

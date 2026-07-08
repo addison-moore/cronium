@@ -242,9 +242,8 @@ export const serversRouter = createTRPCRouter({
 
         // Using direct database query (see workaround note at top of file)
         const { db } = await import("@/server/db");
-        const { events, eventServers, executions, EventStatus } = await import(
-          "@shared/schema"
-        );
+        const { events, eventServers, executions, EventStatus } =
+          await import("@shared/schema");
         const { eq, and } = await import("drizzle-orm");
 
         // Get counts of affected resources

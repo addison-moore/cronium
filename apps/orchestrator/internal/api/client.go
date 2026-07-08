@@ -241,6 +241,20 @@ func (c *Client) ReportHealth(ctx context.Context, report *HealthReport) error {
 	return c.post(ctx, "/api/internal/orchestrator/health", report, &response)
 }
 
+// SendHeartbeat reports orchestrator liveness and capacity
+func (c *Client) SendHeartbeat(ctx context.Context, req *HeartbeatRequest) error {
+	req.Timestamp = time.Now().Format(time.RFC3339)
+	var response interface{}
+	return c.post(ctx, "/api/internal/orchestrator/heartbeat", req, &response)
+}
+
+// SendMetrics reports orchestrator-level metrics
+func (c *Client) SendMetrics(ctx context.Context, req *MetricsRequest) error {
+	req.Timestamp = time.Now().Format(time.RFC3339)
+	var response interface{}
+	return c.post(ctx, "/api/internal/orchestrator/metrics", req, &response)
+}
+
 // HealthCheck performs a health check on the API
 func (c *Client) HealthCheck(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -487,5 +501,5 @@ func (c *Client) GetOrphanedJobs(ctx context.Context, orchestratorID string) ([]
 // ReleaseJob releases a job back to the queue
 func (c *Client) ReleaseJob(ctx context.Context, jobID string, status *types.StatusUpdate) error {
 	var response interface{}
-	return c.post(ctx, fmt.Sprintf("/jobs/%s/release", jobID), status, &response)
+	return c.post(ctx, fmt.Sprintf("/api/internal/jobs/%s/release", jobID), status, &response)
 }

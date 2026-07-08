@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { exec, execSync } from "child_process";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { UserRole } from "@/shared/schema";
+import { hasServerPermission } from "@/server/permissions";
 import { storage } from "@/server/storage";
 import { terminalSSHService } from "@/lib/ssh/terminal";
 import { decryptSensitiveData } from "@/lib/encryption-service";
@@ -262,11 +262,14 @@ const getAutocompleteSuggestions = async (
 // Create a POST endpoint to handle terminal commands
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    // Check if user is authenticated and is an admin
+    // Check authentication + console permission (admins always pass)
     const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== UserRole.ADMIN) {
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!(await hasServerPermission(session.user.id, "console"))) {
       return NextResponse.json(
-        { error: "Unauthorized: Admin access required" },
+        { error: "Unauthorized: console permission required" },
         { status: 403 },
       );
     }
@@ -282,6 +285,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       autocompleteRequest?: string;
       serverId?: number;
     };
+
+    // Local execution (no serverId) additionally requires localServerAccess:
+    // it runs commands directly on the Cronium host
+    if (
+      !serverId &&
+      !(await hasServerPermission(session.user.id, "localServerAccess"))
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Unauthorized: local server access permission required to run commands on the Cronium host",
+        },
+        { status: 403 },
+      );
+    }
 
     // Handle remote server execution
     if (serverId) {

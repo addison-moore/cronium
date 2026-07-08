@@ -116,13 +116,11 @@ export interface ToolTestResponse extends ApiResponse {
 }
 
 // Conditional Events API Types
-export interface ConditionalEventsResponse
-  extends PaginatedResponse<ConditionalAction> {
+export interface ConditionalEventsResponse extends PaginatedResponse<ConditionalAction> {
   conditionalEvents: ConditionalAction[];
 }
 
-export interface ConditionalEventResponse
-  extends ApiResponse<ConditionalAction> {
+export interface ConditionalEventResponse extends ApiResponse<ConditionalAction> {
   conditionalEvent?: ConditionalAction;
 }
 

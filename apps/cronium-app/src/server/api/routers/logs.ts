@@ -235,13 +235,16 @@ export const logsRouter = createTRPCRouter({
     .input(logSearchSchema)
     .query(async ({ ctx, input }) => {
       try {
+        // Regex search is not supported (would require raw SQL regex)
+        if (input.regex) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Regex search is not supported; use plain-text search",
+          });
+        }
+
         // Build search filters
-        const filters: LogFilters & {
-          search?: string;
-          searchFields?: string[];
-          caseSensitive?: boolean;
-          regex?: boolean;
-        } = {
+        const filters: LogFilters = {
           userId: ctx.session.user.id,
         };
 
@@ -249,16 +252,12 @@ export const logsRouter = createTRPCRouter({
         if (input.workflowId) filters.workflowId = input.workflowId;
         if (input.status) filters.status = input.status;
 
-        // Note: search functionality is not yet implemented in storage
-        // These fields are included for future implementation
         if (input.query) {
           filters.search = input.query;
           filters.searchFields = input.searchFields;
           filters.caseSensitive = input.caseSensitive;
-          filters.regex = input.regex;
         }
 
-        // For now, use the existing filtered logs method with search
         const pagination = normalizePagination(input);
         const page = Math.floor(pagination.offset / pagination.limit) + 1;
         const { logs, total } = await storage.getFilteredLogs(
@@ -355,17 +354,13 @@ export const logsRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       try {
         // Build filters for user's logs
-        const filters: LogFilters & {
-          startDate?: string;
-          endDate?: string;
-        } = { userId: ctx.session.user.id };
+        const filters: LogFilters = { userId: ctx.session.user.id };
         if (input.eventId) filters.eventId = String(input.eventId);
         if (input.workflowId) filters.workflowId = input.workflowId;
-        // Note: startDate/endDate filtering is not yet implemented in storage
         if (input.startDate) filters.startDate = input.startDate;
         if (input.endDate) filters.endDate = input.endDate;
 
-        // For now, get all logs and calculate stats
+        // Aggregate stats over the (now date-filtered) logs
         const { logs } = await storage.getFilteredLogs(filters, 1000, 1);
 
         const stats = {
@@ -415,21 +410,18 @@ export const logsRouter = createTRPCRouter({
     .input(adminLogsQuerySchema)
     .query(async ({ input }) => {
       try {
-        const filters: LogFilters & {
-          level?: string;
-          startDate?: string;
-          endDate?: string;
-        } = {};
+        const filters: LogFilters = {};
 
-        // Admin can filter by specific user
+        // Admin can filter by specific user; when own-user filtering is set,
+        // restrict to that user's own events
         if (input.userId && !input.allUsers) {
           filters.userId = input.userId;
+          filters.ownEventsOnly = true;
         }
 
-        // Add other filters
+        // Add other filters (note: `level` has no column and is ignored)
         if (input.eventId) filters.eventId = String(input.eventId);
         if (input.status) filters.status = input.status;
-        if (input.level) filters.level = input.level;
         if (input.date) filters.date = input.date;
         if (input.startDate) filters.startDate = input.startDate;
         if (input.endDate) filters.endDate = input.endDate;
@@ -437,7 +429,8 @@ export const logsRouter = createTRPCRouter({
         const pagination = normalizePagination(input);
         const page =
           input.page ?? Math.floor(pagination.offset / pagination.limit) + 1;
-        const { logs, total } = await storage.getAllLogs(
+        const { logs, total } = await storage.getFilteredLogs(
+          filters,
           pagination.limit,
           page,
         );
@@ -497,14 +490,6 @@ export const logsRouter = createTRPCRouter({
               case "export":
                 // Mark as successful for export - actual data handled separately
                 results.push({ id: logId, success: true });
-                break;
-              case "archive":
-                // TODO: Implement archive functionality
-                results.push({
-                  id: logId,
-                  success: true,
-                  message: "Archive functionality not yet implemented",
-                });
                 break;
             }
           } catch (error) {

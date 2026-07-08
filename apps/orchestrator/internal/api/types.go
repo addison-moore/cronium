@@ -187,6 +187,42 @@ type HealthReport struct {
 	Metrics        map[string]interface{}     `json:"metrics"`
 }
 
+// HeartbeatRequest reports liveness and current capacity
+type HeartbeatRequest struct {
+	OrchestratorID string             `json:"orchestratorId"`
+	Timestamp      string             `json:"timestamp"`
+	RunningJobs    []string           `json:"runningJobs"`
+	Capacity       *HeartbeatCapacity `json:"capacity,omitempty"`
+}
+
+// HeartbeatCapacity describes concurrency headroom
+type HeartbeatCapacity struct {
+	MaxJobs        int `json:"maxJobs"`
+	CurrentJobs    int `json:"currentJobs"`
+	AvailableSlots int `json:"availableSlots"`
+}
+
+// MetricsRequest reports orchestrator-level metrics
+type MetricsRequest struct {
+	OrchestratorID string            `json:"orchestratorId"`
+	Timestamp      string            `json:"timestamp"`
+	Metrics        OrchestratorStats `json:"metrics"`
+	Period         string            `json:"period"`
+}
+
+// OrchestratorStats are the lifetime counters + current gauges
+type OrchestratorStats struct {
+	JobsProcessed        int64   `json:"jobsProcessed"`
+	JobsSucceeded        int64   `json:"jobsSucceeded"`
+	JobsFailed           int64   `json:"jobsFailed"`
+	AverageExecutionTime float64 `json:"averageExecutionTime"`
+	CPUUsage             float64 `json:"cpuUsage"`
+	MemoryUsage          float64 `json:"memoryUsage"`
+	DiskUsage            float64 `json:"diskUsage"`
+	ActiveContainers     int     `json:"activeContainers"`
+	QueueDepth           int     `json:"queueDepth"`
+}
+
 // ComponentHealth represents health of a component
 type ComponentHealth struct {
 	Status    string                 `json:"status"`

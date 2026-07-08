@@ -16,8 +16,9 @@ import (
 
 // ConnectionPool manages SSH connections
 type ConnectionPool struct {
-	config config.ConnectionPoolConfig
-	log    *logrus.Logger
+	config   config.ConnectionPoolConfig
+	log      *logrus.Logger
+	hostKeys *HostKeyVerifier
 
 	mu          sync.RWMutex
 	connections map[string]*poolEntry
@@ -35,10 +36,11 @@ type poolEntry struct {
 }
 
 // NewConnectionPool creates a new connection pool
-func NewConnectionPool(cfg config.ConnectionPoolConfig, log *logrus.Logger) *ConnectionPool {
+func NewConnectionPool(cfg config.ConnectionPoolConfig, securityCfg config.SSHSecurityConfig, log *logrus.Logger) *ConnectionPool {
 	pool := &ConnectionPool{
 		config:      cfg,
 		log:         log,
+		hostKeys:    NewHostKeyVerifier(securityCfg, log),
 		connections: make(map[string]*poolEntry),
 		breakers:    make(map[string]*CircuitBreaker),
 	}
@@ -158,7 +160,7 @@ func (p *ConnectionPool) createConnection(ctx context.Context, server *types.Ser
 	config := &ssh.ClientConfig{
 		User:            server.Username,
 		Auth:            authMethods,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Implement proper host key verification
+		HostKeyCallback: p.hostKeys.Callback(),
 		Timeout:         p.config.ConnectionTimeout,
 	}
 

@@ -68,8 +68,15 @@ export interface SystemInfo {
 // Helper function to get system information
 async function getSystemInformation(): Promise<SystemInfo> {
   try {
+    const os = await import("os");
     const uptime = process.uptime();
     const memory = process.memoryUsage();
+
+    // 1-minute load average normalized to CPU count, as a percentage.
+    // Real data with no extra dependencies (0 on platforms without loadavg).
+    const cpuCount = os.cpus().length || 1;
+    const [load1] = os.loadavg();
+    const normalizedLoad = Math.min(((load1 ?? 0) / cpuCount) * 100, 100);
 
     return {
       uptime,
@@ -82,16 +89,15 @@ async function getSystemInformation(): Promise<SystemInfo> {
         arrayBuffers: memory.arrayBuffers ?? 0,
       },
       cpu: {
-        currentLoad: Math.random() * 100, // Mock data
-        systemLoad: Math.random() * 50,
-        userLoad: Math.random() * 50,
-        temperature: 45 + Math.random() * 20,
+        currentLoad: normalizedLoad,
+        systemLoad: normalizedLoad,
+        userLoad: normalizedLoad,
       },
       os: {
         platform: process.platform,
         arch: process.arch,
         version: process.version,
-        hostname: "localhost",
+        hostname: os.hostname(),
       },
     };
   } catch (error) {
@@ -126,14 +132,23 @@ const monitoringAdminProcedure = adminProcedure
   .use(withTiming)
   .use(withRateLimit(200, 60000)); // 200 requests per minute
 
+// Requires the granular "monitoring" permission (admins always pass)
+const monitoringPermissionProcedure = monitoringProtectedProcedure.use(
+  async ({ ctx, next }) => {
+    const { requirePermission } = await import("@/server/permissions");
+    await requirePermission(ctx.session.user.id, "monitoring");
+    return next();
+  },
+);
+
 // Health check is public but rate limited
 const publicHealthProcedure = publicProcedure
   .use(withTiming)
   .use(withRateLimit(60, 60000)); // 60 requests per minute
 
 export const monitoringRouter = createTRPCRouter({
-  // Get comprehensive monitoring data (admin only)
-  getSystemMonitoring: monitoringAdminProcedure
+  // Get comprehensive monitoring data (requires monitoring permission)
+  getSystemMonitoring: monitoringPermissionProcedure
     .input(monitoringQuerySchema)
     .query(async ({ input, ctx }) => {
       return withErrorHandling(
@@ -279,7 +294,8 @@ export const monitoringRouter = createTRPCRouter({
       );
     }),
 
-  // Get system metrics (admin only)
+  // Get system metrics (admin only). Single real point-in-time sample —
+  // historical series require a metrics store (not yet implemented).
   getSystemMetrics: monitoringAdminProcedure
     .input(systemMetricsSchema)
     .query(async ({ input, ctx }) => {
@@ -287,27 +303,9 @@ export const monitoringRouter = createTRPCRouter({
         async () => {
           const systemInfo = await getSystemInformation();
 
-          // If historical data is requested, generate mock historical points
-          let historical = null;
-          if (input.includeHistorical) {
-            historical = Array.from({ length: input.historyPoints }, (_, i) => {
-              const timestamp = new Date();
-              timestamp.setHours(
-                timestamp.getHours() - (input.historyPoints - i),
-              );
-
-              return {
-                timestamp: timestamp.toISOString(),
-                cpu: Math.random() * 100,
-                memory: 50 + Math.random() * 40,
-                disk: 30 + Math.random() * 20,
-              };
-            });
-          }
-
           const metrics = {
             current: systemInfo,
-            historical,
+            historical: null,
             interval: input.interval,
             lastUpdated: new Date().toISOString(),
           };
@@ -349,18 +347,9 @@ export const monitoringRouter = createTRPCRouter({
             [key: string]: unknown;
           };
 
-          // Add period-specific data if requested
-          let periodComparison = null;
-          if (input.includeComparisons) {
-            // Generate mock comparison data
-            periodComparison = {
-              eventsChange: Math.floor(Math.random() * 20) - 10, // -10 to +10
-              executionsChange: Math.floor(Math.random() * 30) - 15, // -15 to +15
-              successRateChange: Math.floor(Math.random() * 10) - 5, // -5 to +5
-            };
-          }
-
-          // Flatten the metrics for statsResponse
+          // Flatten the metrics for statsResponse. Period comparisons were
+          // removed: they were fabricated, and no consumer reads them —
+          // real deltas need previous-period aggregates (future work).
           const flatDashboardMetrics: Record<string, string | number> = {
             totalEvents: typedStats.totalEvents ?? 0,
             activeEvents: typedStats.activeEvents ?? 0,
@@ -370,15 +359,6 @@ export const monitoringRouter = createTRPCRouter({
             userId: targetUserId,
             lastUpdated: new Date().toISOString(),
           };
-
-          // Add comparison data if available
-          if (periodComparison) {
-            flatDashboardMetrics.eventsChange = periodComparison.eventsChange;
-            flatDashboardMetrics.executionsChange =
-              periodComparison.executionsChange;
-            flatDashboardMetrics.successRateChange =
-              periodComparison.successRateChange;
-          }
 
           return statsResponse(
             {
@@ -546,13 +526,19 @@ export const monitoringRouter = createTRPCRouter({
             });
           }
 
-          // External services check (placeholder)
+          // External services: check the cache (Redis/Valkey), the one
+          // external dependency the app relies on at runtime
           if (input.includeExternalServices) {
+            const { cacheService } = await import("@/lib/cache/cache-service");
+            const cacheStart = Date.now();
+            const cacheAvailable = cacheService.isAvailable();
             health.checks.push({
-              name: "external_services",
-              status: "healthy",
-              responseTime: Math.random() * 200,
-              message: "All external services responding",
+              name: "cache",
+              status: cacheAvailable ? "healthy" : "degraded",
+              responseTime: Date.now() - cacheStart,
+              message: cacheAvailable
+                ? "Cache (Valkey/Redis) is available"
+                : "Cache (Valkey/Redis) is unavailable; falling back to degraded mode",
             });
           }
 

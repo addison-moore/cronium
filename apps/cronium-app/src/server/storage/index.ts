@@ -9,6 +9,7 @@ import { WebhookStorage } from "./modules/webhooks";
 import { ServerStorage } from "./modules/servers";
 import { LogStorage } from "./modules/logs";
 import { UserStorage } from "./modules/users";
+import { RolesStorage } from "./modules/roles";
 import { WorkflowStorage } from "./modules/workflows";
 import { WorkflowNodeStorage } from "./modules/workflow-nodes";
 import { WorkflowExecutionStorage } from "./modules/workflow-execution";
@@ -29,6 +30,7 @@ class DatabaseStorage implements IStorage {
   public servers: ServerStorage;
   private logs: LogStorage;
   private users: UserStorage;
+  private roles: RolesStorage;
   private workflows: WorkflowStorage;
   private workflowNodes: WorkflowNodeStorage;
   private workflowExecution: WorkflowExecutionStorage;
@@ -43,6 +45,7 @@ class DatabaseStorage implements IStorage {
     this.servers = new ServerStorage();
     this.logs = new LogStorage();
     this.users = new UserStorage();
+    this.roles = new RolesStorage();
     this.workflows = new WorkflowStorage();
     this.workflowNodes = new WorkflowNodeStorage();
     this.workflowExecution = new WorkflowExecutionStorage();
@@ -68,6 +71,16 @@ class DatabaseStorage implements IStorage {
     this.users.upsertUser(userData);
   disableUser = (id: string) => this.users.disableUser(id);
   deleteUser = (id: string) => this.users.deleteUser(id);
+
+  // Role methods - delegate to roles module
+  listRoles = () => this.roles.listRoles();
+  getRoleById = (id: number) => this.roles.getRoleById(id);
+  getRoleByName = (name: string) => this.roles.getRoleByName(name);
+  getDefaultRole = () => this.roles.getDefaultRole();
+  updateRolePermissions = (
+    id: number,
+    permissions: Parameters<RolesStorage["updateRolePermissions"]>[1],
+  ) => this.roles.updateRolePermissions(id, permissions);
 
   // Event/Script methods - delegate to events module
   getEvent = (id: number) => this.events.getEvent(id);

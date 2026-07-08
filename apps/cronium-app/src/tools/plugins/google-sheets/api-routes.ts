@@ -23,27 +23,20 @@ export const googleSheetsApiRoutes: PluginApiRoutes = {
         toolId: z.number().int().positive(),
       }),
       output: testConnectionResponseSchema,
-      handler: async () => {
-        // Mock implementation for now
-        // TODO: Implement actual Google Sheets API test
-        try {
-          await new Promise((resolve) => setTimeout(resolve, 500));
-
-          return {
-            success: true,
-            message: "Successfully connected to Google Sheets",
-            details: {
-              permissions: ["spreadsheets.read", "spreadsheets.write"],
-              quotaUsage: 0.15,
-            },
-          };
-        } catch (error) {
-          return {
-            success: false,
-            message:
-              error instanceof Error ? error.message : "Connection failed",
-          };
-        }
+      handler: async ({ ctx }) => {
+        // Dynamic import: this file is shared with the client bundle, but
+        // handlers only run server-side via the plugin router. The OAuth
+        // credential bridge injects credentials.oauthToken before this runs.
+        const { testToolConnection } =
+          await import("@/server/api/routers/tools/connection-tests");
+        const result = await testToolConnection(
+          "google-sheets",
+          ctx.tool.credentials,
+        );
+        return {
+          success: result.success,
+          message: result.message,
+        };
       },
     },
     requiresAuth: true,

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"sync"
 
 	"github.com/sirupsen/logrus"
@@ -102,7 +103,7 @@ func (tm *TunnelManager) handleConnection(remoteConn net.Conn) {
 	defer remoteConn.Close()
 
 	// Connect to local service
-	localConn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", tm.localHost, tm.localPort))
+	localConn, err := net.Dial("tcp", net.JoinHostPort(tm.localHost, strconv.Itoa(tm.localPort)))
 	if err != nil {
 		tm.log.WithError(err).Error("Failed to connect to local service")
 		return

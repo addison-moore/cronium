@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { RateLimitService } from "../rate-limit-service";
 
 export interface SignatureVerificationResult {
   isValid: boolean;
@@ -196,24 +197,18 @@ export class WebhookSecurity {
   }
 
   /**
-   * Rate limit check for webhook endpoints
+   * Rate limit check for webhook endpoints. Backed by the shared
+   * Redis/Valkey sliding window; fails open when the cache is unavailable.
    */
   async checkRateLimit(
     identifier: string,
     limit: number,
     window: number,
   ): Promise<{ allowed: boolean; remaining: number; resetAt: Date }> {
-    // This is a simple in-memory implementation
-    // In production, use Redis or similar
-    const now = Date.now();
-
-    // TODO: Implement proper rate limiting with Redis
-    // For now, always allow
-    return {
-      allowed: true,
-      remaining: limit,
-      resetAt: new Date(now + window),
-    };
+    return RateLimitService.tryCheckLimit(identifier, "webhook", {
+      maxRequests: limit,
+      windowMs: window,
+    });
   }
 
   /**

@@ -273,13 +273,6 @@ function TeamsCredentialDisplay({
                   </>
                 )}
               </div>
-              {hasOAuth && !credentials.refreshToken && tool.isActive && (
-                <div className="mt-3">
-                  <Button variant="outline" size="sm" disabled>
-                    Authorize Access (OAuth2 coming soon)
-                  </Button>
-                </div>
-              )}
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => onEdit(tool)}>

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/api"
@@ -42,6 +43,12 @@ type SimpleOrchestrator struct {
 	mu             sync.RWMutex
 	activeJobs     map[string]*types.Job
 	isShuttingDown bool
+
+	// Lifetime counters (atomic) for heartbeat/metrics reporting
+	jobsProcessed atomic.Int64
+	jobsSucceeded atomic.Int64
+	jobsFailed    atomic.Int64
+	startedAt     time.Time
 }
 
 // NewSimpleOrchestrator creates a new simple orchestrator instance
@@ -150,6 +157,11 @@ func (o *SimpleOrchestrator) Run(ctx context.Context) error {
 	// Start API health check
 	go o.healthCheckLoop(ctx)
 
+	// Start telemetry loops (heartbeat + metrics reporting)
+	o.startedAt = time.Now()
+	go o.heartbeatLoop(ctx)
+	go o.metricsLoop(ctx)
+
 	// Start job polling loop
 	pollTicker := time.NewTicker(o.config.Jobs.PollInterval)
 	defer pollTicker.Stop()
@@ -255,6 +267,8 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 	updates, err := o.executorMgr.Execute(jobCtx, job)
 	if err != nil {
 		log.WithError(err).Error("Failed to start job execution")
+		o.jobsProcessed.Add(1)
+		o.jobsFailed.Add(1)
 		o.metrics.RecordJobFailed(string(job.Type), "execution_failed")
 
 		// Update job status to failed
@@ -358,18 +372,23 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 
 	// Record job completion metrics
 	jobDuration := time.Since(jobStartTime).Seconds()
+	o.jobsProcessed.Add(1)
 	switch completeReq.Status {
 	case types.JobStatusCompleted:
+		o.jobsSucceeded.Add(1)
 		o.metrics.RecordJobCompleted(string(job.Type), jobDuration)
 	case types.JobStatusTimeout:
+		o.jobsFailed.Add(1)
 		o.metrics.RecordJobFailed(string(job.Type), "timeout")
 	case types.JobStatusFailed:
+		o.jobsFailed.Add(1)
 		if exitCode >= 100 {
 			o.metrics.RecordJobFailed(string(job.Type), "partial_failure")
 		} else {
 			o.metrics.RecordJobFailed(string(job.Type), "non_zero_exit")
 		}
 	default:
+		o.jobsFailed.Add(1)
 		o.metrics.RecordJobFailed(string(job.Type), "unknown")
 	}
 
@@ -436,6 +455,82 @@ func (o *SimpleOrchestrator) healthCheckLoop(ctx context.Context) {
 			} else {
 				o.log.Debug("API health check passed")
 			}
+		}
+	}
+}
+
+// heartbeatLoop reports orchestrator liveness and capacity every 30s
+func (o *SimpleOrchestrator) heartbeatLoop(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	send := func() {
+		o.mu.RLock()
+		running := make([]string, 0, len(o.activeJobs))
+		for id := range o.activeJobs {
+			running = append(running, id)
+		}
+		current := len(o.activeJobs)
+		o.mu.RUnlock()
+
+		maxJobs := o.config.Jobs.MaxConcurrent
+		req := &api.HeartbeatRequest{
+			OrchestratorID: o.orchestratorID,
+			RunningJobs:    running,
+			Capacity: &api.HeartbeatCapacity{
+				MaxJobs:        maxJobs,
+				CurrentJobs:    current,
+				AvailableSlots: maxJobs - current,
+			},
+		}
+		if err := o.apiClient.SendHeartbeat(ctx, req); err != nil {
+			o.log.WithError(err).Warn("Failed to send heartbeat")
+		}
+	}
+
+	send() // report immediately on startup
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			send()
+		}
+	}
+}
+
+// metricsLoop reports orchestrator-level metrics every 60s
+func (o *SimpleOrchestrator) metricsLoop(ctx context.Context) {
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+
+	send := func() {
+		o.mu.RLock()
+		queueDepth := len(o.activeJobs)
+		o.mu.RUnlock()
+
+		req := &api.MetricsRequest{
+			OrchestratorID: o.orchestratorID,
+			Period:         "minute",
+			Metrics: api.OrchestratorStats{
+				JobsProcessed:    o.jobsProcessed.Load(),
+				JobsSucceeded:    o.jobsSucceeded.Load(),
+				JobsFailed:       o.jobsFailed.Load(),
+				ActiveContainers: queueDepth,
+				QueueDepth:       queueDepth,
+			},
+		}
+		if err := o.apiClient.SendMetrics(ctx, req); err != nil {
+			o.log.WithError(err).Warn("Failed to send metrics")
+		}
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			send()
 		}
 	}
 }

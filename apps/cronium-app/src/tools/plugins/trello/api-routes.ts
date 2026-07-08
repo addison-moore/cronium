@@ -23,27 +23,19 @@ export const trelloApiRoutes: PluginApiRoutes = {
         toolId: z.number().int().positive(),
       }),
       output: testConnectionResponseSchema,
-      handler: async () => {
-        // Mock implementation for now
-        // TODO: Implement actual Trello API test
-        try {
-          await new Promise((resolve) => setTimeout(resolve, 500));
-
-          return {
-            success: true,
-            message: "Successfully connected to Trello",
-            details: {
-              memberName: "Test User",
-              memberId: "member123",
-            },
-          };
-        } catch (error) {
-          return {
-            success: false,
-            message:
-              error instanceof Error ? error.message : "Connection failed",
-          };
-        }
+      handler: async ({ ctx }) => {
+        // Dynamic import: this file is shared with the client bundle, but
+        // handlers only run server-side via the plugin router.
+        const { testToolConnection } =
+          await import("@/server/api/routers/tools/connection-tests");
+        const result = await testToolConnection("trello", ctx.tool.credentials);
+        return {
+          success: result.success,
+          message: result.message,
+          details: result.success
+            ? { memberName: (result.details?.member as string) ?? "" }
+            : undefined,
+        };
       },
     },
     requiresAuth: true,

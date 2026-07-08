@@ -39,7 +39,7 @@ func (e *Executor) Execute(payloadPath string) error {
 	// Set up signal handling for cleanup
 	e.setupSignalHandling()
 
-	// Verify payload signature (basic check for now)
+	// Verify payload signature (enforced when CRONIUM_VERIFY_KEY is set)
 	e.log.Info("Verifying payload")
 	if err := payload.VerifySignature(payloadPath); err != nil {
 		return fmt.Errorf("payload verification failed: %w", err)

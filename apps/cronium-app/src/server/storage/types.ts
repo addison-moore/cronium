@@ -35,6 +35,10 @@ export type {
   LogStatus,
 } from "../../shared/schema";
 
+// Role types come from the roles storage module
+export type { Role, RolePermissions } from "./modules/roles";
+import type { Role, RolePermissions } from "./modules/roles";
+
 // Import types needed for internal use
 import type {
   User,
@@ -122,8 +126,7 @@ export interface LogFilters {
   sharedOnly?: boolean;
 }
 
-export interface WorkflowExecutionEventWithDetails
-  extends WorkflowExecutionEvent {
+export interface WorkflowExecutionEventWithDetails extends WorkflowExecutionEvent {
   eventName: string | null;
   eventType: string | null;
 }
@@ -144,6 +147,16 @@ export interface IStorage {
   upsertUser(userData: InsertUser): Promise<User>;
   disableUser(id: string): Promise<User>;
   deleteUser(id: string): Promise<void>;
+
+  // Role methods
+  listRoles(): Promise<Role[]>;
+  getRoleById(id: number): Promise<Role | undefined>;
+  getRoleByName(name: string): Promise<Role | undefined>;
+  getDefaultRole(): Promise<Role | undefined>;
+  updateRolePermissions(
+    id: number,
+    permissions: RolePermissions,
+  ): Promise<Role | undefined>;
 
   // Script methods
   getEvent(id: number): Promise<Event | undefined>;

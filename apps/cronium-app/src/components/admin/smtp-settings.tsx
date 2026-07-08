@@ -3,7 +3,7 @@ import React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Mail, Save, Eye, EyeOff } from "lucide-react";
+import { Mail, Save, Send, Eye, EyeOff } from "lucide-react";
 import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
 import { Label } from "@cronium/ui";
@@ -21,6 +21,8 @@ const copy = {
   enableDescription:
     "Provide valid SMTP credentials to enable email notifications.",
   save: "Save",
+  sendTest: "Send test email",
+  sendTestHint: "Sends a test email to your account using the saved settings.",
 } as const;
 
 const smtpSettingsSchema = z.object({
@@ -44,9 +46,16 @@ interface SystemSettings {
 interface SmtpSettingsProps {
   settings: SystemSettings;
   onSave: (data: z.infer<typeof smtpSettingsSchema>) => Promise<void>;
+  onSendTest?: () => void;
+  isSendingTest?: boolean;
 }
 
-export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
+export function SmtpSettings({
+  settings,
+  onSave,
+  onSendTest,
+  isSendingTest,
+}: SmtpSettingsProps) {
   const [showPassword, setShowPassword] = React.useState(false);
 
   const form = useForm<z.infer<typeof smtpSettingsSchema>>({
@@ -213,10 +222,28 @@ export function SmtpSettings({ settings, onSave }: SmtpSettingsProps) {
           {copy.enableDescription}
         </p>
 
-        <Button type="submit" className="flex items-center gap-2">
-          <Save className="h-4 w-4" />
-          {copy.save}
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button type="submit" className="flex items-center gap-2">
+            <Save className="h-4 w-4" />
+            {copy.save}
+          </Button>
+          {onSendTest && (
+            <Button
+              type="button"
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={onSendTest}
+              disabled={isSendingTest}
+              title={copy.sendTestHint}
+            >
+              <Send className="h-4 w-4" />
+              {copy.sendTest}
+            </Button>
+          )}
+        </div>
+        {onSendTest && (
+          <p className="text-muted-foreground text-sm">{copy.sendTestHint}</p>
+        )}
       </form>
     </SettingsSection>
   );

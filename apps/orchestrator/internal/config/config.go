@@ -210,8 +210,15 @@ type CircuitBreakerConfig struct {
 
 // SSHSecurityConfig defines SSH security settings
 type SSHSecurityConfig struct {
-	StrictHostKeyChecking bool     `yaml:"strictHostKeyChecking" envconfig:"STRICT_HOST_KEY_CHECKING" default:"true"`
-	KnownHostsFile        string   `yaml:"knownHostsFile" envconfig:"KNOWN_HOSTS_FILE" default:"/etc/cronium/known_hosts"`
+	StrictHostKeyChecking bool `yaml:"strictHostKeyChecking" envconfig:"STRICT_HOST_KEY_CHECKING" default:"true"`
+	// HostKeyPolicy controls host key verification: "strict" (unknown hosts are
+	// rejected), "accept-new" (unknown hosts are recorded on first connection,
+	// changed keys are rejected), or "insecure" (no verification).
+	HostKeyPolicy  string `yaml:"hostKeyPolicy" envconfig:"HOST_KEY_POLICY" default:"accept-new"`
+	KnownHostsFile string `yaml:"knownHostsFile" envconfig:"KNOWN_HOSTS_FILE" default:"/app/data/known_hosts"`
+	// PayloadSigningKeyFile is the Ed25519 key used to sign payloads so the
+	// runner can verify their authenticity. Auto-generated on first use.
+	PayloadSigningKeyFile string   `yaml:"payloadSigningKeyFile" envconfig:"PAYLOAD_SIGNING_KEY_FILE" default:"/app/data/payload_signing.key"`
 	AllowedCiphers        []string `yaml:"allowedCiphers" envconfig:"ALLOWED_CIPHERS"`
 	AllowedKeyExchanges   []string `yaml:"allowedKeyExchanges" envconfig:"ALLOWED_KEY_EXCHANGES"`
 }

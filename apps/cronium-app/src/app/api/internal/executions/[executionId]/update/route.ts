@@ -94,9 +94,8 @@ export async function PUT(
 
     // Broadcast execution update via WebSocket
     try {
-      const { getWebSocketBroadcaster } = await import(
-        "@/lib/websocket-broadcaster"
-      );
+      const { getWebSocketBroadcaster } =
+        await import("@/lib/websocket-broadcaster");
       const broadcaster = getWebSocketBroadcaster();
 
       const broadcastData: Parameters<

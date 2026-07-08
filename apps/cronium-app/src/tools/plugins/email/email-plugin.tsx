@@ -47,6 +47,7 @@ type SendEmailParams = {
   to: string;
   subject: string;
   body: string;
+  isHtml?: boolean;
 };
 
 // Email credential form component
@@ -263,7 +264,19 @@ function EmailCredentialDisplay({
 
 // Email Actions Definition - Simplified for MVP
 const sendEmailSchema = z.object({
-  to: z.string().email("Must be a valid email address"),
+  to: z
+    .string()
+    .min(1, "Recipient is required")
+    .refine(
+      (value) =>
+        value
+          .split(",")
+          .map((address) => address.trim())
+          .filter(Boolean)
+          .every((address) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)),
+      "Must be a valid email address (or comma-separated list)",
+    )
+    .describe("Recipient email address(es), comma-separated"),
   subject: z
     .string()
     .min(1, "Subject is required")
@@ -272,6 +285,10 @@ const sendEmailSchema = z.object({
     .string()
     .min(1, "Email body is required")
     .describe("Email body content (HTML supported)"),
+  isHtml: z
+    .boolean()
+    .optional()
+    .describe("Send the body as HTML (defaults to true)"),
 });
 
 const emailActions: ToolAction[] = [
@@ -350,37 +367,60 @@ const emailActions: ToolAction[] = [
         throw new Error(`Invalid email credentials: ${errorMessages}`);
       }
 
-      const _emailCreds = validationResult.data;
+      const emailCreds = validationResult.data;
       context.onProgress?.({
         step: "Connecting to SMTP server",
         percentage: 30,
       });
 
-      // Simulate email sending for Phase 1 - Simplified for MVP
-      // In a real implementation, this would use nodemailer or similar
-      const recipient = params.to;
+      // Dynamic import keeps nodemailer out of the client bundle; this file
+      // is "use client" but execute() only runs server-side via the registry.
+      const { sendEmailDetailed } = await import("@/lib/email");
 
-      context.onProgress?.({ step: "Preparing email", percentage: 50 });
+      const recipients = params.to
+        .split(",")
+        .map((address) => address.trim())
+        .filter(Boolean);
+      const isHtml = params.isHtml ?? true;
 
-      // Mock email sending logic
-      const mockDelay = Math.random() * 2000 + 500; // 500-2500ms
-      await new Promise((resolve) => setTimeout(resolve, mockDelay));
+      context.onProgress?.({ step: "Sending email", percentage: 60 });
 
-      context.onProgress?.({ step: "Sending email", percentage: 80 });
-
-      // Validate recipient email
-      const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient);
+      const sendResult = await sendEmailDetailed(
+        {
+          to: recipients.join(", "),
+          subject: params.subject,
+          text: isHtml ? params.body.replace(/<[^>]*>/g, "") : params.body,
+          html: isHtml
+            ? params.body
+            : `<p>${params.body.replace(/\n/g, "<br>")}</p>`,
+        },
+        {
+          host: emailCreds.smtpHost,
+          port: emailCreds.smtpPort,
+          user: emailCreds.smtpUser,
+          password: emailCreds.smtpPassword,
+          fromEmail: emailCreds.fromEmail,
+          fromName: emailCreds.fromName ?? "Cronium",
+          secure: emailCreds.enableSSL,
+        },
+      );
 
       context.onProgress?.({ step: "Email sent", percentage: 100 });
 
+      if (sendResult.accepted.length === 0) {
+        throw new Error(
+          `Email rejected for all recipients: ${sendResult.rejected.join(", ")}`,
+        );
+      }
+
       const result = {
-        messageId: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        status: isValidEmail ? "sent" : "failed",
-        recipients: isValidEmail ? [recipient] : [],
+        messageId: sendResult.messageId,
+        status: "sent" as const,
+        recipients: sendResult.accepted,
         timestamp: new Date().toISOString(),
         deliveryInfo: {
-          accepted: isValidEmail ? [recipient] : [],
-          rejected: isValidEmail ? [] : [recipient],
+          accepted: sendResult.accepted,
+          rejected: sendResult.rejected,
           pending: [],
         },
       };

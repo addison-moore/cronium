@@ -1,13 +1,21 @@
 package payload
 
 import (
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
+
+// VerifyKeyEnvVar carries the base64-encoded Ed25519 public key the
+// orchestrator used to sign the payload. When set, signature verification
+// is mandatory.
+const VerifyKeyEnvVar = "CRONIUM_VERIFY_KEY"
 
 // VerifyChecksum verifies the checksum of a payload file
 func VerifyChecksum(payloadPath string, expectedChecksum string) error {
@@ -35,21 +43,50 @@ func VerifyChecksum(payloadPath string, expectedChecksum string) error {
 	return nil
 }
 
-// VerifySignature verifies the signature of a payload (placeholder for now)
+// VerifySignature verifies the payload's detached Ed25519 signature
+// (<payload>.sig, base64-encoded) against the public key provided via
+// CRONIUM_VERIFY_KEY. When no key is provided (legacy orchestrators or
+// deployments without a signing key), verification is skipped.
 func VerifySignature(payloadPath string) error {
-	// For Phase 1, we'll skip actual signature verification
-	// This will be implemented properly when we set up cosign
-	sigPath := payloadPath + ".sig"
-	if _, err := os.Stat(sigPath); err != nil {
-		if os.IsNotExist(err) {
-			// No signature file, skip verification
-			return nil
-		}
-		return fmt.Errorf("failed to check signature file: %w", err)
+	keyB64 := os.Getenv(VerifyKeyEnvVar)
+	if keyB64 == "" {
+		// No verification key provided; run in legacy unverified mode.
+		return nil
 	}
 
-	// TODO: Implement actual cosign verification
-	// For now, just check that signature file exists
+	keyBytes, err := base64.StdEncoding.DecodeString(keyB64)
+	if err != nil {
+		return fmt.Errorf("invalid %s: %w", VerifyKeyEnvVar, err)
+	}
+	if len(keyBytes) != ed25519.PublicKeySize {
+		return fmt.Errorf("invalid %s: expected %d-byte Ed25519 public key, got %d bytes",
+			VerifyKeyEnvVar, ed25519.PublicKeySize, len(keyBytes))
+	}
+	publicKey := ed25519.PublicKey(keyBytes)
+
+	sigPath := payloadPath + ".sig"
+	sigData, err := os.ReadFile(sigPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("payload signature %s is missing but a verification key was provided", sigPath)
+		}
+		return fmt.Errorf("failed to read signature file: %w", err)
+	}
+
+	signature, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(sigData)))
+	if err != nil {
+		return fmt.Errorf("invalid payload signature encoding: %w", err)
+	}
+
+	payloadData, err := os.ReadFile(payloadPath)
+	if err != nil {
+		return fmt.Errorf("failed to read payload for verification: %w", err)
+	}
+
+	if !ed25519.Verify(publicKey, payloadData, signature) {
+		return fmt.Errorf("payload signature verification failed: payload does not match its signature")
+	}
+
 	return nil
 }
 

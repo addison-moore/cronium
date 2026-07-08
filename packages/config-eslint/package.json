@@ -2,7 +2,7 @@
   "name": "@cronium/eslint-config",
   "version": "1.0.0",
   "private": true,
-  "license": "GPL-3.0-or-later",
+  "license": "AGPL-3.0-or-later",
   "main": "index.js",
   "files": [
     "index.js",

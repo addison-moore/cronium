@@ -82,7 +82,9 @@ function Calendar({
       components={{
         PreviousMonthButton: (props) => {
           // Remove popover prop to avoid TypeScript error with newer React types
-          const { popover, ...buttonProps } = props as any;
+          const { popover: _popover, ...buttonProps } = props as {
+            popover?: unknown;
+          } & React.ButtonHTMLAttributes<HTMLButtonElement>;
           return (
             <button {...buttonProps}>
               <ChevronLeft className="h-4 w-4" />
@@ -91,7 +93,9 @@ function Calendar({
         },
         NextMonthButton: (props) => {
           // Remove popover prop to avoid TypeScript error with newer React types
-          const { popover, ...buttonProps } = props as any;
+          const { popover: _popover, ...buttonProps } = props as {
+            popover?: unknown;
+          } & React.ButtonHTMLAttributes<HTMLButtonElement>;
           return (
             <button {...buttonProps}>
               <ChevronRight className="h-4 w-4" />

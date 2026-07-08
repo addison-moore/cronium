@@ -1,6 +1,10 @@
 /** @type {import('jest').Config} */
 const nextJest = require("next/jest");
 
+// Tests run without a real deployment env; skip t3-env validation when
+// next/jest loads next.config.js (same approach as the lint scripts).
+process.env.SKIP_ENV_VALIDATION ??= "1";
+
 const createJestConfig = nextJest({
   // Provide the path to your Next.js app to load next.config.js and .env files in your test environment
   dir: "./",

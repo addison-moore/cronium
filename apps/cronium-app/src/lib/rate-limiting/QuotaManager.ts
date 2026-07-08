@@ -1,8 +1,16 @@
 import { EventEmitter } from "events";
 import { z } from "zod";
 import { db } from "@/server/db";
-import { userQuotas, quotaUsage } from "@/shared/schema";
-import { eq, and, gte, sql } from "drizzle-orm";
+import {
+  userQuotas,
+  quotaUsage,
+  events,
+  workflows,
+  webhooks,
+  logs,
+  toolActionLogs,
+} from "@/shared/schema";
+import { eq, and, gte, sql, count, isNotNull } from "drizzle-orm";
 
 export const QuotaConfigSchema = z.object({
   // Tool action quotas
@@ -270,16 +278,100 @@ export class QuotaManager extends EventEmitter {
   }
 
   /**
-   * Calculate actual usage from database
+   * Calculate actual usage from database for the given resource. Resources
+   * that have no straightforward query (storage/API request counts) return 0.
    */
   private async calculateActualUsage(
-    _userId: string,
-    _resource: keyof QuotaConfig,
+    userId: string,
+    resource: keyof QuotaConfig,
   ): Promise<number> {
-    // This would query the actual tables to calculate usage
-    // For now, return 0
-    // TODO: Implement actual usage calculation
-    return 0;
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
+
+    const countRows = async (
+      value: Promise<Array<{ value: number }>>,
+    ): Promise<number> => {
+      const [row] = await value;
+      return Number(row?.value ?? 0);
+    };
+
+    switch (resource) {
+      case "eventsPerUser":
+        return countRows(
+          db
+            .select({ value: count() })
+            .from(events)
+            .where(eq(events.userId, userId)),
+        );
+
+      case "workflowsPerUser":
+        return countRows(
+          db
+            .select({ value: count() })
+            .from(workflows)
+            .where(eq(workflows.userId, userId)),
+        );
+
+      case "webhooksPerUser":
+        return countRows(
+          db
+            .select({ value: count() })
+            .from(webhooks)
+            .where(eq(webhooks.userId, userId)),
+        );
+
+      case "eventExecutionsPerMonth":
+        return countRows(
+          db
+            .select({ value: count() })
+            .from(logs)
+            .where(
+              and(eq(logs.userId, userId), gte(logs.createdAt, startOfMonth)),
+            ),
+        );
+
+      case "workflowExecutionsPerMonth":
+        return countRows(
+          db
+            .select({ value: count() })
+            .from(logs)
+            .where(
+              and(
+                eq(logs.userId, userId),
+                isNotNull(logs.workflowId),
+                gte(logs.createdAt, startOfMonth),
+              ),
+            ),
+        );
+
+      case "toolActionsPerMonth":
+      case "toolActionsPerDay": {
+        // tool_action_logs has no userId; join to events for ownership
+        const since =
+          resource === "toolActionsPerDay" ? startOfDay : startOfMonth;
+        return countRows(
+          db
+            .select({ value: count() })
+            .from(toolActionLogs)
+            .innerJoin(events, eq(toolActionLogs.eventId, events.id))
+            .where(
+              and(
+                eq(events.userId, userId),
+                gte(toolActionLogs.createdAt, since),
+              ),
+            ),
+        );
+      }
+
+      default:
+        // Storage / API-request quotas have no simple table query yet
+        return 0;
+    }
   }
 
   /**

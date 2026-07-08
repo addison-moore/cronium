@@ -432,6 +432,19 @@ export const eventsRouter = createTRPCRouter({
         // Get the updated event with relations
         const updatedEvent = await storage.getEventWithRelations(id);
 
+        // Re-sync the in-memory schedule when status or schedule fields
+        // changed (updateScript cancels the old job and re-schedules only
+        // if the event is ACTIVE)
+        if (
+          input.status !== undefined ||
+          input.scheduleNumber !== undefined ||
+          input.scheduleUnit !== undefined ||
+          input.customSchedule !== undefined ||
+          input.startTime !== undefined
+        ) {
+          await scheduler.updateScript(id);
+        }
+
         // Payload generation moved to orchestrator
         // The orchestrator will create payloads from job script content
         // Clean up old payloads if they exist
@@ -478,6 +491,9 @@ export const eventsRouter = createTRPCRouter({
 
         // Clean up payloads before deleting the event
         await payloadService.cleanupEventPayloads(input.id);
+
+        // Cancel the in-memory scheduled job before removing the event
+        await scheduler.deleteScript(input.id);
 
         await storage.deleteScript(input.id);
 
@@ -555,8 +571,8 @@ export const eventsRouter = createTRPCRouter({
         // Update event status to PAUSED
         await storage.updateScript(input.id, { status: EventStatus.PAUSED });
 
-        // TODO: Implement unschedule functionality
-        // await scheduler.unscheduleScript(input.id);
+        // Cancel the in-memory scheduled job so paused events stop firing
+        await scheduler.deleteScript(input.id);
 
         return { success: true };
       } catch (error) {
@@ -625,9 +641,8 @@ export const eventsRouter = createTRPCRouter({
         });
 
         // Import job payload builder
-        const { buildJobPayload } = await import(
-          "@/lib/scheduler/job-payload-builder"
-        );
+        const { buildJobPayload } =
+          await import("@/lib/scheduler/job-payload-builder");
 
         // Build comprehensive job payload
         const jobPayload = buildJobPayload(

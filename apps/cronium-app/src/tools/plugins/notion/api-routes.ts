@@ -23,27 +23,19 @@ export const notionApiRoutes: PluginApiRoutes = {
         toolId: z.number().int().positive(),
       }),
       output: testConnectionResponseSchema,
-      handler: async () => {
-        // Mock implementation for now
-        // TODO: Implement actual Notion API test
-        try {
-          await new Promise((resolve) => setTimeout(resolve, 500));
-
-          return {
-            success: true,
-            message: "Successfully connected to Notion",
-            details: {
-              workspaceName: "Mock Workspace",
-              botId: "bot_123456",
-            },
-          };
-        } catch (error) {
-          return {
-            success: false,
-            message:
-              error instanceof Error ? error.message : "Connection failed",
-          };
-        }
+      handler: async ({ ctx }) => {
+        // Dynamic import: this file is shared with the client bundle, but
+        // handlers only run server-side via the plugin router.
+        const { testToolConnection } =
+          await import("@/server/api/routers/tools/connection-tests");
+        const result = await testToolConnection("notion", ctx.tool.credentials);
+        return {
+          success: result.success,
+          message: result.message,
+          details: result.success
+            ? { workspaceName: (result.details?.workspace as string) ?? "" }
+            : undefined,
+        };
       },
     },
     requiresAuth: true,

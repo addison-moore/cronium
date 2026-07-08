@@ -2,6 +2,7 @@
   "name": "@cronium/orchestrator",
   "version": "1.0.0",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "build": "go build -o orchestrator ./cmd/cronium-orchestrator",
     "build:go": "go build -o orchestrator ./cmd/cronium-orchestrator",
