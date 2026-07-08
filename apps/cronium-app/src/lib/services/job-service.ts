@@ -17,6 +17,7 @@ const generateJobId = customAlphabet(
   12,
 );
 import { storage } from "@server/storage";
+import { shouldRetry, computeRetryBackoffMs } from "./retry-policy";
 
 // Job queue management service
 export interface CreateJobInput {
@@ -463,13 +464,12 @@ export class JobService {
     const maxAttempts = payload?.retries ?? 0;
     const currentAttempts = job.attempts ?? 0;
 
-    // attempts counts prior tries; allow up to maxAttempts retries
-    if (maxAttempts <= 0 || currentAttempts >= maxAttempts) {
+    if (!shouldRetry(currentAttempts, maxAttempts)) {
       return null;
     }
 
     const nextAttempt = currentAttempts + 1;
-    const backoffMs = Math.min(5000 * 2 ** currentAttempts, 5 * 60 * 1000);
+    const backoffMs = computeRetryBackoffMs(currentAttempts);
     const scheduledFor = new Date(Date.now() + backoffMs);
 
     const requeued = await this.updateJob(jobId, {

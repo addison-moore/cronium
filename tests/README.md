@@ -1,6 +1,15 @@
 # Cronium Test Suite
 
-Comprehensive test suite for the Cronium containerized execution system.
+> **Status:** This is an integration/E2E suite that requires a live PostgreSQL
+> (and, for some tests, Valkey/Redis and the runtime service). It is **not** run
+> by the default CI `pnpm test` (which runs the fast, no-DB unit tests). Run it
+> locally with `pnpm test:integration` from the repo root after standing up a
+> test database (see "Environment Setup" below). Some suites here predate recent
+> refactors and may need updating before they pass — treat this as the
+> integration harness, not a green gate.
+
+Integration and performance test suite for the Cronium containerized execution
+system.
 
 ## Test Categories
 

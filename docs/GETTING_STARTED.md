@@ -130,10 +130,10 @@ This will start:
 
 ```bash
 # Start all services with Docker Compose
-pnpm docker:up
+pnpm dev:docker:up
 
 # Or manually:
-docker-compose -f infra/docker/docker-compose.dev.yml --env-file .env.dev up -d
+docker-compose -f infra/docker/docker-compose.dev.local-app.yml --env-file .env.dev up -d
 ```
 
 This will start:
@@ -151,7 +151,7 @@ For local development:
 For Docker:
 
 ```bash
-docker-compose -f infra/docker/docker-compose.dev.yml ps
+docker-compose -f infra/docker/docker-compose.dev.local-app.yml ps
 ```
 
 You should see all services with "Up" status.
@@ -169,9 +169,11 @@ You should see all services with "Up" status.
 ```
 cronium/
 ├── apps/
-│   ├── web/              # Next.js application
+│   ├── cronium-app/      # Next.js application
+│   ├── cronium-info/     # Marketing/docs site
 │   ├── orchestrator/     # Go orchestrator service
-│   └── runtime/          # Go runtime service
+│   ├── runtime/          # Go runtime service
+│   └── runner/           # Go SSH runner binary
 ├── packages/
 │   ├── ui/               # Shared UI components
 │   └── config-*/         # Shared configurations
@@ -182,7 +184,7 @@ cronium/
 
 All services support hot reloading:
 
-- **Next.js**: Changes to files in `apps/web/src` automatically trigger rebuilds
+- **Next.js**: Changes to files in `apps/cronium-app/src` automatically trigger rebuilds
 - **Go Services**: Air watches for changes and restarts services automatically
 
 ### Viewing Logs
@@ -193,11 +195,11 @@ For Docker:
 
 ```bash
 # View all logs
-pnpm docker:logs
+pnpm dev:docker:logs
 
 # View specific service logs
-docker-compose -f infra/docker/docker-compose.dev.yml logs -f cronium-app-dev
-docker-compose -f infra/docker/docker-compose.dev.yml logs -f cronium-orchestrator-dev
+docker-compose -f infra/docker/docker-compose.dev.local-app.yml logs -f cronium-app-dev
+docker-compose -f infra/docker/docker-compose.dev.local-app.yml logs -f cronium-orchestrator-dev
 ```
 
 ### Stopping Services
@@ -210,10 +212,10 @@ For Docker:
 
 ```bash
 # Stop all services
-pnpm docker:down
+pnpm dev:docker:down
 
 # Stop and remove volumes (clean slate)
-docker-compose -f infra/docker/docker-compose.dev.yml down -v
+docker-compose -f infra/docker/docker-compose.dev.local-app.yml down -v
 ```
 
 ## Common Development Tasks
@@ -222,20 +224,20 @@ docker-compose -f infra/docker/docker-compose.dev.yml down -v
 
 ```bash
 # From project root
-cd apps/web && pnpm db:push
+cd apps/cronium-app && pnpm db:push
 
 # Or in Docker
-docker-compose -f infra/docker/docker-compose.dev.yml exec cronium-app-dev pnpm db:push
+docker-compose -f infra/docker/docker-compose.dev.local-app.yml exec cronium-app-dev pnpm db:push
 ```
 
 ### Accessing the Database Studio
 
 ```bash
 # From project root
-cd apps/web && pnpm db:studio
+cd apps/cronium-app && pnpm db:studio
 
 # Or in Docker
-docker-compose -f infra/docker/docker-compose.dev.yml exec cronium-app-dev pnpm db:studio
+docker-compose -f infra/docker/docker-compose.dev.local-app.yml exec cronium-app-dev pnpm db:studio
 ```
 
 ### Running Tests
@@ -245,17 +247,17 @@ docker-compose -f infra/docker/docker-compose.dev.yml exec cronium-app-dev pnpm 
 pnpm test
 
 # Run tests for specific app
-pnpm test --filter @cronium/web
+pnpm test --filter @cronium/app
 
 # Or in Docker
-docker-compose -f infra/docker/docker-compose.dev.yml exec cronium-app-dev pnpm test
+docker-compose -f infra/docker/docker-compose.dev.local-app.yml exec cronium-app-dev pnpm test
 ```
 
 ### Installing New Dependencies
 
 ```bash
 # Install package to specific app
-pnpm add package-name --filter @cronium/web
+pnpm add package-name --filter @cronium/app
 
 # Install package to shared UI library
 pnpm add package-name --filter @cronium/ui
@@ -300,13 +302,13 @@ APP_PORT=5003  # Use a different port
 1. Check logs for specific errors:
 
    ```bash
-   docker-compose -f docker-compose.dev.yml logs cronium-app-dev
+   docker-compose -f docker-compose.dev.local-app.yml logs cronium-app-dev
    ```
 
 2. Verify environment variables:
 
    ```bash
-   docker-compose -f docker-compose.dev.yml config
+   docker-compose -f docker-compose.dev.local-app.yml config
    ```
 
 3. Ensure Docker has enough resources:
@@ -318,7 +320,7 @@ APP_PORT=5003  # Use a different port
 1. Verify volume mounts are correct:
 
    ```bash
-   docker-compose -f docker-compose.dev.yml exec cronium-app-dev ls -la /app
+   docker-compose -f docker-compose.dev.local-app.yml exec cronium-app-dev ls -la /app
    ```
 
 2. Check file permissions:

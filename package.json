@@ -14,6 +14,7 @@
     "build:go": "turbo build:go",
     "test": "turbo test",
     "test:app": "turbo test --filter=@cronium/app",
+    "test:integration": "jest --config tests/jest.config.js",
     "test:go": "turbo test:go",
     "lint": "turbo lint",
     "lint:go": "turbo lint:go",

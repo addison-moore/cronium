@@ -33,6 +33,11 @@ data/orchestrator/
 # Build outputs
 dist/
 build/
+# Compiled runner/service binaries (produced by build/CI, not committed)
+artifacts/
+
+# Local tool configs
+/settings.json
 
 # TypeScript build info
 **/tsconfig.tsbuildinfo

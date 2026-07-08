@@ -1,10 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createTRPCRouter, adminProcedure, protectedProcedure } from "../trpc";
-import {
-  normalizePagination,
-  createPaginatedResult,
-} from "@/server/utils/db-patterns";
 import { withErrorHandling, notFoundError } from "@/server/utils/error-utils";
 import {
   listResponse,
@@ -21,23 +17,11 @@ import {
   toggleUserStatusSchema,
   bulkUserOperationSchema,
   systemSettingsSchema,
-  adminLogsSchema,
-  logIdSchema,
   systemStatsSchema,
 } from "@/shared/schemas/admin";
 import { storage } from "@/server/storage";
 import { UserRole, UserStatus } from "@/shared/schema";
 import { sendInvitationEmail, sendEmailDetailed } from "@/lib/email";
-
-// Define Log interface for proper typing
-export interface Log {
-  id: string;
-  timestamp: Date;
-  level: "ERROR" | "WARN" | "INFO" | "DEBUG";
-  message: string;
-  userId?: string;
-  metadata?: Record<string, unknown>;
-}
 
 // Use centralized admin authentication from trpc.ts
 
