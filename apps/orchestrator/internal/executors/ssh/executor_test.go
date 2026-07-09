@@ -19,8 +19,10 @@ type MockSSHServer struct {
 }
 
 func TestExecutor_DeploymentRetry(t *testing.T) {
-	// Skip if not in CI environment or no test SSH server
-	if os.Getenv("CI") == "" && os.Getenv("TEST_SSH_SERVER") == "" {
+	// Integration test: needs a reachable SSH server. Gate purely on
+	// TEST_SSH_SERVER. Gating on CI meant this ran on every CI machine, none
+	// of which provide an SSH server.
+	if os.Getenv("TEST_SSH_SERVER") == "" {
 		t.Skip("Skipping SSH integration test - set TEST_SSH_SERVER to run")
 	}
 
@@ -86,8 +88,9 @@ func TestExecutor_DeploymentRetry(t *testing.T) {
 }
 
 func TestExecutor_Timeout(t *testing.T) {
-	// Skip if not in test environment with SSH server
-	if os.Getenv("CI") == "" && os.Getenv("TEST_SSH_SERVER") == "" {
+	// Integration test: needs a reachable SSH server that never answers.
+	// See TestExecutor_DeploymentRetry on why CI is not part of this gate.
+	if os.Getenv("TEST_SSH_SERVER") == "" {
 		t.Skip("Skipping timeout test - requires TEST_SSH_SERVER")
 	}
 

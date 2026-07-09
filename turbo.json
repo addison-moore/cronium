@@ -38,6 +38,7 @@
       "env": ["NODE_ENV"]
     },
     "lint": {
+      "dependsOn": ["^build"],
       "outputs": []
     },
     "lint:log": {

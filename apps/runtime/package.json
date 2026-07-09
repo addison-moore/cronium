@@ -9,7 +9,6 @@
     "dev": "cd cronium-runtime && air -c .air.toml",
     "test": "cd cronium-runtime && go test ./...",
     "test:go": "cd cronium-runtime && go test ./...",
-    "lint": "cd cronium-runtime && ../../../infra/scripts/lint-go.sh",
     "lint:go": "cd cronium-runtime && ../../../infra/scripts/lint-go.sh"
   }
 }

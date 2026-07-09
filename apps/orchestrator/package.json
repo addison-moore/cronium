@@ -9,7 +9,6 @@
     "dev": "air -c .air.toml",
     "test": "go test ./...",
     "test:go": "go test ./...",
-    "lint": "../../infra/scripts/lint-go.sh",
     "lint:go": "../../infra/scripts/lint-go.sh"
   }
 }

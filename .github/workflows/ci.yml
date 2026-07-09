@@ -16,6 +16,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  GOLANGCI_LINT_VERSION: "2.12.2"
+
 jobs:
   node:
     name: Lint, Typecheck & Test (Node)
@@ -38,8 +41,12 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      # --ignore-scripts skips native rebuilds (node-pty, cpu-features, bcrypt).
+      # Lint, typecheck and the jest suite need none of them, and skipping the
+      # builds means the runner does not need a C toolchain. The Docker image
+      # build still compiles them, inside a container that has one.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Lint
         run: pnpm lint
@@ -66,9 +73,13 @@ jobs:
             apps/runtime/cronium-runtime/go.sum
             apps/runner/cronium-runner/go.sum
 
+      # Installed with `go install` rather than upstream's install.sh. That
+      # script greps checksums.txt for the tarball name unanchored, so it also
+      # matches the "<tarball>.sbom.json" row that upstream added; the checksum
+      # then never verifies and the step always fails. `go install` verifies
+      # through the Go checksum database instead, and pins the version.
       - name: Install golangci-lint
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin"
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v${{ env.GOLANGCI_LINT_VERSION }}
 
       - name: Vet & test orchestrator
         working-directory: apps/orchestrator
@@ -88,10 +99,17 @@ jobs:
           go vet ./...
           go test ./...
 
+      # Advisory for now. golangci-lint never actually ran (its installer was
+      # broken and lint-go.sh swallowed the resulting error), so there is a
+      # backlog of ~276 findings in orchestrator and ~58 in runtime. The steps
+      # report them without failing the build. Remove continue-on-error once the
+      # backlog is cleared, so Go lint regressions block CI like the Node ones.
       - name: Lint (golangci-lint) orchestrator
         working-directory: apps/orchestrator
         run: ../../infra/scripts/lint-go.sh
+        continue-on-error: true
 
       - name: Lint (golangci-lint) runtime
         working-directory: apps/runtime/cronium-runtime
         run: ../../../infra/scripts/lint-go.sh
+        continue-on-error: true

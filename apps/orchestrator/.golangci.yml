@@ -21,7 +21,6 @@ linters:
     - gocritic
     - gocyclo
     - gosec
-    - gosimple
     - govet
     - ineffassign
     - misspell
@@ -40,7 +39,6 @@ linters:
     - funlen
     - lll
     - wsl
-    - typecheck # Disabled due to false positives with import aliases
 
   exclusions:
     rules:
@@ -69,11 +67,6 @@ linters:
       - path: runtime/
         linters:
           - all
-
-      # Exclude typecheck errors for import aliases
-      - linters:
-          - typecheck
-        text: "undefined:"
 
   settings:
     dupl:
