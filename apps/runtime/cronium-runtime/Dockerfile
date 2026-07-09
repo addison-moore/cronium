@@ -1,5 +1,7 @@
-# Build stage
-FROM golang:1.24-alpine AS builder
+# Build stage.
+# Pinned to BUILDPLATFORM so the Go toolchain runs natively and cross-compiles
+# to TARGETARCH, rather than running under QEMU for a foreign platform.
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git
@@ -16,8 +18,11 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+# Build the binary. TARGETARCH is supplied by buildx; hardcoding amd64 here
+# produced an x86-64 binary inside the linux/arm64 image.
+ARG TARGETARCH
+ARG TARGETOS=linux
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s" \
     -o cronium-runtime \
     cmd/runtime/main.go

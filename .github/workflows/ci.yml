@@ -10,10 +10,19 @@ on:
       - main
   workflow_dispatch:
 
+# Supersede in-flight runs for the same ref instead of queueing them behind
+# each other on the single self-hosted runner.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   node:
     name: Lint, Typecheck & Test (Node)
-    runs-on: ubuntu-latest
+    # Pull requests stay on GitHub-hosted runners: this repo accepts PRs from
+    # forks, and a fork PR running on self-hosted would execute untrusted code
+    # on our own machine.
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'self-hosted' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,7 +52,7 @@ jobs:
 
   go:
     name: Vet & Test (Go)
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'self-hosted' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

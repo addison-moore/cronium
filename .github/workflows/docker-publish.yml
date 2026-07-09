@@ -23,9 +23,16 @@ env:
   IMAGE_NAME_ORCHESTRATOR: ${{ github.repository }}-orchestrator
   IMAGE_NAME_RUNTIME: ${{ github.repository }}-runtime
 
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    # Pull requests stay on GitHub-hosted runners: a fork PR running on
+    # self-hosted would execute untrusted code on our own machine. PR builds
+    # never push images anyway (see `push:` below).
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'self-hosted' }}
     permissions:
       contents: read
       packages: write
@@ -39,7 +46,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
 
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
@@ -107,7 +114,7 @@ jobs:
         with:
           context: .
           file: ./apps/cronium-app/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta-app.outputs.tags }}
           labels: ${{ steps.meta-app.outputs.labels }}
@@ -124,7 +131,7 @@ jobs:
         with:
           context: ./apps/orchestrator
           file: ./apps/orchestrator/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta-orchestrator.outputs.tags }}
           labels: ${{ steps.meta-orchestrator.outputs.labels }}
@@ -141,7 +148,7 @@ jobs:
         with:
           context: ./apps/runtime/cronium-runtime
           file: ./apps/runtime/cronium-runtime/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta-runtime.outputs.tags }}
           labels: ${{ steps.meta-runtime.outputs.labels }}

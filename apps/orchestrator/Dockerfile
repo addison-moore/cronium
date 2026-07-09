@@ -1,8 +1,11 @@
 # Production Dockerfile for Cronium Orchestrator
 # Multi-stage build for security and minimal image size
 
-# Build stage
-FROM golang:1.23-alpine AS builder
+# Build stage.
+# Pinned to BUILDPLATFORM so the Go toolchain always runs natively on the
+# builder; cross-compilation to TARGETARCH below is free, whereas letting
+# buildx run this stage under QEMU for a foreign platform is not.
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata
@@ -22,7 +25,11 @@ COPY . .
 # Build with security flags and version info
 ARG BUILD_VERSION=latest
 ARG BUILD_TIME
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+# TARGETARCH is supplied by buildx. Hardcoding amd64 here produced an x86-64
+# binary inside the linux/arm64 image, which could never execute.
+ARG TARGETARCH
+ARG TARGETOS=linux
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X main.Version=${BUILD_VERSION} -X main.BuildTime=${BUILD_TIME}" \
     -a -installsuffix cgo \
     -o orchestrator ./cmd/cronium-orchestrator
