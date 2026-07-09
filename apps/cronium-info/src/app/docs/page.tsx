@@ -13,6 +13,14 @@ import {
   Activity,
 } from "lucide-react";
 import DocsLayout from "@/components/docs/docs-layout";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: { absolute: "Cronium Documentation — Self-Hosting, Workflows & API" },
+  description:
+    "Official Cronium documentation: self-host with Docker, schedule scripts, build multi-step workflows, connect remote servers, and use the REST API.",
+  alternates: { canonical: "/docs" },
+};
 
 // Enable Partial Prerendering for this page
 export const experimental_ppr = true;

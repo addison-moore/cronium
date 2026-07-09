@@ -21,6 +21,14 @@ import {
   Save,
 } from "lucide-react";
 import { SimpleCodeBlock } from "@/components/docs/api-code-examples";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Tool Action Templates",
+  description:
+    "Build reusable message templates for Cronium tool actions with Handlebars variables and helpers, including event context and formatting.",
+  alternates: { canonical: "/docs/templates" },
+};
 
 const tableOfContents = [
   { title: "Overview", href: "#overview", level: 2 },

@@ -131,9 +131,9 @@ Every 30 mins: */30 * * * *
 ## 🔗 Useful Links
 
 - [Full User Guide](./TOOL_ACTIONS_GUIDE.md)
-- [API Documentation](./api/tools.md)
+- [API Documentation](./TOOL_ACTIONS_API.md)
 - [Webhook Setup Guides](#webhook-guides)
-- [Variable Reference](./VARIABLES.md)
+- [Variable Reference](../FEATURE_LIST.md#5-variables-system)
 
 ## 💡 Pro Tips
 

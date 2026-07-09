@@ -3,7 +3,7 @@
 export const authenticationExamples = {
   usingApiKeys: {
     curl: `curl -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  https://your-cronium-instance.com/api/events`,
+  https://cronium.example.com/api/events`,
     python: `import requests
 
 headers = {
@@ -12,13 +12,13 @@ headers = {
 }
 
 response = requests.get(
-    'https://your-cronium-instance.com/api/events',
+    'https://cronium.example.com/api/events',
     headers=headers
 )`,
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN',
     'Content-Type': 'application/json'

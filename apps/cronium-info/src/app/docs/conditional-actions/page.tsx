@@ -21,6 +21,14 @@ import {
   MessageSquare,
   Code,
 } from "lucide-react";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Conditional Actions",
+  description:
+    "Trigger follow-up actions when an event succeeds, fails, always runs, or meets a condition — send messages to Slack, Discord, Teams, or email, or run another event.",
+  alternates: { canonical: "/docs/conditional-actions" },
+};
 
 const tableOfContents = [
   { title: "Overview", href: "#overview", level: 2 },
@@ -80,8 +88,8 @@ export default function ConditionalActionsPage() {
                   Send Message
                 </CardTitle>
                 <CardDescription>
-                  Send notifications via email, Slack, or Discord when events
-                  complete
+                  Send notifications via email, Slack, Discord, or Microsoft
+                  Teams when events complete
                 </CardDescription>
               </CardHeader>
               <CardContent>

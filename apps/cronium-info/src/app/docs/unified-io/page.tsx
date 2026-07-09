@@ -13,6 +13,14 @@ import ApiCodeExamples, {
   CodeBlock,
   SimpleCodeBlock,
 } from "@/components/docs/api-code-examples";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Unified Input & Output",
+  description:
+    "Pass data between Cronium events and workflow steps using cronium.input() and cronium.output(), in Python, Node.js, and Bash.",
+  alternates: { canonical: "/docs/unified-io" },
+};
 
 const tableOfContents = [
   { title: "Overview", href: "#overview", level: 2 },
@@ -202,7 +210,7 @@ fi`,
 
 # Execute event with input data
 response = requests.post(
-    'https://your-cronium-instance.com/api/events/42/execute',
+    'https://cronium.example.com/api/events/42/execute',
     headers={
         'Authorization': 'Bearer YOUR_API_TOKEN',
         'Content-Type': 'application/json'
@@ -222,7 +230,7 @@ print(f"Execution result: {result}")`,
 
 // Execute event with input data
 const response = await fetch(
-    'https://your-cronium-instance.com/api/events/42/execute',
+    'https://cronium.example.com/api/events/42/execute',
     {
         method: 'POST',
         headers: {
@@ -251,7 +259,7 @@ console.log('Execution result:', result);`,
       "data": {"items": ["item1", "item2"]}
     }
   }' \\
-  https://your-cronium-instance.com/api/events/42/execute`,
+  https://cronium.example.com/api/events/42/execute`,
   },
   quickReference: {
     python: `# cronium is automatically available - no imports needed!

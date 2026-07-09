@@ -8,31 +8,50 @@ export default function Hero() {
   return (
     <div className="dark:from-background dark:to-card relative overflow-hidden bg-gradient-to-b from-white to-gray-100 pt-10 pb-16">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
-        <div className="mx-auto max-w-2xl text-center">
+        <div className="mx-auto max-w-3xl text-center">
+          <p
+            className="animate-fadeIn text-muted-foreground mb-4 text-sm font-semibold tracking-wide uppercase"
+            style={{ animationDelay: "0.05s" }}
+          >
+            Open source · Self-hosted · AGPL-3.0
+          </p>
           <h1
             className="animate-fadeIn text-foreground text-4xl font-bold tracking-tight sm:text-6xl"
             style={{ animationDelay: "0.1s" }}
           >
-            <span className="text-primary dark:text-secondary">
-              Schedule and Automate with Confidence
-            </span>
+            <span className="text-primary dark:text-secondary">Cronium</span> is
+            a self-hosted automation platform
           </h1>
           <p
             className="animate-fadeIn mt-6 text-lg leading-8 text-gray-700 dark:text-gray-200"
             style={{ animationDelay: "0.3s" }}
           >
-            Powerful scheduling and automation platform for developers and
-            businesses
+            Schedule Python, Node.js, and Bash scripts. Chain them into
+            multi-step workflows with conditional logic. Run everything in
+            isolated containers or on your own servers over SSH — on
+            infrastructure you control.
           </p>
           <div
-            className="animate-fadeIn mt-10 flex items-center justify-center gap-x-6"
+            className="animate-fadeIn mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row"
             style={{ animationDelay: "0.5s" }}
           >
+            <Link
+              href="/docs/self-hosting"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-6 py-3 text-sm font-semibold shadow-sm transition-colors"
+            >
+              Deploy with Docker
+            </Link>
+            <Link
+              href="/docs/quick-start"
+              className="border-border text-foreground hover:bg-muted rounded-md border px-6 py-3 text-sm font-semibold transition-colors"
+            >
+              Quick start
+            </Link>
             <Link
               href="/docs"
               className="hover:text-primary dark:hover:text-secondary text-foreground text-sm leading-6 font-semibold"
             >
-              Learn More <span aria-hidden="true">→</span>
+              Read the docs <span aria-hidden="true">→</span>
             </Link>
           </div>
         </div>
@@ -94,14 +113,14 @@ const features = [
     description:
       "Schedule your scripts to run at specific times or intervals with precision and reliability.",
     benefits: [
-      "Cron-style scheduling syntax",
-      "Custom interval options",
-      "Timezone support for global teams",
-      "Run scripts on demand",
+      "Cron expressions or simple intervals",
+      "Run on demand at any time",
+      "Pause and resume any schedule",
+      "Automatic retries with backoff",
     ],
   },
   {
-    name: "Multiple Language Support",
+    name: "Write Scripts in Any Language",
     icon: (props: React.SVGProps<SVGSVGElement>) => (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -118,12 +137,12 @@ const features = [
       </svg>
     ),
     description:
-      "Support for multiple programming languages to automate all your workflows seamlessly.",
+      "Write automations in the language you already use, with a built-in editor and runtime helpers.",
     benefits: [
-      "JavaScript & TypeScript",
-      "Python scripts",
-      "Bash shell scripts",
-      "Version control integration",
+      "Python, Node.js, and Bash",
+      "Or call any HTTP endpoint",
+      "Pass data between steps",
+      "Isolated container execution",
     ],
   },
   {
@@ -173,10 +192,10 @@ const features = [
     description:
       "Detailed logs and notifications to keep track of your script executions and errors.",
     benefits: [
-      "Real-time execution logs",
-      "Success/failure notifications",
-      "Performance analytics",
-      "Error tracking and alerting",
+      "Real-time streaming logs",
+      "Success and failure notifications",
+      "Full execution history",
+      "Alerts to Slack, Discord, or email",
     ],
   },
 ];

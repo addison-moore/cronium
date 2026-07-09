@@ -2,6 +2,14 @@ import React from "react";
 import DocsLayout from "@/components/docs/docs-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { CheckCircle, Terminal, Server, Play, AlertCircle } from "lucide-react";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Create Your First Event",
+  description:
+    "Step-by-step: write a script, test it, and schedule it as a recurring Cronium event.",
+  alternates: { canonical: "/docs/how-to/first-event" },
+};
 
 const tableOfContents = [
   { title: "Before You Begin", href: "#before-you-begin", level: 2 },
@@ -73,10 +81,12 @@ export default function FirstEventPage() {
                 <div className="flex items-start gap-3">
                   <CheckCircle className="mt-1 h-5 w-5 text-green-500" />
                   <div>
-                    <h4 className="font-semibold">Cronium Account</h4>
+                    <h4 className="font-semibold">
+                      Access to a Cronium instance
+                    </h4>
                     <p className="text-muted-foreground text-sm">
-                      Make sure you have access to a Cronium instance and can
-                      sign in to the dashboard.
+                      Cronium is self-hosted — make sure an instance is deployed
+                      and you can sign in to the dashboard.
                     </p>
                   </div>
                 </div>

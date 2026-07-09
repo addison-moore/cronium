@@ -31,7 +31,7 @@ Before you begin, ensure you have the following installed:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-org/cronium.git
+git clone https://github.com/addison-moore/cronium.git
 cd cronium
 ```
 
@@ -50,9 +50,11 @@ pnpm build --filter @cronium/ui --filter @cronium/config-*
 #### Create the development environment file:
 
 ```bash
-# Copy the development environment example
-cp .env.dev.example .env.dev
+# Copy the environment example into place
+cp env/.env.example env/.env.local
 ```
+
+Both `pnpm dev` and `pnpm dev:docker:up` read `env/.env.local`.
 
 #### Generate secure secrets:
 
@@ -60,16 +62,16 @@ Run these commands to generate secure values for your environment:
 
 ```bash
 # Generate AUTH_SECRET
-echo "AUTH_SECRET=$(openssl rand -base64 32)" >> .env.dev
+echo "AUTH_SECRET=$(openssl rand -base64 32)" >> env/.env.local
 
 # Generate ENCRYPTION_KEY
-echo "ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env.dev
+echo "ENCRYPTION_KEY=$(openssl rand -hex 32)" >> env/.env.local
 
 # Generate INTERNAL_API_KEY
-echo "INTERNAL_API_KEY=$(openssl rand -base64 32)" >> .env.dev
+echo "INTERNAL_API_KEY=$(openssl rand -base64 32)" >> env/.env.local
 
 # Generate JWT_SECRET
-echo "JWT_SECRET=$(openssl rand -base64 32)" >> .env.dev
+echo "JWT_SECRET=$(openssl rand -base64 32)" >> env/.env.local
 ```
 
 ### 4. Configure Your Database
@@ -78,7 +80,7 @@ The development environment expects an external PostgreSQL database. You have tw
 
 #### Option A: Use a Local PostgreSQL Instance
 
-If you have PostgreSQL installed locally, update the `DATABASE_URL` in `.env.dev`:
+If you have PostgreSQL installed locally, update the `DATABASE_URL` in `env/.env.local`:
 
 ```bash
 DATABASE_URL=postgresql://your_user:your_password@host.docker.internal:5432/cronium_dev
@@ -96,7 +98,7 @@ DATABASE_URL=postgresql://user:password@host.neon.tech:5432/cronium_dev?sslmode=
 
 ### 5. Configure Optional Services
 
-Edit `.env.dev` to configure optional services:
+Edit `env/.env.local` to configure optional services:
 
 ```bash
 # For email functionality (optional)
@@ -132,8 +134,8 @@ This will start:
 # Start all services with Docker Compose
 pnpm dev:docker:up
 
-# Or manually:
-docker-compose -f infra/docker/docker-compose.dev.local-app.yml --env-file .env.dev up -d
+# Or manually (the helper script sources env/.env.local for you):
+docker compose -f infra/docker/docker-compose.dev.local-app.yml up -d
 ```
 
 This will start:
@@ -280,7 +282,7 @@ If you get a "port already allocated" error:
 lsof -i :5001  # On Mac/Linux
 netstat -ano | findstr :5001  # On Windows
 
-# Kill the process or change the port in .env.dev
+# Kill the process or change the port in env/.env.local
 APP_PORT=5003  # Use a different port
 ```
 
@@ -302,13 +304,13 @@ APP_PORT=5003  # Use a different port
 1. Check logs for specific errors:
 
    ```bash
-   docker-compose -f docker-compose.dev.local-app.yml logs cronium-app-dev
+   docker compose -f infra/docker/docker-compose.dev.local-app.yml logs cronium-app-dev
    ```
 
 2. Verify environment variables:
 
    ```bash
-   docker-compose -f docker-compose.dev.local-app.yml config
+   docker compose -f infra/docker/docker-compose.dev.local-app.yml config
    ```
 
 3. Ensure Docker has enough resources:
@@ -320,7 +322,7 @@ APP_PORT=5003  # Use a different port
 1. Verify volume mounts are correct:
 
    ```bash
-   docker-compose -f docker-compose.dev.local-app.yml exec cronium-app-dev ls -la /app
+   docker compose -f infra/docker/docker-compose.dev.local-app.yml exec cronium-app-dev ls -la /app
    ```
 
 2. Check file permissions:
@@ -351,9 +353,10 @@ See [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md) for a complete list o
 1. **Create your first event**: Navigate to http://localhost:5001/dashboard/events
 2. **Set up a server**: Add a local or SSH server for running events
 3. **Explore the codebase**:
-   - `/src` - Next.js application code
-   - `/orchestrator` - Go orchestrator service
-   - `/docs` - Additional documentation
+   - `apps/cronium-app/src` - Next.js application code
+   - `apps/orchestrator` - Go orchestrator service
+   - `apps/runtime` - Go runtime API and per-language helper libraries
+   - `docs/` - Additional documentation
 
 ## Getting Help
 
@@ -364,7 +367,8 @@ See [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md) for a complete list o
 
 ## Additional Resources
 
-- [Architecture Overview](./ARCHITECTURE.md)
+- [Documentation Index](./README.md)
+- [Execution Flow](./Execution_Flow.md)
 - [Contributing Guide](../CONTRIBUTING.md)
-- [API Documentation](./API.md)
-- [Security Considerations](./SECURITY.md)
+- [Tool Actions API](./tools/TOOL_ACTIONS_API.md)
+- [Security Policy](../SECURITY.md)

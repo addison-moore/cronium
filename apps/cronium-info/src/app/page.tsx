@@ -1,10 +1,18 @@
 import React from "react";
+import type { Metadata } from "next";
 import Navbar from "@/components/landing/navbar";
 import Hero from "@/components/landing/hero";
 import Features from "@/components/landing/Features";
 import Footer from "@/components/landing/footer";
 import { Button } from "@cronium/ui";
 import Link from "next/link";
+import { SITE_TITLE, SITE_DESCRIPTION } from "@/lib/site";
+
+export const metadata: Metadata = {
+  title: { absolute: SITE_TITLE },
+  description: SITE_DESCRIPTION,
+  alternates: { canonical: "/" },
+};
 
 // Enable Partial Prerendering for this page
 export const experimental_ppr = true;
@@ -30,7 +38,8 @@ export default function Home() {
                 How It Works
               </h2>
               <p className="text-muted-foreground mx-auto mt-4 max-w-2xl">
-                Get started with Cronium in three simple steps
+                From a script to a scheduled, monitored automation in three
+                steps
               </p>
             </div>
 
@@ -40,11 +49,11 @@ export default function Home() {
                   <span className="text-primary text-xl font-bold">1</span>
                 </div>
                 <h3 className="text-foreground mb-2 text-xl font-semibold">
-                  Create Your Events
+                  Write an Event
                 </h3>
                 <p className="text-muted-foreground">
-                  Write your code or set up HTTP requests to perform tasks. Use
-                  any supported programming language.
+                  Write a Python, Node.js, or Bash script in the built-in editor
+                  — or point Cronium at any HTTP endpoint.
                 </p>
               </div>
 
@@ -53,11 +62,12 @@ export default function Home() {
                   <span className="text-secondary text-xl font-bold">2</span>
                 </div>
                 <h3 className="text-foreground mb-2 text-xl font-semibold">
-                  Set Up Schedules
+                  Schedule and Connect
                 </h3>
                 <p className="text-muted-foreground">
-                  Choose when and how often your events should run using
-                  flexible scheduling options.
+                  Run it on a cron schedule or interval, in an isolated
+                  container or on your own server over SSH. Chain events into
+                  workflows.
                 </p>
               </div>
 
@@ -66,11 +76,11 @@ export default function Home() {
                   <span className="text-primary text-xl font-bold">3</span>
                 </div>
                 <h3 className="text-foreground mb-2 text-xl font-semibold">
-                  Monitor Execution
+                  Monitor and Get Notified
                 </h3>
                 <p className="text-muted-foreground">
-                  Track performance with detailed logs and receive notifications
-                  for success or failure.
+                  Watch logs stream in real time, review every execution, and
+                  get alerts in Slack, Discord, Teams, or email.
                 </p>
               </div>
             </div>
@@ -88,14 +98,22 @@ export default function Home() {
                 Ready to start automating?
               </h2>
               <p className="mx-auto mb-4 max-w-2xl">
-                Sign up for free and start building your first automation in
-                minutes.
+                Cronium is free and open source. Deploy it with Docker Compose
+                on your own infrastructure in minutes — no account, no vendor,
+                no per-run pricing.
               </p>
               <p className="mx-auto mb-8 max-w-2xl text-gray-100">
-                Join our growing community of developers to share insights and
-                automation recipes.
+                Your scripts, your servers, your data.
               </p>
               <div className="flex flex-col justify-center gap-4 sm:flex-row">
+                <Link href="/docs/self-hosting">
+                  <Button
+                    size="lg"
+                    className="bg-white px-8 font-semibold text-gray-900 hover:bg-gray-100"
+                  >
+                    Deploy Cronium
+                  </Button>
+                </Link>
                 <Link
                   href="https://github.com/addison-moore/cronium"
                   target="_blank"

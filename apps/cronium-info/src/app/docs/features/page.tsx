@@ -22,6 +22,14 @@ import {
   Activity,
   GitFork,
 } from "lucide-react";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Features",
+  description:
+    "Everything Cronium does: scheduled script execution, visual workflows, SSH and containerized execution, real-time logs, integrations, and role-based access.",
+  alternates: { canonical: "/docs/features" },
+};
 
 const tableOfContents = [
   { title: "Script Automation", href: "#script-automation", level: 2 },
@@ -685,10 +693,10 @@ if __name__ == "__main__":
               </CardHeader>
               <CardContent>
                 <ul className="text-muted-foreground space-y-1 text-sm">
-                  <li>• Slack integration</li>
+                  <li>• Slack and Discord</li>
                   <li>• Microsoft Teams</li>
-                  <li>• PagerDuty alerts</li>
-                  <li>• Custom connectors</li>
+                  <li>• Email (SMTP)</li>
+                  <li>• Notion, Trello, Google Sheets</li>
                 </ul>
               </CardContent>
             </Card>
@@ -704,43 +712,43 @@ if __name__ == "__main__":
 
           <Card>
             <CardContent className="pt-6">
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 <div>
                   <h4 className="mb-3 font-semibold">Admin</h4>
                   <ul className="text-muted-foreground space-y-1 text-sm">
                     <li>• Full system access</li>
-                    <li>• User management</li>
+                    <li>• User and role management</li>
                     <li>• System configuration</li>
-                    <li>• Audit logs</li>
+                    <li>• Bypasses all permission checks</li>
                   </ul>
                 </div>
                 <div>
-                  <h4 className="mb-3 font-semibold">Developer</h4>
+                  <h4 className="mb-3 font-semibold">User</h4>
                   <ul className="text-muted-foreground space-y-1 text-sm">
-                    <li>• Create/edit events</li>
-                    <li>• Execute workflows</li>
-                    <li>• View logs</li>
-                    <li>• API access</li>
-                  </ul>
-                </div>
-                <div>
-                  <h4 className="mb-3 font-semibold">Operator</h4>
-                  <ul className="text-muted-foreground space-y-1 text-sm">
-                    <li>• Execute events</li>
-                    <li>• Monitor status</li>
-                    <li>• View logs</li>
-                    <li>• Basic reporting</li>
+                    <li>• Create and edit events</li>
+                    <li>• Build and run workflows</li>
+                    <li>• Manage their own servers</li>
+                    <li>• View execution logs</li>
                   </ul>
                 </div>
                 <div>
                   <h4 className="mb-3 font-semibold">Viewer</h4>
                   <ul className="text-muted-foreground space-y-1 text-sm">
                     <li>• Read-only access</li>
-                    <li>• View events</li>
-                    <li>• Monitor status</li>
-                    <li>• Basic logs</li>
+                    <li>• View events and workflows</li>
+                    <li>• View execution logs</li>
                   </ul>
                 </div>
+              </div>
+              <div className="bg-muted mt-6 rounded-lg p-4">
+                <p className="text-muted-foreground text-sm">
+                  <strong>Granular permissions.</strong> On top of the role,
+                  each non-admin role carries three toggles an administrator can
+                  set: <code>monitoring</code> (view the monitoring dashboard),{" "}
+                  <code>console</code> (use the interactive terminal), and{" "}
+                  <code>localServerAccess</code> (run commands on the Cronium
+                  host itself). Admins always pass these checks.
+                </p>
               </div>
             </CardContent>
           </Card>

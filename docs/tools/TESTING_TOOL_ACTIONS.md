@@ -230,5 +230,5 @@ After successful testing:
 For more information, see:
 
 - [Tool Actions User Guide](./TOOL_ACTIONS_GUIDE.md)
-- [Tool Actions API Reference](./api/TOOL_ACTIONS_API.md)
+- [Tool Actions API Reference](./TOOL_ACTIONS_API.md)
 - [Troubleshooting Guide](./TOOL_ACTIONS_GUIDE.md#troubleshooting)

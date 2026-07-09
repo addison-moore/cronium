@@ -511,6 +511,6 @@ const sendBatchEmails = async (recipients: string[], subject: string) => {
 
 For more information, see:
 
-- [User Guide](../TOOL_ACTIONS_GUIDE.md)
-- [Quick Reference](../TOOL_ACTIONS_QUICK_REFERENCE.md)
-- [Contributing Guide](../CONTRIBUTING.md)
+- [User Guide](./TOOL_ACTIONS_GUIDE.md)
+- [Quick Reference](./TOOL_ACTIONS_QUICK_REFERENCE.md)
+- [Contributing Guide](../../CONTRIBUTING.md)

@@ -3,14 +3,14 @@
 export const eventsApiExamples = {
   listEvents: {
     curl: `curl -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  "https://your-cronium-instance.com/api/events?page=1&limit=10"`,
+  "https://cronium.example.com/api/events?page=1&limit=10"`,
     python: `import requests
 
 headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
 params = {'page': 1, 'limit': 10, 'status': 'active'}
 
 response = requests.get(
-    'https://your-cronium-instance.com/api/events',
+    'https://cronium.example.com/api/events',
     headers=headers,
     params=params
 )
@@ -21,7 +21,7 @@ for event in events:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
 });
 
@@ -45,7 +45,7 @@ events.forEach(event => {
     "script": "echo \\"Hello from API\\"",
     "schedule": "0 9 * * MON"
   }' \\
-  https://your-cronium-instance.com/api/events`,
+  https://cronium.example.com/api/events`,
     python: `import requests
 
 headers = {
@@ -62,7 +62,7 @@ data = {
 }
 
 response = requests.post(
-    'https://your-cronium-instance.com/api/events',
+    'https://cronium.example.com/api/events',
     headers=headers,
     json=data
 )
@@ -75,7 +75,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN',
     'Content-Type': 'application/json'
@@ -99,13 +99,13 @@ try {
   },
   getEvent: {
     curl: `curl -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  https://your-cronium-instance.com/api/events/123`,
+  https://cronium.example.com/api/events/123`,
     python: `import requests
 
 headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
 
 response = requests.get(
-    'https://your-cronium-instance.com/api/events/123',
+    'https://cronium.example.com/api/events/123',
     headers=headers
 )
 
@@ -119,7 +119,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
 });
 
@@ -142,7 +142,7 @@ try {
     "description": "Updated description",
     "status": "paused"
   }' \\
-  https://your-cronium-instance.com/api/events/123`,
+  https://cronium.example.com/api/events/123`,
     python: `import requests
 
 headers = {
@@ -157,7 +157,7 @@ data = {
 }
 
 response = requests.put(
-    'https://your-cronium-instance.com/api/events/123',
+    'https://cronium.example.com/api/events/123',
     headers=headers,
     json=data
 )
@@ -170,7 +170,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN',
     'Content-Type': 'application/json'
@@ -193,13 +193,13 @@ try {
   deleteEvent: {
     curl: `curl -X DELETE \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  https://your-cronium-instance.com/api/events/123`,
+  https://cronium.example.com/api/events/123`,
     python: `import requests
 
 headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
 
 response = requests.delete(
-    'https://your-cronium-instance.com/api/events/123',
+    'https://cronium.example.com/api/events/123',
     headers=headers
 )
 
@@ -210,7 +210,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
 });
 
@@ -226,7 +226,7 @@ try {
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{"input": {"param1": "value1", "param2": "value2"}}' \\
-  https://your-cronium-instance.com/api/events/123/execute`,
+  https://cronium.example.com/api/events/123/execute`,
     python: `import requests
 
 headers = {
@@ -243,7 +243,7 @@ input_data = {
 }
 
 response = requests.post(
-    'https://your-cronium-instance.com/api/events/123/execute',
+    'https://cronium.example.com/api/events/123/execute',
     headers=headers,
     json=input_data
 )
@@ -257,7 +257,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN',
     'Content-Type': 'application/json'
@@ -283,14 +283,14 @@ try {
   },
   getEventLogs: {
     curl: `curl -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  "https://your-cronium-instance.com/api/events/123/logs?page=1&limit=10"`,
+  "https://cronium.example.com/api/events/123/logs?page=1&limit=10"`,
     python: `import requests
 
 headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
 params = {'page': 1, 'limit': 10}
 
 response = requests.get(
-    'https://your-cronium-instance.com/api/events/123/logs',
+    'https://cronium.example.com/api/events/123/logs',
     headers=headers,
     params=params
 )
@@ -305,7 +305,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
 });
 

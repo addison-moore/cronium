@@ -3,13 +3,13 @@
 export const variablesApiExamples = {
   listVariables: {
     curl: `curl -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  "https://your-cronium-instance.com/api/variables"`,
+  "https://cronium.example.com/api/variables"`,
     python: `import requests
 
 headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
 
 response = requests.get(
-    'https://your-cronium-instance.com/api/variables',
+    'https://cronium.example.com/api/variables',
     headers=headers
 )
 
@@ -19,7 +19,7 @@ for variable in variables:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
 });
 
@@ -38,7 +38,7 @@ variables.forEach(variable => {
     "value": "postgresql://user:password@localhost:5432/mydb",
     "description": "Production database connection string"
   }' \\
-  https://your-cronium-instance.com/api/variables`,
+  https://cronium.example.com/api/variables`,
     python: `import requests
 
 headers = {
@@ -53,7 +53,7 @@ data = {
 }
 
 response = requests.post(
-    'https://your-cronium-instance.com/api/variables',
+    'https://cronium.example.com/api/variables',
     headers=headers,
     json=data
 )
@@ -66,7 +66,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN',
     'Content-Type': 'application/json'
@@ -88,13 +88,13 @@ try {
   },
   getVariable: {
     curl: `curl -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  https://your-cronium-instance.com/api/variables/DATABASE_URL`,
+  https://cronium.example.com/api/variables/DATABASE_URL`,
     python: `import requests
 
 headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
 
 response = requests.get(
-    'https://your-cronium-instance.com/api/variables/DATABASE_URL',
+    'https://cronium.example.com/api/variables/DATABASE_URL',
     headers=headers
 )
 
@@ -108,7 +108,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
 });
 
@@ -130,7 +130,7 @@ try {
     "value": "postgresql://user:newpassword@localhost:5432/mydb",
     "description": "Updated production database connection string"
   }' \\
-  https://your-cronium-instance.com/api/variables/DATABASE_URL`,
+  https://cronium.example.com/api/variables/DATABASE_URL`,
     python: `import requests
 
 headers = {
@@ -144,7 +144,7 @@ data = {
 }
 
 response = requests.put(
-    'https://your-cronium-instance.com/api/variables/DATABASE_URL',
+    'https://cronium.example.com/api/variables/DATABASE_URL',
     headers=headers,
     json=data
 )
@@ -157,7 +157,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN',
     'Content-Type': 'application/json'
@@ -179,13 +179,13 @@ try {
   deleteVariable: {
     curl: `curl -X DELETE \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  https://your-cronium-instance.com/api/variables/DATABASE_URL`,
+  https://cronium.example.com/api/variables/DATABASE_URL`,
     python: `import requests
 
 headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
 
 response = requests.delete(
-    'https://your-cronium-instance.com/api/variables/DATABASE_URL',
+    'https://cronium.example.com/api/variables/DATABASE_URL',
     headers=headers
 )
 
@@ -196,7 +196,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
 });
 

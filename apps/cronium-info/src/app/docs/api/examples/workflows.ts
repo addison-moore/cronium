@@ -3,14 +3,14 @@
 export const workflowsApiExamples = {
   listWorkflows: {
     curl: `curl -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  "https://your-cronium-instance.com/api/workflows?page=1&limit=10"`,
+  "https://cronium.example.com/api/workflows?page=1&limit=10"`,
     python: `import requests
 
 headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
 params = {'page': 1, 'limit': 10, 'status': 'active'}
 
 response = requests.get(
-    'https://your-cronium-instance.com/api/workflows',
+    'https://cronium.example.com/api/workflows',
     headers=headers,
     params=params
 )
@@ -21,7 +21,7 @@ for workflow in workflows:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
 });
 
@@ -64,7 +64,7 @@ workflows.forEach(workflow => {
       }
     ]
   }' \\
-  https://your-cronium-instance.com/api/workflows`,
+  https://cronium.example.com/api/workflows`,
     python: `import requests
 
 headers = {
@@ -100,7 +100,7 @@ workflow_data = {
 }
 
 response = requests.post(
-    'https://your-cronium-instance.com/api/workflows',
+    'https://cronium.example.com/api/workflows',
     headers=headers,
     json=workflow_data
 )
@@ -113,7 +113,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN',
     'Content-Type': 'application/json'
@@ -156,13 +156,13 @@ try {
   },
   getWorkflow: {
     curl: `curl -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  https://your-cronium-instance.com/api/workflows/456`,
+  https://cronium.example.com/api/workflows/456`,
     python: `import requests
 
 headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
 
 response = requests.get(
-    'https://your-cronium-instance.com/api/workflows/456',
+    'https://cronium.example.com/api/workflows/456',
     headers=headers
 )
 
@@ -176,7 +176,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
 });
 
@@ -199,7 +199,7 @@ try {
     "description": "Updated description",
     "status": "paused"
   }' \\
-  https://your-cronium-instance.com/api/workflows/456`,
+  https://cronium.example.com/api/workflows/456`,
     python: `import requests
 
 headers = {
@@ -214,7 +214,7 @@ data = {
 }
 
 response = requests.put(
-    'https://your-cronium-instance.com/api/workflows/456',
+    'https://cronium.example.com/api/workflows/456',
     headers=headers,
     json=data
 )
@@ -227,7 +227,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN',
     'Content-Type': 'application/json'
@@ -252,7 +252,7 @@ try {
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{"input": {"startParam": "initialValue"}}' \\
-  https://your-cronium-instance.com/api/workflows/456/execute`,
+  https://cronium.example.com/api/workflows/456/execute`,
     python: `import requests
 
 headers = {
@@ -272,7 +272,7 @@ input_data = {
 }
 
 response = requests.post(
-    'https://your-cronium-instance.com/api/workflows/456/execute',
+    'https://cronium.example.com/api/workflows/456/execute',
     headers=headers,
     json=input_data
 )
@@ -286,7 +286,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN',
     'Content-Type': 'application/json'

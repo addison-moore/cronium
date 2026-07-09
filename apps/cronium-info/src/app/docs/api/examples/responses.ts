@@ -334,7 +334,7 @@ def make_api_request(url, headers, data=None):
 
 # Usage example
 headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
-result = make_api_request('https://your-cronium-instance.com/api/events', headers)`,
+result = make_api_request('https://cronium.example.com/api/events', headers)`,
 
   nodejsErrorHandling: `const axios = require('axios');
 
@@ -400,7 +400,7 @@ class CroniumAPIClient {
 }
 
 // Usage example
-const api = new CroniumAPIClient('https://your-cronium-instance.com/api', 'YOUR_API_TOKEN');
+const api = new CroniumAPIClient('https://cronium.example.com/api', 'YOUR_API_TOKEN');
 const result = await api.createEvent({ name: 'Test Event', type: 'BASH' });`,
 
   curlErrorHandling: `#!/bin/bash
@@ -411,7 +411,7 @@ make_api_request() {
     local endpoint="$2"
     local data="$3"
     local api_token="YOUR_API_TOKEN"
-    local base_url="https://your-cronium-instance.com/api"
+    local base_url="https://cronium.example.com/api"
     
     # Make the request and capture both response and HTTP status
     local response

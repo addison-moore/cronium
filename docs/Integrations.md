@@ -18,7 +18,7 @@ While the terms "integrations" and "tools" are sometimes used interchangeably in
 - Stored in the `toolCredentials` database table
 - Contains encrypted credentials (API keys, webhook URLs, OAuth tokens)
 - Created and managed by users via `/dashboard/tools`
-- Each tool has a name, type (EMAIL, SLACK, DISCORD, WEBHOOK), and encrypted credentials
+- Each tool has a name, a type (`email`, `slack`, `discord`, `teams`, `notion`, `trello`, `google-sheets`), and encrypted credentials
 - Can be activated/deactivated
 - Used by events to perform actions
 
@@ -41,11 +41,14 @@ While the terms "integrations" and "tools" are sometimes used interchangeably in
 
 **Key characteristics**:
 
-- Implemented in `src/server/api/routers/integrations.ts`
-- Provides tRPC endpoints for sending messages
+- Implemented in `apps/cronium-app/src/server/api/routers/tools.ts` and the
+  per-tool routers under `apps/cronium-app/src/server/api/routers/tools/`
+- Provides tRPC endpoints for sending messages and testing connections
 - Contains the business logic for formatting and sending data
 - Handles rate limiting, retries, and error handling
-- Currently uses mock implementations for testing
+- All integrations perform real network calls. `tools.testConnection` verifies
+  credentials against the live provider (SMTP handshake, API auth call, or
+  webhook POST) — there are no mock implementations.
 
 **Example**: When an event wants to send a Slack message:
 
@@ -103,7 +106,7 @@ Tool plugins bridge the gap between tools and integrations:
 - Define credential schemas
 - Map tool configurations to integration API calls
 
-Located in `src/components/tools/plugins/`, each plugin (e.g., `SlackPlugin`, `EmailPlugin`) defines:
+Located in `apps/cronium-app/src/tools/plugins/`, each plugin (e.g., `SlackPlugin`, `EmailPlugin`) defines:
 
 - Available actions (send message, create task, etc.)
 - Parameter schemas

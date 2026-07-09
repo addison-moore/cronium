@@ -139,7 +139,7 @@ For enhanced security:
 ./infra/scripts/setup-secrets.sh
 
 # Deploy with Docker secrets
-docker compose -f docker-compose.yml -f docker-compose.secrets.yml up -d
+docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.secrets.yml up -d
 ```
 
 ### Production Checklist
@@ -307,6 +307,5 @@ docker run --rm -v cronium_postgres_data:/data -v $(pwd):/backup alpine tar czf 
 
 For issues and questions:
 
-- GitHub Issues: https://github.com/your-org/cronium/issues
-- Documentation: https://docs.cronium.io
-- Community: https://discord.gg/cronium
+- GitHub Issues: https://github.com/addison-moore/cronium/issues
+- Documentation: https://cronium.app/docs

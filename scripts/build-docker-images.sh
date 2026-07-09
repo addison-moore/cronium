@@ -57,4 +57,4 @@ echo -e "\n${GREEN}Successfully built images:${NC}"
 docker images | grep -E "cronium/(runtime-api|runner)" | head -10
 
 echo -e "\n${GREEN}✓ All Docker images built successfully!${NC}"
-echo -e "${YELLOW}You can now run 'pnpm docker:up' to start the services.${NC}"
+echo -e "${YELLOW}You can now run 'pnpm dev:docker:up' to start the services.${NC}"

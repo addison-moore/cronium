@@ -3,14 +3,14 @@
 export const serversApiExamples = {
   listServers: {
     curl: `curl -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  "https://your-cronium-instance.com/api/servers?page=1&limit=10"`,
+  "https://cronium.example.com/api/servers?page=1&limit=10"`,
     python: `import requests
 
 headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
 params = {'page': 1, 'limit': 10}
 
 response = requests.get(
-    'https://your-cronium-instance.com/api/servers',
+    'https://cronium.example.com/api/servers',
     headers=headers,
     params=params
 )
@@ -22,7 +22,7 @@ for server in servers:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
 });
 
@@ -47,7 +47,7 @@ servers.forEach(server => {
     "username": "deploy",
     "sshKey": "-----BEGIN OPENSSH PRIVATE KEY-----\\n...\\n-----END OPENSSH PRIVATE KEY-----"
   }' \\
-  https://your-cronium-instance.com/api/servers`,
+  https://cronium.example.com/api/servers`,
     python: `import requests
 
 headers = {
@@ -68,7 +68,7 @@ server_data = {
 }
 
 response = requests.post(
-    'https://your-cronium-instance.com/api/servers',
+    'https://cronium.example.com/api/servers',
     headers=headers,
     json=server_data
 )
@@ -82,7 +82,7 @@ else:
 const fs = require('fs');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN',
     'Content-Type': 'application/json'
@@ -109,13 +109,13 @@ try {
   },
   getServer: {
     curl: `curl -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  https://your-cronium-instance.com/api/servers/789`,
+  https://cronium.example.com/api/servers/789`,
     python: `import requests
 
 headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
 
 response = requests.get(
-    'https://your-cronium-instance.com/api/servers/789',
+    'https://cronium.example.com/api/servers/789',
     headers=headers
 )
 
@@ -130,7 +130,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
 });
 
@@ -148,13 +148,13 @@ try {
   testServerConnection: {
     curl: `curl -X POST \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  https://your-cronium-instance.com/api/servers/789/test`,
+  https://cronium.example.com/api/servers/789/test`,
     python: `import requests
 
 headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
 
 response = requests.post(
-    'https://your-cronium-instance.com/api/servers/789/test',
+    'https://cronium.example.com/api/servers/789/test',
     headers=headers
 )
 
@@ -171,7 +171,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
 });
 
@@ -199,7 +199,7 @@ try {
     "address": "192.168.1.101",
     "port": 2222
   }' \\
-  https://your-cronium-instance.com/api/servers/789`,
+  https://cronium.example.com/api/servers/789`,
     python: `import requests
 
 headers = {
@@ -214,7 +214,7 @@ data = {
 }
 
 response = requests.put(
-    'https://your-cronium-instance.com/api/servers/789',
+    'https://cronium.example.com/api/servers/789',
     headers=headers,
     json=data
 )
@@ -227,7 +227,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: {
     'Authorization': 'Bearer YOUR_API_TOKEN',
     'Content-Type': 'application/json'
@@ -250,13 +250,13 @@ try {
   deleteServer: {
     curl: `curl -X DELETE \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  https://your-cronium-instance.com/api/servers/789`,
+  https://cronium.example.com/api/servers/789`,
     python: `import requests
 
 headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
 
 response = requests.delete(
-    'https://your-cronium-instance.com/api/servers/789',
+    'https://cronium.example.com/api/servers/789',
     headers=headers
 )
 
@@ -267,7 +267,7 @@ else:
     nodejs: `const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://your-cronium-instance.com/api',
+  baseURL: 'https://cronium.example.com/api',
   headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
 });
 

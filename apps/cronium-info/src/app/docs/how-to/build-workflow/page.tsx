@@ -17,6 +17,14 @@ import {
   CheckCircle,
   Lightbulb,
 } from "lucide-react";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Build a Workflow",
+  description:
+    "Step-by-step: chain events together on the Cronium workflow canvas with success, failure, and conditional branches.",
+  alternates: { canonical: "/docs/how-to/build-workflow" },
+};
 
 const tableOfContents = [
   { title: "Before You Begin", href: "#before-you-begin", level: 2 },

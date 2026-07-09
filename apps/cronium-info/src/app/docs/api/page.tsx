@@ -26,6 +26,14 @@ import {
   variablesApiExamples,
   responseExamples,
 } from "./examples";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "API Reference",
+  description:
+    "Cronium REST API reference: authenticate with API tokens and manage events, workflows, servers, and variables programmatically.",
+  alternates: { canonical: "/docs/api" },
+};
 
 const tableOfContents = [
   { title: "Authentication", href: "#authentication", level: 2 },
@@ -851,14 +859,14 @@ const dbUrl = cronium.getVariable('DATABASE_URL');
 cronium.setVariable('LAST_RUN', new Date().toISOString());`}
                 </SimpleCodeBlock>
                 <SimpleCodeBlock language="python">
-                  {`# Python
-db_url = cronium.getVariable('DATABASE_URL')
-cronium.setVariable('LAST_RUN', datetime.now().isoformat())`}
+                  {`# Python (helpers are snake_case)
+db_url = cronium.get_variable('DATABASE_URL')
+cronium.set_variable('LAST_RUN', datetime.now().isoformat())`}
                 </SimpleCodeBlock>
                 <SimpleCodeBlock language="bash">
-                  {`# Bash
-DB_URL=$(cronium.getVariable "DATABASE_URL")
-cronium.setVariable "LAST_RUN" "$(date -Iseconds)"`}
+                  {`# Bash (helpers are shell functions)
+DB_URL=$(cronium_get_variable "DATABASE_URL")
+cronium_set_variable "LAST_RUN" "$(date -Iseconds)"`}
                 </SimpleCodeBlock>
               </div>
             </div>

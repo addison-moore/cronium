@@ -86,24 +86,27 @@ Centralized management of configuration values and secrets.
 
 - **Secure Storage**: Encrypted storage for sensitive values
 - **Variable Scoping**: User-specific variables
-- **Access Methods**:
-  - `cronium.getVariable()` - Read variables in scripts
-  - `cronium.setVariable()` - Update variables from scripts
+- **Access Methods** (naming follows each language's convention):
+  - Node.js: `cronium.getVariable()` / `cronium.setVariable()`
+  - Python: `cronium.get_variable()` / `cronium.set_variable()`
+  - Bash: `cronium_get_variable` / `cronium_set_variable`
 - **Management UI**: Create, edit, delete, and search variables
 - **Export Options**: JSON, ENV, or CSV formats
 - **Usage Tracking**: See which events use each variable
 - **Validation**: Prevent reserved variable names
 
-### 6. Containerized Execution (In Development)
+### 6. Containerized Execution
 
-A major security enhancement currently being implemented to isolate script execution.
+Scripts run in isolated Docker containers, orchestrated by the Go orchestrator
+service with a runtime API sidecar.
 
-**Planned Features:**
+**Features:**
 
 - **Docker Container Isolation**: Each script runs in its own container
 - **Resource Limits**: CPU, memory, and PID limits
 - **Security Constraints**: Non-root execution, dropped capabilities
 - **Custom Images**: Optimized Alpine-based images for each language
+- **Signed Payloads**: Ed25519-signed execution payloads verified by the runner
 - **Go Orchestrator**: High-performance orchestration service
 - **Real-time Logging**: WebSocket-based log streaming
 
@@ -153,7 +156,7 @@ Modern tech stack and developer-friendly features.
 
 - **Frontend**: Next.js 15 with App Router, TypeScript, TailwindCSS 4
 - **Backend**: tRPC for type-safe APIs, Drizzle ORM
-- **Database**: PostgreSQL with Neon
+- **Database**: PostgreSQL (any instance — self-hosted, Neon, Supabase, RDS)
 - **Real-time**: Socket.IO for WebSocket support
 - **Forms**: React Hook Form with Zod validation
 
@@ -184,15 +187,14 @@ Modern, responsive interface designed for ease of use.
 - **Role-Based Access Control**: Granular permissions system
 - **SSH Key Management**: Secure storage of SSH credentials
 - **API Token System**: Secure API access
-- **Audit Logging**: Complete audit trail of all actions
 - **Rate Limiting**: Protection against abuse
-- **Container Isolation**: (Coming soon) Secure script execution
+- **Container Isolation**: Secure, sandboxed script execution
+- **SSH Host-Key Verification**: Protects remote execution against MITM
 
 ## Upcoming Features
 
 Based on development plans:
 
-- **OAuth Support**: Native OAuth for tool integrations
 - **Edge Computing**: Distributed execution capabilities
 
 ---

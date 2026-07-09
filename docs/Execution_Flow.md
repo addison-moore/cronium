@@ -333,19 +333,24 @@ Conditional actions allow events to trigger subsequent actions based on executio
 2. **Job Priority**: No priority queue implementation
    - All jobs processed in FIFO order
    - High-priority jobs cannot jump the queue
+   - Note: `types.Job` carries a `Priority` field and config defaults
+     `QUEUE_STRATEGY=priority`, but neither is read by the dispatcher yet —
+     they are placeholders, not a working priority queue
 
 3. **Resource Management**: Limited container resource allocation
    - Fixed memory/CPU limits
    - No dynamic resource allocation based on load
 
-4. **Error Recovery**: Basic retry mechanism
-   - Could implement exponential backoff
-   - Better error categorization for retry decisions
+4. **Error Recovery**: Retries use exponential backoff
+   - Implemented in `apps/cronium-app/src/lib/services/retry-policy.ts`
+     (`base · 2^attempts`, capped) and applied by `job-service.ts` via the
+     `scheduledFor` column
+   - Remaining gap: better error categorization for retry decisions
+     (transient vs. permanent failures are treated alike)
 
-5. **Runtime Helper Evolution**: Two implementations exist
-   - Legacy file-based system (currently in use)
-   - New HTTP API-based system (in development)
-   - Migration path needed between systems
+5. **Runtime Helpers**: Single HTTP API-based implementation
+   - Scripts call the runtime API sidecar (`runtime-api`) over HTTP
+   - Per-language helper libraries live in `apps/runtime/runtime-helpers/`
 
 6. **Data Flow Limitations**:
    - Output data size limited by file system

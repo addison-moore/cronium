@@ -54,9 +54,9 @@ export default function Features() {
     },
     {
       icon: <Shield className="h-6 w-6" />,
-      title: "End-to-End Encryption",
+      title: "Encrypted Credentials",
       description:
-        "Client-side encryption for sensitive data including SSH keys, passwords, and environment variables.",
+        "SSH keys, passwords, and environment variables are encrypted at rest with AES-256-GCM.",
       category: "Security",
     },
     {
@@ -75,9 +75,9 @@ export default function Features() {
     },
     {
       icon: <Key className="h-6 w-6" />,
-      title: "API Token Management",
+      title: "API Access",
       description:
-        "Secure API access with configurable permissions and automatic token rotation.",
+        "Manage events, workflows, servers, and variables programmatically with API tokens.",
       category: "Integration",
     },
     {
@@ -89,10 +89,10 @@ export default function Features() {
     },
     {
       icon: <Bell className="h-6 w-6" />,
-      title: "Custom Notifications",
+      title: "Built-in Integrations",
       description:
-        "Configure webhooks and email notifications for script success or failure.",
-      category: "Monitoring",
+        "Send messages on success or failure to Slack, Discord, Microsoft Teams, Notion, Trello, Google Sheets, or email.",
+      category: "Integration",
     },
     {
       icon: <BarChart className="h-6 w-6" />,
@@ -207,8 +207,9 @@ export default function Features() {
                     Advanced Workflow Engine
                   </h4>
                   <p className="text-muted-foreground text-sm">
-                    Create sophisticated automation workflows with conditional
-                    logic, error handling, and rollback capabilities.
+                    Chain events with conditional branches that run on success,
+                    failure, or a condition your script sets — including
+                    parallel branches.
                   </p>
                 </div>
               </div>
@@ -222,8 +223,8 @@ export default function Features() {
                     Security-First Design
                   </h4>
                   <p className="text-muted-foreground text-sm">
-                    End-to-end encryption, role-based access control, and secure
-                    credential management protect your data.
+                    Encrypted credentials, SSH host-key verification, signed
+                    execution payloads, and role-based access control.
                   </p>
                 </div>
               </div>

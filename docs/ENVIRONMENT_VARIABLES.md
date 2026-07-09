@@ -73,7 +73,8 @@ These environment variables must be set for the application to function correctl
 
 - Never commit secrets to version control
 - Use strong, randomly generated secrets
-- The app is migrating from `NEXTAUTH_*` to `AUTH_*` prefixed variables
+- Auth variables use the `AUTH_*` prefix. The legacy `NEXTAUTH_*` names are no
+  longer read by the app and can be removed from existing `.env` files.
 
 ### Database
 

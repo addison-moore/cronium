@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Script to set up .env file for development
-# This creates a .env file with secure random values for secrets
+# Script to set up env/.env.local for development
+# This creates env/.env.local with secure random values for secrets
 
 set -e
 
@@ -16,9 +16,9 @@ echo -e "${GREEN}Setting up Cronium development environment...${NC}"
 # Change to project root
 cd "$(dirname "$0")/../.."
 
-# Check if .env already exists
-if [ -f .env ]; then
-    echo -e "${YELLOW}Warning: .env file already exists.${NC}"
+# Check if env/.env.local already exists
+if [ -f env/.env.local ]; then
+    echo -e "${YELLOW}Warning: env/.env.local already exists.${NC}"
     read -p "Do you want to overwrite it? (y/N): " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -43,8 +43,9 @@ INTERNAL_API_KEY=$(generate_secret)
 JWT_SECRET=$(generate_secret)
 POSTGRES_PASSWORD=$(generate_secret)
 
-# Create .env file
-cat > .env << EOF
+# Create env/.env.local
+mkdir -p env
+cat > env/.env.local << EOF
 # Cronium Development Environment Configuration
 # Generated on $(date)
 
@@ -68,8 +69,6 @@ POSTGRES_MAX_CONNECTIONS=100
 # Authentication & Security
 AUTH_URL=http://localhost:5001
 AUTH_SECRET=${AUTH_SECRET}
-NEXTAUTH_URL=http://localhost:5001
-NEXTAUTH_SECRET=${AUTH_SECRET}
 ENCRYPTION_KEY=${ENCRYPTION_KEY}
 
 # Internal Service Authentication
@@ -120,7 +119,7 @@ DOCKER_USERNAME=
 DOCKER_PASSWORD=
 EOF
 
-echo -e "${GREEN}✅ .env file created successfully!${NC}"
+echo -e "${GREEN}✅ env/.env.local created successfully!${NC}"
 echo
 echo -e "${YELLOW}Important: The following secure values have been generated:${NC}"
 echo -e "  AUTH_SECRET: ${AUTH_SECRET:0:10}..."
@@ -132,4 +131,4 @@ echo -e "${GREEN}Next steps:${NC}"
 echo "1. Update DATABASE_URL if using a different database"
 echo "2. Add your OPENAI_API_KEY if using AI features"
 echo "3. Configure SMTP settings if using email features"
-echo "4. Run 'pnpm docker:up' to start services"
+echo "4. Run 'pnpm dev:docker:up' to start services"

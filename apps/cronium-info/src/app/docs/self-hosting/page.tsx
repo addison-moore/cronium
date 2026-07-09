@@ -18,6 +18,14 @@ import {
 } from "@cronium/ui";
 import { SimpleCodeBlock } from "@/components/docs/api-code-examples";
 import { Server, Layers, ShieldCheck, Wrench } from "lucide-react";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Self-Hosting Guide",
+  description:
+    "Deploy Cronium on your own infrastructure with Docker Compose. Covers images, environment variables, database setup, and post-deployment checks.",
+  alternates: { canonical: "/docs/self-hosting" },
+};
 
 const tableOfContents = [
   { title: "Overview", href: "#overview", level: 2 },
@@ -269,7 +277,9 @@ services:
       DATABASE_URL: postgres://cronium:super-secure-password@postgres:5432/cronium
       ORCHESTRATOR_URL: http://cronium-orchestrator:8080
       VALKEY_URL: valkey://valkey:6379
-      NEXT_PUBLIC_SOCKET_URL: http://cronium-app:5002
+      # NEXT_PUBLIC_* values are read by the browser, so this must be a URL
+      # your users can reach - not an internal Docker service name.
+      NEXT_PUBLIC_SOCKET_URL: https://cronium.example.com:5002
       NEXT_PUBLIC_SOCKET_PORT: 5002
     ports:
       - "3000:3000"
@@ -731,12 +741,12 @@ volumes:
                   containers to report healthy states.
                 </li>
                 <li>
-                  Apply database migrations from your workstation (requires
-                  Node.js and pnpm): clone the Cronium repository, run{" "}
-                  <code>pnpm install</code>, then execute{" "}
-                  <code>pnpm --filter @cronium/app db:push</code>. The published
-                  app image does not bundle pnpm, so migrations should run
-                  outside the container or via your CI pipeline.
+                  Database migrations are applied automatically the first time
+                  the app container starts, so there is nothing to run by hand.
+                  If you set <code>AUTO_MIGRATE=false</code> to manage the
+                  schema yourself, apply it from a clone of the repository with{" "}
+                  <code>pnpm install</code> followed by{" "}
+                  <code>pnpm --filter @cronium/app db:push</code>.
                 </li>
                 <li>
                   Optional: add a custom orchestrator config (copy{" "}

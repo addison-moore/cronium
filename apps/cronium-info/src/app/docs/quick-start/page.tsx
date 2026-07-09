@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import DocsLayout from "@/components/docs/docs-layout";
 import {
   Card,
@@ -15,6 +16,14 @@ import {
   Clock,
   Play,
 } from "lucide-react";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Quick Start",
+  description:
+    "Get your first Cronium automation running: sign in to your self-hosted instance, connect a server, create an event, test it, and put it on a schedule.",
+  alternates: { canonical: "/docs/quick-start" },
+};
 
 const tableOfContents = [
   { title: "Prerequisites", href: "#prerequisites", level: 2 },
@@ -125,9 +134,18 @@ export default function QuickStartPage() {
                 <div className="flex items-start gap-3">
                   <CheckCircle className="mt-1 h-5 w-5 text-green-500" />
                   <div>
-                    <h4 className="font-semibold">Cronium Account</h4>
+                    <h4 className="font-semibold">
+                      A running Cronium instance
+                    </h4>
                     <p className="text-muted-foreground text-sm">
-                      You'll need a Cronium account to get started.
+                      Cronium is self-hosted. Deploy it first with the{" "}
+                      <Link
+                        href="/docs/self-hosting"
+                        className="text-primary underline"
+                      >
+                        self-hosting guide
+                      </Link>
+                      .
                     </p>
                   </div>
                 </div>
@@ -148,18 +166,22 @@ export default function QuickStartPage() {
         <StepCard
           step={1}
           title="Sign In to Cronium"
-          description="Access your Cronium dashboard"
+          description="Access the dashboard on your self-hosted instance"
         >
           <div className="space-y-4">
             <p>
-              Navigate to your Cronium instance and sign in with your
-              credentials. If you don't have an account yet, you can create one
-              using the sign-up form.
+              Open your Cronium instance in a browser and sign in. On a fresh
+              deployment with <code>AUTO_SEED_ADMIN</code> enabled, an admin
+              account is created for you on first boot using the{" "}
+              <code>ADMIN_USERNAME</code> and <code>ADMIN_PASSWORD</code> you
+              configured.
             </p>
             <div className="bg-muted rounded-lg p-4">
               <p className="text-sm">
-                <strong>Tip:</strong> Make sure to verify your email address if
-                this is your first time signing in.
+                <strong>Tip:</strong> Change the seeded admin password
+                immediately after your first sign-in, then set{" "}
+                <code>AUTO_SEED_ADMIN=false</code>. Additional users are added
+                by an administrator from the admin page.
               </p>
             </div>
           </div>
@@ -465,7 +487,7 @@ uptime`}</CodeBlock>
                   conditional logic.
                 </p>
                 <a
-                  href={`/docs/workflows`}
+                  href={`/docs/how-to/build-workflow`}
                   className="text-primary inline-flex items-center gap-1 text-sm hover:underline"
                 >
                   Learn Workflows <ArrowRight className="h-4 w-4" />
@@ -526,10 +548,21 @@ uptime`}</CodeBlock>
             <li>
               • Check the{" "}
               <a
-                href={`/docs/how-to/troubleshooting`}
+                href={`/docs/self-hosting`}
                 className="text-primary hover:underline"
               >
-                Troubleshooting Guide
+                Self-Hosting Guide
+              </a>
+            </li>
+            <li>
+              • Open an issue on{" "}
+              <a
+                href="https://github.com/addison-moore/cronium/issues"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                GitHub
               </a>
             </li>
             <li>

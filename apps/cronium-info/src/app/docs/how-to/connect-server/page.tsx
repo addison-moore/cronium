@@ -18,6 +18,14 @@ import {
   Terminal,
   Lock,
 } from "lucide-react";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Connect a Remote Server",
+  description:
+    "Step-by-step: add a remote server to Cronium over SSH with key or password authentication, then test the connection.",
+  alternates: { canonical: "/docs/how-to/connect-server" },
+};
 
 const tableOfContents = [
   { title: "Before You Begin", href: "#before-you-begin", level: 2 },
@@ -118,7 +126,7 @@ export default function ConnectServerPage() {
               <AlertTitle>Tip</AlertTitle>
               <AlertDescription>
                 If you don&apos;t see the <strong>Add Server</strong> button,
-                verify your account has admin or maintainer permissions.
+                verify your account has the admin role.
               </AlertDescription>
             </Alert>
           </div>

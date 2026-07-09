@@ -439,5 +439,4 @@ docker compose logs > cronium.log
 For issues or questions:
 
 - GitHub Issues: https://github.com/addison-moore/cronium/issues
-- Documentation: https://docs.cronium.io
-- Discord: https://discord.gg/cronium
+- Documentation: https://cronium.app/docs

@@ -6,20 +6,21 @@ This guide provides step-by-step instructions for setting up the Cronium develop
 
 - Node.js 18+ and PNPM
 - Docker and Docker Compose
-- Go 1.21+ (for building orchestrator and runtime)
+- Go 1.23+ (for building orchestrator and runtime)
 - PostgreSQL database (local or remote)
 
 ## Environment Variables
 
-Create a `.env.local` file in the root directory with the following variables:
+Create an `env/.env.local` file (this is the path the app's `pnpm dev` script
+loads via `dotenv -e ../../env/.env.local`) with the following variables:
 
 ```bash
 # Database
 DATABASE_URL=postgresql://username:password@localhost:5432/cronium
 
 # Authentication
-NEXTAUTH_SECRET=your-secret-key-here
-NEXTAUTH_URL=http://localhost:5001
+AUTH_SECRET=your-secret-key-here
+AUTH_URL=http://localhost:5001
 
 # Encryption
 ENCRYPTION_KEY=your-32-byte-encryption-key
@@ -62,7 +63,7 @@ Build all required Docker images including:
 - Orchestrator
 
 ```bash
-pnpm docker:build
+pnpm dev:docker:build
 ```
 
 This command builds and tags:
@@ -95,14 +96,16 @@ Start the application and Docker services:
 pnpm dev:app
 
 # Terminal 2: Start Docker services (Orchestrator, Runtime API, Valkey)
-pnpm docker:up
+pnpm dev:docker:up
 ```
 
 The following services will be running:
 
 - **Cronium App**: http://localhost:5001
 - **Orchestrator**: http://localhost:8080
-- **Runtime API**: http://localhost:8089
+- **Runtime API**: http://localhost:8089 — the dev compose file overrides `PORT`
+  to 8089. The runtime binary's own default is 8081, which is what you get when
+  running it directly (e.g. via `pnpm dev`).
 - **Valkey (Redis)**: localhost:6379
 
 ## Verifying the Setup
@@ -126,7 +129,7 @@ If you see an error about missing images, run:
 docker images | grep cronium
 
 # Rebuild if necessary
-pnpm docker:build
+pnpm dev:docker:build
 ```
 
 ## Common Issues
@@ -136,7 +139,7 @@ pnpm docker:build
 The runtime API image hasn't been built. Run:
 
 ```bash
-pnpm docker:build
+pnpm dev:docker:build
 ```
 
 ### "Cannot connect to Docker daemon"
@@ -149,7 +152,7 @@ docker ps
 
 ### Database connection errors
 
-Verify your DATABASE_URL in `.env.local` and ensure PostgreSQL is running.
+Verify your DATABASE_URL in `env/.env.local` and ensure PostgreSQL is running.
 
 ## Development Commands
 
@@ -157,12 +160,12 @@ Verify your DATABASE_URL in `.env.local` and ensure PostgreSQL is running.
 # Start all services
 pnpm dev              # Start everything
 pnpm dev:app          # Start only the Next.js app
-pnpm docker:up        # Start Docker services
+pnpm dev:docker:up        # Start Docker services
 
 # Building
 pnpm build            # Build everything
 pnpm build:go         # Build Go services
-pnpm docker:build     # Build all Docker images
+pnpm dev:docker:build     # Build all Docker images
 
 # Database
 pnpm db:push          # Push schema changes
@@ -170,8 +173,8 @@ pnpm db:studio        # Open database UI
 pnpm db:generate      # Generate migrations
 
 # Docker management
-pnpm docker:down      # Stop Docker services
-pnpm docker:logs      # View Docker logs
+pnpm dev:docker:down      # Stop Docker services
+pnpm dev:docker:logs      # View Docker logs
 
 # Testing & Linting
 pnpm test             # Run tests
@@ -196,7 +199,7 @@ pnpm typecheck        # Type checking
 
 ```bash
 # Application logs
-pnpm docker:logs
+pnpm dev:docker:logs
 
 # Specific service
 docker logs cronium-orchestrator-dev
@@ -207,15 +210,15 @@ docker logs cronium-runtime-api-dev
 
 ```bash
 # Stop everything
-pnpm docker:down
+pnpm dev:docker:down
 
 # Clean Docker images
 docker rmi $(docker images 'cronium/*' -q)
 
 # Rebuild
 pnpm build:go
-pnpm docker:build
-pnpm docker:up
+pnpm dev:docker:build
+pnpm dev:docker:up
 ```
 
 ### Reset database

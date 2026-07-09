@@ -24,6 +24,14 @@ import {
   Code,
 } from "lucide-react";
 import { SimpleCodeBlock } from "@/components/docs/api-code-examples";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Tools & Integrations",
+  description:
+    "Connect Cronium to Slack, Discord, Microsoft Teams, Notion, Trello, Google Sheets, and email. Manage credentials and send messages from your automations.",
+  alternates: { canonical: "/docs/tools" },
+};
 
 const tableOfContents = [
   { title: "Overview", href: "#overview", level: 2 },
@@ -126,9 +134,34 @@ export default function ToolsPage() {
 
           <div className="prose prose-gray dark:prose-invert mb-6 max-w-none">
             <p>
-              Cronium currently supports three communication tools, each with
-              specific features and use cases for different notification
-              requirements.
+              Cronium ships with seven integrations you can connect to your
+              automations, plus optional AI-assisted script generation. Each is
+              configured once with its own credentials, then used from
+              conditional actions and tool-action events.
+            </p>
+            <ul>
+              <li>
+                <strong>Messaging:</strong> Slack, Discord, and Microsoft Teams
+                (via incoming webhooks)
+              </li>
+              <li>
+                <strong>Email:</strong> any SMTP server
+              </li>
+              <li>
+                <strong>Productivity:</strong> Notion and Trello (via API key),
+                and Google Sheets (via OAuth)
+              </li>
+              <li>
+                <strong>AI:</strong> OpenAI-powered script generation, enabled
+                by an administrator
+              </li>
+            </ul>
+            <p>
+              The three most common tools are documented in detail below.
+              Notion, Trello, Google Sheets, and Teams are configured the same
+              way — add the credential on the Tools page, then use{" "}
+              <em>Test Connection</em> to verify it against the provider before
+              you rely on it.
             </p>
           </div>
 
@@ -339,7 +372,7 @@ export default function ToolsPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Shield className="h-4 w-4 text-green-500" />
-                        <span>Client-side encryption before transmission</span>
+                        <span>Encrypted at rest with AES-256-GCM</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Shield className="h-4 w-4 text-green-500" />

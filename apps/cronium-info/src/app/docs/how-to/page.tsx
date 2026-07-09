@@ -9,6 +9,14 @@ import {
   CardTitle,
 } from "@cronium/ui";
 import { ArrowRight, Terminal, Server, Workflow } from "lucide-react";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "How-To Guides",
+  description:
+    "Step-by-step Cronium guides: create your first event, connect a remote server over SSH, and build a multi-step workflow.",
+  alternates: { canonical: "/docs/how-to" },
+};
 
 const tableOfContents = [
   { title: "Essential Guides", href: "#essential-guides", level: 2 },

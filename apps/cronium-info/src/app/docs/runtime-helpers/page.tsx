@@ -5,6 +5,14 @@ import { Database, ArrowRight, Settings, FlaskConical } from "lucide-react";
 import ApiCodeExamples, {
   CodeBlock,
 } from "@/components/docs/api-code-examples";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Runtime Helpers",
+  description:
+    "Use the cronium runtime helpers inside your scripts to read input, write output, get and set variables, set conditions, and access event metadata.",
+  alternates: { canonical: "/docs/runtime-helpers" },
+};
 
 const tableOfContents = [
   { title: "Overview", href: "#overview", level: 2 },
@@ -123,18 +131,18 @@ cronium_output "$result"
     python: `# cronium is automatically available - no imports needed!
 
 # Get a stored variable
-example_api_key = cronium.getVariable('EXAMPLE_API_KEY')
-database_url = cronium.getVariable('DATABASE_URL')
+example_api_key = cronium.get_variable('EXAMPLE_API_KEY')
+database_url = cronium.get_variable('DATABASE_URL')
 
 # Use variables with defaults
-redis_host = cronium.getVariable('REDIS_HOST') or 'localhost'
+redis_host = cronium.get_variable('REDIS_HOST') or 'localhost'
 
 # Set/update variables
-cronium.setVariable('LAST_PROCESSED', '2025-06-17T10:30:00Z')
-cronium.setVariable('COUNTER', str(int(cronium.getVariable('COUNTER') or '0') + 1))
+cronium.set_variable('LAST_PROCESSED', '2025-06-17T10:30:00Z')
+cronium.set_variable('COUNTER', str(int(cronium.get_variable('COUNTER') or '0') + 1))
 
 # Variables persist across all script executions for the user
-print(f"Processing count: {cronium.getVariable('COUNTER')}")`,
+print(f"Processing count: {cronium.get_variable('COUNTER')}")`,
     nodejs: `// cronium is automatically available - no imports needed!
 
 // Get a stored variable
@@ -153,26 +161,26 @@ console.log(\`Processing count: \${cronium.getVariable('COUNTER')}\`);`,
     curl: `# cronium functions are automatically available - no sourcing needed!
 
 # Get a stored variable
-example_api_key=$(cronium_getVariable "EXAMPLE_API_KEY")
-database_url=$(cronium_getVariable "DATABASE_URL")
+example_api_key=$(cronium_get_variable "EXAMPLE_API_KEY")
+database_url=$(cronium_get_variable "DATABASE_URL")
 
 # Use variables with defaults
-redis_host=$(cronium_getVariable "REDIS_HOST")
+redis_host=$(cronium_get_variable "REDIS_HOST")
 if [[ -z "$redis_host" ]]; then
     redis_host="localhost"
 fi
 
 # Set/update variables
-cronium_setVariable "LAST_PROCESSED" "2025-06-17T10:30:00Z"
+cronium_set_variable "LAST_PROCESSED" "2025-06-17T10:30:00Z"
 
 # Increment counter
-counter=$(cronium_getVariable "COUNTER")
+counter=$(cronium_get_variable "COUNTER")
 counter=\${counter:-0}
 new_counter=$((counter + 1))
-cronium_setVariable "COUNTER" "$new_counter"
+cronium_set_variable "COUNTER" "$new_counter"
 
 # Variables persist across all script executions for the user
-echo "Processing count: $(cronium_getVariable 'COUNTER')"`,
+echo "Processing count: $(cronium_get_variable 'COUNTER')"`,
   },
   conditions: {
     python: `# cronium is automatically available - no imports needed!
@@ -185,15 +193,10 @@ current_value = process_data()
 # Set condition based on processing result
 if current_value > threshold:
     print(f"Value {current_value} exceeds threshold {threshold}")
-    cronium.setCondition(True)  # Trigger "On Condition" connections
+    cronium.set_condition(True)  # Trigger "On Condition" connections
 else:
     print(f"Value {current_value} is within threshold")
-    cronium.setCondition(False)  # Don't trigger "On Condition" connections
-
-# Check existing condition (useful for complex logic)
-existing_condition = cronium.getCondition()
-if existing_condition:
-    print("Condition was previously set to True")`,
+    cronium.set_condition(False)  # Don't trigger "On Condition" connections`,
     nodejs: `// cronium is automatically available - no imports needed!
 
 // Process some data
@@ -208,12 +211,6 @@ if (currentValue > threshold) {
 } else {
     console.log(\`Value \${currentValue} is within threshold\`);
     cronium.setCondition(false);  // Don't trigger "On Condition" connections
-}
-
-// Check existing condition (useful for complex logic)
-const existingCondition = cronium.getCondition();
-if (existingCondition) {
-    console.log("Condition was previously set to true");
 }`,
     curl: `# cronium functions are automatically available - no sourcing needed!
 
@@ -225,16 +222,10 @@ current_value=$(process_data)
 # Set condition based on processing result
 if (( current_value > threshold )); then
     echo "Value $current_value exceeds threshold $threshold"
-    cronium_setCondition true  # Trigger "On Condition" connections
+    cronium_set_condition true  # Trigger "On Condition" connections
 else
     echo "Value $current_value is within threshold"
-    cronium_setCondition false  # Don't trigger "On Condition" connections
-fi
-
-# Check existing condition (useful for complex logic)
-existing_condition=$(cronium_getCondition)
-if [[ "$existing_condition" == "true" ]]; then
-    echo "Condition was previously set to true"
+    cronium_set_condition false  # Don't trigger "On Condition" connections
 fi`,
   },
   eventMetadata: {
@@ -333,8 +324,8 @@ def main():
     print(f"Processing event: {event.get('name')}")
     
     # Get configuration from variables
-    max_retries = int(cronium.getVariable('MAX_RETRIES') or '3')
-    api_endpoint = cronium.getVariable('API_ENDPOINT')
+    max_retries = int(cronium.get_variable('MAX_RETRIES') or '3')
+    api_endpoint = cronium.get_variable('API_ENDPOINT')
     
     # Process data
     items = input_data.get('items', [])
@@ -349,12 +340,12 @@ def main():
             errors.append(str(e))
     
     # Update processing stats
-    total_processed = int(cronium.getVariable('TOTAL_PROCESSED') or '0')
-    cronium.setVariable('TOTAL_PROCESSED', str(total_processed + len(processed_items)))
+    total_processed = int(cronium.get_variable('TOTAL_PROCESSED') or '0')
+    cronium.set_variable('TOTAL_PROCESSED', str(total_processed + len(processed_items)))
     
     # Set condition for workflow routing
     success_rate = len(processed_items) / len(items) if items else 1
-    cronium.setCondition(success_rate > 0.8)  # 80% success threshold
+    cronium.set_condition(success_rate > 0.8)  # 80% success threshold
     
     # Set output for next workflow node
     result = {
@@ -435,9 +426,9 @@ main() {
     echo "Processing event: $event_name"
     
     # Get configuration from variables
-    max_retries=$(cronium_getVariable "MAX_RETRIES")
+    max_retries=$(cronium_get_variable "MAX_RETRIES")
     max_retries=\${max_retries:-3}
-    api_endpoint=$(cronium_getVariable "API_ENDPOINT")
+    api_endpoint=$(cronium_get_variable "API_ENDPOINT")
     
     # Process data
     items=$(echo "$input_data" | jq -r '.items[]?')
@@ -456,10 +447,10 @@ main() {
     done <<< "$items"
     
     # Update processing stats
-    total_processed=$(cronium_getVariable "TOTAL_PROCESSED")
+    total_processed=$(cronium_get_variable "TOTAL_PROCESSED")
     total_processed=\${total_processed:-0}
     new_total=$((total_processed + processed_count))
-    cronium_setVariable "TOTAL_PROCESSED" "$new_total"
+    cronium_set_variable "TOTAL_PROCESSED" "$new_total"
     
     # Calculate success rate
     total_items=$((processed_count + error_count))
@@ -467,12 +458,12 @@ main() {
         success_rate=$(echo "scale=2; $processed_count / $total_items" | bc -l)
         # Set condition for workflow routing (80% success threshold)
         if (( $(echo "$success_rate > 0.8" | bc -l) )); then
-            cronium_setCondition true
+            cronium_set_condition true
         else
-            cronium_setCondition false
+            cronium_set_condition false
         fi
     else
-        cronium_setCondition true
+        cronium_set_condition true
         success_rate=1.0
     fi
     
@@ -559,8 +550,7 @@ export default function RuntimeHelpersPage() {
                       Conditional Logic
                     </h4>
                     <p className="text-muted-foreground text-sm">
-                      <code>cronium.setCondition()</code> and{" "}
-                      <code>cronium.getCondition()</code> for workflow routing
+                      <code>cronium.setCondition()</code> for workflow routing
                       control
                     </p>
                   </div>
@@ -578,7 +568,20 @@ export default function RuntimeHelpersPage() {
               </CardContent>
             </Card>
 
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950">
+              <h4 className="mb-2 font-semibold text-amber-800 dark:text-amber-200">
+                Naming conventions differ by language
+              </h4>
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                Each helper follows the idiom of its language. Node.js uses
+                camelCase (<code>cronium.getVariable()</code>), Python uses
+                snake_case (<code>cronium.get_variable()</code>), and Bash
+                exposes shell functions (<code>cronium_get_variable</code>). The
+                behavior is identical — only the spelling changes.
+              </p>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
               <h4 className="mb-2 font-semibold text-blue-800 dark:text-blue-200">
                 Automatic Availability
               </h4>
@@ -692,10 +695,10 @@ export default function RuntimeHelpersPage() {
           <section id="conditions" className="mb-12">
             <h2 className="mb-4 text-2xl font-bold">Conditions</h2>
             <p className="text-muted-foreground mb-6">
-              Control workflow routing using <code>cronium.setCondition()</code>{" "}
-              and <code>cronium.getCondition()</code>. Set boolean conditions to
-              determine which workflow paths are executed based on runtime
-              logic.
+              Control workflow routing using <code>cronium.setCondition()</code>
+              . Set a boolean condition to determine whether the{" "}
+              <strong>On Condition</strong> connections leaving this event are
+              followed.
             </p>
 
             <CodeBlock
@@ -893,8 +896,8 @@ export default function RuntimeHelpersPage() {
                   <div>
                     <h5 className="mb-1 font-semibold">Conditional Checks</h5>
                     <p className="text-muted-foreground text-sm">
-                      Use getCondition() to build complex logic without
-                      unnecessary processing.
+                      Decide the condition in your script, then call
+                      setCondition() once with the result.
                     </p>
                   </div>
                   <div>
