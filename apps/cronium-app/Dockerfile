@@ -7,7 +7,7 @@ RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
 # Enable pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.25.0 --activate
 
 # Copy package files for all workspaces
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
@@ -27,7 +27,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Enable pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.25.0 --activate
 
 # Copy entire workspace with dependencies from deps
 COPY --from=deps /app ./
