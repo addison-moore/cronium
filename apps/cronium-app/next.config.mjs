@@ -30,13 +30,18 @@ const nextConfig = {
 
     // Handle xterm.js packages properly for dynamic imports
     if (!isServer) {
-      // This fixes Node.js modules used in browser context
+      // This fixes Node.js modules used in browser context. Some server-only
+      // modules (nodemailer, pg) are reachable from client components only via
+      // server-executed dynamic imports (e.g. tool plugin execute()); stub the
+      // Node builtins they pull so the client build resolves them to empty.
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
         net: false,
         tls: false,
         crypto: false,
+        dns: false,
+        child_process: false,
       };
 
       // Only apply optimization in production
