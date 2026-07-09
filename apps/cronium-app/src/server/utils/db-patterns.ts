@@ -2,7 +2,7 @@
  * Reusable database patterns and utilities to reduce code duplication
  */
 
-import { or, eq, ilike, desc, asc, sql } from "drizzle-orm";
+import { or, eq, ilike, desc, asc } from "drizzle-orm";
 import type { SQL, AnyColumn } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
@@ -145,13 +145,6 @@ export function filterAccessibleResources<
   return resources.filter(
     (resource) => resource.userId === userId || resource.shared === true,
   );
-}
-
-/**
- * Build a count query for pagination
- */
-export function buildCountQuery(baseQuery: SQL, table: string): SQL<number> {
-  return sql<number>`SELECT COUNT(*) FROM ${sql.identifier(table)} WHERE ${baseQuery}`;
 }
 
 /**
