@@ -1,2 +1,21 @@
 # Run lint-staged for type checking and linting
 npx lint-staged
+
+# If the lockfile is part of this commit, make sure it agrees with the
+# manifests. Committing a regenerated pnpm-lock.yaml without the package.json
+# that produced it passes locally (node_modules is already installed) but
+# breaks every CI, Docker, and Vercel build, which install with
+# --frozen-lockfile.
+if git diff --cached --name-only | grep -qx "pnpm-lock.yaml"; then
+  echo "Verifying pnpm-lock.yaml matches package.json manifests..."
+  if ! pnpm install --frozen-lockfile --lockfile-only --ignore-scripts >/dev/null 2>&1; then
+    echo ""
+    echo "  pnpm-lock.yaml is out of sync with the package.json files."
+    echo "  A --frozen-lockfile install (CI, Vercel, Docker) would fail."
+    echo ""
+    pnpm install --frozen-lockfile --lockfile-only --ignore-scripts 2>&1 | tail -12
+    echo ""
+    echo "  Fix: stage the matching package.json changes, or re-run 'pnpm install'."
+    exit 1
+  fi
+fi
