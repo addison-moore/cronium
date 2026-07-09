@@ -468,8 +468,8 @@ importers:
         specifier: ^9.31.0
         version: 9.31.0
       '@next/eslint-plugin-next':
-        specifier: 15.4.2-canary.7
-        version: 15.4.2-canary.7
+        specifier: 15.5.20
+        version: 15.5.20
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.37.0
         version: 8.38.0(@typescript-eslint/parser@8.38.0(eslint@9.31.0(jiti@2.6.1))(typescript@5.9.3))(eslint@9.31.0(jiti@2.6.1))(typescript@5.9.3)
@@ -1883,9 +1883,6 @@ packages:
 
   '@next/env@15.5.20':
     resolution: {integrity: sha512-dXh51Wvddf8daEyBXryZZEe1FdVxEWx9lgaTseLZUtC1XP/W8Wri+Z+VPOElHlByk23CyqHdc2oVByX7wsTWsw==}
-
-  '@next/eslint-plugin-next@15.4.2-canary.7':
-    resolution: {integrity: sha512-xxix4K+nhzzUWjr5p8QsVDAe2yr42ggLneRnPQa6ulQ553ranM7ESbKYtxfaAwAwFP5iVHUitB9+myV+S5i/Jw==}
 
   '@next/eslint-plugin-next@15.5.20':
     resolution: {integrity: sha512-MZUgFpVd9rGSZpb8bNceUWvkAZe6aQw/6h2SSqHQuYzKfaiEUEVPIO6mXqaBmiBEBSN1f1sOc1uV8GCM90oegg==}
@@ -8450,10 +8447,6 @@ snapshots:
       - utf-8-validate
 
   '@next/env@15.5.20': {}
-
-  '@next/eslint-plugin-next@15.4.2-canary.7':
-    dependencies:
-      fast-glob: 3.3.1
 
   '@next/eslint-plugin-next@15.5.20':
     dependencies:
