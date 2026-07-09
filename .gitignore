@@ -36,6 +36,17 @@ build/
 # Compiled runner/service binaries (produced by build/CI, not committed)
 artifacts/
 
+# Compiled Go binaries (output of `pnpm build:go` / build-optimized.sh).
+# NOTE: apps/runner/cronium-runner/internal/helpers/binaries/ is deliberately
+# NOT ignored — those are //go:embed'd into the runner and must stay tracked.
+apps/orchestrator/orchestrator
+apps/runtime/runtime
+apps/runtime/cronium-runtime/runtime
+apps/orchestrator/runtime/cronium-runtime/cronium-runner-linux-*
+
+# Go test binaries (`go test -c`)
+*.test
+
 # Local tool configs
 /settings.json
 
