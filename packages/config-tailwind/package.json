@@ -8,6 +8,6 @@
     "index.ts"
   ],
   "devDependencies": {
-    "tailwindcss": "^4.1.11"
+    "tailwindcss": "^4.3.2"
   }
 }

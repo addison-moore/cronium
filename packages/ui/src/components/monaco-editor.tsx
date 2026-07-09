@@ -8,6 +8,7 @@ import { Maximize2, Minimize2, X } from "lucide-react";
 
 interface EditorSettings {
   fontSize: number;
+  // Loose: callers pass persisted settings straight from the settings API.
   theme: string;
   wordWrap: boolean;
   minimap: boolean;
@@ -27,8 +28,6 @@ export type EditorLanguage =
   | "html"
   | "text";
 
-type EditorTheme = "vs-dark" | "vs-light" | "hc-black";
-
 export interface MonacoEditorProps {
   defaultValue?: string;
   value?: string;
@@ -44,7 +43,7 @@ export function MonacoEditor({
   defaultValue = "",
   value,
   onChange,
-  language = "javascript" as EditorLanguage,
+  language = "javascript",
   height = "400px",
   readOnly = false,
   className = "",
@@ -233,7 +232,7 @@ export function MonacoEditor({
 
   const defaultSettings: EditorSettings = {
     fontSize: 14,
-    theme: "vs-dark" as EditorTheme,
+    theme: "vs-dark",
     wordWrap: true,
     minimap: false,
     lineNumbers: true,

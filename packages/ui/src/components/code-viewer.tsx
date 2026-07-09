@@ -70,11 +70,12 @@ export function CodeViewer({
           }
         }
 
-        // Add line numbers plugin
+        // Add line numbers plugin. The specifier is held in a variable so
+        // TypeScript does not try to resolve types for this untyped plugin.
         if (showLineNumbers) {
-          await import(
-            "prismjs/plugins/line-numbers/prism-line-numbers" as string
-          );
+          const lineNumbersPlugin =
+            "prismjs/plugins/line-numbers/prism-line-numbers";
+          await import(lineNumbersPlugin);
         }
 
         if (Prism.languages[prismLanguage]) {

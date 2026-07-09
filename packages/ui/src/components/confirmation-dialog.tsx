@@ -65,9 +65,7 @@ export function ConfirmationDialog({
 
   // Use either controlled or internal state
   const open = isControlled ? controlledOpen : internalOpen;
-  const setOpen = isControlled
-    ? (controlledOnOpenChange as (value: boolean) => void)
-    : setInternalOpen;
+  const setOpen = isControlled ? controlledOnOpenChange : setInternalOpen;
 
   // Handle confirmation with loading state
   const handleConfirm = async () => {

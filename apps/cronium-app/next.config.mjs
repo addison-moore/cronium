@@ -42,6 +42,8 @@ const nextConfig = {
         crypto: false,
         dns: false,
         child_process: false,
+        // pg >= 8.17 reaches for util/types; it is server-only.
+        "util/types": false,
       };
 
       // Only apply optimization in production

@@ -17,26 +17,26 @@
   "dependencies": {
     "@cronium/tailwind-config": "workspace:*",
     "@cronium/ui": "workspace:*",
-    "@types/prismjs": "^1.26.5",
+    "@types/prismjs": "^1.26.6",
     "clsx": "^2.1.1",
     "lucide-react": "^0.546.0",
     "next": "15.5.20",
-    "nodemailer": "^6.9.16",
+    "nodemailer": "^6.10.1",
     "prismjs": "^1.30.0",
-    "react": "^19.2.1",
-    "react-dom": "^19.2.1"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
     "@cronium/eslint-config": "workspace:*",
     "@cronium/typescript-config": "workspace:*",
-    "@tailwindcss/postcss": "^4.1.17",
-    "@types/node": "^24.10.2",
-    "@types/react": "^19.2.7",
+    "@tailwindcss/postcss": "^4.3.2",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "eslint": "^9.39.1",
+    "eslint": "^9.39.4",
     "eslint-config-next": "15.5.20",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.17",
+    "postcss": "^8.5.16",
+    "tailwindcss": "^4.3.2",
     "typescript": "^5.9.3"
   }
 }
