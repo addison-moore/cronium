@@ -42,7 +42,6 @@ artifacts/
 apps/orchestrator/orchestrator
 apps/runtime/runtime
 apps/runtime/cronium-runtime/runtime
-apps/orchestrator/runtime/cronium-runtime/cronium-runner-linux-*
 
 # Go test binaries (`go test -c`)
 *.test

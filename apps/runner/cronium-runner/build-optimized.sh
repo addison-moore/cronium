@@ -85,15 +85,5 @@ cp "$DIST_DIR/cronium-runner-linux-arm64-optimized" "$ORCHESTRATOR_ARTIFACTS_DIR
 echo "Orchestrator artifacts copied to: $ORCHESTRATOR_ARTIFACTS_DIR/$VERSION/"
 ls -lah "$ORCHESTRATOR_ARTIFACTS_DIR/$VERSION/"
 
-# Also copy to orchestrator's embedded location for Docker builds
-ORCHESTRATOR_RUNNER_DIR="../../orchestrator/runtime/cronium-runtime"
-if [ -d "$ORCHESTRATOR_RUNNER_DIR" ]; then
-    echo ""
-    echo "Copying to orchestrator runtime directory..."
-    cp "$DIST_DIR/cronium-runner-linux-amd64-optimized" "$ORCHESTRATOR_RUNNER_DIR/cronium-runner-linux-amd64"
-    cp "$DIST_DIR/cronium-runner-linux-arm64-optimized" "$ORCHESTRATOR_RUNNER_DIR/cronium-runner-linux-arm64"
-    echo "Copied to orchestrator runtime directory"
-fi
-
 echo ""
 echo "Build complete!"
