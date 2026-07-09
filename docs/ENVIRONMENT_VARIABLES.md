@@ -30,6 +30,7 @@ Variables are marked with service indicators:
 - [Optional Variables](#optional-variables)
   - [Email Configuration](#email-configuration)
   - [AI Integration](#ai-integration)
+  - [Marketing Site (apps/cronium-info)](#marketing-site-appscronium-info)
   - [Docker Registry](#docker-registry)
 - [Service-Specific Configuration](#service-specific-configuration)
   - [Main Application (cronium-app)](#main-application-cronium-app)
@@ -140,6 +141,20 @@ postgresql://user:password@localhost:5432/cronium?sslmode=require
 | Variable         | Description                    | Type     | Default | Required |
 | ---------------- | ------------------------------ | -------- | ------- | -------- |
 | `OPENAI_API_KEY` | OpenAI API key for AI features | `string` | -       | No       |
+
+### Marketing Site (`apps/cronium-info`)
+
+These only affect the public marketing/docs site, not the Cronium app. Both are
+inlined at build time, so they must be present when the site is built — and
+declared in `turbo.json`'s `globalEnv`, or Turborepo strips them from the build
+environment.
+
+| Variable               | Description                                                                             | Type     | Default               | Required |
+| ---------------------- | --------------------------------------------------------------------------------------- | -------- | --------------------- | -------- |
+| `NEXT_PUBLIC_SITE_URL` | Absolute origin used for canonical URLs, the sitemap, OpenGraph tags, and JSON-LD       | `string` | `https://cronium.app` | No       |
+| `NEXT_PUBLIC_GA_ID`    | Google Analytics 4 measurement ID. Set to an empty string to disable analytics entirely | `string` | `G-K5J8YTQYPN`        | No       |
+
+Analytics render only in production builds, so `pnpm dev` never sends events.
 
 ### OAuth Tool Integrations (optional)
 

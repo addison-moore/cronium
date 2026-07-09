@@ -1,6 +1,7 @@
 import React from "react";
 import { type Metadata } from "next";
 import { ThemeProvider } from "@/components/theme-provider";
+import { GoogleAnalytics } from "@/components/analytics";
 import {
   SITE_URL,
   SITE_NAME,
@@ -150,6 +151,7 @@ export default function RootLayout({
       </head>
       <body className="bg-background h-full text-gray-900 dark:text-gray-100">
         <ThemeProvider>{children}</ThemeProvider>
+        <GoogleAnalytics />
       </body>
     </html>
   );

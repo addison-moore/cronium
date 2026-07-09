@@ -13,6 +13,14 @@ export const SITE_URL = (
 
 export const GITHUB_URL = "https://github.com/addison-moore/cronium";
 
+/**
+ * Google Analytics 4 measurement ID. Public by design — it ships in the page.
+ * Override per environment with NEXT_PUBLIC_GA_ID; set it to an empty string
+ * to disable analytics entirely for a given deploy.
+ */
+export const GA_MEASUREMENT_ID =
+  process.env.NEXT_PUBLIC_GA_ID ?? "G-K5J8YTQYPN";
+
 export const SITE_NAME = "Cronium";
 
 /** Used as the homepage <title> and the OpenGraph title. */
