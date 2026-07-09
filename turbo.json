@@ -5,8 +5,9 @@
     "NODE_ENV",
     "DATABASE_URL",
     "NEXT_PUBLIC_APP_URL",
-    "NEXTAUTH_URL",
-    "NEXTAUTH_SECRET",
+    "NEXT_PUBLIC_SITE_URL",
+    "AUTH_URL",
+    "AUTH_SECRET",
     "ANALYZE",
     "VERCEL_URL",
     "CI"
@@ -15,7 +16,16 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
-      "env": ["NODE_ENV"]
+      "env": [
+        "NODE_ENV",
+        "CONTACT_EMAIL_TO",
+        "CONTACT_EMAIL_FROM",
+        "CONTACT_SMTP_HOST",
+        "CONTACT_SMTP_PORT",
+        "CONTACT_SMTP_USER",
+        "CONTACT_SMTP_PASSWORD",
+        "CONTACT_SMTP_SECURE"
+      ]
     },
     "dev": {
       "cache": false,
