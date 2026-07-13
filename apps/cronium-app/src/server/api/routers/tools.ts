@@ -20,6 +20,17 @@ import {
 } from "@/lib/security/credential-encryption";
 import { auditLog } from "@/lib/security/audit-logger";
 import { rateLimiter } from "@/lib/security/rate-limiter";
+import {
+  redactCredentialValues,
+  mergeCredentials,
+} from "@/lib/tools/credential-redaction";
+
+/** Blank secret-bearing credential fields before returning a tool to a client. */
+function redactTool<T extends { credentials: Record<string, unknown> }>(
+  tool: T,
+): T {
+  return { ...tool, credentials: redactCredentialValues(tool.credentials) };
+}
 import { buildPluginRouter } from "./plugin-router";
 import { testToolConnection } from "./tools/connection-tests";
 import { slackRouter } from "./tools/slack-routes";
@@ -365,10 +376,10 @@ export const toolsRouter = createTRPCRouter({
         const tools = await getUserTools(ctx.session.user.id);
 
         if (input?.id) {
-          return tools.filter((tool) => tool.id === input.id);
+          return tools.filter((tool) => tool.id === input.id).map(redactTool);
         }
 
-        return tools;
+        return tools.map(redactTool);
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -499,9 +510,10 @@ export const toolsRouter = createTRPCRouter({
         );
 
         // Return tools without sanitization for the owner
-        // The frontend components handle hiding sensitive data
+        // Secret-bearing credential fields are blanked before leaving the
+        // server; the edit form treats a blank secret as "keep current".
         return {
-          tools: paginatedTools,
+          tools: paginatedTools.map(redactTool),
           total: filteredTools.length,
           hasMore: pagination.offset + pagination.limit < filteredTools.length,
         };
@@ -526,7 +538,7 @@ export const toolsRouter = createTRPCRouter({
           throw new TRPCError({ code: "NOT_FOUND", message: "Tool not found" });
         }
 
-        return tool;
+        return redactTool(tool);
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -685,6 +697,21 @@ export const toolsRouter = createTRPCRouter({
 
         if (!existingTool) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Tool not found" });
+        }
+
+        // Merge blank secret fields with the existing decrypted credentials (a
+        // blank secret means "keep current"), so the redacted secrets the read
+        // endpoints return don't wipe or force a re-type when the user edits a
+        // non-secret field. Runs before validation so the merged, complete
+        // credentials are what gets validated and encrypted.
+        if (updateData.credentials) {
+          const existingDecrypted =
+            (await getUserTools(ctx.session.user.id)).find((t) => t.id === id)
+              ?.credentials ?? {};
+          updateData.credentials = mergeCredentials(
+            updateData.credentials,
+            existingDecrypted,
+          );
         }
 
         // Validate credentials if provided
