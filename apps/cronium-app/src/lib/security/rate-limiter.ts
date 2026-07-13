@@ -198,12 +198,13 @@ export class RateLimiter {
       };
     } catch (error) {
       console.error("Rate limit check failed:", error);
-      // Fail open - allow the request if rate limiting fails
+      // Fail closed: a broken limiter must not become an open door for abuse.
       return {
-        allowed: true,
+        allowed: false,
         limit: config.maxRequests,
-        remaining: config.maxRequests,
+        remaining: 0,
         resetAt: new Date(Date.now() + config.windowSize),
+        retryAfter: 60,
       };
     }
   }
@@ -245,9 +246,13 @@ export class RateLimiter {
       const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
       const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-      // Count requests in each window
+      // Sum the actual request counts. Each row is a *window* holding a
+      // requestCount, so count(*) (rows) drastically undercounts real usage —
+      // sum(requestCount) is the true number of requests in the period.
       const hourlyCountResult = await db
-        .select({ count: sql<number>`count(*)::int` })
+        .select({
+          count: sql<number>`coalesce(sum(${toolRateLimits.requestCount}), 0)::int`,
+        })
         .from(toolRateLimits)
         .where(
           and(
@@ -258,7 +263,9 @@ export class RateLimiter {
         );
 
       const dailyCountResult = await db
-        .select({ count: sql<number>`count(*)::int` })
+        .select({
+          count: sql<number>`coalesce(sum(${toolRateLimits.requestCount}), 0)::int`,
+        })
         .from(toolRateLimits)
         .where(
           and(
@@ -287,9 +294,9 @@ export class RateLimiter {
       };
     } catch (error) {
       console.error("Quota check failed:", error);
-      // Fail open
+      // Fail closed: deny rather than let a broken quota check waive the cap.
       return {
-        allowed: true,
+        allowed: false,
         daily: { used: 0, limit: defaultQuotas.free?.daily ?? 0 },
         hourly: { used: 0, limit: defaultQuotas.free?.hourly ?? 0 },
         tier: "free",

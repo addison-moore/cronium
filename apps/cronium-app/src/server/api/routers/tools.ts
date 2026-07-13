@@ -19,6 +19,7 @@ import {
   type EncryptedData,
 } from "@/lib/security/credential-encryption";
 import { auditLog } from "@/lib/security/audit-logger";
+import { rateLimiter } from "@/lib/security/rate-limiter";
 import { buildPluginRouter } from "./plugin-router";
 import { testToolConnection } from "./tools/connection-tests";
 import { slackRouter } from "./tools/slack-routes";
@@ -1309,6 +1310,29 @@ export const toolsRouter = createTRPCRouter({
             console.log(`[PARTIAL] ${JSON.stringify(result)}`);
           },
         };
+
+        // Throttle: the manual execute path must not be an unmetered bypass of
+        // the rate limit / quota the scheduler path enforces.
+        const rl = await rateLimiter.checkRateLimit(
+          ctx.session.user.id,
+          tool.type,
+        );
+        if (!rl.allowed) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: `Rate limit exceeded. Try again in ${rl.retryAfter ?? 60}s.`,
+          });
+        }
+        const quota = await rateLimiter.checkQuota(
+          ctx.session.user.id,
+          tool.type,
+        );
+        if (!quota.allowed) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Usage quota exceeded for this tool.",
+          });
+        }
 
         // Inject a fresh OAuth access token for plugins that require it
         const { injectOAuthToken } =
