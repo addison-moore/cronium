@@ -106,9 +106,12 @@ export function buildSmtpTransport(opts: {
     port: opts.port,
     secure: opts.secure ?? opts.port === 465, // true for 465, false otherwise
     auth: { user: opts.user, pass: opts.password },
-    // Bound connection attempts so scheduled executions don't hang
+    // Bound every phase so a scheduled execution can't hang: connect and
+    // greeting were bounded, but a stall after the greeting (mid-send) could
+    // still hang forever without socketTimeout.
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,
+    socketTimeout: 20_000,
     ...(opts.allowSelfSigned ? { tls: { rejectUnauthorized: false } } : {}),
   });
 }

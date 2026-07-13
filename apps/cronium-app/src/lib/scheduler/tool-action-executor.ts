@@ -6,7 +6,6 @@ import { db } from "@/server/db";
 import { toolActionLogs } from "@/shared/schema";
 import { redactSecrets } from "@/lib/tools/redact";
 import { credentialCache } from "@/lib/tools/credential-cache";
-import { connectionPool } from "@/lib/tools/connection-pool";
 import {
   createRetryExecutor,
   defaultRetryConfigs,
@@ -286,17 +285,6 @@ export async function executeToolAction(
         toolType: cachedTool.type,
       });
     }
-
-    // Check for pooled connection
-    const pooledConnection = connectionPool.getConnection(
-      toolActionConfig.toolId,
-      cachedTool.type,
-      userId,
-    );
-    console.log(
-      `[ToolAction] Pooled connection:`,
-      pooledConnection ? "Found" : "Not found",
-    );
 
     // Get the action definition
     console.log(
