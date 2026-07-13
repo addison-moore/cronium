@@ -446,7 +446,7 @@ export async function executeToolAction(
     const result = await circuitBreaker.execute(async () => {
       return retryExecutor.execute(
         async () => {
-          const actionResult = await action.execute(
+          const actionResult: unknown = await action.execute(
             credentials,
             mergedParameters,
             context,

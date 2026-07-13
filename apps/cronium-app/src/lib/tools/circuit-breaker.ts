@@ -280,7 +280,15 @@ export class CircuitBreaker<T> {
 }
 
 /**
- * Circuit breaker manager for tool actions
+ * Circuit breaker manager for tool actions.
+ *
+ * State is held in an in-memory Map, so it is per-process: it resets on restart
+ * and is not shared across instances. For a single-node self-hosted deployment
+ * (the target), that is sufficient — the breaker trips within a running process
+ * after repeated failures (now that failures actually throw; see the executor's
+ * failure wrapper). A multi-instance deployment would need shared state
+ * (Redis/DB) for the breaker to be effective; that is deliberately out of scope
+ * until multi-instance is supported.
  */
 export class CircuitBreakerManager {
   private static instance: CircuitBreakerManager;
