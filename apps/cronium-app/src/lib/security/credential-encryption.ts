@@ -69,7 +69,25 @@ export class CredentialEncryption {
       throw new Error("Master key must be at least 32 characters long");
     }
 
-    // Derive a consistent key from the master key
+    // Entropy sanity check. We intentionally do NOT use validateKeyStrength()
+    // here: it demands uppercase/special characters and would reject the
+    // recommended `openssl rand -hex 32` key (128 bits of entropy, all
+    // lowercase hex). A distinct-character count instead catches genuinely weak
+    // keys (e.g. "changeme..." or a repeated character) without false alarms on
+    // random hex/base64.
+    const distinctChars = new Set(masterKey).size;
+    if (distinctChars < 8) {
+      console.warn(
+        `[Security] ENCRYPTION_KEY has very low entropy (${distinctChars} distinct characters). ` +
+          `Use a random key, e.g. \`openssl rand -hex 32\`.`,
+      );
+    }
+
+    // Derive a consistent key from the master key. The KDF salt is static by
+    // design: the ENCRYPTION_KEY is already unique and secret per deployment, so
+    // a fixed (non-secret) salt is sufficient. It must NOT change — the derived
+    // master key encrypts every stored credential, so changing it would make all
+    // existing credentials undecryptable.
     const salt = Buffer.from("cronium-tool-credentials-v1", "utf8");
     this.masterKey = scryptSync(masterKey, salt, this.keyLength);
 
