@@ -4,6 +4,7 @@ import { isToolActionsExecutionEnabled } from "@/lib/featureFlags";
 import { toolActionHealthMonitor } from "./tool-action-health-monitor";
 import { db } from "@/server/db";
 import { toolActionLogs } from "@/shared/schema";
+import { redactSecrets } from "@/lib/tools/redact";
 import { credentialCache } from "@/lib/tools/credential-cache";
 import { connectionPool } from "@/lib/tools/connection-pool";
 import {
@@ -83,7 +84,10 @@ export async function executeToolAction(
 
   console.log(`[ToolAction] Starting execution for event ${event.id}`);
   console.log(`[ToolAction] Event type: ${event.type}, User: ${event.userId}`);
-  console.log(`[ToolAction] Input data:`, JSON.stringify(input, null, 2));
+  console.log(
+    `[ToolAction] Input data:`,
+    JSON.stringify(redactSecrets(input), null, 2),
+  );
 
   // Check if tool action execution is enabled
   if (!isToolActionsExecutionEnabled()) {
@@ -93,7 +97,10 @@ export async function executeToolAction(
   try {
     // Parse tool action configuration
     try {
-      console.log(`[ToolAction] Raw config:`, event.toolActionConfig);
+      console.log(
+        `[ToolAction] Raw config:`,
+        redactSecrets(event.toolActionConfig),
+      );
       if (typeof event.toolActionConfig === "string") {
         toolActionConfig = JSON.parse(
           event.toolActionConfig,
@@ -108,7 +115,7 @@ export async function executeToolAction(
       }
       console.log(
         `[ToolAction] Parsed config:`,
-        JSON.stringify(toolActionConfig, null, 2),
+        JSON.stringify(redactSecrets(toolActionConfig), null, 2),
       );
     } catch (error) {
       console.error(`[ToolAction] Failed to parse config:`, error);
@@ -307,7 +314,7 @@ export async function executeToolAction(
         console.log(`[PROGRESS] ${progress.step}: ${progress.percentage}%`);
       },
       onPartialResult: (result) => {
-        console.log(`[PARTIAL] ${JSON.stringify(result)}`);
+        console.log(`[PARTIAL] ${JSON.stringify(redactSecrets(result))}`);
       },
       isTest: false,
     };
@@ -372,7 +379,7 @@ export async function executeToolAction(
     context.logger.info(`Executing action: ${action.name} (${action.id})`);
     console.log(
       `[ToolAction] Executing with parameters:`,
-      JSON.stringify(mergedParameters, null, 2),
+      JSON.stringify(redactSecrets(mergedParameters), null, 2),
     );
     context.onProgress?.({ step: "Initializing action", percentage: 10 });
 
@@ -430,15 +437,20 @@ export async function executeToolAction(
     context.onProgress?.({ step: "Action completed", percentage: 100 });
     context.logger.info(`Action completed in ${executionTime}ms`);
     console.log(`[ToolAction] Execution successful in ${executionTime}ms`);
-    console.log(`[ToolAction] Result:`, JSON.stringify(result, null, 2));
+    console.log(
+      `[ToolAction] Result:`,
+      JSON.stringify(redactSecrets(result), null, 2),
+    );
 
-    // Format the result for the execution engine
+    // Format the result for the execution engine. Parameters are redacted here
+    // so neither the returned stdout nor the persisted log leaks secrets (e.g.
+    // a Teams webhook URL passed as a parameter).
     const formattedOutput = {
       actionId: action.id,
       actionName: action.name,
       executionTime,
       result,
-      parameters: mergedParameters,
+      parameters: redactSecrets(mergedParameters),
       timestamp: new Date().toISOString(),
     };
 
@@ -483,8 +495,8 @@ export async function executeToolAction(
         toolType: toolActionConfig.toolType,
         actionType: action.actionType,
         actionId: action.id,
-        parameters: mergedParameters,
-        result: formattedOutput,
+        parameters: redactSecrets(mergedParameters) as Record<string, unknown>,
+        result: redactSecrets(formattedOutput),
         status: "SUCCESS",
         executionTime,
         errorMessage: null,
@@ -572,7 +584,10 @@ export async function executeToolAction(
         toolType: parsedConfig.toolType ?? "unknown",
         actionType: "unknown",
         actionId: parsedConfig.actionId ?? "unknown",
-        parameters: parsedConfig.parameters ?? {},
+        parameters: (redactSecrets(parsedConfig.parameters) ?? {}) as Record<
+          string,
+          unknown
+        >,
         result: null,
         status: "FAILURE",
         executionTime: Date.now() - startTime,
