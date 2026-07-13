@@ -73,6 +73,30 @@ export interface ToolActionExecutionContext {
 }
 
 /**
+ * Thrown when a tool action's execute() reports failure via a
+ * {success:false}/{ok:false} result. Actions historically caught their own
+ * errors and returned these shapes, so the executor's retry/circuit-breaker
+ * never saw a failure and reported the send as a success. Converting them to a
+ * throw restores honest job status and breaker protection.
+ */
+class ToolActionError extends Error {
+  constructor(
+    message: string,
+    readonly result: unknown,
+  ) {
+    super(message);
+    this.name = "ToolActionError";
+  }
+}
+
+/** True if an action result signals failure (slack uses `ok`, others `success`). */
+function isFailureResult(r: unknown): boolean {
+  if (!r || typeof r !== "object") return false;
+  const obj = r as { ok?: unknown; success?: unknown };
+  return obj.ok === false || obj.success === false;
+}
+
+/**
  * Execute a tool action based on the event configuration
  */
 export async function executeToolAction(
@@ -388,9 +412,14 @@ export async function executeToolAction(
       ? defaultRetryConfigs.aggressive
       : defaultRetryConfigs.standard;
 
-    // Create a mutable copy of the config
+    // Create a mutable copy of the config.
+    // Tool actions are predominantly non-idempotent sends, so we do NOT retry
+    // in-process: retrying after a send that already reached the provider would
+    // double-deliver. Safe retry needs idempotency keys (a later phase). The
+    // circuit breaker still trips after repeated failures across calls, and
+    // genuine failures are now surfaced honestly (see the throw wrapper below).
     const retryConfig: RetryConfig = {
-      maxAttempts: baseConfig.maxAttempts,
+      maxAttempts: 1,
       initialDelay: baseConfig.initialDelay,
       maxDelay: baseConfig.maxDelay,
       backoffMultiplier: baseConfig.backoffMultiplier,
@@ -428,7 +457,26 @@ export async function executeToolAction(
     const toolId = toolActionConfig.toolId; // Capture toolId before async callback
     const result = await circuitBreaker.execute(async () => {
       return retryExecutor.execute(
-        () => action.execute(credentials, mergedParameters, context),
+        async () => {
+          const actionResult = await action.execute(
+            credentials,
+            mergedParameters,
+            context,
+          );
+          // Actions report failure by returning {success:false}/{ok:false}
+          // instead of throwing. Convert that to a throw so the breaker records
+          // it and the executor's catch surfaces it as a failed job.
+          if (isFailureResult(actionResult)) {
+            const errMsg = (actionResult as { error?: unknown }).error;
+            throw new ToolActionError(
+              typeof errMsg === "string" && errMsg
+                ? errMsg
+                : `${action.name} reported failure`,
+              actionResult,
+            );
+          }
+          return actionResult;
+        },
         { actionId: action.id, toolId },
       );
     });
