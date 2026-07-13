@@ -70,12 +70,11 @@ export function CodeViewer({
           }
         }
 
-        // Add line numbers plugin. The specifier is held in a variable so
-        // TypeScript does not try to resolve types for this untyped plugin.
+        // Add line numbers plugin. Static specifier so webpack resolves it at
+        // build time; the ambient declaration in prismjs-plugins.d.ts keeps
+        // TypeScript happy for this otherwise-untyped submodule.
         if (showLineNumbers) {
-          const lineNumbersPlugin =
-            "prismjs/plugins/line-numbers/prism-line-numbers";
-          await import(lineNumbersPlugin);
+          await import("prismjs/plugins/line-numbers/prism-line-numbers");
         }
 
         if (Prism.languages[prismLanguage]) {

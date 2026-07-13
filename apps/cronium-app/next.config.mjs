@@ -44,6 +44,9 @@ const nextConfig = {
         child_process: false,
         // pg >= 8.17 reaches for util/types; it is server-only.
         "util/types": false,
+        // pg's native binding is an optional dependency we don't install; pg
+        // falls back to pure JS. Stub it so the client trace doesn't warn.
+        "pg-native": false,
       };
 
       // Only apply optimization in production
