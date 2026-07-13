@@ -3,6 +3,42 @@ import { oauthTokens } from "@/shared/schema";
 import { eq, and } from "drizzle-orm";
 import { type OAuthToken, OAuthError } from "./types";
 import type { OAuthProvider } from "./providers";
+import {
+  credentialEncryption,
+  type EncryptedData,
+} from "@/lib/security/credential-encryption";
+
+/**
+ * OAuth access/refresh tokens are long-lived and grant access to a user's
+ * external account, so they must not be stored in plaintext. These helpers
+ * encrypt on write and decrypt on read using the same AES-256-GCM service as
+ * tool credentials. Existing plaintext tokens are detected on read and passed
+ * through unchanged; they are re-encrypted the next time they are stored (e.g.
+ * on refresh).
+ */
+function encryptSecret(value: string): string {
+  if (!credentialEncryption.isAvailable()) return value;
+  return JSON.stringify(credentialEncryption.encrypt(value));
+}
+
+function parseEncrypted(stored: string): EncryptedData | null {
+  try {
+    const o = JSON.parse(stored) as Partial<EncryptedData>;
+    if (o && o.encrypted && o.iv && o.authTag && o.keyDerivation) {
+      return o as EncryptedData;
+    }
+  } catch {
+    // not JSON -> legacy plaintext
+  }
+  return null;
+}
+
+function decryptSecret(stored: string): string {
+  const enc = parseEncrypted(stored);
+  if (!enc) return stored; // legacy plaintext
+  const dec = credentialEncryption.decrypt(enc);
+  return typeof dec === "string" ? dec : String(dec);
+}
 
 export class TokenManager {
   constructor(private provider: OAuthProvider) {}
@@ -22,8 +58,10 @@ export class TokenManager {
           userId,
           toolId,
           providerId: this.provider.id,
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
+          accessToken: encryptSecret(tokens.accessToken),
+          refreshToken: tokens.refreshToken
+            ? encryptSecret(tokens.refreshToken)
+            : tokens.refreshToken,
           expiresAt: tokens.expiresAt,
           tokenType: tokens.tokenType,
           scope: tokens.scope,
@@ -35,8 +73,10 @@ export class TokenManager {
             oauthTokens.providerId,
           ],
           set: {
-            accessToken: tokens.accessToken,
-            refreshToken: tokens.refreshToken,
+            accessToken: encryptSecret(tokens.accessToken),
+            refreshToken: tokens.refreshToken
+              ? encryptSecret(tokens.refreshToken)
+              : tokens.refreshToken,
             expiresAt: tokens.expiresAt,
             tokenType: tokens.tokenType,
             scope: tokens.scope,
@@ -78,8 +118,10 @@ export class TokenManager {
       }
 
       return {
-        accessToken: row.accessToken,
-        refreshToken: row.refreshToken ?? undefined,
+        accessToken: decryptSecret(row.accessToken),
+        refreshToken: row.refreshToken
+          ? decryptSecret(row.refreshToken)
+          : undefined,
         expiresAt: row.expiresAt ?? undefined,
         tokenType: row.tokenType,
         scope: row.scope ?? undefined,
