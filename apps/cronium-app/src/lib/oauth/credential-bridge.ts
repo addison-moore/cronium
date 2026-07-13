@@ -12,7 +12,7 @@
 
 import { TokenManager } from "./TokenManager";
 import { createProviderFromEnv } from "./providers";
-import { initializePlugins, ToolPluginRegistry } from "@/tools/plugins";
+import { getPluginOAuthConfig } from "@/tools/plugins/oauth-config";
 
 export interface OAuthBridgeTarget {
   userId: string;
@@ -35,9 +35,7 @@ export async function injectOAuthToken(
   credentials: Record<string, unknown>,
   target: OAuthBridgeTarget,
 ): Promise<Record<string, unknown>> {
-  initializePlugins();
-  const plugin = ToolPluginRegistry.get(toolTypeToPluginId(target.toolType));
-  const oauthConfig = plugin?.requiresOAuth;
+  const oauthConfig = getPluginOAuthConfig(toolTypeToPluginId(target.toolType));
   if (!oauthConfig) {
     return credentials;
   }

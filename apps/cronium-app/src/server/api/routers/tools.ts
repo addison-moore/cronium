@@ -1259,11 +1259,13 @@ export const toolsRouter = createTRPCRouter({
           });
         }
 
-        // Import tool plugin registry
-        const { ToolPluginRegistry } =
-          await import("@/tools/types/tool-plugin");
+        // Resolve the action from the server-safe registry. The plugin objects
+        // are "use client", so reading actions off ToolPluginRegistry on the
+        // server yields client reference proxies with no usable execute().
+        const { getServerActionById } =
+          await import("@/lib/tools/server-plugin-actions");
 
-        const action = ToolPluginRegistry.getActionById(input.actionId);
+        const action = getServerActionById(input.actionId);
         if (!action) {
           throw new TRPCError({
             code: "NOT_FOUND",

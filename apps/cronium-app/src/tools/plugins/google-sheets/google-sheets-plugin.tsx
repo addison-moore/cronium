@@ -28,6 +28,7 @@ import { ToolHealthBadge } from "@/tools/ToolHealthIndicator";
 import { Badge } from "@cronium/ui";
 import { googleSheetsCredentialsSchema } from "./schemas";
 import { googleSheetsApiRoutes } from "./api-routes";
+import { GOOGLE_SHEETS_OAUTH } from "../oauth-config";
 import { trpc } from "@/lib/trpc";
 
 const GOOGLE_SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
@@ -304,11 +305,10 @@ export const GoogleSheetsPlugin: ToolPlugin = {
     scope: "https://www.googleapis.com/auth/spreadsheets",
   },
 
-  // The server injects credentials.oauthToken before executing actions
-  requiresOAuth: {
-    providerId: "google",
-    scope: "https://www.googleapis.com/auth/spreadsheets",
-  },
+  // The server injects credentials.oauthToken before executing actions.
+  // Config lives in the server-safe oauth-config module (single source of
+  // truth shared with the OAuth credential bridge).
+  requiresOAuth: GOOGLE_SHEETS_OAUTH,
 
   CredentialForm: GoogleSheetsCredentialForm,
   CredentialDisplay: GoogleSheetsCredentialDisplay,
