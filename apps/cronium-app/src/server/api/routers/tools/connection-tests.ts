@@ -7,6 +7,9 @@
  * meaningful check report an honest failure instead of fake success.
  */
 
+import { safeFetch } from "@/lib/tools/safe-fetch";
+import { TOOL_HOSTS } from "@/tools/utils/tool-hosts";
+
 export interface ConnectionTestResult {
   success: boolean;
   message: string;
@@ -120,16 +123,14 @@ async function testSlack(
 ): Promise<ConnectionTestResult> {
   const webhookUrl = credentials.webhookUrl as string | undefined;
   if (!webhookUrl) return failure("Webhook URL not found in credentials");
-  if (!webhookUrl.startsWith("https://hooks.slack.com/")) {
-    return failure("Invalid Slack webhook URL");
-  }
 
   // Slack incoming webhooks have no side-effect-free check; this posts a
-  // visible message to the configured channel.
-  const response = await fetchWithTimeout(webhookUrl, {
+  // visible message to the configured channel. safeFetch enforces the host.
+  const response = await safeFetch(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text: "Cronium connection test" }),
+    allowHosts: TOOL_HOSTS.slack,
   });
   const responseText = await response.text();
   if (!response.ok || responseText !== "ok") {
@@ -145,7 +146,9 @@ async function testDiscord(
   if (!webhookUrl) return failure("Webhook URL not found in credentials");
 
   // Discord webhooks return their metadata on GET without sending a message
-  const response = await fetchWithTimeout(webhookUrl);
+  const response = await safeFetch(webhookUrl, {
+    allowHosts: TOOL_HOSTS.discord,
+  });
   if (!response.ok) {
     return failure(`Discord webhook error: ${response.status}`);
   }
@@ -165,7 +168,7 @@ async function testTeams(
 
   // Teams incoming webhooks accept a MessageCard POST; this posts a visible
   // message to the configured channel.
-  const response = await fetchWithTimeout(webhookUrl, {
+  const response = await safeFetch(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -174,6 +177,7 @@ async function testTeams(
       summary: "Cronium connection test",
       text: "Cronium connection test",
     }),
+    allowHosts: TOOL_HOSTS.teams,
   });
   const responseText = await response.text();
   if (!response.ok) {

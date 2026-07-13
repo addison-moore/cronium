@@ -41,6 +41,7 @@ const nextConfig = {
         tls: false,
         crypto: false,
         dns: false,
+        "dns/promises": false,
         child_process: false,
         // pg >= 8.17 reaches for util/types; it is server-only.
         "util/types": false,

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for create-sheet action parameters
 export const createSheetSchema = z.object({
@@ -180,7 +181,7 @@ export const createSheetAction: ToolAction = {
       }
 
       // Make API request
-      const response = await fetch(
+      const response = await toolFetch.googleSheets(
         `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
           spreadsheetId,
         )}:batchUpdate`,

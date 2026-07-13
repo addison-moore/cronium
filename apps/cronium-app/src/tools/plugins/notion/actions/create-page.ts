@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for Notion block objects
 const blockSchema = z.object({
@@ -370,15 +371,18 @@ export const createPageAction: ToolAction = {
       }
 
       // Create page via Notion API
-      const response = await fetch("https://api.notion.com/v1/pages", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-          "Notion-Version": "2022-06-28",
+      const response = await toolFetch.notion(
+        "https://api.notion.com/v1/pages",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            "Notion-Version": "2022-06-28",
+          },
+          body: JSON.stringify(pageData),
         },
-        body: JSON.stringify(pageData),
-      });
+      );
 
       // Update progress
       if (onProgress) {

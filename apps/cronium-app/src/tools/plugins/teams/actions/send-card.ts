@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { toolFetch } from "@/lib/tools/safe-fetch";
+import { TOOL_HOSTS, isAllowedWebhookUrl } from "@/tools/utils/tool-hosts";
 
 // Schema for Adaptive Card elements
 const adaptiveCardSchema = z.object({
@@ -104,6 +106,10 @@ export const sendCardSchema = z.object({
   webhookUrl: z
     .string()
     .url()
+    .refine(
+      (url) => isAllowedWebhookUrl(url, TOOL_HOSTS.teams),
+      "Must be an https Microsoft Teams webhook URL (*.webhook.office.com)",
+    )
     .describe("The Microsoft Teams webhook URL for the channel"),
   card: adaptiveCardSchema.describe("The Adaptive Card to send (JSON format)"),
   fallbackText: z
@@ -320,7 +326,7 @@ export const sendCardAction: ToolAction = {
       }
 
       // Send card via webhook
-      const response = await fetch(webhookUrl, {
+      const response = await toolFetch.teams(webhookUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

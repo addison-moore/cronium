@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for the send-message action parameters - Enhanced to support blocks
 export const sendMessageSchema = z
@@ -202,7 +203,7 @@ export const sendMessageAction: ToolAction = {
       }
 
       // Send the request to Slack
-      const response = await fetch(webhookUrl, {
+      const response = await toolFetch.slack(webhookUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for Discord message action parameters - Enhanced to support embeds
 export const sendMessageSchema = z
@@ -202,7 +203,7 @@ export const sendMessageAction: ToolAction = {
       }
 
       // Send the request to Discord
-      const response = await fetch(webhookUrl + "?wait=true", {
+      const response = await toolFetch.discord(webhookUrl + "?wait=true", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

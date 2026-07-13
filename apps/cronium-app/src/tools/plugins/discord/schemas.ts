@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TOOL_HOSTS, isAllowedWebhookUrl } from "@/tools/utils/tool-hosts";
 
 // Discord credentials schema
 export const discordCredentialsSchema = z.object({
@@ -6,8 +7,8 @@ export const discordCredentialsSchema = z.object({
     .string()
     .url("Must be a valid webhook URL")
     .refine(
-      (url) => url.includes("discord.com/api/webhooks"),
-      "Must be a valid Discord webhook URL",
+      (url) => isAllowedWebhookUrl(url, TOOL_HOSTS.discord),
+      "Must be an https URL on discord.com or discordapp.com",
     ),
   username: z.string().optional(),
   avatarUrl: z.string().url().optional(),

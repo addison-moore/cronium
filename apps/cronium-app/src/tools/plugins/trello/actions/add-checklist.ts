@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for add-checklist action parameters
 export const addChecklistSchema = z.object({
@@ -170,7 +171,7 @@ export const addChecklistAction: ToolAction = {
       url.searchParams.append("token", apiToken);
 
       // Create checklist
-      const response = await fetch(url.toString(), {
+      const response = await toolFetch.trello(url.toString(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -217,7 +218,7 @@ export const addChecklistAction: ToolAction = {
             itemData.pos = item.pos;
           }
 
-          const itemResponse = await fetch(itemUrl.toString(), {
+          const itemResponse = await toolFetch.trello(itemUrl.toString(), {
             method: "POST",
             headers: {
               "Content-Type": "application/json",

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for move-card action parameters
 export const moveCardSchema = z.object({
@@ -157,7 +158,7 @@ export const moveCardAction: ToolAction = {
       url.searchParams.append("token", apiToken);
 
       // Make API request
-      const response = await fetch(url.toString(), {
+      const response = await toolFetch.trello(url.toString(), {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

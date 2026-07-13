@@ -1,12 +1,18 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { toolFetch } from "@/lib/tools/safe-fetch";
+import { TOOL_HOSTS, isAllowedWebhookUrl } from "@/tools/utils/tool-hosts";
 
 // Schema for send-message action parameters
 export const sendMessageSchema = z.object({
   webhookUrl: z
     .string()
     .url()
+    .refine(
+      (url) => isAllowedWebhookUrl(url, TOOL_HOSTS.teams),
+      "Must be an https Microsoft Teams webhook URL (*.webhook.office.com)",
+    )
     .describe("The Microsoft Teams webhook URL for the channel"),
   message: z
     .string()
@@ -260,7 +266,7 @@ export const sendMessageAction: ToolAction = {
       }
 
       // Send message via webhook
-      const response = await fetch(webhookUrl, {
+      const response = await toolFetch.teams(webhookUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

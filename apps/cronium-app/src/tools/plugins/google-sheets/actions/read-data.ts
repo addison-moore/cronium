@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for read-data action parameters
 export const readDataSchema = z.object({
@@ -168,7 +169,7 @@ export const readDataAction: ToolAction = {
       );
 
       // Make API request
-      const response = await fetch(url.toString(), {
+      const response = await toolFetch.googleSheets(url.toString(), {
         method: "GET",
         headers: {
           Authorization: `Bearer ${oauthToken}`,

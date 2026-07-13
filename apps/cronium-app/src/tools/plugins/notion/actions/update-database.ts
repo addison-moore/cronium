@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for update-database action parameters
 export const updateDatabaseSchema = z.object({
@@ -258,7 +259,7 @@ export const updateDatabaseAction: ToolAction = {
       }
 
       // Update page via Notion API
-      const response = await fetch(
+      const response = await toolFetch.notion(
         `https://api.notion.com/v1/pages/${pageId}`,
         {
           method: "PATCH",

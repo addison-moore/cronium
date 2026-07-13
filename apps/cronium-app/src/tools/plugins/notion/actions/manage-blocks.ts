@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for manage-blocks action parameters
 export const manageBlocksSchema = z.object({
@@ -261,7 +262,7 @@ export const manageBlocksAction: ToolAction = {
             processBlock(block, variables),
           );
 
-          response = await fetch(
+          response = await toolFetch.notion(
             `https://api.notion.com/v1/blocks/${pageId}/children`,
             {
               method: "PATCH",
@@ -299,7 +300,7 @@ export const manageBlocksAction: ToolAction = {
           const blockId = replaceVariables(typedParams.blockId, variables);
           const blockData = processBlock(typedParams.blocks[0], variables);
 
-          response = await fetch(
+          response = await toolFetch.notion(
             `https://api.notion.com/v1/blocks/${blockId}`,
             {
               method: "PATCH",
@@ -325,7 +326,7 @@ export const manageBlocksAction: ToolAction = {
 
           const blockId = replaceVariables(typedParams.blockId, variables);
 
-          response = await fetch(
+          response = await toolFetch.notion(
             `https://api.notion.com/v1/blocks/${blockId}`,
             {
               method: "DELETE",
@@ -349,7 +350,7 @@ export const manageBlocksAction: ToolAction = {
 
           const blockId = replaceVariables(typedParams.blockId, variables);
 
-          response = await fetch(
+          response = await toolFetch.notion(
             `https://api.notion.com/v1/blocks/${blockId}/children?page_size=100`,
             {
               headers: {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TOOL_HOSTS, isAllowedWebhookUrl } from "@/tools/utils/tool-hosts";
 
 // Slack credentials schema
 export const slackCredentialsSchema = z.object({
@@ -6,8 +7,8 @@ export const slackCredentialsSchema = z.object({
     .string()
     .url("Must be a valid webhook URL")
     .refine(
-      (url) => url.includes("hooks.slack.com"),
-      "Must be a valid Slack webhook URL",
+      (url) => isAllowedWebhookUrl(url, TOOL_HOSTS.slack),
+      "Must be an https URL on hooks.slack.com",
     ),
   channel: z.string().optional(),
   username: z.string().optional(),
