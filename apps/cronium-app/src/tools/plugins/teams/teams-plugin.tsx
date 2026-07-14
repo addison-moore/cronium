@@ -26,6 +26,7 @@ import {
 } from "../../types/tool-plugin";
 import { teamsActions } from "./actions";
 import { ToolHealthBadge } from "@/tools/ToolHealthIndicator";
+import { TestConnectionButton } from "@/tools/components/TestConnectionButton";
 import { teamsCredentialsSchema, type TeamsCredentials } from "./schemas";
 
 const teamsFormSchema = teamsCredentialsSchema.extend({
@@ -160,6 +161,14 @@ function TeamsCredentialForm({
         </p>
       </div>
 
+      <TestConnectionButton
+        type="teams"
+        toolId={tool?.id}
+        getCredentials={() => {
+          const { name: _name, ...creds } = form.getValues();
+          return creds;
+        }}
+      />
       <div className="flex gap-2 pt-4">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel

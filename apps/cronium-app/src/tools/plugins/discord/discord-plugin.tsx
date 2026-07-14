@@ -17,6 +17,7 @@ import {
 } from "../../types/tool-plugin";
 import { discordActions } from "./actions";
 import { ToolHealthBadge } from "@/tools/ToolHealthIndicator";
+import { TestConnectionButton } from "@/tools/components/TestConnectionButton";
 import { discordCredentialsSchema, type DiscordCredentials } from "./schemas";
 
 const discordFormSchema = discordCredentialsSchema.extend({
@@ -68,7 +69,19 @@ function DiscordCredentialForm({
           placeholder="https://discord.com/api/webhooks/..."
           {...form.register("webhookUrl")}
         />
+        <p className="text-muted-foreground mt-1 text-xs">
+          In Discord: Server Settings → Integrations → Webhooks → New Webhook →
+          Copy Webhook URL.
+        </p>
       </div>
+      <TestConnectionButton
+        type="discord"
+        toolId={tool?.id}
+        getCredentials={() => {
+          const { name: _name, ...creds } = form.getValues();
+          return creds;
+        }}
+      />
       <div className="flex gap-2 pt-4">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel

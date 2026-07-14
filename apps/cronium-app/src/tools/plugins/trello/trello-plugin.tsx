@@ -25,6 +25,7 @@ import {
 } from "../../types/tool-plugin";
 import { trelloActions } from "./actions";
 import { ToolHealthBadge } from "@/tools/ToolHealthIndicator";
+import { TestConnectionButton } from "@/tools/components/TestConnectionButton";
 import { trelloCredentialsSchema, type TrelloCredentials } from "./schemas";
 
 const trelloFormSchema = trelloCredentialsSchema.extend({
@@ -121,6 +122,14 @@ function TrelloCredentialForm({
         </p>
       </div>
 
+      <TestConnectionButton
+        type="trello"
+        toolId={tool?.id}
+        getCredentials={() => {
+          const { name: _name, ...creds } = form.getValues();
+          return creds;
+        }}
+      />
       <div className="flex gap-2 pt-4">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel

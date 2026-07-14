@@ -25,6 +25,7 @@ import {
 } from "../../types/tool-plugin";
 import { notionActions } from "./actions";
 import { ToolHealthBadge } from "@/tools/ToolHealthIndicator";
+import { TestConnectionButton } from "@/tools/components/TestConnectionButton";
 import { notionCredentialsSchema, type NotionCredentials } from "./schemas";
 
 const notionFormSchema = notionCredentialsSchema.extend({
@@ -106,10 +107,19 @@ function NotionCredentialForm({
           {...form.register("apiKey")}
         />
         <p className="text-muted-foreground mt-1 text-xs">
-          Your Notion internal integration token
+          Your Notion internal integration token (starts with{" "}
+          <code>secret_</code> or <code>ntn_</code>).
         </p>
       </div>
 
+      <TestConnectionButton
+        type="notion"
+        toolId={tool?.id}
+        getCredentials={() => {
+          const { name: _name, ...creds } = form.getValues();
+          return creds;
+        }}
+      />
       <div className="flex gap-2 pt-4">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel

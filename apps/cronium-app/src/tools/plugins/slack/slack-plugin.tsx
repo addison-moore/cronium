@@ -26,6 +26,7 @@ import { trpc } from "@/lib/trpc";
 import { useToast } from "@cronium/ui";
 import { slackActions } from "./actions";
 import { ToolHealthBadge } from "@/tools/ToolHealthIndicator";
+import { TestConnectionButton } from "@/tools/components/TestConnectionButton";
 import { slackCredentialsSchema, type SlackCredentials } from "./schemas";
 
 const slackFormSchema = slackCredentialsSchema.extend({
@@ -79,9 +80,18 @@ function SlackCredentialForm({
           {...form.register("webhookUrl")}
         />
         <p className="text-muted-foreground mt-1 text-xs">
-          Get this from your Slack app's Incoming Webhooks section
+          In Slack: create or open an app → Incoming Webhooks → Add New Webhook
+          to Workspace, then copy the URL.
         </p>
       </div>
+      <TestConnectionButton
+        type="slack"
+        toolId={tool?.id}
+        getCredentials={() => {
+          const { name: _name, ...creds } = form.getValues();
+          return creds;
+        }}
+      />
       <div className="flex gap-2 pt-4">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel

@@ -19,6 +19,7 @@ import {
 } from "../../types/tool-plugin";
 import { emailCredentialsSchema, type EmailCredentials } from "./schemas";
 import { emailActions } from "./actions";
+import { TestConnectionButton } from "@/tools/components/TestConnectionButton";
 
 // Email form schema (includes name field for UI)
 const emailFormSchema = z.object({
@@ -90,14 +91,22 @@ function EmailCredentialForm({
           placeholder="smtp.gmail.com"
           {...form.register("smtpHost")}
         />
+        <p className="text-muted-foreground mt-1 text-xs">
+          Your mail provider&apos;s outgoing SMTP server (e.g. smtp.gmail.com,
+          smtp.office365.com).
+        </p>
       </div>
       <div>
         <Label htmlFor="smtpPort">Port</Label>
         <Input
           id="smtpPort"
-          placeholder=""
+          placeholder="587"
           {...form.register("smtpPort", { valueAsNumber: true })}
         />
+        <p className="text-muted-foreground mt-1 text-xs">
+          587 for STARTTLS (Enable TLS), 465 for SSL (Enable SSL), 25 for
+          unencrypted.
+        </p>
       </div>
       <div>
         <Label htmlFor="smtpUser">SMTP User</Label>
@@ -115,6 +124,10 @@ function EmailCredentialForm({
           placeholder="Your email password or app password"
           {...form.register("smtpPassword")}
         />
+        <p className="text-muted-foreground mt-1 text-xs">
+          For Gmail, Outlook, and most providers with 2FA, use an{" "}
+          <strong>app password</strong>, not your account password.
+        </p>
       </div>
       <div>
         <Label htmlFor="fromEmail">From Email</Label>
@@ -141,6 +154,14 @@ function EmailCredentialForm({
         <input type="checkbox" id="enableSSL" {...form.register("enableSSL")} />
         <Label htmlFor="enableSSL">Enable SSL</Label>
       </div>
+      <TestConnectionButton
+        type="email"
+        toolId={tool?.id}
+        getCredentials={() => {
+          const { name: _name, ...creds } = form.getValues();
+          return creds;
+        }}
+      />
       <div className="flex gap-2 pt-4">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel

@@ -432,6 +432,77 @@ export const toolsRouter = createTRPCRouter({
       }
     }),
 
+  // Test connection using credentials from a form, before the tool is saved
+  // (or while editing). This is the "test before save" path — the saved-tool
+  // testConnection above only works once a tool exists. Never throws on a
+  // provider failure; returns an honest { success, message } so the form can
+  // show it inline.
+  testCredentials: protectedProcedure
+    .input(
+      z.object({
+        type: z.string().min(1),
+        credentials: z.record(z.string(), z.unknown()),
+        // When editing an existing tool, pass its id so blank secret fields
+        // (the read endpoints redact them) fall back to the stored values
+        // instead of testing an empty secret.
+        toolId: z.number().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        // A real outbound provider call — throttle it like the other test /
+        // execute paths so it can't be used as an unmetered network probe.
+        const rl = await rateLimiter.checkRateLimit(
+          ctx.session.user.id,
+          input.type,
+        );
+        if (!rl.allowed) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: `Too many tests. Try again in ${rl.retryAfter ?? 60}s.`,
+          });
+        }
+
+        let credentials = input.credentials;
+        if (input.toolId != null) {
+          const existing = (await getUserTools(ctx.session.user.id)).find(
+            (t) => t.id === input.toolId,
+          );
+          if (existing) {
+            credentials = mergeCredentials(credentials, existing.credentials);
+          }
+        }
+
+        // Cheap shape check before spending a network round-trip.
+        const validation = await validateCredentialsForType(
+          input.type,
+          credentials,
+        );
+        if (!validation.valid) {
+          return {
+            success: false,
+            message: validation.errors.join(", ") || "Invalid credentials",
+          };
+        }
+
+        const startTime = Date.now();
+        const result = await testToolConnection(input.type, credentials);
+        return {
+          success: result.success,
+          message: result.message,
+          duration: Date.now() - startTime,
+          details: result.details ?? {},
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to test credentials",
+          cause: error,
+        });
+      }
+    }),
+
   // Get all user tools
   getAll: protectedProcedure
     .input(toolQuerySchema)
