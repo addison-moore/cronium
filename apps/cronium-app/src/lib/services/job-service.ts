@@ -245,14 +245,15 @@ export class JobService {
     batchSize = 10,
     jobTypes?: JobType[],
   ): Promise<Job[]> {
-    // Find unclaimed jobs that are scheduled to run. Tool actions run in-process
-    // (see runInProcessJob); the orchestrator must never claim one, or it would
-    // fail it as a scriptless container job.
+    // Find unclaimed jobs that are scheduled to run. Tool actions and HTTP
+    // requests run in-process (see runInProcessJob); the orchestrator must never
+    // claim one, or it would fail it as a scriptless container job.
     const conditions = [
       eq(jobsTable.status, JobStatus.QUEUED),
       isNull(jobsTable.orchestratorId),
       lte(jobsTable.scheduledFor, new Date()),
       ne(jobsTable.type, JobType.TOOL_ACTION),
+      ne(jobsTable.type, JobType.HTTP_REQUEST),
     ];
 
     if (jobTypes && jobTypes.length > 0) {

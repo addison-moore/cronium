@@ -16,10 +16,15 @@
 import { type Event, type Job, JobStatus, JobType } from "@/shared/schema";
 import { jobService } from "@/lib/services/job-service";
 import { executeToolAction } from "@/lib/scheduler/tool-action-executor";
+import { executeHttpEvent } from "@/lib/scheduler/http-event-executor";
 
-/** Job types executed in the app process rather than dispatched to the orchestrator. */
+/**
+ * Job types executed in the app process rather than dispatched to the
+ * orchestrator (which only runs container/ssh scripts). Both tool actions and
+ * HTTP requests are scriptless outbound calls with a working in-process engine.
+ */
 export function isInProcessJobType(type: JobType): boolean {
-  return type === JobType.TOOL_ACTION;
+  return type === JobType.TOOL_ACTION || type === JobType.HTTP_REQUEST;
 }
 
 /**
@@ -38,7 +43,10 @@ export async function runInProcessJob(
       startedAt: new Date(),
     });
 
-    const result = await executeToolAction(event, input);
+    const result =
+      job.type === JobType.HTTP_REQUEST
+        ? await executeHttpEvent(event, input)
+        : await executeToolAction(event, input);
     const executionDuration = Date.now() - startedAt;
     const succeeded = result.exitCode === 0;
 

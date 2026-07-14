@@ -167,10 +167,12 @@ export function buildJobPayload(
     };
   }
 
-  // Add retry configuration. Tool actions are non-idempotent and run in-process
-  // (single attempt, per the executor); they must never be re-queued on failure,
-  // or a FAILED status would flip the job back to QUEUED with nothing to run it.
-  if (event.retries && jobType !== JobType.TOOL_ACTION) {
+  // Add retry configuration. In-process job types (tool actions, HTTP requests)
+  // run a single attempt in the app and must never be re-queued on failure, or a
+  // FAILED status would flip the job back to QUEUED with nothing to run it.
+  const runsInProcess =
+    jobType === JobType.TOOL_ACTION || jobType === JobType.HTTP_REQUEST;
+  if (event.retries && !runsInProcess) {
     jobPayload.retries = event.retries;
   }
 

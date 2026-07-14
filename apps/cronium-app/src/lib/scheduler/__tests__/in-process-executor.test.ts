@@ -7,17 +7,23 @@ jest.mock("@/lib/services/job-service", () => ({
 jest.mock("@/lib/scheduler/tool-action-executor", () => ({
   executeToolAction: jest.fn(),
 }));
+jest.mock("@/lib/scheduler/http-event-executor", () => ({
+  executeHttpEvent: jest.fn(),
+}));
 
 import { runInProcessJob, isInProcessJobType } from "../in-process-executor";
 import { jobService } from "@/lib/services/job-service";
 import { executeToolAction } from "@/lib/scheduler/tool-action-executor";
+import { executeHttpEvent } from "@/lib/scheduler/http-event-executor";
 import { JobStatus, JobType } from "@/shared/schema";
 import type { Event, Job } from "@/shared/schema";
 
 const mockUpdate = jobService.updateJobStatus as jest.Mock;
 const mockExec = executeToolAction as jest.Mock;
+const mockHttp = executeHttpEvent as jest.Mock;
 
-const job = { id: "job_1" } as Job;
+const job = { id: "job_1", type: JobType.TOOL_ACTION } as Job;
+const httpJob = { id: "job_2", type: JobType.HTTP_REQUEST } as Job;
 const event = {
   id: 1,
   userId: "u1",
@@ -36,13 +42,26 @@ const lastData = () =>
 beforeEach(() => {
   mockUpdate.mockReset().mockResolvedValue(null);
   mockExec.mockReset();
+  mockHttp.mockReset();
 });
 
 describe("isInProcessJobType", () => {
-  it("is true only for TOOL_ACTION", () => {
+  it("is true for the scriptless in-process types, false for scripts", () => {
     expect(isInProcessJobType(JobType.TOOL_ACTION)).toBe(true);
+    expect(isInProcessJobType(JobType.HTTP_REQUEST)).toBe(true);
     expect(isInProcessJobType(JobType.SCRIPT)).toBe(false);
-    expect(isInProcessJobType(JobType.HTTP_REQUEST)).toBe(false);
+  });
+});
+
+describe("runInProcessJob — dispatch by job type", () => {
+  it("routes HTTP_REQUEST jobs to executeHttpEvent, not executeToolAction", async () => {
+    mockHttp.mockResolvedValue({ stdout: "{}", stderr: "", exitCode: 0 });
+
+    await runInProcessJob(httpJob, event, { a: 1 });
+
+    expect(mockHttp).toHaveBeenCalledWith(event, { a: 1 });
+    expect(mockExec).not.toHaveBeenCalled();
+    expect(statuses()).toEqual([JobStatus.RUNNING, JobStatus.COMPLETED]);
   });
 });
 
