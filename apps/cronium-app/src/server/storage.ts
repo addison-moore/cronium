@@ -20,6 +20,9 @@ import {
   webhookEvents,
   webhookDeliveries,
   serverDeletionNotifications,
+  toolActionLogs,
+  jobs,
+  executions,
   type ConditionalActionType,
   type User,
   type InsertUser,
@@ -616,6 +619,26 @@ class DatabaseStorage implements IStorage {
       // Delete logs
       await db.delete(logs).where(inArray(logs.eventId, eventIds));
 
+      // Delete tool action logs
+      await db
+        .delete(toolActionLogs)
+        .where(inArray(toolActionLogs.eventId, eventIds));
+
+      // Delete executions of these events' jobs, then the jobs themselves
+      // (logs reference jobs, executions reference jobs)
+      await db
+        .delete(executions)
+        .where(
+          inArray(
+            executions.jobId,
+            db
+              .select({ id: jobs.id })
+              .from(jobs)
+              .where(inArray(jobs.eventId, eventIds)),
+          ),
+        );
+      await db.delete(jobs).where(inArray(jobs.eventId, eventIds));
+
       // Delete environment variables
       await db.delete(envVars).where(inArray(envVars.eventId, eventIds));
 
@@ -636,6 +659,11 @@ class DatabaseStorage implements IStorage {
             inArray(conditionalActions.targetEventId, eventIds),
           ),
         );
+
+      // Delete workflow nodes that reference these events
+      await db
+        .delete(workflowNodes)
+        .where(inArray(workflowNodes.eventId, eventIds));
 
       // Delete the events themselves
       await db.delete(events).where(inArray(events.id, eventIds));
@@ -1333,45 +1361,66 @@ class DatabaseStorage implements IStorage {
     try {
       console.log(`Starting deletion of script ${id}`);
 
-      // Delete related resources in proper order to avoid foreign key conflicts
+      // Delete related resources in proper order to avoid foreign key
+      // conflicts, in a transaction so a failure leaves nothing half-deleted
+      await db.transaction(async (tx) => {
+        // 1. Delete environment variables first
+        console.log(`Deleting environment variables for script ${id}`);
+        await tx.delete(envVars).where(eq(envVars.eventId, id));
 
-      // 1. Delete environment variables first
-      console.log(`Deleting environment variables for script ${id}`);
-      await this.deleteEnvVarsByEventId(id);
+        // 2. Delete conditional actions that reference this event
+        console.log(`Deleting conditional actions for script ${id}`);
+        await tx
+          .delete(conditionalActions)
+          .where(
+            or(
+              eq(conditionalActions.successEventId, id),
+              eq(conditionalActions.failEventId, id),
+              eq(conditionalActions.alwaysEventId, id),
+              eq(conditionalActions.conditionEventId, id),
+              eq(conditionalActions.targetEventId, id),
+            ),
+          );
 
-      // 2. Delete conditional actions that reference this event
-      console.log(`Deleting conditional actions for script ${id}`);
-      await db
-        .delete(conditionalActions)
-        .where(eq(conditionalActions.successEventId, id));
-      await db
-        .delete(conditionalActions)
-        .where(eq(conditionalActions.failEventId, id));
-      await db
-        .delete(conditionalActions)
-        .where(eq(conditionalActions.targetEventId, id));
+        // 3. Delete logs
+        console.log(`Deleting logs for script ${id}`);
+        await tx.delete(logs).where(eq(logs.eventId, id));
 
-      // 3. Delete logs
-      console.log(`Deleting logs for script ${id}`);
-      await db.delete(logs).where(eq(logs.eventId, id));
+        // 3b. Delete tool action logs
+        console.log(`Deleting tool action logs for script ${id}`);
+        await tx.delete(toolActionLogs).where(eq(toolActionLogs.eventId, id));
 
-      // 4. Delete workflow execution event associations
-      console.log(`Deleting workflow execution events for script ${id}`);
-      await db
-        .delete(workflowExecutionEvents)
-        .where(eq(workflowExecutionEvents.eventId, id));
+        // 3c. Delete executions of this event's jobs, then the jobs
+        // themselves (logs reference jobs, executions reference jobs)
+        console.log(`Deleting executions and jobs for script ${id}`);
+        await tx
+          .delete(executions)
+          .where(
+            inArray(
+              executions.jobId,
+              tx.select({ id: jobs.id }).from(jobs).where(eq(jobs.eventId, id)),
+            ),
+          );
+        await tx.delete(jobs).where(eq(jobs.eventId, id));
 
-      // 5. Delete server associations
-      console.log(`Deleting event server associations for script ${id}`);
-      await db.delete(eventServers).where(eq(eventServers.eventId, id));
+        // 4. Delete workflow execution event associations
+        console.log(`Deleting workflow execution events for script ${id}`);
+        await tx
+          .delete(workflowExecutionEvents)
+          .where(eq(workflowExecutionEvents.eventId, id));
 
-      // 6. Delete workflow nodes that reference this script
-      console.log(`Deleting workflow nodes for script ${id}`);
-      await db.delete(workflowNodes).where(eq(workflowNodes.eventId, id));
+        // 5. Delete server associations
+        console.log(`Deleting event server associations for script ${id}`);
+        await tx.delete(eventServers).where(eq(eventServers.eventId, id));
 
-      // 7. Delete the script itself last
-      console.log(`Deleting script ${id}`);
-      await db.delete(events).where(eq(events.id, id));
+        // 6. Delete workflow nodes that reference this script
+        console.log(`Deleting workflow nodes for script ${id}`);
+        await tx.delete(workflowNodes).where(eq(workflowNodes.eventId, id));
+
+        // 7. Delete the script itself last
+        console.log(`Deleting script ${id}`);
+        await tx.delete(events).where(eq(events.id, id));
+      });
 
       console.log(`Successfully deleted script ${id}`);
     } catch (error) {
