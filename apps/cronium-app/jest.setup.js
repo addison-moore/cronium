@@ -43,20 +43,23 @@ jest.mock("next/navigation", () => ({
   },
 }));
 
-// Mock window.matchMedia
-Object.defineProperty(window, "matchMedia", {
-  writable: true,
-  value: jest.fn().mockImplementation((query) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: jest.fn(), // deprecated
-    removeListener: jest.fn(), // deprecated
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-    dispatchEvent: jest.fn(),
-  })),
-});
+// Mock window.matchMedia (browser-like environments only; node-env tests such
+// as the SSRF / encryption suites have no window and need real node crypto).
+if (typeof window !== "undefined") {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: jest.fn().mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: jest.fn(), // deprecated
+      removeListener: jest.fn(), // deprecated
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    })),
+  });
+}
 
 // Mock IntersectionObserver
 global.IntersectionObserver = class IntersectionObserver {
@@ -86,17 +89,21 @@ global.ResizeObserver = class ResizeObserver {
   }
 };
 
-// Mock crypto for browser environment
-Object.defineProperty(global, "crypto", {
-  value: {
-    getRandomValues: (arr) => {
-      for (let i = 0; i < arr.length; i++) {
-        arr[i] = Math.floor(Math.random() * 256);
-      }
-      return arr;
+// Mock crypto for browser-like environments only. In the node test environment
+// the real Node crypto (scrypt, AES-GCM) must be left intact for the credential
+// encryption tests.
+if (typeof window !== "undefined") {
+  Object.defineProperty(global, "crypto", {
+    value: {
+      getRandomValues: (arr) => {
+        for (let i = 0; i < arr.length; i++) {
+          arr[i] = Math.floor(Math.random() * 256);
+        }
+        return arr;
+      },
     },
-  },
-});
+  });
+}
 
 // Suppress console warnings in tests
 const originalError = console.error;

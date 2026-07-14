@@ -22,6 +22,7 @@ import {
   getServerActionById,
   getAllServerActionIds,
 } from "@/lib/tools/server-action-executor";
+import { ToolActionError, isFailureResult } from "@/lib/tools/action-result";
 
 export interface ToolActionConfig {
   toolType: string;
@@ -69,30 +70,6 @@ export interface ToolActionExecutionContext {
   onPartialResult?: (result: unknown) => void;
   isTest?: boolean;
   mockData?: unknown;
-}
-
-/**
- * Thrown when a tool action's execute() reports failure via a
- * {success:false}/{ok:false} result. Actions historically caught their own
- * errors and returned these shapes, so the executor's retry/circuit-breaker
- * never saw a failure and reported the send as a success. Converting them to a
- * throw restores honest job status and breaker protection.
- */
-class ToolActionError extends Error {
-  constructor(
-    message: string,
-    readonly result: unknown,
-  ) {
-    super(message);
-    this.name = "ToolActionError";
-  }
-}
-
-/** True if an action result signals failure (slack uses `ok`, others `success`). */
-function isFailureResult(r: unknown): boolean {
-  if (!r || typeof r !== "object") return false;
-  const obj = r as { ok?: unknown; success?: unknown };
-  return obj.ok === false || obj.success === false;
 }
 
 /**
