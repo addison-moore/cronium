@@ -9,6 +9,7 @@ import { db } from "@/server/db";
 import { jobs, executions, logs } from "@/shared/schema";
 import { eq, desc } from "drizzle-orm";
 import { JobStatus } from "@/shared/schema";
+import { unifiedIoDebug } from "@/lib/unified-io/debug";
 
 export interface JobPollOptions {
   jobId: string;
@@ -140,8 +141,8 @@ export async function waitForJobCompletion(
         // Determine success based on job status
         const success = job.status === JobStatus.COMPLETED;
 
-        console.log(
-          `[UnifiedIO] poll job ${jobId} done (status=${job.status}): result keys=${job.result && typeof job.result === "object" ? Object.keys(job.result as object).join(",") : "none"}; extracted scriptOutput=${JSON.stringify(scriptOutput)}`,
+        unifiedIoDebug(
+          `poll job ${jobId} done (status=${job.status}): result keys=${job.result && typeof job.result === "object" ? Object.keys(job.result as object).join(",") : "none"}; extracted scriptOutput=${JSON.stringify(scriptOutput)}`,
         );
 
         // Build result

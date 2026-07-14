@@ -28,6 +28,8 @@ export interface InProcessResult {
   stderr: string;
   exitCode: number;
   data?: unknown;
+  /** True when this result's data should flow to the next event via Unified I/O. */
+  producesOutput?: boolean;
 }
 
 interface HttpHeader {
@@ -107,6 +109,8 @@ export async function executeHttpEvent(
       ? ""
       : (error ?? `HTTP request failed with status ${status}`),
     exitCode: succeeded ? 0 : 1,
-    data,
+    data: summary,
+    // An HTTP request event fetches data; expose it to the next workflow step.
+    producesOutput: true,
   };
 }

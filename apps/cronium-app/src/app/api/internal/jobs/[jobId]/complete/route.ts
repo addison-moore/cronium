@@ -4,6 +4,7 @@ import { jobService } from "@/lib/services/job-service";
 import { JobStatus, jobs } from "@shared/schema";
 import { db } from "@/server/db";
 import { eq } from "drizzle-orm";
+import { unifiedIoDebug } from "@/lib/unified-io/debug";
 
 // Mark job as completed
 export async function POST(
@@ -149,8 +150,8 @@ export async function POST(
       ) {
         scriptOutput = existingResult.output;
       }
-      console.log(
-        `[UnifiedIO] complete job ${jobId}: existing result keys=${existingResult ? Object.keys(existingResult).join(",") : "none"}; promoted scriptOutput=${JSON.stringify(scriptOutput) ?? "undefined"}`,
+      unifiedIoDebug(
+        `complete job ${jobId}: existing result keys=${existingResult ? Object.keys(existingResult).join(",") : "none"}; promoted scriptOutput=${JSON.stringify(scriptOutput) ?? "undefined"}`,
       );
     }
 

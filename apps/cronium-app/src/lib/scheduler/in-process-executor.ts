@@ -50,6 +50,14 @@ export async function runInProcessJob(
     const executionDuration = Date.now() - startedAt;
     const succeeded = result.exitCode === 0;
 
+    // Emit fetched data to Unified I/O so a workflow's next step receives it via
+    // cronium.input(). Read/HTTP actions set producesOutput; send/write actions
+    // don't, so they don't pollute the data channel.
+    const resultField: Record<string, unknown> = { exitCode: result.exitCode };
+    if (succeeded && result.producesOutput && result.data !== undefined) {
+      resultField.scriptOutput = result.data;
+    }
+
     await jobService.updateJobStatus(
       job.id,
       succeeded ? JobStatus.COMPLETED : JobStatus.FAILED,
@@ -57,7 +65,7 @@ export async function runInProcessJob(
         output: succeeded ? result.stdout : result.stderr,
         exitCode: result.exitCode,
         executionDuration,
-        result: { exitCode: result.exitCode },
+        result: resultField,
         ...(succeeded ? {} : { error: result.stderr || "Tool action failed" }),
       },
     );

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { executionService } from "@/lib/services/execution-service";
 import { jobService } from "@/lib/services/job-service";
 import { JobStatus } from "@/shared/schema";
+import { unifiedIoDebug } from "@/lib/unified-io/debug";
 
 // Update an execution
 export async function PUT(
@@ -155,8 +156,8 @@ export async function PUT(
             scriptOutput: existingResult.output,
           };
         }
-        console.log(
-          `[UnifiedIO] execution ${executionId} completing job ${execution.jobId}: result keys=${Object.keys(existingResult).join(",") || "none"}; scriptOutput promoted=${jobUpdateData.result ? "yes" : "no"}`,
+        unifiedIoDebug(
+          `execution ${executionId} completing job ${execution.jobId}: result keys=${Object.keys(existingResult).join(",") || "none"}; scriptOutput promoted=${jobUpdateData.result ? "yes" : "no"}`,
         );
 
         // Pass timing information to job update

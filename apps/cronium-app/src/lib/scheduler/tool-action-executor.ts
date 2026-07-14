@@ -38,6 +38,8 @@ export interface ToolActionResult {
   stderr: string;
   exitCode: number;
   data?: unknown;
+  /** True when this action's data should flow to the next event via Unified I/O. */
+  producesOutput?: boolean;
   healthStatus?: ToolActionHealthStatus;
 }
 
@@ -517,6 +519,7 @@ export async function executeToolAction(
       stderr: "",
       exitCode: 0,
       data: result,
+      producesOutput: action.producesOutput ?? false,
       healthStatus,
     };
   } catch (error) {

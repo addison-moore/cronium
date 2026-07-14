@@ -4,6 +4,7 @@ import { db } from "@/server/db";
 import { jobs } from "@/shared/schema";
 import { eq } from "drizzle-orm";
 import { executionService } from "@/lib/services/execution-service";
+import { unifiedIoDebug } from "@/lib/unified-io/debug";
 
 export async function POST(
   request: NextRequest,
@@ -67,8 +68,8 @@ export async function POST(
       })
       .where(eq(jobs.id, execution.jobId));
 
-    console.log(
-      `[UnifiedIO] /output stored for execution ${executionId} (job ${execution.jobId}): ${JSON.stringify(body.output)}`,
+    unifiedIoDebug(
+      `/output stored for execution ${executionId} (job ${execution.jobId}): ${JSON.stringify(body.output)}`,
     );
 
     return NextResponse.json({ success: true });

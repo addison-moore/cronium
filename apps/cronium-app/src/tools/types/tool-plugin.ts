@@ -42,6 +42,12 @@ export interface ToolAction {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   outputSchema: z.ZodSchema<any>;
 
+  // When true, this action's result is emitted as the event's Unified I/O output
+  // (job.result.scriptOutput), so a workflow's next step receives it via
+  // cronium.input(). Set on read/fetch actions (e.g. SQL query, search); leave
+  // false/undefined on send/write actions so they don't pollute the data channel.
+  producesOutput?: boolean;
+
   // Execution
   execute: (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

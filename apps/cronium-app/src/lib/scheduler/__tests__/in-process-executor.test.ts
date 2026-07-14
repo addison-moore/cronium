@@ -91,6 +91,51 @@ describe("runInProcessJob", () => {
     expect(lastData().error).toBe("invalid_token");
   });
 
+  it("emits result.data as scriptOutput when the action produces output (Unified I/O)", async () => {
+    mockExec.mockResolvedValue({
+      stdout: "ok",
+      stderr: "",
+      exitCode: 0,
+      data: { rows: [{ id: 1 }] },
+      producesOutput: true,
+    });
+
+    await runInProcessJob(job, event);
+
+    const result = lastData().result as Record<string, unknown>;
+    expect(result.scriptOutput).toEqual({ rows: [{ id: 1 }] });
+  });
+
+  it("does not emit scriptOutput for a send/write action (producesOutput false)", async () => {
+    mockExec.mockResolvedValue({
+      stdout: "ok",
+      stderr: "",
+      exitCode: 0,
+      data: { ok: true },
+      producesOutput: false,
+    });
+
+    await runInProcessJob(job, event);
+
+    const result = lastData().result as Record<string, unknown>;
+    expect(result.scriptOutput).toBeUndefined();
+  });
+
+  it("does not emit scriptOutput when the action fails, even if producesOutput", async () => {
+    mockExec.mockResolvedValue({
+      stdout: "",
+      stderr: "boom",
+      exitCode: 1,
+      data: { partial: true },
+      producesOutput: true,
+    });
+
+    await runInProcessJob(job, event);
+
+    const result = lastData().result as Record<string, unknown>;
+    expect(result.scriptOutput).toBeUndefined();
+  });
+
   it("finalizes the job FAILED (never throws) if the engine itself throws", async () => {
     mockExec.mockRejectedValue(new Error("kaboom"));
 
