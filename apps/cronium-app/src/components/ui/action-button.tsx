@@ -11,12 +11,7 @@ interface ActionButtonProps {
   onClick?: () => void;
   href?: string;
   variant?:
-    | "default"
-    | "outline"
-    | "secondary"
-    | "destructive"
-    | "ghost"
-    | "link";
+    "default" | "outline" | "secondary" | "destructive" | "ghost" | "link";
   size?: "default" | "sm" | "lg" | "icon";
   isLoading?: boolean;
   isDisabled?: boolean;

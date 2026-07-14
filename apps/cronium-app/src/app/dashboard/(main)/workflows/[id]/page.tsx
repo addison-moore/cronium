@@ -243,8 +243,7 @@ export default function WorkflowDetailsPage({
       setWorkflowNodes(nodes);
 
       const typedConnections = workflowDetails?.connections as
-        | WorkflowConnection[]
-        | undefined;
+        WorkflowConnection[] | undefined;
       const edges: WorkflowEdge[] = (typedConnections ?? []).map((conn) => ({
         id: `edge-${String(conn.id)}`,
         source: `node-${String(conn.sourceNodeId)}`,
@@ -288,10 +287,7 @@ export default function WorkflowDetailsPage({
   // Handle executions data
   useEffect(() => {
     if (executionsData?.executions) {
-      const executionsResponse = executionsData.executions as {
-        executions: WorkflowExecution[];
-        total: number;
-      };
+      const executionsResponse = executionsData.executions;
       const executions = executionsResponse.executions;
 
       const stats: ExecutionStats = {
@@ -1095,26 +1091,24 @@ export default function WorkflowDetailsPage({
                     return mappedEvent;
                   },
                 )}
-                initialNodes={enrichedWorkflowNodes.map(
-                  (node): Node => ({
-                    id: node.id,
-                    type: node.type,
-                    position: node.position,
-                    data: {
-                      eventId: node.data.eventId,
-                      label: node.data.label,
-                      type: node.data.type,
-                      eventTypeIcon: node.data.eventTypeIcon,
-                      description: node.data.description,
-                      tags: node.data.tags,
-                      serverId: node.data.serverId,
-                      serverName: node.data.serverName,
-                      createdAt: node.data.createdAt,
-                      updatedAt: node.data.updatedAt,
-                      updateEvents: node.data.updateEvents,
-                    },
-                  }),
-                )}
+                initialNodes={enrichedWorkflowNodes.map((node): Node => ({
+                  id: node.id,
+                  type: node.type,
+                  position: node.position,
+                  data: {
+                    eventId: node.data.eventId,
+                    label: node.data.label,
+                    type: node.data.type,
+                    eventTypeIcon: node.data.eventTypeIcon,
+                    description: node.data.description,
+                    tags: node.data.tags,
+                    serverId: node.data.serverId,
+                    serverName: node.data.serverName,
+                    createdAt: node.data.createdAt,
+                    updatedAt: node.data.updatedAt,
+                    updateEvents: node.data.updateEvents,
+                  },
+                }))}
                 initialEdges={workflowEdges.map((edge): Edge => {
                   const mappedEdge: Edge = {
                     id: edge.id,

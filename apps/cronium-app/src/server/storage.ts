@@ -770,7 +770,7 @@ class DatabaseStorage implements IStorage {
 
         // Add default payloadVersion
         if (script) {
-          return { ...script, payloadVersion: 1 } as Script;
+          return { ...script, payloadVersion: 1 };
         }
         return undefined;
       }
@@ -993,7 +993,7 @@ class DatabaseStorage implements IStorage {
         failEvents: [],
         alwaysEvents: [],
         conditionEvents: [],
-      } as EventWithRelations;
+      };
     }
   }
 
@@ -1211,7 +1211,7 @@ class DatabaseStorage implements IStorage {
           ...event,
           payloadVersion: 1,
           eventServers: [],
-        })) as Event[];
+        }));
       }
 
       // Re-throw other errors

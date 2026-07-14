@@ -132,7 +132,7 @@ export function EventEditTab({
       message?: string;
     } = {
       id: action.id,
-      type: action.type as string, // Convert enum to string
+      type: action.type, // Convert enum to string
     };
 
     // Only add properties if they have values (not null or undefined)

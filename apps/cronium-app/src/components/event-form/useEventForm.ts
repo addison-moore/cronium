@@ -128,7 +128,7 @@ function eventFormReducer<T extends EventType>(
         data: {
           ...state.data,
           [action.field]: action.value,
-        } as EventFormData<T>,
+        },
         isDirty: true,
       };
 
@@ -197,7 +197,7 @@ function eventFormReducer<T extends EventType>(
             ...state.data.envVars,
             { ...action.envVar, id: Date.now() },
           ],
-        } as unknown as EventFormData<T>,
+        },
         isDirty: true,
       };
 
@@ -209,7 +209,7 @@ function eventFormReducer<T extends EventType>(
           envVars: state.data.envVars.filter(
             (_, index) => index !== action.index,
           ),
-        } as unknown as EventFormData<T>,
+        },
         isDirty: true,
       };
 
@@ -221,7 +221,7 @@ function eventFormReducer<T extends EventType>(
           envVars: state.data.envVars.map((envVar, index) =>
             index === action.index ? { ...envVar, ...action.envVar } : envVar,
           ),
-        } as unknown as EventFormData<T>,
+        },
         isDirty: true,
       };
 
@@ -346,7 +346,7 @@ export function useEventForm<T extends EventType = EventType>(
         );
         dispatch({
           type: "SET_FIELD_ERROR",
-          field: field as keyof EventFormErrors,
+          field: field,
           error: error ?? undefined,
         });
       }

@@ -58,7 +58,7 @@ export const useActionBuilderStore = create<ActionBuilderState>((set, get) => ({
 
   onEdgesChange: (changes) => {
     set({
-      edges: applyEdgeChanges(changes, get().edges) as ActionConnection[],
+      edges: applyEdgeChanges(changes, get().edges),
     });
   },
 
@@ -70,7 +70,7 @@ export const useActionBuilderStore = create<ActionBuilderState>((set, get) => ({
       data: {
         connectionType: "always" as const,
       },
-    } as ActionConnection;
+    };
     set({
       edges: addEdge(newEdge, get().edges),
     });
@@ -89,7 +89,7 @@ export const useActionBuilderStore = create<ActionBuilderState>((set, get) => ({
         ...(data as Record<string, unknown>),
         nodeType: type, // Store our NodeType in data
         id,
-      } as ActionNodeData,
+      },
     };
     set({
       nodes: [...get().nodes, newNode],

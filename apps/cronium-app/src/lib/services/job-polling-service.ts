@@ -143,7 +143,7 @@ export async function waitForJobCompletion(
         // Build result
         const result: JobResult = {
           success,
-          status: job.status as JobStatus,
+          status: job.status,
           output: execution?.output ?? log?.output ?? undefined,
           error: execution?.error ?? log?.error ?? job.lastError ?? undefined,
           scriptOutput,

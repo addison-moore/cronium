@@ -183,7 +183,7 @@ export class ScriptScheduler {
         `Scheduling event ${String(typedRefreshedScript.id)} (${String(typedRefreshedScript.name ?? "")})`,
       );
       console.log(
-        `Script status: ${String(typedRefreshedScript.status ?? "")}, Start time: ${typedRefreshedScript.startTime ? new Date(typedRefreshedScript.startTime as string | number | Date).toISOString() : "Not set"}`,
+        `Script status: ${String(typedRefreshedScript.status ?? "")}, Start time: ${typedRefreshedScript.startTime ? new Date(typedRefreshedScript.startTime).toISOString() : "Not set"}`,
       );
 
       // Check if event has a start time in the future

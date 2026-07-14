@@ -168,7 +168,7 @@ export default function WorkflowDetailsForm({
           userId: updatedWorkflow.userId,
           webhookKey: updatedWorkflow.webhookKey,
           runLocation: updatedWorkflow.runLocation,
-        } as Workflow);
+        });
         toast({
           title: "Success",
           description: "Workflow updated successfully",

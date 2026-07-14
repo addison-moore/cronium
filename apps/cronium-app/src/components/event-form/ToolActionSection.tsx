@@ -508,10 +508,7 @@ export default function ToolActionSection({
         apiProps.body = parameters.body as string | Record<string, unknown>;
       if (parameters.authType)
         apiProps.authType = parameters.authType as
-          | "none"
-          | "api_key"
-          | "bearer"
-          | "basic";
+          "none" | "api_key" | "bearer" | "basic";
       if (parameters.timeout) apiProps.timeout = parameters.timeout as number;
 
       return <ApiRequestPreview {...apiProps} />;

@@ -96,7 +96,7 @@ export async function executeHttpRequest(
       data: {
         status: response.status,
         statusText: response.statusText,
-        headers: response.headers as Record<string, unknown>,
+        headers: response.headers,
         body: response.data as unknown,
       },
     };

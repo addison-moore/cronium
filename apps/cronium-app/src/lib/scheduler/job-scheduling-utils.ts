@@ -24,9 +24,7 @@ export function calculateNextExecutionTime(
     }
 
     // For simple schedules, calculate based on last run
-    const lastRun = event.lastRunAt
-      ? new Date(event.lastRunAt as string | number | Date)
-      : new Date();
+    const lastRun = event.lastRunAt ? new Date(event.lastRunAt) : new Date();
     const now = new Date();
 
     // Calculate next run based on schedule unit and number

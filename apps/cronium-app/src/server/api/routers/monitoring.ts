@@ -697,11 +697,7 @@ export const monitoringRouter = createTRPCRouter({
 
               analytics.data = Object.entries(eventGroups).map(
                 ([name, stats]) => {
-                  const typedStats = stats as {
-                    count: number;
-                    success: number;
-                    failure: number;
-                  };
+                  const typedStats = stats;
                   return {
                     label: name,
                     value: typedStats.count,

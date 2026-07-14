@@ -506,7 +506,7 @@ export const logsRouter = createTRPCRouter({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to perform bulk operation",
-          cause: error as Error,
+          cause: error,
         });
       }
     }),

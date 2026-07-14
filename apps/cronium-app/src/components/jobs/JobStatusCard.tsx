@@ -61,11 +61,7 @@ export function JobStatusCard({ job }: JobStatusCardProps) {
           <Badge
             variant={
               config.color as
-                | "secondary"
-                | "default"
-                | "warning"
-                | "success"
-                | "destructive"
+                "secondary" | "default" | "warning" | "success" | "destructive"
             }
           >
             <Icon className="mr-1 h-3 w-3" />

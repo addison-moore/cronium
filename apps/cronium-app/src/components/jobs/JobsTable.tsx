@@ -136,10 +136,7 @@ export function JobsTable({ jobs }: JobsTableProps) {
                 <Badge
                   variant={
                     priority.color as
-                      | "secondary"
-                      | "default"
-                      | "warning"
-                      | "destructive"
+                      "secondary" | "default" | "warning" | "destructive"
                   }
                 >
                   {priority.label}

@@ -24,7 +24,7 @@ function encryptSecret(value: string): string {
 function parseEncrypted(stored: string): EncryptedData | null {
   try {
     const o = JSON.parse(stored) as Partial<EncryptedData>;
-    if (o && o.encrypted && o.iv && o.authTag && o.keyDerivation) {
+    if (o?.encrypted && o.iv && o.authTag && o.keyDerivation) {
       return o as EncryptedData;
     }
   } catch {

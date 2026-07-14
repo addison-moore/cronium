@@ -179,8 +179,7 @@ export default function EditWorkflowPage() {
 
       // Convert workflow connections to canvas format
       const typedConnections = workflowDetails?.connections as
-        | WorkflowConnection[]
-        | undefined;
+        WorkflowConnection[] | undefined;
       const edges: Edge[] = (typedConnections ?? []).map((conn) => ({
         id: `edge-${String(conn.id)}`,
         source: `node-${String(conn.sourceNodeId)}`,
@@ -295,9 +294,7 @@ export default function EditWorkflowPage() {
         id: workflowId,
         ...workflowValues,
         scheduleUnit: workflowValues.scheduleUnit as
-          | TimeUnit
-          | null
-          | undefined,
+          TimeUnit | null | undefined,
         nodes: transformedNodes,
         edges: transformedEdges,
       });

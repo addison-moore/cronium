@@ -107,9 +107,7 @@ export class WebhookRouter {
 
       // Check rate limit
       const rateLimit = webhook.rateLimit as
-        | { requests?: number; window?: number }
-        | null
-        | undefined;
+        { requests?: number; window?: number } | null | undefined;
       const rateLimitResult = await this.webhookSecurity.checkRateLimit(
         `webhook:${webhook.id}`,
         rateLimit?.requests ?? 100,

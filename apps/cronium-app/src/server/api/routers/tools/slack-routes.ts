@@ -58,7 +58,7 @@ async function getSlackTool(userId: string, toolId: number) {
       parsedCredentials =
         typeof tool.credentials === "string"
           ? (JSON.parse(tool.credentials) as Record<string, unknown>)
-          : (tool.credentials as Record<string, unknown>);
+          : tool.credentials;
     } catch {
       parsedCredentials = {};
     }

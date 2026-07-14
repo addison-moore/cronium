@@ -54,8 +54,7 @@ export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
               {job.metadata &&
               typeof job.metadata === "object" &&
               job.metadata !== null &&
-              Object.keys(job.metadata as Record<string, unknown>).length >
-                0 ? (
+              Object.keys(job.metadata).length > 0 ? (
                 <Card className="p-6">
                   <h3 className="mb-4 text-lg font-medium">Job Metadata</h3>
                   <pre className="bg-muted overflow-auto rounded-md p-4">

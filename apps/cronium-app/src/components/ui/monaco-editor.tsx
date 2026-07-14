@@ -44,7 +44,7 @@ export function MonacoEditor({
   defaultValue = "",
   value,
   onChange,
-  language = "javascript" as EditorLanguage,
+  language = "javascript",
   height = "400px",
   readOnly = false,
   className = "",
@@ -233,7 +233,7 @@ export function MonacoEditor({
 
   const defaultSettings: EditorSettings = {
     fontSize: 14,
-    theme: "vs-dark" as EditorTheme,
+    theme: "vs-dark",
     wordWrap: true,
     minimap: false,
     lineNumbers: true,

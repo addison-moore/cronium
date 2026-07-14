@@ -67,8 +67,7 @@ async function clearEventLogs(eventId: number) {
       sql`SELECT COUNT(*) FROM logs WHERE event_id = ${eventId}`,
     );
     const logCountResult = logCountQuery.rows?.[0] as
-      | { count?: string }
-      | undefined;
+      { count?: string } | undefined;
     const logCount = parseInt(logCountResult?.count ?? "0", 10);
 
     if (logCount === 0) {

@@ -50,7 +50,7 @@ function isValidEventsData(
     typeof data === "object" &&
     data !== null &&
     "events" in data &&
-    Array.isArray((data as { events: unknown }).events)
+    Array.isArray(data.events)
   );
 }
 
@@ -62,7 +62,7 @@ function isValidServersData(
     typeof data === "object" &&
     data !== null &&
     "servers" in data &&
-    Array.isArray((data as { servers: unknown }).servers)
+    Array.isArray(data.servers)
   );
 }
 
@@ -208,7 +208,7 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
         typeof dbEvent.scheduleNumber === "number" ? dbEvent.scheduleNumber : 1,
       scheduleUnit:
         typeof dbEvent.scheduleUnit === "string"
-          ? (dbEvent.scheduleUnit as TimeUnit)
+          ? dbEvent.scheduleUnit
           : TimeUnit.MINUTES,
       customSchedule:
         typeof dbEvent.customSchedule === "string"
@@ -237,7 +237,7 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
       serverId: typeof dbEvent.serverId === "number" ? dbEvent.serverId : null,
       timeoutUnit:
         typeof dbEvent.timeoutUnit === "string"
-          ? (dbEvent.timeoutUnit as TimeUnit)
+          ? dbEvent.timeoutUnit
           : TimeUnit.SECONDS,
     };
 

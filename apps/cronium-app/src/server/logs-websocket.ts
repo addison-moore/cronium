@@ -185,8 +185,7 @@ export class LogsWebSocketHandler {
           update.startTime,
         completedAt:
           ((update as Record<string, unknown>).completedAt as
-            | Date
-            | undefined) ?? update.endTime,
+            Date | undefined) ?? update.endTime,
         duration: update.duration,
         executionDuration: update.executionDuration,
         setupDuration: update.setupDuration,
@@ -194,9 +193,7 @@ export class LogsWebSocketHandler {
       // Include execution data if available
       execution: {
         exitCode: (update as Record<string, unknown>).exitCode as
-          | number
-          | null
-          | undefined,
+          number | null | undefined,
         status: update.status,
       },
       // Include output data

@@ -356,7 +356,7 @@ export async function processEvent(
             actionId: actionId,
             toolId: conditional_event.toolId,
             parameters: actionParameters,
-          } as ToolActionConfig),
+          }),
         };
 
         // Execute the tool action

@@ -178,7 +178,7 @@ export const eventsRouter = createTRPCRouter({
         if (input.onSuccessActions && input.onSuccessActions.length > 0) {
           for (const conditionalAction of input.onSuccessActions) {
             await storage.createAction({
-              type: conditionalAction.action as ConditionalActionType, // Use action, not type
+              type: conditionalAction.action, // Use action, not type
               successEventId: event.id, // Link to parent event
               targetEventId: conditionalAction.details?.targetEventId ?? null,
               toolId: conditionalAction.details?.toolId ?? null,
@@ -192,7 +192,7 @@ export const eventsRouter = createTRPCRouter({
         if (input.onFailActions && input.onFailActions.length > 0) {
           for (const conditionalAction of input.onFailActions) {
             await storage.createAction({
-              type: conditionalAction.action as ConditionalActionType, // Use action, not type
+              type: conditionalAction.action, // Use action, not type
               failEventId: event.id, // Link to parent event
               targetEventId: conditionalAction.details?.targetEventId ?? null,
               toolId: conditionalAction.details?.toolId ?? null,
@@ -206,7 +206,7 @@ export const eventsRouter = createTRPCRouter({
         if (input.onAlwaysActions && input.onAlwaysActions.length > 0) {
           for (const conditionalAction of input.onAlwaysActions) {
             await storage.createAction({
-              type: conditionalAction.action as ConditionalActionType,
+              type: conditionalAction.action,
               alwaysEventId: event.id, // Link to parent event
               targetEventId: conditionalAction.details?.targetEventId ?? null,
               toolId: conditionalAction.details?.toolId ?? null,
@@ -220,7 +220,7 @@ export const eventsRouter = createTRPCRouter({
         if (input.onConditionActions && input.onConditionActions.length > 0) {
           for (const conditionalAction of input.onConditionActions) {
             await storage.createAction({
-              type: conditionalAction.action as ConditionalActionType,
+              type: conditionalAction.action,
               conditionEventId: event.id, // Link to parent event
               targetEventId: conditionalAction.details?.targetEventId ?? null,
               toolId: conditionalAction.details?.toolId ?? null,
@@ -372,7 +372,7 @@ export const eventsRouter = createTRPCRouter({
           if (onSuccessActions && onSuccessActions.length > 0) {
             for (const conditionalAction of onSuccessActions) {
               await storage.createAction({
-                type: conditionalAction.action as ConditionalActionType, // Use action, not type
+                type: conditionalAction.action, // Use action, not type
                 successEventId: id, // Link to parent event
                 targetEventId: conditionalAction.details?.targetEventId ?? null,
                 toolId: conditionalAction.details?.toolId ?? null,
@@ -387,7 +387,7 @@ export const eventsRouter = createTRPCRouter({
           if (onFailActions && onFailActions.length > 0) {
             for (const conditionalAction of onFailActions) {
               await storage.createAction({
-                type: conditionalAction.action as ConditionalActionType, // Use action, not type
+                type: conditionalAction.action, // Use action, not type
                 failEventId: id, // Link to parent event
                 targetEventId: conditionalAction.details?.targetEventId ?? null,
                 toolId: conditionalAction.details?.toolId ?? null,
@@ -402,7 +402,7 @@ export const eventsRouter = createTRPCRouter({
           if (onAlwaysActions && onAlwaysActions.length > 0) {
             for (const conditionalAction of onAlwaysActions) {
               await storage.createAction({
-                type: conditionalAction.action as ConditionalActionType,
+                type: conditionalAction.action,
                 alwaysEventId: id, // Link to parent event
                 targetEventId: conditionalAction.details?.targetEventId ?? null,
                 toolId: conditionalAction.details?.toolId ?? null,
@@ -417,7 +417,7 @@ export const eventsRouter = createTRPCRouter({
           if (onConditionActions && onConditionActions.length > 0) {
             for (const conditionalAction of onConditionActions) {
               await storage.createAction({
-                type: conditionalAction.action as ConditionalActionType,
+                type: conditionalAction.action,
                 conditionEventId: id, // Link to parent event
                 targetEventId: conditionalAction.details?.targetEventId ?? null,
                 toolId: conditionalAction.details?.toolId ?? null,

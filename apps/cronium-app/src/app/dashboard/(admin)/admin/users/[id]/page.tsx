@@ -265,9 +265,7 @@ export default function UserDetailsPage() {
                 <span>
                   Created:{" "}
                   {userData.createdAt
-                    ? new Date(
-                        userData.createdAt as string | number | Date,
-                      ).toLocaleDateString()
+                    ? new Date(userData.createdAt).toLocaleDateString()
                     : "Unknown"}
                 </span>
               </div>
@@ -276,9 +274,7 @@ export default function UserDetailsPage() {
                 <span>
                   Last Login:{" "}
                   {userData.lastLogin
-                    ? new Date(
-                        userData.lastLogin as string | number | Date,
-                      ).toLocaleDateString()
+                    ? new Date(userData.lastLogin).toLocaleDateString()
                     : "Never"}
                 </span>
               </div>

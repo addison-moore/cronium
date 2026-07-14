@@ -193,8 +193,7 @@ export default function AdminPage() {
 
   const users = usersData?.users ?? [];
   // Extract settings from the response wrapper
-  const settings =
-    (systemSettings?.data as SystemSettings) ?? ({} as SystemSettings);
+  const settings = (systemSettings?.data as SystemSettings) ?? {};
 
   // Fetch roles using tRPC
   const {

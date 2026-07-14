@@ -863,10 +863,7 @@ export default function ConditionalActionsSection({
                 value={newEventType}
                 onValueChange={(
                   value:
-                    | "ON_SUCCESS"
-                    | "ON_FAILURE"
-                    | "ALWAYS"
-                    | "ON_CONDITION",
+                    "ON_SUCCESS" | "ON_FAILURE" | "ALWAYS" | "ON_CONDITION",
                 ) => setNewEventType(value)}
               >
                 <SelectTrigger>

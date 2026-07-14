@@ -87,7 +87,7 @@ export const t = initTRPC.context<typeof createTRPCContext>().create({
         // Include stack trace and additional details only in development
         ...(isDev && {
           stack: error.stack,
-          cause: error.cause as unknown,
+          cause: error.cause,
         }),
       },
       // In production, provide generic messages for server errors

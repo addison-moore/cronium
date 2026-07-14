@@ -45,12 +45,7 @@ export function StatusBadgeRenderer({
 }: StatusBadgeRendererProps) {
   // Get the appropriate status variant and icon based on type and status
   let statusType:
-    | "success"
-    | "warning"
-    | "failure"
-    | "running"
-    | "info"
-    | "pending" = "info";
+    "success" | "warning" | "failure" | "running" | "info" | "pending" = "info";
   let displayLabel = status;
   let icon = null;
 

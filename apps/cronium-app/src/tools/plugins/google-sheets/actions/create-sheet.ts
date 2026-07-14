@@ -263,6 +263,6 @@ function replaceVariables(
       return JSON.stringify(value);
     }
     // At this point, we know value is a primitive type (string, number, boolean, etc.)
-    return String(value as string | number | boolean);
+    return String(value);
   });
 }

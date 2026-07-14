@@ -370,8 +370,7 @@ export type SafeTRPCHandler<TInput, TOutput> = (
  * Enhanced API response type with error handling
  */
 export type ApiResponse<T> =
-  | { success: true; data: T }
-  | { success: false; error: string; code?: string };
+  { success: true; data: T } | { success: false; error: string; code?: string };
 
 /**
  * Create safe API response

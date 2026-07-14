@@ -1093,12 +1093,6 @@ module.exports = croniumInstance;`;
         stdout: "",
         stderr: errorMessage,
         isTimeout,
-      } as {
-        stdout: string;
-        stderr: string;
-        scriptOutput?: unknown;
-        condition?: boolean;
-        isTimeout?: boolean;
       };
     } finally {
       // Always attempt cleanup of working directory if it was created

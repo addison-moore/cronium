@@ -114,8 +114,8 @@ export default function Terminal({ serverId, serverName }: TerminalProps) {
         term.loadAddon(unicode11Addon);
         term.loadAddon(webLinksAddon);
 
-        termRef.current = term as Terminal;
-        fitAddonRef.current = fitAddon as FitAddon;
+        termRef.current = term;
+        fitAddonRef.current = fitAddon;
 
         // Open terminal
         term.open(terminalRef.current!);

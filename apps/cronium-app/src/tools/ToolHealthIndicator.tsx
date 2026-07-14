@@ -179,10 +179,7 @@ export function ToolHealthBadge({
   }, [toolId]);
 
   const getVariant = ():
-    | "default"
-    | "destructive"
-    | "secondary"
-    | "outline" => {
+    "default" | "destructive" | "secondary" | "outline" => {
     switch (status) {
       case "healthy":
         return "default";

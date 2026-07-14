@@ -210,7 +210,7 @@ async function getUserTools(
         }
       } else {
         // Already an object
-        credentials = rawCredentials as Record<string, unknown>;
+        credentials = rawCredentials;
       }
 
       // Type assertion for properties that might not exist in older records
@@ -704,7 +704,7 @@ export const toolsRouter = createTRPCRouter({
           credentials:
             typeof newTool.credentials === "string"
               ? (JSON.parse(newTool.credentials) as Record<string, unknown>)
-              : (newTool.credentials as Record<string, unknown>),
+              : newTool.credentials,
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -880,7 +880,7 @@ export const toolsRouter = createTRPCRouter({
         if (typeof rawCredentials === "string") {
           credentials = JSON.parse(rawCredentials) as Record<string, unknown>;
         } else {
-          credentials = rawCredentials as Record<string, unknown>;
+          credentials = rawCredentials;
         }
         if (updatedTool.encrypted && credentialEncryption.isAvailable()) {
           try {

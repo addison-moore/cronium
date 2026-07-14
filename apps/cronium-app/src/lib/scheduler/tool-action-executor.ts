@@ -500,7 +500,7 @@ export async function executeToolAction(
         toolType: toolActionConfig.toolType,
         actionType: action.actionType,
         actionId: action.id,
-        parameters: redactSecrets(mergedParameters) as Record<string, unknown>,
+        parameters: redactSecrets(mergedParameters),
         result: redactSecrets(formattedOutput),
         status: "SUCCESS",
         executionTime,
@@ -528,9 +528,7 @@ export async function executeToolAction(
 
     // Categorize the error
     const parsedConfig: Partial<ToolActionConfig> =
-      toolActionConfig ??
-      ((parseToolActionConfig(event.toolActionConfig) ??
-        {}) as Partial<ToolActionConfig>);
+      toolActionConfig ?? parseToolActionConfig(event.toolActionConfig) ?? {};
     const categorizedError = ErrorCategorizer.categorize(
       errorObj,
       parsedConfig.toolType ?? "unknown",
@@ -576,10 +574,7 @@ export async function executeToolAction(
         toolType: parsedConfig.toolType ?? "unknown",
         actionType: "unknown",
         actionId: parsedConfig.actionId ?? "unknown",
-        parameters: (redactSecrets(parsedConfig.parameters) ?? {}) as Record<
-          string,
-          unknown
-        >,
+        parameters: redactSecrets(parsedConfig.parameters) ?? {},
         result: null,
         status: "FAILURE",
         executionTime: Date.now() - startTime,

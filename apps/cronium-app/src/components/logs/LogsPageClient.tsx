@@ -162,29 +162,26 @@ export default function LogsPageClient() {
       });
 
       // Convert lightweight workflows to Workflow type with only required fields
-      return data.workflows.map(
-        (workflow) =>
-          ({
-            id: workflow.id,
-            name: workflow.name,
-            // Set all required fields with default values
-            userId: "",
-            description: null,
-            triggerType: WorkflowTriggerType.MANUAL,
-            webhookKey: null,
-            scheduleNumber: null,
-            scheduleUnit: null,
-            customSchedule: null,
-            runLocation: RunLocation.LOCAL,
-            overrideEventServers: false,
-            overrideServerIds: null,
-            status: EventStatus.DRAFT,
-            shared: false,
-            tags: [],
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          }) as Workflow,
-      );
+      return data.workflows.map((workflow) => ({
+        id: workflow.id,
+        name: workflow.name,
+        // Set all required fields with default values
+        userId: "",
+        description: null,
+        triggerType: WorkflowTriggerType.MANUAL,
+        webhookKey: null,
+        scheduleNumber: null,
+        scheduleUnit: null,
+        customSchedule: null,
+        runLocation: RunLocation.LOCAL,
+        overrideEventServers: false,
+        overrideServerIds: null,
+        status: EventStatus.DRAFT,
+        shared: false,
+        tags: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }));
     } catch (error) {
       console.error("Error fetching workflows:", error);
       toast({

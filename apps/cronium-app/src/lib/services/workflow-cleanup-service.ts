@@ -259,7 +259,7 @@ export class WorkflowCleanupService {
       await db
         .update(executions)
         .set({
-          status: JobStatus.FAILED as JobStatus,
+          status: JobStatus.FAILED,
           completedAt: now,
           error: "Job execution timed out",
           exitCode: -1,

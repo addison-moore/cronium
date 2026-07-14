@@ -355,10 +355,7 @@ export const SlackPluginTrpc: ToolPlugin = {
       if (username) params.username = username;
       if (iconEmoji) params.iconEmoji = iconEmoji;
 
-      const result = (await typedClient.tools.slack.send.mutate(params)) as {
-        success: boolean;
-        message?: string;
-      };
+      const result = await typedClient.tools.slack.send.mutate(params);
 
       return {
         success: result.success,
@@ -440,9 +437,9 @@ export const SlackPluginTrpc: ToolPlugin = {
           message: result.message ?? "Test message sent successfully",
         };
       } else {
-        const result = (await typedClient.tools.slack.testConnection.mutate({
+        const result = await typedClient.tools.slack.testConnection.mutate({
           toolId: id,
-        })) as { success: boolean; message?: string; details?: unknown };
+        });
 
         return {
           success: result.success,

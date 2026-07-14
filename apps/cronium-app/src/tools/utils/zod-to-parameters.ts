@@ -71,7 +71,7 @@ export function zodToParameters(
   ) {
     const innerSchema = currentDef.schema ?? unwrappedSchema._def?.schema;
     if (!innerSchema) break;
-    unwrappedSchema = innerSchema as ZodSchemaWithDef;
+    unwrappedSchema = innerSchema;
     currentDef = unwrappedSchema._def;
   }
 
@@ -121,12 +121,12 @@ function parseZodType(
         (def.unwrap ? def.unwrap() : undefined) ??
         (baseSchema.unwrap ? baseSchema.unwrap() : undefined);
       if (!innerType) break;
-      baseSchema = innerType as ZodSchemaWithDef;
+      baseSchema = innerType;
     } else if (type === "default" || type === "ZodDefault") {
       if (def.defaultValue !== undefined) {
         defaultValue =
           typeof def.defaultValue === "function"
-            ? (def.defaultValue as () => unknown)()
+            ? def.defaultValue()
             : def.defaultValue;
       }
       const innerType =
@@ -134,7 +134,7 @@ function parseZodType(
         (def.unwrap ? def.unwrap() : undefined) ??
         (baseSchema.unwrap ? baseSchema.unwrap() : undefined);
       if (!innerType) break;
-      baseSchema = innerType as ZodSchemaWithDef;
+      baseSchema = innerType;
     } else if (type === "nullable" || type === "ZodNullable") {
       required = false;
       const innerType =
@@ -142,7 +142,7 @@ function parseZodType(
         (def.unwrap ? def.unwrap() : undefined) ??
         (baseSchema.unwrap ? baseSchema.unwrap() : undefined);
       if (!innerType) break;
-      baseSchema = innerType as ZodSchemaWithDef;
+      baseSchema = innerType;
     } else {
       break;
     }

@@ -369,9 +369,7 @@ export async function POST(request: NextRequest) {
       scriptData.httpHeaders = null;
     }
 
-    const script = await storage.createScript(
-      scriptData as Parameters<typeof storage.createScript>[0],
-    );
+    const script = await storage.createScript(scriptData);
 
     // Add environment variables if provided
     if (data.envVars && data.envVars.length > 0) {
