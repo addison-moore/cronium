@@ -30,6 +30,33 @@ export interface JobResult {
 }
 
 /**
+ * Extract the Unified I/O output + branch condition a workflow reads from a
+ * completed job's `result`. `scriptOutput` is the canonical field (the
+ * completion route promotes `cronium.output()` data into it); `result.output`
+ * is a legacy fallback holding the raw published value directly (no `.data`
+ * wrapper).
+ */
+function extractScriptOutputAndCondition(jobResult: unknown): {
+  scriptOutput: unknown;
+  condition: boolean | undefined;
+} {
+  let scriptOutput: unknown;
+  let condition: boolean | undefined;
+  if (jobResult && typeof jobResult === "object") {
+    const result = jobResult as Record<string, unknown>;
+    if ("scriptOutput" in result) {
+      scriptOutput = result.scriptOutput;
+    } else if ("output" in result && result.output !== undefined) {
+      scriptOutput = result.output;
+    }
+    if ("condition" in result) {
+      condition = result.condition as boolean;
+    }
+  }
+  return { scriptOutput, condition };
+}
+
+/**
  * Wait for a job to complete and return its results
  */
 export async function waitForJobCompletion(
@@ -116,27 +143,9 @@ export async function waitForJobCompletion(
         }
 
         // Extract script output and condition from job result
-        let scriptOutput: unknown;
-        let condition: boolean | undefined;
-
-        if (job.result && typeof job.result === "object") {
-          const result = job.result as Record<string, unknown>;
-
-          // scriptOutput is the canonical field (the completion route promotes
-          // cronium.output() data into it). result.output is a legacy fallback:
-          // the runtime /output route stores the raw published value there, so
-          // read it directly rather than assuming a nested `.data` wrapper.
-          if ("scriptOutput" in result) {
-            scriptOutput = result.scriptOutput;
-          } else if ("output" in result && result.output !== undefined) {
-            scriptOutput = result.output;
-          }
-
-          // Check for condition
-          if ("condition" in result) {
-            condition = result.condition as boolean;
-          }
-        }
+        const { scriptOutput, condition } = extractScriptOutputAndCondition(
+          job.result,
+        );
 
         // Determine success based on job status
         const success = job.status === JobStatus.COMPLETED;
@@ -222,22 +231,9 @@ export async function getJobResult(jobId: string): Promise<JobResult | null> {
     }
 
     // Extract script output and condition
-    let scriptOutput: unknown;
-    let condition: boolean | undefined;
-
-    if (job.result && typeof job.result === "object") {
-      const result = job.result as Record<string, unknown>;
-
-      if ("scriptOutput" in result) {
-        scriptOutput = result.scriptOutput;
-      } else if ("output" in result && result.output !== undefined) {
-        scriptOutput = result.output;
-      }
-
-      if ("condition" in result) {
-        condition = result.condition as boolean;
-      }
-    }
+    const { scriptOutput, condition } = extractScriptOutputAndCondition(
+      job.result,
+    );
 
     const success = job.status === JobStatus.COMPLETED;
 
