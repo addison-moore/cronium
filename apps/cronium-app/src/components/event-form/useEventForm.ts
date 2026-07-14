@@ -188,42 +188,48 @@ function eventFormReducer<T extends EventType>(
         isDirty: false,
       };
 
-    case "ADD_ENV_VAR":
+    // The env-var cases below update `envVars` via a `Partial<EventFormData<T>>`
+    // spread (the same shape SET_MULTIPLE_FIELDS uses). Overriding a known field
+    // inline instead — `{ ...state.data, envVars: [...] }` — makes TS check the
+    // literal against every member of the EventFormData discriminated union under
+    // exactOptionalPropertyTypes and reject it; spreading a Partial sidesteps
+    // that without an `as unknown as` cast.
+    case "ADD_ENV_VAR": {
+      const patch = {
+        envVars: [...state.data.envVars, { ...action.envVar, id: Date.now() }],
+      } as Partial<EventFormData<T>>;
       return {
         ...state,
-        data: {
-          ...state.data,
-          envVars: [
-            ...state.data.envVars,
-            { ...action.envVar, id: Date.now() },
-          ],
-        },
+        data: { ...state.data, ...patch },
         isDirty: true,
       };
+    }
 
-    case "REMOVE_ENV_VAR":
+    case "REMOVE_ENV_VAR": {
+      const patch = {
+        envVars: state.data.envVars.filter(
+          (_, index) => index !== action.index,
+        ),
+      } as Partial<EventFormData<T>>;
       return {
         ...state,
-        data: {
-          ...state.data,
-          envVars: state.data.envVars.filter(
-            (_, index) => index !== action.index,
-          ),
-        },
+        data: { ...state.data, ...patch },
         isDirty: true,
       };
+    }
 
-    case "UPDATE_ENV_VAR":
+    case "UPDATE_ENV_VAR": {
+      const patch = {
+        envVars: state.data.envVars.map((envVar, index) =>
+          index === action.index ? { ...envVar, ...action.envVar } : envVar,
+        ),
+      } as Partial<EventFormData<T>>;
       return {
         ...state,
-        data: {
-          ...state.data,
-          envVars: state.data.envVars.map((envVar, index) =>
-            index === action.index ? { ...envVar, ...action.envVar } : envVar,
-          ),
-        },
+        data: { ...state.data, ...patch },
         isDirty: true,
       };
+    }
 
     case "ADD_CONDITIONAL_ACTION":
       return {

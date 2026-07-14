@@ -259,10 +259,16 @@ function replaceVariables(
   return text.replace(/\{\{(\w+)\}\}/g, (match, key: string) => {
     const value = variables.get(key);
     if (value === null || value === undefined) return match;
-    if (typeof value === "object") {
-      return JSON.stringify(value);
+    if (typeof value === "string") return value;
+    if (typeof value === "object") return JSON.stringify(value);
+    if (
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      typeof value === "bigint"
+    ) {
+      return String(value);
     }
-    // At this point, we know value is a primitive type (string, number, boolean, etc.)
-    return String(value);
+    // Exotic types (symbol/function) have no useful text form; leave as-is.
+    return match;
   });
 }
