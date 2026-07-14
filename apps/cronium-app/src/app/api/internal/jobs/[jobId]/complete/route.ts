@@ -1,7 +1,9 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { jobService } from "@/lib/services/job-service";
-import { JobStatus } from "@shared/schema";
+import { JobStatus, jobs } from "@shared/schema";
+import { db } from "@/server/db";
+import { eq } from "drizzle-orm";
 
 // Mark job as completed
 export async function POST(
@@ -126,10 +128,33 @@ export async function POST(
       updateData.metrics = body.metrics;
     }
 
+    // Resolve the structured output for workflow chaining. Container scripts
+    // publish data via cronium.output() → the runtime /output route, which stores
+    // it on job.result.output BEFORE this completion runs. The orchestrator's
+    // completion body does not echo it, and updateJobStatus replaces `result`, so
+    // read the already-stored output here and promote it to scriptOutput (the one
+    // field workflow chaining reads). An explicit body.scriptOutput wins.
+    let scriptOutput: unknown = body.scriptOutput;
+    if (scriptOutput === undefined) {
+      const [existing] = await db
+        .select({ result: jobs.result })
+        .from(jobs)
+        .where(eq(jobs.id, jobId))
+        .limit(1);
+      const existingResult = existing?.result as Record<string, unknown> | null;
+      if (
+        existingResult &&
+        "output" in existingResult &&
+        existingResult.output !== undefined
+      ) {
+        scriptOutput = existingResult.output;
+      }
+    }
+
     // Store scriptOutput and condition in the result field
     const result: Record<string, unknown> = {};
-    if (body.scriptOutput !== undefined) {
-      result.scriptOutput = body.scriptOutput;
+    if (scriptOutput !== undefined) {
+      result.scriptOutput = scriptOutput;
     }
     if (body.condition !== undefined) {
       result.condition = body.condition;

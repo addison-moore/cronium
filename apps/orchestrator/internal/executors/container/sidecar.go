@@ -239,7 +239,17 @@ func (sm *SidecarManager) generateExecutionToken(job *types.Job) (string, error)
 		}
 	}
 
-	return generateJWT(job.ID, sm.executor.config.Runtime.JWTSecret, userID, eventID)
+	// The JWT claim must carry the same executionID exported as
+	// CRONIUM_EXECUTION_ID and used in the runtime API URL, or the runtime
+	// handler rejects cronium.output()/input() with 403.
+	sm.executor.mu.RLock()
+	executionID := sm.executor.executionIDs[job.ID]
+	sm.executor.mu.RUnlock()
+	if executionID == "" {
+		executionID = job.ID
+	}
+
+	return generateJWT(executionID, job.ID, sm.executor.config.Runtime.JWTSecret, userID, eventID)
 }
 
 // storeExecutionToken stores the token for use by the main container

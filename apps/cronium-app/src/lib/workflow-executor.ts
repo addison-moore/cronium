@@ -981,10 +981,14 @@ export class WorkflowExecutor {
       return { ...initialInputData };
     }
 
-    // Return the latest output directly - this becomes the input for cronium.input()
-    return typeof latestOutput === "object" && latestOutput !== null
-      ? (latestOutput as Record<string, unknown>)
-      : {};
+    // This becomes the next step's cronium.input(). Objects/arrays pass through
+    // as-is; a scalar (string/number/boolean, e.g. cronium.output("done")) is
+    // wrapped so it survives the object-typed input channel instead of being
+    // dropped — the next step reads it as cronium.input().value.
+    if (typeof latestOutput === "object" && latestOutput !== null) {
+      return latestOutput as Record<string, unknown>;
+    }
+    return { value: latestOutput };
   }
 
   async runWorkflowImmediately(

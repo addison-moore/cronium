@@ -17,15 +17,18 @@ type ExecutionClaims struct {
 	jwt.RegisteredClaims
 }
 
-// generateJWT generates a JWT token for the execution
-func generateJWT(jobID string, secret string, userID string, eventID string) (string, error) {
+// generateJWT generates a JWT token for the execution. executionID must be the
+// same id exported to the container as CRONIUM_EXECUTION_ID and used in the
+// runtime API URL, or the runtime handler rejects calls with "execution ID
+// mismatch" (403).
+func generateJWT(executionID string, jobID string, secret string, userID string, eventID string) (string, error) {
 	if secret == "" {
 		return "", fmt.Errorf("JWT secret not configured")
 	}
 
 	// Create claims
 	claims := ExecutionClaims{
-		ExecutionID: jobID, // Using job ID as execution ID
+		ExecutionID: executionID,
 		UserID:      userID,
 		EventID:     eventID,
 		JobID:       jobID,

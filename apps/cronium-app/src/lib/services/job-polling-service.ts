@@ -121,14 +121,14 @@ export async function waitForJobCompletion(
         if (job.result && typeof job.result === "object") {
           const result = job.result as Record<string, unknown>;
 
-          // Check for script output in various locations
+          // scriptOutput is the canonical field (the completion route promotes
+          // cronium.output() data into it). result.output is a legacy fallback:
+          // the runtime /output route stores the raw published value there, so
+          // read it directly rather than assuming a nested `.data` wrapper.
           if ("scriptOutput" in result) {
             scriptOutput = result.scriptOutput;
-          } else if ("output" in result && typeof result.output === "object") {
-            const outputData = result.output as Record<string, unknown>;
-            if ("data" in outputData) {
-              scriptOutput = outputData.data;
-            }
+          } else if ("output" in result && result.output !== undefined) {
+            scriptOutput = result.output;
           }
 
           // Check for condition
@@ -225,11 +225,8 @@ export async function getJobResult(jobId: string): Promise<JobResult | null> {
 
       if ("scriptOutput" in result) {
         scriptOutput = result.scriptOutput;
-      } else if ("output" in result && typeof result.output === "object") {
-        const outputData = result.output as Record<string, unknown>;
-        if ("data" in outputData) {
-          scriptOutput = outputData.data;
-        }
+      } else if ("output" in result && result.output !== undefined) {
+        scriptOutput = result.output;
       }
 
       if ("condition" in result) {

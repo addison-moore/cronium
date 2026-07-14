@@ -34,11 +34,12 @@ type Executor struct {
 	cleanup        *CleanupManager
 
 	// Track active containers and resources
-	mu         sync.RWMutex
-	containers map[string]string // jobID -> containerID
-	sidecars   map[string]string // jobID -> sidecarContainerID
-	networks   map[string]string // jobID -> networkID
-	tokens     map[string]string // jobID -> executionToken
+	mu           sync.RWMutex
+	containers   map[string]string // jobID -> containerID
+	sidecars     map[string]string // jobID -> sidecarContainerID
+	networks     map[string]string // jobID -> networkID
+	tokens       map[string]string // jobID -> execution JWT token
+	executionIDs map[string]string // jobID -> executionID (must match the JWT claim + CRONIUM_EXECUTION_ID)
 }
 
 // NewExecutor creates a new container executor
@@ -70,6 +71,7 @@ func NewExecutor(cfg config.ContainerConfig, apiClient *api.Client, log *logrus.
 		sidecars:      make(map[string]string),
 		networks:      make(map[string]string),
 		tokens:        make(map[string]string),
+		executionIDs:  make(map[string]string),
 	}
 
 	// Create sidecar manager
@@ -118,12 +120,14 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 	// Generate execution ID
 	executionID := fmt.Sprintf("exec_%s_%d", job.ID, time.Now().Unix())
 
-	// Store execution ID for later use
+	// Store execution ID for later use. This is the id the runtime sidecar's JWT
+	// claim and the CRONIUM_EXECUTION_ID env must both carry, or the runtime API
+	// rejects cronium.output()/input() with 403 (execution ID mismatch).
 	e.mu.Lock()
-	if e.tokens == nil {
-		e.tokens = make(map[string]string)
+	if e.executionIDs == nil {
+		e.executionIDs = make(map[string]string)
 	}
-	e.tokens[job.ID] = executionID
+	e.executionIDs[job.ID] = executionID
 	e.mu.Unlock()
 
 	go func() {
@@ -216,9 +220,10 @@ func (e *Executor) Cleanup(ctx context.Context, job *types.Job) error {
 		e.mu.Unlock()
 	}
 
-	// Clean up token
+	// Clean up token + execution ID
 	e.mu.Lock()
 	delete(e.tokens, job.ID)
+	delete(e.executionIDs, job.ID)
 	e.mu.Unlock()
 
 	// Return combined error if any
@@ -334,17 +339,24 @@ func (e *Executor) getImageForScript(scriptType types.ScriptType) string {
 	return "cronium/runner:bash-alpine"
 }
 
-// buildCommand builds the container command
+// buildCommand builds the container command.
+//
+// Each runtime image ships the cronium helper SDK but does not auto-load it, so
+// we prepend a loader that exposes `cronium` to the user's script without an
+// explicit import — matching the runner path and the documented no-import usage
+// (e.g. `cronium.output(...)`). Without this the script fails with
+// NameError/ReferenceError: cronium is not defined.
 func (e *Executor) buildCommand(script *types.Script) []string {
 	switch script.Type {
 	case types.ScriptTypeBash:
-		return []string{"/bin/bash", "-c", script.Content}
+		// cronium.sh is also auto-sourced via BASH_ENV; source explicitly for safety.
+		return []string{"/bin/bash", "-c", "source /usr/local/bin/cronium.sh 2>/dev/null || true\n" + script.Content}
 	case types.ScriptTypePython:
-		return []string{"python", "-c", script.Content}
+		return []string{"python", "-c", "import cronium\n" + script.Content}
 	case types.ScriptTypeNode:
-		return []string{"node", "-e", script.Content}
+		return []string{"node", "-e", "globalThis.cronium = require('cronium');\n" + script.Content}
 	default:
-		return []string{"/bin/bash", "-c", script.Content}
+		return []string{"/bin/bash", "-c", "source /usr/local/bin/cronium.sh 2>/dev/null || true\n" + script.Content}
 	}
 }
 
@@ -364,9 +376,10 @@ func (e *Executor) buildEnvironment(job *types.Job) []string {
 		token = "" // Continue without token (will fail auth)
 	}
 
-	// Get actual execution ID
+	// Get actual execution ID (kept in its own map so it is never clobbered by
+	// the JWT token, which the sidecar stores under e.tokens).
 	e.mu.RLock()
-	executionID := e.tokens[job.ID]
+	executionID := e.executionIDs[job.ID]
 	e.mu.RUnlock()
 	if executionID == "" {
 		// Fallback if not found
