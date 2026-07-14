@@ -1072,15 +1072,11 @@ export const toolsRouter = createTRPCRouter({
               ? Math.round((successCount / executionsToday) * 100)
               : 0,
           avgResponseTime: Math.round(totalExecutionTime),
-          byType: {
-            slack: targetTools.filter((t) => t.type.toLowerCase() === "slack")
-              .length,
-            discord: targetTools.filter(
-              (t) => t.type.toLowerCase() === "discord",
-            ).length,
-            email: targetTools.filter((t) => t.type.toLowerCase() === "email")
-              .length,
-          },
+          byType: targetTools.reduce<Record<string, number>>((acc, t) => {
+            const type = t.type.toLowerCase();
+            acc[type] = (acc[type] ?? 0) + 1;
+            return acc;
+          }, {}),
         };
 
         return stats;

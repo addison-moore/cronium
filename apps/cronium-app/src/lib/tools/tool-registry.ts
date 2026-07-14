@@ -41,9 +41,20 @@ function normalizeType(type: string): string {
 const BY_TYPE = new Map<string, ToolManifest>(
   MANIFESTS.map((m) => [m.type, m]),
 );
+// Action ids are the global routing key (stored events reference them by
+// string), so a collision would silently shadow one tool's action with
+// another's. Fail loudly at module load instead of at runtime.
 const ACTION_BY_ID = new Map<string, ToolAction>();
 for (const m of MANIFESTS) {
-  for (const action of m.actions) ACTION_BY_ID.set(action.id, action);
+  for (const action of m.actions) {
+    const existing = ACTION_BY_ID.get(action.id);
+    if (existing) {
+      throw new Error(
+        `Duplicate tool action id "${action.id}" (in "${m.type}" and an earlier manifest). Action ids must be globally unique.`,
+      );
+    }
+    ACTION_BY_ID.set(action.id, action);
+  }
 }
 
 export function getManifest(type: string): ToolManifest | undefined {
