@@ -27,7 +27,6 @@ import { googleSheetsActions } from "./actions";
 import { ToolHealthBadge } from "@/tools/ToolHealthIndicator";
 import { Badge } from "@cronium/ui";
 import { googleSheetsCredentialsSchema } from "./schemas";
-import { googleSheetsApiRoutes } from "./api-routes";
 import { GOOGLE_SHEETS_OAUTH } from "../oauth-config";
 import { trpc } from "@/lib/trpc";
 
@@ -320,8 +319,6 @@ export const GoogleSheetsPlugin: ToolPlugin = {
     Object.values(googleSheetsActions).filter(
       (action) => action.actionType === type,
     ),
-
-  apiRoutes: googleSheetsApiRoutes,
 
   async validate(
     credentials: Record<string, unknown>,

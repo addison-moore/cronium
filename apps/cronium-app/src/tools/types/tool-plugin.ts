@@ -103,8 +103,7 @@ export interface ConditionalActionConfig {
     messageLabel?: string; // Custom label for message field
     showSubject?: boolean; // Whether to show subject field
     icon?:
-      | LucideIcon
-      | React.ComponentType<{ size?: number; className?: string }>; // Icon to display in conditional actions UI
+      LucideIcon | React.ComponentType<{ size?: number; className?: string }>; // Icon to display in conditional actions UI
   };
 
   // Validation for conditional action parameters
@@ -134,13 +133,7 @@ export interface VisualFormConfig {
 export interface FormFieldConfig {
   name: string;
   type:
-    | "text"
-    | "number"
-    | "select"
-    | "textarea"
-    | "boolean"
-    | "array"
-    | "object";
+    "text" | "number" | "select" | "textarea" | "boolean" | "array" | "object";
   label: string;
   placeholder?: string;
   required?: boolean;
@@ -169,50 +162,6 @@ export interface Logger {
   error: (message: string) => void;
   debug: (message: string) => void;
 }
-
-// API Route Handler Types
-export interface PluginRouteContext {
-  userId: string;
-  toolId: number;
-  tool: ToolWithParsedCredentials;
-}
-
-export interface PluginRouteHandler<TInput = unknown, TOutput = unknown> {
-  input: z.ZodSchema<TInput>;
-  output: z.ZodSchema<TOutput>;
-  handler: (params: {
-    input: TInput;
-    ctx: PluginRouteContext;
-  }) => Promise<TOutput> | TOutput;
-}
-
-export interface PluginApiRoute {
-  path: string;
-  method: "query" | "mutation";
-  description: string;
-  handler: PluginRouteHandler;
-  requiresAuth?: boolean;
-  requiresActiveStatus?: boolean;
-}
-
-export type PluginApiRoutes = Record<string, PluginApiRoute>;
-
-// Standard API Response Types
-export interface PluginApiSuccess<T = unknown> {
-  success: true;
-  data: T;
-  message?: string;
-}
-
-export interface PluginApiError {
-  success: false;
-  error: string;
-  details?: unknown;
-}
-
-export type PluginApiResponse<T = unknown> =
-  | PluginApiSuccess<T>
-  | PluginApiError;
 
 // Credentials configuration for tools
 export interface ToolCredentials {
@@ -245,9 +194,6 @@ export interface ToolPlugin {
   getActionById: (id: string) => ToolAction | undefined;
   getActionsByType: (type: ActionType) => ToolAction[];
   getConditionalAction?: () => ToolAction | undefined;
-
-  // API Routes (new)
-  apiRoutes?: PluginApiRoutes;
 
   // OAuth requirement: when set, the server injects a fresh access token as
   // credentials.oauthToken before executing actions (metadata only)

@@ -26,7 +26,6 @@ import {
 import { trelloActions } from "./actions";
 import { ToolHealthBadge } from "@/tools/ToolHealthIndicator";
 import { trelloCredentialsSchema, type TrelloCredentials } from "./schemas";
-import { trelloApiRoutes } from "./api-routes";
 
 const trelloFormSchema = trelloCredentialsSchema.extend({
   name: z.string().min(1, "Name is required"),
@@ -257,8 +256,6 @@ export const TrelloPlugin: ToolPlugin = {
   getActionById: (id: string) => trelloActions[id],
   getActionsByType: (type: string) =>
     Object.values(trelloActions).filter((action) => action.actionType === type),
-
-  apiRoutes: trelloApiRoutes,
 
   async validate(
     credentials: Record<string, unknown>,

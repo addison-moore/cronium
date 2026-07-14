@@ -27,7 +27,6 @@ import { useToast } from "@cronium/ui";
 import { slackActions } from "./actions";
 import { ToolHealthBadge } from "@/tools/ToolHealthIndicator";
 import { slackCredentialsSchema, type SlackCredentials } from "./schemas";
-import { slackApiRoutes } from "./api-routes";
 
 const slackFormSchema = slackCredentialsSchema.extend({
   name: z.string().min(1, "Name is required"),
@@ -269,7 +268,6 @@ export const SlackPluginTrpc: ToolPlugin = {
     Object.values(slackActions).find((action) => action.isSendMessageAction),
 
   // API routes for this plugin
-  apiRoutes: slackApiRoutes,
 
   async validate(credentials: Record<string, unknown>) {
     const result = slackCredentialsSchema.safeParse(credentials);

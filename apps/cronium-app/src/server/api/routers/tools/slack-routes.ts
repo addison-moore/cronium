@@ -152,7 +152,7 @@ export const slackRouter = createTRPCRouter({
       }
 
       // Real webhook test (posts a visible test message to the channel)
-      const { testToolConnection } = await import("./connection-tests");
+      const { testToolConnection } = await import("@/lib/tools/tool-registry");
       const result = await testToolConnection("slack", tool.credentials);
       return {
         success: result.success,

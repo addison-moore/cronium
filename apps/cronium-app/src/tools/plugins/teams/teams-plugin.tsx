@@ -27,7 +27,6 @@ import {
 import { teamsActions } from "./actions";
 import { ToolHealthBadge } from "@/tools/ToolHealthIndicator";
 import { teamsCredentialsSchema, type TeamsCredentials } from "./schemas";
-import { teamsApiRoutes } from "./api-routes";
 
 const teamsFormSchema = teamsCredentialsSchema.extend({
   name: z.string().min(1, "Name is required"),
@@ -341,8 +340,6 @@ export const TeamsPlugin: ToolPlugin = {
   getActionById: (id: string) => teamsActions[id],
   getActionsByType: (type: string) =>
     Object.values(teamsActions).filter((action) => action.actionType === type),
-
-  apiRoutes: teamsApiRoutes,
 
   async validate(
     credentials: Record<string, unknown>,

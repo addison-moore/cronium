@@ -26,7 +26,6 @@ import {
 import { notionActions } from "./actions";
 import { ToolHealthBadge } from "@/tools/ToolHealthIndicator";
 import { notionCredentialsSchema, type NotionCredentials } from "./schemas";
-import { notionApiRoutes } from "./api-routes";
 
 const notionFormSchema = notionCredentialsSchema.extend({
   name: z.string().min(1, "Name is required"),
@@ -239,8 +238,6 @@ export const NotionPlugin: ToolPlugin = {
   getActionById: (id: string) => notionActions[id],
   getActionsByType: (type: string) =>
     Object.values(notionActions).filter((action) => action.actionType === type),
-
-  apiRoutes: notionApiRoutes,
 
   async validate(
     credentials: Record<string, unknown>,

@@ -18,7 +18,6 @@ import {
   type ActionType,
 } from "../../types/tool-plugin";
 import { emailCredentialsSchema, type EmailCredentials } from "./schemas";
-import { emailApiRoutes } from "./api-routes";
 import { emailActions } from "./actions";
 
 // Email form schema (includes name field for UI)
@@ -287,7 +286,6 @@ export const EmailPlugin: ToolPlugin = {
     emailActions.find((action) => action.isSendMessageAction),
 
   // API Routes
-  apiRoutes: emailApiRoutes,
 
   async validate(
     credentials: Record<string, unknown>,

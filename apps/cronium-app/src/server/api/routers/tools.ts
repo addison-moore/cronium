@@ -31,15 +31,8 @@ function redactTool<T extends { credentials: Record<string, unknown> }>(
 ): T {
   return { ...tool, credentials: redactCredentialValues(tool.credentials) };
 }
-import { buildPluginRouter } from "./plugin-router";
 import { testToolConnection } from "@/lib/tools/tool-registry";
 import { slackRouter } from "./tools/slack-routes";
-import { discordRouter } from "./tools/discord-routes";
-import { emailRouter } from "./tools/email-routes";
-import { googleSheetsRouter } from "./tools/google-sheets-routes";
-import { teamsRouter } from "./tools/teams-routes";
-import { notionRouter } from "./tools/notion-routes";
-import { trelloRouter } from "./tools/trello-routes";
 
 // Use centralized authentication from trpc.ts
 
@@ -1573,14 +1566,7 @@ export const toolsRouter = createTRPCRouter({
     }),
 
   // Dynamic plugin routes (with TypeScript issues)
-  plugins: buildPluginRouter(),
 
   // Explicit plugin routes (with proper TypeScript types)
   slack: slackRouter,
-  discord: discordRouter,
-  email: emailRouter,
-  googleSheets: googleSheetsRouter,
-  teams: teamsRouter,
-  notion: notionRouter,
-  trello: trelloRouter,
 });

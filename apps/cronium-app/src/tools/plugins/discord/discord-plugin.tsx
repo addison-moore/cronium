@@ -18,7 +18,6 @@ import {
 import { discordActions } from "./actions";
 import { ToolHealthBadge } from "@/tools/ToolHealthIndicator";
 import { discordCredentialsSchema, type DiscordCredentials } from "./schemas";
-import { discordApiRoutes } from "./api-routes";
 
 const discordFormSchema = discordCredentialsSchema.extend({
   name: z.string().min(1, "Name is required"),
@@ -181,7 +180,6 @@ export const DiscordPlugin: ToolPlugin = {
     Object.values(discordActions).find((action) => action.isSendMessageAction),
 
   // API Routes
-  apiRoutes: discordApiRoutes,
 
   async validate(
     credentials: Record<string, unknown>,
