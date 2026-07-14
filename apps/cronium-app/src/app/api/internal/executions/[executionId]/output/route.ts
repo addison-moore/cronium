@@ -67,6 +67,10 @@ export async function POST(
       })
       .where(eq(jobs.id, execution.jobId));
 
+    console.log(
+      `[UnifiedIO] /output stored for execution ${executionId} (job ${execution.jobId}): ${JSON.stringify(body.output)}`,
+    );
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error saving output:", error);

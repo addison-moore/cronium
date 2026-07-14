@@ -139,6 +139,26 @@ export async function PUT(
         if (execution.completedAt)
           jobUpdateData.completedAt = execution.completedAt;
 
+        // Promote data published via cronium.output() (stored on job.result.output
+        // by the runtime /output route) into scriptOutput — the field workflow
+        // chaining reads. This is the real completion path for container/ssh jobs
+        // (the orchestrator finalizes via UpdateExecution, not /jobs/*/complete).
+        const existingResult =
+          (job.result as Record<string, unknown> | null) ?? {};
+        if (
+          "output" in existingResult &&
+          existingResult.output !== undefined &&
+          !("scriptOutput" in existingResult)
+        ) {
+          jobUpdateData.result = {
+            ...existingResult,
+            scriptOutput: existingResult.output,
+          };
+        }
+        console.log(
+          `[UnifiedIO] execution ${executionId} completing job ${execution.jobId}: result keys=${Object.keys(existingResult).join(",") || "none"}; scriptOutput promoted=${jobUpdateData.result ? "yes" : "no"}`,
+        );
+
         // Pass timing information to job update
         if (
           execution.executionDuration !== null &&
