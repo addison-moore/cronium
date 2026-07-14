@@ -23,6 +23,7 @@ import {
   getAllServerActionIds,
 } from "@/lib/tools/server-action-executor";
 import { ToolActionError, isFailureResult } from "@/lib/tools/action-result";
+import { parseToolActionConfig } from "@/lib/tools/tool-action-config";
 
 export interface ToolActionConfig {
   toolType: string;
@@ -101,18 +102,9 @@ export async function executeToolAction(
         `[ToolAction] Raw config:`,
         redactSecrets(event.toolActionConfig),
       );
-      if (typeof event.toolActionConfig === "string") {
-        toolActionConfig = JSON.parse(
-          event.toolActionConfig,
-        ) as ToolActionConfig;
-      } else if (
-        event.toolActionConfig &&
-        typeof event.toolActionConfig === "object"
-      ) {
-        toolActionConfig = event.toolActionConfig as ToolActionConfig;
-      } else {
-        toolActionConfig = null;
-      }
+      toolActionConfig = parseToolActionConfig(
+        event.toolActionConfig,
+      ) as ToolActionConfig | null;
       console.log(
         `[ToolAction] Parsed config:`,
         JSON.stringify(redactSecrets(toolActionConfig), null, 2),
@@ -537,21 +529,8 @@ export async function executeToolAction(
     // Categorize the error
     const parsedConfig: Partial<ToolActionConfig> =
       toolActionConfig ??
-      (() => {
-        if (typeof event.toolActionConfig === "string") {
-          try {
-            return JSON.parse(event.toolActionConfig) as ToolActionConfig;
-          } catch {
-            return {} as Partial<ToolActionConfig>;
-          }
-        } else if (
-          event.toolActionConfig &&
-          typeof event.toolActionConfig === "object"
-        ) {
-          return event.toolActionConfig as ToolActionConfig;
-        }
-        return {} as Partial<ToolActionConfig>;
-      })();
+      ((parseToolActionConfig(event.toolActionConfig) ??
+        {}) as Partial<ToolActionConfig>);
     const categorizedError = ErrorCategorizer.categorize(
       errorObj,
       parsedConfig.toolType ?? "unknown",

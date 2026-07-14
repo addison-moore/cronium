@@ -1,6 +1,7 @@
 import type { EventWithRelations } from "@/server/storage";
 import { JobType, EventType, RunLocation } from "@/shared/schema";
 import type { ScriptType } from "@/shared/schema";
+import { parseToolActionConfig } from "@/lib/tools/tool-action-config";
 
 export interface JobPayload {
   executionLogId: number;
@@ -82,15 +83,18 @@ export function buildJobPayload(
       }
       break;
 
-    case JobType.TOOL_ACTION:
-      if (event.toolActionConfig) {
-        const config = event.toolActionConfig as Record<string, unknown>;
+    case JobType.TOOL_ACTION: {
+      // Parse defensively: toolActionConfig may be an object or a (double-)
+      // encoded JSON string depending on when the event was saved.
+      const config = parseToolActionConfig(event.toolActionConfig);
+      if (config) {
         jobPayload.toolAction = {
-          toolType: (config.toolType as string) || "unknown",
-          config: config,
+          toolType: config.toolType ?? "unknown",
+          config,
         };
       }
       break;
+    }
   }
 
   // Add environment variables
@@ -163,8 +167,10 @@ export function buildJobPayload(
     };
   }
 
-  // Add retry configuration
-  if (event.retries) {
+  // Add retry configuration. Tool actions are non-idempotent and run in-process
+  // (single attempt, per the executor); they must never be re-queued on failure,
+  // or a FAILED status would flip the job back to QUEUED with nothing to run it.
+  if (event.retries && jobType !== JobType.TOOL_ACTION) {
     jobPayload.retries = event.retries;
   }
 

@@ -662,6 +662,13 @@ export class ScriptScheduler {
         `[${executionId}] Created job ${job.id} for script ${String(event.id)}: ${event.name ?? ""}`,
       );
 
+      // Tool actions run in-process (the orchestrator only runs container/ssh).
+      const { isInProcessJobType, runInProcessJob } =
+        await import("@/lib/scheduler/in-process-executor");
+      if (isInProcessJobType(jobType)) {
+        void runInProcessJob(job, event, inputData);
+      }
+
       // Return a result that matches the expected interface
       return {
         success: true,
@@ -794,6 +801,16 @@ export class ScriptScheduler {
       jobId: job.id,
       status: LogStatus.PENDING,
     });
+
+    // Tool actions run in-process; the orchestrator never claims them. Started
+    // before the wait block below so a workflow's job-completion poll observes it.
+    {
+      const { isInProcessJobType, runInProcessJob } =
+        await import("@/lib/scheduler/in-process-executor");
+      if (isInProcessJobType(jobType)) {
+        void runInProcessJob(job, event, input);
+      }
+    }
 
     // If waitForCompletion is true (for workflows), wait for job to complete
     console.log(

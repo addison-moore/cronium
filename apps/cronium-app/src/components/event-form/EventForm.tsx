@@ -32,6 +32,7 @@ import EditorSettingsModal, {
 } from "./EditorSettingsModal";
 import { Eye, EyeOff, Trash2, Settings } from "lucide-react";
 import { isToolActionsUIEnabled } from "@/lib/featureFlags";
+import { parseToolActionConfig } from "@/lib/tools/tool-action-config";
 import {
   EventType,
   EventStatus,
@@ -445,18 +446,17 @@ export default function EventForm({
   // Initialize form data from initialData
   useEffect(() => {
     if (initialData) {
-      // Parse and set tool action config
-      if (
-        initialData.toolActionConfig &&
-        typeof initialData.toolActionConfig === "string"
-      ) {
-        try {
-          const config = JSON.parse(
+      // Parse and set tool action config. Stored value may be an object (newer
+      // events) or a (double-)encoded JSON string (older events); handle both.
+      if (initialData.toolActionConfig) {
+        const config = parseToolActionConfig(initialData.toolActionConfig);
+        if (config) {
+          setValue("toolActionConfig", config as ToolActionConfig);
+        } else {
+          console.error(
+            "Failed to parse tool action config:",
             initialData.toolActionConfig,
-          ) as ToolActionConfig;
-          setValue("toolActionConfig", config);
-        } catch (e) {
-          console.error("Failed to parse tool action config:", e);
+          );
         }
       }
 

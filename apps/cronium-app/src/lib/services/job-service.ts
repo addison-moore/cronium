@@ -2,13 +2,13 @@ import { db } from "@server/db";
 import {
   type Job,
   JobStatus,
-  type JobType,
+  JobType,
   type ScriptType,
   JobPriority,
   jobs as jobsTable,
   LogStatus,
 } from "@shared/schema";
-import { eq, desc, and, or, isNull, lte, gte } from "drizzle-orm";
+import { eq, ne, desc, and, or, isNull, lte, gte } from "drizzle-orm";
 import { customAlphabet } from "nanoid";
 
 // Use only alphanumeric characters for job IDs to avoid issues with dashes
@@ -245,11 +245,14 @@ export class JobService {
     batchSize = 10,
     jobTypes?: JobType[],
   ): Promise<Job[]> {
-    // Find unclaimed jobs that are scheduled to run
+    // Find unclaimed jobs that are scheduled to run. Tool actions run in-process
+    // (see runInProcessJob); the orchestrator must never claim one, or it would
+    // fail it as a scriptless container job.
     const conditions = [
       eq(jobsTable.status, JobStatus.QUEUED),
       isNull(jobsTable.orchestratorId),
       lte(jobsTable.scheduledFor, new Date()),
+      ne(jobsTable.type, JobType.TOOL_ACTION),
     ];
 
     if (jobTypes && jobTypes.length > 0) {

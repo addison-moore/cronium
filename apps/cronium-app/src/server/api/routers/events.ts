@@ -701,6 +701,19 @@ export const eventsRouter = createTRPCRouter({
           status: LogStatus.PENDING,
         });
 
+        // Tool actions run in-process (the orchestrator only runs container/ssh
+        // scripts). Fire-and-forget: the runner finalizes the job/log itself and
+        // the UI polls the log for the result.
+        const { isInProcessJobType, runInProcessJob } =
+          await import("@/lib/scheduler/in-process-executor");
+        if (isInProcessJobType(jobType)) {
+          void runInProcessJob(
+            job,
+            event,
+            (input as { input?: Record<string, unknown> }).input,
+          );
+        }
+
         return { success: true, logId: log.id, jobId: job.id };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
