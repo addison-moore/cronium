@@ -149,6 +149,9 @@ export async function POST(
       ) {
         scriptOutput = existingResult.output;
       }
+      console.log(
+        `[UnifiedIO] complete job ${jobId}: existing result keys=${existingResult ? Object.keys(existingResult).join(",") : "none"}; promoted scriptOutput=${JSON.stringify(scriptOutput) ?? "undefined"}`,
+      );
     }
 
     // Store scriptOutput and condition in the result field
