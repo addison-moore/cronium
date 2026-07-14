@@ -2,7 +2,7 @@
 
 import { UserRole } from "@/shared/schema";
 import { useSession } from "next-auth/react";
-import { api } from "@/trpc/react";
+import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 
 type User = {
@@ -28,7 +28,7 @@ export function useAuth() {
     data: userData,
     isLoading: isUserLoading,
     error,
-  } = api.userAuth.getCurrentUser.useQuery(undefined, {
+  } = trpc.userAuth.getCurrentUser.useQuery(undefined, {
     enabled: !!session?.user?.id,
     retry: false,
     ...QUERY_OPTIONS.static,

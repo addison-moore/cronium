@@ -1,5 +1,5 @@
 import { UserRole } from "@/shared/schema";
-import { api } from "@/trpc/react";
+import { trpc } from "@/lib/trpc";
 import { useAuth } from "./useAuth";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 
@@ -23,7 +23,7 @@ export function usePermissions() {
   const { user } = useAuth();
 
   // Fetch roles using tRPC
-  const { data: roles, isLoading: loading } = api.admin.getRoles.useQuery(
+  const { data: roles, isLoading: loading } = trpc.admin.getRoles.useQuery(
     undefined,
     {
       enabled: !!user && user.role !== UserRole.ADMIN,

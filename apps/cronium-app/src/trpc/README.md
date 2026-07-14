@@ -7,8 +7,9 @@ This directory contains the modernized tRPC configuration for Cronium, optimized
 ### Core Configuration
 
 - **`server.ts`** - Server-side caller with optimizations for App Router
-- **`react.tsx`** - Client-side provider with enhanced QueryClient and DevTools
 - **`shared.ts`** - Type utilities, error helpers, and query configurations
+
+The client-side tRPC instance lives in `src/lib/trpc.ts` (exported as `trpc`), with the provider in `src/components/providers/TrpcProvider.tsx`. There is intentionally only one `createTRPCReact` instance in the app.
 
 ### Advanced Features
 
@@ -115,10 +116,10 @@ This directory contains the modernized tRPC configuration for Cronium, optimized
 
    ```typescript
    "use client";
-   import { api } from "@/trpc/react";
+   import { trpc } from "@/lib/trpc";
 
    export function EventForm() {
-     const createEvent = api.events.create.useMutation();
+     const createEvent = trpc.events.create.useMutation();
      // ... component logic
    }
    ```
@@ -303,11 +304,7 @@ The `withTiming` middleware automatically logs:
 1. **Update imports:**
 
    ```typescript
-   // Old
-   import { api } from "@/lib/trpc";
-
-   // New
-   import { api } from "@/trpc/react"; // Client
+   import { trpc } from "@/lib/trpc"; // Client
    import { api } from "@/trpc/server"; // Server
    ```
 

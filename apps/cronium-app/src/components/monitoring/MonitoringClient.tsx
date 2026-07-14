@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { api } from "@/trpc/react";
+import { trpc } from "@/lib/trpc";
 import { MonitoringPageSkeleton } from "@/components/dashboard/DashboardStatsSkeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { Badge } from "@cronium/ui";
@@ -16,9 +16,9 @@ const SERVICE_LABELS: Record<string, string> = {
 
 export default function MonitoringClient() {
   const { data: stats, isLoading } =
-    api.monitoring.getSystemMonitoring.useQuery({});
-  const { data: health } = api.monitoring.getHealthCheck.useQuery({});
-  const { data: activityData } = api.monitoring.getActivityFeed.useQuery({
+    trpc.monitoring.getSystemMonitoring.useQuery({});
+  const { data: health } = trpc.monitoring.getHealthCheck.useQuery({});
+  const { data: activityData } = trpc.monitoring.getActivityFeed.useQuery({
     limit: 10,
     offset: 0,
   });

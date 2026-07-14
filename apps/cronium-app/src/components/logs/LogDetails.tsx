@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useParams } from "next/navigation";
-import { api } from "@/trpc/react";
+import { trpc } from "@/lib/trpc";
 import { LogDetailsSkeleton } from "@/components/logs/LogDetailsSkeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { formatDistanceToNow, format } from "date-fns";
@@ -14,7 +14,7 @@ export default function LogDetails() {
   const params = useParams();
   const id = parseInt(params.id as string);
 
-  const { data: log, isLoading } = api.logs.getById.useQuery(
+  const { data: log, isLoading } = trpc.logs.getById.useQuery(
     { id },
     { enabled: !isNaN(id) },
   );
@@ -136,16 +136,14 @@ export default function LogDetails() {
               Error details from the execution
             </p>
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="border-destructive/20 border-t">
-              <CodeViewer
-                code={log.error}
-                language="text"
-                className="rounded-none border-0"
-                theme="dark"
-                showLineNumbers={log.error.split("\n").length > 5}
-              />
-            </div>
+          <CardContent className="p-4">
+            <CodeViewer
+              code={log.error}
+              language="text"
+              className="rounded-none"
+              theme="dark"
+              showLineNumbers={log.error.split("\n").length > 5}
+            />
           </CardContent>
         </Card>
       )}
