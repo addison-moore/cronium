@@ -72,7 +72,7 @@ export function RolesManagement({
       };
 
       // Optimistically update the selected role immediately
-      if (selectedRole && selectedRole.id === roleId) {
+      if (selectedRole?.id === roleId) {
         setSelectedRole({
           ...selectedRole,
           permissions: newPermissions,
@@ -84,7 +84,7 @@ export function RolesManagement({
     } catch (error) {
       console.error("Error updating role permission:", error);
       // Revert the optimistic update on error
-      if (selectedRole && selectedRole.id === roleId) {
+      if (selectedRole?.id === roleId) {
         const originalRole = roles.find((r) => r.id === roleId);
         if (originalRole) {
           setSelectedRole({

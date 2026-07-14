@@ -814,7 +814,7 @@ export const serversRouter = createTRPCRouter({
           try {
             // Check if user owns the server
             const server = await storage.getServer(serverId);
-            if (!server || server.userId !== ctx.session.user.id) {
+            if (server?.userId !== ctx.session.user.id) {
               results.push({
                 id: serverId,
                 success: false,

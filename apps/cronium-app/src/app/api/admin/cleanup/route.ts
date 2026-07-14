@@ -11,7 +11,7 @@ import { UserRole } from "@/shared/schema";
 export async function GET() {
   // Check authentication
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== UserRole.ADMIN) {
+  if (session?.user?.role !== UserRole.ADMIN) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -36,7 +36,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   // Check authentication
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== UserRole.ADMIN) {
+  if (session?.user?.role !== UserRole.ADMIN) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

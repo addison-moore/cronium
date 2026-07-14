@@ -1010,8 +1010,7 @@ export class WorkflowExecutor {
     // Re-schedule the workflow if it's active and scheduled
     const workflow = await storage.getWorkflow(workflowId);
     if (
-      workflow &&
-      workflow.status === EventStatus.ACTIVE &&
+      workflow?.status === EventStatus.ACTIVE &&
       workflow.triggerType === WorkflowTriggerType.SCHEDULE
     ) {
       await this.scheduleWorkflow(workflowId);

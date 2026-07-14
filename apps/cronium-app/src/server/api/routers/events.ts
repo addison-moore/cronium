@@ -11,7 +11,7 @@ import {
   withTransaction,
 } from "../trpc";
 import { EventStatus, LogStatus, RunLocation } from "@/shared/schema";
-import type { ConditionalActionType, ScriptType } from "@/shared/schema";
+import type { ScriptType } from "@/shared/schema";
 import { validateConditionalActions } from "@/server/utils/event-validation";
 import {
   createEventSchema,
@@ -449,8 +449,7 @@ export const eventsRouter = createTRPCRouter({
         // The orchestrator will create payloads from job script content
         // Clean up old payloads if they exist
         if (
-          updatedEvent &&
-          updatedEvent.runLocation === RunLocation.REMOTE &&
+          updatedEvent?.runLocation === RunLocation.REMOTE &&
           (input.content !== undefined || input.envVars !== undefined)
         ) {
           try {

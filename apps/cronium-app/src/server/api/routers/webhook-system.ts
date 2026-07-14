@@ -346,7 +346,7 @@ export const webhookSystemRouter = createTRPCRouter({
             .where(eq(webhookDeliveries.deliveryId, input.deliveryId))
             .limit(1);
 
-          if (!delivery || delivery.webhookUserId !== ctx.session.user.id) {
+          if (delivery?.webhookUserId !== ctx.session.user.id) {
             throw notFoundError("Delivery");
           }
 

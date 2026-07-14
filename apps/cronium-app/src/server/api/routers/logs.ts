@@ -180,7 +180,7 @@ export const logsRouter = createTRPCRouter({
 
         // Check if user has access to the event this log belongs to
         const event = await storage.getEvent(existingLog.eventId);
-        if (!event || event.userId !== ctx.session.user.id) {
+        if (event?.userId !== ctx.session.user.id) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
         }
 
@@ -214,7 +214,7 @@ export const logsRouter = createTRPCRouter({
 
         // Check if user has access to the event this log belongs to
         const event = await storage.getEvent(log.eventId);
-        if (!event || event.userId !== ctx.session.user.id) {
+        if (event?.userId !== ctx.session.user.id) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
         }
 
@@ -473,7 +473,7 @@ export const logsRouter = createTRPCRouter({
 
             // Check if user has access to the event this log belongs to
             const event = await storage.getEvent(log.eventId);
-            if (!event || event.userId !== ctx.session.user.id) {
+            if (event?.userId !== ctx.session.user.id) {
               results.push({
                 id: logId,
                 success: false,

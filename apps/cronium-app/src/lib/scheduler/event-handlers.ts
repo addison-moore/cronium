@@ -5,10 +5,7 @@ import {
 } from "@/lib/template-processor";
 import type { ConditionalAction } from "@/shared/schema";
 import { ConditionalActionType, EventType, type Event } from "@/shared/schema";
-import {
-  executeToolAction,
-  type ToolActionConfig,
-} from "./tool-action-executor";
+import { executeToolAction } from "./tool-action-executor";
 
 interface ExecutionData {
   executionTime?: string;

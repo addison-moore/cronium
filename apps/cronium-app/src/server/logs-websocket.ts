@@ -43,7 +43,7 @@ export class LogsWebSocketHandler {
             // Validate access to the job/log
             if (jobId) {
               const job = await jobService.getJob(jobId);
-              if (!job || job.userId !== userId) {
+              if (job?.userId !== userId) {
                 return next(new Error("Access denied"));
               }
               (socket.data as SocketData).job = job;
@@ -51,7 +51,7 @@ export class LogsWebSocketHandler {
 
             if (logId) {
               const log = await storage.getLog(logId);
-              if (!log || log.userId !== userId) {
+              if (log?.userId !== userId) {
                 return next(new Error("Access denied"));
               }
               (socket.data as SocketData).log = log;
@@ -78,7 +78,7 @@ export class LogsWebSocketHandler {
             if (data.jobId) {
               // Get log ID from job
               const job = await jobService.getJob(data.jobId);
-              if (job && job.userId === (socket.data as SocketData).userId) {
+              if (job?.userId === (socket.data as SocketData).userId) {
                 // Find associated log
                 const logs = await storage.getLogsByEventId(job.eventId, {
                   limit: 1,
@@ -99,7 +99,7 @@ export class LogsWebSocketHandler {
 
             // Verify access
             const log = await storage.getLog(logId);
-            if (!log || log.userId !== (socket.data as SocketData).userId) {
+            if (log?.userId !== (socket.data as SocketData).userId) {
               socket.emit("error", { message: "Access denied" });
               return;
             }

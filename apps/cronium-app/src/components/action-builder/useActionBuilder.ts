@@ -11,7 +11,6 @@ import { create } from "zustand";
 import {
   type ActionNode,
   type ActionConnection,
-  type ActionNodeData,
   NodeType,
   NODE_TEMPLATES,
 } from "./types";

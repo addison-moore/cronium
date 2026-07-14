@@ -27,8 +27,6 @@ export type EditorLanguage =
   | "html"
   | "text";
 
-type EditorTheme = "vs-dark" | "vs-light" | "hc-black";
-
 export interface MonacoEditorProps {
   defaultValue?: string;
   value?: string;

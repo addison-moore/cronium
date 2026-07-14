@@ -492,7 +492,7 @@ export const workflowsRouter = createTRPCRouter({
           try {
             // Check if user owns the workflow
             const workflow = await storage.getWorkflow(workflowId);
-            if (!workflow || workflow.userId !== ctx.session.user.id) {
+            if (workflow?.userId !== ctx.session.user.id) {
               results.push({
                 id: workflowId,
                 success: false,
@@ -574,7 +574,7 @@ export const workflowsRouter = createTRPCRouter({
 
         // Get execution details
         const execution = await storage.getWorkflowExecution(input.executionId);
-        if (!execution || execution.workflowId !== input.workflowId) {
+        if (execution?.workflowId !== input.workflowId) {
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "Execution not found",

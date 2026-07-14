@@ -202,7 +202,7 @@ export class CredentialCacheManager {
         .where(eq(toolCredentials.id, toolId))
         .limit(1);
 
-      if (!tool || tool.userId !== userId) {
+      if (tool?.userId !== userId) {
         return null;
       }
 

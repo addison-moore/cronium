@@ -30,7 +30,7 @@ export async function authenticateApiRequest(request: NextRequest): Promise<{
   try {
     const apiToken = await storage.getApiTokenByToken(token);
 
-    if (!apiToken || apiToken.status !== TokenStatus.ACTIVE) {
+    if (apiToken?.status !== TokenStatus.ACTIVE) {
       return { authenticated: false, userId: "" };
     }
 

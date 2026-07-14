@@ -239,8 +239,7 @@ export default function WorkflowExecutionGraph({
       // Only notify if execution has actually changed
       const lastNotified = lastNotifiedExecutionRef.current;
       if (
-        !lastNotified ||
-        lastNotified.id !== currentExecution.id ||
+        lastNotified?.id !== currentExecution.id ||
         lastNotified.status !== (currentExecution.status as string)
       ) {
         onExecutionUpdate(currentExecution);

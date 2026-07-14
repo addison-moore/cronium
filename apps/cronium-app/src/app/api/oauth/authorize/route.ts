@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     const toolRecord = tool[0];
-    if (!toolRecord || toolRecord.userId !== session.user.id) {
+    if (toolRecord?.userId !== session.user.id) {
       return NextResponse.json(
         { error: "Tool not found or unauthorized" },
         { status: 404 },
