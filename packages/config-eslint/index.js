@@ -49,7 +49,6 @@ module.exports = [
       sourceType: "module",
       parserOptions: {
         project: true,
-        tsconfigRootDir: process.cwd(),
       },
     },
     rules: {
