@@ -7,8 +7,6 @@ import {
   createToolSchema,
   updateToolSchema,
   toolIdSchema,
-  validateToolCredentialsSchema,
-  toolExportSchema,
   toolStatsSchema,
 } from "@shared/schemas/tools";
 import { toolCredentials, EventType } from "@/shared/schema";
@@ -519,29 +517,6 @@ export const toolsRouter = createTRPCRouter({
       }
     }),
 
-  // Get single tool by ID
-  getById: protectedProcedure
-    .input(toolIdSchema)
-    .query(async ({ ctx, input }) => {
-      try {
-        const tools = await getUserTools(ctx.session.user.id);
-        const tool = tools.find((t) => t.id === input.id);
-
-        if (!tool) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Tool not found" });
-        }
-
-        return redactTool(tool);
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to fetch tool",
-          cause: error,
-        });
-      }
-    }),
-
   // Create new tool
   create: protectedProcedure
     .input(createToolSchema)
@@ -915,85 +890,6 @@ export const toolsRouter = createTRPCRouter({
       }
     }),
 
-  // Validate tool credentials
-  validateCredentials: protectedProcedure
-    .input(validateToolCredentialsSchema)
-    .mutation(async ({ input }) => {
-      try {
-        const validation = await validateCredentialsForType(
-          input.type,
-          input.credentials,
-        );
-
-        const result = {
-          valid: validation.valid,
-          errors: validation.errors,
-          warnings: [] as string[],
-          suggestions: [] as string[],
-        };
-
-        // A real connection test is available via tools.testConnection; this
-        // procedure only validates credential shape.
-        if (validation.valid && input.testConnection) {
-          result.suggestions.push(
-            "Credentials are well-formed. Use Test Connection to verify against the provider.",
-          );
-        }
-
-        return result;
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to validate credentials",
-          cause: error,
-        });
-      }
-    }),
-
-  // Export tools
-  export: protectedProcedure
-    .input(toolExportSchema)
-    .mutation(async ({ ctx, input }) => {
-      try {
-        const tools = await getUserTools(ctx.session.user.id);
-        const toolsToExport = tools.filter((t) => input.toolIds.includes(t.id));
-
-        if (toolsToExport.length === 0) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "No tools found to export",
-          });
-        }
-
-        // Prepare export data
-        const exportData = toolsToExport.map((tool) => ({
-          name: tool.name,
-          type: tool.type,
-          description: tool.description,
-          tags: tool.tags,
-          isActive: input.includeInactive || tool.isActive,
-          credentials: input.includeCredentials ? tool.credentials : undefined,
-        }));
-
-        const fileContent = JSON.stringify(exportData, null, 2);
-        const filename = `tools_${new Date().toISOString().split("T")[0] ?? "export"}.json`;
-
-        return {
-          data: fileContent,
-          filename,
-          format: input.format,
-          count: toolsToExport.length,
-        };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to export tools",
-          cause: error,
-        });
-      }
-    }),
-
   // Get tool statistics
   getStats: protectedProcedure
     .input(toolStatsSchema)
@@ -1090,39 +986,6 @@ export const toolsRouter = createTRPCRouter({
       }
     }),
 
-  // Get available actions for a tool type
-  getAvailableActions: protectedProcedure
-    .input(z.object({ toolType: z.string().optional() }))
-    .query(async ({ input }) => {
-      try {
-        // Import tool plugin registry
-        const { ToolPluginRegistry } =
-          await import("@/tools/types/tool-plugin");
-
-        if (input.toolType) {
-          const plugin = ToolPluginRegistry.get(input.toolType);
-          return {
-            success: true,
-            actions: plugin?.actions ?? [],
-          };
-        } else {
-          // Return all actions from all plugins
-          const allActions = ToolPluginRegistry.getAllActions();
-          return {
-            success: true,
-            actions: allActions,
-          };
-        }
-      } catch (error) {
-        console.error("Error getting available actions:", error);
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to get available actions",
-          cause: error,
-        });
-      }
-    }),
-
   // Get tool action health status
   getToolActionHealth: protectedProcedure
     .input(
@@ -1198,56 +1061,6 @@ export const toolsRouter = createTRPCRouter({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to get tool action health",
-          cause: error,
-        });
-      }
-    }),
-
-  // Validate action parameters
-  validateActionParams: protectedProcedure
-    .input(
-      z.object({
-        actionId: z.string(),
-        parameters: z.record(z.string(), z.unknown()),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      try {
-        // Import tool plugin registry
-        const { ToolPluginRegistry } =
-          await import("@/tools/types/tool-plugin");
-
-        const action = ToolPluginRegistry.getActionById(input.actionId);
-        if (!action) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Action not found",
-          });
-        }
-
-        // Validate parameters against action schema
-        try {
-          action.inputSchema.parse(input.parameters);
-          return {
-            valid: true,
-            errors: [],
-          };
-        } catch (validationError) {
-          if (validationError instanceof z.ZodError) {
-            return {
-              valid: false,
-              errors: validationError.issues.map(
-                (issue) => `${issue.path.join(".")}: ${issue.message}`,
-              ),
-            };
-          }
-          throw validationError;
-        }
-      } catch (error) {
-        console.error("Error validating action parameters:", error);
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to validate action parameters",
           cause: error,
         });
       }

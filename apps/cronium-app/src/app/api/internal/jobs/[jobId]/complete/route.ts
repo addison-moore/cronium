@@ -2,10 +2,6 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { jobService } from "@/lib/services/job-service";
 import { JobStatus } from "@shared/schema";
-import { initializePlugins } from "@/tools/plugins";
-
-// Ensure plugins are initialized for this API route
-initializePlugins();
 
 // Mark job as completed
 export async function POST(
