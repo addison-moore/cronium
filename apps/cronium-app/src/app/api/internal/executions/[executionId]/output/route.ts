@@ -19,11 +19,30 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Cap the payload so a runaway cronium.output() can't OOM the app or bloat
+    // the jobs JSONB column. Reject early on Content-Length, then re-check the
+    // serialized size (header can be absent or wrong).
+    const MAX_OUTPUT_BYTES = 5 * 1024 * 1024; // 5 MB
+    const contentLength = Number(request.headers.get("content-length") ?? 0);
+    if (contentLength > MAX_OUTPUT_BYTES) {
+      return NextResponse.json(
+        { error: `Output exceeds the ${MAX_OUTPUT_BYTES}-byte limit` },
+        { status: 413 },
+      );
+    }
+
     const { executionId } = await params;
     const body = (await request.json()) as {
       output: unknown;
       timestamp: string;
     };
+
+    if (JSON.stringify(body.output ?? null).length > MAX_OUTPUT_BYTES) {
+      return NextResponse.json(
+        { error: `Output exceeds the ${MAX_OUTPUT_BYTES}-byte limit` },
+        { status: 413 },
+      );
+    }
 
     // Get execution
     const execution = await executionService.getExecution(executionId);
@@ -45,28 +64,30 @@ export async function POST(
       metadata: updatedMetadata,
     });
 
-    // Also update job's result for backward compatibility
-    const existingResult = await db
-      .select({ result: jobs.result })
-      .from(jobs)
-      .where(eq(jobs.id, execution.jobId))
-      .limit(1);
+    // Merge the output into job.result under a row lock so concurrent
+    // output()/completion writes serialize instead of clobbering each other
+    // (this is a read-modify-write of a JSONB column).
+    await db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ result: jobs.result })
+        .from(jobs)
+        .where(eq(jobs.id, execution.jobId))
+        .limit(1)
+        .for("update");
 
-    const jobResult =
-      (existingResult[0]?.result as Record<string, unknown>) || {};
-    const updatedResult = {
-      ...jobResult,
-      output: body.output,
-      outputTimestamp: body.timestamp,
-    };
-
-    await db
-      .update(jobs)
-      .set({
-        result: updatedResult,
-        updatedAt: new Date(),
-      })
-      .where(eq(jobs.id, execution.jobId));
+      const jobResult = (row?.result as Record<string, unknown>) || {};
+      await tx
+        .update(jobs)
+        .set({
+          result: {
+            ...jobResult,
+            output: body.output,
+            outputTimestamp: body.timestamp,
+          },
+          updatedAt: new Date(),
+        })
+        .where(eq(jobs.id, execution.jobId));
+    });
 
     unifiedIoDebug(
       `/output stored for execution ${executionId} (job ${execution.jobId}): ${JSON.stringify(body.output)}`,
