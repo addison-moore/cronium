@@ -1,17 +1,14 @@
 /**
  * Server-side entry point for resolving tool actions.
  *
- * Action resolution is delegated to `server-plugin-actions.ts`, which imports
- * the plugins' action definitions directly. This file previously pulled actions
- * out of `ToolPluginRegistry` via the `@/tools/plugins` barrel, but that barrel
- * imports "use client" plugin modules — on the server they become client
- * reference proxies with no usable actions, so the registry came back empty and
- * every tool action failed with "Action not found".
+ * Action resolution is delegated to the single `tool-registry`, which is built
+ * from the per-tool manifests (no "use client" boundary). This file previously
+ * pulled actions out of `ToolPluginRegistry` via the `@/tools/plugins` barrel,
+ * whose "use client" plugin modules became client reference proxies on the
+ * server — the registry came back empty and every action failed with "Action
+ * not found".
  */
-export {
-  getServerActionById,
-  getAllServerActionIds,
-} from "./server-plugin-actions";
+export { getServerActionById, getAllServerActionIds } from "./tool-registry";
 
 // Execution context passed to a tool action's execute(). Re-defined here (rather
 // than imported from tool-plugin.ts) to avoid a circular dependency.

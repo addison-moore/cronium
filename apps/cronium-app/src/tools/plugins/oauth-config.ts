@@ -1,10 +1,7 @@
 /**
- * OAuth configuration per plugin, in a plain (non-"use client") module.
- *
- * The plugin objects that carry `requiresOAuth` live in "use client" files, so
- * server code can't read it off them (it gets a client reference proxy). The
- * OAuth credential bridge reads from here instead; the plugin files import the
- * same values, keeping a single source of truth.
+ * OAuth config for tools that need it, in a plain (client-safe) module so both
+ * the google-sheets manifest (server) and its "use client" plugin can import it.
+ * The tool registry exposes it via `getOAuthConfig(type)`.
  */
 export interface PluginOAuthConfig {
   providerId: "google" | "microsoft" | "slack";
@@ -15,14 +12,3 @@ export const GOOGLE_SHEETS_OAUTH: PluginOAuthConfig = {
   providerId: "google",
   scope: "https://www.googleapis.com/auth/spreadsheets",
 };
-
-// Keyed by plugin id (toolType lowercased with underscores -> hyphens).
-export const PLUGIN_OAUTH_CONFIG: Record<string, PluginOAuthConfig> = {
-  "google-sheets": GOOGLE_SHEETS_OAUTH,
-};
-
-export function getPluginOAuthConfig(
-  pluginId: string,
-): PluginOAuthConfig | undefined {
-  return PLUGIN_OAUTH_CONFIG[pluginId];
-}

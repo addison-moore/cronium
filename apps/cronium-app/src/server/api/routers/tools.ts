@@ -32,7 +32,7 @@ function redactTool<T extends { credentials: Record<string, unknown> }>(
   return { ...tool, credentials: redactCredentialValues(tool.credentials) };
 }
 import { buildPluginRouter } from "./plugin-router";
-import { testToolConnection } from "./tools/connection-tests";
+import { testToolConnection } from "@/lib/tools/tool-registry";
 import { slackRouter } from "./tools/slack-routes";
 import { discordRouter } from "./tools/discord-routes";
 import { emailRouter } from "./tools/email-routes";
@@ -295,7 +295,7 @@ async function validateCredentialsForType(
   try {
     // Import server-side validation registry (no React components)
     const { validateToolCredentials } =
-      await import("@/tools/plugins/validation-registry");
+      await import("@/lib/tools/tool-registry");
 
     // Validate using the server-side registry
     return validateToolCredentials(type, credentials);
@@ -1291,7 +1291,7 @@ export const toolsRouter = createTRPCRouter({
         // are "use client", so reading actions off ToolPluginRegistry on the
         // server yields client reference proxies with no usable execute().
         const { getServerActionById } =
-          await import("@/lib/tools/server-plugin-actions");
+          await import("@/lib/tools/tool-registry");
 
         const action = getServerActionById(input.actionId);
         if (!action) {
