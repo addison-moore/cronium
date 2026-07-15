@@ -57,6 +57,20 @@ jobs:
       - name: Test
         run: pnpm test
 
+  sdk-sync:
+    name: SDK Sync (container mirror vs canonical)
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'self-hosted' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The execution container images build from apps/runtime/container-images/
+      # and COPY a byte-identical mirror of the canonical helpers in
+      # apps/runtime/runtime-helpers/. Fail the build if they drift, so a fix to
+      # the documented SDK can't ship without reaching the images (or vice versa).
+      - name: Verify SDK copies are in sync
+        run: bash scripts/check-sdk-sync.sh
+
   go:
     name: Vet & Test (Go)
     runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'self-hosted' }}

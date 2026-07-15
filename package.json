@@ -16,6 +16,7 @@
     "test:app": "turbo test --filter=@cronium/app",
     "test:integration": "jest --config tests/jest.config.js",
     "test:go": "turbo test:go",
+    "check:sdk-sync": "bash scripts/check-sdk-sync.sh",
     "lint": "turbo lint",
     "lint:go": "turbo lint:go",
     "lint:ts": "turbo lint:ts",

@@ -2,6 +2,16 @@
 
 This directory contains the Docker container images for the Cronium runtime environment. These images provide secure, isolated execution environments for user scripts with the Cronium SDK pre-installed.
 
+> **SDK source of truth.** The `cronium.py` / `cronium.js` / `cronium.d.ts` /
+> `cronium.sh` files in `python/`, `nodejs/`, and `bash/` here are a byte-for-byte
+> **mirror** of the canonical SDK in `../runtime-helpers/` (which carries the
+> `package.json` / `setup.py` / `README` / tests). Each image builds with its own
+> language directory as the Docker context and `COPY`s the helper from there, so
+> the mirror has to live in-tree. Edit the helper in `../runtime-helpers/`, then
+> run `bash scripts/check-sdk-sync.sh --fix` from the repo root to update the
+> mirror. CI (`scripts/check-sdk-sync.sh`, run via the `sdk-sync` job) fails if
+> the two ever drift.
+
 ## Images
 
 ### Base Image (`cronium/base`)
