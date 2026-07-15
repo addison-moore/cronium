@@ -40,12 +40,27 @@ cronium.event() {
     "${CRONIUM_HELPERS_DIR}/cronium.event" "$@"
 }
 
+# Canonical container-SDK aliases (cronium_*). The container image ships the
+# helpers under these snake_case names, so a script written to the documented
+# interface runs unchanged whether it executes locally (container) or remotely
+# (runner).
+cronium_input()        { "${CRONIUM_HELPERS_DIR}/cronium.input" "$@"; }
+cronium_output()       { "${CRONIUM_HELPERS_DIR}/cronium.output" "$@"; }
+cronium_get_variable() { "${CRONIUM_HELPERS_DIR}/cronium.getVariable" "$@"; }
+cronium_set_variable() { "${CRONIUM_HELPERS_DIR}/cronium.setVariable" "$@"; }
+cronium_event()        { "${CRONIUM_HELPERS_DIR}/cronium.event" "$@"; }
+
 # Export functions for use in subshells
 export -f cronium.input
 export -f cronium.output
 export -f cronium.getVariable
 export -f cronium.setVariable
 export -f cronium.event
+export -f cronium_input
+export -f cronium_output
+export -f cronium_get_variable
+export -f cronium_set_variable
+export -f cronium_event
 `
 	return fmt.Sprintf(script, helperDir)
 }
@@ -131,6 +146,12 @@ class cronium:
         if result.returncode != 0:
             raise RuntimeError(f"cronium.event failed: {result.stderr}")
         return json.loads(result.stdout) if result.stdout.strip() else {}
+
+# Canonical container-SDK snake_case aliases. The documented Python SDK exposes
+# get_variable/set_variable, so a script written to the docs runs unchanged
+# whether it executes locally (container) or remotely (runner).
+cronium.get_variable = cronium.getVariable
+cronium.set_variable = cronium.setVariable
 
 # Add to builtins so it's available without import
 import builtins
