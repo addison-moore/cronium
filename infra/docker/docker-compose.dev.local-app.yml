@@ -101,21 +101,20 @@ services:
     image: cronium/runtime-api:latest
     container_name: cronium-runtime-api-dev
     environment:
-      # Server configuration
-      PORT: 8089
-
-      # Backend API configuration
-      BACKEND_URL: http://host.docker.internal:5001
-      BACKEND_TOKEN: ${INTERNAL_API_KEY}
-
-      # Cache configuration
-      VALKEY_URL: redis://valkey:6379
-
-      # Auth configuration
-      JWT_SECRET: ${JWT_SECRET}
-
-      # Logging
-      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      # The runtime reads RUNTIME_-prefixed vars (internal/config/config.go:
+      # applyLegacyEnvOverrides). The old block used bare PORT/JWT_SECRET/... which
+      # those overrides don't read, so the service stayed on its default :8081
+      # while the orchestrator tunnel dialed runtime-api:8089 — connection refused,
+      # surfaced by the runner as `EOF` on cronium.output()/input(). Port 8089
+      # matches the orchestrator's RUNTIME_PORT, the ports mapping, and the
+      # healthcheck; RUNTIME_JWT_SECRET must match the orchestrator's
+      # CRONIUM_CONTAINER_RUNTIME_JWT_SECRET so the tunnel JWT validates.
+      RUNTIME_PORT: 8089
+      RUNTIME_JWT_SECRET: ${JWT_SECRET}
+      RUNTIME_BACKEND_URL: http://host.docker.internal:5001
+      RUNTIME_BACKEND_TOKEN: ${INTERNAL_API_KEY}
+      RUNTIME_VALKEY_URL: redis://cronium-valkey-dev:6379
+      RUNTIME_LOG_LEVEL: ${LOG_LEVEL:-debug}
     ports:
       - "8089:8089"
     depends_on:
