@@ -110,27 +110,34 @@ func (tm *TunnelManager) handleConnection(remoteConn net.Conn) {
 	}
 	defer localConn.Close()
 
-	// Copy data in both directions
-	errCh := make(chan error, 2)
-
-	go func() {
-		_, err := io.Copy(localConn, remoteConn)
-		errCh <- err
-	}()
-
-	go func() {
-		_, err := io.Copy(remoteConn, localConn)
-		errCh <- err
-	}()
-
-	// Wait for either direction to finish
-	select {
-	case err := <-errCh:
+	// Copy data in both directions. When one direction ends (its source EOFs),
+	// half-close the destination's write side so the peer sees EOF, then wait for
+	// the OTHER direction to drain before returning (the defers close both). This
+	// avoids truncating an in-flight HTTP response — the previous code returned on
+	// the first copy finishing and hard-closed both sides, which the runner's HTTP
+	// client would see as an EOF mid-response.
+	done := make(chan struct{}, 2)
+	pipe := func(dst, src net.Conn) {
+		_, err := io.Copy(dst, src)
 		if err != nil && err != io.EOF {
-			tm.log.WithError(err).Debug("Tunnel connection closed with error")
+			tm.log.WithError(err).Debug("Tunnel copy ended with error")
 		}
-	case <-tm.stopCh:
-		tm.log.Debug("Tunnel connection closed due to shutdown")
+		if cw, ok := dst.(interface{ CloseWrite() error }); ok {
+			_ = cw.CloseWrite()
+		}
+		done <- struct{}{}
+	}
+
+	go pipe(localConn, remoteConn)
+	go pipe(remoteConn, localConn)
+
+	for i := 0; i < 2; i++ {
+		select {
+		case <-done:
+		case <-tm.stopCh:
+			tm.log.Debug("Tunnel connection closed due to shutdown")
+			return
+		}
 	}
 }
 

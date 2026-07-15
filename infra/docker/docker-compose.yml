@@ -103,6 +103,10 @@ services:
       CRONIUM_CONTAINER_RUNTIME_JWT_SECRET: ${JWT_SECRET}
       CRONIUM_CONTAINER_RUNTIME_BACKEND_URL: http://cronium-app:3000
       CRONIUM_CONTAINER_RUNTIME_VALKEY_URL: valkey://valkey:6379
+      # The SSH reverse tunnel for remote (runner) execution dials this shared
+      # runtime service; it MUST match the cronium-runtime service name:port.
+      RUNTIME_HOST: cronium-runtime
+      RUNTIME_PORT: 8081
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "8080:8080"
@@ -112,6 +116,7 @@ services:
     depends_on:
       - cronium-app
       - valkey
+      - cronium-runtime
     restart: unless-stopped
     user: "0:0"
     networks:

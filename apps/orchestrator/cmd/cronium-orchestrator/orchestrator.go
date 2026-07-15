@@ -73,12 +73,16 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 	executorMgr.Register(types.JobTypeContainer, containerExec)
 
 	// Register SSH executor (with multi-server support).
-	// Runtime host/port are configured via RUNTIME_HOST / RUNTIME_PORT.
+	// Runtime host/port for the shared runtime-api the SSH reverse tunnel dials.
+	// MUST match the runtime service's docker name:port for remote (runner)
+	// cronium.input()/output() to reach it — a mismatch closes the tunnel with no
+	// response and the runner reports EOF. Configure via RUNTIME_HOST/RUNTIME_PORT;
+	// the defaults match the canonical `cronium-runtime` service on 8081.
 	runtimeHost := os.Getenv("RUNTIME_HOST")
 	if runtimeHost == "" {
-		runtimeHost = "runtime-api" // Default to Docker service name
+		runtimeHost = "cronium-runtime"
 	}
-	runtimePort := 8089 // Default runtime API port
+	runtimePort := 8081
 	if envPort := os.Getenv("RUNTIME_PORT"); envPort != "" {
 		if port, err := strconv.Atoi(envPort); err == nil {
 			runtimePort = port

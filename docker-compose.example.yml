@@ -70,6 +70,7 @@ services:
     depends_on:
       - cronium-app
       - valkey
+      - cronium-runtime
     environment:
       CRONIUM_API_ENDPOINT: http://cronium-app:3000
       CRONIUM_API_TOKEN: ${INTERNAL_API_KEY}
@@ -77,6 +78,10 @@ services:
       CRONIUM_CONTAINER_RUNTIME_JWT_SECRET: ${JWT_SECRET}
       CRONIUM_CONTAINER_RUNTIME_BACKEND_URL: http://cronium-app:3000
       CRONIUM_CONTAINER_RUNTIME_VALKEY_URL: valkey://valkey:6379
+      # Remote (runner) execution tunnels to this shared runtime service; must
+      # match the cronium-runtime service name:port below.
+      RUNTIME_HOST: cronium-runtime
+      RUNTIME_PORT: 8081
       LOG_LEVEL: info
     ports:
       - "8080:8080"
