@@ -20,6 +20,7 @@ import { notionManifest } from "@/tools/plugins/notion/manifest";
 import { trelloManifest } from "@/tools/plugins/trello/manifest";
 import { googleSheetsManifest } from "@/tools/plugins/google-sheets/manifest";
 import { emailManifest } from "@/tools/plugins/email/manifest";
+import { sqlManifest } from "@/tools/plugins/sql/manifest";
 
 // ── The single list. Add a tool by adding its manifest import above + here. ──
 const MANIFESTS: ToolManifest[] = [
@@ -30,6 +31,7 @@ const MANIFESTS: ToolManifest[] = [
   trelloManifest,
   googleSheetsManifest,
   emailManifest,
+  sqlManifest,
 ];
 
 export type { ConnectionTestResult };

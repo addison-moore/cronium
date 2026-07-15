@@ -7,6 +7,7 @@ import { GoogleSheetsPlugin } from "./google-sheets/google-sheets-plugin";
 import { TeamsPlugin } from "./teams/teams-plugin";
 import { NotionPlugin } from "./notion/notion-plugin";
 import { TrelloPlugin } from "./trello/trello-plugin";
+import { SqlPlugin } from "./sql/sql-plugin";
 
 // Track initialization state globally
 declare global {
@@ -27,6 +28,7 @@ export function initializePlugins() {
   ToolPluginRegistry.register(TeamsPlugin);
   ToolPluginRegistry.register(NotionPlugin);
   ToolPluginRegistry.register(TrelloPlugin);
+  ToolPluginRegistry.register(SqlPlugin);
 
   global.__pluginsInitialized = true;
 }
@@ -40,6 +42,7 @@ export {
   TeamsPlugin,
   NotionPlugin,
   TrelloPlugin,
+  SqlPlugin,
 };
 
 // Export registry for easy access

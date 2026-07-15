@@ -25,8 +25,16 @@ const nextConfig = {
     PUBLIC_APP_URL: env.PUBLIC_APP_URL,
   },
   webpack: (config, { isServer, dev }) => {
-    // Handle SSH binary modules properly
-    config.externals = [...(config.externals || []), "ssh2"];
+    // Handle SSH binary modules properly. mysql2 (SQL tool driver) is
+    // externalized too: it is only ever loaded via a server-executed dynamic
+    // import, and it uses `node:`-scheme builtins the client webpack can't
+    // resolve — externalizing keeps it out of the client trace entirely.
+    config.externals = [
+      ...(config.externals || []),
+      "ssh2",
+      "mysql2/promise",
+      "mysql2",
+    ];
 
     // Handle xterm.js packages properly for dynamic imports
     if (!isServer) {
@@ -137,6 +145,7 @@ const nextConfig = {
   serverExternalPackages: [
     "ssh2",
     "node-ssh",
+    "mysql2",
     "handlebars",
     "@xterm/xterm",
     "@xterm/addon-fit",
