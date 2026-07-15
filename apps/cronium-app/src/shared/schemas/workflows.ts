@@ -224,28 +224,58 @@ export const createWorkflowSchema = z
       message: "Workflow cannot contain cycles",
       path: ["edges"],
     },
+  )
+  .refine(
+    (data) => {
+      // Single-predecessor: a node may have at most one incoming edge. Cronium
+      // workflows do not support fan-in / merge nodes (fan-OUT via conditional
+      // edges is fine). Enforced here so it holds regardless of which builder or
+      // API path created the graph — the canvas UI guard is bypassable.
+      const targets = data.edges.map((edge) => edge.target);
+      return new Set(targets).size === targets.length;
+    },
+    {
+      message:
+        "A node cannot have multiple incoming connections (no fan-in). Each node may have at most one input.",
+      path: ["edges"],
+    },
   );
 
 // Update workflow schema
-export const updateWorkflowSchema = z.object({
-  id: z.number().int().positive("Workflow ID must be a positive integer"),
-  name: z.string().min(1).max(100).nullish(),
-  description: z.string().max(500).nullish(),
-  tags: z.array(z.string()).nullish(),
-  triggerType: z.nativeEnum(WorkflowTriggerType).nullish(),
-  webhookKey: z.string().nullish(),
-  scheduleNumber: z.number().min(1).nullish(),
-  scheduleUnit: z.nativeEnum(TimeUnit).nullish(),
-  customSchedule: z.string().nullish(),
-  useCronScheduling: z.boolean().nullish(),
-  runLocation: z.nativeEnum(RunLocation).nullish(),
-  overrideEventServers: z.boolean().nullish(),
-  overrideServerIds: z.array(z.number().int().positive()).nullish(),
-  status: z.nativeEnum(EventStatus).nullish(),
-  shared: z.boolean().nullish(),
-  nodes: z.array(workflowNodeSchema).optional(),
-  edges: z.array(workflowEdgeSchema).optional(),
-});
+export const updateWorkflowSchema = z
+  .object({
+    id: z.number().int().positive("Workflow ID must be a positive integer"),
+    name: z.string().min(1).max(100).nullish(),
+    description: z.string().max(500).nullish(),
+    tags: z.array(z.string()).nullish(),
+    triggerType: z.nativeEnum(WorkflowTriggerType).nullish(),
+    webhookKey: z.string().nullish(),
+    scheduleNumber: z.number().min(1).nullish(),
+    scheduleUnit: z.nativeEnum(TimeUnit).nullish(),
+    customSchedule: z.string().nullish(),
+    useCronScheduling: z.boolean().nullish(),
+    runLocation: z.nativeEnum(RunLocation).nullish(),
+    overrideEventServers: z.boolean().nullish(),
+    overrideServerIds: z.array(z.number().int().positive()).nullish(),
+    status: z.nativeEnum(EventStatus).nullish(),
+    shared: z.boolean().nullish(),
+    nodes: z.array(workflowNodeSchema).optional(),
+    edges: z.array(workflowEdgeSchema).optional(),
+  })
+  .refine(
+    (data) => {
+      // Single-predecessor: no fan-in (see createWorkflowSchema). Only checked
+      // when edges are being updated.
+      if (!data.edges) return true;
+      const targets = data.edges.map((edge) => edge.target);
+      return new Set(targets).size === targets.length;
+    },
+    {
+      message:
+        "A node cannot have multiple incoming connections (no fan-in). Each node may have at most one input.",
+      path: ["edges"],
+    },
+  );
 
 // Workflow ID parameter schema
 export const workflowIdSchema = z.object({
