@@ -168,18 +168,22 @@ func (c *BackendClient) AuditLog(ctx context.Context, executionID, action string
 		"timestamp":   time.Now(),
 	}
 	
-	req, err := c.newRequest(ctx, "POST", url, body)
-	if err != nil {
-		return err
-	}
-	
-	// Don't wait for response - fire and forget
+	// Fire and forget on a detached context: the caller's request context is
+	// often canceled the moment its handler returns, which would abort this
+	// audit write if the request were built from it.
 	go func() {
+		bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		req, err := c.newRequest(bgCtx, "POST", url, body)
+		if err != nil {
+			c.log.WithError(err).Error("Failed to build audit log request")
+			return
+		}
 		if err := c.doRequest(req, nil); err != nil {
 			c.log.WithError(err).Error("Failed to send audit log")
 		}
 	}()
-	
+
 	return nil
 }
 
@@ -221,21 +225,32 @@ func (c *BackendClient) doRequest(req *http.Request, result interface{}) error {
 			c.log.WithField("attempt", i).Debug("Retrying request")
 		}
 		
+		// Rebuild the request body for each attempt. The body is a one-shot
+		// reader that attempt 1 drains, so without this a retry would send an
+		// empty body (e.g. writing {"output":null} over real data).
+		if req.GetBody != nil {
+			bodyCopy, err := req.GetBody()
+			if err != nil {
+				return fmt.Errorf("failed to rewind request body: %w", err)
+			}
+			req.Body = bodyCopy
+		}
+
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			lastErr = err
 			continue
 		}
-		
-		defer resp.Body.Close()
-		
-		// Read response body
+
+		// Read + close the body this iteration (don't defer inside the loop,
+		// which would leak every non-final response until the function returns).
 		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		if err != nil {
 			lastErr = fmt.Errorf("failed to read response: %w", err)
 			continue
 		}
-		
+
 		// Check status code
 		if resp.StatusCode >= 400 {
 			var errResp types.ErrorResponse

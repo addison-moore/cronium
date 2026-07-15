@@ -30,7 +30,11 @@ func (h *Handler) GetInput(w http.ResponseWriter, r *http.Request) {
 	executionID := chi.URLParam(r, "id")
 	
 	// Verify token matches execution
-	claims, _ := middleware.GetTokenClaims(r.Context())
+	claims, ok := middleware.GetTokenClaims(r.Context())
+	if !ok {
+		h.writeError(w, http.StatusUnauthorized, "missing or invalid execution token")
+		return
+	}
 	if claims.ExecutionID != executionID {
 		h.writeError(w, http.StatusForbidden, "execution ID mismatch")
 		return
@@ -54,7 +58,11 @@ func (h *Handler) SetOutput(w http.ResponseWriter, r *http.Request) {
 	executionID := chi.URLParam(r, "id")
 	
 	// Verify token matches execution
-	claims, _ := middleware.GetTokenClaims(r.Context())
+	claims, ok := middleware.GetTokenClaims(r.Context())
+	if !ok {
+		h.writeError(w, http.StatusUnauthorized, "missing or invalid execution token")
+		return
+	}
 	if claims.ExecutionID != executionID {
 		h.writeError(w, http.StatusForbidden, "execution ID mismatch")
 		return
@@ -87,6 +95,10 @@ func (h *Handler) GetVariable(w http.ResponseWriter, r *http.Request) {
 	
 	// Verify token matches execution
 	claims, ok := middleware.GetTokenClaims(r.Context())
+	if !ok {
+		h.writeError(w, http.StatusUnauthorized, "missing or invalid execution token")
+		return
+	}
 	h.log.WithFields(logrus.Fields{
 		"urlExecutionID": executionID,
 		"claimsExecutionID": claims.ExecutionID,
@@ -125,7 +137,11 @@ func (h *Handler) SetVariable(w http.ResponseWriter, r *http.Request) {
 	key := chi.URLParam(r, "key")
 	
 	// Verify token matches execution
-	claims, _ := middleware.GetTokenClaims(r.Context())
+	claims, ok := middleware.GetTokenClaims(r.Context())
+	if !ok {
+		h.writeError(w, http.StatusUnauthorized, "missing or invalid execution token")
+		return
+	}
 	if claims.ExecutionID != executionID {
 		h.writeError(w, http.StatusForbidden, "execution ID mismatch")
 		return
@@ -156,7 +172,11 @@ func (h *Handler) SetCondition(w http.ResponseWriter, r *http.Request) {
 	executionID := chi.URLParam(r, "id")
 	
 	// Verify token matches execution
-	claims, _ := middleware.GetTokenClaims(r.Context())
+	claims, ok := middleware.GetTokenClaims(r.Context())
+	if !ok {
+		h.writeError(w, http.StatusUnauthorized, "missing or invalid execution token")
+		return
+	}
 	if claims.ExecutionID != executionID {
 		h.writeError(w, http.StatusForbidden, "execution ID mismatch")
 		return
@@ -187,7 +207,11 @@ func (h *Handler) GetContext(w http.ResponseWriter, r *http.Request) {
 	executionID := chi.URLParam(r, "id")
 	
 	// Verify token matches execution
-	claims, _ := middleware.GetTokenClaims(r.Context())
+	claims, ok := middleware.GetTokenClaims(r.Context())
+	if !ok {
+		h.writeError(w, http.StatusUnauthorized, "missing or invalid execution token")
+		return
+	}
 	if claims.ExecutionID != executionID {
 		h.writeError(w, http.StatusForbidden, "execution ID mismatch")
 		return
@@ -209,7 +233,11 @@ func (h *Handler) GetContext(w http.ResponseWriter, r *http.Request) {
 // ExecuteToolAction handles POST /tool-actions/execute
 func (h *Handler) ExecuteToolAction(w http.ResponseWriter, r *http.Request) {
 	// Get execution ID from token
-	claims, _ := middleware.GetTokenClaims(r.Context())
+	claims, ok := middleware.GetTokenClaims(r.Context())
+	if !ok {
+		h.writeError(w, http.StatusUnauthorized, "missing or invalid execution token")
+		return
+	}
 	executionID := claims.ExecutionID
 
 	var config types.ToolActionConfig

@@ -21,9 +21,15 @@ type ExecutionClaims struct {
 // same id exported to the container as CRONIUM_EXECUTION_ID and used in the
 // runtime API URL, or the runtime handler rejects calls with "execution ID
 // mismatch" (403).
-func generateJWT(executionID string, jobID string, secret string, userID string, eventID string) (string, error) {
+func generateJWT(executionID string, jobID string, secret string, userID string, eventID string, lifetime time.Duration) (string, error) {
 	if secret == "" {
 		return "", fmt.Errorf("JWT secret not configured")
+	}
+
+	// The token must outlive the job, or a long-running script's late
+	// cronium.output()/input() call gets a 401 mid-execution.
+	if lifetime < 2*time.Hour {
+		lifetime = 2 * time.Hour
 	}
 
 	// Create claims
@@ -36,7 +42,7 @@ func generateJWT(executionID string, jobID string, secret string, userID string,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   fmt.Sprintf("job:%s", jobID),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(2 * time.Hour)), // 2 hour expiry
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(lifetime)),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 			Issuer:    "cronium-orchestrator",
 		},

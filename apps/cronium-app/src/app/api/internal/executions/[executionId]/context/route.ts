@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
-import { jobs, events, users } from "@/shared/schema";
+import { jobs, events } from "@/shared/schema";
 import { eq } from "drizzle-orm";
 import { executionService } from "@/lib/services/execution-service";
 
@@ -77,36 +77,9 @@ export async function GET(
       }
     }
 
-    // Get user details if available
-    let userData: {
-      id: string;
-      email: string | null;
-      name: string | null;
-    } | null = null;
-    if (jobData.userId) {
-      const user = await db
-        .select({
-          id: users.id,
-          email: users.email,
-          firstName: users.firstName,
-          lastName: users.lastName,
-        })
-        .from(users)
-        .where(eq(users.id, jobData.userId))
-        .limit(1);
-
-      if (user && user.length > 0) {
-        userData = {
-          id: user[0]?.id ?? "",
-          email: user[0]?.email ?? null,
-          name:
-            `${user[0]?.firstName ?? ""} ${user[0]?.lastName ?? ""}`.trim() ||
-            null,
-        };
-      }
-    }
-
-    // Build execution context
+    // Build execution context. NOTE: intentionally no user email/name — a
+    // running script only needs userId (for scoped variables); leaking the
+    // operator's email/name into the container is unnecessary PII exposure.
     const metadata: Record<string, unknown> = {};
 
     // Safely merge metadata
@@ -133,13 +106,6 @@ export async function GET(
             content: eventData.content,
             runLocation: eventData.runLocation,
             serverId: eventData.serverId,
-          }
-        : null,
-      user: userData
-        ? {
-            id: userData.id,
-            email: userData.email ?? null,
-            name: userData.name ?? null,
           }
         : null,
     };

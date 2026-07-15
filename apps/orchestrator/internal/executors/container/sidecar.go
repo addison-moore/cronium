@@ -249,7 +249,11 @@ func (sm *SidecarManager) generateExecutionToken(job *types.Job) (string, error)
 		executionID = job.ID
 	}
 
-	return generateJWT(executionID, job.ID, sm.executor.config.Runtime.JWTSecret, userID, eventID)
+	// Size the token to outlast the job (plus a cleanup buffer) so late
+	// cronium.output()/input() calls in a long script don't hit an expired token.
+	lifetime := job.GetTimeout() + time.Hour
+
+	return generateJWT(executionID, job.ID, sm.executor.config.Runtime.JWTSecret, userID, eventID, lifetime)
 }
 
 // storeExecutionToken stores the token for use by the main container
