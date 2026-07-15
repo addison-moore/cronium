@@ -17,6 +17,8 @@ import {
 import { scheduleJob, RecurrenceRule } from "node-schedule";
 import type { Job } from "node-schedule";
 import { EventEmitter } from "events";
+import { unifiedIoDebug } from "@/lib/unified-io/debug";
+import { resolveWorkflowInput } from "@/lib/unified-io/resolve-input";
 
 // Type definitions
 interface NodeResult {
@@ -932,63 +934,24 @@ export class WorkflowExecutor {
    * Resolve input parameters for a node from its dependency nodes
    */
   private resolveInputParams(
-    _node: WorkflowNode,
+    node: WorkflowNode,
     incomingConnections: WorkflowConnection[],
     nodeResults: Map<number, NodeResult>,
     initialInputData: Record<string, unknown> = {},
   ): Record<string, unknown> {
-    // If this is the first node (no incoming connections), use initial workflow input
-    if (incomingConnections.length === 0) {
-      return { ...initialInputData };
-    }
-
-    // For nodes with incoming connections, use the output from the most recent successful predecessor
-    // This ensures cronium.output() from one event becomes cronium.input() for the next
-    let latestOutput: unknown = {};
-    let hasValidOutput = false;
-
-    for (const connection of incomingConnections) {
-      const sourceNodeResult = nodeResults.get(connection.sourceNodeId);
-      console.log(
-        `Workflow input resolution: Checking connection from node ${connection.sourceNodeId}:`,
-        sourceNodeResult,
+    const resolved = resolveWorkflowInput(
+      incomingConnections,
+      nodeResults,
+      initialInputData,
+    );
+    // A downstream node whose predecessor failed or emitted nothing receives {}
+    // (not the workflow trigger input — see resolveWorkflowInput). Trace it.
+    if (incomingConnections.length > 0 && Object.keys(resolved).length === 0) {
+      unifiedIoDebug(
+        `workflow input: node ${node.id} predecessor produced no usable output; receives {}`,
       );
-
-      if (sourceNodeResult?.success) {
-        // If the source node has scriptOutput (from cronium.output()), use it directly
-        if (
-          sourceNodeResult.scriptOutput !== undefined &&
-          sourceNodeResult.scriptOutput !== null
-        ) {
-          console.log(
-            `Found valid scriptOutput from node ${connection.sourceNodeId}:`,
-            sourceNodeResult.scriptOutput,
-          );
-          latestOutput = sourceNodeResult.scriptOutput;
-          hasValidOutput = true;
-        } else {
-          console.log(
-            `Node ${connection.sourceNodeId} has no scriptOutput (undefined or null)`,
-          );
-        }
-      } else {
-        console.log(`Node ${connection.sourceNodeId} failed or has no result`);
-      }
     }
-
-    // If no valid output from predecessors, fall back to initial workflow input
-    if (!hasValidOutput) {
-      return { ...initialInputData };
-    }
-
-    // This becomes the next step's cronium.input(). Objects/arrays pass through
-    // as-is; a scalar (string/number/boolean, e.g. cronium.output("done")) is
-    // wrapped so it survives the object-typed input channel instead of being
-    // dropped — the next step reads it as cronium.input().value.
-    if (typeof latestOutput === "object" && latestOutput !== null) {
-      return latestOutput as Record<string, unknown>;
-    }
-    return { value: latestOutput };
+    return resolved;
   }
 
   async runWorkflowImmediately(
