@@ -50,12 +50,15 @@ Result shape:
 
 Parameters:
 
-- **query** — SQL using `:named` placeholders for values.
-- **params** — a JSON object mapping placeholder names to values (may be
-  templates; see below).
-- **maxRows** — cap on returned rows (default 10000). If exceeded, rows are
-  truncated and `truncated` is `true`.
-- **timeoutMs** — statement timeout (default 30000).
+- **query** — SQL using `:named` placeholders for values (edited in a SQL code
+  editor).
+- **params** — optional JSON object mapping placeholder names to values (may be
+  templates; see below). Leave blank if the query has no placeholders.
+
+The **statement timeout** comes from the event's **Timeout** setting (in Event
+Settings) — there is no separate per-action timeout. Results are capped at
+**10,000 rows** as a safety backstop (`truncated` is set if the cap is hit); use
+`LIMIT` in your query to control how many rows come back.
 
 Run Query rejects any statement that isn't read-only, and rejects multiple
 (stacked) statements — so a "read" node can never mutate data.
@@ -111,7 +114,8 @@ Or reference it in another tool action's parameters with
 - **Connection targets.** Like HTTP events, the SQL tool connects to
   user-configured hosts and does not allowlist them — connecting to your own
   internal databases is the point (single-tenant / operator-is-author model).
-- **Resource limits.** A row cap (`truncated` flag) and a statement timeout
-  bound memory and the Unified I/O payload; values with imprecise types
-  (`BIGINT`, `DECIMAL`), dates, and binary are returned JSON-safe (numbers as
-  strings, dates as ISO strings, blobs as base64).
+- **Resource limits.** An internal 10,000-row cap (`truncated` flag) and the
+  event's Timeout (applied as the SQL statement timeout, and as an overall cap on
+  the action) bound memory and the Unified I/O payload. Values with imprecise
+  types (`BIGINT`, `DECIMAL`), dates, and binary are returned JSON-safe (numbers
+  as strings, dates as ISO strings, blobs as base64).

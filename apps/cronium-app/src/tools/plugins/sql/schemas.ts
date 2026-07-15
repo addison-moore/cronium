@@ -41,33 +41,36 @@ export function defaultPort(dialect: SqlDialectValue): number {
 // `coerceBindParams` normalizes it in execute().
 const paramsMap = z
   .union([z.record(z.string(), z.unknown()), z.string()])
-  .optional();
-
-const timeoutMs = z.coerce
-  .number()
-  .int()
-  .positive()
-  .max(600_000)
   .optional()
-  .default(30_000);
+  .describe(
+    'Optional. JSON object of values for the query\'s :name placeholders, e.g. {"id": "{{cronium.input.orderId}}"}. Values are bound safely (never concatenated into the SQL). Leave blank if the query has no placeholders.',
+  );
+
+// Result-size safety cap: a query without a LIMIT can't pull unbounded rows into
+// memory / the Unified I/O payload. Users control the size with LIMIT; this is
+// just the backstop. The statement timeout comes from the event's Timeout
+// setting (context.timeoutMs), not a per-action field.
+export const DEFAULT_MAX_ROWS = 10_000;
+export const DEFAULT_SQL_TIMEOUT_MS = 30_000;
 
 export const runQuerySchema = z.object({
-  query: z.string().min(1, "Query is required"),
+  query: z
+    .string()
+    .min(1, "Query is required")
+    .describe(
+      "The SQL query to run (read-only: SELECT/WITH). Use :name placeholders for values and supply them in Parameters. Add LIMIT to cap the number of rows.",
+    ),
   params: paramsMap,
-  maxRows: z.coerce
-    .number()
-    .int()
-    .positive()
-    .max(1_000_000)
-    .optional()
-    .default(10_000),
-  timeoutMs,
 });
 export type RunQueryParams = z.infer<typeof runQuerySchema>;
 
 export const executeStatementSchema = z.object({
-  statement: z.string().min(1, "Statement is required"),
+  statement: z
+    .string()
+    .min(1, "Statement is required")
+    .describe(
+      "A single SQL write statement (INSERT/UPDATE/DELETE/DDL). Use :name placeholders for values and supply them in Parameters.",
+    ),
   params: paramsMap,
-  timeoutMs,
 });
 export type ExecuteStatementParams = z.infer<typeof executeStatementSchema>;

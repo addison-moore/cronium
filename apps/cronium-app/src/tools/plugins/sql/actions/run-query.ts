@@ -1,7 +1,12 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
-import { sqlCredentialsSchema, runQuerySchema } from "../schemas";
+import {
+  sqlCredentialsSchema,
+  runQuerySchema,
+  DEFAULT_MAX_ROWS,
+  DEFAULT_SQL_TIMEOUT_MS,
+} from "../schemas";
 import { getDriver } from "../drivers";
 import {
   assertReadOnlyStatement,
@@ -68,13 +73,13 @@ export const runQueryAction: ToolAction = {
 
       const driver = getDriver(creds.dialect);
       const result = await driver.run(creds, parsed.query, bindParams, {
-        maxRows: parsed.maxRows,
-        timeoutMs: parsed.timeoutMs,
+        maxRows: DEFAULT_MAX_ROWS,
+        timeoutMs: context.timeoutMs ?? DEFAULT_SQL_TIMEOUT_MS,
       });
 
       logger.info(
         `SQL query returned ${result.rowCount} row(s)${
-          result.truncated ? ` (truncated to ${parsed.maxRows})` : ""
+          result.truncated ? ` (truncated to ${DEFAULT_MAX_ROWS})` : ""
         } from ${creds.dialect}`,
       );
 

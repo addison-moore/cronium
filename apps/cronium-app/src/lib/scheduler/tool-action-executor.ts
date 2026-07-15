@@ -16,6 +16,8 @@ import { ErrorCategorizer } from "@/lib/tools/error-categorization";
 import { rateLimiter } from "@/lib/security/rate-limiter";
 import { auditLog } from "@/lib/security/audit-logger";
 import { processToolActionTemplate } from "@/lib/tool-action-template-processor";
+import { eventTimeoutMs } from "@/lib/scheduler/event-timeout";
+import { withTimeout } from "@/lib/scheduler/with-timeout";
 import { createTemplateContext } from "@/lib/template-processor";
 import { type EncryptedData } from "@/lib/security/credential-encryption";
 import {
@@ -73,6 +75,7 @@ export interface ToolActionExecutionContext {
   onPartialResult?: (result: unknown) => void;
   isTest?: boolean;
   mockData?: unknown;
+  timeoutMs?: number;
 }
 
 /**
@@ -300,6 +303,9 @@ export async function executeToolAction(
         console.log(`[PARTIAL] ${JSON.stringify(redactSecrets(result))}`);
       },
       isTest: false,
+      // The event's Timeout setting bounds this in-process action (used by the
+      // SQL tool as its statement timeout and enforced as an overall cap below).
+      timeoutMs: eventTimeoutMs(event),
     };
 
     // Get user variables for template context
@@ -417,10 +423,14 @@ export async function executeToolAction(
     const result = await circuitBreaker.execute(async () => {
       return retryExecutor.execute(
         async () => {
-          const actionResult: unknown = await action.execute(
-            credentials,
-            mergedParameters,
-            context,
+          // Enforce the event's Timeout setting as an overall cap so a slow or
+          // hung action fails the job instead of running unbounded. The SQL
+          // driver also applies context.timeoutMs as its statement timeout, so
+          // a query is cancelled DB-side within the same budget.
+          const actionResult: unknown = await withTimeout(
+            action.execute(credentials, mergedParameters, context),
+            context.timeoutMs ?? 30_000,
+            `Action "${action.name}"`,
           );
           // Actions report failure by returning {success:false}/{ok:false}
           // instead of throwing. Convert that to a throw so the breaker records

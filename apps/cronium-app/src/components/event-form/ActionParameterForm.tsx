@@ -118,7 +118,11 @@ export default function ActionParameterForm({
     // Check for explicit format hints
     const description =
       (schema as { description?: string }).description?.toLowerCase() ?? "";
-    if (description.includes("json") || description.includes("html")) {
+    if (
+      description.includes("json") ||
+      description.includes("html") ||
+      description.includes("sql")
+    ) {
       return true;
     }
 
@@ -130,6 +134,8 @@ export default function ActionParameterForm({
       lowerKey.includes("blocks") || // Slack blocks
       lowerKey.includes("embeds") || // Discord embeds
       lowerKey.includes("card") || // Teams adaptive cards
+      lowerKey === "query" || // SQL query
+      lowerKey === "statement" || // SQL statement
       (lowerKey.includes("body") && description.includes("html"))
     ) {
       return true;
@@ -142,7 +148,7 @@ export default function ActionParameterForm({
   const getMonacoLanguage = (
     key: string,
     schema: z.ZodTypeAny,
-  ): "html" | "json" => {
+  ): "html" | "json" | "sql" => {
     const description =
       (schema as { description?: string }).description?.toLowerCase() ?? "";
     const lowerKey = key.toLowerCase();
@@ -152,6 +158,14 @@ export default function ActionParameterForm({
       (lowerKey.includes("body") && description.includes("html"))
     ) {
       return "html";
+    }
+
+    if (
+      description.includes("sql") ||
+      lowerKey === "query" ||
+      lowerKey === "statement"
+    ) {
+      return "sql";
     }
 
     return "json";
@@ -409,6 +423,9 @@ export default function ActionParameterForm({
           rows={4}
           className="font-mono text-sm"
         />
+        {description && (
+          <p className="text-muted-foreground text-sm">{description}</p>
+        )}
         {error && <p className="text-sm text-red-500">{error}</p>}
       </div>
     );

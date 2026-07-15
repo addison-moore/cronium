@@ -129,6 +129,11 @@ export interface ExecutionContext {
   isTest?: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mockData?: any;
+  // The event's configured execution timeout in milliseconds (from the event's
+  // Timeout setting). Actions that make bounded external calls (e.g. the SQL
+  // tool's statement timeout) should honor this; the executor also enforces it
+  // as an overall cap on execute().
+  timeoutMs?: number;
 }
 
 // Supporting Interfaces

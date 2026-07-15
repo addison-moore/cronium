@@ -67,6 +67,29 @@ describe("run-query action", () => {
     });
   });
 
+  it("uses the event timeout (context.timeoutMs) as the statement timeout", async () => {
+    const run = jest.fn().mockResolvedValue({
+      columns: [],
+      rows: [],
+      rowCount: 0,
+      truncated: false,
+    });
+    mockGetDriver.mockReturnValue({ run });
+    const context = ctx();
+    context.timeoutMs = 5_000;
+    await runQueryAction.execute(
+      creds,
+      { query: "SELECT 1", params: {} },
+      context,
+    );
+    expect(run).toHaveBeenCalledWith(
+      expect.anything(),
+      "SELECT 1",
+      {},
+      { maxRows: 10_000, timeoutMs: 5_000 },
+    );
+  });
+
   it("rejects a write on the read path and never touches the driver", async () => {
     mockGetDriver.mockReturnValue({ run: jest.fn() });
     const result = (await runQueryAction.execute(

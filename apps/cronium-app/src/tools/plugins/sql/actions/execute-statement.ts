@@ -1,7 +1,11 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
-import { sqlCredentialsSchema, executeStatementSchema } from "../schemas";
+import {
+  sqlCredentialsSchema,
+  executeStatementSchema,
+  DEFAULT_SQL_TIMEOUT_MS,
+} from "../schemas";
 import { getDriver } from "../drivers";
 import {
   assertSingleStatement,
@@ -61,7 +65,7 @@ export const executeStatementAction: ToolAction = {
         // High cap so a RETURNING clause isn't truncated; we only surface the
         // affected/returned row count, not the rows themselves.
         maxRows: 1_000_000,
-        timeoutMs: parsed.timeoutMs,
+        timeoutMs: context.timeoutMs ?? DEFAULT_SQL_TIMEOUT_MS,
       });
 
       logger.info(
