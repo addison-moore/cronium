@@ -31,6 +31,17 @@ export const executeStatementAction: ToolAction = {
     "Use :named placeholders and supply values in Parameters (JSON). Only a " +
     "single statement is allowed. This is the explicit write path; Run Query " +
     "rejects mutations.",
+  examples: [
+    {
+      name: "Update a row by id",
+      description: "Parameterized UPDATE returning the affected row count",
+      input: {
+        statement: "UPDATE orders SET status = :status WHERE id = :id",
+        params: { status: "shipped", id: "1001" },
+      },
+      output: { rowCount: 1 },
+    },
+  ],
 
   async execute(
     credentials: unknown,
