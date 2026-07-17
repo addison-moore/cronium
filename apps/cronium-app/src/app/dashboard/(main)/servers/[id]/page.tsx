@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Code,
   Eye,
+  Terminal as TerminalIcon,
 } from "lucide-react";
 import { Button } from "@cronium/ui";
 import {
@@ -36,6 +37,8 @@ import { Spinner } from "@cronium/ui";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
 import ServerEventsList from "@/components/dashboard/ServerEventsList";
 import ServerForm from "@/components/dashboard/ServerForm";
+import Terminal from "@/components/terminal/Terminal-lazy";
+import { usePermissions } from "@/hooks/usePermissions";
 import { ServerDetailsHeader } from "@/components/server-details/ServerDetailsHeader";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
@@ -71,8 +74,10 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
   // Tab navigation
   const { activeTab, changeTab } = useHashTabNavigation({
     defaultTab: "overview",
-    validTabs: ["overview", "edit"],
+    validTabs: ["overview", "edit", "console"],
   });
+
+  const { permissions } = usePermissions();
 
   // tRPC queries and mutations
   const utils = trpc.useUtils();
@@ -361,6 +366,14 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
         <TabsList>
           <Tab value="overview" label="Overview" className="py-2" icon={Eye} />
           <Tab value="edit" label="Edit" className="py-2" icon={Edit} />
+          {permissions.console && (
+            <Tab
+              value="console"
+              label="Console"
+              className="py-2"
+              icon={TerminalIcon}
+            />
+          )}
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -368,12 +381,20 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
         </TabsContent>
 
         <TabsContent value="edit" className="space-y-4">
-          <ServerForm
-            initialServer={server as Partial<UpdateServerInput>}
-            isEditing={true}
-            onSuccess={handleServerUpdate}
-          />
+          <div className="bg-card border-input rounded-lg border p-6">
+            <ServerForm
+              initialServer={server as Partial<UpdateServerInput>}
+              isEditing={true}
+              onSuccess={handleServerUpdate}
+            />
+          </div>
         </TabsContent>
+
+        {permissions.console && (
+          <TabsContent value="console" className="space-y-4">
+            <Terminal serverId={serverId} serverName={server.name} />
+          </TabsContent>
+        )}
       </Tabs>
 
       <AlertDialog
