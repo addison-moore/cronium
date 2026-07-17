@@ -1,23 +1,10 @@
 import { z } from "zod";
-import {
-  EventType,
-  EventStatus,
-  TimeUnit,
-  RunLocation,
-  ConditionalActionType,
-} from "@/shared/schema";
+import { EventType, EventStatus, TimeUnit, RunLocation } from "@/shared/schema";
 
 // Schema for environment variables
 export const envVarSchema = z.object({
   key: z.string().min(1, "Key is required"),
   value: z.string().min(1, "Value is required"),
-});
-
-// Schema for events (success/failure handlers)
-export const eventSchema = z.object({
-  type: z.nativeEnum(ConditionalActionType),
-  value: z.string().optional(),
-  targetScriptId: z.coerce.number().optional(),
 });
 
 // HTTP Header schema
@@ -68,8 +55,6 @@ export const scriptSchema = z
     timeoutUnit: z.nativeEnum(TimeUnit),
     retries: z.number().min(0, "Retries must be at least 0"),
     envVars: z.array(envVarSchema).default([]),
-    onSuccessActions: z.array(eventSchema).default([]),
-    onFailActions: z.array(eventSchema).default([]),
   })
   .refine(
     (data) => {

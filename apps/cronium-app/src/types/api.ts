@@ -10,7 +10,6 @@ import type {
   Log,
   Server,
   User,
-  ConditionalAction,
   Workflow,
   UserVariable,
   Tool,
@@ -113,15 +112,6 @@ export interface ToolTestResponse extends ApiResponse {
     message: string;
     responseTime?: number;
   };
-}
-
-// Conditional Events API Types
-export interface ConditionalEventsResponse extends PaginatedResponse<ConditionalAction> {
-  conditionalEvents: ConditionalAction[];
-}
-
-export interface ConditionalEventResponse extends ApiResponse<ConditionalAction> {
-  conditionalEvent?: ConditionalAction;
 }
 
 // Dashboard API Types

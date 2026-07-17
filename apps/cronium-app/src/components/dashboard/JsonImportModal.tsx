@@ -19,7 +19,6 @@ import {
   EventTriggerType,
   RunLocation,
   TimeUnit,
-  ConditionalActionType,
 } from "@/shared/schema";
 import { trpc } from "@/lib/trpc";
 import { type z } from "zod";
@@ -59,14 +58,6 @@ interface ImportEventData {
     key: string;
     value: string;
     isSecret?: boolean;
-  }>;
-  successEvents?: Array<{
-    type: string;
-    value: string;
-  }>;
-  failEvents?: Array<{
-    type: string;
-    value: string;
   }>;
 }
 
@@ -261,28 +252,6 @@ export function JsonImportModal({ isOpen, onClose }: JsonImportModalProps) {
               value: envVar.value,
             }))
           : [],
-        onSuccessActions: Array.isArray(importData.successEvents)
-          ? importData.successEvents.map((e) => ({
-              type: "ON_SUCCESS",
-              action: ConditionalActionType.SCRIPT,
-              details: {
-                targetEventId: null,
-                message: e.value,
-              },
-            }))
-          : [],
-        onFailActions: Array.isArray(importData.failEvents)
-          ? importData.failEvents.map((e) => ({
-              type: "ON_FAILURE",
-              action: ConditionalActionType.SCRIPT,
-              details: {
-                targetEventId: null,
-                message: e.value,
-              },
-            }))
-          : [],
-        onAlwaysActions: [],
-        onConditionActions: [],
       };
 
       // Validate with schema

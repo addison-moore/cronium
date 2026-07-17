@@ -3,14 +3,7 @@ import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import {
-  RunLocation,
-  ConnectionType,
-  UserRole,
-  EventStatus,
-  TimeUnit,
-  type ConditionalActionType,
-} from "@/shared/schema";
+import { RunLocation, UserRole, EventStatus, TimeUnit } from "@/shared/schema";
 import { authenticateApiRequest } from "@/lib/api-auth";
 
 // Helper function to authenticate user via session or API token
@@ -220,27 +213,6 @@ export async function PATCH(
       status?: EventStatus;
       resetCounterOnActive?: boolean;
       envVars?: Array<{ key: string; value: string }>;
-      conditionalActions?: Array<{
-        type: string;
-        action: ConditionalActionType;
-        details: {
-          emailAddresses?: string;
-          targetEventId?: number;
-          toolId?: number;
-          message?: string;
-          emailSubject?: string;
-        };
-      }>;
-      onSuccessActions?: Array<{
-        type: ConditionalActionType;
-        value?: string;
-        targetScriptId?: string | number;
-      }>;
-      onFailActions?: Array<{
-        type: ConditionalActionType;
-        value?: string;
-        targetScriptId?: string | number;
-      }>;
       selectedServerIds?: number[];
       startTime?: Date | null;
       [key: string]: unknown;
@@ -341,104 +313,6 @@ export async function PATCH(
           key: envVar.key,
           value: envVar.value,
         });
-      }
-    }
-
-    // Handle conditional actions
-    if (Array.isArray(body.conditionalActions)) {
-      // Delete existing conditional actions for this script
-      await storage.deleteActionsByEventId(eventId);
-
-      // Add new conditional actions
-      for (const condAction of body.conditionalActions) {
-        interface ConditionalActionData {
-          type: ConditionalActionType;
-          value: string;
-          targetEventId: number | null;
-          toolId: number | null;
-          message: string | null;
-          emailAddresses: string | null;
-          emailSubject: string | null;
-          successEventId?: number;
-          failEventId?: number;
-          alwaysEventId?: number;
-          conditionEventId?: number;
-        }
-
-        const eventData: ConditionalActionData = {
-          type: condAction.action,
-          value: condAction.details.emailAddresses ?? "",
-          targetEventId: condAction.details.targetEventId ?? null,
-          toolId: condAction.details.toolId ?? null,
-          message: condAction.details.message ?? null,
-          emailAddresses: condAction.details.emailAddresses ?? null,
-          emailSubject: condAction.details.emailSubject ?? null,
-        };
-
-        if (condAction.type === String(ConnectionType.ON_SUCCESS)) {
-          eventData.successEventId = eventId;
-          await storage.createAction(eventData);
-        } else if (condAction.type === String(ConnectionType.ON_FAILURE)) {
-          eventData.failEventId = eventId;
-          await storage.createAction(eventData);
-        } else if (condAction.type === String(ConnectionType.ALWAYS)) {
-          eventData.alwaysEventId = eventId;
-          await storage.createAction(eventData);
-        } else if (condAction.type === String(ConnectionType.ON_CONDITION)) {
-          eventData.conditionEventId = eventId;
-          await storage.createAction(eventData);
-        }
-      }
-    }
-
-    // If success events are provided, handle them (legacy support)
-    if (Array.isArray(body.onSuccessActions)) {
-      // Delete all existing conditional actions first
-      await storage.deleteActionsByEventId(eventId);
-
-      // Add new success events
-      for (const action of body.onSuccessActions) {
-        // Ensure event data is properly sanitized
-        const sanitizedEvent = {
-          type: action.type,
-          value: typeof action.value === "string" ? action.value : "",
-          successEventId: eventId,
-          targetEventId: action.targetScriptId
-            ? parseInt(String(action.targetScriptId), 10)
-            : null,
-        };
-
-        // Skip invalid events
-        if (!sanitizedEvent.type) {
-          continue;
-        }
-
-        await storage.createAction(sanitizedEvent);
-      }
-    }
-
-    // If fail events are provided, handle them (legacy support)
-    if (Array.isArray(body.onFailActions)) {
-      // Note: conditional actions are already deleted above
-
-      // Add new fail events
-      for (const action of body.onFailActions) {
-        // Ensure event data is properly sanitized
-        const sanitizedEvent = {
-          type: action.type,
-          value: typeof action.value === "string" ? action.value : "",
-          failEventId: eventId,
-          targetEventId: action.targetScriptId
-            ? parseInt(String(action.targetScriptId), 10)
-            : null,
-        };
-
-        // Skip invalid events
-        if (!sanitizedEvent.type) {
-          continue;
-        }
-
-        await storage.createAction(sanitizedEvent);
       }
     }
 

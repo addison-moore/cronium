@@ -11,7 +11,6 @@ const PRIORITY_FILES = [
 
   // Server-side critical
   "/src/server/storage.ts",
-  "/src/server/utils/event-validation.ts",
   "/src/server/api/routers/tools.ts",
 
   // Security-sensitive

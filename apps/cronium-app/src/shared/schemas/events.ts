@@ -5,7 +5,6 @@ import {
   RunLocation,
   TimeUnit,
   EventTriggerType,
-  ConditionalActionType,
 } from "../schema";
 
 // Base event query schema
@@ -28,24 +27,6 @@ export const envVarSchema = z.object({
 export const httpHeaderSchema = z.object({
   key: z.string().min(1, "Header key is required"),
   value: z.string(),
-});
-
-// Conditional event schema - Updated to match frontend data structure
-export const conditionalActionSchema = z.object({
-  type: z.string(), // ON_SUCCESS, ON_FAILURE, ALWAYS, ON_CONDITION
-  action: z.nativeEnum(ConditionalActionType), // SCRIPT or SEND_MESSAGE
-  details: z
-    .object({
-      emailAddresses: z.string().optional(),
-      emailSubject: z.string().optional(),
-      targetEventId: z.number().optional().nullable(),
-      toolId: z.number().optional().nullable(),
-      message: z.string().optional(),
-    })
-    .optional(),
-  // Legacy fields for backward compatibility
-  value: z.string().optional(),
-  targetScriptId: z.number().optional().nullable(),
 });
 
 // Create event schema
@@ -107,10 +88,6 @@ export const createEventSchema = z
 
     // Environment variables and conditional events
     envVars: z.array(envVarSchema).default([]),
-    onSuccessActions: z.array(conditionalActionSchema).default([]),
-    onFailActions: z.array(conditionalActionSchema).default([]),
-    onAlwaysActions: z.array(conditionalActionSchema).default([]),
-    onConditionActions: z.array(conditionalActionSchema).default([]),
   })
   .refine(
     (data) => {
@@ -214,10 +191,6 @@ export const updateEventSchema = z.object({
   maxExecutions: z.number().min(0).optional(),
   resetCounterOnActive: z.boolean().optional(),
   envVars: z.array(envVarSchema).optional(),
-  onSuccessActions: z.array(conditionalActionSchema).optional(),
-  onFailActions: z.array(conditionalActionSchema).optional(),
-  onAlwaysActions: z.array(conditionalActionSchema).optional(),
-  onConditionActions: z.array(conditionalActionSchema).optional(),
 });
 
 // Event ID parameter schema
@@ -273,4 +246,3 @@ export type EventDownloadInput = z.infer<typeof eventDownloadSchema>;
 export type EventFilterInput = z.infer<typeof eventFilterSchema>;
 export type EnvVar = z.infer<typeof envVarSchema>;
 export type HttpHeader = z.infer<typeof httpHeaderSchema>;
-export type ConditionalAction = z.infer<typeof conditionalActionSchema>;

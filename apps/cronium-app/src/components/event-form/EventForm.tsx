@@ -23,9 +23,6 @@ import { getDefaultScriptContent } from "@/lib/scriptTemplates";
 import { MonacoEditor } from "@cronium/ui";
 import { TagsInput } from "@cronium/ui";
 import AIScriptAssistant from "@/components/dashboard/AIScriptAssistant-lazy";
-import ConditionalActionsSection, {
-  type EventData,
-} from "./ConditionalActionsSection";
 import ToolActionSection from "./ToolActionSection";
 import EditorSettingsModal, {
   type EditorSettings,
@@ -39,7 +36,6 @@ import {
   RunLocation,
   TimeUnit,
   EventTriggerType,
-  type ConditionalActionType,
   type Event,
   type Tool,
 } from "@/shared/schema";
@@ -50,42 +46,6 @@ import type { ServerData } from "@/components/event-list/types";
 interface EventFormInitialData extends Partial<Event> {
   environmentVariables?: Array<{ key: string; value: string }>;
   servers?: Array<{ id: number; name: string }>;
-  // Conditional events
-  successEvents?: Array<{
-    id: number;
-    type: string;
-    value?: string;
-    emailSubject?: string;
-    targetEventId?: number;
-    toolId?: number;
-    message?: string;
-  }>;
-  failEvents?: Array<{
-    id: number;
-    type: string;
-    value?: string;
-    emailSubject?: string;
-    targetEventId?: number;
-    toolId?: number;
-    message?: string;
-  }>;
-  alwaysEvents?: Array<{
-    id: number;
-    type: string;
-    value?: string;
-    targetEventId?: number;
-    toolId?: number;
-    message?: string;
-  }>;
-  conditionEvents?: Array<{
-    id: number;
-    type: string;
-    value?: string;
-    emailSubject?: string;
-    targetEventId?: number;
-    toolId?: number;
-    message?: string;
-  }>;
 }
 
 const eventsCopy = {
@@ -213,20 +173,6 @@ const eventFormSchema = z
     httpBody: z.string().optional(),
     // Tool Action specific field
     toolActionConfig: z.custom<ToolActionConfig>().optional().nullable(),
-    // Conditional actions
-    conditionalActions: z
-      .array(
-        z.object({
-          type: z.string(),
-          action: z.string(),
-          emailAddresses: z.string().optional(),
-          emailSubject: z.string().optional(),
-          targetEventId: z.number().optional().nullable(),
-          toolId: z.number().optional().nullable(),
-          message: z.string().optional(),
-        }),
-      )
-      .default([]),
   })
   .refine(
     (data) => {
@@ -357,7 +303,6 @@ export default function EventForm({
       envVars: [],
       tags: [],
       toolActionConfig: null,
-      conditionalActions: [],
     },
   });
 
@@ -404,13 +349,6 @@ export default function EventForm({
     QUERY_OPTIONS.dynamic,
   );
   const availableTools = (toolsData?.tools ?? []) as unknown as Tool[];
-
-  // Fetch available events
-  const { data: eventsData } = trpc.events.getAll.useQuery(
-    { limit: 1000, offset: 0 },
-    QUERY_OPTIONS.dynamic,
-  );
-  const availableEvents = eventsData?.events ?? [];
 
   // tRPC mutations
   const createEventMutation = trpc.events.create.useMutation();
@@ -555,7 +493,6 @@ export default function EventForm({
         // Prepare form data for submission
         // Remove form-only fields and prepare for API
         const {
-          conditionalActions,
           useCronScheduling: _useCronScheduling,
           httpHeaders: _httpHeaders,
           runOnLocal,
@@ -570,65 +507,6 @@ export default function EventForm({
             : runOnLocal
               ? RunLocation.LOCAL_AND_REMOTE
               : RunLocation.REMOTE;
-
-        // ConditionalActionType types are already defined in the schema
-
-        // Separate conditional actions by type
-        const successActions = conditionalActions
-          .filter((action) => action.type === "ON_SUCCESS")
-          .map((action) => ({
-            type: action.type,
-            action: action.action as ConditionalActionType,
-            details: {
-              emailAddresses: action.emailAddresses ?? "",
-              emailSubject: action.emailSubject ?? "",
-              targetEventId: action.targetEventId ?? null,
-              toolId: action.toolId ?? null,
-              message: action.message ?? "",
-            },
-          }));
-
-        const failureActions = conditionalActions
-          .filter((action) => action.type === "ON_FAILURE")
-          .map((action) => ({
-            type: action.type,
-            action: action.action as ConditionalActionType,
-            details: {
-              emailAddresses: action.emailAddresses ?? "",
-              emailSubject: action.emailSubject ?? "",
-              targetEventId: action.targetEventId ?? null,
-              toolId: action.toolId ?? null,
-              message: action.message ?? "",
-            },
-          }));
-
-        const alwaysActions = conditionalActions
-          .filter((action) => action.type === "ALWAYS")
-          .map((action) => ({
-            type: action.type,
-            action: action.action as ConditionalActionType,
-            details: {
-              emailAddresses: action.emailAddresses ?? "",
-              emailSubject: action.emailSubject ?? "",
-              targetEventId: action.targetEventId ?? null,
-              toolId: action.toolId ?? null,
-              message: action.message ?? "",
-            },
-          }));
-
-        const conditionActions = conditionalActions
-          .filter((action) => action.type === "ON_CONDITION")
-          .map((action) => ({
-            type: action.type,
-            action: action.action as ConditionalActionType,
-            details: {
-              emailAddresses: action.emailAddresses ?? "",
-              emailSubject: action.emailSubject ?? "",
-              targetEventId: action.targetEventId ?? null,
-              toolId: action.toolId ?? null,
-              message: action.message ?? "",
-            },
-          }));
 
         const formData = {
           ...baseData,
@@ -647,10 +525,6 @@ export default function EventForm({
               : undefined,
           envVars: data.envVars, // Already an array
           tags: data.tags, // Already an array
-          onSuccessActions: successActions,
-          onFailActions: failureActions,
-          onAlwaysActions: alwaysActions,
-          onConditionActions: conditionActions,
           // Include httpHeaders as array if it's HTTP request
           ...(isHttpRequest &&
             data.httpHeaders && {
@@ -1642,16 +1516,6 @@ export default function EventForm({
           </div>
         </CardContent>
       </Card>
-
-      {/* Conditional Actions Section */}
-      <ConditionalActionsSection
-        eventData={initialData as EventData}
-        availableEvents={availableEvents}
-        {...(eventId !== undefined && { eventId })}
-        onConditionalActionsChange={(actions) => {
-          setValue("conditionalActions", actions);
-        }}
-      />
     </>
   );
 

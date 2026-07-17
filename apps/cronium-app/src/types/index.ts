@@ -3,7 +3,6 @@ import {
   type TimeUnit,
   type EventStatus,
   type RunLocation,
-  type ConditionalActionType,
   type UserRole,
 } from "@shared/schema";
 
@@ -46,12 +45,6 @@ export interface EnvVarInput {
   value: string;
 }
 
-export interface EventInput {
-  type: ConditionalActionType;
-  value?: string;
-  targetScriptId?: string;
-}
-
 export interface CreateScriptInput {
   name: string;
   type: EventType;
@@ -66,8 +59,6 @@ export interface CreateScriptInput {
   timeoutUnit: TimeUnit;
   retries: number;
   envVars: EnvVarInput[];
-  onSuccessActions: EventInput[];
-  onFailActions: EventInput[];
 }
 
 export interface UpdateScriptInput extends CreateScriptInput {

@@ -9,7 +9,6 @@ import {
   EventType,
   type RunLocation,
   type TimeUnit,
-  type ConditionalActionType,
   type EventTriggerType,
   UserRole,
 } from "@/shared/schema";
@@ -80,36 +79,6 @@ export type EventTypeConfig<T extends EventType> =
       : never;
 
 /**
- * Conditional action configuration based on action type
- */
-export type ConditionalActionConfig<T extends ConditionalActionType> =
-  T extends ConditionalActionType.SEND_MESSAGE
-    ? {
-        toolId: number;
-        message: string;
-        emailAddresses?: string;
-        emailSubject?: string;
-        targetEventId?: never;
-      }
-    : T extends ConditionalActionType.SCRIPT
-      ? {
-          targetEventId: number;
-          toolId?: never;
-          message?: never;
-          emailAddresses?: never;
-          emailSubject?: never;
-        }
-      : T extends ConditionalActionType.NONE
-        ? {
-            toolId?: never;
-            message?: never;
-            emailAddresses?: never;
-            emailSubject?: never;
-            targetEventId?: never;
-          }
-        : never;
-
-/**
  * Server requirements based on run location
  */
 export type ServerRequirement<T extends RunLocation> =
@@ -129,17 +98,6 @@ export type EventConfig =
   | (EventTypeConfig<EventType.NODEJS> & { type: EventType.NODEJS })
   | (EventTypeConfig<EventType.PYTHON> & { type: EventType.PYTHON })
   | (EventTypeConfig<EventType.BASH> & { type: EventType.BASH });
-
-/**
- * Type-safe conditional action union
- */
-export type ConditionalAction<
-  T extends ConditionalActionType = ConditionalActionType,
-> = {
-  id?: number;
-  type: "ON_SUCCESS" | "ON_FAILURE" | "ALWAYS" | "ON_CONDITION";
-  action: T;
-} & ConditionalActionConfig<T>;
 
 /**
  * Basic API Response patterns (deprecated - use ApiResponse below)

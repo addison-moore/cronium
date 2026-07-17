@@ -12,7 +12,6 @@ import {
 } from "../trpc";
 import { EventStatus, LogStatus, RunLocation } from "@/shared/schema";
 import type { ScriptType } from "@/shared/schema";
-import { validateConditionalActions } from "@/server/utils/event-validation";
 import {
   createEventSchema,
   updateEventSchema,
@@ -137,101 +136,6 @@ export const eventsRouter = createTRPCRouter({
           await storage.setEventServers(event.id, input.selectedServerIds);
         }
 
-        // Validate conditional actions before creating them
-        const allConditionalActions = [
-          ...(input.onSuccessActions ?? []),
-          ...(input.onFailActions ?? []),
-          ...(input.onAlwaysActions ?? []),
-          ...(input.onConditionActions ?? []),
-        ];
-
-        const validationErrors = await validateConditionalActions(
-          event.id,
-          allConditionalActions.map((action) => {
-            const mappedAction: {
-              action: string;
-              details?: { targetEventId?: number };
-            } = {
-              action: action.action,
-            };
-            if (
-              action.details?.targetEventId !== undefined &&
-              action.details.targetEventId !== null
-            ) {
-              mappedAction.details = {
-                targetEventId: action.details.targetEventId,
-              };
-            }
-            return mappedAction;
-          }),
-        );
-
-        if (validationErrors.length > 0) {
-          // Rollback the event creation by deleting it
-          await storage.deleteScript(event.id);
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: validationErrors.join(" "),
-          });
-        }
-
-        // Handle conditional actions - Fixed to use proper storage methods and data structure
-        if (input.onSuccessActions && input.onSuccessActions.length > 0) {
-          for (const conditionalAction of input.onSuccessActions) {
-            await storage.createAction({
-              type: conditionalAction.action, // Use action, not type
-              successEventId: event.id, // Link to parent event
-              targetEventId: conditionalAction.details?.targetEventId ?? null,
-              toolId: conditionalAction.details?.toolId ?? null,
-              message: conditionalAction.details?.message ?? "",
-              emailAddresses: conditionalAction.details?.emailAddresses ?? "",
-              emailSubject: conditionalAction.details?.emailSubject ?? "",
-            });
-          }
-        }
-
-        if (input.onFailActions && input.onFailActions.length > 0) {
-          for (const conditionalAction of input.onFailActions) {
-            await storage.createAction({
-              type: conditionalAction.action, // Use action, not type
-              failEventId: event.id, // Link to parent event
-              targetEventId: conditionalAction.details?.targetEventId ?? null,
-              toolId: conditionalAction.details?.toolId ?? null,
-              message: conditionalAction.details?.message ?? "",
-              emailAddresses: conditionalAction.details?.emailAddresses ?? "",
-              emailSubject: conditionalAction.details?.emailSubject ?? "",
-            });
-          }
-        }
-
-        if (input.onAlwaysActions && input.onAlwaysActions.length > 0) {
-          for (const conditionalAction of input.onAlwaysActions) {
-            await storage.createAction({
-              type: conditionalAction.action,
-              alwaysEventId: event.id, // Link to parent event
-              targetEventId: conditionalAction.details?.targetEventId ?? null,
-              toolId: conditionalAction.details?.toolId ?? null,
-              message: conditionalAction.details?.message ?? "",
-              emailAddresses: conditionalAction.details?.emailAddresses ?? "",
-              emailSubject: conditionalAction.details?.emailSubject ?? "",
-            });
-          }
-        }
-
-        if (input.onConditionActions && input.onConditionActions.length > 0) {
-          for (const conditionalAction of input.onConditionActions) {
-            await storage.createAction({
-              type: conditionalAction.action,
-              conditionEventId: event.id, // Link to parent event
-              targetEventId: conditionalAction.details?.targetEventId ?? null,
-              toolId: conditionalAction.details?.toolId ?? null,
-              message: conditionalAction.details?.message ?? "",
-              emailAddresses: conditionalAction.details?.emailAddresses ?? "",
-              emailSubject: conditionalAction.details?.emailSubject ?? "",
-            });
-          }
-        }
-
         // Payload generation moved to orchestrator
         // The orchestrator will create payloads from job script content
 
@@ -272,16 +176,7 @@ export const eventsRouter = createTRPCRouter({
           });
         }
 
-        const {
-          id,
-          envVars,
-          onSuccessActions,
-          onFailActions,
-          onAlwaysActions,
-          onConditionActions,
-          selectedServerIds,
-          ...eventData
-        } = input;
+        const { id, envVars, selectedServerIds, ...eventData } = input;
 
         // Update the event
         if (Object.keys(eventData).length > 0) {
@@ -321,113 +216,6 @@ export const eventsRouter = createTRPCRouter({
         // Handle server associations
         if (selectedServerIds !== undefined) {
           await storage.setEventServers(id, selectedServerIds);
-        }
-
-        // Handle conditional actions - Fixed to use proper storage methods and data structure
-        if (
-          onSuccessActions !== undefined ||
-          onFailActions !== undefined ||
-          onAlwaysActions !== undefined ||
-          onConditionActions !== undefined
-        ) {
-          // Validate conditional actions before updating
-          const allConditionalActions = [
-            ...(onSuccessActions ?? []),
-            ...(onFailActions ?? []),
-            ...(onAlwaysActions ?? []),
-            ...(onConditionActions ?? []),
-          ];
-
-          const validationErrors = await validateConditionalActions(
-            id,
-            allConditionalActions.map((action) => {
-              const mappedAction: {
-                action: string;
-                details?: { targetEventId?: number };
-              } = {
-                action: action.action,
-              };
-              if (
-                action.details?.targetEventId !== undefined &&
-                action.details.targetEventId !== null
-              ) {
-                mappedAction.details = {
-                  targetEventId: action.details.targetEventId,
-                };
-              }
-              return mappedAction;
-            }),
-          );
-
-          if (validationErrors.length > 0) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: validationErrors.join(" "),
-            });
-          }
-
-          // Delete existing conditional actions
-          await storage.deleteActionsByEventId(id);
-
-          // Create new success events
-          if (onSuccessActions && onSuccessActions.length > 0) {
-            for (const conditionalAction of onSuccessActions) {
-              await storage.createAction({
-                type: conditionalAction.action, // Use action, not type
-                successEventId: id, // Link to parent event
-                targetEventId: conditionalAction.details?.targetEventId ?? null,
-                toolId: conditionalAction.details?.toolId ?? null,
-                message: conditionalAction.details?.message ?? "",
-                emailAddresses: conditionalAction.details?.emailAddresses ?? "",
-                emailSubject: conditionalAction.details?.emailSubject ?? "",
-              });
-            }
-          }
-
-          // Create new failure events
-          if (onFailActions && onFailActions.length > 0) {
-            for (const conditionalAction of onFailActions) {
-              await storage.createAction({
-                type: conditionalAction.action, // Use action, not type
-                failEventId: id, // Link to parent event
-                targetEventId: conditionalAction.details?.targetEventId ?? null,
-                toolId: conditionalAction.details?.toolId ?? null,
-                message: conditionalAction.details?.message ?? "",
-                emailAddresses: conditionalAction.details?.emailAddresses ?? "",
-                emailSubject: conditionalAction.details?.emailSubject ?? "",
-              });
-            }
-          }
-
-          // Create new always events
-          if (onAlwaysActions && onAlwaysActions.length > 0) {
-            for (const conditionalAction of onAlwaysActions) {
-              await storage.createAction({
-                type: conditionalAction.action,
-                alwaysEventId: id, // Link to parent event
-                targetEventId: conditionalAction.details?.targetEventId ?? null,
-                toolId: conditionalAction.details?.toolId ?? null,
-                message: conditionalAction.details?.message ?? "",
-                emailAddresses: conditionalAction.details?.emailAddresses ?? "",
-                emailSubject: conditionalAction.details?.emailSubject ?? "",
-              });
-            }
-          }
-
-          // Create new condition events
-          if (onConditionActions && onConditionActions.length > 0) {
-            for (const conditionalAction of onConditionActions) {
-              await storage.createAction({
-                type: conditionalAction.action,
-                conditionEventId: id, // Link to parent event
-                targetEventId: conditionalAction.details?.targetEventId ?? null,
-                toolId: conditionalAction.details?.toolId ?? null,
-                message: conditionalAction.details?.message ?? "",
-                emailAddresses: conditionalAction.details?.emailAddresses ?? "",
-                emailSubject: conditionalAction.details?.emailSubject ?? "",
-              });
-            }
-          }
         }
 
         // Get the updated event with relations

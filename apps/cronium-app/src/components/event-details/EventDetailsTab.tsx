@@ -44,7 +44,6 @@ const copy = {
   executions: "Executions",
   scriptContent: "Script Content",
   httpRequestDetails: "HTTP Request Details",
-  conditionalActions: "Conditional Actions",
 } as const;
 
 interface EventDetailsTabProps {
@@ -396,32 +395,6 @@ export function EventDetailsTab({
           <AccordionItem value="http-details">
             <AccordionTrigger>{copy.httpRequestDetails}</AccordionTrigger>
             <AccordionContent>{renderHttpRequestDetails()}</AccordionContent>
-          </AccordionItem>
-        )}
-
-        {Event.conditionalActions && Event.conditionalActions.length > 0 && (
-          <AccordionItem value="conditional-actions">
-            <AccordionTrigger>{copy.conditionalActions}</AccordionTrigger>
-            <AccordionContent>
-              <div className="space-y-3">
-                {Event.conditionalActions.map((action, index) => (
-                  <div
-                    key={index}
-                    className="border-border bg-background rounded-lg border p-3"
-                  >
-                    <div className="mb-2 flex items-center space-x-2">
-                      <Badge variant="outline">{action.type}</Badge>
-                      <Badge variant="secondary">{action.action}</Badge>
-                    </div>
-                    {action.description && (
-                      <p className="text-muted-foreground text-sm">
-                        {action.description}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </AccordionContent>
           </AccordionItem>
         )}
       </Accordion>

@@ -491,11 +491,6 @@ export function EventDetails({ eventId }: EventDetailsProps) {
               body: event.httpBody ?? null,
             }
           : null,
-        // Map conditional actions properly
-        successEvents: event.successEvents ?? [],
-        failEvents: event.failEvents ?? [],
-        alwaysEvents: event.alwaysEvents ?? [],
-        conditionEvents: event.conditionEvents ?? [],
         // Add missing fields with defaults
         description: event.description,
         active: event.status === EventStatus.ACTIVE,

@@ -9,7 +9,6 @@ import {
   RunLocation,
   TimeUnit,
   UserRole,
-  ConnectionType,
 } from "@/shared/schema";
 import { z } from "zod";
 import { authenticateApiRequest } from "@/lib/api-auth";
@@ -67,24 +66,6 @@ const createEventSchema = z
         z.object({
           key: z.string().min(1),
           value: z.string(),
-        }),
-      )
-      .optional(),
-    onSuccessActions: z
-      .array(
-        z.object({
-          type: z.string(),
-          value: z.string().optional(),
-          targetScriptId: z.union([z.number(), z.null()]).optional(),
-        }),
-      )
-      .optional(),
-    onFailActions: z
-      .array(
-        z.object({
-          type: z.string(),
-          value: z.string().optional(),
-          targetScriptId: z.union([z.number(), z.null()]).optional(),
         }),
       )
       .optional(),
@@ -204,21 +185,8 @@ export async function GET(request: NextRequest) {
   }
 }
 
-interface ConditionalActionData {
-  type: ConnectionType;
-  action: string;
-  details: {
-    emailAddresses?: string;
-    targetEventId?: number | null;
-    toolId?: number | null;
-    message?: string | null;
-    emailSubject?: string | null;
-  };
-}
-
 interface RequestBody {
   httpRequest?: string;
-  conditionalActions?: ConditionalActionData[];
 }
 
 // POST to create a new script
@@ -379,71 +347,6 @@ export async function POST(request: NextRequest) {
           key: envVar.key,
           value: envVar.value,
         });
-      }
-    }
-
-    // Handle conditional actions
-    if (body.conditionalActions && body.conditionalActions.length > 0) {
-      for (const condAction of body.conditionalActions) {
-        const eventData = {
-          type: condAction.action,
-          value: condAction.details.emailAddresses ?? "",
-          targetEventId: condAction.details.targetEventId ?? null,
-          toolId: condAction.details.toolId ?? null,
-          message: condAction.details.message ?? null,
-          emailAddresses: condAction.details.emailAddresses ?? null,
-          emailSubject: condAction.details.emailSubject ?? null,
-          successEventId: null as number | null,
-          failEventId: null as number | null,
-          alwaysEventId: null as number | null,
-          conditionEventId: null as number | null,
-        };
-
-        if (condAction.type === ConnectionType.ON_SUCCESS) {
-          eventData.successEventId = script.id;
-          await storage.createAction(
-            eventData as Parameters<typeof storage.createAction>[0],
-          );
-        } else if (condAction.type === ConnectionType.ON_FAILURE) {
-          eventData.failEventId = script.id;
-          await storage.createAction(
-            eventData as Parameters<typeof storage.createAction>[0],
-          );
-        } else if (condAction.type === ConnectionType.ALWAYS) {
-          eventData.alwaysEventId = script.id;
-          await storage.createAction(
-            eventData as Parameters<typeof storage.createAction>[0],
-          );
-        } else if (condAction.type === ConnectionType.ON_CONDITION) {
-          eventData.conditionEventId = script.id;
-          await storage.createAction(
-            eventData as Parameters<typeof storage.createAction>[0],
-          );
-        }
-      }
-    }
-
-    // Add success events if provided (legacy support)
-    if (data.onSuccessActions && data.onSuccessActions.length > 0) {
-      for (const action of data.onSuccessActions) {
-        await storage.createAction({
-          type: action.type,
-          value: action.value,
-          successEventId: script.id,
-          targetEventId: action.targetScriptId,
-        } as Parameters<typeof storage.createAction>[0]);
-      }
-    }
-
-    // Add failure events if provided (legacy support)
-    if (data.onFailActions && data.onFailActions.length > 0) {
-      for (const action of data.onFailActions) {
-        await storage.createAction({
-          type: action.type,
-          value: action.value,
-          failEventId: script.id,
-          targetEventId: action.targetScriptId,
-        } as Parameters<typeof storage.createAction>[0]);
       }
     }
 

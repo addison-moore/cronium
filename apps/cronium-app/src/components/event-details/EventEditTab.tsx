@@ -6,7 +6,7 @@ import EventForm from "@/components/event-form/EventForm-lazy";
 import { type Event } from "./types";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@cronium/ui";
-import { TimeUnit, RunLocation, type ConditionalAction } from "@/shared/schema";
+import { TimeUnit, RunLocation } from "@/shared/schema";
 
 interface EventEditTabProps {
   event: Event;
@@ -110,41 +110,6 @@ export function EventEditTab({
     ? (timeoutUnitValue as TimeUnit)
     : TimeUnit.SECONDS;
 
-  // Helper function to convert null values to undefined for conditional actions
-  const transformConditionalAction = (
-    action: ConditionalAction,
-  ): {
-    id: number;
-    type: string;
-    value?: string;
-    emailSubject?: string;
-    targetEventId?: number;
-    toolId?: number;
-    message?: string;
-  } => {
-    const result: {
-      id: number;
-      type: string;
-      value?: string;
-      emailSubject?: string;
-      targetEventId?: number;
-      toolId?: number;
-      message?: string;
-    } = {
-      id: action.id,
-      type: action.type, // Convert enum to string
-    };
-
-    // Only add properties if they have values (not null or undefined)
-    if (action.value) result.value = action.value;
-    if (action.emailSubject) result.emailSubject = action.emailSubject;
-    if (action.targetEventId) result.targetEventId = action.targetEventId;
-    if (action.toolId) result.toolId = action.toolId;
-    if (action.message) result.message = action.message;
-
-    return result;
-  };
-
   const eventWithDateObjects = {
     ...event,
     createdAt: event.createdAt ? new Date(event.createdAt) : new Date(),
@@ -158,11 +123,6 @@ export function EventEditTab({
       typeof event.resetCounterOnActive === "string"
         ? event.resetCounterOnActive === "true"
         : event.resetCounterOnActive,
-    // Transform conditional actions to convert null to undefined
-    successEvents: event.successEvents?.map(transformConditionalAction),
-    failEvents: event.failEvents?.map(transformConditionalAction),
-    alwaysEvents: event.alwaysEvents?.map(transformConditionalAction),
-    conditionEvents: event.conditionEvents?.map(transformConditionalAction),
   };
 
   return (

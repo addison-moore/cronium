@@ -96,61 +96,7 @@ export function EventEditModal({
           >
             <EventForm
               eventId={eventId}
-              initialData={{
-                ...eventData,
-                successEvents: eventData.successEvents.map((action) => ({
-                  id: action.id,
-                  type: action.type,
-                  ...(action.value !== null && { value: action.value }),
-                  ...(action.emailSubject !== null && {
-                    emailSubject: action.emailSubject,
-                  }),
-                  ...(action.targetEventId !== null && {
-                    targetEventId: action.targetEventId,
-                  }),
-                  ...(action.toolId !== null && { toolId: action.toolId }),
-                  ...(action.message !== null && { message: action.message }),
-                })),
-                failEvents: eventData.failEvents.map((action) => ({
-                  id: action.id,
-                  type: action.type,
-                  ...(action.value !== null && { value: action.value }),
-                  ...(action.emailSubject !== null && {
-                    emailSubject: action.emailSubject,
-                  }),
-                  ...(action.targetEventId !== null && {
-                    targetEventId: action.targetEventId,
-                  }),
-                  ...(action.toolId !== null && { toolId: action.toolId }),
-                  ...(action.message !== null && { message: action.message }),
-                })),
-                alwaysEvents: eventData.alwaysEvents.map((action) => ({
-                  id: action.id,
-                  type: action.type,
-                  ...(action.value !== null && { value: action.value }),
-                  ...(action.emailSubject !== null && {
-                    emailSubject: action.emailSubject,
-                  }),
-                  ...(action.targetEventId !== null && {
-                    targetEventId: action.targetEventId,
-                  }),
-                  ...(action.toolId !== null && { toolId: action.toolId }),
-                  ...(action.message !== null && { message: action.message }),
-                })),
-                conditionEvents: eventData.conditionEvents.map((action) => ({
-                  id: action.id,
-                  type: action.type,
-                  ...(action.value !== null && { value: action.value }),
-                  ...(action.emailSubject !== null && {
-                    emailSubject: action.emailSubject,
-                  }),
-                  ...(action.targetEventId !== null && {
-                    targetEventId: action.targetEventId,
-                  }),
-                  ...(action.toolId !== null && { toolId: action.toolId }),
-                  ...(action.message !== null && { message: action.message }),
-                })),
-              }}
+              initialData={eventData}
               isEditing={true}
               onSuccess={handleEventUpdate}
               layout="modal"
