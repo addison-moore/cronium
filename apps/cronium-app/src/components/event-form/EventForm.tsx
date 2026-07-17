@@ -113,8 +113,10 @@ const eventsCopy = {
     IntervalUnit: "Interval Unit",
     RunLocations: {
       Label: "Execution Location",
-      Local: "Local Server",
-      Remote: "Remote Server",
+      Local: "Local (Cronium host)",
+      Help: "Select where this event runs — locally, on remote servers, or both.",
+      Groups: "Groups",
+      AtLeastOne: "Select at least one execution location",
     },
     Servers: "Servers",
     NoServersAvailable: "No servers available",
@@ -183,6 +185,7 @@ const eventFormSchema = z
     timeoutValue: z.number().min(1).default(30),
     timeoutUnit: z.nativeEnum(TimeUnit).default(TimeUnit.SECONDS),
     runLocation: z.nativeEnum(RunLocation).default(RunLocation.LOCAL),
+    runOnLocal: z.boolean().default(true),
     selectedServerIds: z.array(z.number()).default([]),
     retries: z.number().min(0).max(10).default(0),
     maxExecutions: z.number().min(0).default(0),
@@ -268,14 +271,11 @@ const eventFormSchema = z
   )
   .refine(
     (data) => {
-      // Validate server selection for remote execution
-      if (data.runLocation === RunLocation.REMOTE) {
-        return data.selectedServerIds.length > 0;
-      }
-      return true;
+      // At least one execution location: local and/or a remote server
+      return data.runOnLocal || data.selectedServerIds.length > 0;
     },
     {
-      message: "Please select at least one server for remote execution",
+      message: "Select at least one execution location",
       path: ["selectedServerIds"],
     },
   );
@@ -348,6 +348,8 @@ export default function EventForm({
       timeoutValue: initialData?.timeoutValue ?? 30,
       timeoutUnit: initialData?.timeoutUnit ?? TimeUnit.SECONDS,
       runLocation: initialData?.runLocation ?? RunLocation.LOCAL,
+      // Local unless the event is remote-only
+      runOnLocal: initialData?.runLocation !== RunLocation.REMOTE,
       selectedServerIds: [],
       retries: initialData?.retries ?? 0,
       maxExecutions: initialData?.maxExecutions ?? 0,
@@ -370,7 +372,6 @@ export default function EventForm({
   // Watch form values
   const type = watch("type");
   const triggerType = watch("triggerType");
-  const runLocation = watch("runLocation");
   const useCronScheduling = watch("useCronScheduling");
 
   // Derived state
@@ -381,7 +382,6 @@ export default function EventForm({
   ].includes(type);
   const isHttpRequest = type === EventType.HTTP_REQUEST;
   const isToolAction = type === EventType.TOOL_ACTION;
-  const isRemote = runLocation === RunLocation.REMOTE;
   const isScheduled = triggerType === EventTriggerType.SCHEDULE;
 
   // Fetch available servers
@@ -390,6 +390,13 @@ export default function EventForm({
     QUERY_OPTIONS.dynamic,
   );
   const servers = (serversData?.servers ?? []) as ServerData[];
+
+  // Fetch server groups (quick-select in the execution location picker)
+  const { data: serverGroupsData } = trpc.servers.getGroups.useQuery(
+    undefined,
+    QUERY_OPTIONS.dynamic,
+  );
+  const serverGroups = serverGroupsData?.groups ?? [];
 
   // Fetch available tools
   const { data: toolsData } = trpc.tools.getAll.useQuery(
@@ -528,6 +535,7 @@ export default function EventForm({
   useEffect(() => {
     if (type === EventType.TOOL_ACTION) {
       setValue("runLocation", RunLocation.LOCAL);
+      setValue("runOnLocal", true);
       setValue("selectedServerIds", []);
     }
   }, [type, setValue]);
@@ -550,8 +558,18 @@ export default function EventForm({
           conditionalActions,
           useCronScheduling: _useCronScheduling,
           httpHeaders: _httpHeaders,
+          runOnLocal,
           ...baseData
         } = data;
+
+        // Derive the run location from the selected locations: local only,
+        // servers only, or both
+        const derivedRunLocation =
+          data.selectedServerIds.length === 0
+            ? RunLocation.LOCAL
+            : runOnLocal
+              ? RunLocation.LOCAL_AND_REMOTE
+              : RunLocation.REMOTE;
 
         // ConditionalActionType types are already defined in the schema
 
@@ -614,6 +632,7 @@ export default function EventForm({
 
         const formData = {
           ...baseData,
+          runLocation: derivedRunLocation,
           content: isScriptType ? data.content : undefined,
           startTime: data.startTime
             ? new Date(data.startTime).toISOString()
@@ -1362,100 +1381,148 @@ export default function EventForm({
           <CardTitle>{eventsCopy.ExecutionSettings}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Run Location */}
+          {/* Execution Location: local host, remote servers, or both */}
           <div className="space-y-2">
-            <Label htmlFor="runLocation">
-              {eventsCopy.Fields.RunLocations.Label}
-            </Label>
-            <Controller
-              name="runLocation"
-              control={control}
-              render={({ field }) => (
-                <Select
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  disabled={isToolAction}
-                >
-                  <SelectTrigger id="runLocation" disabled={isToolAction}>
-                    <SelectValue
-                      placeholder={eventsCopy.Placeholders.SelectLocation}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={RunLocation.LOCAL}>
-                      {eventsCopy.Fields.RunLocations.Local}
-                    </SelectItem>
-                    <SelectItem value={RunLocation.REMOTE}>
-                      {eventsCopy.Fields.RunLocations.Remote}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            {isToolAction && (
+            <Label>{eventsCopy.Fields.RunLocations.Label}</Label>
+            {isToolAction ? (
               <p className="text-muted-foreground text-sm">
                 Tool Actions can only run on the local server.
               </p>
-            )}
-          </div>
+            ) : (
+              <>
+                <p className="text-muted-foreground text-sm">
+                  {eventsCopy.Fields.RunLocations.Help}
+                </p>
+                <Controller
+                  name="selectedServerIds"
+                  control={control}
+                  render={({ field }) => {
+                    const selected = field.value ?? [];
+                    const toggleGroup = (groupServerIds: number[]) => {
+                      const memberIds = groupServerIds.filter((id) =>
+                        servers.some((server) => server.id === id),
+                      );
+                      if (memberIds.length === 0) return;
+                      const allSelected = memberIds.every((id) =>
+                        selected.includes(id),
+                      );
+                      field.onChange(
+                        allSelected
+                          ? selected.filter((id) => !memberIds.includes(id))
+                          : Array.from(new Set([...selected, ...memberIds])),
+                      );
+                    };
 
-          {/* Server Selection */}
-          {isRemote && !isToolAction && (
-            <div className="space-y-4">
-              <Label>{eventsCopy.Fields.Servers || "Servers"}</Label>
-              <Controller
-                name="selectedServerIds"
-                control={control}
-                render={({ field }) => (
-                  <div className="border-border max-h-40 space-y-2 overflow-y-auto rounded-md border p-3">
-                    {servers.length === 0 ? (
-                      <p className="text-sm text-gray-500">
-                        {eventsCopy.Fields.NoServersAvailable ||
-                          "No servers available. Please add a server first."}
-                      </p>
-                    ) : (
-                      servers.map((server) => (
-                        <div
-                          key={server.id}
-                          className="flex items-center space-x-2"
-                        >
-                          <Checkbox
-                            id={`server-${server.id}`}
-                            checked={field.value?.includes(server.id) ?? false}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                field.onChange([
-                                  ...(field.value ?? []),
-                                  server.id,
-                                ]);
-                              } else {
-                                field.onChange(
-                                  (field.value ?? []).filter(
-                                    (id: number) => id !== server.id,
-                                  ),
-                                );
-                              }
-                            }}
+                    return (
+                      <div className="border-border max-h-56 space-y-2 overflow-y-auto rounded-md border p-3">
+                        {/* Local host */}
+                        <div className="flex items-center space-x-2">
+                          <Controller
+                            name="runOnLocal"
+                            control={control}
+                            render={({ field: localField }) => (
+                              <Checkbox
+                                id="location-local"
+                                checked={localField.value}
+                                onCheckedChange={(checked) =>
+                                  localField.onChange(checked === true)
+                                }
+                              />
+                            )}
                           />
                           <Label
-                            htmlFor={`server-${server.id}`}
+                            htmlFor="location-local"
                             className="cursor-pointer text-sm font-normal"
                           >
-                            {server.name} ({server.address})
+                            {eventsCopy.Fields.RunLocations.Local}
                           </Label>
                         </div>
-                      ))
-                    )}
-                  </div>
+
+                        {/* Group quick-select */}
+                        {serverGroups.length > 0 && servers.length > 0 && (
+                          <div className="border-border flex flex-wrap items-center gap-2 border-t pt-2">
+                            <span className="text-muted-foreground text-xs">
+                              {eventsCopy.Fields.RunLocations.Groups}:
+                            </span>
+                            {serverGroups.map((group) => {
+                              const memberIds = group.serverIds.filter((id) =>
+                                servers.some((server) => server.id === id),
+                              );
+                              const allSelected =
+                                memberIds.length > 0 &&
+                                memberIds.every((id) => selected.includes(id));
+                              return (
+                                <Button
+                                  key={group.id}
+                                  type="button"
+                                  size="sm"
+                                  variant={allSelected ? "default" : "outline"}
+                                  className="h-6 px-2 text-xs"
+                                  disabled={memberIds.length === 0}
+                                  onClick={() => toggleGroup(group.serverIds)}
+                                  title={
+                                    allSelected
+                                      ? `Remove all servers in ${group.name}`
+                                      : `Add all servers in ${group.name}`
+                                  }
+                                >
+                                  {group.name} ({memberIds.length})
+                                </Button>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Servers */}
+                        {servers.length === 0 ? (
+                          <p className="border-border border-t pt-2 text-sm text-gray-500">
+                            {eventsCopy.Fields.NoServersAvailable ||
+                              "No servers available. Please add a server first."}
+                          </p>
+                        ) : (
+                          <div className="border-border space-y-2 border-t pt-2">
+                            {servers.map((server) => (
+                              <div
+                                key={server.id}
+                                className="flex items-center space-x-2"
+                              >
+                                <Checkbox
+                                  id={`server-${server.id}`}
+                                  checked={selected.includes(server.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      field.onChange([...selected, server.id]);
+                                    } else {
+                                      field.onChange(
+                                        selected.filter(
+                                          (id: number) => id !== server.id,
+                                        ),
+                                      );
+                                    }
+                                  }}
+                                />
+                                <Label
+                                  htmlFor={`server-${server.id}`}
+                                  className="cursor-pointer text-sm font-normal"
+                                >
+                                  {server.name} ({server.address})
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }}
+                />
+                {errors.selectedServerIds && (
+                  <p className="text-sm text-red-500">
+                    {errors.selectedServerIds.message}
+                  </p>
                 )}
-              />
-              {errors.selectedServerIds && (
-                <p className="text-sm text-red-500">
-                  {errors.selectedServerIds.message}
-                </p>
-              )}
-            </div>
-          )}
+              </>
+            )}
+          </div>
 
           {/* Timeout Settings */}
           <div className="grid grid-cols-2 gap-4">

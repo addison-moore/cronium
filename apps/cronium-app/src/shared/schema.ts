@@ -35,6 +35,8 @@ export enum EventStatus {
 export enum RunLocation {
   LOCAL = "LOCAL",
   REMOTE = "REMOTE",
+  // Runs on the Cronium host AND on the event's remote servers
+  LOCAL_AND_REMOTE = "LOCAL_AND_REMOTE",
 }
 
 export enum TimeUnit {

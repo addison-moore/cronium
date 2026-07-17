@@ -69,6 +69,7 @@ interface ServerData {
 interface ServerListFilters {
   searchTerm: string;
   statusFilter: string;
+  groupFilter: string;
   sortBy: string;
   sortOrder: string;
 }
@@ -102,9 +103,14 @@ export function ServersTableClient({
   const [filters, setFilters] = useState<ServerListFilters>({
     searchTerm: "",
     statusFilter: "all",
+    groupFilter: "all",
     sortBy: "createdAt",
     sortOrder: "desc",
   });
+
+  // Server groups (for the group filter)
+  const groupsQuery = trpc.servers.getGroups.useQuery();
+  const groups = groupsQuery.data?.groups ?? [];
 
   // Query for archived servers
   const archivedQuery = trpc.servers.getArchived.useQuery(undefined, {
@@ -275,6 +281,7 @@ export function ServersTableClient({
     setFilters({
       searchTerm: "",
       statusFilter: "all",
+      groupFilter: "all",
       sortBy: "createdAt",
       sortOrder: "desc",
     });
@@ -285,15 +292,24 @@ export function ServersTableClient({
   const displayServers =
     filters.statusFilter === "archived" ? archivedServers : servers;
 
+  // Servers in the selected group (empty selection = no group filtering)
+  const selectedGroup =
+    filters.groupFilter === "all"
+      ? undefined
+      : groups.find((group) => group.id.toString() === filters.groupFilter);
+
   // Apply filters to servers
   const filteredServers = displayServers.filter((server) => {
     const matchesSearch =
       server.name.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
       server.address.toLowerCase().includes(filters.searchTerm.toLowerCase());
 
+    const matchesGroup =
+      !selectedGroup || selectedGroup.serverIds.includes(server.id);
+
     // For archived filter, we already have the right servers
     if (filters.statusFilter === "archived") {
-      return matchesSearch;
+      return matchesSearch && matchesGroup;
     }
 
     const matchesStatus =
@@ -302,7 +318,7 @@ export function ServersTableClient({
       (filters.statusFilter === "offline" && server.online === false) ||
       (filters.statusFilter === "unknown" && server.online === undefined);
 
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesStatus && matchesGroup;
   });
 
   // Apply sorting to filtered servers
@@ -481,6 +497,7 @@ export function ServersTableClient({
       <div>
         <ServerFilters
           filters={filters}
+          groups={groups}
           onFiltersChange={updateFilters}
           onClearFilters={handleClearFilters}
         />
@@ -529,6 +546,7 @@ export function ServersTableClient({
     <div className="border-border bg-secondary-bg rounded-lg border p-4">
       <ServerFilters
         filters={filters}
+        groups={groups}
         onFiltersChange={updateFilters}
         onClearFilters={handleClearFilters}
       />

@@ -15,18 +15,26 @@ import { Button } from "@cronium/ui";
 interface ServerFilters {
   searchTerm: string;
   statusFilter: string;
+  groupFilter: string;
   sortBy: string;
   sortOrder: string;
 }
 
+interface ServerGroupOption {
+  id: number;
+  name: string;
+}
+
 interface ServerFiltersProps {
   filters: ServerFilters;
+  groups: ServerGroupOption[];
   onFiltersChange: (filters: Partial<ServerFilters>) => void;
   onClearFilters: () => void;
 }
 
 export function ServerFilters({
   filters,
+  groups,
   onFiltersChange,
 }: ServerFiltersProps) {
   const sortOptions = [
@@ -106,6 +114,37 @@ export function ServerFilters({
             </SelectContent>
           </Select>
         </div>
+
+        {/* Group Filter */}
+        {groups.length > 0 && (
+          <div className="w-[180px]">
+            <Select
+              value={filters.groupFilter}
+              onValueChange={(value) => onFiltersChange({ groupFilter: value })}
+            >
+              <SelectTrigger className="focus:ring-primary/20 h-10 w-full rounded-md transition-all focus:ring-2">
+                <SelectValue placeholder="All Groups" />
+              </SelectTrigger>
+              <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
+                <SelectItem
+                  value="all"
+                  className="hover:bg-muted py-2 pr-3 pl-8 text-sm font-medium"
+                >
+                  All Groups
+                </SelectItem>
+                {groups.map((group) => (
+                  <SelectItem
+                    key={group.id}
+                    value={group.id.toString()}
+                    className="hover:bg-muted py-2 pr-3 pl-8 text-sm"
+                  >
+                    {group.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Sort By and Sort Order */}
         <div className="flex gap-2">

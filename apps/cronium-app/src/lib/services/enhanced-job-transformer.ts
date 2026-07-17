@@ -27,10 +27,12 @@ export async function enhancedTransformJobForOrchestrator(
 
   // Get payload for server info
   const payload = job.payload as Record<string, unknown>;
-  const target = payload?.target as { serverId?: number } | undefined;
+  const target = payload?.target as
+    { serverId?: number; runOnLocal?: boolean } | undefined;
   if (!target?.serverId) {
     return transformedJob;
   }
+  const runOnLocal = target.runOnLocal === true;
 
   try {
     // Get event details to check for server setup
@@ -77,11 +79,16 @@ export async function enhancedTransformJobForOrchestrator(
       `Added server details for job ${job.id}: ${server.name} (${server.address}:${server.port})`,
     );
 
-    // Also check for multi-server scenarios
+    // Also check for multi-server scenarios. A local branch (LOCAL_AND_REMOTE)
+    // also goes through the multi-server executor, even with a single server,
+    // so the local container execution can run alongside the SSH one.
     const eventServers = await storage.getEventServers(eventId);
 
     // Multi-server scenario - fetch all server details
-    if (eventServers && eventServers.length > 1) {
+    if (
+      eventServers &&
+      (eventServers.length > 1 || (runOnLocal && eventServers.length >= 1))
+    ) {
       const servers = [];
       for (const eventServer of eventServers) {
         const srv = await storage.getServer(eventServer.serverId);
@@ -119,6 +126,7 @@ export async function enhancedTransformJobForOrchestrator(
         servers,
         multiServer: true,
         serverCount: servers.length,
+        ...(runOnLocal && { runLocal: true }),
       };
     }
   } catch (error) {

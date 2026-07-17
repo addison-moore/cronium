@@ -132,25 +132,31 @@ export function EventsTable({
 
   const formatServerLocation = (event: Event): string => {
     // If runLocation is explicitly set to local, show "local"
-    if (event.runLocation === "local") {
+    if (event.runLocation?.toUpperCase() === "LOCAL") {
       return "local";
     }
+
+    // Events that run locally AND on servers show both
+    const localPrefix =
+      event.runLocation?.toUpperCase() === "LOCAL_AND_REMOTE" ? "local + " : "";
 
     // Check for multi-server configuration
     if (event.eventServers && event.eventServers.length > 0) {
       if (event.eventServers.length > 1) {
-        return "multi-server";
+        return `${localPrefix}multi-server`;
       }
       // Single server from eventServers array
       const serverId = event.eventServers[0];
       const server = servers.find((s) => s.id === serverId);
-      return server ? server.name : `Server ${String(serverId)}`;
+      return (
+        localPrefix + (server ? server.name : `Server ${String(serverId)}`)
+      );
     }
 
     // Check legacy single serverId field
     if (event.serverId) {
       const server = servers.find((s) => s.id === event.serverId);
-      return server ? server.name : `Server ${event.serverId}`;
+      return localPrefix + (server ? server.name : `Server ${event.serverId}`);
     }
 
     // Default to local if no server configuration

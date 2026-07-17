@@ -178,10 +178,19 @@ export function EventOverviewTab({
                 <span className="text-muted-foreground">
                   {copy.executionLocation}:{" "}
                 </span>
-                {event.runLocation === "REMOTE" &&
+                {event.runLocation !== "LOCAL" &&
                 event.servers &&
                 event.servers.length > 0 ? (
                   <div className="mt-1 space-y-1">
+                    {event.runLocation === "LOCAL_AND_REMOTE" && (
+                      <div className="flex items-center font-medium">
+                        <Server className="mr-2 h-4 w-4" />
+                        <span>Local</span>
+                        <span className="text-muted-foreground ml-2">
+                          (Cronium host)
+                        </span>
+                      </div>
+                    )}
                     {event.servers.map((server) => (
                       <div
                         key={server.id}
@@ -198,7 +207,9 @@ export function EventOverviewTab({
                 ) : (
                   <span className="flex items-center font-medium">
                     <Server className="mr-1 h-4 w-4" />
-                    {event.runLocation}
+                    {event.runLocation === "LOCAL_AND_REMOTE"
+                      ? "Local + Remote"
+                      : event.runLocation}
                   </span>
                 )}
               </div>

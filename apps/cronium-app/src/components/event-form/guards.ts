@@ -50,7 +50,7 @@ export function requiresScheduleConfig(triggerType: EventTriggerType): boolean {
  * Type guard to check if run location requires server selection
  */
 export function requiresServerSelection(runLocation: RunLocation): boolean {
-  return runLocation === RunLocation.REMOTE;
+  return runLocation !== RunLocation.LOCAL;
 }
 
 /**

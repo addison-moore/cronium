@@ -156,7 +156,7 @@ export async function PUT(
           jobUpdateData.result = mergedResult;
         }
         unifiedIoDebug(
-          `execution ${executionId} completing job ${execution.jobId}: result keys=${Object.keys(existingResult).join(",") || "none"}; scriptOutput promoted=${mergedResult && "scriptOutput" in mergedResult ? "yes" : "no"}; condition=${String(mergedResult?.condition ?? "none")}`,
+          `execution ${executionId} completing job ${execution.jobId}: result keys=${Object.keys(existingResult).join(",") || "none"}; scriptOutput promoted=${mergedResult && "scriptOutput" in mergedResult ? "yes" : "no"}; condition=${JSON.stringify(mergedResult?.condition ?? "none")}`,
         );
 
         // Pass timing information to job update

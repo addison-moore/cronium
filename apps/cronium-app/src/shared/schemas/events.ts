@@ -156,8 +156,9 @@ export const createEventSchema = z
   )
   .refine(
     (data) => {
-      // Validate server selection for remote execution
-      if (data.runLocation === RunLocation.REMOTE) {
+      // Validate server selection for remote execution (REMOTE or
+      // LOCAL_AND_REMOTE)
+      if (data.runLocation !== RunLocation.LOCAL) {
         return data.serverId ?? data.selectedServerIds.length > 0;
       }
       return true;

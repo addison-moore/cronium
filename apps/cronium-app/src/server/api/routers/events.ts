@@ -128,9 +128,10 @@ export const eventsRouter = createTRPCRouter({
           }
         }
 
-        // Handle server associations for remote execution
+        // Handle server associations for remote execution (REMOTE or
+        // LOCAL_AND_REMOTE)
         if (
-          input.runLocation === RunLocation.REMOTE &&
+          input.runLocation !== RunLocation.LOCAL &&
           input.selectedServerIds.length > 0
         ) {
           await storage.setEventServers(event.id, input.selectedServerIds);
@@ -449,7 +450,8 @@ export const eventsRouter = createTRPCRouter({
         // The orchestrator will create payloads from job script content
         // Clean up old payloads if they exist
         if (
-          updatedEvent?.runLocation === RunLocation.REMOTE &&
+          updatedEvent &&
+          updatedEvent.runLocation !== RunLocation.LOCAL &&
           (input.content !== undefined || input.envVars !== undefined)
         ) {
           try {

@@ -93,6 +93,9 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SSH executor: %w", err)
 	}
+	// Wire the container executor in as the local branch of LOCAL_AND_REMOTE
+	// jobs (events that run on the Cronium host and remote servers at once)
+	sshExec.SetLocalExecutor(containerExec)
 	executorMgr.Register(types.JobTypeSSH, sshExec)
 
 	// Create log streamer

@@ -13,11 +13,24 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// LocalJobExecutor runs the local (container) branch of a job that targets
+// both the Cronium host and remote servers (RunLocation LOCAL_AND_REMOTE).
+type LocalJobExecutor interface {
+	Execute(ctx context.Context, job *types.Job) (<-chan types.ExecutionUpdate, error)
+}
+
 // MultiServerExecutor handles SSH execution across multiple servers
 type MultiServerExecutor struct {
-	executor  *Executor
-	log       *logrus.Logger
-	apiClient *api.Client
+	executor      *Executor
+	log           *logrus.Logger
+	apiClient     *api.Client
+	localExecutor LocalJobExecutor
+}
+
+// SetLocalExecutor wires in the executor used for the local branch of
+// LOCAL_AND_REMOTE jobs (the container executor).
+func (m *MultiServerExecutor) SetLocalExecutor(exec LocalJobExecutor) {
+	m.localExecutor = exec
 }
 
 // NewMultiServerExecutor creates a new multi-server SSH executor
@@ -68,8 +81,16 @@ func (m *MultiServerExecutor) Execute(ctx context.Context, job *types.Job) (<-ch
 		return m.executor.Execute(ctx, job)
 	}
 
+	// LOCAL_AND_REMOTE jobs also run a local container branch
+	runLocal, _ := job.Metadata["runLocal"].(bool)
+	runLocal = runLocal && m.localExecutor != nil
+	totalTargets := len(servers)
+	if runLocal {
+		totalTargets++
+	}
+
 	// Create aggregated updates channel
-	updates := make(chan types.ExecutionUpdate, 100*len(servers))
+	updates := make(chan types.ExecutionUpdate, 100*totalTargets)
 
 	// Create wait group for parallel execution
 	var wg sync.WaitGroup
@@ -83,10 +104,33 @@ func (m *MultiServerExecutor) Execute(ctx context.Context, job *types.Job) (<-ch
 		defer close(updates)
 
 		// Send initial status
+		statusMsg := fmt.Sprintf("Starting execution on %d servers", len(servers))
+		if runLocal {
+			statusMsg = fmt.Sprintf("Starting execution locally and on %d servers", len(servers))
+		}
 		m.sendUpdate(updates, types.UpdateTypeStatus, &types.StatusUpdate{
 			Status:  types.JobStatusRunning,
-			Message: fmt.Sprintf("Starting execution on %d servers", len(servers)),
+			Message: statusMsg,
 		})
+
+		// Start the local branch first, if requested
+		if runLocal {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+
+				localResult := m.executeLocally(ctx, job)
+
+				resultsMu.Lock()
+				results["local"] = localResult
+				resultsMu.Unlock()
+
+				localDetails := &types.ServerDetails{ID: "local", Name: "Local"}
+				for update := range localResult.Updates {
+					m.forwardUpdate(updates, update, localDetails)
+				}
+			}()
+		}
 
 		// Start execution on each server
 		for i, serverData := range servers {
@@ -262,6 +306,98 @@ func (m *MultiServerExecutor) executeOnServer(ctx context.Context, job *types.Jo
 				result.Status = types.JobStatusFailed
 				if status, ok := update.Data.(*types.StatusUpdate); ok {
 					result.Error = fmt.Errorf(status.Message)
+				}
+			}
+		}
+
+		result.Output = outputBuf.String()
+	}()
+
+	result.Updates = processedUpdates
+	return result
+}
+
+// executeLocally runs the local container branch of a LOCAL_AND_REMOTE job.
+// The container executor creates and finalizes its own executions record
+// (with a NULL server id, like any local run), so unlike executeOnServer this
+// does not manage execution records itself.
+func (m *MultiServerExecutor) executeLocally(ctx context.Context, job *types.Job) *ServerResult {
+	result := &ServerResult{
+		ServerID:   "local",
+		ServerName: "Local",
+		Status:     types.JobStatusPending,
+		StartTime:  time.Now(),
+	}
+
+	// Clone the job as a plain local container job. Job.Execution is a value
+	// struct, so mutating the clone's target is safe; the metadata map is
+	// shared, so build a fresh one without the multi-server keys.
+	localJob := *job
+	localJob.Type = types.JobTypeContainer
+	localJob.Execution.Target = types.Target{Type: types.TargetTypeLocal}
+	meta := make(map[string]any, len(job.Metadata))
+	for k, v := range job.Metadata {
+		switch k {
+		case "servers", "multiServer", "serverCount", "runLocal":
+			continue
+		}
+		meta[k] = v
+	}
+	localJob.Metadata = meta
+
+	localUpdates, err := m.localExecutor.Execute(ctx, &localJob)
+	if err != nil {
+		result.Error = err
+		result.Status = types.JobStatusFailed
+		result.EndTime = time.Now()
+
+		errorChan := make(chan types.ExecutionUpdate, 1)
+		errorChan <- types.ExecutionUpdate{
+			Type:      types.UpdateTypeError,
+			Timestamp: time.Now(),
+			Data: &types.StatusUpdate{
+				Status:  types.JobStatusFailed,
+				Message: fmt.Sprintf("Failed to start local execution: %v", err),
+				Error:   types.ErrorDetailsFromError(err),
+			},
+		}
+		close(errorChan)
+		result.Updates = errorChan
+		return result
+	}
+
+	processedUpdates := make(chan types.ExecutionUpdate, 100)
+	go func() {
+		defer close(processedUpdates)
+
+		var outputBuf strings.Builder
+
+		for update := range localUpdates {
+			processedUpdates <- update
+
+			switch update.Type {
+			case types.UpdateTypeLog:
+				if logEntry, ok := update.Data.(*types.LogEntry); ok {
+					if logEntry.Stream == "stdout" {
+						outputBuf.WriteString(logEntry.Line + "\n")
+					}
+				}
+			case types.UpdateTypeStatus:
+				if status, ok := update.Data.(*types.StatusUpdate); ok {
+					result.Status = status.Status
+				}
+			case types.UpdateTypeComplete:
+				if status, ok := update.Data.(*types.StatusUpdate); ok {
+					result.Status = status.Status
+					if status.ExitCode != nil {
+						result.ExitCode = *status.ExitCode
+					}
+					result.EndTime = time.Now()
+				}
+			case types.UpdateTypeError:
+				result.Status = types.JobStatusFailed
+				if status, ok := update.Data.(*types.StatusUpdate); ok {
+					result.Error = fmt.Errorf("%s", status.Message)
 				}
 			}
 		}

@@ -24,6 +24,9 @@ export interface JobPayload {
   target?: {
     serverId?: number;
     containerImage?: string;
+    // LOCAL_AND_REMOTE events: also run a local container branch alongside
+    // the remote servers (consumed by the enhanced job transformer)
+    runOnLocal?: boolean;
   };
   timeout?: {
     value: number;
@@ -107,12 +110,17 @@ export function buildJobPayload(
     });
   }
 
-  // Add target information
-  if (event.runLocation === RunLocation.REMOTE) {
+  // Add target information. REMOTE and LOCAL_AND_REMOTE both target a server;
+  // LOCAL_AND_REMOTE additionally sets runOnLocal so the enhanced transformer
+  // adds a local container branch to the fan-out.
+  const runsOnServers = event.runLocation !== RunLocation.LOCAL;
+  const runOnLocal = event.runLocation === RunLocation.LOCAL_AND_REMOTE;
+  if (runsOnServers) {
     // Check for direct serverId first
     if (event.serverId) {
       jobPayload.target = {
         serverId: event.serverId,
+        ...(runOnLocal && { runOnLocal: true }),
       };
     } else if (event.servers && event.servers.length > 0) {
       // If no direct serverId, check servers table
@@ -121,6 +129,7 @@ export function buildJobPayload(
       if (firstServer?.id) {
         jobPayload.target = {
           serverId: firstServer.id,
+          ...(runOnLocal && { runOnLocal: true }),
         };
       } else {
         // Fallback to container if no server found
