@@ -43,8 +43,7 @@ Result shape:
 {
   "columns": ["id", "email"],
   "rows": [{ "id": 42, "email": "a@b.com" }],
-  "rowCount": 1,
-  "truncated": false
+  "rowCount": 1
 }
 ```
 
@@ -54,11 +53,11 @@ Parameters:
   editor).
 - **params** — optional JSON object mapping placeholder names to values (may be
   templates; see below). Leave blank if the query has no placeholders.
+- **maxRows** — optional row limit (default **10,000**). If the query returns
+  more, the action **fails** rather than returning a shortened result.
 
 The **statement timeout** comes from the event's **Timeout** setting (in Event
-Settings) — there is no separate per-action timeout. Results are capped at
-**10,000 rows** as a safety backstop (`truncated` is set if the cap is hit); use
-`LIMIT` in your query to control how many rows come back.
+Settings) — there is no separate per-action timeout.
 
 Run Query rejects any statement that isn't read-only, and rejects multiple
 (stacked) statements — so a "read" node can never mutate data.
@@ -101,6 +100,54 @@ for row in data["rows"]:
 Or reference it in another tool action's parameters with
 `{{cronium.input.rows}}`.
 
+## Large result sets and bulk ETL
+
+Data passed between events travels through Unified I/O: the payload is held in
+the app's memory, written to `job.result` (jsonb), and served to the next step.
+It is sized for handing a **modest result** to the next step — not for bulk
+transfer. Two limits apply to Run Query:
+
+- **Row limit** — `maxRows` (default 10,000). Exceeding it **fails the action**
+  instead of returning a truncated result, so a job can never look successful
+  while quietly dropping rows. Add a `LIMIT`, or raise `maxRows`.
+- **Size limit** — the result must fit the **5 MB** Unified I/O payload limit
+  (the same limit a script's `cronium.output()` gets). Raising `maxRows` past
+  what fits in 5 MB will fail on size instead.
+
+Roughly, 5 MB is on the order of tens of thousands of narrow rows. That covers
+report-sized reads. For a genuine ETL, don't move the rows through Cronium at
+all — pick whichever fits:
+
+**1. Server-side, zero transfer (best when source and target are the same
+database, or reachable via FDW/dblink).** Let the database do the work; no rows
+enter Cronium, so there is no practical size limit:
+
+```sql
+-- Execute Statement
+INSERT INTO analytics.orders_daily (id, total, day)
+SELECT id, total, date_trunc('day', created_at)
+FROM public.orders
+WHERE created_at >= :since;
+```
+
+**2. A Script event that streams (best for cross-system ETL).** A Python/Node
+script event runs in its own container, so it can stream millions of rows with a
+server-side cursor and write them to the destination in batches, without holding
+the whole result in memory or passing it between events:
+
+```python
+# Python script event — streams in batches, never materializes the full result
+import psycopg
+with psycopg.connect(SOURCE_DSN) as src, psycopg.connect(TARGET_DSN) as dst:
+    with src.cursor(name="etl") as cur:      # server-side cursor
+        cur.itersize = 5000
+        for row in cur.execute("SELECT id, total FROM orders"):
+            ...  # write to dst in batches
+```
+
+Rule of thumb: use **Run Query** when the next step needs to _see_ the rows; use
+**Execute Statement** or a **Script event** when the rows just need to _move_.
+
 ## Security notes
 
 - **Least privilege is the real backstop.** Connect with a restricted database
@@ -114,8 +161,9 @@ Or reference it in another tool action's parameters with
 - **Connection targets.** Like HTTP events, the SQL tool connects to
   user-configured hosts and does not allowlist them — connecting to your own
   internal databases is the point (single-tenant / operator-is-author model).
-- **Resource limits.** An internal 10,000-row cap (`truncated` flag) and the
-  event's Timeout (applied as the SQL statement timeout, and as an overall cap on
-  the action) bound memory and the Unified I/O payload. Values with imprecise
-  types (`BIGINT`, `DECIMAL`), dates, and binary are returned JSON-safe (numbers
-  as strings, dates as ISO strings, blobs as base64).
+- **Resource limits.** A row limit (`maxRows`, default 10,000 — exceeding it
+  fails rather than truncating), the 5 MB Unified I/O payload limit, and the
+  event's Timeout (applied as the SQL statement timeout and as an overall cap on
+  the action) bound memory and the payload. See "Large result sets and bulk ETL"
+  above. Values with imprecise types (`BIGINT`, `DECIMAL`), dates, and binary are
+  returned JSON-safe (numbers as strings, dates as ISO strings, blobs as base64).

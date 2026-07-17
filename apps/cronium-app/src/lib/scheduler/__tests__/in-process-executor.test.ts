@@ -106,6 +106,27 @@ describe("runInProcessJob", () => {
     expect(result.scriptOutput).toEqual({ rows: [{ id: 1 }] });
   });
 
+  it("fails the job when the output exceeds the Unified I/O size limit", async () => {
+    // ~6 MB of JSON, over the 5 MB limit a script's cronium.output() also gets.
+    mockExec.mockResolvedValue({
+      stdout: "ok",
+      stderr: "",
+      exitCode: 0,
+      data: { rows: [{ blob: "x".repeat(6 * 1024 * 1024) }] },
+      producesOutput: true,
+    });
+
+    await runInProcessJob(job, event);
+
+    expect(statuses()).toEqual([JobStatus.RUNNING, JobStatus.FAILED]);
+    const data = lastData();
+    expect(String(data.error)).toMatch(/over the 5\.0 MB limit/);
+    // The oversized payload must not be persisted.
+    expect(
+      (data.result as Record<string, unknown>).scriptOutput,
+    ).toBeUndefined();
+  });
+
   it("does not emit scriptOutput for a send/write action (producesOutput false)", async () => {
     mockExec.mockResolvedValue({
       stdout: "ok",

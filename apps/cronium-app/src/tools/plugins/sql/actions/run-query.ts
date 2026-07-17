@@ -29,12 +29,11 @@ export const runQueryAction: ToolAction = {
     columns: z.array(z.string()).optional(),
     rows: z.array(z.record(z.string(), z.unknown())).optional(),
     rowCount: z.number().optional(),
-    truncated: z.boolean().optional(),
     success: z.boolean().optional(),
     error: z.string().optional(),
   }),
   // Read action: its rows flow into Unified I/O so the next event's
-  // cronium.input() receives { columns, rows, rowCount, truncated }.
+  // cronium.input() receives { columns, rows, rowCount }.
   producesOutput: true,
   helpText:
     "Use :named placeholders in the query and supply values in Parameters " +
@@ -53,7 +52,6 @@ export const runQueryAction: ToolAction = {
         columns: ["id", "email"],
         rows: [{ id: 42, email: "a@b.com" }],
         rowCount: 1,
-        truncated: false,
       },
     },
   ],
@@ -71,23 +69,31 @@ export const runQueryAction: ToolAction = {
 
       assertReadOnlyStatement(parsed.query);
 
+      const maxRows = parsed.maxRows ?? DEFAULT_MAX_ROWS;
       const driver = getDriver(creds.dialect);
       const result = await driver.run(creds, parsed.query, bindParams, {
-        maxRows: DEFAULT_MAX_ROWS,
+        maxRows,
         timeoutMs: context.timeoutMs ?? DEFAULT_SQL_TIMEOUT_MS,
       });
 
+      // Never hand back a silently-shortened result: an ETL that received 10k of
+      // 15k rows would look successful while dropping data. Fail with the fix.
+      if (result.truncated) {
+        throw new Error(
+          `Query returned more than ${maxRows} rows. Add a LIMIT to the query, or raise Max Rows. ` +
+            `For large extracts, prefer a server-side INSERT ... SELECT (Execute Statement) or a Script event that streams, ` +
+            `rather than passing every row between events.`,
+        );
+      }
+
       logger.info(
-        `SQL query returned ${result.rowCount} row(s)${
-          result.truncated ? ` (truncated to ${DEFAULT_MAX_ROWS})` : ""
-        } from ${creds.dialect}`,
+        `SQL query returned ${result.rowCount} row(s) from ${creds.dialect}`,
       );
 
       return {
         columns: result.columns,
         rows: result.rows,
         rowCount: result.rowCount,
-        truncated: result.truncated,
       };
     } catch (error) {
       const message =

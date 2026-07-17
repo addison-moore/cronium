@@ -17,6 +17,7 @@ import { type Event, type Job, JobStatus, JobType } from "@/shared/schema";
 import { jobService } from "@/lib/services/job-service";
 import { executeToolAction } from "@/lib/scheduler/tool-action-executor";
 import { executeHttpEvent } from "@/lib/scheduler/http-event-executor";
+import { MAX_UNIFIED_IO_OUTPUT_BYTES, toMb } from "@/lib/unified-io/limits";
 
 /**
  * Job types executed in the app process rather than dispatched to the
@@ -54,19 +55,36 @@ export async function runInProcessJob(
     // cronium.input(). Read/HTTP actions set producesOutput; send/write actions
     // don't, so they don't pollute the data channel.
     const resultField: Record<string, unknown> = { exitCode: result.exitCode };
+    let oversizeError: string | null = null;
     if (succeeded && result.producesOutput && result.data !== undefined) {
-      resultField.scriptOutput = result.data;
+      // Same limit a script's cronium.output() gets (the script route enforces
+      // it too). Fail loudly rather than dropping the payload: a step reported
+      // COMPLETED while its output silently vanished would hand the next step
+      // empty input, which reads as data loss.
+      const bytes = Buffer.byteLength(JSON.stringify(result.data) ?? "");
+      if (bytes > MAX_UNIFIED_IO_OUTPUT_BYTES) {
+        oversizeError =
+          `Action output is ${toMb(bytes)} MB, over the ${toMb(MAX_UNIFIED_IO_OUTPUT_BYTES)} MB limit for data passed between events. ` +
+          `Return less data (fewer columns, or a LIMIT), or move bulk work to a server-side INSERT ... SELECT (Execute Statement) or a Script event that streams.`;
+      } else {
+        resultField.scriptOutput = result.data;
+      }
     }
 
+    const finalSucceeded = succeeded && !oversizeError;
     await jobService.updateJobStatus(
       job.id,
-      succeeded ? JobStatus.COMPLETED : JobStatus.FAILED,
+      finalSucceeded ? JobStatus.COMPLETED : JobStatus.FAILED,
       {
-        output: succeeded ? result.stdout : result.stderr,
-        exitCode: result.exitCode,
+        output: oversizeError ?? (succeeded ? result.stdout : result.stderr),
+        exitCode: finalSucceeded ? result.exitCode : result.exitCode || 1,
         executionDuration,
         result: resultField,
-        ...(succeeded ? {} : { error: result.stderr || "Tool action failed" }),
+        ...(finalSucceeded
+          ? {}
+          : {
+              error: oversizeError ?? (result.stderr || "Tool action failed"),
+            }),
       },
     );
   } catch (err) {

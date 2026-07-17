@@ -5,6 +5,7 @@ import { jobs } from "@/shared/schema";
 import { eq } from "drizzle-orm";
 import { executionService } from "@/lib/services/execution-service";
 import { unifiedIoDebug } from "@/lib/unified-io/debug";
+import { MAX_UNIFIED_IO_OUTPUT_BYTES } from "@/lib/unified-io/limits";
 
 export async function POST(
   request: NextRequest,
@@ -21,8 +22,9 @@ export async function POST(
 
     // Cap the payload so a runaway cronium.output() can't OOM the app or bloat
     // the jobs JSONB column. Reject early on Content-Length, then re-check the
-    // serialized size (header can be absent or wrong).
-    const MAX_OUTPUT_BYTES = 5 * 1024 * 1024; // 5 MB
+    // serialized size (header can be absent or wrong). The same limit applies to
+    // output-producing tool actions (see lib/unified-io/limits.ts).
+    const MAX_OUTPUT_BYTES = MAX_UNIFIED_IO_OUTPUT_BYTES;
     const contentLength = Number(request.headers.get("content-length") ?? 0);
     if (contentLength > MAX_OUTPUT_BYTES) {
       return NextResponse.json(

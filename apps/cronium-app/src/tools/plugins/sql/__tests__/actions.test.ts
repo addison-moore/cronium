@@ -38,7 +38,7 @@ describe("run-query action", () => {
     expect(runQueryAction.producesOutput).toBe(true);
   });
 
-  it("returns { columns, rows, rowCount, truncated } on success", async () => {
+  it("returns { columns, rows, rowCount } on success", async () => {
     const run = jest.fn().mockResolvedValue({
       columns: ["id"],
       rows: [{ id: 1 }],
@@ -63,8 +63,46 @@ describe("run-query action", () => {
       columns: ["id"],
       rows: [{ id: 1 }],
       rowCount: 1,
+    });
+  });
+
+  it("fails instead of silently truncating when the row cap is exceeded", async () => {
+    const run = jest.fn().mockResolvedValue({
+      columns: ["id"],
+      rows: [{ id: 1 }],
+      rowCount: 1,
+      truncated: true,
+    });
+    mockGetDriver.mockReturnValue({ run });
+    const result = (await runQueryAction.execute(
+      creds,
+      { query: "SELECT id FROM big", params: {} },
+      ctx(),
+    )) as { success: boolean; error: string };
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/more than 10000 rows/);
+    expect(result.error).toMatch(/LIMIT|Max Rows/);
+  });
+
+  it("honors an explicit maxRows override", async () => {
+    const run = jest.fn().mockResolvedValue({
+      columns: [],
+      rows: [],
+      rowCount: 0,
       truncated: false,
     });
+    mockGetDriver.mockReturnValue({ run });
+    await runQueryAction.execute(
+      creds,
+      { query: "SELECT 1", params: {}, maxRows: 50_000 },
+      ctx(),
+    );
+    expect(run).toHaveBeenCalledWith(
+      expect.anything(),
+      "SELECT 1",
+      {},
+      { maxRows: 50_000, timeoutMs: 30_000 },
+    );
   });
 
   it("uses the event timeout (context.timeoutMs) as the statement timeout", async () => {

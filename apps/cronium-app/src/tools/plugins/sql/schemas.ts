@@ -46,11 +46,16 @@ const paramsMap = z
     'Optional. JSON object of values for the query\'s :name placeholders, e.g. {"id": "{{cronium.input.orderId}}"}. Values are bound safely (never concatenated into the SQL). Leave blank if the query has no placeholders.',
   );
 
-// Result-size safety cap: a query without a LIMIT can't pull unbounded rows into
-// memory / the Unified I/O payload. Users control the size with LIMIT; this is
-// just the backstop. The statement timeout comes from the event's Timeout
+// Row guardrail. Tool actions run in-process in the app, and the result is held
+// in memory, written to job.result (jsonb), and handed to the next step — so an
+// unbounded SELECT is a real risk to the app, not just to the query. Exceeding
+// the limit FAILS the action rather than silently truncating: quietly returning
+// 10k of 15k rows would be data loss an ETL could not detect. Users who need
+// more can raise `maxRows` (bounded by MAX_ROWS_CEILING and, ultimately, by the
+// Unified I/O byte limit). The statement timeout comes from the event's Timeout
 // setting (context.timeoutMs), not a per-action field.
 export const DEFAULT_MAX_ROWS = 10_000;
+export const MAX_ROWS_CEILING = 1_000_000;
 export const DEFAULT_SQL_TIMEOUT_MS = 30_000;
 
 export const runQuerySchema = z.object({
@@ -61,6 +66,15 @@ export const runQuerySchema = z.object({
       "The SQL query to run (read-only: SELECT/WITH). Use :name placeholders for values and supply them in Parameters. Add LIMIT to cap the number of rows.",
     ),
   params: paramsMap,
+  maxRows: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(MAX_ROWS_CEILING)
+    .optional()
+    .describe(
+      "Optional. Maximum rows to return (default 10,000). The action fails if the query returns more, rather than silently dropping rows — add a LIMIT or raise this. Very large extracts should use Execute Statement (INSERT ... SELECT) or a Script event instead of passing rows between events.",
+    ),
 });
 export type RunQueryParams = z.infer<typeof runQuerySchema>;
 
