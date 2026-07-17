@@ -14,6 +14,9 @@
 import { db } from "@/server/db";
 import { createCaller } from "@/server/api/root";
 import { sessionFromApiToken } from "@/server/api/trpc";
+import { sessionFromOAuthToken } from "@/lib/mcp-oauth/resource";
+import { getBearerToken } from "@/lib/api-auth";
+import { getBaseUrl, resourceMetadataUrl } from "@/lib/mcp-oauth/metadata";
 import { MCP_TOOLS, MCP_TOOL_BY_NAME } from "./tools";
 
 export const runtime = "nodejs";
@@ -111,19 +114,31 @@ async function handleMessage(
 }
 
 export async function POST(req: Request): Promise<Response> {
-  // Strict bearer auth (no dev auto-auth on this internet-facing route).
-  const session = await sessionFromApiToken(req.headers);
+  // Strict bearer auth (no dev auto-auth on this internet-facing route):
+  // accept an OAuth 2.1 access token or a raw Cronium API token.
+  const session =
+    (await sessionFromOAuthToken(req.headers)) ??
+    (await sessionFromApiToken(req.headers));
   if (!session) {
+    // Point MCP clients at the protected-resource metadata so they can discover
+    // the OAuth authorization server (RFC 9728). Flag invalid_token when a
+    // (bad/expired) token was supplied, vs. simply missing.
+    const hadToken = getBearerToken(req.headers) !== null;
+    const challenge =
+      `Bearer resource_metadata="${resourceMetadataUrl(getBaseUrl(req))}"` +
+      (hadToken
+        ? ', error="invalid_token", error_description="The access token is invalid or expired"'
+        : "");
     return new Response(
       JSON.stringify({
         error:
-          "unauthorized: provide a valid Cronium API token as a Bearer token",
+          "unauthorized: authenticate with an OAuth access token or a Cronium API token",
       }),
       {
         status: 401,
         headers: {
           "content-type": "application/json",
-          "www-authenticate": "Bearer",
+          "www-authenticate": challenge,
         },
       },
     );

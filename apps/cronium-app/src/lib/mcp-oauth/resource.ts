@@ -1,0 +1,38 @@
+import type { Session } from "next-auth";
+import { getBearerToken } from "@/lib/api-auth";
+import { storage } from "@/server/storage";
+import { verifyAccessToken } from "./tokens";
+
+/**
+ * Resource-server side: turn a valid OAuth access token (Bearer) into a Session
+ * for the token's user, so /api/mcp accepts OAuth-issued tokens alongside raw
+ * API tokens. Returns null when there is no valid access token.
+ */
+export async function sessionFromOAuthToken(
+  headers: Headers,
+): Promise<Session | null> {
+  const token = getBearerToken(headers);
+  if (!token) return null;
+
+  const payload = verifyAccessToken(token);
+  if (!payload) return null;
+
+  const user = await storage.getUser(payload.sub);
+  if (!user) return null;
+
+  const name =
+    user.firstName || user.lastName
+      ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim()
+      : (user.email ?? "User");
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email ?? "",
+      name,
+      role: user.role,
+      image: null,
+    },
+    expires: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+  } as Session;
+}

@@ -94,9 +94,14 @@ separate process). Use this for the claude.ai **web** app, ChatGPT (Business+ de
 MCP client that connects to a remote server.
 
 - **URL:** `https://<your-cronium-host>/api/mcp` (must be HTTPS and reachable by the client).
-- **Auth:** send your Cronium API token as a bearer header — `Authorization: Bearer <token>`.
-  In claude.ai this is the connector's **custom header** auth. Unauthenticated or invalid tokens
-  are rejected with `401` (enforced even in dev — no auto-auth on this route).
+- **Auth — two options:**
+  - **OAuth 2.1 (recommended for claude.ai):** Cronium is a full OAuth 2.1 authorization server
+    for this resource (PKCE, dynamic client registration, discovery). Just add the connector URL
+    in claude.ai and click **Connect** — you'll be sent to Cronium to sign in and approve; no
+    token to paste. Discovery lives at `/.well-known/oauth-authorization-server` and
+    `/.well-known/oauth-protected-resource`; the `/api/mcp` `401` advertises them.
+  - **Static bearer:** send a Cronium API token — `Authorization: Bearer <token>` (claude.ai
+    "custom header" auth, or any client). Unauthenticated/invalid tokens get `401`.
 - **Transport:** stateless JSON-RPC over `POST` (Streamable HTTP, JSON-response mode). `GET`
   returns `405` (no server-initiated stream needed).
 
@@ -108,10 +113,9 @@ curl -s https://<host>/api/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
-> **Security:** `/api/mcp` is internet-facing when your instance is. Serve it over HTTPS. A
-> Cronium API token currently grants full user rights (per-token scopes are a planned follow-up).
-> OAuth 2.1 for the connector is the next phase (`_plans/mcp/PLAN.md` 3b); today it uses a
-> static bearer token.
+> **Security:** `/api/mcp` is internet-facing when your instance is. Serve it over HTTPS. Both an
+> OAuth access token and a raw Cronium API token currently grant full user rights (per-token
+> scopes are a planned follow-up, `_plans/mcp/PLAN.md` Phase 4).
 
 ## Notes & limits
 

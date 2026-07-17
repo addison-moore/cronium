@@ -167,6 +167,24 @@ const nextConfig = {
     contentDispositionType: "attachment",
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
+  async rewrites() {
+    return [
+      // MCP OAuth 2.1 discovery (RFC 8414 / RFC 9728). The handlers live under
+      // /api/mcp/oauth/metadata so tsc/eslint pick them up; expose the spec URLs.
+      {
+        source: "/.well-known/oauth-authorization-server",
+        destination: "/api/mcp/oauth/metadata/authorization-server",
+      },
+      {
+        source: "/.well-known/oauth-protected-resource",
+        destination: "/api/mcp/oauth/metadata/protected-resource",
+      },
+      {
+        source: "/.well-known/oauth-protected-resource/api/mcp",
+        destination: "/api/mcp/oauth/metadata/protected-resource",
+      },
+    ];
+  },
   async headers() {
     return [
       {
