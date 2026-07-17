@@ -11,6 +11,7 @@ import {
   type StandardizedTableAction,
 } from "@cronium/ui";
 import { EventTypeIcon } from "@/components/ui/event-type-icon";
+import { parseToolActionConfig } from "@/lib/tools/tool-action-config";
 import { ClickableStatusBadge } from "@/components/ui/clickable-status-badge";
 import {
   Tooltip,
@@ -204,7 +205,13 @@ export function EventsTable({
         return (
           <div className="flex items-center">
             <div className="mr-2">
-              <EventTypeIcon type={event.type} size={16} />
+              <EventTypeIcon
+                type={event.type}
+                toolType={
+                  parseToolActionConfig(event.toolActionConfig)?.toolType
+                }
+                size={16}
+              />
             </div>
             <StandardizedTableLink href={`/dashboard/events/${event.id}`}>
               {event.name}

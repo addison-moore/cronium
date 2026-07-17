@@ -81,6 +81,7 @@ async function EventsList() {
       timeoutUnit: rawEvent.timeoutUnit,
       retries: rawEvent.retries,
       shared: rawEvent.shared,
+      toolActionConfig: rawEvent.toolActionConfig,
     };
 
     // Add eventServers only if it exists

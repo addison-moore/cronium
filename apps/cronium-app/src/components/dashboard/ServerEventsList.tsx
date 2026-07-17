@@ -92,13 +92,13 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
   const [deleteEventId, setDeleteEventId] = useState<number | null>(null);
   const { toast } = useToast();
 
-  // tRPC queries for all events (will filter by server client-side)
+  // Events associated with this server via the event_servers join table
   const {
     data: eventsData,
     isLoading,
     refetch: refetchEvents,
-  } = trpc.events.getAll.useQuery(
-    { limit: 1000 }, // Get all events for client-side filtering
+  } = trpc.servers.getEvents.useQuery(
+    { id: serverId, limit: 100 },
     QUERY_OPTIONS.dynamic,
   );
 
@@ -275,21 +275,15 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
     if (typeof dbEvent.retries === "number") {
       mappedEvent.retries = dbEvent.retries;
     }
+    if (dbEvent.toolActionConfig != null) {
+      mappedEvent.toolActionConfig = dbEvent.toolActionConfig;
+    }
 
     return mappedEvent;
   }
 
-  // Filter events by serverId and safely map to component Event type
-  const events: Event[] = allEvents
-    .filter((event): event is DbEvent => {
-      return (
-        typeof event === "object" &&
-        event !== null &&
-        typeof (event as { serverId?: unknown }).serverId === "number" &&
-        (event as { serverId: number }).serverId === serverId
-      );
-    })
-    .map(mapDbEventToEvent);
+  // Safely map to component Event type (already scoped to this server)
+  const events: Event[] = allEvents.map(mapDbEventToEvent);
 
   // Helper function to update state
   const updateState = (updates: Partial<EventListState>) => {

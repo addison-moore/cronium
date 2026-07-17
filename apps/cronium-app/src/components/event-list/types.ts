@@ -36,6 +36,8 @@ export interface Event {
   gistFileName?: string | null;
   // Workflow related fields
   workflowId?: number | null;
+  // Tool action fields (raw jsonb value; parse with parseToolActionConfig)
+  toolActionConfig?: unknown;
 }
 
 export interface ServerData {
