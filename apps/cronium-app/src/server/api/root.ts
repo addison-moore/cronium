@@ -19,6 +19,7 @@ import { toolActionLogsRouter } from "./routers/toolActionLogs";
 import { toolActionTemplatesRouter } from "./routers/toolActionTemplates";
 import { jobsRouter } from "./routers/jobs";
 import { staticResourcesRouter } from "./routers/static-resources";
+import { mcpRouter } from "./routers/mcp";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 
 /**
@@ -47,6 +48,7 @@ export const appRouter = createTRPCRouter({
   toolActionTemplates: toolActionTemplatesRouter,
   jobs: jobsRouter,
   staticResources: staticResourcesRouter,
+  mcp: mcpRouter,
 });
 
 // export type definition of API

@@ -51,14 +51,54 @@ const createInnerTRPCContext = (opts: CreateContextOptions) => {
  *
  * @see https://trpc.io/docs/context
  */
+/**
+ * Build a Session from an `Authorization: Bearer <api-token>` header, so
+ * headless clients (e.g. the MCP server) can act as the token's owner without a
+ * browser session. Cookie sessions take precedence; this is only consulted when
+ * there is no session. Returns null when there is no valid token.
+ */
+const sessionFromApiToken = async (
+  headers: Headers,
+): Promise<Session | null> => {
+  const { getBearerToken, authenticateApiToken } =
+    await import("../../lib/api-auth");
+  const token = getBearerToken(headers);
+  if (!token) return null;
+
+  const auth = await authenticateApiToken(token);
+  if (!auth) return null;
+
+  const { storage } = await import("../storage");
+  const user = await storage.getUser(auth.userId);
+  if (!user) return null;
+
+  const name =
+    user.firstName || user.lastName
+      ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim()
+      : (user.email ?? "User");
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email ?? "",
+      name,
+      role: user.role,
+      image: null,
+    },
+    expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  } as Session;
+};
+
 export const createTRPCContext = async (
   opts: CreateNextContextOptions | { headers: Headers },
 ) => {
   // Extract headers from the options
   const headers = "headers" in opts ? opts.headers : new Headers();
 
-  // Get session using the cached version to avoid repeated DB calls
-  const session = await getCachedServerSession();
+  // Get session using the cached version to avoid repeated DB calls.
+  // Fall back to API-token bearer auth for headless (non-cookie) callers.
+  const session =
+    (await getCachedServerSession()) ?? (await sessionFromApiToken(headers));
 
   return createInnerTRPCContext({
     session,
