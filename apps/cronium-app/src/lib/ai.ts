@@ -269,6 +269,14 @@ async function listGeminiModels(apiKey: string): Promise<AiModelOption[]> {
   return models;
 }
 
+export interface ListModelsResult {
+  models: AiModelOption[];
+  source: "provider" | "fallback";
+  // Set when the provider fetch was attempted and failed (bad key, network,
+  // ...), so the admin UI can tell the user why it's showing a fallback list.
+  error: string | undefined;
+}
+
 // Query the provider's models API so the admin UI only offers models the
 // provider actually serves. Falls back to a curated static list when the
 // provider can't be reached (e.g. no key entered yet).
@@ -276,7 +284,7 @@ export async function listAvailableModels(
   provider: AiProviderId,
   apiKey?: string,
   baseUrl?: string,
-): Promise<{ models: AiModelOption[]; source: "provider" | "fallback" }> {
+): Promise<ListModelsResult> {
   let resolvedKey = apiKey;
   if (!resolvedKey) {
     const keySetting = await storage.getSetting(
@@ -293,6 +301,7 @@ export async function listAvailableModels(
     resolvedBaseUrl = baseUrlSetting?.value ?? undefined;
   }
 
+  let fetchError: string | undefined;
   if (resolvedKey && (provider !== "custom" || resolvedBaseUrl)) {
     try {
       let models: AiModelOption[];
@@ -311,12 +320,18 @@ export async function listAvailableModels(
           break;
       }
       if (models.length > 0) {
-        return { models, source: "provider" };
+        return { models, source: "provider", error: undefined };
       }
     } catch (error) {
       console.error(`Failed to list models from ${provider}:`, error);
+      const message = error instanceof Error ? error.message : String(error);
+      fetchError = message.slice(0, 300);
     }
   }
 
-  return { models: FALLBACK_AI_MODELS[provider], source: "fallback" };
+  return {
+    models: FALLBACK_AI_MODELS[provider],
+    source: "fallback",
+    error: fetchError,
+  };
 }

@@ -513,7 +513,12 @@ export const adminRouter = createTRPCRouter({
 
           // SMTP settings
           smtpHost: settingsObject.smtpHost ?? "",
-          smtpPort: settingsObject.smtpPort ?? "587",
+          // Stored numeric-looking strings ("587") round-trip through JSON.parse
+          // as numbers; the settings schemas expect a string
+          smtpPort:
+            typeof settingsObject.smtpPort === "number"
+              ? String(settingsObject.smtpPort)
+              : (settingsObject.smtpPort ?? "587"),
           smtpUser: settingsObject.smtpUser ?? "",
           smtpPassword: settingsObject.smtpPassword ?? "",
           smtpFromEmail: settingsObject.smtpFromEmail ?? "",

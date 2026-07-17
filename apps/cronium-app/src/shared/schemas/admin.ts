@@ -99,7 +99,12 @@ export const systemSettingsSchema = z.object({
   logRetentionDays: z.number().min(1).max(365).optional(),
   // SMTP settings
   smtpHost: z.string().optional(),
-  smtpPort: z.string().optional(),
+  // Accept numbers too: clients that round-trip getSystemSettings send the
+  // JSON.parse'd number back
+  smtpPort: z
+    .union([z.string(), z.number()])
+    .transform((value) => String(value))
+    .optional(),
   smtpUser: z.string().optional(),
   smtpPassword: z.string().optional(),
   smtpFromEmail: z.string().email().optional(),

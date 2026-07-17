@@ -36,7 +36,7 @@ const copy = {
   baseUrl: "API Base URL",
   save: "Save",
   fallbackNote:
-    "Couldn't fetch the live model list from the provider — showing common models. Enter a valid API key and refresh to see the models your account can use.",
+    "Showing common models. Enter your API key and refresh to load the models your account can actually use.",
   customHelp:
     "Any OpenAI-compatible endpoint (Groq, Together, Fireworks, OpenRouter, Ollama, vLLM, ...) for open models like Kimi, Qwen, or Llama.",
 } as const;
@@ -141,11 +141,15 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
   const [modelSource, setModelSource] = React.useState<"provider" | "fallback">(
     "fallback",
   );
+  const [modelFetchError, setModelFetchError] = React.useState<
+    string | undefined
+  >(undefined);
 
   const listModels = trpc.admin.listAiModels.useMutation({
     onSuccess: (result) => {
       setModels(result.data.models);
       setModelSource(result.data.source);
+      setModelFetchError(result.data.error);
     },
   });
   // Keep a stable reference so the provider-change effect doesn't refire on
@@ -169,6 +173,7 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
   React.useEffect(() => {
     setModels(FALLBACK_AI_MODELS[provider]);
     setModelSource("fallback");
+    setModelFetchError(undefined);
     loadModels(provider, apiKey, baseUrl);
   }, [provider, loadModels]);
 
@@ -366,10 +371,18 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
                       </SelectContent>
                     </Select>
                   )}
-                  {modelSource === "fallback" && !useManualModelInput && (
-                    <p className="text-muted-foreground text-sm">
-                      {copy.fallbackNote}
+                  {modelFetchError ? (
+                    <p className="text-sm text-amber-600 dark:text-amber-500">
+                      Couldn&apos;t fetch the live model list — showing common
+                      models instead. Provider error: {modelFetchError}
                     </p>
+                  ) : (
+                    modelSource === "fallback" &&
+                    !useManualModelInput && (
+                      <p className="text-muted-foreground text-sm">
+                        {copy.fallbackNote}
+                      </p>
+                    )
                   )}
                   {fieldState.error && (
                     <p id="aiModel-error" className="text-sm text-red-600">
