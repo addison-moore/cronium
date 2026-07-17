@@ -9,6 +9,7 @@ import { NotionPlugin } from "./notion/notion-plugin";
 import { TrelloPlugin } from "./trello/trello-plugin";
 import { SqlPlugin } from "./sql/sql-plugin";
 import { MongoDbPlugin } from "./mongodb/mongodb-plugin";
+import { AiPlugin } from "./ai/ai-plugin";
 
 // Track initialization state globally
 declare global {
@@ -31,6 +32,7 @@ export function initializePlugins() {
   ToolPluginRegistry.register(TrelloPlugin);
   ToolPluginRegistry.register(SqlPlugin);
   ToolPluginRegistry.register(MongoDbPlugin);
+  ToolPluginRegistry.register(AiPlugin);
 
   global.__pluginsInitialized = true;
 }
@@ -46,6 +48,7 @@ export {
   TrelloPlugin,
   SqlPlugin,
   MongoDbPlugin,
+  AiPlugin,
 };
 
 // Export registry for easy access

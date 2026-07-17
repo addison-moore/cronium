@@ -7,15 +7,32 @@ import {
 } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { withErrorHandling } from "@/server/utils/error-utils";
-import { mutationResponse } from "@/server/utils/api-patterns";
+import {
+  mutationResponse,
+  resourceResponse,
+} from "@/server/utils/api-patterns";
 import { storage } from "@/server/storage";
-import { generateScriptCode, isAiConfigured } from "@/lib/ai";
+import {
+  generateScriptCode,
+  isAiConfigured,
+  listAvailableModels,
+} from "@/lib/ai";
+import { AI_PROVIDER_IDS } from "@/shared/ai-providers";
 
 // Schemas
 const generateScriptSchema = z.object({
   prompt: z.string().min(1, "Prompt is required"),
   scriptType: z.string(),
   currentCode: z.string().optional(),
+});
+
+// List the models a provider serves, for populating the model picker when a
+// user configures a per-user AI connection. Mirrors admin.listAiModels but is
+// available to any authenticated user (their own key travels in the POST body).
+const listModelsSchema = z.object({
+  provider: z.enum(AI_PROVIDER_IDS),
+  apiKey: z.string().optional(),
+  baseUrl: z.string().optional(),
 });
 
 export const aiRouter = createTRPCRouter({
@@ -64,6 +81,30 @@ export const aiRouter = createTRPCRouter({
         {
           component: "aiRouter",
           operationName: "generateScript",
+          userId: ctx.session.user.id,
+        },
+      );
+    }),
+
+  // List available models for an AI provider (for the per-user AI connection
+  // form). A mutation so the API key travels in the POST body, not a GET URL.
+  listModels: protectedProcedure
+    .use(withTiming)
+    .use(withRateLimit(30, 60000))
+    .input(listModelsSchema)
+    .mutation(async ({ ctx, input }) => {
+      return withErrorHandling(
+        async () => {
+          const result = await listAvailableModels(
+            input.provider,
+            input.apiKey?.trim() ? input.apiKey.trim() : undefined,
+            input.baseUrl?.trim() ? input.baseUrl.trim() : undefined,
+          );
+          return resourceResponse(result);
+        },
+        {
+          component: "aiRouter",
+          operationName: "listModels",
           userId: ctx.session.user.id,
         },
       );

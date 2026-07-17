@@ -275,6 +275,7 @@ export default function ActionParameterForm({
         key.toLowerCase().includes("body") ||
         key.toLowerCase().includes("content") ||
         key.toLowerCase().includes("message") ||
+        key.toLowerCase().includes("prompt") ||
         key.toLowerCase().includes("description")
       ) {
         return (

@@ -159,11 +159,16 @@ export default function ToolsPage() {
                 Unified I/O
               </li>
               <li>
-                <strong>AI:</strong> AI-assisted script generation using OpenAI,
-                Anthropic (Claude), Google Gemini, or any OpenAI-compatible
-                endpoint serving open models such as Kimi, Qwen, and Llama —
-                enabled by an administrator, who picks the provider and model in
-                the Admin page&apos;s AI Assistant tab
+                <strong>AI:</strong> prompt an LLM as a tool action inside your
+                events and workflows. Each user adds their own AI connection
+                (OpenAI, Anthropic/Claude, Google Gemini, or any
+                OpenAI-compatible endpoint serving open models such as Kimi,
+                Qwen, and Llama), then the Prompt action sends a prompt —
+                template-able with {"{{cronium.input.*}}"} — and passes the
+                reply to the next step; a JSON mode returns structured fields
+                for downstream steps to branch on. (Separately, administrators
+                can enable AI-assisted script generation in the Admin
+                page&apos;s AI Assistant tab.)
               </li>
             </ul>
             <p>

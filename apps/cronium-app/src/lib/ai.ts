@@ -23,6 +23,52 @@ export interface AiConfig {
   baseUrl: string | undefined;
 }
 
+// Options shared by every provider dispatcher and by the public generateText().
+export interface GenerateTextOptions {
+  systemPrompt?: string;
+  userPrompt: string;
+  // Sampling temperature. Passed through only when set — some OpenAI reasoning
+  // models reject it, so leave it undefined unless the caller asked for it.
+  temperature?: number;
+  // Max output tokens. Defaults to MAX_OUTPUT_TOKENS.
+  maxTokens?: number;
+  // "json" nudges providers toward valid JSON (native JSON mode where available,
+  // and a system-prompt instruction everywhere). Parsing is the caller's job.
+  responseFormat?: "text" | "json";
+  // Aborts the underlying provider request (e.g. from the event's timeout).
+  signal?: AbortSignal;
+}
+
+export interface GenerateTextUsage {
+  inputTokens?: number | undefined;
+  outputTokens?: number | undefined;
+}
+
+export interface GenerateTextResult {
+  text: string;
+  model: string;
+  provider: AiProviderId;
+  usage?: GenerateTextUsage | undefined;
+  finishReason?: string | undefined;
+}
+
+// Appended to the system prompt in JSON mode so providers without a native JSON
+// switch (Anthropic here) still return parseable output, and so OpenAI's
+// json_object mode — which requires the word "json" in the prompt — is satisfied.
+const JSON_INSTRUCTION =
+  "Respond with a single valid JSON value only — no prose, no explanation, " +
+  "and no markdown code fences.";
+
+function withJsonInstruction(
+  systemPrompt: string | undefined,
+  responseFormat: "text" | "json" | undefined,
+): string {
+  if (responseFormat !== "json") return systemPrompt ?? "";
+  return systemPrompt
+    ? `${systemPrompt}\n\n${JSON_INSTRUCTION}`
+    : JSON_INSTRUCTION;
+}
+
 function isAiProviderId(value: string): value is AiProviderId {
   return (AI_PROVIDER_IDS as readonly string[]).includes(value);
 }
@@ -143,69 +189,149 @@ Use the cronium helpers when the task involves passing data between workflow ste
 
 async function generateWithOpenAI(
   config: AiConfig,
-  systemPrompt: string,
-  userPrompt: string,
-): Promise<string> {
+  opts: GenerateTextOptions,
+): Promise<GenerateTextResult> {
   const openai = new OpenAI({
     apiKey: config.apiKey,
     ...(config.baseUrl ? { baseURL: config.baseUrl } : {}),
   });
 
-  // Newer OpenAI reasoning models reject `temperature` and `max_tokens`, so
-  // stick to parameters accepted across the whole model range.
-  const response = await openai.chat.completions.create({
-    model: config.model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    max_completion_tokens: MAX_OUTPUT_TOKENS,
-  });
+  const systemPrompt = withJsonInstruction(
+    opts.systemPrompt,
+    opts.responseFormat,
+  );
 
-  return response.choices[0]?.message.content ?? "";
+  // OpenAI uses `max_completion_tokens` (accepted by both chat and reasoning
+  // models). `temperature` is passed only when set — reasoning models reject it.
+  const response = await openai.chat.completions.create(
+    {
+      model: config.model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: opts.userPrompt },
+      ],
+      max_completion_tokens: opts.maxTokens ?? MAX_OUTPUT_TOKENS,
+      ...(opts.temperature !== undefined
+        ? { temperature: opts.temperature }
+        : {}),
+      ...(opts.responseFormat === "json"
+        ? { response_format: { type: "json_object" as const } }
+        : {}),
+    },
+    opts.signal ? { signal: opts.signal } : {},
+  );
+
+  return {
+    text: response.choices[0]?.message.content ?? "",
+    model: config.model,
+    provider: config.provider,
+    usage: {
+      inputTokens: response.usage?.prompt_tokens,
+      outputTokens: response.usage?.completion_tokens,
+    },
+    finishReason: response.choices[0]?.finish_reason ?? undefined,
+  };
 }
 
 async function generateWithAnthropic(
   config: AiConfig,
-  systemPrompt: string,
-  userPrompt: string,
-): Promise<string> {
+  opts: GenerateTextOptions,
+): Promise<GenerateTextResult> {
   const anthropic = new Anthropic({ apiKey: config.apiKey });
 
-  const response = await anthropic.messages.create({
-    model: config.model,
-    max_tokens: MAX_OUTPUT_TOKENS,
-    system: systemPrompt,
-    messages: [{ role: "user", content: userPrompt }],
-  });
+  // No native JSON mode on the classic messages API — the system-prompt
+  // instruction (added by withJsonInstruction) is what steers JSON output.
+  const systemPrompt = withJsonInstruction(
+    opts.systemPrompt,
+    opts.responseFormat,
+  );
+
+  const response = await anthropic.messages.create(
+    {
+      model: config.model,
+      max_tokens: opts.maxTokens ?? MAX_OUTPUT_TOKENS,
+      ...(systemPrompt ? { system: systemPrompt } : {}),
+      ...(opts.temperature !== undefined
+        ? { temperature: opts.temperature }
+        : {}),
+      messages: [{ role: "user", content: opts.userPrompt }],
+    },
+    opts.signal ? { signal: opts.signal } : {},
+  );
 
   if (response.stop_reason === "refusal") {
     throw new Error("The AI provider declined to generate this content");
   }
 
-  return response.content
-    .filter((block) => block.type === "text")
-    .map((block) => block.text)
-    .join("");
+  return {
+    text: response.content
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join(""),
+    model: config.model,
+    provider: config.provider,
+    usage: {
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+    },
+    finishReason: response.stop_reason ?? undefined,
+  };
 }
 
 async function generateWithGemini(
   config: AiConfig,
-  systemPrompt: string,
-  userPrompt: string,
-): Promise<string> {
+  opts: GenerateTextOptions,
+): Promise<GenerateTextResult> {
   const gemini = new GoogleGenAI({ apiKey: config.apiKey ?? "" });
 
   const response = await gemini.models.generateContent({
     model: config.model,
-    contents: userPrompt,
+    contents: opts.userPrompt,
     config: {
-      systemInstruction: systemPrompt,
-      maxOutputTokens: MAX_OUTPUT_TOKENS,
+      ...(opts.systemPrompt ? { systemInstruction: opts.systemPrompt } : {}),
+      maxOutputTokens: opts.maxTokens ?? MAX_OUTPUT_TOKENS,
+      ...(opts.temperature !== undefined
+        ? { temperature: opts.temperature }
+        : {}),
+      ...(opts.responseFormat === "json"
+        ? { responseMimeType: "application/json" }
+        : {}),
+      ...(opts.signal ? { abortSignal: opts.signal } : {}),
     },
   });
 
-  return response.text ?? "";
+  return {
+    text: response.text ?? "",
+    model: config.model,
+    provider: config.provider,
+    usage: {
+      inputTokens: response.usageMetadata?.promptTokenCount,
+      outputTokens: response.usageMetadata?.candidatesTokenCount,
+    },
+    finishReason: response.candidates?.[0]?.finishReason ?? undefined,
+  };
+}
+
+// Provider-agnostic text generation from an EXPLICIT config (e.g. a per-user AI
+// tool connection), as opposed to generateScriptCode which reads system
+// settings. Dispatches to the same provider functions; the caller supplies the
+// prompts and parses JSON when responseFormat is "json".
+export async function generateText(
+  config: AiConfig,
+  opts: GenerateTextOptions,
+): Promise<GenerateTextResult> {
+  if (!config.apiKey) {
+    throw new Error("AI provider API key not configured");
+  }
+  switch (config.provider) {
+    case "anthropic":
+      return generateWithAnthropic(config, opts);
+    case "gemini":
+      return generateWithGemini(config, opts);
+    case "openai":
+    case "custom":
+      return generateWithOpenAI(config, opts);
+  }
 }
 
 // Function to generate code based on a prompt and script type
@@ -226,19 +352,10 @@ export async function generateScriptCode(
   );
 
   try {
-    let content: string;
-    switch (config.provider) {
-      case "anthropic":
-        content = await generateWithAnthropic(config, systemPrompt, userPrompt);
-        break;
-      case "gemini":
-        content = await generateWithGemini(config, systemPrompt, userPrompt);
-        break;
-      case "openai":
-      case "custom":
-        content = await generateWithOpenAI(config, systemPrompt, userPrompt);
-        break;
-    }
+    const { text: content } = await generateText(config, {
+      systemPrompt,
+      userPrompt,
+    });
 
     // Extract code from response if it's wrapped in markdown code blocks
     const codeBlockRegex = /```(?:\w+)?\s*\n([\s\S]+?)\n```/;
