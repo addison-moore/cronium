@@ -303,8 +303,6 @@ export const EmailPlugin: ToolPlugin = {
     emailActions.find((action) => action.id === id),
   getActionsByType: (type: ActionType) =>
     emailActions.filter((action) => action.actionType === type),
-  getConditionalAction: () =>
-    emailActions.find((action) => action.isSendMessageAction),
 
   // API Routes
 

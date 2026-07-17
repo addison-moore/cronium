@@ -55,12 +55,6 @@ export enum LogStatus {
   PARTIAL = "PARTIAL", // Added for partial multi-server success
 }
 
-export enum ConditionalActionType {
-  NONE = "NONE",
-  SCRIPT = "SCRIPT",
-  SEND_MESSAGE = "SEND_MESSAGE",
-}
-
 export enum WorkflowTriggerType {
   SCHEDULE = "SCHEDULE",
   WEBHOOK = "WEBHOOK",
@@ -447,29 +441,6 @@ export const serverDeletionNotifications = pgTable(
   },
 );
 
-export const conditionalActions = pgTable("conditional_actions", {
-  id: serial("id").primaryKey(),
-  type: varchar("type", { length: 50 })
-    .$type<ConditionalActionType>()
-    .notNull(),
-  value: varchar("value", { length: 255 }),
-  successEventId: integer("success_event_id").references(() => events.id),
-  failEventId: integer("fail_event_id").references(() => events.id),
-  alwaysEventId: integer("always_event_id").references(() => events.id),
-  conditionEventId: integer("condition_event_id").references(() => events.id),
-  targetEventId: integer("target_event_id").references(() => events.id),
-  toolId: integer("tool_id").references(() => toolCredentials.id),
-  message: text("message"),
-  emailAddresses: text("email_addresses"),
-  emailSubject: varchar("email_subject", { length: 255 }),
-  createdAt: timestamp("created_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-  updatedAt: timestamp("updated_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-});
-
 export const systemSettings = pgTable("system_settings", {
   id: serial("id").primaryKey(),
   key: varchar("key", { length: 255 }).notNull().unique(),
@@ -755,15 +726,6 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   eventServers: many(eventServers),
   envVars: many(envVars),
   logs: many(logs),
-  onSuccessEvents: many(conditionalActions, {
-    relationName: "successEventRelations",
-  }),
-  onFailEvents: many(conditionalActions, {
-    relationName: "failEventRelations",
-  }),
-  onAlwaysEvents: many(conditionalActions, {
-    relationName: "alwaysEventRelations",
-  }),
 }));
 
 export const envVarsRelations = relations(envVars, ({ one }) => ({
@@ -858,36 +820,6 @@ export const executionsRelations = relations(executions, ({ one }) => ({
     references: [servers.id],
   }),
 }));
-
-export const conditionalActionsRelations = relations(
-  conditionalActions,
-  ({ one }) => ({
-    successEvent: one(events, {
-      fields: [conditionalActions.successEventId],
-      references: [events.id],
-      relationName: "successEventRelations",
-    }),
-    failEvent: one(events, {
-      fields: [conditionalActions.failEventId],
-      references: [events.id],
-      relationName: "failEventRelations",
-    }),
-    alwaysEvent: one(events, {
-      fields: [conditionalActions.alwaysEventId],
-      references: [events.id],
-      relationName: "alwaysEventRelations",
-    }),
-    conditionEvent: one(events, {
-      fields: [conditionalActions.conditionEventId],
-      references: [events.id],
-      relationName: "conditionEventRelations",
-    }),
-    targetEvent: one(events, {
-      fields: [conditionalActions.targetEventId],
-      references: [events.id],
-    }),
-  }),
-);
 
 export const workflows = pgTable("workflows", {
   id: serial("id").primaryKey(),
@@ -1226,9 +1158,6 @@ export type InsertJob = typeof jobs.$inferInsert;
 
 export type Execution = typeof executions.$inferSelect;
 export type InsertExecution = typeof executions.$inferInsert;
-
-export type ConditionalAction = typeof conditionalActions.$inferSelect;
-export type InsertConditionalAction = typeof conditionalActions.$inferInsert;
 
 export type Setting = typeof systemSettings.$inferSelect;
 export type InsertSetting = typeof systemSettings.$inferInsert;

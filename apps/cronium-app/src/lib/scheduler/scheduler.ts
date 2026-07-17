@@ -1,28 +1,12 @@
-import { EventStatus, TimeUnit, type ConditionalAction } from "@/shared/schema";
+import { EventStatus, TimeUnit } from "@/shared/schema";
 import { scheduleJob, RecurrenceRule, gracefulShutdown } from "node-schedule";
 import type { Job as NodeScheduleJob } from "node-schedule";
 import { storage, type EventWithRelations } from "@/server/storage";
 
 // Import modules
-import {
-  handleSuccessActions,
-  handleFailureActions,
-  handleAlwaysActions,
-  handleConditionActions,
-  processEvent,
-} from "./event-handlers";
 import { handleExecutionCount } from "./execution-counter";
 
 // Type definitions
-
-// ConditionalEvent interface removed - using ConditionalAction from schema instead
-
-interface ExecutionData {
-  executionTime?: string;
-  duration?: number;
-  output?: string;
-  error?: string;
-}
 
 interface ExecutionResult {
   success: boolean;
@@ -686,35 +670,6 @@ export class ScriptScheduler {
   // Expose methods from the imported modules but bind them to this instance
   private async handleExecutionCount(eventId: number) {
     return handleExecutionCount(eventId);
-  }
-
-  private async handleSuccessActions(eventId: number) {
-    return handleSuccessActions(eventId, this.processEvent.bind(this));
-  }
-
-  private async handleFailureActions(eventId: number) {
-    return handleFailureActions(eventId, this.processEvent.bind(this));
-  }
-
-  private async handleAlwaysActions(eventId: number) {
-    return handleAlwaysActions(eventId, this.processEvent.bind(this));
-  }
-
-  private async handleConditionActions(eventId: number, condition: boolean) {
-    return handleConditionActions(
-      eventId,
-      condition,
-      this.processEvent.bind(this),
-    );
-  }
-
-  private async processEvent(
-    conditional_event: ConditionalAction,
-    event: EventWithRelations,
-    isSuccess: boolean,
-    executionData?: ExecutionData,
-  ) {
-    return processEvent(conditional_event, event, isSuccess, executionData);
   }
 
   // Execute an event for workflow usage (with workflow execution tracking)

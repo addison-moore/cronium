@@ -73,50 +73,6 @@ export interface ToolAction {
   parameters: ActionParameter[];
   features?: ActionFeatures;
   helpUrl?: string;
-
-  // Flag to indicate if this action can be used as a conditional action
-  isSendMessageAction?: boolean;
-
-  // Configuration for conditional action usage
-  conditionalActionConfig?: ConditionalActionConfig;
-}
-
-// Conditional Action Configuration
-export interface ConditionalActionConfig {
-  // Mapping of conditional action fields to tool action parameters
-  parameterMapping: {
-    // Standard conditional fields mapped to action parameters
-    recipients?: string; // Maps to parameter name for recipients (e.g., "to", "channel", "webhook_url")
-    message?: string; // Maps to parameter name for message content (e.g., "text", "body", "content")
-    subject?: string; // Maps to parameter name for subject (e.g., "subject", "title")
-    [key: string]: string | undefined; // Allow custom mappings
-  };
-
-  // Optional custom field configuration
-  customFields?: Array<{
-    name: string;
-    label: string;
-    type: "text" | "textarea" | "select" | "array";
-    required?: boolean;
-    placeholder?: string;
-    helpText?: string;
-    options?: Array<{ value: string; label: string }>;
-  }>;
-
-  // Display configuration
-  displayConfig?: {
-    recipientLabel?: string; // Custom label for recipient field (e.g., "Email Addresses", "Channel", "Webhook URL")
-    messageLabel?: string; // Custom label for message field
-    showSubject?: boolean; // Whether to show subject field
-    icon?:
-      LucideIcon | React.ComponentType<{ size?: number; className?: string }>; // Icon to display in conditional actions UI
-  };
-
-  // Validation for conditional action parameters
-  validate?: (params: Record<string, unknown>) => {
-    isValid: boolean;
-    errors?: string[];
-  };
 }
 
 // Execution Context
@@ -204,7 +160,6 @@ export interface ToolPlugin {
   actions: ToolAction[];
   getActionById: (id: string) => ToolAction | undefined;
   getActionsByType: (type: ActionType) => ToolAction[];
-  getConditionalAction?: () => ToolAction | undefined;
 
   // OAuth requirement: when set, the server injects a fresh access token as
   // credentials.oauthToken before executing actions (metadata only)
@@ -331,41 +286,6 @@ export class ToolPluginRegistry {
       if (action) return action;
     }
     return undefined;
-  }
-
-  // Get all actions that can be used as conditional actions
-  static getConditionalActions(): Array<{
-    tool: ToolPlugin;
-    action: ToolAction;
-  }> {
-    const conditionalActions: Array<{ tool: ToolPlugin; action: ToolAction }> =
-      [];
-
-    this.plugins.forEach((plugin) => {
-      plugin.actions.forEach((action) => {
-        if (action.isSendMessageAction) {
-          conditionalActions.push({ tool: plugin, action });
-        }
-      });
-    });
-
-    return conditionalActions;
-  }
-
-  // Get conditional action for a specific tool type
-  static getConditionalActionForTool(toolType: string): ToolAction | undefined {
-    const plugin = this.plugins.get(toolType.toLowerCase());
-    if (!plugin) return undefined;
-
-    return plugin.actions.find((action) => action.isSendMessageAction);
-  }
-
-  // Check if a tool has any conditional actions
-  static hasConditionalActions(toolType: string): boolean {
-    const plugin = this.plugins.get(toolType.toLowerCase());
-    if (!plugin) return false;
-
-    return plugin.actions.some((action) => action.isSendMessageAction);
   }
 
   static unregister(id: string) {

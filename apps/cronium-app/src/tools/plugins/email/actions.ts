@@ -9,7 +9,6 @@ import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "../../utils/zod-to-parameters";
 import { emailCredentialsSchema, type EmailCredentials } from "./schemas";
-import { EmailIcon } from "./email-icon";
 
 type SendEmailParams = {
   to: string;
@@ -55,40 +54,6 @@ export const emailActions: ToolAction[] = [
     actionType: "create",
     actionTypeColor: "blue",
     developmentMode: "visual",
-    isSendMessageAction: true,
-    conditionalActionConfig: {
-      parameterMapping: {
-        recipients: "to",
-        message: "body",
-        subject: "subject",
-      },
-      displayConfig: {
-        recipientLabel: "Email Addresses",
-        messageLabel: "Email Body",
-        showSubject: true,
-        icon: EmailIcon,
-      },
-      validate: (params) => {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        const errors: string[] = [];
-
-        if (!params.to || typeof params.to !== "string") {
-          errors.push("Email address is required");
-        } else if (!emailRegex.test(params.to)) {
-          errors.push("Invalid email address format");
-        }
-
-        if (!params.subject || typeof params.subject !== "string") {
-          errors.push("Subject is required");
-        }
-
-        if (!params.body || typeof params.body !== "string") {
-          errors.push("Email body is required");
-        }
-
-        return { isValid: errors.length === 0, errors };
-      },
-    },
     inputSchema: sendEmailSchema,
     parameters: safeZodToParameters(sendEmailSchema),
     outputSchema: z.object({

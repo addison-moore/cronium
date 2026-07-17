@@ -30,13 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_logs_created_desc ON logs (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs (status, created_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_status_scheduled ON jobs (status, scheduled_for);
 
--- Conditional-action + env-var foreign keys (merged from the former
--- add-event-indexes.sql).
-CREATE INDEX IF NOT EXISTS idx_conditional_actions_success_event_id ON conditional_actions (success_event_id);
-CREATE INDEX IF NOT EXISTS idx_conditional_actions_fail_event_id ON conditional_actions (fail_event_id);
-CREATE INDEX IF NOT EXISTS idx_conditional_actions_always_event_id ON conditional_actions (always_event_id);
-CREATE INDEX IF NOT EXISTS idx_conditional_actions_condition_event_id ON conditional_actions (condition_event_id);
-CREATE INDEX IF NOT EXISTS idx_conditional_actions_target_event_id ON conditional_actions (target_event_id);
+-- Env-var foreign key (merged from the former add-event-indexes.sql).
 CREATE INDEX IF NOT EXISTS idx_env_vars_event_id ON env_vars (event_id);
 CREATE INDEX IF NOT EXISTS idx_events_status_user_id ON events (status, user_id);
 CREATE INDEX IF NOT EXISTS idx_logs_event_id_start_time ON logs (event_id, start_time DESC);
