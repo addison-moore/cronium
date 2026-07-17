@@ -79,7 +79,7 @@ export const FEATURES: Feature[] = [
     icon: "brain",
     title: "AI-Powered Script Generation",
     description:
-      "Draft scripts from a prompt with OpenAI, then edit them in the built-in editor.",
+      "Draft scripts from a prompt with OpenAI, Claude, Gemini, or open models like Kimi, Qwen, and Llama, then edit them in the built-in editor.",
     href: "/docs/tools#available-tools",
   },
   {

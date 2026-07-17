@@ -9,7 +9,7 @@ import { TRPCError } from "@trpc/server";
 import { withErrorHandling } from "@/server/utils/error-utils";
 import { mutationResponse } from "@/server/utils/api-patterns";
 import { storage } from "@/server/storage";
-import { generateScriptCode } from "@/lib/ai";
+import { generateScriptCode, isAiConfigured } from "@/lib/ai";
 
 // Schemas
 const generateScriptSchema = z.object({
@@ -36,16 +36,15 @@ export const aiRouter = createTRPCRouter({
             });
           }
 
-          // Check if OpenAI API key is available
-          const apiKeySetting = await storage.getSetting("openaiApiKey");
-          if (!apiKeySetting?.value) {
+          // Check if the configured AI provider has credentials
+          if (!(await isAiConfigured())) {
             throw new TRPCError({
               code: "PRECONDITION_FAILED",
-              message: "OpenAI API key not configured",
+              message: "AI provider API key not configured",
             });
           }
 
-          // Generate code with OpenAI
+          // Generate code with the configured provider
           const generatedCode = await generateScriptCode(
             input.prompt,
             input.scriptType,

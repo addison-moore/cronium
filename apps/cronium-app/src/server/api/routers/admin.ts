@@ -22,6 +22,8 @@ import {
 import { storage } from "@/server/storage";
 import { UserRole, UserStatus } from "@/shared/schema";
 import { sendInvitationEmail, sendEmailDetailed } from "@/lib/email";
+import { listAvailableModels } from "@/lib/ai";
+import { AI_PROVIDER_IDS } from "@/shared/ai-providers";
 
 // Use centralized admin authentication from trpc.ts
 
@@ -521,8 +523,13 @@ export const adminRouter = createTRPCRouter({
 
           // AI settings
           aiEnabled: settingsObject.aiEnabled ?? false,
-          aiModel: settingsObject.aiModel ?? "gpt-3.5-turbo",
+          aiProvider: settingsObject.aiProvider ?? "openai",
+          aiModel: settingsObject.aiModel ?? "",
           openaiApiKey: settingsObject.openaiApiKey ?? "",
+          anthropicApiKey: settingsObject.anthropicApiKey ?? "",
+          geminiApiKey: settingsObject.geminiApiKey ?? "",
+          customAiApiKey: settingsObject.customAiApiKey ?? "",
+          customAiBaseUrl: settingsObject.customAiBaseUrl ?? "",
         };
 
         return resourceResponse(systemSettings);
@@ -559,6 +566,34 @@ export const adminRouter = createTRPCRouter({
         {
           component: "adminRouter",
           operationName: "updateSystemSettings",
+          userId: ctx.session.user.id,
+        },
+      );
+    }),
+
+  // List the models currently available from an AI provider. A mutation (not a
+  // query) so the API key travels in the POST body instead of a GET URL.
+  listAiModels: adminProcedure
+    .input(
+      z.object({
+        provider: z.enum(AI_PROVIDER_IDS),
+        apiKey: z.string().optional(),
+        baseUrl: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return withErrorHandling(
+        async () => {
+          const result = await listAvailableModels(
+            input.provider,
+            input.apiKey?.trim() ? input.apiKey.trim() : undefined,
+            input.baseUrl?.trim() ? input.baseUrl.trim() : undefined,
+          );
+          return resourceResponse(result);
+        },
+        {
+          component: "adminRouter",
+          operationName: "listAiModels",
           userId: ctx.session.user.id,
         },
       );

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { UserRole, UserStatus } from "../schema";
+import { AI_PROVIDER_IDS } from "../ai-providers";
 
 // Base admin query schema
 export const adminQuerySchema = z.object({
@@ -109,8 +110,13 @@ export const systemSettingsSchema = z.object({
   inviteOnly: z.boolean().optional(),
   // AI settings
   aiEnabled: z.boolean().optional(),
+  aiProvider: z.enum(AI_PROVIDER_IDS).optional(),
   aiModel: z.string().optional(),
   openaiApiKey: z.string().optional(),
+  anthropicApiKey: z.string().optional(),
+  geminiApiKey: z.string().optional(),
+  customAiApiKey: z.string().optional(),
+  customAiBaseUrl: z.string().optional(),
 });
 
 // Logs query schema

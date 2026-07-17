@@ -152,8 +152,11 @@ export default function ToolsPage() {
                 and Google Sheets (via OAuth)
               </li>
               <li>
-                <strong>AI:</strong> OpenAI-powered script generation, enabled
-                by an administrator
+                <strong>AI:</strong> AI-assisted script generation using OpenAI,
+                Anthropic (Claude), Google Gemini, or any OpenAI-compatible
+                endpoint serving open models such as Kimi, Qwen, and Llama —
+                enabled by an administrator, who picks the provider and model in
+                the Admin page&apos;s AI Assistant tab
               </li>
             </ul>
             <p>

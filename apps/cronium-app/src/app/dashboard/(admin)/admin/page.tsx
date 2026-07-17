@@ -5,6 +5,7 @@ import { Mail, Users, Sparkles, UserCog, Shield } from "lucide-react";
 import { z } from "zod";
 import { UserStatus } from "@/shared/schema";
 import type { UserRole } from "@/shared/schema";
+import { AI_PROVIDER_IDS, type AiProviderId } from "@/shared/ai-providers";
 import {
   SmtpSettings,
   RegistrationSettings,
@@ -26,8 +27,13 @@ interface SystemSettings {
   allowRegistration?: boolean;
   requireAdminApproval?: boolean;
   aiEnabled?: boolean;
+  aiProvider?: AiProviderId;
   aiModel?: string;
   openaiApiKey?: string;
+  anthropicApiKey?: string;
+  geminiApiKey?: string;
+  customAiApiKey?: string;
+  customAiBaseUrl?: string;
   enableRegistration?: boolean;
   enableGuestAccess?: boolean;
   defaultUserRole?: UserRole;
@@ -54,8 +60,13 @@ type RegistrationSettingsData = z.infer<typeof registrationSettingsSchema>;
 
 const aiSettingsSchema = z.object({
   aiEnabled: z.boolean().optional(),
+  aiProvider: z.enum(AI_PROVIDER_IDS).optional(),
   aiModel: z.string().optional(),
   openaiApiKey: z.string().optional(),
+  anthropicApiKey: z.string().optional(),
+  geminiApiKey: z.string().optional(),
+  customAiApiKey: z.string().optional(),
+  customAiBaseUrl: z.string().optional(),
 });
 type AiSettingsData = z.infer<typeof aiSettingsSchema>;
 

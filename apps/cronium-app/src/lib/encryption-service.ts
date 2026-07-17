@@ -167,6 +167,9 @@ export const SENSITIVE_FIELDS = {
 export const SENSITIVE_SYSTEM_SETTINGS = [
   "smtpPassword",
   "openaiApiKey",
+  "anthropicApiKey",
+  "geminiApiKey",
+  "customAiApiKey",
   // Add more sensitive keys here as needed
 ] as const;
 
