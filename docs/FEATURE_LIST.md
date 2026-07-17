@@ -22,7 +22,7 @@ Events are the fundamental units of automation in Cronium. Each event represents
 - **Multi-Server Support**: Execute the same event across multiple servers simultaneously
 - **Resource Management**: Configurable timeouts and retry logic
 - **Data Flow**: Pass data between events using runtime helpers
-- **Conditional Actions**: Trigger follow-up actions based on success/failure/custom conditions
+- **Workflow Branching**: Chain events with on-success / on-failure / on-condition edges
 - **Environment Variables**: Secure storage and injection of runtime variables
 - **Comprehensive Logging**: Full execution history with stdout/stderr capture
 

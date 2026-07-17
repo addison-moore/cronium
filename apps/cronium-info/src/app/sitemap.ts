@@ -29,11 +29,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "monthly",
     },
     { path: "/docs/unified-io", priority: 0.7, changeFrequency: "monthly" },
-    {
-      path: "/docs/conditional-actions",
-      priority: 0.7,
-      changeFrequency: "monthly",
-    },
     { path: "/docs/templates", priority: 0.6, changeFrequency: "monthly" },
     { path: "/docs/api", priority: 0.8, changeFrequency: "monthly" },
 

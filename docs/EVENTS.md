@@ -82,21 +82,18 @@ Execute pre-built integrations with third-party services:
 - **Execution Logs**: Complete stdout/stderr capture with timestamps
 - **Real-time Monitoring**: Watch executions as they happen
 
-#### 🔗 Conditional Actions
+#### 🔗 Chaining events (Workflows)
 
-Execute follow-up actions based on event outcomes:
+To run follow-up events based on an event's outcome, add the events to a
+**Workflow** and connect them with conditional edges:
 
-- **On Success**: Trigger when event completes successfully
-- **On Failure**: Respond to errors and failures
-- **Always**: Execute regardless of outcome
-- **On Condition**: Custom logic based on output
+- **On Success**: run the next step when the source event succeeds
+- **On Failure**: run the next step when it fails
+- **Always**: run regardless of outcome
+- **On Condition**: run based on `cronium.setCondition(...)` from the source event
 
-Actions can:
-
-- Trigger other events
-- Send notifications (Email, Slack, Discord)
-- Update variables
-- Execute cleanup scripts
+A follow-up step can be any event — a script, an HTTP request, or a tool action
+(Email/Slack/Discord notification). See [WORKFLOWS.md](./WORKFLOWS.md).
 
 #### 📊 Data Flow
 
@@ -142,12 +139,6 @@ The event form provides a comprehensive interface for configuring all aspects of
    - Timeout configuration
    - Retry settings
    - Environment variables
-
-5. **Conditional Actions**
-   - Action type selection
-   - Target configuration
-   - Message templates
-   - Variable mapping
 
 #### Event Management Dashboard
 
@@ -275,7 +266,7 @@ def check_system_health():
     # Store metrics
     cronium.setVariable('LATEST_METRICS', json.dumps(metrics))
 
-    # Output for conditional actions
+    # Output for the next workflow step
     cronium.output({
         'healthy': len(alerts) == 0,
         'metrics': metrics,
@@ -384,8 +375,7 @@ interface Event {
 3. **Runtime** injects helpers and variables
 4. **Process** runs with configured limits
 5. **Logger** captures all output
-6. **Handler** processes conditional actions
-7. **Storage** saves results and updates state
+6. **Storage** saves results and updates state
 
 ### API Architecture
 
@@ -601,7 +591,7 @@ Transform Cronium into a thriving ecosystem:
 3. **Schedule Your Event**
    - Set your preferred schedule
    - Configure retries if needed
-   - Add conditional actions
+   - Chain follow-up events in a workflow (optional)
    - Activate the event
 
 4. **Monitor & Maintain**

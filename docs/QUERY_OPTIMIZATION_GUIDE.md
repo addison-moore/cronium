@@ -44,7 +44,6 @@ docker exec -it cronium-app-dev bash -c "DATABASE_URL=\$DATABASE_URL pnpm tsx sr
 
 This creates indexes on:
 
-- `conditional_actions` foreign keys
 - `event_servers` foreign keys
 - `env_vars.event_id`
 - Composite indexes for common query patterns
@@ -92,7 +91,6 @@ getEventWithRelationsSimple() (private method - fallback)
 The cache is automatically invalidated when:
 
 - Events are updated
-- Conditional actions are modified
 - Event servers are changed
 
 Manual cache clearing:
@@ -116,7 +114,7 @@ If you still experience timeouts:
 
    ```sql
    SELECT indexname FROM pg_indexes
-   WHERE tablename IN ('conditional_actions', 'event_servers', 'env_vars');
+   WHERE tablename IN ('event_servers', 'env_vars');
    ```
 
 2. Monitor query performance:

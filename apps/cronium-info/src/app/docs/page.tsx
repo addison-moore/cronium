@@ -7,7 +7,6 @@ import {
   Code,
   Terminal,
   Server,
-  Clock,
   Database,
   Workflow,
   Activity,
@@ -133,13 +132,6 @@ export default function DocsPage() {
               description="Exchange data between events and workflows across languages"
               icon={Database}
               link={`/docs/unified-io`}
-            />
-
-            <DocSection
-              title="Conditional Actions"
-              description="Respond to success, failure, or custom conditions"
-              icon={Clock}
-              link={`/docs/conditional-actions`}
             />
 
             <DocSection

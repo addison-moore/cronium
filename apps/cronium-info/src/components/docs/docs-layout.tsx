@@ -33,7 +33,6 @@ const navigationItems: NavItem[] = [
       { title: "Overview", href: "/docs/features" },
       { title: "Runtime Helpers", href: "/docs/runtime-helpers" },
       { title: "Unified Input/Output", href: "/docs/unified-io" },
-      { title: "Conditional Actions", href: "/docs/conditional-actions" },
       { title: "Tools", href: "/docs/tools" },
       { title: "Templates", href: "/docs/templates" },
     ],

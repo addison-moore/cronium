@@ -462,7 +462,7 @@ Workflows support conditional execution based on runtime data:
 ### 2. Linear Data Flow
 
 **Limitation**: Data flows forward only (no loops)
-**Workaround**: Use conditional actions or scheduled re-runs for iterative processes
+**Workaround**: Use scheduled re-runs for iterative processes
 
 ### 3. Limited Parallelism
 

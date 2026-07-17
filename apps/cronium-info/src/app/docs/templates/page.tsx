@@ -349,20 +349,20 @@ export default function TemplatesPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <ArrowRight className="h-5 w-5" />
-                  In Conditional Actions
+                  In Workflows
                 </CardTitle>
                 <CardDescription>
-                  Apply templates in workflow conditional actions
+                  Apply templates to a tool-action event used as a workflow step
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <ol className="space-y-2 text-sm">
-                  <li>1. Edit event conditional actions</li>
-                  <li>2. Add success or failure action</li>
-                  <li>3. Select tool and action type</li>
-                  <li>4. Choose template to apply</li>
-                  <li>5. Template parameters are loaded</li>
-                  <li>6. Save the conditional action</li>
+                  <li>1. Create a tool-action event</li>
+                  <li>2. Select the tool and action type</li>
+                  <li>3. Choose a template to apply</li>
+                  <li>4. Template parameters are loaded</li>
+                  <li>5. Add the event as a workflow step</li>
+                  <li>6. Connect it with an on-success/failure edge</li>
                 </ol>
               </CardContent>
             </Card>

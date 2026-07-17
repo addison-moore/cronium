@@ -384,7 +384,6 @@ type EventFormData<
     runLocation: R;
     serverId: R extends RunLocation.REMOTE ? ServerId : null;
     selectedServerIds: R extends RunLocation.REMOTE ? ServerId[] : never;
-    conditionalActions: ConditionalAction[];
   };
 
 // Hook with full type safety

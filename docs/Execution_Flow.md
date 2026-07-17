@@ -112,7 +112,7 @@ After execution completes:
 1. **Condition Evaluation**: Check if event set a condition via runtime helper
 2. **Output Collection**: Retrieve output data set by the event
 3. **Variable Updates**: Persist any variable changes back to database
-4. **Conditional Actions**: Evaluate and trigger any configured actions
+4. **Workflow Advance**: If part of a workflow, follow the matching outgoing edges
 
 ### Step 8: Status Updates
 
@@ -129,7 +129,7 @@ Runtime helpers provide a consistent API across different scripting languages fo
 
 - **Data Flow**: Pass data between events using input/output
 - **Variable Management**: Get/set global and user-scoped variables
-- **Condition Setting**: Control conditional action execution
+- **Condition Setting**: Control workflow ON_CONDITION edges via `cronium.setCondition(...)`
 - **Event Metadata**: Access current event information
 
 ### Available Functions
@@ -195,30 +195,21 @@ cronium_setCondition true
 event_info=$(cronium_event)
 ```
 
-## Conditional Actions
+## Chaining events (Workflows)
 
-Conditional actions allow events to trigger subsequent actions based on execution outcomes:
+Follow-up events are chained in a **Workflow** by connecting nodes with
+conditional edges based on the source event's outcome:
 
-### Trigger Types
+### Edge Types
 
-- **ON_SUCCESS**: Triggered when the event completes successfully (exit code 0)
-- **ON_FAILURE**: Triggered when the event fails (non-zero exit code)
-- **ALWAYS**: Triggered regardless of the event outcome
-- **ON_CONDITION**: Triggered when the event explicitly sets a condition via runtime helper
+- **ON_SUCCESS**: follow the edge when the source event completes successfully (exit code 0)
+- **ON_FAILURE**: follow the edge when it fails (non-zero exit code)
+- **ALWAYS**: follow the edge regardless of outcome
+- **ON_CONDITION**: follow the edge when the source event sets a condition via `cronium.setCondition(...)`
 
-### Action Types
-
-- **SEND_MESSAGE**: Send notifications via Email, Slack, or Discord
-- **SCRIPT**: Execute another event, passing output data as input
-
-### Execution Flow for Conditional Actions
-
-1. **Configuration**: Users configure conditional actions in the event form
-2. **Execution**: Event runs and may use runtime helpers to set data/conditions
-3. **Evaluation**: System checks execution result and conditions
-4. **Triggering**: Matching conditional actions are executed:
-   - Message actions use the tool plugin system
-   - Script actions create new jobs with data flow
+Any event can be a workflow step — a script, an HTTP request, or a tool action
+(Email/Slack/Discord notification) — and the source event's `cronium.output()`
+becomes the next step's `cronium.input()`. See [WORKFLOWS.md](./WORKFLOWS.md).
 
 ## Data Flow Diagram
 
@@ -390,9 +381,9 @@ Conditional actions allow events to trigger subsequent actions based on executio
    - Binary data support
    - More language bindings (Ruby, Go, etc.)
 
-7. **Conditional Action Improvements**
+7. **Workflow Improvements**
    - Complex condition expressions (AND/OR logic)
-   - Delay actions (wait before triggering)
+   - Delay steps (wait before triggering)
    - Conditional loops and retries
    - Dynamic action configuration based on output
 
@@ -404,9 +395,9 @@ The current execution flow provides a solid foundation for running user scripts 
 - **Orchestrator** manages distributed execution
 - **Executors** provide isolated environments
 - **Runtime Helpers** enable data flow and automation
-- **Conditional Actions** support complex workflows
+- **Workflows** chain events with conditional edges for complex automation
 
-The combination of containerized execution for security, runtime helpers for data flow, and conditional actions for workflow automation creates a powerful platform for scheduled task automation. The use of containers for local execution and SSH for remote execution covers the main use cases while maintaining security and isolation.
+The combination of containerized execution for security, runtime helpers for data flow, and workflows for automation creates a powerful platform for scheduled task automation. The use of containers for local execution and SSH for remote execution covers the main use cases while maintaining security and isolation.
 
 Future improvements should focus on:
 
@@ -414,6 +405,6 @@ Future improvements should focus on:
 2. Enhanced observability and monitoring
 3. Advanced scheduling and priority management
 4. Completing the runtime helper API migration
-5. Richer conditional action capabilities
+5. Richer workflow branching capabilities
 
 These enhancements will support more complex use cases and larger deployments while maintaining the security and reliability of the current system.
