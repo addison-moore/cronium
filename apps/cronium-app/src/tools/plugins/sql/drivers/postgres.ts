@@ -125,10 +125,7 @@ export const postgresDriver: SqlDriver = {
         // pulling the remainder of the result.
         const want = Math.min(BATCH_SIZE, opts.maxRows - acc.rows.length + 1);
         if (want <= 0) break;
-        const { rows: batch, fields } = await readBatch(
-          cursor as unknown as Parameters<typeof readBatch>[0],
-          want,
-        );
+        const { rows: batch, fields } = await readBatch(cursor, want);
         if (columns.length === 0 && fields.length > 0) columns = fields;
         if (batch.length === 0) break;
         for (const row of batch) {

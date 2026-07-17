@@ -705,7 +705,7 @@ export default function EventForm({
 
   const contentClassName =
     layout === "modal"
-      ? "max-h-[60vh] overflow-y-auto px-1"
+      ? "max-h-[60vh] space-y-4 overflow-y-auto px-1"
       : layout === "embedded"
         ? ""
         : "";

@@ -151,7 +151,7 @@ export async function waitForJobCompletion(
         const success = job.status === JobStatus.COMPLETED;
 
         unifiedIoDebug(
-          `poll job ${jobId} done (status=${job.status}): result keys=${job.result && typeof job.result === "object" ? Object.keys(job.result as object).join(",") : "none"}; extracted scriptOutput=${JSON.stringify(scriptOutput)}`,
+          `poll job ${jobId} done (status=${job.status}): result keys=${job.result && typeof job.result === "object" ? Object.keys(job.result).join(",") : "none"}; extracted scriptOutput=${JSON.stringify(scriptOutput)}`,
         );
 
         // Build result

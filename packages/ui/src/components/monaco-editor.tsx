@@ -253,6 +253,9 @@ export function MonacoEditor({
         fontSize: settings.fontSize,
         minimap: { enabled: settings.minimap },
         scrollBeyondLastLine: false,
+        // Let wheel events bubble to the page when the editor can't scroll
+        // further, so the surrounding form keeps scrolling
+        scrollbar: { alwaysConsumeMouseWheel: false },
         automaticLayout: true,
         lineNumbers: settings.lineNumbers ? "on" : "off",
         folding: true,
@@ -336,7 +339,7 @@ export function MonacoEditor({
         variant="outline"
         size="sm"
         onClick={toggleExpanded}
-        className="absolute right-2 bottom-2 z-10 p-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+        className="absolute bottom-2 right-2 z-10 p-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
         title="Expand editor"
       >
         <Maximize2 size={16} />

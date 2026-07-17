@@ -134,6 +134,9 @@ echo "Script execution completed!"`;
         options={{
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
+          // Let wheel events bubble to the page when the editor can't scroll
+          // further, so the surrounding form keeps scrolling
+          scrollbar: { alwaysConsumeMouseWheel: false },
           wordWrap: "on",
           readOnly: disabled,
         }}
