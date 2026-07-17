@@ -1651,6 +1651,10 @@ class DatabaseStorage implements IStorage {
     const pagination = normalizePagination(query);
     const conditions: SQL[] = [
       buildUserAccessConditions(userId, servers.userId, servers.shared),
+      // Archived servers are listed only through the dedicated getArchived
+      // endpoint (their credentials are purged); every getAll consumer — the
+      // servers table, event form, console, workflow form — wants active only.
+      eq(servers.isArchived, false),
     ];
 
     if (typeof query.shared === "boolean") {
