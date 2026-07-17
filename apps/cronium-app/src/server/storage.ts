@@ -23,6 +23,9 @@ import {
   toolActionLogs,
   jobs,
   executions,
+  serverGroups,
+  serverGroupMembers,
+  type ServerGroup,
   type ConditionalActionType,
   type User,
   type InsertUser,
@@ -167,6 +170,10 @@ export interface WorkflowExecutionEventWithDetails extends WorkflowExecutionEven
   eventType: string | null;
 }
 
+export interface ServerGroupWithServers extends ServerGroup {
+  serverIds: number[];
+}
+
 export interface IStorage {
   // User methods
   getUser(id: string): Promise<User | undefined>;
@@ -256,6 +263,21 @@ export interface IStorage {
   createLog(insertLog: InsertLog): Promise<Log>;
   updateLog(id: number, updateData: Partial<InsertLog>): Promise<Log>;
   deleteLog(id: number): Promise<void>;
+
+  // Server group methods
+  getServerGroups(userId: string): Promise<ServerGroupWithServers[]>;
+  getServerGroup(id: number): Promise<ServerGroupWithServers | undefined>;
+  createServerGroup(
+    userId: string,
+    name: string,
+    serverIds: number[],
+  ): Promise<ServerGroupWithServers>;
+  updateServerGroup(
+    id: number,
+    name: string,
+    serverIds: number[],
+  ): Promise<ServerGroupWithServers>;
+  deleteServerGroup(id: number): Promise<void>;
 
   // Server methods
   getServer(id: number): Promise<Server | undefined>;
@@ -2126,6 +2148,107 @@ class DatabaseStorage implements IStorage {
 
     // Then delete the server
     await db.delete(servers).where(eq(servers.id, id));
+  }
+
+  // Server group methods
+  async getServerGroups(userId: string): Promise<ServerGroupWithServers[]> {
+    const groups = await db.query.serverGroups.findMany({
+      where: eq(serverGroups.userId, userId),
+      orderBy: [asc(serverGroups.name)],
+      with: {
+        members: {
+          columns: {
+            serverId: true,
+          },
+        },
+      },
+    });
+
+    return groups.map(({ members, ...group }) => ({
+      ...group,
+      serverIds: members.map((m) => m.serverId),
+    }));
+  }
+
+  async getServerGroup(
+    id: number,
+  ): Promise<ServerGroupWithServers | undefined> {
+    const group = await db.query.serverGroups.findFirst({
+      where: eq(serverGroups.id, id),
+      with: {
+        members: {
+          columns: {
+            serverId: true,
+          },
+        },
+      },
+    });
+
+    if (!group) return undefined;
+    const { members, ...rest } = group;
+    return { ...rest, serverIds: members.map((m) => m.serverId) };
+  }
+
+  async createServerGroup(
+    userId: string,
+    name: string,
+    serverIds: number[],
+  ): Promise<ServerGroupWithServers> {
+    return db.transaction(async (tx) => {
+      const [group] = await tx
+        .insert(serverGroups)
+        .values({ userId, name })
+        .returning();
+
+      if (!group) {
+        throw new Error("Failed to create server group");
+      }
+
+      if (serverIds.length > 0) {
+        await tx
+          .insert(serverGroupMembers)
+          .values(
+            serverIds.map((serverId) => ({ groupId: group.id, serverId })),
+          );
+      }
+
+      return { ...group, serverIds };
+    });
+  }
+
+  async updateServerGroup(
+    id: number,
+    name: string,
+    serverIds: number[],
+  ): Promise<ServerGroupWithServers> {
+    return db.transaction(async (tx) => {
+      const [group] = await tx
+        .update(serverGroups)
+        .set({ name, updatedAt: new Date() })
+        .where(eq(serverGroups.id, id))
+        .returning();
+
+      if (!group) {
+        throw new Error("Failed to update server group - group not found");
+      }
+
+      // Replace membership wholesale
+      await tx
+        .delete(serverGroupMembers)
+        .where(eq(serverGroupMembers.groupId, id));
+      if (serverIds.length > 0) {
+        await tx
+          .insert(serverGroupMembers)
+          .values(serverIds.map((serverId) => ({ groupId: id, serverId })));
+      }
+
+      return { ...group, serverIds };
+    });
+  }
+
+  async deleteServerGroup(id: number): Promise<void> {
+    // Members are removed by the FK cascade
+    await db.delete(serverGroups).where(eq(serverGroups.id, id));
   }
 
   // Server soft-delete cleanup methods (used by serverCleanupService)

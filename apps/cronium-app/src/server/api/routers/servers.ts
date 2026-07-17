@@ -14,6 +14,9 @@ import {
   testServerConnectionSchema,
   serverUsageStatsSchema,
   serverLogsSchema,
+  createServerGroupSchema,
+  updateServerGroupSchema,
+  serverGroupIdSchema,
 } from "@shared/schemas/servers";
 import { type InsertServer } from "@shared/schema";
 import { storage } from "@/server/storage";
@@ -1072,4 +1075,105 @@ export const serversRouter = createTRPCRouter({
         });
       }
     }),
+
+  // Server group procedures
+  getGroups: protectedProcedure.query(async ({ ctx }) => {
+    return withErrorHandling(
+      async () => {
+        const groups = await storage.getServerGroups(ctx.session.user.id);
+        return { groups };
+      },
+      {
+        component: "serversRouter",
+        operationName: "getGroups",
+        userId: ctx.session.user.id,
+      },
+    );
+  }),
+
+  createGroup: protectedProcedure
+    .input(createServerGroupSchema)
+    .mutation(async ({ ctx, input }) => {
+      return withErrorHandling(
+        async () => {
+          await assertServersAccessible(input.serverIds, ctx.session.user.id);
+          return storage.createServerGroup(
+            ctx.session.user.id,
+            input.name,
+            input.serverIds,
+          );
+        },
+        {
+          component: "serversRouter",
+          operationName: "createGroup",
+          userId: ctx.session.user.id,
+        },
+      );
+    }),
+
+  updateGroup: protectedProcedure
+    .input(updateServerGroupSchema)
+    .mutation(async ({ ctx, input }) => {
+      return withErrorHandling(
+        async () => {
+          const group = await storage.getServerGroup(input.id);
+          if (group?.userId !== ctx.session.user.id) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Server group not found",
+            });
+          }
+          await assertServersAccessible(input.serverIds, ctx.session.user.id);
+          return storage.updateServerGroup(
+            input.id,
+            input.name,
+            input.serverIds,
+          );
+        },
+        {
+          component: "serversRouter",
+          operationName: "updateGroup",
+          userId: ctx.session.user.id,
+        },
+      );
+    }),
+
+  deleteGroup: protectedProcedure
+    .input(serverGroupIdSchema)
+    .mutation(async ({ ctx, input }) => {
+      return withErrorHandling(
+        async () => {
+          const group = await storage.getServerGroup(input.id);
+          if (group?.userId !== ctx.session.user.id) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Server group not found",
+            });
+          }
+          await storage.deleteServerGroup(input.id);
+          return { success: true };
+        },
+        {
+          component: "serversRouter",
+          operationName: "deleteGroup",
+          userId: ctx.session.user.id,
+        },
+      );
+    }),
 });
+
+// Ensure every server being added to a group is accessible to the user
+async function assertServersAccessible(
+  serverIds: number[],
+  userId: string,
+): Promise<void> {
+  for (const serverId of serverIds) {
+    const canAccess = await storage.canUserAccessServer(serverId, userId);
+    if (!canAccess) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: `No access to server ${serverId}`,
+      });
+    }
+  }
+}

@@ -261,6 +261,42 @@ export const servers = pgTable("servers", {
     .notNull(),
 });
 
+export const serverGroups = pgTable("server_groups", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id", { length: 255 })
+    .references(() => users.id)
+    .notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  createdAt: timestamp("created_at")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
+  updatedAt: timestamp("updated_at")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
+});
+
+export const serverGroupMembers = pgTable(
+  "server_group_members",
+  {
+    id: serial("id").primaryKey(),
+    groupId: integer("group_id")
+      .references(() => serverGroups.id, { onDelete: "cascade" })
+      .notNull(),
+    serverId: integer("server_id")
+      .references(() => servers.id, { onDelete: "cascade" })
+      .notNull(),
+    createdAt: timestamp("created_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (table) => ({
+    uniqueGroupServer: unique("unique_group_server").on(
+      table.groupId,
+      table.serverId,
+    ),
+  }),
+);
+
 export const logs = pgTable("logs", {
   id: serial("id").primaryKey(),
   eventId: integer("event_id")
@@ -754,7 +790,33 @@ export const serversRelations = relations(servers, ({ one, many }) => ({
   events: many(events),
   eventServers: many(eventServers),
   executions: many(executions),
+  groupMembers: many(serverGroupMembers),
 }));
+
+export const serverGroupsRelations = relations(
+  serverGroups,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [serverGroups.userId],
+      references: [users.id],
+    }),
+    members: many(serverGroupMembers),
+  }),
+);
+
+export const serverGroupMembersRelations = relations(
+  serverGroupMembers,
+  ({ one }) => ({
+    group: one(serverGroups, {
+      fields: [serverGroupMembers.groupId],
+      references: [serverGroups.id],
+    }),
+    server: one(servers, {
+      fields: [serverGroupMembers.serverId],
+      references: [servers.id],
+    }),
+  }),
+);
 
 export const logsRelations = relations(logs, ({ one }) => ({
   event: one(events, {
@@ -1149,6 +1211,10 @@ export type InsertEnvVar = typeof envVars.$inferInsert;
 
 export type Server = typeof servers.$inferSelect;
 export type InsertServer = typeof servers.$inferInsert;
+
+export type ServerGroup = typeof serverGroups.$inferSelect;
+export type InsertServerGroup = typeof serverGroups.$inferInsert;
+export type ServerGroupMember = typeof serverGroupMembers.$inferSelect;
 
 export type Log = typeof logs.$inferSelect;
 export type InsertLog = typeof logs.$inferInsert;

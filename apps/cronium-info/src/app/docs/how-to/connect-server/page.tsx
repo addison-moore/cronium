@@ -261,8 +261,9 @@ export default function ConnectServerPage() {
               <div className="flex items-start gap-3">
                 <Server className="mt-1 h-5 w-5 text-green-500" />
                 <p>
-                  Need to manage multiple targets? Tag servers so you can filter
-                  them quickly when building workflows.
+                  Need to manage multiple targets? Organize servers into groups
+                  from the <strong>Groups</strong> tab on the Servers page (e.g.
+                  a &ldquo;Proxmox&rdquo; group for your Proxmox hosts).
                 </p>
               </div>
             </CardContent>

@@ -127,6 +127,28 @@ export const serverIdSchema = z.object({
   id: z.number().int().positive("Server ID must be a positive integer"),
 });
 
+// Server group schemas
+export const createServerGroupSchema = z.object({
+  name: z
+    .string()
+    .min(1, "Group name is required")
+    .max(255, "Group name must be less than 255 characters"),
+  serverIds: z.array(z.number().int().positive()).default([]),
+});
+
+export const updateServerGroupSchema = z.object({
+  id: z.number().int().positive("Group ID must be a positive integer"),
+  name: z
+    .string()
+    .min(1, "Group name is required")
+    .max(255, "Group name must be less than 255 characters"),
+  serverIds: z.array(z.number().int().positive()).default([]),
+});
+
+export const serverGroupIdSchema = z.object({
+  id: z.number().int().positive("Group ID must be a positive integer"),
+});
+
 // Server health check schema
 export const serverHealthCheckSchema = z.object({
   id: z.number().int().positive("Server ID must be a positive integer"),

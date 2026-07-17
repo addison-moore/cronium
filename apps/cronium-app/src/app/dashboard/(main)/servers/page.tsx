@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { PageHeader } from "@cronium/ui";
 import { ServersTableClient } from "@/components/server-list/ServersTableClient";
+import { ServersPageTabs } from "@/components/server-list/ServersPageTabs";
 import { ServersTableSkeleton } from "@cronium/ui";
 import { authOptions } from "@/lib/auth";
 import { api } from "@/trpc/server";
@@ -55,10 +56,13 @@ export default async function ServersPage() {
         }}
       />
 
-      {/* Stream the servers list */}
-      <Suspense fallback={<ServersTableSkeleton />}>
-        <ServersList />
-      </Suspense>
+      <ServersPageTabs
+        serversTab={
+          <Suspense fallback={<ServersTableSkeleton />}>
+            <ServersList />
+          </Suspense>
+        }
+      />
     </div>
   );
 }
