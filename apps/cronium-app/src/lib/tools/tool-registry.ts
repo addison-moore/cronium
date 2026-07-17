@@ -21,6 +21,7 @@ import { trelloManifest } from "@/tools/plugins/trello/manifest";
 import { googleSheetsManifest } from "@/tools/plugins/google-sheets/manifest";
 import { emailManifest } from "@/tools/plugins/email/manifest";
 import { sqlManifest } from "@/tools/plugins/sql/manifest";
+import { mongodbManifest } from "@/tools/plugins/mongodb/manifest";
 
 // ── The single list. Add a tool by adding its manifest import above + here. ──
 const MANIFESTS: ToolManifest[] = [
@@ -32,6 +33,7 @@ const MANIFESTS: ToolManifest[] = [
   googleSheetsManifest,
   emailManifest,
   sqlManifest,
+  mongodbManifest,
 ];
 
 export type { ConnectionTestResult };

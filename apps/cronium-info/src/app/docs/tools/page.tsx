@@ -134,7 +134,7 @@ export default function ToolsPage() {
 
           <div className="prose prose-gray dark:prose-invert mb-6 max-w-none">
             <p>
-              Cronium ships with seven integrations you can connect to your
+              Cronium ships with nine integrations you can connect to your
               automations, plus optional AI-assisted script generation. Each is
               configured once with its own credentials, then used from
               conditional actions and tool-action events.
@@ -150,6 +150,13 @@ export default function ToolsPage() {
               <li>
                 <strong>Productivity:</strong> Notion and Trello (via API key),
                 and Google Sheets (via OAuth)
+              </li>
+              <li>
+                <strong>Data:</strong> SQL databases (PostgreSQL and MySQL) for
+                parameterized queries and write statements, and MongoDB for
+                finding, aggregating, inserting, updating, and deleting
+                documents — read results flow to the next workflow step via
+                Unified I/O
               </li>
               <li>
                 <strong>AI:</strong> AI-assisted script generation using OpenAI,
