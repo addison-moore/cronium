@@ -57,7 +57,7 @@ const createInnerTRPCContext = (opts: CreateContextOptions) => {
  * browser session. Cookie sessions take precedence; this is only consulted when
  * there is no session. Returns null when there is no valid token.
  */
-const sessionFromApiToken = async (
+export const sessionFromApiToken = async (
   headers: Headers,
 ): Promise<Session | null> => {
   const { getBearerToken, authenticateApiToken } =

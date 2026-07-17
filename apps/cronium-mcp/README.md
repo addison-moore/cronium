@@ -87,9 +87,37 @@ draft the two events + workflow with defaults filled (Local execution, 30s timeo
 | `CRONIUM_BASE_URL`  | ✅       | e.g. `http://localhost:5001` or your instance URL |
 | `CRONIUM_API_TOKEN` | ✅       | a Cronium API token                               |
 
+## Remote endpoint (claude.ai web app & other HTTP MCP clients)
+
+Cronium also serves the **same tools over HTTP** at **`/api/mcp`** (in the app itself — no
+separate process). Use this for the claude.ai **web** app, ChatGPT (Business+ dev mode), or any
+MCP client that connects to a remote server.
+
+- **URL:** `https://<your-cronium-host>/api/mcp` (must be HTTPS and reachable by the client).
+- **Auth:** send your Cronium API token as a bearer header — `Authorization: Bearer <token>`.
+  In claude.ai this is the connector's **custom header** auth. Unauthenticated or invalid tokens
+  are rejected with `401` (enforced even in dev — no auto-auth on this route).
+- **Transport:** stateless JSON-RPC over `POST` (Streamable HTTP, JSON-response mode). `GET`
+  returns `405` (no server-initiated stream needed).
+
+Quick check with curl:
+
+```bash
+curl -s https://<host>/api/mcp \
+  -H "authorization: Bearer <token>" -H "content-type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+```
+
+> **Security:** `/api/mcp` is internet-facing when your instance is. Serve it over HTTPS. A
+> Cronium API token currently grants full user rights (per-token scopes are a planned follow-up).
+> OAuth 2.1 for the connector is the next phase (`_plans/mcp/PLAN.md` 3b); today it uses a
+> static bearer token.
+
 ## Notes & limits
 
-- Local only (stdio). For the claude.ai **web** app you need the remote server (Phase 3).
+- The stdio server (this package) is local-only; the remote `/api/mcp` endpoint covers the
+  claude.ai web app.
 - The token has full user rights (no per-token scopes yet — Phase 4).
-- The server does no validation of its own beyond shape; Cronium performs authoritative
-  validation and returns errors the model can correct.
+- Neither server validates beyond shape; Cronium performs authoritative validation and returns
+  errors the model can correct. In particular `toolId` is checked at execution, not creation —
+  the model should use real ids from `get_capabilities`.
