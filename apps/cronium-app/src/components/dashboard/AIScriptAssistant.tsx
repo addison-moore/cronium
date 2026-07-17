@@ -174,6 +174,11 @@ export default function AIScriptAssistant({
               rows={3}
               className="resize-none"
             />
+            <p className="text-muted-foreground text-xs">
+              The assistant knows Cronium&apos;s runtime helpers — ask for
+              scripts that read workflow input, produce output for the next
+              step, persist variables, or set workflow conditions.
+            </p>
           </div>
 
           {generatedCode && (

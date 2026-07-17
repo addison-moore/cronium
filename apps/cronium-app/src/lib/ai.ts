@@ -12,7 +12,9 @@ import {
   type AiProviderId,
 } from "@/shared/ai-providers";
 
-const MAX_OUTPUT_TOKENS = 4000;
+// Reasoning models (GPT-5.x etc.) spend completion tokens on reasoning before
+// emitting text, so leave generous headroom beyond the expected script length.
+const MAX_OUTPUT_TOKENS = 8000;
 
 export interface AiConfig {
   provider: AiProviderId;
@@ -64,27 +66,71 @@ export async function isAiConfigured(): Promise<boolean> {
   return true;
 }
 
-function buildPrompts(
+// Per-language reference for the Cronium runtime helpers so generated scripts
+// can participate in workflows. Names and calling conventions must match the
+// SDKs in apps/runtime/runtime-helpers/ — do not invent additional helpers.
+const CRONIUM_HELPERS_NODEJS = `A global \`cronium\` object is automatically available (no require or import needed):
+- await cronium.input() — JSON input for this run: the output of the previous workflow step, or the trigger payload. Returns null when there is none.
+- await cronium.output(data) — set this run's output (any JSON-serializable value); it becomes the next connected workflow step's input.
+- await cronium.getVariable(key) — read a persistent variable (returns null if unset).
+- await cronium.setVariable(key, value) — write a persistent variable. Variables persist across runs and are shared across the user's events and workflows.
+- await cronium.setCondition(boolean) — set the condition evaluated by conditional workflow connections (true takes the "condition true" branch).
+- await cronium.event() — metadata about the running event (id, name, type, etc.).
+Wrap the script body in an async IIFE — (async () => { ... })(); — and always \`await\` cronium calls. Do not use top-level await.
+Extra helpers available only when the event runs in a Cronium container (not on remote servers): cronium.executeToolAction(tool, action, config), cronium.sendEmail({to, subject, body}), cronium.sendSlackMessage({channel, text}), cronium.sendDiscordMessage({channelId, content}).
+On events that run on remote servers over SSH, only input, output, getVariable, setVariable, and event are available — setCondition and the extra helpers are not.`;
+
+const CRONIUM_HELPERS_PYTHON = `The \`cronium\` module is automatically available (no import needed) with synchronous, snake_case functions:
+- cronium.input() — JSON input for this run: the output of the previous workflow step, or the trigger payload. Returns None when there is none.
+- cronium.output(data) — set this run's output (any JSON-serializable value); it becomes the next connected workflow step's input.
+- cronium.get_variable(key) — read a persistent variable (returns None if unset).
+- cronium.set_variable(key, value) — write a persistent variable. Variables persist across runs and are shared across the user's events and workflows.
+- cronium.set_condition(bool) — set the condition evaluated by conditional workflow connections (True takes the "condition true" branch).
+- cronium.event() — metadata dict about the running event (id, name, type, etc.).
+Extra helpers available only when the event runs in a Cronium container (not on remote servers): cronium.execute_tool_action(tool, action, config), cronium.send_email(to, subject, body), cronium.send_slack_message(channel, text), cronium.send_discord_message(channel_id, content).
+On events that run on remote servers over SSH, only input, output, get_variable, set_variable, and event are available — set_condition and the extra helpers are not.`;
+
+const CRONIUM_HELPERS_BASH = `Cronium helper shell functions are automatically available (already sourced, no setup needed):
+- cronium_input — echoes this run's JSON input: the output of the previous workflow step, or the trigger payload. Usage: input=$(cronium_input)
+- cronium_output <data> — set this run's output; pass a JSON string (plain strings are auto-wrapped). It becomes the next connected workflow step's input.
+- cronium_get_variable <key> — echoes a persistent variable's value (empty if unset).
+- cronium_set_variable <key> <value> — write a persistent variable. Variables persist across runs and are shared across the user's events and workflows.
+- cronium_set_condition <true|false> — set the condition evaluated by conditional workflow connections (true takes the "condition true" branch).
+- cronium_event — echoes event metadata JSON; cronium_event_field <field> extracts one field.
+Extra helpers available only when the event runs in a Cronium container (not on remote servers): cronium_execute_tool_action <tool> <action> <config_json>, cronium_send_email, cronium_send_slack_message, cronium_send_discord_message, cronium_variable_exists, cronium_increment_variable.
+On events that run on remote servers over SSH, only cronium_input, cronium_output, cronium_get_variable, cronium_set_variable, and cronium_event are available — cronium_set_condition and the extra helpers are not.`;
+
+export function buildPrompts(
   prompt: string,
   scriptType: string,
   currentCode?: string,
 ): { systemPrompt: string; userPrompt: string } {
   let systemPrompt = `You are an expert programmer that writes clean, efficient, and well-documented code.
-Generate code based on the user's request.`;
+You write scripts for Cronium, a self-hosted automation platform where scripts run as scheduled events, standalone or chained into workflows. Generate code based on the user's request.`;
 
-  // Add script type-specific instructions
+  // Add script type-specific instructions and the runtime helper reference
   switch (scriptType) {
     case "NODEJS":
-      systemPrompt += `\nWrite JavaScript code using Node.js. Include error handling.`;
+      systemPrompt += `\nWrite JavaScript code using Node.js. Include error handling.\n\n${CRONIUM_HELPERS_NODEJS}`;
       break;
     case "PYTHON":
-      systemPrompt += `\nWrite Python code that follows PEP 8 guidelines. Include error handling.`;
+      systemPrompt += `\nWrite Python code that follows PEP 8 guidelines. Include error handling.\n\n${CRONIUM_HELPERS_PYTHON}`;
       break;
     case "BASH":
-      systemPrompt += `\nWrite Bash script with proper error handling. Add comments where appropriate.`;
+      systemPrompt += `\nWrite Bash script with proper error handling. Add comments where appropriate.\n\n${CRONIUM_HELPERS_BASH}`;
       break;
     default:
       systemPrompt += `\nWrite code in the appropriate language for the task.`;
+  }
+
+  if (
+    scriptType === "NODEJS" ||
+    scriptType === "PYTHON" ||
+    scriptType === "BASH"
+  ) {
+    systemPrompt += `
+
+Use the cronium helpers when the task involves passing data between workflow steps (input/output), persisting state between runs (variables), or steering conditional workflow branches (condition). Skip them when the task doesn't need them — a script that neither reads input nor produces output for other steps should not call them. A script exits successfully with exit code 0; a non-zero exit (or uncaught error) marks the run failed. Only use the cronium helpers documented above — do not invent others.`;
   }
 
   // Add modification instruction if existing code is provided
