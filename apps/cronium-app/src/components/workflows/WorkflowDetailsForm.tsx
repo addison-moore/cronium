@@ -239,14 +239,8 @@ export default function WorkflowDetailsForm({
           type: "connectionEdge" as const,
           animated: true,
           data: {
-            // Always provide both type and connectionType
-            type:
-              (edge.data?.type as ConnectionType | undefined) ??
-              (edge.data?.connectionType as ConnectionType | undefined) ??
-              ConnectionType.ALWAYS,
             connectionType:
               (edge.data?.connectionType as ConnectionType | undefined) ??
-              (edge.data?.type as ConnectionType | undefined) ??
               ConnectionType.ALWAYS,
           },
         })),

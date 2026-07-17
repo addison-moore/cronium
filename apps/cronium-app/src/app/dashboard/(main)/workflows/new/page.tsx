@@ -177,10 +177,8 @@ export default function NewWorkflowPage() {
         type: "connectionEdge" as const,
         animated: edge.animated ?? true,
         data: {
-          type: (edge.data?.type as ConnectionType) || ConnectionType.ALWAYS,
           connectionType:
             (edge.data?.connectionType as ConnectionType) ||
-            (edge.data?.type as ConnectionType) ||
             ConnectionType.ALWAYS,
         },
       }));

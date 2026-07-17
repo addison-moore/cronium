@@ -70,11 +70,13 @@ function ConnectionEdge({
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
-  // Get connection type from edge data or default to ALWAYS
-  // Support both 'type' and 'connectionType' for backwards compatibility
+  // The edge's condition lives at `data.connectionType` — the single name used
+  // by the canvas, the load/save transforms, and `workflow_connections`. Do not
+  // reintroduce a `data.type` alias: it shadowed this value (so the badge kept
+  // reading "Always" after the user picked another condition), and it reads as
+  // React Flow's own `edge.type` ("connectionEdge"), which is a different thing.
   const connectionType =
-    ((data?.type ?? data?.connectionType) as ConnectionType) ??
-    ConnectionType.ALWAYS;
+    (data?.connectionType as ConnectionType) ?? ConnectionType.ALWAYS;
   const connectionStyle = connectionStyles[connectionType];
   const { label } = connectionStyle;
 

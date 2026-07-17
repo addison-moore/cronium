@@ -337,7 +337,7 @@ export default function WorkflowCanvas({
       const normalizedEdges = initialEdges.map((edge) => ({
         ...edge,
         type: edge.type ?? "connectionEdge",
-        data: edge.data ?? { type: ConnectionType.ALWAYS },
+        data: edge.data ?? { connectionType: ConnectionType.ALWAYS },
         animated: edge.animated ?? true,
         sourceHandle: edge.sourceHandle ?? null,
         targetHandle: edge.targetHandle ?? null,
@@ -394,7 +394,7 @@ export default function WorkflowCanvas({
       const normalizedEdges = previousState.edges.map((edge) => ({
         ...edge,
         type: edge.type ?? "connectionEdge",
-        data: edge.data ?? { type: ConnectionType.ALWAYS },
+        data: edge.data ?? { connectionType: ConnectionType.ALWAYS },
         animated: edge.animated ?? true,
         sourceHandle: edge.sourceHandle ?? null,
         targetHandle: edge.targetHandle ?? null,
@@ -428,7 +428,7 @@ export default function WorkflowCanvas({
     const normalizedEdges = lastSavedState.edges.map((edge) => ({
       ...edge,
       type: edge.type ?? "connectionEdge",
-      data: edge.data ?? { type: ConnectionType.ALWAYS },
+      data: edge.data ?? { connectionType: ConnectionType.ALWAYS },
       animated: edge.animated ?? true,
       sourceHandle: edge.sourceHandle ?? null,
       targetHandle: edge.targetHandle ?? null,
@@ -600,7 +600,7 @@ export default function WorkflowCanvas({
         ...connection,
         id: `e-${connection.source}-${connection.target}`,
         type: "connectionEdge", // Ensure type is always defined as a string
-        data: { type: ConnectionType.ALWAYS },
+        data: { connectionType: ConnectionType.ALWAYS },
         animated: true,
         source: connection.source,
         target: connection.target,
@@ -616,15 +616,12 @@ export default function WorkflowCanvas({
         source: edge.source,
         target: edge.target,
         type: edge.type ?? "connectionEdge",
-        data: edge.data
-          ? {
-              ...edge.data,
-              type:
-                ((edge.data?.type ??
-                  edge.data?.connectionType) as ConnectionType) ??
-                ConnectionType.ALWAYS,
-            }
-          : { type: ConnectionType.ALWAYS },
+        data: {
+          ...edge.data,
+          connectionType:
+            (edge.data?.connectionType as ConnectionType) ??
+            ConnectionType.ALWAYS,
+        },
         animated: edge.animated ?? true,
         sourceHandle: edge.sourceHandle ?? null,
         targetHandle: edge.targetHandle ?? null,
@@ -634,7 +631,7 @@ export default function WorkflowCanvas({
       const updatedEdges = edgesWithNewEdge.map((edge) => ({
         ...edge,
         type: edge.type ?? "connectionEdge",
-        data: edge.data ?? { type: ConnectionType.ALWAYS },
+        data: edge.data ?? { connectionType: ConnectionType.ALWAYS },
         animated: edge.animated ?? true,
         sourceHandle: edge.sourceHandle ?? null,
         targetHandle: edge.targetHandle ?? null,

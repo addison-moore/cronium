@@ -43,28 +43,39 @@ export async function POST(
       metadata: updatedMetadata,
     });
 
-    // Also update job's result for backward compatibility
-    const existingResult = await db
-      .select({ result: jobs.result })
-      .from(jobs)
-      .where(eq(jobs.id, execution.jobId))
-      .limit(1);
+    // Mirror the condition onto job.result — that is where workflow
+    // ON_CONDITION edges read it from (job-polling-service extracts it, and
+    // workflow-executor compares `sourceNodeResult.condition === true`).
+    //
+    // Key on execution.jobId, NOT executionId: executionId is
+    // `exec_<jobID>_<ts>` (orchestrator container/executor.go), so matching it
+    // against jobs.id updated zero rows and silently dropped every
+    // cronium.setCondition().
+    //
+    // Row-locked, matching the /output route: this is a read-modify-write of a
+    // JSONB column, and a script calling both setCondition() and output() would
+    // otherwise race and lose one of them.
+    await db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ result: jobs.result })
+        .from(jobs)
+        .where(eq(jobs.id, execution.jobId))
+        .limit(1)
+        .for("update");
 
-    const jobResult =
-      (existingResult[0]?.result as Record<string, unknown>) || {};
-    const updatedResult = {
-      ...jobResult,
-      condition: body.condition,
-      conditionTimestamp: new Date().toISOString(),
-    };
-
-    await db
-      .update(jobs)
-      .set({
-        result: updatedResult,
-        updatedAt: new Date(),
-      })
-      .where(eq(jobs.id, executionId));
+      const jobResult = (row?.result as Record<string, unknown>) || {};
+      await tx
+        .update(jobs)
+        .set({
+          result: {
+            ...jobResult,
+            condition: body.condition,
+            conditionTimestamp: new Date().toISOString(),
+          },
+          updatedAt: new Date(),
+        })
+        .where(eq(jobs.id, execution.jobId));
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

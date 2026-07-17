@@ -4,6 +4,7 @@ import { executionService } from "@/lib/services/execution-service";
 import { jobService } from "@/lib/services/job-service";
 import { JobStatus } from "@/shared/schema";
 import { unifiedIoDebug } from "@/lib/unified-io/debug";
+import { mergeCompletionResult } from "@/lib/unified-io/merge-completion-result";
 
 // Update an execution
 export async function PUT(
@@ -140,24 +141,22 @@ export async function PUT(
         if (execution.completedAt)
           jobUpdateData.completedAt = execution.completedAt;
 
-        // Promote data published via cronium.output() (stored on job.result.output
-        // by the runtime /output route) into scriptOutput — the field workflow
-        // chaining reads. This is the real completion path for container/ssh jobs
-        // (the orchestrator finalizes via UpdateExecution, not /jobs/*/complete).
+        // Carry what the runtime wrote to job.result forward (cronium.output()
+        // and cronium.setCondition()) and promote output -> scriptOutput.
+        // updateJobStatus replaces `result`, so without this it is lost. This is
+        // the real completion path for container/ssh jobs (the orchestrator
+        // finalizes via UpdateExecution, not /jobs/*/complete).
         const existingResult =
           (job.result as Record<string, unknown> | null) ?? {};
-        if (
-          "output" in existingResult &&
-          existingResult.output !== undefined &&
-          !("scriptOutput" in existingResult)
-        ) {
-          jobUpdateData.result = {
-            ...existingResult,
-            scriptOutput: existingResult.output,
-          };
+        const mergedResult = mergeCompletionResult(
+          existingResult,
+          execution.exitCode,
+        );
+        if (mergedResult) {
+          jobUpdateData.result = mergedResult;
         }
         unifiedIoDebug(
-          `execution ${executionId} completing job ${execution.jobId}: result keys=${Object.keys(existingResult).join(",") || "none"}; scriptOutput promoted=${jobUpdateData.result ? "yes" : "no"}`,
+          `execution ${executionId} completing job ${execution.jobId}: result keys=${Object.keys(existingResult).join(",") || "none"}; scriptOutput promoted=${mergedResult && "scriptOutput" in mergedResult ? "yes" : "no"}; condition=${String(mergedResult?.condition ?? "none")}`,
         );
 
         // Pass timing information to job update
