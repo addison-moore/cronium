@@ -4,12 +4,21 @@ import {
 } from "@/lib/tools/connection-test";
 import type { SqlCredentials } from "../schemas";
 import { defaultPort } from "../schemas";
-import type { NormalizedQueryResult, SqlDriver, SqlRunOptions } from "./types";
-import { normalizeRows, rewriteNamedPlaceholders } from "./sql-helpers";
+import type {
+  NormalizedQueryResult,
+  SqlDriver,
+  SqlReadOptions,
+  SqlWriteOptions,
+} from "./types";
+import { createRowAccumulator, rewriteNamedPlaceholders } from "./sql-helpers";
 
-// `pg` is imported dynamically inside each method so the driver never enters a
-// static bundle; it is only ever reached server-side (tool actions run
-// in-process in the app). Typed loosely to avoid a static type dependency.
+// Rows pulled per cursor round-trip. Small enough to bound memory, large enough
+// that a 10k-row read is ~10 round-trips rather than 10k.
+const BATCH_SIZE = 1_000;
+
+// `pg` / `pg-cursor` are imported dynamically inside each method so they never
+// enter a static bundle; they are only ever reached server-side (tool actions
+// run in-process in the app).
 async function connect(credentials: SqlCredentials, timeoutMs: number) {
   const { Client } = await import("pg");
   const client = new Client({
@@ -20,7 +29,6 @@ async function connect(credentials: SqlCredentials, timeoutMs: number) {
     password: credentials.password || undefined,
     ssl: sslConfig(credentials.ssl),
     statement_timeout: timeoutMs,
-    query_timeout: timeoutMs,
     connectionTimeoutMillis: Math.min(timeoutMs, 10_000),
     application_name: "cronium",
   });
@@ -33,6 +41,32 @@ function sslConfig(
 ): false | { rejectUnauthorized: boolean } {
   if (ssl === "disable") return false;
   return { rejectUnauthorized: ssl === "verify-full" };
+}
+
+/**
+ * Promisified `cursor.read` that also surfaces the result's field metadata (the
+ * promise form of pg-cursor's read() returns rows only, and we need column
+ * names — including for an empty result).
+ */
+function readBatch(
+  cursor: {
+    read: (
+      n: number,
+      cb: (
+        err: Error | undefined,
+        rows: Record<string, unknown>[],
+        result: { fields?: { name: string }[] },
+      ) => void,
+    ) => void;
+  },
+  n: number,
+): Promise<{ rows: Record<string, unknown>[]; fields: string[] }> {
+  return new Promise((resolve, reject) => {
+    cursor.read(n, (err, rows, result) => {
+      if (err) reject(err);
+      else resolve({ rows, fields: (result?.fields ?? []).map((f) => f.name) });
+    });
+  });
 }
 
 export const postgresDriver: SqlDriver = {
@@ -66,28 +100,73 @@ export const postgresDriver: SqlDriver = {
     }
   },
 
-  async run(
+  async query(
     credentials: SqlCredentials,
     sql: string,
     params: Record<string, unknown>,
-    opts: SqlRunOptions,
+    opts: SqlReadOptions,
   ): Promise<NormalizedQueryResult> {
+    const { text, values } = rewriteNamedPlaceholders(sql, params, "dollar");
+    const Cursor = (await import("pg-cursor")).default;
+    let client: Awaited<ReturnType<typeof connect>> | undefined;
+    let cursor: InstanceType<typeof Cursor> | undefined;
+    try {
+      client = await connect(credentials, opts.timeoutMs);
+      // A cursor streams the result: rows are pulled a batch at a time and we
+      // stop the moment a limit is hit, so an unbounded SELECT never lands in
+      // the app's heap.
+      cursor = client.query(new Cursor(text, values));
+      const acc = createRowAccumulator(opts.maxRows, opts.maxBytes);
+      let columns: string[] = [];
+      let exhausted = false;
+
+      while (!exhausted) {
+        // Read at most one row past the cap so overflow is detectable without
+        // pulling the remainder of the result.
+        const want = Math.min(BATCH_SIZE, opts.maxRows - acc.rows.length + 1);
+        if (want <= 0) break;
+        const { rows: batch, fields } = await readBatch(
+          cursor as unknown as Parameters<typeof readBatch>[0],
+          want,
+        );
+        if (columns.length === 0 && fields.length > 0) columns = fields;
+        if (batch.length === 0) break;
+        for (const row of batch) {
+          if (!acc.push(row)) {
+            exhausted = true;
+            break;
+          }
+        }
+        if (batch.length < want) break;
+      }
+
+      return {
+        columns,
+        rows: acc.rows,
+        rowCount: acc.rows.length,
+        truncated: acc.truncated,
+        bytesExceeded: acc.bytesExceeded,
+      };
+    } finally {
+      await cursor?.close().catch(() => undefined);
+      await client?.end().catch(() => undefined);
+    }
+  },
+
+  async execute(
+    credentials: SqlCredentials,
+    sql: string,
+    params: Record<string, unknown>,
+    opts: SqlWriteOptions,
+  ): Promise<{ rowCount: number }> {
     const { text, values } = rewriteNamedPlaceholders(sql, params, "dollar");
     let client: Awaited<ReturnType<typeof connect>> | undefined;
     try {
       client = await connect(credentials, opts.timeoutMs);
       const res = await client.query({ text, values });
-      const rawRows = (res.rows ?? []) as Record<string, unknown>[];
-      const columns = (res.fields ?? []).map((f) => f.name);
-      const truncated = rawRows.length > opts.maxRows;
-      const capped = truncated ? rawRows.slice(0, opts.maxRows) : rawRows;
-      const isRead = columns.length > 0 || capped.length > 0;
-      return {
-        columns,
-        rows: normalizeRows(capped),
-        rowCount: isRead ? capped.length : (res.rowCount ?? 0),
-        truncated,
-      };
+      // pg reports affected rows for INSERT/UPDATE/DELETE, and the returned row
+      // count when RETURNING is used.
+      return { rowCount: res.rowCount ?? res.rows?.length ?? 0 };
     } finally {
       await client?.end().catch(() => undefined);
     }

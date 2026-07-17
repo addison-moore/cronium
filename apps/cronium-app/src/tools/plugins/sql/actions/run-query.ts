@@ -7,6 +7,7 @@ import {
   DEFAULT_MAX_ROWS,
   DEFAULT_SQL_TIMEOUT_MS,
 } from "../schemas";
+import { MAX_UNIFIED_IO_OUTPUT_BYTES, toMb } from "@/lib/unified-io/limits";
 import { getDriver } from "../drivers";
 import {
   assertReadOnlyStatement,
@@ -71,13 +72,23 @@ export const runQueryAction: ToolAction = {
 
       const maxRows = parsed.maxRows ?? DEFAULT_MAX_ROWS;
       const driver = getDriver(creds.dialect);
-      const result = await driver.run(creds, parsed.query, bindParams, {
+      // The driver streams and stops at whichever limit is hit first, so peak
+      // memory is bounded by maxBytes regardless of how large the result set is.
+      const result = await driver.query(creds, parsed.query, bindParams, {
         maxRows,
+        maxBytes: MAX_UNIFIED_IO_OUTPUT_BYTES,
         timeoutMs: context.timeoutMs ?? DEFAULT_SQL_TIMEOUT_MS,
       });
 
       // Never hand back a silently-shortened result: an ETL that received 10k of
       // 15k rows would look successful while dropping data. Fail with the fix.
+      if (result.bytesExceeded) {
+        throw new Error(
+          `Query result exceeds the ${toMb(MAX_UNIFIED_IO_OUTPUT_BYTES)} MB limit for data passed between events. ` +
+            `Select fewer columns or rows, or move bulk work to a server-side INSERT ... SELECT (Execute Statement) ` +
+            `or a Script event that streams.`,
+        );
+      }
       if (result.truncated) {
         throw new Error(
           `Query returned more than ${maxRows} rows. Add a LIMIT to the query, or raise Max Rows. ` +

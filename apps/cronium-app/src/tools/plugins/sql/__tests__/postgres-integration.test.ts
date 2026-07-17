@@ -54,10 +54,14 @@ describeIf("postgres adapter (integration)", () => {
   // describe.skip still executes this body to register (skipped) tests, so this
   // must not throw when the URL is absent.
   const creds = url ? credsFromUrl(url) : ({} as SqlCredentials);
-  const opts = { maxRows: 10_000, timeoutMs: 15_000 };
+  const opts = {
+    maxRows: 10_000,
+    maxBytes: 5 * 1024 * 1024,
+    timeoutMs: 15_000,
+  };
 
   it("binds :named params and returns them", async () => {
-    const res = await postgresDriver.run(
+    const res = await postgresDriver.query(
       creds,
       "SELECT :a::int AS a, :b AS b, :a::int + 1 AS a_plus",
       { a: "5", b: "hi" },
@@ -69,7 +73,7 @@ describeIf("postgres adapter (integration)", () => {
   });
 
   it("coerces bigint and timestamp to JSON-safe values", async () => {
-    const res = await postgresDriver.run(
+    const res = await postgresDriver.query(
       creds,
       "SELECT 9007199254740993::bigint AS big, '2020-01-02T03:04:05Z'::timestamptz AS ts, '2021-05-06'::date AS d",
       {},
@@ -83,15 +87,47 @@ describeIf("postgres adapter (integration)", () => {
     expect(row.d).toContain("2021-05-06");
   });
 
-  it("applies the row cap and sets truncated", async () => {
-    const res = await postgresDriver.run(
+  it("returns columns for an empty result", async () => {
+    const res = await postgresDriver.query(
+      creds,
+      "SELECT g FROM generate_series(1, 0) AS g",
+      {},
+      opts,
+    );
+    expect(res.columns).toEqual(["g"]);
+    expect(res.rows).toEqual([]);
+  });
+
+  it("stops at the row cap and reports truncated", async () => {
+    const res = await postgresDriver.query(
       creds,
       "SELECT g FROM generate_series(1, 50) AS g",
       {},
-      { maxRows: 10, timeoutMs: 15_000 },
+      { ...opts, maxRows: 10 },
     );
     expect(res.rows).toHaveLength(10);
     expect(res.truncated).toBe(true);
+    expect(res.bytesExceeded).toBe(false);
+  });
+
+  it("bounds a huge result set by the byte budget instead of buffering it", async () => {
+    // 5 million rows would be gigabytes if buffered. The cursor must stop at the
+    // byte budget almost immediately and return promptly.
+    const started = Date.now();
+    const res = await postgresDriver.query(
+      creds,
+      "SELECT g, repeat('x', 500) AS pad FROM generate_series(1, 5000000) AS g",
+      {},
+      { maxRows: 1_000_000, maxBytes: 200_000, timeoutMs: 15_000 },
+    );
+    expect(res.bytesExceeded).toBe(true);
+    expect(res.rows.length).toBeLessThan(1000); // stopped early, not 5M rows
+    expect(Date.now() - started).toBeLessThan(10_000);
+  });
+
+  it("streams EXPLAIN through the cursor", async () => {
+    const res = await postgresDriver.query(creds, "EXPLAIN SELECT 1", {}, opts);
+    expect(res.rows.length).toBeGreaterThan(0);
   });
 
   it("runs end-to-end through the run-query action", async () => {

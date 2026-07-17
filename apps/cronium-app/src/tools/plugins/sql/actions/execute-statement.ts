@@ -61,10 +61,9 @@ export const executeStatementAction: ToolAction = {
       assertSingleStatement(parsed.statement);
 
       const driver = getDriver(creds.dialect);
-      const result = await driver.run(creds, parsed.statement, bindParams, {
-        // High cap so a RETURNING clause isn't truncated; we only surface the
-        // affected/returned row count, not the rows themselves.
-        maxRows: 1_000_000,
+      // Writes are buffered, not streamed: they return an affected-row count,
+      // not rows, so there is nothing to bound.
+      const result = await driver.execute(creds, parsed.statement, bindParams, {
         timeoutMs: context.timeoutMs ?? DEFAULT_SQL_TIMEOUT_MS,
       });
 

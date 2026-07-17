@@ -172,6 +172,68 @@ export function normalizeRows(
   return rows.map((row) => toJsonSafe(row) as Record<string, unknown>);
 }
 
+export interface RowAccumulator {
+  /** JSON-safe rows collected so far. */
+  readonly rows: Record<string, unknown>[];
+  /** True once a row beyond `maxRows` was seen. */
+  readonly truncated: boolean;
+  /** True once adding a row would have exceeded `maxBytes`. */
+  readonly bytesExceeded: boolean;
+  /** Accumulated payload size in bytes. */
+  readonly bytes: number;
+  /** Add a raw driver row. Returns false when the caller must stop reading. */
+  push(row: Record<string, unknown>): boolean;
+}
+
+/**
+ * Collects streamed rows under a row count *and* a byte budget, normalizing each
+ * to JSON-safe values as it goes.
+ *
+ * Both drivers share this so the limits behave identically, and so the decision
+ * to stop is made incrementally: the caller stops pulling from the cursor/stream
+ * the moment `push` returns false, which is what keeps peak memory bounded by
+ * `maxBytes` rather than by the size of the result set.
+ */
+export function createRowAccumulator(
+  maxRows: number,
+  maxBytes: number,
+): RowAccumulator {
+  const rows: Record<string, unknown>[] = [];
+  let truncated = false;
+  let bytesExceeded = false;
+  let bytes = 0;
+
+  return {
+    get rows() {
+      return rows;
+    },
+    get truncated() {
+      return truncated;
+    },
+    get bytesExceeded() {
+      return bytesExceeded;
+    },
+    get bytes() {
+      return bytes;
+    },
+    push(raw: Record<string, unknown>): boolean {
+      if (rows.length >= maxRows) {
+        truncated = true;
+        return false;
+      }
+      const row = toJsonSafe(raw) as Record<string, unknown>;
+      const size = JSON.stringify(row)?.length ?? 0;
+      if (bytes + size > maxBytes) {
+        bytesExceeded = true;
+        return false;
+      }
+      rows.push(row);
+      bytes += size;
+      return true;
+    },
+  };
+}
+
 const READ_ONLY_LEADING = /^(select|with|explain|show|table|values)$/i;
 
 /**

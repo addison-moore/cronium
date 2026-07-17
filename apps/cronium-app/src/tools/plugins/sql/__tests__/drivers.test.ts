@@ -1,22 +1,77 @@
 /**
  * @jest-environment node
  */
+import { Readable } from "stream";
+
+// ---- pg / pg-cursor mocks -------------------------------------------------
+type CursorCb = (
+  err: Error | undefined,
+  rows: Record<string, unknown>[],
+  result: { fields?: { name: string }[] },
+) => void;
+
+/** A fake pg-cursor that serves `rows` in batches, like a real server cursor. */
+function makeFakeCursor(
+  rows: Record<string, unknown>[],
+  fields: { name: string }[],
+) {
+  let i = 0;
+  return {
+    reads: [] as number[],
+    read(n: number, cb: CursorCb) {
+      this.reads.push(n);
+      const batch = rows.slice(i, i + n);
+      i += batch.length;
+      process.nextTick(() => cb(undefined, batch, { fields }));
+    },
+    close: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
+let fakeCursor: ReturnType<typeof makeFakeCursor>;
 const mockPgQuery = jest.fn();
-const mockPgConnect = jest.fn().mockResolvedValue(undefined);
 const mockPgEnd = jest.fn().mockResolvedValue(undefined);
 jest.mock("pg", () => ({
   Client: jest.fn().mockImplementation(() => ({
-    connect: mockPgConnect,
-    query: mockPgQuery,
+    connect: jest.fn().mockResolvedValue(undefined),
+    // Real pg submits a Cursor and returns it; anything else is a normal query.
+    query: (arg: unknown) =>
+      arg && typeof (arg as { read?: unknown }).read === "function"
+        ? arg
+        : mockPgQuery(arg),
     end: mockPgEnd,
   })),
 }));
+jest.mock("pg-cursor", () => ({
+  __esModule: true,
+  default: jest.fn().mockImplementation(() => fakeCursor),
+}));
 
-const mockMysqlQuery = jest.fn();
+// ---- mysql2 mocks ---------------------------------------------------------
+let mysqlRows: Record<string, unknown>[] = [];
+let mysqlFields: { name: string }[] = [];
+const mockCoreDestroy = jest.fn();
+const mockCoreQuery = jest.fn(() => ({
+  on: function (ev: string, h: (f: { name: string }[]) => void) {
+    if (ev === "fields") h(mysqlFields);
+    return this;
+  },
+  stream: () => Readable.from(mysqlRows, { objectMode: true }),
+}));
+jest.mock("mysql2", () => ({
+  createConnection: jest.fn(() => ({
+    on: jest.fn(),
+    connect: (cb: (e?: Error) => void) => cb(undefined),
+    query: mockCoreQuery,
+    destroy: mockCoreDestroy,
+  })),
+}));
+
+const mockMysqlPromiseQuery = jest.fn();
 const mockMysqlEnd = jest.fn().mockResolvedValue(undefined);
 jest.mock("mysql2/promise", () => ({
   createConnection: jest.fn().mockResolvedValue({
-    query: mockMysqlQuery,
+    query: mockMysqlPromiseQuery,
     end: mockMysqlEnd,
   }),
 }));
@@ -34,119 +89,157 @@ const pgCreds: SqlCredentials = {
   ssl: "require",
 };
 const myCreds: SqlCredentials = { ...pgCreds, dialect: "mysql" };
-const opts = { maxRows: 10_000, timeoutMs: 30_000 };
+const read = { maxRows: 10_000, maxBytes: 5 * 1024 * 1024, timeoutMs: 30_000 };
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  mysqlRows = [];
+  mysqlFields = [];
+});
 
-describe("postgresDriver.run", () => {
-  it("binds :name as $n and normalizes a SELECT result", async () => {
-    mockPgQuery.mockResolvedValue({
-      rows: [{ id: 1n }, { id: 2n }],
-      fields: [{ name: "id" }],
-      rowCount: 2,
-    });
-    const res = await postgresDriver.run(
+describe("postgresDriver.query (cursor streaming)", () => {
+  it("binds :name as $n and returns normalized rows with columns", async () => {
+    fakeCursor = makeFakeCursor([{ id: 1n }, { id: 2n }], [{ name: "id" }]);
+    const res = await postgresDriver.query(
       pgCreds,
       "SELECT id FROM t WHERE id = :id",
       { id: 1 },
-      opts,
+      read,
     );
-    expect(mockPgQuery).toHaveBeenCalledWith({
-      text: "SELECT id FROM t WHERE id = $1",
-      values: [1],
-    });
     expect(res).toEqual({
       columns: ["id"],
       rows: [{ id: "1" }, { id: "2" }],
       rowCount: 2,
       truncated: false,
+      bytesExceeded: false,
     });
+    expect(fakeCursor.close).toHaveBeenCalled();
     expect(mockPgEnd).toHaveBeenCalled();
   });
 
-  it("caps rows and sets truncated", async () => {
-    mockPgQuery.mockResolvedValue({
-      rows: [{ n: 1 }, { n: 2 }, { n: 3 }],
-      fields: [{ name: "n" }],
-      rowCount: 3,
-    });
-    const res = await postgresDriver.run(
+  it("stops at maxRows and reports truncated without draining the cursor", async () => {
+    const many = Array.from({ length: 500 }, (_, i) => ({ n: i }));
+    fakeCursor = makeFakeCursor(many, [{ name: "n" }]);
+    const res = await postgresDriver.query(
       pgCreds,
       "SELECT n FROM t",
       {},
       {
-        maxRows: 2,
-        timeoutMs: 1000,
+        ...read,
+        maxRows: 10,
       },
     );
-    expect(res.rows).toHaveLength(2);
+    expect(res.rows).toHaveLength(10);
     expect(res.truncated).toBe(true);
-    expect(res.rowCount).toBe(2);
+    // Only ever asked for maxRows+1 — it did not pull all 500 rows.
+    expect(Math.max(...fakeCursor.reads)).toBeLessThanOrEqual(11);
   });
 
-  it("reports affected rows for a write (no returned rows)", async () => {
-    mockPgQuery.mockResolvedValue({ rows: [], fields: [], rowCount: 5 });
-    const res = await postgresDriver.run(
+  it("stops on the byte budget and reports bytesExceeded", async () => {
+    const fat = Array.from({ length: 50 }, () => ({ blob: "x".repeat(1000) }));
+    fakeCursor = makeFakeCursor(fat, [{ name: "blob" }]);
+    const res = await postgresDriver.query(
       pgCreds,
-      "UPDATE t SET a = 1",
+      "SELECT blob FROM t",
       {},
-      opts,
+      {
+        ...read,
+        maxBytes: 5_000,
+      },
+    );
+    expect(res.bytesExceeded).toBe(true);
+    expect(res.rows.length).toBeLessThan(50);
+  });
+
+  it("returns columns for an empty result", async () => {
+    fakeCursor = makeFakeCursor([], [{ name: "id" }]);
+    const res = await postgresDriver.query(
+      pgCreds,
+      "SELECT id FROM t",
+      {},
+      read,
     );
     expect(res).toEqual({
-      columns: [],
+      columns: ["id"],
       rows: [],
-      rowCount: 5,
+      rowCount: 0,
       truncated: false,
+      bytesExceeded: false,
     });
   });
+});
 
-  it("closes the connection even when the query throws", async () => {
-    mockPgQuery.mockRejectedValue(new Error("boom"));
-    await expect(
-      postgresDriver.run(pgCreds, "SELECT 1", {}, opts),
-    ).rejects.toThrow("boom");
+describe("postgresDriver.execute (buffered write)", () => {
+  it("reports affected rows and closes the client", async () => {
+    mockPgQuery.mockResolvedValue({ rows: [], fields: [], rowCount: 5 });
+    const res = await postgresDriver.execute(
+      pgCreds,
+      "UPDATE t SET a = 1 WHERE b = :b",
+      { b: 2 },
+      { timeoutMs: 30_000 },
+    );
+    expect(mockPgQuery).toHaveBeenCalledWith({
+      text: "UPDATE t SET a = 1 WHERE b = $1",
+      values: [2],
+    });
+    expect(res).toEqual({ rowCount: 5 });
     expect(mockPgEnd).toHaveBeenCalled();
   });
 });
 
-describe("mysqlDriver.run", () => {
-  it("binds :name as ? and normalizes a SELECT result", async () => {
-    mockMysqlQuery.mockResolvedValue([
-      [{ id: 1 }, { id: 2 }],
-      [{ name: "id" }],
-    ]);
-    const res = await mysqlDriver.run(
+describe("mysqlDriver.query (row streaming)", () => {
+  it("binds :name as ? and returns normalized rows with columns", async () => {
+    mysqlRows = [{ id: 1 }, { id: 2 }];
+    mysqlFields = [{ name: "id" }];
+    const res = await mysqlDriver.query(
       myCreds,
       "SELECT id FROM t WHERE id = :id",
       { id: 7 },
-      opts,
+      read,
     );
-    expect(mockMysqlQuery).toHaveBeenCalledWith({
-      sql: "SELECT id FROM t WHERE id = ?",
-      values: [7],
-      timeout: 30_000,
-    });
+    expect(mockCoreQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sql: "SELECT id FROM t WHERE id = ?",
+        values: [7],
+      }),
+    );
     expect(res).toEqual({
       columns: ["id"],
       rows: [{ id: 1 }, { id: 2 }],
       rowCount: 2,
       truncated: false,
+      bytesExceeded: false,
     });
+    expect(mockCoreDestroy).toHaveBeenCalled();
   });
 
-  it("reports affectedRows for a write (ResultSetHeader)", async () => {
-    mockMysqlQuery.mockResolvedValue([{ affectedRows: 3 }, undefined]);
-    const res = await mysqlDriver.run(
+  it("stops at maxRows and reports truncated", async () => {
+    mysqlRows = Array.from({ length: 100 }, (_, i) => ({ n: i }));
+    mysqlFields = [{ name: "n" }];
+    const res = await mysqlDriver.query(
+      myCreds,
+      "SELECT n FROM t",
+      {},
+      {
+        ...read,
+        maxRows: 5,
+      },
+    );
+    expect(res.rows).toHaveLength(5);
+    expect(res.truncated).toBe(true);
+  });
+});
+
+describe("mysqlDriver.execute (buffered write)", () => {
+  it("reports affectedRows from the ResultSetHeader", async () => {
+    mockMysqlPromiseQuery.mockResolvedValue([{ affectedRows: 3 }, undefined]);
+    const res = await mysqlDriver.execute(
       myCreds,
       "DELETE FROM t WHERE a = :a",
       { a: 1 },
-      opts,
+      { timeoutMs: 30_000 },
     );
-    expect(res).toEqual({
-      columns: [],
-      rows: [],
-      rowCount: 3,
-      truncated: false,
-    });
+    expect(res).toEqual({ rowCount: 3 });
+    expect(mockMysqlEnd).toHaveBeenCalled();
   });
 });

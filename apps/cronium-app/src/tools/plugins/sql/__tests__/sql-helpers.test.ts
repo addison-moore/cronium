@@ -10,7 +10,39 @@ import {
   assertReadOnlyStatement,
   assertSingleStatement,
   coerceBindParams,
+  createRowAccumulator,
 } from "../drivers/sql-helpers";
+
+describe("createRowAccumulator", () => {
+  it("collects rows, normalizing them to JSON-safe values", () => {
+    const acc = createRowAccumulator(10, 1_000);
+    expect(acc.push({ id: 1n })).toBe(true);
+    expect(acc.rows).toEqual([{ id: "1" }]);
+    expect(acc.truncated).toBe(false);
+    expect(acc.bytesExceeded).toBe(false);
+  });
+
+  it("stops and flags truncated once maxRows is reached", () => {
+    const acc = createRowAccumulator(2, 1_000_000);
+    expect(acc.push({ n: 1 })).toBe(true);
+    expect(acc.push({ n: 2 })).toBe(true);
+    // The row past the cap is rejected rather than stored.
+    expect(acc.push({ n: 3 })).toBe(false);
+    expect(acc.rows).toHaveLength(2);
+    expect(acc.truncated).toBe(true);
+    expect(acc.bytesExceeded).toBe(false);
+  });
+
+  it("stops and flags bytesExceeded before storing an over-budget row", () => {
+    const acc = createRowAccumulator(1_000, 50);
+    expect(acc.push({ a: "x".repeat(10) })).toBe(true);
+    expect(acc.push({ a: "y".repeat(100) })).toBe(false);
+    expect(acc.rows).toHaveLength(1);
+    expect(acc.bytesExceeded).toBe(true);
+    expect(acc.truncated).toBe(false);
+    expect(acc.bytes).toBeLessThanOrEqual(50);
+  });
+});
 
 describe("rewriteNamedPlaceholders", () => {
   it("rewrites :name to $n (postgres) binding in order", () => {

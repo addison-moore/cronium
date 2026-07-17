@@ -114,6 +114,12 @@ transfer. Two limits apply to Run Query:
   (the same limit a script's `cronium.output()` gets). Raising `maxRows` past
   what fits in 5 MB will fail on size instead.
 
+Run Query **streams** the result (a server-side cursor on Postgres, a row stream
+on MySQL) and stops as soon as either limit is hit, so a `SELECT` over a huge
+table fails fast on the limit rather than pulling the table into the app's
+memory first. Peak memory is bounded by the size limit no matter how large the
+result set would have been.
+
 Roughly, 5 MB is on the order of tens of thousands of narrow rows. That covers
 report-sized reads. For a genuine ETL, don't move the rows through Cronium at
 all — pick whichever fits:

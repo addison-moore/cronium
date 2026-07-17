@@ -4,14 +4,18 @@ import {
 } from "@/lib/tools/connection-test";
 import type { SqlCredentials } from "../schemas";
 import { defaultPort } from "../schemas";
-import type { NormalizedQueryResult, SqlDriver, SqlRunOptions } from "./types";
-import { normalizeRows, rewriteNamedPlaceholders } from "./sql-helpers";
+import type {
+  NormalizedQueryResult,
+  SqlDriver,
+  SqlReadOptions,
+  SqlWriteOptions,
+} from "./types";
+import { createRowAccumulator, rewriteNamedPlaceholders } from "./sql-helpers";
 
-// `mysql2` is imported dynamically inside each method so the driver stays out of
-// static bundles; it is only reached server-side.
-async function connect(credentials: SqlCredentials, timeoutMs: number) {
-  const mysql = await import("mysql2/promise");
-  return mysql.createConnection({
+// `mysql2` is imported dynamically inside each method so it stays out of static
+// bundles; it is only reached server-side.
+function baseConfig(credentials: SqlCredentials, timeoutMs: number) {
+  return {
     host: credentials.host,
     port: credentials.port ?? defaultPort("mysql"),
     database: credentials.database,
@@ -26,7 +30,12 @@ async function connect(credentials: SqlCredentials, timeoutMs: number) {
     ...(credentials.ssl === "disable"
       ? {}
       : { ssl: { rejectUnauthorized: credentials.ssl === "verify-full" } }),
-  });
+  };
+}
+
+async function connectPromise(credentials: SqlCredentials, timeoutMs: number) {
+  const mysql = await import("mysql2/promise");
+  return mysql.createConnection(baseConfig(credentials, timeoutMs));
 }
 
 export const mysqlDriver: SqlDriver = {
@@ -35,9 +44,9 @@ export const mysqlDriver: SqlDriver = {
   async testConnection(
     credentials: SqlCredentials,
   ): Promise<ConnectionTestResult> {
-    let conn: Awaited<ReturnType<typeof connect>> | undefined;
+    let conn: Awaited<ReturnType<typeof connectPromise>> | undefined;
     try {
-      conn = await connect(credentials, 10_000);
+      conn = await connectPromise(credentials, 10_000);
       const [rows] = await conn.query("SELECT VERSION() AS version");
       const version =
         (Array.isArray(rows) ? (rows[0] as { version?: string }) : undefined)
@@ -58,43 +67,74 @@ export const mysqlDriver: SqlDriver = {
     }
   },
 
-  async run(
+  async query(
     credentials: SqlCredentials,
     sql: string,
     params: Record<string, unknown>,
-    opts: SqlRunOptions,
+    opts: SqlReadOptions,
   ): Promise<NormalizedQueryResult> {
     const { text, values } = rewriteNamedPlaceholders(sql, params, "question");
-    let conn: Awaited<ReturnType<typeof connect>> | undefined;
+    // The core (callback) API is used here rather than mysql2/promise: only it
+    // exposes Query.stream(), and streaming is the whole point — we stop pulling
+    // as soon as a limit is hit instead of buffering the result.
+    const mysql = await import("mysql2");
+    const conn = mysql.createConnection(
+      baseConfig(credentials, opts.timeoutMs),
+    );
+    // A connection 'error' with no listener would be an unhandled EventEmitter
+    // error and take down the app process. The real error still surfaces via
+    // connect()/the stream below, which is what we report.
+    conn.on("error", () => undefined);
     try {
-      conn = await connect(credentials, opts.timeoutMs);
-      const [result, fields] = await conn.query({
+      await new Promise<void>((resolve, reject) => {
+        conn.connect((err) => (err ? reject(err) : resolve()));
+      });
+
+      const acc = createRowAccumulator(opts.maxRows, opts.maxBytes);
+      let columns: string[] = [];
+      const q = conn.query({ sql: text, values, timeout: opts.timeoutMs });
+      q.on("fields", (fields: { name: string }[] | undefined) => {
+        if (columns.length === 0) columns = (fields ?? []).map((f) => f.name);
+      });
+
+      const stream = q.stream({ highWaterMark: 256 });
+      for await (const row of stream) {
+        if (!acc.push(row as Record<string, unknown>)) break; // destroys the stream
+      }
+
+      return {
+        columns,
+        rows: acc.rows,
+        rowCount: acc.rows.length,
+        truncated: acc.truncated,
+        bytesExceeded: acc.bytesExceeded,
+      };
+    } finally {
+      // destroy() rather than end(): on an early stop we do not want to wait for
+      // the server to finish sending the rest of the result.
+      conn.destroy();
+    }
+  },
+
+  async execute(
+    credentials: SqlCredentials,
+    sql: string,
+    params: Record<string, unknown>,
+    opts: SqlWriteOptions,
+  ): Promise<{ rowCount: number }> {
+    const { text, values } = rewriteNamedPlaceholders(sql, params, "question");
+    let conn: Awaited<ReturnType<typeof connectPromise>> | undefined;
+    try {
+      conn = await connectPromise(credentials, opts.timeoutMs);
+      const [result] = await conn.query({
         sql: text,
         values,
         timeout: opts.timeoutMs,
       });
-
-      // SELECT-like statements return an array of row objects; writes return a
-      // ResultSetHeader with affectedRows.
-      if (Array.isArray(result)) {
-        const rawRows = result as Record<string, unknown>[];
-        const columns = (fields ?? []).map((f) => f.name);
-        const truncated = rawRows.length > opts.maxRows;
-        const capped = truncated ? rawRows.slice(0, opts.maxRows) : rawRows;
-        return {
-          columns,
-          rows: normalizeRows(capped),
-          rowCount: capped.length,
-          truncated,
-        };
-      }
-
-      const header = result as { affectedRows?: number };
+      // SELECT-like returns an array of rows; a write returns a ResultSetHeader.
+      if (Array.isArray(result)) return { rowCount: result.length };
       return {
-        columns: [],
-        rows: [],
-        rowCount: header.affectedRows ?? 0,
-        truncated: false,
+        rowCount: (result as { affectedRows?: number }).affectedRows ?? 0,
       };
     } finally {
       await conn?.end().catch(() => undefined);

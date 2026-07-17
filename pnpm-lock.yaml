@@ -239,6 +239,9 @@ importers:
       pg:
         specifier: ^8.22.0
         version: 8.22.0
+      pg-cursor:
+        specifier: ^2.21.0
+        version: 2.21.0(pg@8.22.0)
       prismjs:
         specifier: ^1.30.0
         version: 1.30.0
@@ -351,6 +354,9 @@ importers:
       '@types/pg':
         specifier: ^8.20.0
         version: 8.20.0
+      '@types/pg-cursor':
+        specifier: ^2.7.2
+        version: 2.7.2
       '@types/prismjs':
         specifier: ^1.26.6
         version: 1.26.6
@@ -3066,6 +3072,9 @@ packages:
   '@types/passport@1.0.17':
     resolution: {integrity: sha512-aciLyx+wDwT2t2/kJGJR2AEeBz0nJU4WuRX04Wu9Dqc5lSUtwu0WERPHYsLhF9PtseiAMPBGNUOtFjxZ56prsg==}
 
+  '@types/pg-cursor@2.7.2':
+    resolution: {integrity: sha512-m3xT8bVFCvx98LuzbvXyuCdT/Hjdd/v8ml4jL4K1QF70Y8clOfCFdgoaEB1FWdcSwcpoFYZTJQaMD9/GQ27efQ==}
+
   '@types/pg@8.20.0':
     resolution: {integrity: sha512-bEPFOaMAHTEP1EzpvHTbmwR8UsFyHSKsRisLIHVMXnpNefSbGA1bD6CVy+qKjGSqmZqNqBDV2azOBo8TgkcVow==}
 
@@ -5650,6 +5659,11 @@ packages:
 
   pg-connection-string@2.14.0:
     resolution: {integrity: sha512-XwWDGcLRGCXAR8F/AM5bG7Q+A3Wm2s6QeEjlOKZLlH3UYcguiqCWKyWXVag5TLTIjR7oOJUY8kcADaZgWPyLeg==}
+
+  pg-cursor@2.21.0:
+    resolution: {integrity: sha512-IYvk/j+Suhtbo/C3uOf4JLsLK/gWxOTUOmYbDsbKnLaVJDq+KwhwK6ngpRfiCk8eDMS3AmGQABZCv0cREEzHQw==}
+    peerDependencies:
+      pg: ^8
 
   pg-int8@1.0.1:
     resolution: {integrity: sha512-WCtabS6t3c8SkpDBUlb1kjOs7l66xsGdKpIPZsg4wR+B3+u9UAum2odSsF9tnvxg80h4ZxLWMy4pRjOsFIqQpw==}
@@ -8916,6 +8930,11 @@ snapshots:
     dependencies:
       '@types/express': 5.0.6
 
+  '@types/pg-cursor@2.7.2':
+    dependencies:
+      '@types/node': 24.13.3
+      '@types/pg': 8.20.0
+
   '@types/pg@8.20.0':
     dependencies:
       '@types/node': 24.13.3
@@ -11851,6 +11870,10 @@ snapshots:
     optional: true
 
   pg-connection-string@2.14.0: {}
+
+  pg-cursor@2.21.0(pg@8.22.0):
+    dependencies:
+      pg: 8.22.0
 
   pg-int8@1.0.1: {}
 
