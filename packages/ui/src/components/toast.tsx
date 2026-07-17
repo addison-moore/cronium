@@ -14,7 +14,7 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      "fixed top-4 right-0 left-0 z-[100] flex max-h-screen flex-col items-end gap-2 px-4 sm:right-4 sm:left-auto sm:max-w-[420px]",
+      "fixed left-0 right-0 top-4 z-[100] flex max-h-screen flex-col items-end gap-2 px-4 sm:left-auto sm:right-4 sm:max-w-[420px]",
       className,
     )}
     {...props}
@@ -63,7 +63,7 @@ const ToastAction = React.forwardRef<
   <ToastPrimitives.Action
     ref={ref}
     className={cn(
-      "inline-flex h-8 shrink-0 items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none disabled:pointer-events-none disabled:opacity-50",
+      "inline-flex h-8 shrink-0 items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
       "group-[.destructive-toast]:border-red-200 group-[.destructive-toast]:bg-white group-[.destructive-toast]:text-red-700 group-[.destructive-toast]:hover:bg-red-100 group-[.destructive-toast]:focus:ring-red-500 dark:group-[.destructive-toast]:border-red-800 dark:group-[.destructive-toast]:bg-gray-800 dark:group-[.destructive-toast]:text-red-300 dark:group-[.destructive-toast]:hover:bg-red-900/30",
       "group-[.success-toast]:border-green-200 group-[.success-toast]:bg-white group-[.success-toast]:text-green-700 group-[.success-toast]:hover:bg-green-100 group-[.success-toast]:focus:ring-green-500 dark:group-[.success-toast]:border-green-800 dark:group-[.success-toast]:bg-gray-800 dark:group-[.success-toast]:text-green-300 dark:group-[.success-toast]:hover:bg-green-900/30",
       "group-[.warning-toast]:border-amber-200 group-[.warning-toast]:bg-white group-[.warning-toast]:text-amber-700 group-[.warning-toast]:hover:bg-amber-100 group-[.warning-toast]:focus:ring-amber-500 dark:group-[.warning-toast]:border-amber-800 dark:group-[.warning-toast]:bg-gray-800 dark:group-[.warning-toast]:text-amber-300 dark:group-[.warning-toast]:hover:bg-amber-900/30",
@@ -82,7 +82,7 @@ const ToastClose = React.forwardRef<
   <ToastPrimitives.Close
     ref={ref}
     className={cn(
-      "absolute top-2 right-2 rounded-md p-1 opacity-70 transition-opacity group-hover:opacity-100 hover:opacity-100 focus:opacity-100 focus:ring-2 focus:outline-none disabled:pointer-events-none",
+      "absolute right-2 top-2 rounded-md p-1 opacity-70 transition-opacity hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 disabled:pointer-events-none group-hover:opacity-100",
       "group-[.destructive-toast]:text-red-600 group-[.destructive-toast]:hover:text-red-700 group-[.destructive-toast]:focus:ring-red-500 dark:group-[.destructive-toast]:text-red-400 dark:group-[.destructive-toast]:hover:text-red-300",
       "group-[.success-toast]:text-green-600 group-[.success-toast]:hover:text-green-700 group-[.success-toast]:focus:ring-green-500 dark:group-[.success-toast]:text-green-400 dark:group-[.success-toast]:hover:text-green-300",
       "group-[.warning-toast]:text-amber-600 group-[.warning-toast]:hover:text-amber-700 group-[.warning-toast]:focus:ring-amber-500 dark:group-[.warning-toast]:text-amber-400 dark:group-[.warning-toast]:hover:text-amber-300",

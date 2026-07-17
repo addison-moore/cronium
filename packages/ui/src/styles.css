@@ -35,7 +35,7 @@
   --color-success-foreground: var(--success-foreground-color);
   --color-warning: var(--warning-color);
   --color-warning-foreground: var(--warning-foreground-color);
-  
+
   /* Custom radius tokens */
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
@@ -53,10 +53,10 @@
  */
 @layer utilities {
   /* Data state utilities for Switch and Checkbox - these need explicit definition */
-  .data-\[state\=checked\]\:translate-x-5[data-state="checked"] { 
-    transform: translateX(1.25rem); 
+  .data-\[state\=checked\]\:translate-x-5[data-state="checked"] {
+    transform: translateX(1.25rem);
   }
-  .data-\[state\=unchecked\]\:translate-x-0[data-state="unchecked"] { 
-    transform: translateX(0); 
+  .data-\[state\=unchecked\]\:translate-x-0[data-state="unchecked"] {
+    transform: translateX(0);
   }
 }

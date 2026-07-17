@@ -147,7 +147,7 @@ export function CodeViewer({
         variant="ghost"
         onClick={handleCopy}
         className={cn(
-          "absolute top-2 right-2 h-8 w-8 p-0",
+          "absolute right-2 top-2 h-8 w-8 p-0",
           "opacity-0 transition-opacity group-hover:opacity-100",
         )}
         title="Copy to clipboard"
