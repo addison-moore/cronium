@@ -1,4 +1,4 @@
-import { Card, CardContent, PageShell, Skeleton } from "@cronium/ui";
+import { PageShell, Skeleton, TableSkeleton } from "@cronium/ui";
 
 export default function DashboardMainLoading() {
   return (
@@ -12,31 +12,15 @@ export default function DashboardMainLoading() {
         <Skeleton className="h-9 w-32" />
       </div>
 
-      {/* Stat card strip (dashboard) / filter bar (list pages) */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i}>
-            <CardContent className="space-y-3 p-6">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-8 w-16" />
-              <Skeleton className="h-3 w-full" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Main content block */}
-      <Card>
-        <CardContent className="space-y-3 p-6">
-          <div className="flex items-center justify-between">
-            <Skeleton className="h-5 w-32" />
-            <Skeleton className="h-8 w-24" />
-          </div>
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
+      {/* List container: filter row + table, matching the list pages */}
+      <div className="border-border bg-secondary-bg space-y-4 rounded-lg border p-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
           ))}
-        </CardContent>
-      </Card>
+        </div>
+        <TableSkeleton rows={6} columns={5} showActions />
+      </div>
     </PageShell>
   );
 }

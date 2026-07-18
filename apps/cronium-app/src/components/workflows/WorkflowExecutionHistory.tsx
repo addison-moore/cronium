@@ -360,9 +360,7 @@ export default function WorkflowExecutionHistory({
             {/* Search - Only show on logs page (when workflowId is not provided) */}
             {!workflowId && (
               <div>
-                <label className="text-foreground mb-1 block text-sm font-medium">
-                  Search Workflows
-                </label>
+                <label className="sr-only">Search Workflows</label>
                 <div className="relative">
                   <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform" />
                   <Input
@@ -381,9 +379,7 @@ export default function WorkflowExecutionHistory({
 
             {/* Sort By */}
             <div>
-              <label className="text-foreground mb-1 block text-sm font-medium">
-                Sort By
-              </label>
+              <label className="sr-only">Sort By</label>
               <div className="flex items-center space-x-2">
                 <Select
                   value={sortBy}
@@ -451,9 +447,7 @@ export default function WorkflowExecutionHistory({
 
             {/* Status */}
             <div>
-              <label className="text-foreground mb-1 block text-sm font-medium">
-                Status
-              </label>
+              <label className="sr-only">Status</label>
               <Select
                 value={statusFilter}
                 onValueChange={(value) => {
@@ -481,9 +475,7 @@ export default function WorkflowExecutionHistory({
             {/* Tags - Only show on logs page (when workflowId is not provided) */}
             {!workflowId && (
               <div>
-                <label className="text-foreground mb-1 block text-sm font-medium">
-                  Tags
-                </label>
+                <label className="sr-only">Tags</label>
                 <ComboBox
                   options={tagOptions}
                   value={tagFilter}

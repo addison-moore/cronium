@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
-import { Card, CardContent, Label, Input, Button } from "@cronium/ui";
+import { Label, Input, Button } from "@cronium/ui";
 import {
   Select,
   SelectContent,
@@ -191,11 +191,13 @@ export function ActivityTableWithFilters({
 
   return (
     <div className={className}>
-      <Card className="bg-secondary-bg mb-6">
-        <CardContent>
+      <ActivityTable
+        filtersSlot={
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div className="w-full">
-              <Label htmlFor="scriptFilter">Event</Label>
+              <Label htmlFor="scriptFilter" className="sr-only">
+                Event
+              </Label>
               <ComboBox
                 options={[
                   { label: "All Events", value: "all" },
@@ -215,7 +217,9 @@ export function ActivityTableWithFilters({
             </div>
 
             <div className="w-full">
-              <Label htmlFor="statusFilter">Status</Label>
+              <Label htmlFor="statusFilter" className="sr-only">
+                Status
+              </Label>
               <Select
                 value={filterStatus}
                 onValueChange={(value: string) =>
@@ -238,7 +242,9 @@ export function ActivityTableWithFilters({
             </div>
 
             <div className="w-full">
-              <Label htmlFor="dateFilter">Date</Label>
+              <Label htmlFor="dateFilter" className="sr-only">
+                Date
+              </Label>
               <Input
                 id="dateFilter"
                 type="date"
@@ -249,7 +255,9 @@ export function ActivityTableWithFilters({
             </div>
 
             <div className="w-full">
-              <Label htmlFor="ownershipFilter">Event Ownership</Label>
+              <Label htmlFor="ownershipFilter" className="sr-only">
+                Event Ownership
+              </Label>
               <Select
                 value={filterEventOwnership}
                 onValueChange={(value: string) => {
@@ -269,7 +277,9 @@ export function ActivityTableWithFilters({
             </div>
 
             <div className="w-full">
-              <Label htmlFor="workflowFilter">Workflow</Label>
+              <Label htmlFor="workflowFilter" className="sr-only">
+                Workflow
+              </Label>
               <ComboBox
                 options={[
                   { label: "All Workflows", value: "all" },
@@ -291,7 +301,6 @@ export function ActivityTableWithFilters({
             </div>
 
             <div className="w-full">
-              <Label className="opacity-0">Actions</Label>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -304,10 +313,8 @@ export function ActivityTableWithFilters({
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        }
 
-      <ActivityTable
         title={title}
         description={description ?? ""}
         data={logs.map((log) => ({

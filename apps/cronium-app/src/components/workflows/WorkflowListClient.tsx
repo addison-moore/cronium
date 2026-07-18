@@ -637,7 +637,7 @@ export function WorkflowListClient({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="border-border bg-secondary-bg space-y-4 rounded-lg border p-4">
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-4">
         {/* Search */}

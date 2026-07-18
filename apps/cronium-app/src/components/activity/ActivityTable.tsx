@@ -70,6 +70,8 @@ interface ActivityEntry {
 interface ActivityTableProps {
   title: string;
   description?: string;
+  /** Optional filter controls rendered inside the card, above the table */
+  filtersSlot?: React.ReactNode;
   data: ActivityEntry[];
   isLoading: boolean;
   isRefreshing?: boolean;
@@ -86,6 +88,7 @@ interface ActivityTableProps {
 }
 
 export function ActivityTable({
+  filtersSlot,
   title,
   description,
   data,
@@ -219,6 +222,7 @@ export function ActivityTable({
           <CardTitle>{title}</CardTitle>
         </CardHeader>
         <CardContent>
+          {filtersSlot && <div className="mb-4">{filtersSlot}</div>}
           <TableSkeleton rows={6} columns={6} />
         </CardContent>
       </Card>
@@ -248,6 +252,7 @@ export function ActivityTable({
         )}
       </CardHeader>
       <CardContent>
+        {filtersSlot && <div className="mb-4">{filtersSlot}</div>}
         {data.length === 0 ? (
           <EmptyState
             icon={<FileText className="h-10 w-10" />}

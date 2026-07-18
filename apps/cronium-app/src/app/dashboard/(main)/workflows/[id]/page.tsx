@@ -745,7 +745,7 @@ export default function WorkflowDetailsPage({
   };
 
   if (isLoading) {
-    return <DetailPageSkeleton />;
+    return <DetailPageSkeleton withTabs variant="canvas" />;
   }
 
   if (!workflow) {

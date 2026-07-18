@@ -126,7 +126,7 @@ export function ComboBox({
             role="ComboBox"
             aria-expanded={open}
             className={cn(
-              "focus:ring-primary/20 focus:border-primary h-10 w-full justify-between rounded-md border border-gray-300 transition-all hover:cursor-pointer hover:border-gray-400 focus:ring-2 disabled:pointer-events-none dark:border-gray-600 dark:bg-gray-800 dark:hover:border-gray-500",
+              "focus:ring-primary/20 focus:border-primary border-border bg-input hover:border-muted-foreground/40 h-10 w-full justify-between rounded-md border transition-all hover:cursor-pointer focus:ring-2 disabled:pointer-events-none",
               className,
             )}
           >
@@ -135,23 +135,23 @@ export function ComboBox({
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className="border-border bg-background w-full rounded-md border p-0 pb-1 shadow-md"
+          className="border-border bg-popover text-popover-foreground w-full rounded-md border p-0 pb-1 shadow-md"
           align="start"
         >
-          <div className="flex items-center border-b border-gray-200 px-3 py-2 dark:border-gray-700">
-            <Search className="mr-2 h-4 w-4 text-gray-400" />
+          <div className="border-border flex items-center border-b px-3 py-2">
+            <Search className="text-muted-foreground mr-2 h-4 w-4" />
             <input
               ref={inputRef}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Search..."
-              className="flex h-8 w-full bg-transparent py-2 text-sm outline-none placeholder:text-gray-400 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-50"
+              className="placeholder:text-muted-foreground flex h-8 w-full bg-transparent py-2 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
             />
           </div>
           <div className="max-h-60 overflow-auto p-1">
             {filteredOptions.length === 0 ? (
-              <div className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+              <div className="text-muted-foreground py-6 text-center text-sm">
                 {emptyMessage}
               </div>
             ) : (
@@ -167,9 +167,9 @@ export function ComboBox({
                     onClick={() => handleSelect(option.value)}
                     className={cn(
                       "flex cursor-pointer items-center rounded-md px-2 py-2 text-sm",
-                      "hover:bg-gray-100 dark:hover:bg-gray-800",
+                      "hover:bg-muted",
                       value === option.value
-                        ? "bg-gray-100 dark:bg-gray-800"
+                        ? "bg-accent text-accent-foreground"
                         : "",
                       highlightedIndex === index
                         ? "bg-primary dark:bg-primary/30 border-primary border"

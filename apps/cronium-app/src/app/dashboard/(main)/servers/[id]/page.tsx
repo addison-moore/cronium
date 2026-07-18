@@ -154,7 +154,7 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
   };
 
   if (isLoading) {
-    return <DetailPageSkeleton />;
+    return <DetailPageSkeleton withTabs />;
   }
 
   if (!server) {
