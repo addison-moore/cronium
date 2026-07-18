@@ -61,7 +61,9 @@ export function JobFilters() {
 
       <div className="grid gap-4 md:grid-cols-4">
         <div className="space-y-2">
-          <Label htmlFor="search">Search</Label>
+          <Label htmlFor="search" className="sr-only">
+            Search
+          </Label>
           <div className="relative">
             <Search className="text-muted-foreground absolute top-2.5 left-2 h-4 w-4" />
             <Input
@@ -75,7 +77,9 @@ export function JobFilters() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="status">Status</Label>
+          <Label htmlFor="status" className="sr-only">
+            Status
+          </Label>
           <Select value={status} onValueChange={setStatus}>
             <SelectTrigger id="status">
               <SelectValue placeholder="All statuses" />
@@ -93,7 +97,9 @@ export function JobFilters() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="type">Type</Label>
+          <Label htmlFor="type" className="sr-only">
+            Type
+          </Label>
           <Select value={type} onValueChange={setType}>
             <SelectTrigger id="type">
               <SelectValue placeholder="All types" />

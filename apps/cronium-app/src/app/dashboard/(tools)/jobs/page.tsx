@@ -1,5 +1,5 @@
 import { api } from "@/trpc/server";
-import { Card, PageHeader, PageShell, JobsTableSkeleton } from "@cronium/ui";
+import { PageHeader, PageShell, JobsTableSkeleton } from "@cronium/ui";
 import { JobsTable } from "@/components/jobs/JobsTable";
 import { JobFilters } from "@/components/jobs/JobFilters";
 import { Suspense } from "react";
@@ -24,18 +24,16 @@ async function JobsContent() {
   });
 
   return (
-    <div className="space-y-4">
+    <div className="border-border bg-secondary-bg space-y-4 rounded-lg border p-4">
       <JobFilters />
-      <Card>
-        <JobsTable jobs={response.items} />
-      </Card>
+      <JobsTable jobs={response.items} />
     </div>
   );
 }
 
 function JobsPageSkeleton() {
   return (
-    <div className="space-y-4">
+    <div className="border-border bg-secondary-bg space-y-4 rounded-lg border p-4">
       <div className="flex gap-4">
         <Skeleton className="h-10 w-32" />
         <Skeleton className="h-10 w-32" />
