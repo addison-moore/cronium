@@ -16,13 +16,11 @@ import { UserRole } from "@/shared/schema";
 
 const ALL_GRANTED: RolePermissions = {
   console: true,
-  monitoring: true,
   localServerAccess: true,
 };
 
 const ALL_DENIED: RolePermissions = {
   console: false,
-  monitoring: false,
   localServerAccess: false,
 };
 
@@ -31,7 +29,6 @@ function normalizePermissions(role: Role | undefined): RolePermissions {
   const permissions = (role.permissions ?? {}) as Partial<RolePermissions>;
   return {
     console: permissions.console ?? false,
-    monitoring: permissions.monitoring ?? false,
     localServerAccess: permissions.localServerAccess ?? false,
   };
 }

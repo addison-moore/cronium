@@ -104,7 +104,6 @@ export type { WorkflowExecution } from "../shared/schema";
 export type Role = typeof roles.$inferSelect;
 export interface RolePermissions {
   console: boolean;
-  monitoring: boolean;
   localServerAccess: boolean;
 }
 

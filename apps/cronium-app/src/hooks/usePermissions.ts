@@ -5,7 +5,6 @@ import { QUERY_OPTIONS } from "@/trpc/shared";
 
 interface Permissions {
   console: boolean;
-  monitoring: boolean;
   localServerAccess: boolean;
 }
 
@@ -34,7 +33,6 @@ export function usePermissions() {
   // Determine permissions based on user role
   let permissions: Permissions = {
     console: false,
-    monitoring: false,
     localServerAccess: false,
   };
   let userRole: Role | null = null;
@@ -44,7 +42,6 @@ export function usePermissions() {
     if (user.role === UserRole.ADMIN) {
       permissions = {
         console: true,
-        monitoring: true,
         localServerAccess: true,
       };
       // Create a synthetic admin role object

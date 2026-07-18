@@ -9,13 +9,13 @@ const DEFAULT_ROLES = [
   {
     name: "Admin",
     description: "Administrators with full access",
-    permissions: { console: true, monitoring: true, localServerAccess: true },
+    permissions: { console: true, localServerAccess: true },
     isDefault: false,
   },
   {
     name: "User",
     description: "Default role for regular users",
-    permissions: { console: true, monitoring: true, localServerAccess: false },
+    permissions: { console: true, localServerAccess: false },
     isDefault: true,
   },
   {
@@ -23,7 +23,6 @@ const DEFAULT_ROLES = [
     description: "Read-only users",
     permissions: {
       console: false,
-      monitoring: true,
       localServerAccess: false,
     },
     isDefault: false,

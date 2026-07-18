@@ -1,7 +1,8 @@
 "use client";
 import { PageShell, Tabs, TabsContent, TabsList, Tab } from "@cronium/ui";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
-import { Mail, Users, Sparkles, UserCog, Shield } from "lucide-react";
+import { Mail, Users, Sparkles, UserCog, Shield, Activity } from "lucide-react";
+import SystemHealth from "@/components/admin/system-health";
 import { z } from "zod";
 import { UserStatus } from "@/shared/schema";
 import type { UserRole } from "@/shared/schema";
@@ -80,6 +81,7 @@ const adminCopy = {
     ai: "AI Assistant",
     users: "Users",
     roles: "Roles",
+    monitoring: "Monitoring",
   },
 };
 
@@ -87,7 +89,7 @@ export default function AdminPage() {
   // Hash-based tab navigation
   const { activeTab, changeTab } = useHashTabNavigation({
     defaultTab: "smtp",
-    validTabs: ["smtp", "registration", "ai", "users", "roles"],
+    validTabs: ["smtp", "registration", "ai", "users", "roles", "monitoring"],
   });
 
   // tRPC queries and mutations
@@ -312,7 +314,6 @@ export default function AdminPage() {
     roleId: number,
     permissions: {
       console: boolean;
-      monitoring: boolean;
       localServerAccess: boolean;
     },
   ): Promise<void> {
@@ -339,6 +340,11 @@ export default function AdminPage() {
           <Tab value="ai" icon={Sparkles} label={adminCopy.tabs.ai} />
           <Tab value="users" icon={UserCog} label={adminCopy.tabs.users} />
           <Tab value="roles" icon={Shield} label={adminCopy.tabs.roles} />
+          <Tab
+            value="monitoring"
+            icon={Activity}
+            label={adminCopy.tabs.monitoring}
+          />
         </TabsList>
 
         <TabsContent value="smtp">
@@ -393,6 +399,10 @@ export default function AdminPage() {
             }}
             onUpdateRole={handleUpdateRole}
           />
+        </TabsContent>
+
+        <TabsContent value="monitoring">
+          <SystemHealth />
         </TabsContent>
       </Tabs>
     </PageShell>

@@ -447,6 +447,8 @@ if __name__ == "__main__":
             <p className="text-muted-foreground text-lg">
               Comprehensive monitoring and analytics to track performance,
               identify issues, and optimize your automation workflows.
+              Administrators also get a dedicated System Health tab on the admin
+              page covering database, cache, memory, and CPU status.
             </p>
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -743,9 +745,8 @@ if __name__ == "__main__":
               <div className="bg-muted mt-6 rounded-lg p-4">
                 <p className="text-muted-foreground text-sm">
                   <strong>Granular permissions.</strong> On top of the role,
-                  each non-admin role carries three toggles an administrator can
-                  set: <code>monitoring</code> (view the monitoring dashboard),{" "}
-                  <code>console</code> (use the interactive terminal), and{" "}
+                  each non-admin role carries two toggles an administrator can
+                  set: <code>console</code> (use the interactive terminal) and{" "}
                   <code>localServerAccess</code> (run commands on the Cronium
                   host itself). Admins always pass these checks.
                 </p>

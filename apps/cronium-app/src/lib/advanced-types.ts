@@ -40,8 +40,7 @@ export type DashboardRoute =
   | `/dashboard/workflows`
   | `/dashboard/logs`
   | `/dashboard/admin`
-  | `/dashboard/console`
-  | `/dashboard/monitoring`;
+  | `/dashboard/console`;
 
 /**
  * Environment variable patterns

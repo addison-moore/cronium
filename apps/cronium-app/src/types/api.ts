@@ -158,21 +158,6 @@ export interface DownloadResponse extends ApiResponse {
   data: string; // Base64 encoded or direct content
 }
 
-// Monitoring API Types
-export interface MonitoringResponse extends ApiResponse {
-  monitoring: {
-    systemHealth: {
-      cpu: number;
-      memory: number;
-      disk: number;
-      uptime: number;
-    };
-    activeConnections: number;
-    scheduledEvents: number;
-    queuedTasks: number;
-  };
-}
-
 // Third-party Integration Types
 export interface SlackApiResponse {
   ok: boolean;

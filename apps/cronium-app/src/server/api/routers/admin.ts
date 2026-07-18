@@ -711,7 +711,6 @@ export const adminRouter = createTRPCRouter({
         const items = storedRoles.map((role) => {
           const permissions = (role.permissions ?? {}) as Partial<{
             console: boolean;
-            monitoring: boolean;
             localServerAccess: boolean;
           }>;
           return {
@@ -720,7 +719,6 @@ export const adminRouter = createTRPCRouter({
             description: role.description ?? "",
             permissions: {
               console: permissions.console ?? false,
-              monitoring: permissions.monitoring ?? false,
               localServerAccess: permissions.localServerAccess ?? false,
             },
             isDefault: role.isDefault,
@@ -752,7 +750,6 @@ export const adminRouter = createTRPCRouter({
         roleId: z.number(),
         permissions: z.object({
           console: z.boolean(),
-          monitoring: z.boolean(),
           localServerAccess: z.boolean(),
         }),
       }),

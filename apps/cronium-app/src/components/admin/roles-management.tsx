@@ -26,7 +26,6 @@ interface Role {
   description: string;
   permissions: {
     console: boolean;
-    monitoring: boolean;
     localServerAccess: boolean;
   };
   isDefault: boolean;
@@ -42,7 +41,6 @@ interface RolesManagementProps {
     roleId: number,
     permissions: {
       console: boolean;
-      monitoring: boolean;
       localServerAccess: boolean;
     },
   ) => Promise<void>;
@@ -57,7 +55,7 @@ export function RolesManagement({
 
   const handlePermissionChange = async (
     roleId: number,
-    permission: "console" | "monitoring" | "localServerAccess",
+    permission: "console" | "localServerAccess",
     value: boolean,
   ) => {
     try {
@@ -66,7 +64,6 @@ export function RolesManagement({
 
       const newPermissions = {
         console: role.permissions.console,
-        monitoring: role.permissions.monitoring,
         localServerAccess: role.permissions.localServerAccess,
         [permission]: value,
       };
@@ -219,31 +216,6 @@ export function RolesManagement({
                           handlePermissionChange(
                             selectedRole.id,
                             "console",
-                            checked,
-                          )
-                        }
-                      />
-                    </div>
-
-                    <div className="border-border flex items-center justify-between border-b py-2">
-                      <div>
-                        <Label
-                          htmlFor={`monitoring-${selectedRole.id}`}
-                          className="text-sm font-medium"
-                        >
-                          Monitoring Access
-                        </Label>
-                        <p className="text-xs text-gray-500">
-                          View system performance and application metrics
-                        </p>
-                      </div>
-                      <Switch
-                        id={`monitoring-${selectedRole.id}`}
-                        checked={selectedRole.permissions.monitoring}
-                        onCheckedChange={(checked) =>
-                          handlePermissionChange(
-                            selectedRole.id,
-                            "monitoring",
                             checked,
                           )
                         }

@@ -15,7 +15,6 @@ import {
   Sun,
   LogOut,
   Terminal,
-  SquareActivity,
   ChevronLeft,
   GitFork,
   LayoutPanelTop,
@@ -42,7 +41,6 @@ const navLabels = {
   servers: "Servers",
   tools: "Tools",
   settings: "Settings",
-  monitoring: "Monitoring",
   console: "Console",
   admin: "Admin",
 };
@@ -125,12 +123,6 @@ export default function DashboardLayoutClient({
       name: navLabels.settings,
       href: "/dashboard/settings",
       icon: <Settings className="h-5 w-5" />,
-    },
-    {
-      name: navLabels.monitoring,
-      href: "/dashboard/monitoring",
-      icon: <SquareActivity className="h-5 w-5" />,
-      permission: "monitoring",
     },
     {
       name: navLabels.console,
