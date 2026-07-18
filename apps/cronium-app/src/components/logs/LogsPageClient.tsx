@@ -213,7 +213,6 @@ export default function LogsPageClient() {
 
           <TabsContent value="events" className="space-y-4">
             <ActivityTableWithFilters
-              title={copy.recentActivity}
               getLogs={getLogs}
               getEvents={getEvents}
               fetchWorkflows={fetchWorkflows}

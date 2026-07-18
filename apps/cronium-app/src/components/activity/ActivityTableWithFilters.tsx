@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 import { Label, Input, Button } from "@cronium/ui";
 import {
   Select,
@@ -30,7 +30,7 @@ const hasWorkflowName = (
 };
 
 interface ActivityWithFiltersProps {
-  title: string;
+  title?: string;
   description?: string;
   getLogs: (params: URLSearchParams) => Promise<LogsResponse>;
   getEvents: () => Promise<Event[]>;
@@ -310,13 +310,24 @@ export function ActivityTableWithFilters({
                   <X className="mr-2 h-4 w-4" />
                   Clear Filters
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => void handleRefresh()}
+                  disabled={isRefreshing}
+                  className="w-full"
+                >
+                  <RefreshCw
+                    className={`mr-2 h-4 w-4 ${isRefreshing ? "motion-safe:animate-spin" : ""}`}
+                  />
+                  {isRefreshing ? "Refreshing..." : "Refresh"}
+                </Button>
               </div>
             </div>
           </div>
         }
 
-        title={title}
-        description={description ?? ""}
+        {...(title ? { title } : {})}
+        {...(description ? { description } : {})}
         data={logs.map((log) => ({
           id: log.id,
           eventId: log.eventId,
@@ -342,7 +353,6 @@ export function ActivityTableWithFilters({
         }))}
         isLoading={isLoading}
         isRefreshing={isRefreshing}
-        onRefresh={handleRefresh}
         emptyStateMessage={
           filterEventId ||
           filterStatus ||

@@ -68,7 +68,7 @@ interface ActivityEntry {
 }
 
 interface ActivityTableProps {
-  title: string;
+  title?: string;
   description?: string;
   /** Optional filter controls rendered inside the card, above the table */
   filtersSlot?: React.ReactNode;
@@ -229,30 +229,37 @@ export function ActivityTable({
     );
   }
 
+  const refreshButton = onRefresh ? (
+    <Button
+      variant="outline"
+      onClick={handleRefresh}
+      disabled={isRefreshing}
+      size="sm"
+      className="ml-auto shrink-0"
+    >
+      <RefreshCw
+        className={`mr-2 h-4 w-4 ${isRefreshing ? "motion-safe:animate-spin" : ""}`}
+      />
+      {isRefreshing ? "Refreshing..." : "Refresh"}
+    </Button>
+  ) : null;
+
   return (
     <Card className={`${className} bg-secondary-bg`}>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <div>
-          <CardTitle>{title}</CardTitle>
-          {description && <CardDescription>{description}</CardDescription>}
-        </div>
-        {onRefresh && (
-          <Button
-            variant="outline"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            size="sm"
-            className="ml-auto"
-          >
-            <RefreshCw
-              className={`mr-2 h-4 w-4 ${isRefreshing ? "motion-safe:animate-spin" : ""}`}
-            />
-            {isRefreshing ? "Refreshing..." : "Refresh"}
-          </Button>
-        )}
-      </CardHeader>
-      <CardContent>
+      {(title ?? description) && (
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <div>
+            {title && <CardTitle>{title}</CardTitle>}
+            {description && <CardDescription>{description}</CardDescription>}
+          </div>
+          {onRefresh && refreshButton}
+        </CardHeader>
+      )}
+      <CardContent className={(title ?? description) ? "" : "pt-6"}>
         {filtersSlot && <div className="mb-4">{filtersSlot}</div>}
+        {!title && !description && !filtersSlot && refreshButton && (
+          <div className="mb-4 flex justify-end">{refreshButton}</div>
+        )}
         {data.length === 0 ? (
           <EmptyState
             icon={<FileText className="h-10 w-10" />}

@@ -2,7 +2,7 @@ import { Plus } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { Card, CardContent, PageShell } from "@cronium/ui";
+import { PageShell } from "@cronium/ui";
 import { PageHeader } from "@cronium/ui";
 import { WorkflowListClient } from "@/components/workflows/WorkflowListClient";
 import { WorkflowsTableSkeleton } from "@cronium/ui";
@@ -77,14 +77,10 @@ export default async function WorkflowsPage() {
           icon: <Plus className="h-4 w-4" />,
         }}
       />
-      <Card>
-        <CardContent>
-          {/* Stream the workflows list */}
-          <Suspense fallback={<WorkflowsTableSkeleton />}>
-            <WorkflowsList />
-          </Suspense>
-        </CardContent>
-      </Card>
+      {/* Stream the workflows list */}
+      <Suspense fallback={<WorkflowsTableSkeleton />}>
+        <WorkflowsList />
+      </Suspense>
     </PageShell>
   );
 }
