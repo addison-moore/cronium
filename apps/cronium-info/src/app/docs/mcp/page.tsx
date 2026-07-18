@@ -1,12 +1,6 @@
 import React from "react";
 import DocsLayout from "@/components/docs/docs-layout";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@cronium/ui";
+import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { Bot, ShieldCheck, Wrench, ListChecks } from "lucide-react";
 import { SimpleCodeBlock } from "@/components/docs/api-code-examples";
 import type { Metadata } from "next";
