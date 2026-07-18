@@ -9,21 +9,20 @@ const NODEJS_TEMPLATE = `/**
  */
 console.log('Starting Node.js script execution...');
 
-// Access input data
-const inputData = cronium.input();
-console.log('Input received:', inputData);
-
 // Example: Access environment variables
 const exampleApiKey = process.env.EXAMPLE_API_KEY;
 console.log('Environment variable example:', exampleApiKey ? 'API key found' : 'No API key set');
 
-// Your script logic goes here
+// Your script logic goes here.
+// The cronium helpers are async — always await them inside an async function.
 async function main() {
   try {
     console.log('Running main function...');
-    
-    // Process input data
-    const inputData = cronium.input();
+
+    // Access input data (the previous workflow step's output)
+    const inputData = await cronium.input();
+    console.log('Input received:', inputData);
+
     const result = {
       success: true,
       message: "Node.js processing completed",
@@ -31,25 +30,24 @@ async function main() {
       calculation_result: 42,
       timestamp: new Date().toISOString()
     };
-    
+
     console.log('Processing result:', result);
-    
+
     // Set output for next workflow node or API response
-    cronium.output(result);
-    
+    await cronium.output(result);
+
     return result;
   } catch (error) {
     console.error('Error in script execution:', error);
-    
+
     // Even on error, provide structured output
     const errorResult = {
       success: false,
       error: error.message,
-      input_received: cronium.input(),
       timestamp: new Date().toISOString()
     };
-    
-    cronium.output(errorResult);
+
+    await cronium.output(errorResult);
     return errorResult;
   }
 }

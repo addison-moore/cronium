@@ -264,7 +264,7 @@ def check_system_health():
         alerts.append(f"Low disk space: {metrics['disk_usage']}% used")
 
     # Store metrics
-    cronium.setVariable('LATEST_METRICS', json.dumps(metrics))
+    cronium.set_variable('LATEST_METRICS', json.dumps(metrics))
 
     # Output for the next workflow step
     cronium.output({

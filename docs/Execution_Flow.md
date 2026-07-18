@@ -137,7 +137,8 @@ Runtime helpers provide a consistent API across different scripting languages fo
 #### JavaScript/Node.js
 
 ```javascript
-const cronium = require("cronium");
+// The global `cronium` object is automatically available — no require needed.
+// All helpers are async: await them inside an async function.
 
 // Data flow
 const inputData = await cronium.input(); // Get data from previous event
@@ -157,18 +158,19 @@ const eventInfo = await cronium.event(); // Get current event details
 #### Python
 
 ```python
-import cronium
+# The `cronium` module is automatically available — no import needed.
+# Functions are synchronous and snake_case.
 
 # Data flow
 input_data = cronium.input()
 cronium.output(result_data)
 
 # Variables
-value = cronium.getVariable('key')
-cronium.setVariable('key', 'value')
+value = cronium.get_variable('key')
+cronium.set_variable('key', 'value')
 
 # Conditions
-cronium.setCondition(True)
+cronium.set_condition(True)
 
 # Metadata
 event_info = cronium.event()
@@ -177,19 +179,18 @@ event_info = cronium.event()
 #### Bash
 
 ```bash
-# Source the runtime helper
-source cronium.sh
+# The cronium_* helper functions are automatically available (auto-sourced).
 
 # Data flow
 input_data=$(cronium_input)
 cronium_output "$result_data"
 
 # Variables
-value=$(cronium_getVariable "key")
-cronium_setVariable "key" "value"
+value=$(cronium_get_variable "key")
+cronium_set_variable "key" "value"
 
 # Conditions
-cronium_setCondition true
+cronium_set_condition true
 
 # Metadata
 event_info=$(cronium_event)
