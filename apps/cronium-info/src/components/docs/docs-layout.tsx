@@ -39,7 +39,10 @@ const navigationItems: NavItem[] = [
   },
   {
     title: "API Reference",
-    items: [{ title: "REST API", href: "/docs/api" }],
+    items: [
+      { title: "REST API", href: "/docs/api" },
+      { title: "MCP (AI Agents)", href: "/docs/mcp" },
+    ],
   },
   {
     title: "How-to Guides",

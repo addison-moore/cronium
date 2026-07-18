@@ -18,15 +18,16 @@ are aimed at people **running** or **developing** Cronium.
 
 ## Concepts
 
-| Guide                                    | Covers                                        |
-| ---------------------------------------- | --------------------------------------------- |
-| [FEATURE_LIST.md](./FEATURE_LIST.md)     | Everything Cronium can do, feature by feature |
-| [EVENTS.md](./EVENTS.md)                 | Events — the unit of automation               |
-| [WORKFLOWS.md](./WORKFLOWS.md)           | Chaining events into DAG pipelines            |
-| [Execution_Flow.md](./Execution_Flow.md) | How a job travels from trigger to result      |
-| [Integrations.md](./Integrations.md)     | Tools vs. integrations vs. plugins            |
-| [AUTH.md](./AUTH.md)                     | Authentication, sessions, and roles           |
-| [TIMEOUTS.md](./TIMEOUTS.md)             | Timeout behavior across the stack             |
+| Guide                                    | Covers                                         |
+| ---------------------------------------- | ---------------------------------------------- |
+| [FEATURE_LIST.md](./FEATURE_LIST.md)     | Everything Cronium can do, feature by feature  |
+| [EVENTS.md](./EVENTS.md)                 | Events — the unit of automation                |
+| [WORKFLOWS.md](./WORKFLOWS.md)           | Chaining events into DAG pipelines             |
+| [Execution_Flow.md](./Execution_Flow.md) | How a job travels from trigger to result       |
+| [Integrations.md](./Integrations.md)     | Tools vs. integrations vs. plugins             |
+| [AUTH.md](./AUTH.md)                     | Authentication, sessions, and roles            |
+| [MCP.md](./MCP.md)                       | Create events & workflows from an AI app (MCP) |
+| [TIMEOUTS.md](./TIMEOUTS.md)             | Timeout behavior across the stack              |
 
 ## Reference
 

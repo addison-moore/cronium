@@ -10,6 +10,7 @@ import {
   Database,
   Workflow,
   Activity,
+  Bot,
 } from "lucide-react";
 import DocsLayout from "@/components/docs/docs-layout";
 import type { Metadata } from "next";
@@ -160,6 +161,13 @@ export default function DocsPage() {
               description="REST endpoints with request and response examples"
               icon={Code}
               link={`/docs/api`}
+            />
+
+            <DocSection
+              title="MCP (AI Agents)"
+              description="Create events and workflows from Claude and other AI apps"
+              icon={Bot}
+              link={`/docs/mcp`}
             />
 
             <DocSection

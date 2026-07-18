@@ -31,6 +31,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: "/docs/unified-io", priority: 0.7, changeFrequency: "monthly" },
     { path: "/docs/templates", priority: 0.6, changeFrequency: "monthly" },
     { path: "/docs/api", priority: 0.8, changeFrequency: "monthly" },
+    { path: "/docs/mcp", priority: 0.8, changeFrequency: "monthly" },
 
     // How-to guides
     { path: "/docs/how-to", priority: 0.7, changeFrequency: "monthly" },
