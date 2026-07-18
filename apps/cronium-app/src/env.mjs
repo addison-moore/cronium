@@ -3,7 +3,12 @@ import { z } from "zod";
 
 export const env = createEnv({
   server: {
-    NODE_ENV: z.enum(["development", "test", "production"]),
+    // Next.js sets NODE_ENV itself (dev/build/start); processes launched
+    // outside the Next CLI (e.g. the socket server via tsx) may not have it.
+    // Never set NODE_ENV in env/.env* files — see the note there.
+    NODE_ENV: z
+      .enum(["development", "test", "production"])
+      .default("development"),
     AUTH_SECRET: z.string(),
     AUTH_URL: z.string().url(),
     SMTP_HOST: z.string().optional(),
