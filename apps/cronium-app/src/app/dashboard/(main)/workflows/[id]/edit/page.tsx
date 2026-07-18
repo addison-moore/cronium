@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { Button } from "@cronium/ui";
+import { Button, PageShell } from "@cronium/ui";
 import { toast } from "@cronium/ui";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -358,7 +358,7 @@ export default function EditWorkflowPage() {
 
   return (
     <div className="bg-background min-h-screen">
-      <div className="container mx-auto px-4 py-6">
+      <PageShell>
         <div className="mb-6 flex items-center">
           <Button variant="ghost" size="sm" asChild className="mr-4">
             <Link href="/dashboard/workflows">
@@ -367,7 +367,7 @@ export default function EditWorkflowPage() {
             </Link>
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">{copy.editWorkflow}</h1>
+            <h1 className="text-2xl font-semibold">{copy.editWorkflow}</h1>
             <p className="text-muted-foreground mt-1">
               Update your workflow configuration and design
             </p>
@@ -406,7 +406,7 @@ export default function EditWorkflowPage() {
           initialEdges={workflowEdges}
           workflowId={workflowId}
         />
-      </div>
+      </PageShell>
     </div>
   );
 }

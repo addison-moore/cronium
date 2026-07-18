@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { Button } from "@cronium/ui";
+import { Button, PageShell } from "@cronium/ui";
 import { toast } from "@cronium/ui";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -197,7 +197,7 @@ export default function NewWorkflowPage() {
   };
 
   return (
-    <div className="container mx-auto p-4">
+    <PageShell>
       <div className="mb-6 flex items-center">
         <Button variant="ghost" size="sm" className="mr-2" asChild>
           <Link href="/dashboard/workflows">
@@ -205,7 +205,7 @@ export default function NewWorkflowPage() {
             {copy.backToWorkflows}
           </Link>
         </Button>
-        <h1 className="text-2xl font-bold">{copy.createNewWorkflow}</h1>
+        <h1 className="text-2xl font-semibold">{copy.createNewWorkflow}</h1>
       </div>
 
       <WorkflowForm
@@ -238,6 +238,6 @@ export default function NewWorkflowPage() {
         cancelButtonText="Cancel"
         onCancel={() => router.push(`/dashboard/workflows`)}
       />
-    </div>
+    </PageShell>
   );
 }

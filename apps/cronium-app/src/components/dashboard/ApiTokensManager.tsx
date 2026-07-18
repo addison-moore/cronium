@@ -287,7 +287,7 @@ export default function ApiTokensManager() {
                           )}
                           {Array.isArray(token.scopes) &&
                             token.scopes.length > 0 && (
-                              <span className="bg-muted rounded px-1.5 py-0.5 text-xs font-medium">
+                              <span className="bg-muted rounded-md px-1.5 py-0.5 text-xs font-medium">
                                 {token.scopes.join(", ")} only
                               </span>
                             )}

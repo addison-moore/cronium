@@ -13,7 +13,7 @@ import {
   Trash,
   SendHorizontal,
 } from "lucide-react";
-import { Button } from "@cronium/ui";
+import { Button, PageShell } from "@cronium/ui";
 import {
   Card,
   CardContent,
@@ -185,24 +185,24 @@ export default function UserDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto py-8">
+      <PageShell>
         <div className="text-center">Loading user details...</div>
-      </div>
+      </PageShell>
     );
   }
 
   if (!user?.data) {
     return (
-      <div className="container mx-auto py-8">
+      <PageShell>
         <div className="text-center">User not found.</div>
-      </div>
+      </PageShell>
     );
   }
 
   const userData = user.data;
 
   return (
-    <div className="container mx-auto space-y-6 py-8">
+    <PageShell>
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button
@@ -403,6 +403,6 @@ export default function UserDetailsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }

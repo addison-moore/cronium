@@ -2,7 +2,7 @@ import { Plus } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { Card, CardContent } from "@cronium/ui";
+import { Card, CardContent, PageShell } from "@cronium/ui";
 import { PageHeader } from "@cronium/ui";
 import { WorkflowListClient } from "@/components/workflows/WorkflowListClient";
 import { WorkflowsTableSkeleton } from "@cronium/ui";
@@ -67,7 +67,7 @@ export default async function WorkflowsPage() {
   }
 
   return (
-    <div className="container mx-auto p-4">
+    <PageShell>
       <PageHeader
         title="Workflows"
         description="Design and manage your automation workflows"
@@ -85,6 +85,6 @@ export default async function WorkflowsPage() {
           </Suspense>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

@@ -124,7 +124,7 @@ export function ActionNode({ data, selected }: NodeProps) {
               ) : null}
             </div>
             <button
-              className="hover:bg-muted rounded p-1"
+              className="hover:bg-muted rounded-md p-1"
               onClick={(e) => {
                 e.stopPropagation();
                 // TODO: Open configuration panel

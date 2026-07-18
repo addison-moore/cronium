@@ -1,9 +1,8 @@
 import { api } from "@/trpc/server";
 import { notFound } from "next/navigation";
-import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { JobStatusCard } from "@/components/jobs/JobStatusCard";
 import { JobExecutionLogs } from "@/components/jobs/JobExecutionLogs";
-import { Card } from "@cronium/ui";
+import { Card, PageHeader, PageShell } from "@cronium/ui";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cronium/ui";
 
 interface JobDetailsPageProps {
@@ -23,10 +22,10 @@ export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
   const job = response.data;
 
   return (
-    <div className="flex-1 space-y-4 p-4 pt-6 md:p-8">
-      <DashboardHeader
-        heading={`Job ${id}`}
-        text="View job execution details and logs"
+    <PageShell>
+      <PageHeader
+        title={`Job ${id}`}
+        description="View job execution details and logs"
       />
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -98,6 +97,6 @@ export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
           </Card>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

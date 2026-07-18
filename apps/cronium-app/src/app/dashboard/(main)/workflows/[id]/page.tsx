@@ -2,7 +2,13 @@
 
 import { useState, useEffect, use, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  PageShell,
+} from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { Badge } from "@cronium/ui";
 import { Tab, Tabs, TabsContent, TabsList } from "@cronium/ui";
@@ -738,34 +744,34 @@ export default function WorkflowDetailsPage({
 
   if (isLoading) {
     return (
-      <div className="container mx-auto py-6">
+      <PageShell>
         <div className="animate-pulse">
-          <div className="bg-muted mb-6 h-8 w-1/3 rounded"></div>
+          <div className="bg-muted mb-6 h-8 w-1/3 rounded-md"></div>
           <div className="space-y-4">
-            <div className="bg-muted h-32 rounded"></div>
-            <div className="bg-muted h-64 rounded"></div>
+            <div className="bg-muted h-32 rounded-md"></div>
+            <div className="bg-muted h-64 rounded-md"></div>
           </div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   if (!workflow) {
     return (
-      <div className="container mx-auto py-6">
+      <PageShell>
         <div className="text-center">
-          <h1 className="mb-4 text-2xl font-bold">Workflow Not Found</h1>
+          <h1 className="mb-4 text-2xl font-semibold">Workflow Not Found</h1>
           <Button onClick={() => router.back()}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Go Back
           </Button>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="container mx-auto space-y-6 py-6">
+    <PageShell>
       {/* Header */}
       <WorkflowDetailsHeader
         workflow={workflow}
@@ -979,7 +985,7 @@ export default function WorkflowDetailsPage({
                     <span className="text-sm font-medium">
                       Custom Schedule:
                     </span>
-                    <code className="bg-muted rounded px-2 py-1 text-sm">
+                    <code className="bg-muted rounded-md px-2 py-1 text-sm">
                       {workflow.customSchedule}
                     </code>
                   </div>
@@ -1012,13 +1018,13 @@ export default function WorkflowDetailsPage({
                   <div className="flex items-center gap-2">
                     <Link className="text-muted-foreground h-4 w-4" />
                     <span className="text-sm font-medium">Webhook Key:</span>
-                    <code className="bg-muted rounded px-2 py-1 text-sm">
+                    <code className="bg-muted rounded-md px-2 py-1 text-sm">
                       {workflow.webhookKey}
                     </code>
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm font-medium">Webhook URL:</p>
-                    <div className="bg-muted rounded p-3">
+                    <div className="bg-muted rounded-md p-3">
                       <code className="text-sm break-all">
                         {typeof window !== "undefined"
                           ? window.location.origin
@@ -1196,6 +1202,6 @@ export default function WorkflowDetailsPage({
           />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

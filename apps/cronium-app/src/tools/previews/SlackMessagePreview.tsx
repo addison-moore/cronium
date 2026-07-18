@@ -120,7 +120,7 @@ export function SlackMessagePreview({
                     ) => (
                       <div
                         key={index}
-                        className="rounded border border-slate-700 bg-slate-800 p-2 text-sm"
+                        className="rounded-md border border-slate-700 bg-slate-800 p-2 text-sm"
                       >
                         {block.type === "section" && block.text?.text}
                         {block.type === "divider" && (

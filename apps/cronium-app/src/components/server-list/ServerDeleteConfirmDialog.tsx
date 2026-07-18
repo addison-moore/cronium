@@ -285,7 +285,7 @@ export function ServerDeleteConfirmDialog({
               <div className="space-y-2">
                 <Label htmlFor="confirm-delete" className="text-sm font-medium">
                   Type{" "}
-                  <span className="bg-muted rounded px-1 py-0.5 font-mono">
+                  <span className="bg-muted rounded-md px-1 py-0.5 font-mono">
                     {serverName}
                   </span>{" "}
                   to confirm:

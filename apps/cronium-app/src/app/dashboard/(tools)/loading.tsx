@@ -1,8 +1,8 @@
-import { Skeleton } from "@cronium/ui";
+import { PageShell, Skeleton } from "@cronium/ui";
 
 export default function ToolsLoading() {
   return (
-    <div className="container mx-auto p-4">
+    <PageShell>
       <div className="mb-6">
         <Skeleton className="mb-2 h-8 w-32" />
         <Skeleton className="h-4 w-64" />
@@ -20,6 +20,6 @@ export default function ToolsLoading() {
           </div>
         ))}
       </div>
-    </div>
+    </PageShell>
   );
 }

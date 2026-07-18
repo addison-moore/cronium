@@ -15,7 +15,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
-import { Form } from "@cronium/ui";
+import { Form, PageShell } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { Tabs, TabsContent, TabsList, Tab } from "@cronium/ui";
 import { SettingsCard, FormFieldWrapper } from "@/components/dashboard";
@@ -242,22 +242,22 @@ export default function SettingsPage() {
 
   if (isLoadingAuth) {
     return (
-      <div className="container mx-auto p-4">
+      <PageShell>
         <div className="mb-6 flex items-center">
-          <h1 className="text-2xl font-bold">{copy.title}</h1>
+          <h1 className="text-2xl font-semibold">{copy.title}</h1>
         </div>
         <div className="flex h-64 items-center justify-center">
           <Spinner size="lg" variant="primary" />
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="container mx-auto p-4">
+    <PageShell>
       <div className="mb-6 flex items-center">
         <Settings className="mr-2 h-6 w-6" />
-        <h1 className="text-2xl font-bold">{copy.title}</h1>
+        <h1 className="text-2xl font-semibold">{copy.title}</h1>
       </div>
 
       <Tabs value={activeTab} onValueChange={changeTab}>
@@ -436,6 +436,6 @@ export default function SettingsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }

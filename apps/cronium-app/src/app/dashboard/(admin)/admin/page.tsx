@@ -1,5 +1,5 @@
 "use client";
-import { Tabs, TabsContent, TabsList, Tab } from "@cronium/ui";
+import { PageShell, Tabs, TabsContent, TabsList, Tab } from "@cronium/ui";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
 import { Mail, Users, Sparkles, UserCog, Shield } from "lucide-react";
 import { z } from "zod";
@@ -320,10 +320,10 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="container mx-auto space-y-8 py-6">
+    <PageShell>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">{adminCopy.title}</h1>
+          <h1 className="text-2xl font-semibold">{adminCopy.title}</h1>
           <p className="text-gray-500">{adminCopy.description}</p>
         </div>
       </div>
@@ -395,6 +395,6 @@ export default function AdminPage() {
           />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

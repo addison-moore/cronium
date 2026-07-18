@@ -108,7 +108,7 @@ export function ApiRequestPreview({
             >
               {method.toUpperCase()}
             </Badge>
-            <code className="bg-muted flex-1 rounded px-2 py-1 text-sm">
+            <code className="bg-muted flex-1 rounded-md px-2 py-1 text-sm">
               {buildFullUrl()}
             </code>
           </div>
@@ -120,7 +120,7 @@ export function ApiRequestPreview({
                 <Code className="h-4 w-4" />
                 Headers
               </div>
-              <div className="border-border bg-muted/50 rounded border p-3">
+              <div className="border-border bg-muted/50 rounded-md border p-3">
                 <pre className="text-xs">
                   {Object.entries(formatHeaders()).map(([key, value]) => (
                     <div key={key}>
@@ -139,7 +139,7 @@ export function ApiRequestPreview({
                 <Code className="h-4 w-4" />
                 Request Body
               </div>
-              <div className="border-border bg-muted/50 rounded border p-3">
+              <div className="border-border bg-muted/50 rounded-md border p-3">
                 <pre className="max-h-64 overflow-auto text-xs">
                   {formatBody()}
                 </pre>
@@ -152,7 +152,7 @@ export function ApiRequestPreview({
             <div className="text-muted-foreground mb-2 text-sm font-medium">
               Example Response
             </div>
-            <div className="bg-muted/30 rounded border border-dashed p-3">
+            <div className="bg-muted/30 rounded-md border border-dashed p-3">
               <pre className="text-muted-foreground text-xs">
                 {`{
   "status": "success",

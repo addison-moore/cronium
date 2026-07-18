@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@cronium/ui";
 import { ScrollArea } from "@cronium/ui";
-import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import { PageHeader, PageShell } from "@cronium/ui";
 
 export const metadata: Metadata = {
   title: "API Tokens | Settings | Cronium",
@@ -38,8 +38,8 @@ const docsCopy = {
 export default function ApiTokensPage() {
   return (
     <ScrollArea className="h-full">
-      <div className="flex-1 space-y-4 p-4 pt-6 md:p-8">
-        <DashboardHeader heading={heading} text={description} />
+      <PageShell>
+        <PageHeader title={heading} description={description} />
 
         <Tabs defaultValue="tokens" className="space-y-4">
           <TabsList>
@@ -127,7 +127,7 @@ export default function ApiTokensPage() {
             </Card>
           </TabsContent>
         </Tabs>
-      </div>
+      </PageShell>
     </ScrollArea>
   );
 }

@@ -2,7 +2,7 @@ import { Plus } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { PageHeader } from "@cronium/ui";
+import { PageHeader, PageShell } from "@cronium/ui";
 import { EventsListClient } from "@/components/event-list/EventsListClient";
 import { EventsPageActions } from "@/components/event-list/EventsPageActions";
 import { EventsTableSkeleton } from "@cronium/ui";
@@ -155,7 +155,7 @@ export default async function EventsPage() {
   }
 
   return (
-    <div className="container mx-auto p-4">
+    <PageShell>
       <PageHeader
         title="Events"
         description="Create and manage your automation events"
@@ -171,6 +171,6 @@ export default async function EventsPage() {
       <Suspense fallback={<EventsTableSkeleton />}>
         <EventsList />
       </Suspense>
-    </div>
+    </PageShell>
   );
 }

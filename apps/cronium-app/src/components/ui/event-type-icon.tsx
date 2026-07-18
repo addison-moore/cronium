@@ -85,7 +85,7 @@ export function EventTypeIcon({
       return (
         <div
           style={{ width: size, height: size }}
-          className={`rounded bg-gray-300 ${className}`}
+          className={`rounded-md bg-gray-300 ${className}`}
         />
       );
   }

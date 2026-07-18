@@ -2,7 +2,7 @@ import { Plus } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { PageHeader } from "@cronium/ui";
+import { PageHeader, PageShell } from "@cronium/ui";
 import { ServersTableClient } from "@/components/server-list/ServersTableClient";
 import { ServersPageTabs } from "@/components/server-list/ServersPageTabs";
 import { ServersTableSkeleton } from "@cronium/ui";
@@ -46,7 +46,7 @@ export default async function ServersPage() {
   }
 
   return (
-    <div className="container mx-auto p-4">
+    <PageShell>
       <PageHeader
         title="Servers"
         createButton={{
@@ -63,6 +63,6 @@ export default async function ServersPage() {
           </Suspense>
         }
       />
-    </div>
+    </PageShell>
   );
 }

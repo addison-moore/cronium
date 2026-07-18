@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { toast } from "@cronium/ui";
+import { PageShell, toast } from "@cronium/ui";
 import { Tabs, TabsContent, TabsList, Tab } from "@cronium/ui";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
 import { ActivityTableWithFilters } from "@/components/activity";
@@ -196,7 +196,7 @@ export default function LogsPageClient() {
   };
 
   return (
-    <div className="container mx-auto p-4">
+    <PageShell>
       <div className="space-y-6">
         <PageHeader title={copy.title} description={copy.description} />
 
@@ -226,6 +226,6 @@ export default function LogsPageClient() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </PageShell>
   );
 }

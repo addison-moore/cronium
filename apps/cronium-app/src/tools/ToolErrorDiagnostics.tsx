@@ -244,7 +244,7 @@ function DiagnosticsContent({
             </div>
 
             {issue.solution && (
-              <div className="bg-muted/50 rounded p-3">
+              <div className="bg-muted/50 rounded-md p-3">
                 <p className="mb-1 text-sm font-medium">Suggested Solution:</p>
                 <p className="text-muted-foreground text-sm">
                   {issue.solution}
@@ -253,7 +253,7 @@ function DiagnosticsContent({
             )}
 
             {issue.code && (
-              <pre className="bg-muted/30 overflow-x-auto rounded p-3 text-xs">
+              <pre className="bg-muted/30 overflow-x-auto rounded-md p-3 text-xs">
                 <code>{issue.code}</code>
               </pre>
             )}

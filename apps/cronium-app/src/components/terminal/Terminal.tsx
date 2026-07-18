@@ -303,17 +303,17 @@ export default function Terminal({ serverId, serverName }: TerminalProps) {
 
   if (!isClient || isUserLoading) {
     return (
-      <div className="border-border bg-solarized-base03 relative flex h-[60vh] w-full items-center justify-center overflow-hidden rounded border pb-2">
+      <div className="border-border bg-solarized-base03 relative flex h-[60vh] w-full items-center justify-center overflow-hidden rounded-md border pb-2">
         <div className="text-gray-400">Loading terminal...</div>
       </div>
     );
   }
 
   return (
-    <div className="border-border bg-solarized-base03 relative h-[60vh] w-full overflow-auto rounded border pb-2">
+    <div className="border-border bg-solarized-base03 relative h-[60vh] w-full overflow-auto rounded-md border pb-2">
       <div ref={terminalRef} className="h-full w-full p-2" />
       {loading && (
-        <div className="absolute top-2 right-2 rounded bg-blue-500/20 px-2 py-1 text-xs text-blue-300">
+        <div className="absolute top-2 right-2 rounded-md bg-blue-500/20 px-2 py-1 text-xs text-blue-300">
           Connecting...
         </div>
       )}

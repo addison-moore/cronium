@@ -4,7 +4,7 @@ import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { Badge } from "@cronium/ui";
 import { ScrollArea } from "@cronium/ui";
-import { Search, Filter } from "lucide-react";
+import { Search, Filter, Lightbulb } from "lucide-react";
 import { Input } from "@cronium/ui";
 import {
   Select,
@@ -179,7 +179,8 @@ export default function ActionSelector({
                               </p>
                               {action.helpText && (
                                 <p className="text-muted-foreground mt-1 text-xs italic">
-                                  💡 {action.helpText}
+                                  <Lightbulb className="mr-1 inline h-3 w-3" />
+                                  {action.helpText}
                                 </p>
                               )}
                             </div>

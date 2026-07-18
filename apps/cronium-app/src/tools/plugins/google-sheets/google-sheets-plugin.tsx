@@ -187,7 +187,7 @@ function GoogleConnectSection({ toolId }: { toolId: number }) {
           }
           disabled={revokeMutation.isPending}
         >
-          <Unlink size={14} className="mr-1" />
+          <Unlink className="mr-1 h-3.5 w-3.5" />
           Disconnect
         </Button>
       </div>
@@ -201,7 +201,7 @@ function GoogleConnectSection({ toolId }: { toolId: number }) {
       onClick={handleConnect}
       disabled={isConnecting}
     >
-      <Link2 size={14} className="mr-1" />
+      <Link2 className="mr-1 h-3.5 w-3.5" />
       Connect Google Account
     </Button>
   );
@@ -253,14 +253,14 @@ function GoogleSheetsCredentialDisplay({
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => onEdit(tool)}>
-                <Edit size={16} />
+                <Edit className="h-4 w-4" />
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => onDelete(tool.id)}
               >
-                <Trash2 size={16} />
+                <Trash2 className="h-4 w-4" />
               </Button>
             </div>
           </div>

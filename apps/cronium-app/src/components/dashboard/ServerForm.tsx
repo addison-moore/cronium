@@ -545,8 +545,9 @@ MIIEpAIBAAKCAQEAxyz...
 
         <div className="bg-info/10 rounded-md p-3">
           <p className="text-info-text text-sm">
-            <strong>🔒 Security:</strong> Your SSH key is encrypted on your
-            device and securely stored.
+            <Lock className="mr-1 inline h-3.5 w-3.5" />
+            <strong>Security:</strong> Your SSH key is encrypted on your device
+            and securely stored.
           </p>
         </div>
 

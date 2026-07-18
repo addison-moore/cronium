@@ -633,7 +633,7 @@ export default function WorkflowExecutionHistory({
                                     {selectedExecution.events.map((event) => (
                                       <div
                                         key={event.id}
-                                        className="border-border rounded border p-3"
+                                        className="border-border rounded-md border p-3"
                                       >
                                         <div className="flex items-center justify-between">
                                           <div className="flex items-center gap-2">
@@ -671,7 +671,7 @@ export default function WorkflowExecutionHistory({
                                             <label className="text-xs font-medium">
                                               Output:
                                             </label>
-                                            <pre className="bg-muted mt-1 overflow-x-auto rounded p-2 text-xs">
+                                            <pre className="bg-muted mt-1 overflow-x-auto rounded-md p-2 text-xs">
                                               {event.output}
                                             </pre>
                                           </div>
@@ -681,7 +681,7 @@ export default function WorkflowExecutionHistory({
                                             <label className="text-destructive text-xs font-medium">
                                               Error:
                                             </label>
-                                            <pre className="mt-1 overflow-x-auto rounded bg-red-50 p-2 text-xs dark:bg-red-900/20">
+                                            <pre className="mt-1 overflow-x-auto rounded-md bg-red-50 p-2 text-xs dark:bg-red-900/20">
                                               {event.errorMessage}
                                             </pre>
                                           </div>

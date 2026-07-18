@@ -133,7 +133,7 @@ export function NodeLibrary() {
                         <button
                           key={tool.id}
                           onClick={() => setSelectedTool(tool.id)}
-                          className={`mb-2 flex w-full flex-col items-center gap-1 rounded p-2 transition-colors ${
+                          className={`mb-2 flex w-full flex-col items-center gap-1 rounded-md p-2 transition-colors ${
                             selectedTool === tool.id
                               ? "bg-primary text-primary-foreground"
                               : "hover:bg-accent"

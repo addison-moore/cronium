@@ -153,7 +153,7 @@ export function EventDetailsTab({
 
         <div className="space-y-1">
           <span className="text-sm font-medium">URL:</span>
-          <div className="bg-muted rounded p-2 font-mono text-sm break-all">
+          <div className="bg-muted rounded-md p-2 font-mono text-sm break-all">
             {event.httpRequest.url}
           </div>
         </div>
@@ -161,7 +161,7 @@ export function EventDetailsTab({
         {event.httpRequest.headers && event.httpRequest.headers.length > 0 && (
           <div className="space-y-2">
             <span className="text-sm font-medium">{copy.headers}:</span>
-            <div className="border-border overflow-hidden rounded border">
+            <div className="border-border overflow-hidden rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -189,7 +189,7 @@ export function EventDetailsTab({
         {event.httpRequest.body && (
           <div className="space-y-2">
             <span className="text-sm font-medium">{copy.body}:</span>
-            <div className="border-border overflow-hidden rounded border">
+            <div className="border-border overflow-hidden rounded-md border">
               <CodeViewer
                 code={event.httpRequest.body}
                 language="json"
@@ -281,7 +281,7 @@ export function EventDetailsTab({
             </div>
           </div>
         ) : (
-          <div className="border-border overflow-hidden rounded border">
+          <div className="border-border overflow-hidden rounded-md border">
             <CodeViewer
               code={event.content ?? ""}
               language={

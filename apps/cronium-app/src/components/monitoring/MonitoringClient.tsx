@@ -3,7 +3,13 @@
 import React from "react";
 import { trpc } from "@/lib/trpc";
 import { MonitoringPageSkeleton } from "@/components/dashboard/DashboardStatsSkeleton";
-import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  PageShell,
+} from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Activity, Server, Database, Cpu } from "lucide-react";
 
@@ -33,8 +39,8 @@ export default function MonitoringClient() {
   const activities = activityData?.items ?? [];
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="mb-6 text-3xl font-bold">System Monitoring</h1>
+    <PageShell>
+      <h1 className="mb-6 text-2xl font-semibold">System Monitoring</h1>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -169,6 +175,6 @@ export default function MonitoringClient() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageShell>
   );
 }

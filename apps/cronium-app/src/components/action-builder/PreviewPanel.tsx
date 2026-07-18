@@ -227,7 +227,7 @@ export function PreviewPanel({
                             )}
                           </div>
                           {step.input !== undefined && step.input !== null && (
-                            <div className="bg-muted rounded p-2">
+                            <div className="bg-muted rounded-md p-2">
                               <div className="text-xs font-medium">Input:</div>
                               <pre className="text-xs">
                                 {JSON.stringify(step.input, null, 2)}
@@ -236,7 +236,7 @@ export function PreviewPanel({
                           )}
                           {step.output !== undefined &&
                             step.output !== null && (
-                              <div className="bg-muted rounded p-2">
+                              <div className="bg-muted rounded-md p-2">
                                 <div className="text-xs font-medium">
                                   Output:
                                 </div>
@@ -246,7 +246,7 @@ export function PreviewPanel({
                               </div>
                             )}
                           {step.error && (
-                            <div className="bg-destructive/10 text-destructive rounded p-2">
+                            <div className="bg-destructive/10 text-destructive rounded-md p-2">
                               <div className="text-xs font-medium">Error:</div>
                               <div className="text-xs">{step.error}</div>
                             </div>

@@ -1,4 +1,4 @@
-import { Skeleton } from "@cronium/ui";
+import { PageShell, Skeleton } from "@cronium/ui";
 import { Card, CardContent, CardHeader } from "@cronium/ui";
 
 export function DashboardStatsSkeleton() {
@@ -125,7 +125,7 @@ export function DashboardStatsSkeleton() {
 
 export function MonitoringPageSkeleton() {
   return (
-    <div className="container mx-auto p-6">
+    <PageShell>
       <div className="mb-6">
         <Skeleton className="mb-2 h-8 w-48" />
         <Skeleton className="h-4 w-96" />
@@ -199,6 +199,6 @@ export function MonitoringPageSkeleton() {
           </div>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

@@ -27,7 +27,7 @@ import ToolActionSection from "./ToolActionSection";
 import EditorSettingsModal, {
   type EditorSettings,
 } from "./EditorSettingsModal";
-import { Eye, EyeOff, Trash2, Settings } from "lucide-react";
+import { Eye, EyeOff, Trash2, Settings, Lock } from "lucide-react";
 import { isToolActionsUIEnabled } from "@/lib/featureFlags";
 import { parseToolActionConfig } from "@/lib/tools/tool-action-config";
 import {
@@ -1107,7 +1107,8 @@ export default function EventForm({
 
           <div className="bg-info/10 rounded-md p-3">
             <p className="text-info-text text-sm">
-              <strong>🔒 {eventsCopy.Fields.Security}:</strong>{" "}
+              <Lock className="mr-1 inline h-3.5 w-3.5" />
+              <strong>{eventsCopy.Fields.Security}:</strong>{" "}
               {eventsCopy.Fields.SecurityNote}
             </p>
           </div>

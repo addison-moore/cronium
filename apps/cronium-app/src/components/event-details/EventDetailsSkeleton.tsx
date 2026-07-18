@@ -1,10 +1,10 @@
-import { Skeleton } from "@cronium/ui";
+import { PageShell, Skeleton } from "@cronium/ui";
 import { Card, CardContent, CardHeader } from "@cronium/ui";
 import { Tabs, TabsList, Tab, TabsContent } from "@cronium/ui";
 
 export function EventDetailsSkeleton() {
   return (
-    <div className="container mx-auto px-4 py-8">
+    <PageShell>
       {/* Header skeleton */}
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -106,6 +106,6 @@ export function EventDetailsSkeleton() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

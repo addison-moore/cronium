@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
@@ -130,7 +131,8 @@ export default function HttpRequestForm({
                 size="icon"
                 onClick={() => handleRemoveHeader(index)}
               >
-                ✕
+                <X className="h-4 w-4" />
+                <span className="sr-only">Remove header</span>
               </Button>
             </div>
           ))}

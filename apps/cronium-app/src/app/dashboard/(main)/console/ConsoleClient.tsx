@@ -87,7 +87,7 @@ export default function ConsoleClient() {
     <div className="flex h-full flex-col space-y-4 p-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{consoleCopy.title}</h1>
+          <h1 className="text-2xl font-semibold">{consoleCopy.title}</h1>
           <p className="text-muted-foreground">{consoleCopy.description}</p>
         </div>
       </div>

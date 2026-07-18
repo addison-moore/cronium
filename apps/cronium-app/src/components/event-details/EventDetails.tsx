@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Activity, AlertCircle, Edit, Logs, Lock } from "lucide-react";
-import { Tabs, TabsContent, TabsList, Tab } from "@cronium/ui";
+import { Tabs, TabsContent, TabsList, Tab, PageShell } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { toast } from "@cronium/ui";
 import { useRouter } from "next/navigation";
@@ -406,10 +406,10 @@ export function EventDetails({ eventId }: EventDetailsProps) {
   // Early return for invalid event ID
   if (isNaN(numericEventId)) {
     return (
-      <div className="container mx-auto py-6">
+      <PageShell>
         <div className="text-center">
           <AlertCircle className="text-destructive mx-auto mb-4 h-12 w-12" />
-          <h1 className="mb-2 text-2xl font-bold text-gray-900 dark:text-gray-100">
+          <h1 className="mb-2 text-2xl font-semibold text-gray-900 dark:text-gray-100">
             Invalid Event ID
           </h1>
           <p className="mb-4 text-gray-600 dark:text-gray-400">
@@ -419,29 +419,29 @@ export function EventDetails({ eventId }: EventDetailsProps) {
             <Button>Back to Events</Button>
           </Link>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   // Loading state
   if (isLoading) {
     return (
-      <div className="container mx-auto py-6">
+      <PageShell>
         <div className="flex items-center justify-center">
           <Spinner size="lg" />
           <span className="ml-2">{copy.loading}</span>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   // Error state - event not found
   if (!event) {
     return (
-      <div className="container mx-auto py-6">
+      <PageShell>
         <div className="text-center">
           <AlertCircle className="text-destructive mx-auto mb-4 h-12 w-12" />
-          <h1 className="mb-2 text-2xl font-bold text-gray-900 dark:text-gray-100">
+          <h1 className="mb-2 text-2xl font-semibold text-gray-900 dark:text-gray-100">
             {copy.notFoundTitle}
           </h1>
           <p className="mb-4 text-gray-600 dark:text-gray-400">
@@ -451,7 +451,7 @@ export function EventDetails({ eventId }: EventDetailsProps) {
             <Button>Back to Events</Button>
           </Link>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
@@ -502,7 +502,7 @@ export function EventDetails({ eventId }: EventDetailsProps) {
     : null;
 
   return (
-    <div className="container mx-auto space-y-6 py-6">
+    <PageShell>
       {/* Event Header with Actions */}
       {transformedEvent && (
         <EventDetailsHeader
@@ -597,6 +597,6 @@ export function EventDetails({ eventId }: EventDetailsProps) {
         eventName={event.name}
         isDeleting={deleteEventMutation.isPending}
       />
-    </div>
+    </PageShell>
   );
 }

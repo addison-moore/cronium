@@ -179,21 +179,25 @@ function NotionCredentialDisplay({
                     size="sm"
                     onClick={() => toggleSecretVisibility(tool.id)}
                   >
-                    {isSecretVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+                    {isSecretVisible ? (
+                      <EyeOff className="h-3.5 w-3.5" />
+                    ) : (
+                      <Eye className="h-3.5 w-3.5" />
+                    )}
                   </Button>
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => onEdit(tool)}>
-                <Edit size={16} />
+                <Edit className="h-4 w-4" />
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => onDelete(tool.id)}
               >
-                <Trash2 size={16} />
+                <Trash2 className="h-4 w-4" />
               </Button>
             </div>
           </div>

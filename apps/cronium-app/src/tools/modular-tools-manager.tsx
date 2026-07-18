@@ -712,10 +712,7 @@ export function ModularToolsManager() {
             <Card className="h-full">
               <CardContent className="flex h-full items-center justify-center">
                 <div className="text-center">
-                  <Settings
-                    size={48}
-                    className="text-muted-foreground mx-auto mb-4"
-                  />
+                  <Settings className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
                   <h3 className="mb-2 font-medium">Select a Tool</h3>
                   <p className="text-muted-foreground text-sm">
                     Choose a tool from the list to configure credentials and
@@ -792,10 +789,7 @@ export function ModularToolsManager() {
                         </div>
                       </div>
                       {isSelected && (
-                        <ChevronRight
-                          size={16}
-                          className="text-muted-foreground flex-shrink-0"
-                        />
+                        <ChevronRight className="text-muted-foreground h-4 w-4 flex-shrink-0" />
                       )}
                     </div>
                   );

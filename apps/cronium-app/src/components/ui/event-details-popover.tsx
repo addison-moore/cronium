@@ -91,7 +91,7 @@ export function EventDetailsPopover({
               <div className="flex items-center gap-2 text-sm">
                 <Info className="text-muted-foreground h-4 w-4" />
                 <span className="text-muted-foreground">Event ID:</span>
-                <span className="bg-muted rounded px-1 py-0.5 font-mono text-xs">
+                <span className="bg-muted rounded-md px-1 py-0.5 font-mono text-xs">
                   {eventId}
                 </span>
               </div>

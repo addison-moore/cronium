@@ -1,11 +1,11 @@
-import { Skeleton } from "@cronium/ui";
+import { PageShell, Skeleton } from "@cronium/ui";
 import { Card, CardContent, CardHeader } from "@cronium/ui";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@cronium/ui";
 import { TableSkeleton } from "@cronium/ui";
 
 export function LogsPageSkeleton() {
   return (
-    <div className="container mx-auto p-4">
+    <PageShell>
       <div className="space-y-6">
         {/* Page Header */}
         <div>
@@ -91,6 +91,6 @@ export function LogsPageSkeleton() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </PageShell>
   );
 }

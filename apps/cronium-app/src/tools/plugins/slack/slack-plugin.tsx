@@ -195,7 +195,11 @@ function SlackCredentialDisplay({
                     size="sm"
                     onClick={() => toggleTokenVisibility(tool.id)}
                   >
-                    {isTokenVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+                    {isTokenVisible ? (
+                      <EyeOff className="h-3.5 w-3.5" />
+                    ) : (
+                      <Eye className="h-3.5 w-3.5" />
+                    )}
                   </Button>
                 </div>
               </div>
@@ -207,7 +211,7 @@ function SlackCredentialDisplay({
                     onClick={() => handleTestConnection(tool)}
                     disabled={isTesting}
                   >
-                    <TestTube size={14} className="mr-1" />
+                    <TestTube className="mr-1 h-3.5 w-3.5" />
                     {isTesting ? "Testing..." : "Test Connection"}
                   </Button>
                   <Button
@@ -223,14 +227,14 @@ function SlackCredentialDisplay({
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => onEdit(tool)}>
-                <Edit size={16} />
+                <Edit className="h-4 w-4" />
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => onDelete(tool.id)}
               >
-                <Trash2 size={16} />
+                <Trash2 className="h-4 w-4" />
               </Button>
             </div>
           </div>

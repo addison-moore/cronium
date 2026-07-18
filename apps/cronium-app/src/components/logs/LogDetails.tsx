@@ -4,7 +4,13 @@ import React from "react";
 import { useParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { LogDetailsSkeleton } from "@/components/logs/LogDetailsSkeleton";
-import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  PageShell,
+} from "@cronium/ui";
 import { formatDistanceToNow, format } from "date-fns";
 import { CodeViewer } from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -25,13 +31,13 @@ export default function LogDetails() {
 
   if (!log) {
     return (
-      <div className="container mx-auto p-4">
+      <PageShell>
         <Card>
           <CardContent className="pt-6">
             <p className="text-muted-foreground text-center">Log not found</p>
           </CardContent>
         </Card>
-      </div>
+      </PageShell>
     );
   }
 
@@ -42,7 +48,7 @@ export default function LogDetails() {
   };
 
   return (
-    <div className="container mx-auto max-w-6xl space-y-6 p-4">
+    <PageShell className="max-w-6xl">
       {/* Header Card */}
       <Card>
         <CardHeader>
@@ -147,6 +153,6 @@ export default function LogDetails() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </PageShell>
   );
 }

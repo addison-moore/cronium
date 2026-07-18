@@ -116,7 +116,7 @@ export function DataMapper({
               {mappings.map((mapping, index) => (
                 <div
                   key={index}
-                  className={`hover:bg-accent flex cursor-pointer items-center justify-between rounded border p-2 text-sm transition-colors ${
+                  className={`hover:bg-accent flex cursor-pointer items-center justify-between rounded-md border p-2 text-sm transition-colors ${
                     selectedMapping === index ? "border-primary bg-accent" : ""
                   }`}
                   onClick={() => setSelectedMapping(index)}

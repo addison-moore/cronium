@@ -1,8 +1,8 @@
-import { Skeleton } from "@cronium/ui";
+import { PageShell, Skeleton } from "@cronium/ui";
 
 export default function DashboardMainLoading() {
   return (
-    <div className="container mx-auto p-4">
+    <PageShell>
       {/* Page header skeleton */}
       <div className="mb-6">
         <Skeleton className="mb-2 h-8 w-48" />
@@ -25,6 +25,6 @@ export default function DashboardMainLoading() {
           </div>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

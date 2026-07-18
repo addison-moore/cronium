@@ -66,13 +66,13 @@ export default function LogDetail({ log, onRefresh }: LogDetailProps) {
             className="rounded-full p-2 hover:bg-gray-100 dark:hover:bg-gray-800"
             aria-label="Refresh log"
           >
-            <RefreshCw size={16} />
+            <RefreshCw className="h-4 w-4" />
           </button>
         )}
       </CardHeader>
       <CardContent>
         <div className="mb-2 flex items-center">
-          <Terminal size={18} className="mr-2" />
+          <Terminal className="mr-2 h-[18px] w-[18px]" />
           <h3 className="font-medium">Output</h3>
         </div>
         <div className="max-h-80 overflow-auto rounded-md bg-black p-4 font-mono text-sm text-white">

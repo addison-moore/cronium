@@ -4,7 +4,7 @@ import { useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, AlertCircle } from "lucide-react";
-import { Button } from "@cronium/ui";
+import { Button, PageShell } from "@cronium/ui";
 import { Card, CardContent } from "@cronium/ui";
 import ServerForm from "@/components/dashboard/ServerForm";
 import { Spinner } from "@cronium/ui";
@@ -79,7 +79,7 @@ export default function EditServerPage({ params }: EditServerPageProps) {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-4">
+      <PageShell>
         <div className="mb-6 flex items-center">
           <Button variant="ghost" size="sm" className="mr-2" asChild>
             <Link
@@ -93,19 +93,19 @@ export default function EditServerPage({ params }: EditServerPageProps) {
               Back to Server
             </Link>
           </Button>
-          <h1 className="text-2xl font-bold">Loading Server...</h1>
+          <h1 className="text-2xl font-semibold">Loading Server...</h1>
         </div>
 
         <div className="flex h-64 items-center justify-center">
           <Spinner size="lg" />
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   if (serverError ?? !server) {
     return (
-      <div className="container mx-auto p-4">
+      <PageShell>
         <div className="mb-6 flex items-center">
           <Button variant="ghost" size="sm" className="mr-2" asChild>
             <Link href="/dashboard/servers">
@@ -113,7 +113,7 @@ export default function EditServerPage({ params }: EditServerPageProps) {
               Back to Servers
             </Link>
           </Button>
-          <h1 className="text-2xl font-bold">Error</h1>
+          <h1 className="text-2xl font-semibold">Error</h1>
         </div>
 
         <Card>
@@ -131,12 +131,12 @@ export default function EditServerPage({ params }: EditServerPageProps) {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="container mx-auto p-4">
+    <PageShell>
       <div className="mb-6 flex items-center">
         <Button variant="ghost" size="sm" className="mr-2" asChild>
           <Link
@@ -150,7 +150,7 @@ export default function EditServerPage({ params }: EditServerPageProps) {
             Back to Server
           </Link>
         </Button>
-        <h1 className="text-2xl font-bold">Edit {server.name}</h1>
+        <h1 className="text-2xl font-semibold">Edit {server.name}</h1>
       </div>
 
       <div className="bg-card border-input mx-auto max-w-4xl rounded-lg border p-6">
@@ -160,6 +160,6 @@ export default function EditServerPage({ params }: EditServerPageProps) {
           onSuccess={handleSuccess}
         />
       </div>
-    </div>
+    </PageShell>
   );
 }

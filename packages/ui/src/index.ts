@@ -27,6 +27,7 @@ export * from "./components/modal";
 export * from "./components/monaco-editor-lazy";
 // Note: monaco-editor is re-exported through monaco-editor-lazy to avoid conflicts
 export * from "./components/page-header";
+export * from "./components/page-shell";
 export * from "./components/pagination";
 export * from "./components/popover";
 export * from "./components/progress";

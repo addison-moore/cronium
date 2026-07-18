@@ -1,6 +1,5 @@
 import { api } from "@/trpc/server";
-import { Card } from "@cronium/ui";
-import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import { Card, PageHeader, PageShell } from "@cronium/ui";
 import { JobsTable } from "@/components/jobs/JobsTable";
 import { JobFilters } from "@/components/jobs/JobFilters";
 import { Suspense } from "react";
@@ -8,13 +7,13 @@ import { Skeleton } from "@cronium/ui";
 
 export default async function JobsPage() {
   return (
-    <div className="flex-1 space-y-4 p-4 pt-6 md:p-8">
-      <DashboardHeader heading="Jobs" text="View and manage execution jobs" />
+    <PageShell>
+      <PageHeader title="Jobs" description="View and manage execution jobs" />
 
       <Suspense fallback={<JobsPageSkeleton />}>
         <JobsContent />
       </Suspense>
-    </div>
+    </PageShell>
   );
 }
 

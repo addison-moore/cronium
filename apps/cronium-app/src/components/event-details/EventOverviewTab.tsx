@@ -62,7 +62,7 @@ export function EventOverviewTab({
   const formatSchedule = () => {
     if (event.customSchedule) {
       return (
-        <span className="bg-muted rounded p-1 font-mono text-xs">
+        <span className="bg-muted rounded-md p-1 font-mono text-xs">
           {event.customSchedule}
         </span>
       );
@@ -95,7 +95,7 @@ export function EventOverviewTab({
               </div>
               <div className="text-sm">
                 <span className="text-muted-foreground">{copy.eventId}: </span>
-                <span className="bg-muted rounded p-1 font-mono text-xs">
+                <span className="bg-muted rounded-md p-1 font-mono text-xs">
                   {event.id}
                 </span>
               </div>

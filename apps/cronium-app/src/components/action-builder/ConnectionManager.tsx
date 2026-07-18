@@ -164,7 +164,7 @@ export function ConnectionManager({
               Add Mapping
             </Button>
           </div>
-          <div className="text-muted-foreground rounded border border-dashed p-4 text-center text-sm">
+          <div className="text-muted-foreground rounded-md border border-dashed p-4 text-center text-sm">
             Field mapping coming soon...
           </div>
         </div>

@@ -12,7 +12,7 @@ import {
   Eye,
   Terminal as TerminalIcon,
 } from "lucide-react";
-import { Button } from "@cronium/ui";
+import { Button, PageShell } from "@cronium/ui";
 import {
   Card,
   CardContent,
@@ -154,7 +154,7 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-4">
+      <PageShell>
         <div className="mb-6 flex items-center">
           <Button variant="ghost" size="sm" className="mr-2" asChild>
             <Link href="/dashboard/servers">
@@ -162,19 +162,19 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
               Back to Servers
             </Link>
           </Button>
-          <h1 className="text-2xl font-bold">Loading Server...</h1>
+          <h1 className="text-2xl font-semibold">Loading Server...</h1>
         </div>
 
         <div className="flex h-64 items-center justify-center">
           <Spinner size="lg" />
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   if (!server) {
     return (
-      <div className="container mx-auto p-4">
+      <PageShell>
         <div className="mb-6 flex items-center">
           <Button variant="ghost" size="sm" className="mr-2" asChild>
             <Link href="/dashboard/servers">
@@ -182,7 +182,7 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
               Back to Servers
             </Link>
           </Button>
-          <h1 className="text-2xl font-bold">Server Not Found</h1>
+          <h1 className="text-2xl font-semibold">Server Not Found</h1>
         </div>
 
         <Card>
@@ -199,7 +199,7 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </PageShell>
     );
   }
 
@@ -352,7 +352,7 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
   );
 
   return (
-    <div className="container mx-auto space-y-6 py-6">
+    <PageShell>
       <ServerDetailsHeader
         server={{
           id: serverId,
@@ -431,6 +431,6 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }
