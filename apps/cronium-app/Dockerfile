@@ -2,12 +2,12 @@
 # Multi-stage build for security and optimization
 
 # Stage 1: Dependencies
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
 # Enable pnpm
-RUN corepack enable && corepack prepare pnpm@10.25.0 --activate
+RUN corepack enable && corepack prepare pnpm@11.13.1 --activate
 
 # Copy package files for all workspaces
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
@@ -22,12 +22,12 @@ COPY packages/config-tailwind/package.json ./packages/config-tailwind/
 RUN pnpm install --frozen-lockfile
 
 # Stage 2: Builder
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Enable pnpm
-RUN corepack enable && corepack prepare pnpm@10.25.0 --activate
+RUN corepack enable && corepack prepare pnpm@11.13.1 --activate
 
 # Copy entire workspace with dependencies from deps
 COPY --from=deps /app ./
@@ -59,7 +59,7 @@ RUN pnpm exec next build
 WORKDIR /app
 
 # Stage 3: Runtime
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 # Install runtime dependencies only
