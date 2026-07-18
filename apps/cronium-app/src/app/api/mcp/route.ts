@@ -115,11 +115,12 @@ async function handleMessage(
 
 export async function POST(req: Request): Promise<Response> {
   // Strict bearer auth (no dev auto-auth on this internet-facing route):
-  // accept an OAuth 2.1 access token or a raw Cronium API token.
-  const session =
+  // accept an OAuth 2.1 access token or a raw Cronium API token. Either may
+  // carry scopes that limit what the caller can do.
+  const auth =
     (await sessionFromOAuthToken(req.headers)) ??
     (await sessionFromApiToken(req.headers));
-  if (!session) {
+  if (!auth) {
     // Point MCP clients at the protected-resource metadata so they can discover
     // the OAuth authorization server (RFC 9728). Flag invalid_token when a
     // (bad/expired) token was supplied, vs. simply missing.
@@ -153,7 +154,12 @@ export async function POST(req: Request): Promise<Response> {
     });
   }
 
-  const caller = createCaller({ session, db, headers: req.headers });
+  const caller = createCaller({
+    session: auth.session,
+    db,
+    headers: req.headers,
+    tokenScopes: auth.scopes,
+  });
   const baseUrl = baseUrlFrom(req);
 
   // Support a JSON-RPC batch (array) or a single message.

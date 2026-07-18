@@ -466,6 +466,10 @@ export const apiTokens = pgTable("api_tokens", {
     .notNull(),
   lastUsed: timestamp("last_used"),
   expiresAt: timestamp("expires_at"),
+  // Optional least-privilege scope list. NULL = full user rights (the default,
+  // and all pre-existing tokens). A non-null array limits the token to the
+  // procedures those scopes permit (see server/token-scopes.ts).
+  scopes: jsonb("scopes").$type<string[]>(),
   createdAt: timestamp("created_at")
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),

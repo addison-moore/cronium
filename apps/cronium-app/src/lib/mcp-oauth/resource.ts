@@ -10,7 +10,7 @@ import { verifyAccessToken } from "./tokens";
  */
 export async function sessionFromOAuthToken(
   headers: Headers,
-): Promise<Session | null> {
+): Promise<{ session: Session; scopes: string[] | null } | null> {
   const token = getBearerToken(headers);
   if (!token) return null;
 
@@ -25,7 +25,7 @@ export async function sessionFromOAuthToken(
       ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim()
       : (user.email ?? "User");
 
-  return {
+  const session = {
     user: {
       id: user.id,
       email: user.email ?? "",
@@ -35,4 +35,8 @@ export async function sessionFromOAuthToken(
     },
     expires: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
   } as Session;
+
+  // OAuth access tokens are always scoped to what the grant approved.
+  const scopes = payload.scope ? payload.scope.split(" ").filter(Boolean) : [];
+  return { session, scopes };
 }

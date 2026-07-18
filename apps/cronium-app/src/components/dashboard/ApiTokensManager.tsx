@@ -6,6 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
+import { Switch } from "@cronium/ui";
+import { Label } from "@cronium/ui";
 import {
   Card,
   CardContent,
@@ -52,6 +54,9 @@ const createTokenSchema = z.object({
     .string()
     .min(1, "Token name is required")
     .max(100, "Token name is too long"),
+  // When on, the token is limited to the MCP operation set (see token-scopes.ts)
+  // instead of full account access — recommended for AI connectors.
+  mcpOnly: z.boolean().optional(),
 });
 
 type CreateTokenFormData = z.infer<typeof createTokenSchema>;
@@ -65,6 +70,7 @@ export default function ApiTokensManager() {
     resolver: zodResolver(createTokenSchema),
     defaultValues: {
       name: "",
+      mcpOnly: false,
     },
   });
 
@@ -135,7 +141,10 @@ export default function ApiTokensManager() {
   });
 
   const onSubmit = (data: CreateTokenFormData) => {
-    createTokenMutation.mutate(data);
+    createTokenMutation.mutate({
+      name: data.name,
+      ...(data.mcpOnly ? { scopes: ["mcp"] } : {}),
+    });
   };
 
   const copyToClipboard = (text: string) => {
@@ -214,6 +223,26 @@ export default function ApiTokensManager() {
                     Create Token
                   </Button>
                 </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <FormField
+                    control={form.control}
+                    name="mcpOnly"
+                    render={({ field }) => (
+                      <Switch
+                        id="mcpOnly"
+                        checked={field.value ?? false}
+                        onCheckedChange={field.onChange}
+                      />
+                    )}
+                  />
+                  <Label
+                    htmlFor="mcpOnly"
+                    className="text-muted-foreground text-sm"
+                  >
+                    Limit to MCP — can only create/manage events &amp; workflows
+                    (recommended for AI connectors), not full account access.
+                  </Label>
+                </div>
               </CardContent>
             </form>
           </Form>
@@ -256,6 +285,12 @@ export default function ApiTokensManager() {
                               Last used {formatDate(token.lastUsed)}
                             </span>
                           )}
+                          {Array.isArray(token.scopes) &&
+                            token.scopes.length > 0 && (
+                              <span className="bg-muted rounded px-1.5 py-0.5 text-xs font-medium">
+                                {token.scopes.join(", ")} only
+                              </span>
+                            )}
                         </CardDescription>
                       </div>
                       <StatusBadge status={token.status} label={token.status} />

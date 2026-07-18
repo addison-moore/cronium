@@ -17,9 +17,11 @@ export function getBearerToken(headers: Headers): string | null {
  * the token is active and unexpired, otherwise null. Bumps `lastUsed`.
  * Header-agnostic so both REST (NextRequest) and tRPC (Headers) paths reuse it.
  */
-export async function authenticateApiToken(
-  token: string,
-): Promise<{ userId: string; tokenId: number } | null> {
+export async function authenticateApiToken(token: string): Promise<{
+  userId: string;
+  tokenId: number;
+  scopes: string[] | null;
+} | null> {
   try {
     const apiToken = await storage.getApiTokenByToken(token);
 
@@ -33,7 +35,11 @@ export async function authenticateApiToken(
     // Update last used time
     await storage.updateApiToken(apiToken.id, { lastUsed: new Date() });
 
-    return { userId: apiToken.userId, tokenId: apiToken.id };
+    return {
+      userId: apiToken.userId,
+      tokenId: apiToken.id,
+      scopes: apiToken.scopes ?? null,
+    };
   } catch (error) {
     console.error("Error validating API token:", error);
     return null;

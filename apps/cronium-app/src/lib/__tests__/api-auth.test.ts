@@ -48,7 +48,7 @@ describe("authenticateApiToken", () => {
       expiresAt: null,
     });
     const res = await authenticateApiToken("tok");
-    expect(res).toEqual({ userId: "user-1", tokenId: 7 });
+    expect(res).toEqual({ userId: "user-1", tokenId: 7, scopes: null });
     expect(mockUpdate).toHaveBeenCalledWith(
       7,
       expect.objectContaining({ lastUsed: expect.any(Date) }),

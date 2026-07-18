@@ -4,10 +4,13 @@ import { TRPCError } from "@trpc/server";
 import { storage } from "@/server/storage";
 import { nanoid } from "nanoid";
 import { TokenStatus } from "@/shared/schema";
+import { API_TOKEN_SCOPES } from "@/server/token-scopes";
 
 // Schemas
 const createApiTokenSchema = z.object({
   name: z.string().min(1, "Token name is required").max(100),
+  // Optional least-privilege scopes. Omit for a full-access token (default).
+  scopes: z.array(z.enum(API_TOKEN_SCOPES)).min(1).optional(),
 });
 
 const tokenIdSchema = z.object({
@@ -74,6 +77,7 @@ export const authRouter = createTRPCRouter({
           name: input.name,
           token,
           status: TokenStatus.ACTIVE,
+          scopes: input.scopes ?? null,
           createdAt: new Date(),
           updatedAt: new Date(),
         });

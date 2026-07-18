@@ -25,6 +25,9 @@ import { db } from "../db";
 interface CreateContextOptions {
   session: Session | null;
   headers: Headers;
+  // Scopes of the API/OAuth token that authenticated this request, or null for
+  // full rights (cookie sessions, and unscoped tokens). See token-scopes.ts.
+  tokenScopes?: string[] | null;
 }
 
 /**
@@ -42,6 +45,7 @@ const createInnerTRPCContext = (opts: CreateContextOptions) => {
     session: opts.session,
     db,
     headers: opts.headers,
+    tokenScopes: opts.tokenScopes ?? null,
   };
 };
 
@@ -59,7 +63,7 @@ const createInnerTRPCContext = (opts: CreateContextOptions) => {
  */
 export const sessionFromApiToken = async (
   headers: Headers,
-): Promise<Session | null> => {
+): Promise<{ session: Session; scopes: string[] | null } | null> => {
   const { getBearerToken, authenticateApiToken } =
     await import("../../lib/api-auth");
   const token = getBearerToken(headers);
@@ -77,7 +81,7 @@ export const sessionFromApiToken = async (
       ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim()
       : (user.email ?? "User");
 
-  return {
+  const session = {
     user: {
       id: user.id,
       email: user.email ?? "",
@@ -87,6 +91,8 @@ export const sessionFromApiToken = async (
     },
     expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   } as Session;
+
+  return { session, scopes: auth.scopes };
 };
 
 export const createTRPCContext = async (
@@ -95,14 +101,17 @@ export const createTRPCContext = async (
   // Extract headers from the options
   const headers = "headers" in opts ? opts.headers : new Headers();
 
-  // Get session using the cached version to avoid repeated DB calls.
-  // Fall back to API-token bearer auth for headless (non-cookie) callers.
-  const session =
-    (await getCachedServerSession()) ?? (await sessionFromApiToken(headers));
-
+  // Cookie session (full rights) takes precedence; fall back to API-token bearer
+  // auth for headless callers, carrying that token's scopes for enforcement.
+  const cookieSession = await getCachedServerSession();
+  if (cookieSession) {
+    return createInnerTRPCContext({ session: cookieSession, headers });
+  }
+  const tokenAuth = await sessionFromApiToken(headers);
   return createInnerTRPCContext({
-    session,
+    session: tokenAuth?.session ?? null,
     headers,
+    tokenScopes: tokenAuth?.scopes ?? null,
   });
 };
 
@@ -172,6 +181,26 @@ const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
       session: ctx.session,
     },
   });
+});
+
+/**
+ * Enforce per-token scopes. When the request was authenticated by a *scoped*
+ * API/OAuth token (ctx.tokenScopes is non-null), the procedure at `path` must be
+ * permitted by those scopes; otherwise it's forbidden. Cookie sessions and
+ * unscoped tokens (tokenScopes === null) are unrestricted.
+ */
+const enforceTokenScopes = t.middleware(async ({ ctx, path, next }) => {
+  const scopes = ctx.tokenScopes;
+  if (scopes !== null) {
+    const { isPathAllowedForScopes } = await import("@/server/token-scopes");
+    if (!isPathAllowedForScopes(scopes, path)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: `This token's scope does not permit ${path}`,
+      });
+    }
+  }
+  return next();
 });
 
 /**
@@ -326,29 +355,19 @@ const devAutoAuth = t.middleware(async ({ ctx, next }) => {
  */
 export const protectedProcedure =
   process.env.NODE_ENV !== "development"
-    ? t.procedure.use(enforceUserIsAuthed)
-    : t.procedure.use(devAutoAuth).use(enforceUserIsAuthed);
-
-/**
- * Admin procedure (require user to be logged in and have admin role)
- */
-export const adminProcedure =
-  process.env.NODE_ENV !== "development"
-    ? protectedProcedure.use(({ ctx, next }) => {
-        if (ctx.session.user.role !== UserRole.ADMIN) {
-          throw new TRPCError({ code: "FORBIDDEN" });
-        }
-
-        return next({
-          ctx,
-        });
-      })
+    ? t.procedure.use(enforceUserIsAuthed).use(enforceTokenScopes)
     : t.procedure
         .use(devAutoAuth)
         .use(enforceUserIsAuthed)
-        .use(({ ctx, next }) => {
-          if (ctx.session.user.role !== UserRole.ADMIN) {
-            throw new TRPCError({ code: "FORBIDDEN" });
-          }
-          return next({ ctx });
-        });
+        .use(enforceTokenScopes);
+
+/**
+ * Admin procedure (require user to be logged in and have admin role). Derives
+ * from protectedProcedure so it inherits auth + token-scope enforcement.
+ */
+export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.session.user.role !== UserRole.ADMIN) {
+    throw new TRPCError({ code: "FORBIDDEN" });
+  }
+  return next({ ctx });
+});
