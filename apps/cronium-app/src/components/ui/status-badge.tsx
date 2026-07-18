@@ -8,26 +8,96 @@ import {
   type TokenStatus,
 } from "@/shared/schema";
 import {
-  CheckCircle,
-  XCircle,
-  Clock,
-  Pause,
-  AlertCircle,
-  AlertTriangle,
   Archive,
-  RefreshCw,
-  Info,
+  AlertTriangle,
   Circle,
+  CircleCheck,
+  CircleX,
+  Clock,
+  Info,
+  Loader2,
+  Pause,
 } from "lucide-react";
 
-interface StatusConfig {
-  label: string;
+/**
+ * Canonical status semantics (see _plans/styling/Review.md §4):
+ *
+ *   success / active / online / completed -> success (green), CircleCheck
+ *   failure / error / offline / disabled  -> destructive (red), CircleX
+ *   running / in-progress                 -> info (blue), Loader2 spinning
+ *   pending / queued / draft              -> neutral (gray), Clock (static)
+ *   warning / paused / timeout / partial  -> warning (amber), AlertTriangle/Pause
+ *   informational                         -> info (blue), Info
+ *   archived / invited                    -> brand (violet), Archive/Clock
+ *
+ * All colors come from the semantic tokens in @cronium/ui/styles.css —
+ * never raw palette classes. One hue per state, everywhere.
+ */
+
+type StatusTheme = {
+  /** Icon/accent color (the hue anchor) */
   color: string;
+  /** Label text readable on the tinted fill */
   textColor: string;
+  /** Translucent tinted fill */
   bgColor: string;
+  /** Solid indicator dot */
   indicator: string;
+  /** Tinted border */
+  border: string;
+};
+
+const THEMES = {
+  success: {
+    color: "text-success",
+    textColor: "text-success-text",
+    bgColor: "bg-success/10",
+    indicator: "bg-success",
+    border: "border-success/40",
+  },
+  destructive: {
+    color: "text-destructive",
+    textColor: "text-destructive-text",
+    bgColor: "bg-destructive/10",
+    indicator: "bg-destructive",
+    border: "border-destructive/40",
+  },
+  warning: {
+    color: "text-warning",
+    textColor: "text-warning-text",
+    bgColor: "bg-warning/10",
+    indicator: "bg-warning",
+    border: "border-warning/40",
+  },
+  info: {
+    color: "text-info",
+    textColor: "text-info-text",
+    bgColor: "bg-info/10",
+    indicator: "bg-info",
+    border: "border-info/40",
+  },
+  neutral: {
+    color: "text-muted-foreground",
+    textColor: "text-muted-foreground",
+    bgColor: "bg-muted/60",
+    indicator: "bg-muted-foreground",
+    border: "border-border",
+  },
+  brand: {
+    color: "text-primary",
+    textColor: "text-primary",
+    bgColor: "bg-primary/10",
+    indicator: "bg-primary",
+    border: "border-primary/40",
+  },
+} satisfies Record<string, StatusTheme>;
+
+export type StatusThemeName = keyof typeof THEMES;
+
+interface StatusConfig extends StatusTheme {
+  label: string;
+  theme: StatusThemeName;
   icon?: ReactNode;
-  border?: string;
 }
 
 type StatusType =
@@ -44,10 +114,19 @@ type StatusType =
   | "active"
   | "online"
   | "offline"
-  | "archived";
+  | "archived"
+  | "queued"
+  | "claimed"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "error"
+  | "skipped"
+  | "timeout";
 
 interface StatusBadgeProps {
-  status: StatusType;
+  /** Known statuses get canonical label/theme/icon; unknown strings fall back to neutral */
+  status: StatusType | (string & {});
   label?: string;
   showIndicator?: boolean;
   size?: "sm" | "md" | "lg";
@@ -56,202 +135,129 @@ interface StatusBadgeProps {
   border?: string;
 }
 
+const STATUS_MAP: Record<
+  string,
+  { label: string; theme: StatusThemeName; icon: () => ReactNode }
+> = {
+  [EventStatus.ACTIVE]: {
+    label: "Active",
+    theme: "success",
+    icon: () => <CircleCheck />,
+  },
+  [LogStatus.SUCCESS]: {
+    label: "Success",
+    theme: "success",
+    icon: () => <CircleCheck />,
+  },
+  success: { label: "Success", theme: "success", icon: () => <CircleCheck /> },
+  active: { label: "Active", theme: "success", icon: () => <CircleCheck /> },
+  online: {
+    label: "Online",
+    theme: "success",
+    icon: () => <Circle className="fill-current" />,
+  },
+  offline: { label: "Offline", theme: "destructive", icon: () => <CircleX /> },
+  [LogStatus.FAILURE]: {
+    label: "Failed",
+    theme: "destructive",
+    icon: () => <CircleX />,
+  },
+  failure: { label: "Failed", theme: "destructive", icon: () => <CircleX /> },
+  [UserStatus.DISABLED]: {
+    label: "Disabled",
+    theme: "destructive",
+    icon: () => <CircleX />,
+  },
+  [LogStatus.RUNNING]: {
+    label: "Running",
+    theme: "info",
+    icon: () => <Loader2 className="animate-spin" />,
+  },
+  running: {
+    label: "Running",
+    theme: "info",
+    icon: () => <Loader2 className="animate-spin" />,
+  },
+  [EventStatus.PAUSED]: {
+    label: "Paused",
+    theme: "warning",
+    icon: () => <Pause />,
+  },
+  [LogStatus.TIMEOUT]: {
+    label: "Timeout",
+    theme: "warning",
+    icon: () => <Clock />,
+  },
+  [LogStatus.PARTIAL]: {
+    label: "Partial",
+    theme: "warning",
+    icon: () => <AlertTriangle />,
+  },
+  warning: {
+    label: "Warning",
+    theme: "warning",
+    icon: () => <AlertTriangle />,
+  },
+  [EventStatus.DRAFT]: {
+    label: "Draft",
+    theme: "neutral",
+    icon: () => <Circle />,
+  },
+  // Also covers UserStatus.PENDING (same "PENDING" value)
+  [LogStatus.PENDING]: {
+    label: "Pending",
+    theme: "neutral",
+    icon: () => <Clock />,
+  },
+  pending: { label: "Pending", theme: "neutral", icon: () => <Clock /> },
+  [EventStatus.ARCHIVED]: {
+    label: "Archived",
+    theme: "brand",
+    icon: () => <Archive />,
+  },
+  archived: { label: "Archived", theme: "brand", icon: () => <Archive /> },
+  [UserStatus.INVITED]: {
+    label: "Invited",
+    theme: "brand",
+    icon: () => <Clock />,
+  },
+  info: { label: "Info", theme: "info", icon: () => <Info /> },
+  // Job lifecycle statuses (jobs table / job detail)
+  queued: { label: "Queued", theme: "neutral", icon: () => <Clock /> },
+  claimed: { label: "Claimed", theme: "info", icon: () => <Clock /> },
+  completed: {
+    label: "Completed",
+    theme: "success",
+    icon: () => <CircleCheck />,
+  },
+  failed: { label: "Failed", theme: "destructive", icon: () => <CircleX /> },
+  cancelled: { label: "Cancelled", theme: "neutral", icon: () => <CircleX /> },
+  // Common lowercase aliases used by execution views
+  error: { label: "Error", theme: "destructive", icon: () => <CircleX /> },
+  skipped: { label: "Skipped", theme: "neutral", icon: () => <Circle /> },
+  timeout: { label: "Timeout", theme: "warning", icon: () => <Clock /> },
+  paused: { label: "Paused", theme: "warning", icon: () => <Pause /> },
+  draft: { label: "Draft", theme: "neutral", icon: () => <Circle /> },
+};
+
 /**
  * Get status configuration for styling consistency across components
  */
 export const getStatusConfig = (
-  status: StatusType,
+  status: StatusType | (string & {}),
   icon?: ReactNode,
 ): StatusConfig => {
-  switch (status) {
-    case EventStatus.ACTIVE:
-    case UserStatus.ACTIVE:
-    case "active":
-      return {
-        label: "Active",
-        color: "text-green-600 dark:text-green-400",
-        textColor: "text-green-700 dark:text-green-300",
-        bgColor: "bg-green-50 dark:bg-green-900/20",
-        indicator: "bg-green-500",
-        icon: icon ?? <CheckCircle />,
-        border: "border-green-300 dark:border-green-600",
-      };
-    case LogStatus.SUCCESS:
-    case "success":
-      return {
-        label: "Success",
-        color: "text-green-600 dark:text-green-400",
-        textColor: "text-green-700 dark:text-green-300",
-        bgColor: "bg-green-50 dark:bg-green-900/20",
-        indicator: "bg-green-500",
-        icon: icon ?? <CheckCircle />,
-        border: "border-green-300 dark:border-green-600",
-      };
-    case "online":
-      return {
-        label: "Online",
-        color: "text-green-600 dark:text-green-400",
-        textColor: "text-green-700 dark:text-green-300",
-        bgColor: "bg-green-50 dark:bg-green-900/20",
-        indicator: "bg-green-500",
-        icon: icon ?? <Circle className="fill-current" />,
-        border: "border-green-300 dark:border-green-600",
-      };
-    case "offline":
-      return {
-        label: "Offline",
-        color: "text-red-600 dark:text-red-400",
-        textColor: "text-red-700 dark:text-red-300",
-        bgColor: "bg-red-50 dark:bg-red-900/20",
-        indicator: "bg-red-500",
-        icon: icon ?? <XCircle />,
-        border: "border-red-300 dark:border-red-600",
-      };
-    case EventStatus.PAUSED:
-      return {
-        label: "Paused",
-        color: "text-yellow-600 dark:text-yellow-400",
-        textColor: "text-yellow-700 dark:text-yellow-300",
-        bgColor: "bg-yellow-50 dark:bg-yellow-900/20",
-        indicator: "bg-yellow-500",
-        icon: icon ?? <Pause />,
-        border: "border-yellow-300 dark:border-yellow-600",
-      };
-    case LogStatus.TIMEOUT:
-      return {
-        label: "Timeout",
-        color: "text-amber-600 dark:text-amber-400",
-        textColor: "text-amber-700 dark:text-amber-300",
-        bgColor: "bg-amber-50 dark:bg-amber-900/20",
-        indicator: "bg-amber-500",
-        icon: icon ?? <Clock />,
-        border: "border-amber-300 dark:border-amber-600",
-      };
-    case LogStatus.PARTIAL:
-      return {
-        label: "Partial",
-        color: "text-orange-600 dark:text-orange-400",
-        textColor: "text-orange-700 dark:text-orange-300",
-        bgColor: "bg-orange-50 dark:bg-orange-900/20",
-        indicator: "bg-orange-500",
-        icon: icon ?? <AlertTriangle />,
-        border: "border-orange-300 dark:border-orange-600",
-      };
-    case "warning":
-      return {
-        label: "Warning",
-        color: "text-yellow-600 dark:text-yellow-400",
-        textColor: "text-yellow-700 dark:text-yellow-300",
-        bgColor: "bg-yellow-50 dark:bg-yellow-900/20",
-        indicator: "bg-yellow-500",
-        icon: icon ?? <AlertCircle />,
-        border: "border-yellow-300 dark:border-yellow-600",
-      };
-    case EventStatus.DRAFT:
-      return {
-        label: "Draft",
-        color: "text-gray-600 dark:text-gray-400",
-        textColor: "text-gray-700 dark:text-gray-300",
-        bgColor: "bg-gray-50 dark:bg-gray-800",
-        indicator: "bg-gray-500",
-        icon: icon ?? <Circle />,
-        border: "border-gray-300 dark:border-gray-600",
-      };
-    case LogStatus.PENDING:
-    case "pending":
-      return {
-        label: "Pending",
-        color: "text-gray-600 dark:text-gray-400",
-        textColor: "text-gray-700 dark:text-gray-300",
-        bgColor: "bg-gray-50 dark:bg-gray-800",
-        indicator: "bg-gray-500",
-        icon: icon ?? <Clock />,
-        border: "border-gray-300 dark:border-gray-600",
-      };
-    case EventStatus.ARCHIVED:
-    case "archived":
-      return {
-        label: "Archived",
-        color: "text-purple-600 dark:text-purple-400",
-        textColor: "text-purple-700 dark:text-purple-300",
-        bgColor: "bg-purple-50 dark:bg-purple-900/20",
-        indicator: "bg-purple-500",
-        icon: icon ?? <Archive />,
-        border: "border-purple-300 dark:border-purple-600",
-      };
-    case LogStatus.RUNNING:
-    case "running":
-      return {
-        label: "Running",
-        color: "text-blue-600 dark:text-blue-400",
-        textColor: "text-blue-700 dark:text-blue-300",
-        bgColor: "bg-blue-50 dark:bg-blue-900/20",
-        indicator: "bg-blue-500",
-        icon: icon ?? <RefreshCw className="animate-spin" />,
-        border: "border-blue-300 dark:border-blue-600",
-      };
-    case LogStatus.FAILURE:
-    case "failure":
-      return {
-        label: "Failed",
-        color: "text-red-600 dark:text-red-400",
-        textColor: "text-red-700 dark:text-red-300",
-        bgColor: "bg-red-50 dark:bg-red-900/20",
-        indicator: "bg-red-500",
-        icon: icon ?? <XCircle />,
-        border: "border-red-300 dark:border-red-600",
-      };
-    case UserStatus.INVITED:
-      return {
-        label: "Invited",
-        color: "text-purple-600 dark:text-purple-400",
-        textColor: "text-purple-700 dark:text-purple-300",
-        bgColor: "bg-purple-50 dark:bg-purple-900/20",
-        indicator: "bg-purple-500",
-        icon: icon ?? <Clock />,
-        border: "border-purple-300 dark:border-purple-600",
-      };
-    case UserStatus.DISABLED:
-      return {
-        label: "Disabled",
-        color: "text-red-600 dark:text-red-400",
-        textColor: "text-red-700 dark:text-red-300",
-        bgColor: "bg-red-50 dark:bg-red-900/20",
-        indicator: "bg-red-500",
-        icon: icon ?? <XCircle />,
-        border: "border-red-300 dark:border-red-600",
-      };
-    case UserStatus.PENDING:
-      return {
-        label: "Pending",
-        color: "text-yellow-600 dark:text-yellow-400",
-        textColor: "text-yellow-700 dark:text-yellow-300",
-        bgColor: "bg-yellow-50 dark:bg-yellow-900/20",
-        indicator: "bg-yellow-500",
-        icon: icon ?? <Clock />,
-        border: "border-yellow-300 dark:border-yellow-600",
-      };
-    case "info":
-      return {
-        label: "Info",
-        color: "text-indigo-600 dark:text-indigo-400",
-        textColor: "text-indigo-700 dark:text-indigo-300",
-        bgColor: "bg-indigo-50 dark:bg-indigo-900/20",
-        indicator: "bg-indigo-500",
-        icon: icon ?? <Info />,
-        border: "border-indigo-300 dark:border-indigo-600",
-      };
-    default:
-      return {
-        label: "Unknown",
-        color: "text-gray-600 dark:text-gray-400",
-        textColor: "text-gray-700 dark:text-gray-300",
-        bgColor: "bg-gray-50 dark:bg-gray-800",
-        indicator: "bg-gray-500",
-        icon: icon ?? <Circle />,
-        border: "border-gray-300 dark:border-gray-600",
-      };
-  }
+  const entry = STATUS_MAP[status] ?? {
+    label: "Unknown",
+    theme: "neutral" as const,
+    icon: () => <Circle />,
+  };
+  return {
+    label: entry.label,
+    theme: entry.theme,
+    ...THEMES[entry.theme],
+    icon: icon ?? entry.icon(),
+  };
 };
 
 export const sizeClasses = {
@@ -271,6 +277,26 @@ export const iconSizeClasses = {
   md: "h-3 w-3",
   lg: "h-3.5 w-3.5",
 };
+
+/**
+ * Icon-only status rendering for tables, graphs and cards. Renders the
+ * canonical icon in the canonical hue so every surface agrees.
+ */
+export function StatusIcon({
+  status,
+  className = "h-4 w-4",
+}: {
+  status: StatusType | (string & {});
+  className?: string;
+}) {
+  const config = getStatusConfig(status);
+  if (!isValidElement(config.icon)) return null;
+  const element = config.icon as React.ReactElement<{ className?: string }>;
+  return cloneElement(element, {
+    className:
+      `${className} ${config.color} ${element.props?.className ?? ""}`.trim(),
+  });
+}
 
 /**
  * A reusable status badge component for displaying status with consistent styling

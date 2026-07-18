@@ -154,7 +154,9 @@ export function JobExecutionLogs({ jobId }: JobExecutionLogsProps) {
                   key={index}
                   className={cn(
                     "break-all whitespace-pre-wrap",
-                    log.stream === "stderr" ? "text-red-400" : "text-green-400",
+                    log.stream === "stderr"
+                      ? "text-destructive"
+                      : "text-success",
                   )}
                 >
                   {log.line}

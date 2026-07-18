@@ -46,11 +46,11 @@ export default function ErrorPage() {
           </h2>
           <div className="mt-4 flex justify-center">
             <div className="rounded-full bg-red-100 p-4">
-              <AlertTriangle className="h-8 w-8 text-red-600" />
+              <AlertTriangle className="text-destructive h-8 w-8" />
             </div>
           </div>
           {errorMessage && (
-            <p className="mt-4 font-medium text-red-600">{errorMessage}</p>
+            <p className="text-destructive mt-4 font-medium">{errorMessage}</p>
           )}
           <p className="mt-2 text-sm text-gray-500">
             There was a problem with your authentication request. Please try

@@ -261,7 +261,7 @@ export function EventsFilters({
                 className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm"
               >
                 <div className="flex items-center">
-                  <span className="mr-2 flex h-2 w-2 rounded-full bg-green-500"></span>
+                  <span className="bg-success mr-2 flex h-2 w-2 rounded-full"></span>
                   {copy.statusActive}
                 </div>
               </SelectItem>
@@ -270,7 +270,7 @@ export function EventsFilters({
                 className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm"
               >
                 <div className="flex items-center">
-                  <span className="mr-2 flex h-2 w-2 rounded-full bg-yellow-500"></span>
+                  <span className="bg-warning mr-2 flex h-2 w-2 rounded-full"></span>
                   {copy.statusPaused}
                 </div>
               </SelectItem>
@@ -320,7 +320,7 @@ export function EventsFilters({
                 className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm"
               >
                 <div className="flex items-center">
-                  <span className="mr-2 flex h-2 w-2 rounded-full bg-blue-500"></span>
+                  <span className="bg-info mr-2 flex h-2 w-2 rounded-full"></span>
                   Local
                 </div>
               </SelectItem>
@@ -331,7 +331,7 @@ export function EventsFilters({
                   className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm"
                 >
                   <div className="flex items-center">
-                    <span className="mr-2 flex h-2 w-2 rounded-full bg-green-500"></span>
+                    <span className="bg-success mr-2 flex h-2 w-2 rounded-full"></span>
                     {server.name}
                   </div>
                 </SelectItem>

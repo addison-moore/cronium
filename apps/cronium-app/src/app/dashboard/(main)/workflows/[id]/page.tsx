@@ -936,16 +936,16 @@ export default function WorkflowDetailsPage({
                     </h4>
                     <div className="grid grid-cols-3 gap-4">
                       <div className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-green-500" />
+                        <CheckCircle className="text-success h-4 w-4" />
                         <span className="text-sm font-medium">Successful:</span>
-                        <span className="text-sm font-bold text-green-600">
+                        <span className="text-success text-sm font-bold">
                           {executionStats.successCount ?? 0}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <XCircle className="h-4 w-4 text-red-500" />
+                        <XCircle className="text-destructive h-4 w-4" />
                         <span className="text-sm font-medium">Failed:</span>
-                        <span className="text-sm font-bold text-red-600">
+                        <span className="text-destructive text-sm font-bold">
                           {executionStats.failureCount ?? 0}
                         </span>
                       </div>

@@ -198,7 +198,7 @@ export default function ActivatePage() {
             <CardDescription>{copy.activatedDescription}</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center py-6">
-            <CheckCircle2 className="h-16 w-16 text-green-500" />
+            <CheckCircle2 className="text-success h-16 w-16" />
           </CardContent>
           <CardFooter className="flex justify-center">
             <p>{copy.redirectMessage}</p>

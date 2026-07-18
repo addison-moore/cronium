@@ -91,7 +91,7 @@ export function TestConnectionButton({
       {result && (
         <p
           className={`mt-2 flex items-center gap-1 text-xs ${
-            result.success ? "text-green-600" : "text-red-600"
+            result.success ? "text-success-text" : "text-destructive-text"
           }`}
         >
           {result.success ? (

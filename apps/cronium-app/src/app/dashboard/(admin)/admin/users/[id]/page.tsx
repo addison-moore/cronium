@@ -336,7 +336,7 @@ export default function UserDetailsPage() {
                   size="sm"
                   onClick={() => updateUserStatus(UserStatus.DISABLED)}
                   disabled={isUpdating}
-                  className="flex items-center gap-2 text-orange-600 hover:text-orange-700"
+                  className="text-warning hover:text-warning-text flex items-center gap-2"
                 >
                   <UserX className="h-4 w-4" />
                   Disable User
@@ -347,7 +347,7 @@ export default function UserDetailsPage() {
                   size="sm"
                   onClick={() => updateUserStatus(UserStatus.ACTIVE)}
                   disabled={isUpdating}
-                  className="flex items-center gap-2 text-green-600 hover:text-green-700"
+                  className="text-success hover:text-success-text flex items-center gap-2"
                 >
                   <UserCheck className="h-4 w-4" />
                   Activate User
@@ -359,7 +359,7 @@ export default function UserDetailsPage() {
           {/* Danger Zone */}
           <div className="border-border border-t pt-6">
             <div className="space-y-3">
-              <label className="text-sm font-medium text-red-600">
+              <label className="text-destructive text-sm font-medium">
                 Danger Zone
               </label>
               <Button
@@ -396,7 +396,7 @@ export default function UserDetailsPage() {
             <AlertDialogAction
               onClick={deleteUser}
               disabled={isUpdating}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive hover:bg-destructive/90"
             >
               {isUpdating ? "Deleting..." : "Delete User"}
             </AlertDialogAction>

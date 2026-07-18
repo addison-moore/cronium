@@ -30,14 +30,15 @@ export function ActionEdge({
     targetPosition,
   });
 
+  // CSS variables so edges follow the semantic tokens in both themes
   const getEdgeStyle = () => {
     if (data?.connectionType === "success") {
-      return { stroke: "#10b981", strokeWidth: 2 };
+      return { stroke: "var(--success-color)", strokeWidth: 2 };
     }
     if (data?.connectionType === "failure") {
-      return { stroke: "#ef4444", strokeWidth: 2 };
+      return { stroke: "var(--destructive-color)", strokeWidth: 2 };
     }
-    return { stroke: "#6b7280", strokeWidth: 2 };
+    return { stroke: "var(--muted-foreground-color)", strokeWidth: 2 };
   };
 
   return (

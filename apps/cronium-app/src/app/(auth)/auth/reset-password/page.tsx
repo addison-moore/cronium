@@ -93,8 +93,8 @@ export default function ResetPassword() {
         <div className="w-full max-w-md space-y-8 text-center">
           <div>
             <div className="mb-6 flex justify-center">
-              <div className="rounded-full bg-green-100 p-4">
-                <CheckCircle className="h-8 w-8 text-green-600" />
+              <div className="bg-success/15 rounded-full p-4">
+                <CheckCircle className="text-success h-8 w-8" />
               </div>
             </div>
             <h2 className="text-3xl font-bold tracking-tight">
@@ -125,8 +125,8 @@ export default function ResetPassword() {
         <div className="w-full max-w-md space-y-8 text-center">
           <div>
             <div className="mb-6 flex justify-center">
-              <div className="rounded-full bg-red-100 p-4">
-                <AlertTriangle className="h-8 w-8 text-red-600" />
+              <div className="bg-destructive/15 rounded-full p-4">
+                <AlertTriangle className="text-destructive h-8 w-8" />
               </div>
             </div>
             <h2 className="text-3xl font-bold tracking-tight">
@@ -156,8 +156,8 @@ export default function ResetPassword() {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <div className="mb-6 flex justify-center">
-            <div className="rounded-full bg-blue-100 p-4">
-              <Lock className="h-8 w-8 text-blue-600" />
+            <div className="bg-info/15 rounded-full p-4">
+              <Lock className="text-info h-8 w-8" />
             </div>
           </div>
           <h1 className="text-primary dark:text-secondary text-4xl font-bold tracking-tight">
@@ -172,11 +172,13 @@ export default function ResetPassword() {
         </div>
 
         {form.formState.errors.root?.general && (
-          <div className="rounded-md bg-red-50 p-4">
+          <div className="bg-destructive/10 rounded-md p-4">
             <div className="flex">
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">Error</h3>
-                <div className="mt-2 text-sm text-red-700">
+                <h3 className="text-destructive-text text-sm font-medium">
+                  Error
+                </h3>
+                <div className="text-destructive-text mt-2 text-sm">
                   <p>{form.formState.errors.root.general.message}</p>
                 </div>
               </div>

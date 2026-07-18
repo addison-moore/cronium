@@ -6,8 +6,8 @@ import { type LogStatus } from "@/shared/schema";
 import {
   Code,
   Clock,
-  Check,
-  AlertTriangle,
+  CircleCheck,
+  CircleX,
   GitFork,
   Server,
 } from "lucide-react";
@@ -160,19 +160,19 @@ export default function DashboardStats() {
       footer: (
         <div className="flex text-xs">
           <div className="mr-4 flex items-center">
-            <div className="mr-1 h-2 w-2 rounded-full bg-green-500"></div>
+            <div className="bg-success mr-1 h-2 w-2 rounded-full"></div>
             <span>
               {statsCopy.totalEvents.active}: {stats.activeScripts}
             </span>
           </div>
           <div className="mr-4 flex items-center">
-            <div className="mr-1 h-2 w-2 rounded-full bg-yellow-500"></div>
+            <div className="bg-warning mr-1 h-2 w-2 rounded-full"></div>
             <span>
               {statsCopy.totalEvents.paused}: {stats.pausedScripts}
             </span>
           </div>
           <div className="flex items-center">
-            <div className="mr-1 h-2 w-2 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+            <div className="bg-muted-foreground/40 mr-1 h-2 w-2 rounded-full"></div>
             <span>
               {statsCopy.totalEvents.draft}: {stats.draftScripts}
             </span>
@@ -189,27 +189,27 @@ export default function DashboardStats() {
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs">
             <span className="flex items-center">
-              <Check className="mr-1 h-3 w-3 text-green-500" />
+              <CircleCheck className="text-success mr-1 h-3 w-3" />
               {statsCopy.executions.successRate}
             </span>
             <span>{stats.successRate}%</span>
           </div>
           <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
             <div
-              className="h-full rounded-full bg-green-500"
+              className="bg-success h-full rounded-full"
               style={{ width: `${stats.successRate}%` }}
             ></div>
           </div>
           <div className="flex items-center justify-between text-xs">
             <span className="flex items-center">
-              <AlertTriangle className="mr-1 h-3 w-3 text-red-500" />
+              <CircleX className="text-destructive mr-1 h-3 w-3" />
               {statsCopy.executions.failureRate}
             </span>
             <span>{stats.failureRate}%</span>
           </div>
           <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
             <div
-              className="h-full rounded-full bg-red-500"
+              className="bg-destructive h-full rounded-full"
               style={{ width: `${stats.failureRate}%` }}
             ></div>
           </div>
@@ -276,7 +276,7 @@ export default function DashboardStats() {
         onPageSizeChange={handlePageSizeChange}
       />
       {error && (
-        <p className="text-red-500">
+        <p className="text-destructive">
           Error: {error.message ?? "Failed to load dashboard data"}
         </p>
       )}

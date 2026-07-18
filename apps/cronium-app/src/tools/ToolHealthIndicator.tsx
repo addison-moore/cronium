@@ -76,11 +76,11 @@ export function ToolHealthIndicator({
   const getStatusIcon = () => {
     switch (status) {
       case "healthy":
-        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+        return <CheckCircle2 className="text-success h-4 w-4" />;
       case "unhealthy":
-        return <XCircle className="h-4 w-4 text-red-500" />;
+        return <XCircle className="text-destructive h-4 w-4" />;
       case "checking":
-        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
+        return <Loader2 className="text-info h-4 w-4 animate-spin" />;
       default:
         return <AlertCircle className="h-4 w-4 text-gray-400" />;
     }

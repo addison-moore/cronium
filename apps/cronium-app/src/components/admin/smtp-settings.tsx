@@ -101,7 +101,7 @@ export function SmtpSettings({
               {...form.register("smtpHost")}
             />
             {form.formState.errors.smtpHost && (
-              <p id="smtpHost-error" className="text-sm text-red-600">
+              <p id="smtpHost-error" className="text-destructive text-sm">
                 {form.formState.errors.smtpHost.message}
               </p>
             )}
@@ -118,7 +118,7 @@ export function SmtpSettings({
               {...form.register("smtpPort")}
             />
             {form.formState.errors.smtpPort && (
-              <p id="smtpPort-error" className="text-sm text-red-600">
+              <p id="smtpPort-error" className="text-destructive text-sm">
                 {form.formState.errors.smtpPort.message}
               </p>
             )}
@@ -135,7 +135,7 @@ export function SmtpSettings({
               {...form.register("smtpUser")}
             />
             {form.formState.errors.smtpUser && (
-              <p id="smtpUser-error" className="text-sm text-red-600">
+              <p id="smtpUser-error" className="text-destructive text-sm">
                 {form.formState.errors.smtpUser.message}
               </p>
             )}
@@ -172,7 +172,7 @@ export function SmtpSettings({
               </Button>
             </div>
             {form.formState.errors.smtpPassword && (
-              <p id="smtpPassword-error" className="text-sm text-red-600">
+              <p id="smtpPassword-error" className="text-destructive text-sm">
                 {form.formState.errors.smtpPassword.message}
               </p>
             )}
@@ -192,7 +192,7 @@ export function SmtpSettings({
               {...form.register("smtpFromEmail")}
             />
             {form.formState.errors.smtpFromEmail && (
-              <p id="smtpFromEmail-error" className="text-sm text-red-600">
+              <p id="smtpFromEmail-error" className="text-destructive text-sm">
                 {form.formState.errors.smtpFromEmail.message}
               </p>
             )}
@@ -211,7 +211,7 @@ export function SmtpSettings({
               {...form.register("smtpFromName")}
             />
             {form.formState.errors.smtpFromName && (
-              <p id="smtpFromName-error" className="text-sm text-red-600">
+              <p id="smtpFromName-error" className="text-destructive text-sm">
                 {form.formState.errors.smtpFromName.message}
               </p>
             )}

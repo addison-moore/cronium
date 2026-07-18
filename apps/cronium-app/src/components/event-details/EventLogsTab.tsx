@@ -340,7 +340,7 @@ export function EventLogsTab({
                               <h4 className="text-sm font-medium">
                                 {copy.error}:
                               </h4>
-                              <pre className="max-h-[300px] overflow-auto rounded-md border border-red-200 bg-red-50 p-3 text-xs whitespace-pre-wrap text-red-800">
+                              <pre className="border-destructive/40 bg-destructive/10 text-destructive-text max-h-[300px] overflow-auto rounded-md border p-3 text-xs whitespace-pre-wrap">
                                 {typeof log.error === "object" &&
                                 log.error !== null
                                   ? JSON.stringify(log.error, null, 2)

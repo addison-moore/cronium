@@ -67,13 +67,13 @@ export default function ActionSelector({
   const getActionTypeBadgeColor = (actionType: ActionType) => {
     switch (actionType) {
       case "create":
-        return "bg-green-500 text-white hover:bg-green-600";
+        return "bg-success text-success-foreground hover:bg-success/90";
       case "update":
-        return "bg-blue-500 text-white hover:bg-blue-600";
+        return "bg-info text-info-foreground hover:bg-info/90";
       case "search":
         return "bg-purple-500 text-white hover:bg-purple-600";
       case "delete":
-        return "bg-red-500 text-white hover:bg-red-600";
+        return "bg-destructive text-destructive-foreground hover:bg-destructive/90";
       default:
         return "bg-gray-500 text-white hover:bg-gray-600";
     }

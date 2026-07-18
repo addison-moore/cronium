@@ -328,7 +328,7 @@ export default function ApiTokensManager() {
                           deleteTokenMutation.mutate({ id: token.id })
                         }
                         disabled={deleteTokenMutation.isPending}
-                        className="text-red-600 hover:text-red-700"
+                        className="text-destructive hover:text-destructive-text"
                       >
                         {deleteTokenMutation.isPending ? (
                           <Loader2 className="h-4 w-4 animate-spin" />

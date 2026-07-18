@@ -25,11 +25,11 @@ import { trpc } from "@/lib/trpc";
 function getSeverityIcon(severity: "error" | "warning" | "info") {
   switch (severity) {
     case "error":
-      return <XCircle className="h-5 w-5 text-red-500" />;
+      return <XCircle className="text-destructive h-5 w-5" />;
     case "warning":
-      return <AlertCircle className="h-5 w-5 text-yellow-500" />;
+      return <AlertCircle className="text-warning h-5 w-5" />;
     case "info":
-      return <CheckCircle className="h-5 w-5 text-blue-500" />;
+      return <CheckCircle className="text-info h-5 w-5" />;
   }
 }
 
@@ -185,7 +185,7 @@ export function ToolErrorDiagnostics({
           </div>
         ) : diagnosticIssues.length === 0 ? (
           <div className="py-8 text-center">
-            <CheckCircle className="mx-auto mb-4 h-12 w-12 text-green-500" />
+            <CheckCircle className="text-success mx-auto mb-4 h-12 w-12" />
             <p className="text-muted-foreground">No recent errors detected</p>
           </div>
         ) : (

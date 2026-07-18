@@ -13,51 +13,12 @@ import { Badge } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
-import {
-  CheckCircle,
-  Clock,
-  XCircle,
-  Loader2,
-  AlertCircle,
-  Eye,
-} from "lucide-react";
+import { Eye } from "lucide-react";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 interface JobsTableProps {
   jobs: Job[];
 }
-
-const statusConfig = {
-  queued: {
-    label: "Queued",
-    color: "secondary",
-    icon: Clock,
-  },
-  claimed: {
-    label: "Claimed",
-    color: "default",
-    icon: AlertCircle,
-  },
-  running: {
-    label: "Running",
-    color: "warning",
-    icon: Loader2,
-  },
-  completed: {
-    label: "Completed",
-    color: "success",
-    icon: CheckCircle,
-  },
-  failed: {
-    label: "Failed",
-    color: "destructive",
-    icon: XCircle,
-  },
-  cancelled: {
-    label: "Cancelled",
-    color: "secondary",
-    icon: XCircle,
-  },
-};
 
 const priorityConfig = {
   0: { label: "Low", color: "secondary" },
@@ -98,13 +59,9 @@ export function JobsTable({ jobs }: JobsTableProps) {
       </TableHeader>
       <TableBody>
         {jobs.map((job) => {
-          const status =
-            statusConfig[job.status as keyof typeof statusConfig] ??
-            statusConfig.queued;
           const priority =
             priorityConfig[job.priority as keyof typeof priorityConfig] ??
             priorityConfig.normal;
-          const StatusIcon = status.icon;
 
           const duration =
             job.completedAt && job.startedAt
@@ -117,20 +74,7 @@ export function JobsTable({ jobs }: JobsTableProps) {
               <TableCell className="font-mono text-sm">{job.id}</TableCell>
               <TableCell className="capitalize">{job.type}</TableCell>
               <TableCell>
-                <Badge
-                  variant={
-                    status.color as
-                      | "secondary"
-                      | "default"
-                      | "warning"
-                      | "success"
-                      | "destructive"
-                  }
-                  className="gap-1"
-                >
-                  <StatusIcon className="h-3 w-3" />
-                  {status.label}
-                </Badge>
+                <StatusBadge status={job.status} />
               </TableCell>
               <TableCell>
                 <Badge

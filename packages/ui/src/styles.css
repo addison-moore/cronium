@@ -57,6 +57,14 @@
   --info-color: #3b82f6;
   --info-foreground-color: #ffffff;
 
+  /* Status on-tint text: readable label text on the translucent status
+     fills used by badges (bg-success/10 etc.). The base status token is the
+     hue anchor (fills, dots, icons); these are its text-contrast variants. */
+  --success-text-color: #047857;
+  --warning-text-color: #b45309;
+  --destructive-text-color: #b91c1c;
+  --info-text-color: #1d4ed8;
+
   /* UI elements */
   --border-color: #e5e7eb;
   --input-color: #ffffff;
@@ -101,8 +109,10 @@
   --accent-color: #342255;
   --accent-foreground-color: #f9fafb;
 
-  --destructive-color: #b91c1c;
-  --destructive-foreground-color: #fef2f2;
+  /* Bright red in dark mode (like shadcn): the old #b91c1c fill color had
+     ~2.5:1 contrast as text on the dark background */
+  --destructive-color: #ef4444;
+  --destructive-foreground-color: #ffffff;
 
   --success-color: #10b981;
   --success-foreground-color: #ffffff;
@@ -112,6 +122,11 @@
 
   --info-color: #2563eb;
   --info-foreground-color: #ffffff;
+
+  --success-text-color: #6ee7b7;
+  --warning-text-color: #fcd34d;
+  --destructive-text-color: #fca5a5;
+  --info-text-color: #93c5fd;
 
   --border-color: #374151;
   --input-color: #1f2937;
@@ -148,6 +163,10 @@
   --color-warning-foreground: var(--warning-foreground-color);
   --color-info: var(--info-color);
   --color-info-foreground: var(--info-foreground-color);
+  --color-success-text: var(--success-text-color);
+  --color-warning-text: var(--warning-text-color);
+  --color-destructive-text: var(--destructive-text-color);
+  --color-info-text: var(--info-text-color);
 
   /* Additional surface tokens */
   --color-secondary-bg: var(--secondary-bg-color);

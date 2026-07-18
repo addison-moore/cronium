@@ -188,7 +188,7 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-col items-center justify-center p-8">
-              <AlertCircle className="mb-4 h-16 w-16 text-red-500" />
+              <AlertCircle className="text-destructive mb-4 h-16 w-16" />
               <h2 className="mb-2 text-xl font-semibold">Server Not Found</h2>
               <p className="mb-4 text-center text-gray-500">
                 The server you're looking for doesn't exist or has been deleted.

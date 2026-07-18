@@ -24,6 +24,7 @@ import {
   Edit,
   Copy,
   RefreshCw,
+  Loader2,
   Archive,
   Trash2,
   Play,
@@ -276,15 +277,15 @@ export function EventsTable({
         <Button
           variant="outline"
           size="sm"
-          className="h-8 w-8 cursor-pointer rounded-full border-green-500 p-0 transition-colors hover:bg-green-50 hover:text-green-600 dark:border-green-600 dark:hover:bg-green-900/30 dark:hover:text-green-500"
+          className="border-success hover:bg-success/10 hover:text-success h-8 w-8 cursor-pointer rounded-full p-0 transition-colors"
           onClick={() => onEventRun(event.id)}
           disabled={isRunning[event.id]}
           title={copy.runEvent}
         >
           {isRunning[event.id] ? (
-            <RefreshCw className="h-4 w-4 animate-spin text-green-500" />
+            <Loader2 className="text-success h-4 w-4 animate-spin" />
           ) : (
-            <Play className="h-4 w-4 text-green-500" />
+            <Play className="text-success h-4 w-4" />
           )}
           <span className="sr-only">{copy.runEvent}</span>
         </Button>

@@ -627,7 +627,7 @@ export default function EventForm({
               )}
             />
             {errors.name && (
-              <p className="text-sm text-red-500">{errors.name.message}</p>
+              <p className="text-destructive text-sm">{errors.name.message}</p>
             )}
           </div>
 
@@ -850,7 +850,7 @@ export default function EventForm({
                 )}
               />
               {errors.content && (
-                <p className="mt-2 text-sm text-red-500">
+                <p className="text-destructive mt-2 text-sm">
                   {errors.content.message}
                 </p>
               )}
@@ -907,7 +907,9 @@ export default function EventForm({
                 )}
               />
               {errors.httpUrl && (
-                <p className="text-sm text-red-500">{errors.httpUrl.message}</p>
+                <p className="text-destructive text-sm">
+                  {errors.httpUrl.message}
+                </p>
               )}
             </div>
 
@@ -1103,8 +1105,8 @@ export default function EventForm({
             }}
           />
 
-          <div className="rounded-md bg-blue-50 p-3 dark:bg-blue-950">
-            <p className="text-sm text-blue-800 dark:text-blue-200">
+          <div className="bg-info/10 rounded-md p-3">
+            <p className="text-info-text text-sm">
               <strong>🔒 {eventsCopy.Fields.Security}:</strong>{" "}
               {eventsCopy.Fields.SecurityNote}
             </p>
@@ -1390,7 +1392,7 @@ export default function EventForm({
                   }}
                 />
                 {errors.selectedServerIds && (
-                  <p className="text-sm text-red-500">
+                  <p className="text-destructive text-sm">
                     {errors.selectedServerIds.message}
                   </p>
                 )}

@@ -289,7 +289,7 @@ export function UserVariablesManager() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDeleteVariable(variable.id)}
-                        className="text-red-600 hover:text-red-700"
+                        className="text-destructive hover:text-destructive-text"
                         disabled={deleteVariableMutation.isPending}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -370,8 +370,8 @@ export function UserVariablesManager() {
       </Dialog>
 
       {error && (
-        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-4">
-          <p className="text-red-700">
+        <div className="border-destructive/40 bg-destructive/10 mt-4 rounded-md border p-4">
+          <p className="text-destructive-text">
             Error: {error.message || "Failed to load variables"}
           </p>
         </div>

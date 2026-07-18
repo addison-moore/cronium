@@ -79,7 +79,7 @@ export function ServerFilters({
                 className="hover:bg-muted py-2 pr-3 pl-8 text-sm"
               >
                 <div className="flex items-center">
-                  <span className="mr-2 flex h-2 w-2 rounded-full bg-green-500"></span>
+                  <span className="bg-success mr-2 flex h-2 w-2 rounded-full"></span>
                   Online
                 </div>
               </SelectItem>
@@ -88,7 +88,7 @@ export function ServerFilters({
                 className="hover:bg-muted py-2 pr-3 pl-8 text-sm"
               >
                 <div className="flex items-center">
-                  <span className="mr-2 flex h-2 w-2 rounded-full bg-red-500"></span>
+                  <span className="bg-destructive mr-2 flex h-2 w-2 rounded-full"></span>
                   Offline
                 </div>
               </SelectItem>

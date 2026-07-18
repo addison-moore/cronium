@@ -16,16 +16,16 @@ const eventTypeStyles: Record<string, { bg: string; text: string }> = {
     text: "text-emerald-700 dark:text-emerald-400",
   },
   [EventType.PYTHON]: {
-    bg: "bg-blue-100 dark:bg-blue-900/30",
-    text: "text-blue-700 dark:text-blue-400",
+    bg: "bg-info/10",
+    text: "text-info-text",
   },
   [EventType.BASH]: {
-    bg: "bg-amber-100 dark:bg-amber-900/30",
-    text: "text-amber-700 dark:text-amber-400",
+    bg: "bg-warning/10",
+    text: "text-warning-text",
   },
   [EventType.HTTP_REQUEST]: {
-    bg: "bg-purple-100 dark:bg-purple-900/30",
-    text: "text-purple-700 dark:text-purple-400",
+    bg: "bg-primary/10",
+    text: "text-primary",
   },
 };
 

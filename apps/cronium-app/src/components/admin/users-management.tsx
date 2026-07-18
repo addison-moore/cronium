@@ -345,7 +345,10 @@ export function UsersManagement({
                         {...inviteForm.register("email")}
                       />
                       {inviteForm.formState.errors.email && (
-                        <p id="email-error" className="text-sm text-red-600">
+                        <p
+                          id="email-error"
+                          className="text-destructive text-sm"
+                        >
                           {inviteForm.formState.errors.email.message}
                         </p>
                       )}
@@ -476,7 +479,7 @@ export function UsersManagement({
                           <>
                             <DropdownMenuItem
                               onClick={() => handleResendInvitation(user.id)}
-                              className="text-blue-600"
+                              className="text-info"
                             >
                               <SendHorizontal className="mr-2 h-4 w-4" />
                               Resend Invitation
@@ -489,14 +492,14 @@ export function UsersManagement({
                           <>
                             <DropdownMenuItem
                               onClick={() => handleApproveUser(user.id)}
-                              className="text-green-600"
+                              className="text-success"
                             >
                               <UserCheck className="mr-2 h-4 w-4" />
                               Approve
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => handleDenyUser(user.id)}
-                              className="text-red-600"
+                              className="text-destructive"
                             >
                               <UserX className="mr-2 h-4 w-4" />
                               Deny
@@ -510,7 +513,7 @@ export function UsersManagement({
                             onClick={() =>
                               onUpdateUserStatus(user.id, UserStatus.DISABLED)
                             }
-                            className="text-orange-600"
+                            className="text-warning-text"
                           >
                             <UserX className="mr-2 h-4 w-4" />
                             Disable User
@@ -520,7 +523,7 @@ export function UsersManagement({
                             onClick={() =>
                               onUpdateUserStatus(user.id, UserStatus.ACTIVE)
                             }
-                            className="text-green-600"
+                            className="text-success"
                           >
                             <UserCheck className="mr-2 h-4 w-4" />
                             Activate User
@@ -533,7 +536,7 @@ export function UsersManagement({
                             setSelectedUserId(user.id);
                             setIsDeleteDialogOpen(true);
                           }}
-                          className="text-red-600"
+                          className="text-destructive"
                         >
                           <Trash className="mr-2 h-4 w-4" />
                           Delete User
@@ -605,7 +608,7 @@ export function UsersManagement({
                 onClick={() =>
                   selectedUserId && handleDeleteUser(selectedUserId)
                 }
-                className="bg-red-600 hover:bg-red-700"
+                className="bg-destructive hover:bg-destructive/90"
               >
                 Delete
               </AlertDialogAction>

@@ -152,13 +152,13 @@ export default function SignIn() {
         </div>
 
         {(errors.root?.serverError ?? errorFromParams) && (
-          <div className="rounded-md bg-red-50 p-4">
+          <div className="bg-destructive/10 rounded-md p-4">
             <div className="flex">
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">
+                <h3 className="text-destructive-text text-sm font-medium">
                   {copy.errorHeading}
                 </h3>
-                <div className="mt-2 text-sm text-red-700">
+                <div className="text-destructive-text mt-2 text-sm">
                   <p>{errors.root?.serverError?.message ?? errorFromParams}</p>
                 </div>
               </div>

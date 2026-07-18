@@ -48,13 +48,13 @@ export function BulkActionsToolbar({
             size="sm"
             onClick={onBulkActivate}
             disabled={bulkActionLoading !== null}
-            className="h-8 w-8 p-0 hover:border-green-300 hover:bg-green-50 dark:hover:bg-green-900/30"
+            className="hover:border-success/40 hover:bg-success/10 h-8 w-8 p-0"
             title="Activate selected events"
           >
             {bulkActionLoading === "activate" ? (
               <RefreshCw className="h-4 w-4 animate-spin" />
             ) : (
-              <Play className="h-4 w-4 text-green-600" />
+              <Play className="text-success h-4 w-4" />
             )}
           </Button>
           <Button
@@ -62,13 +62,13 @@ export function BulkActionsToolbar({
             size="sm"
             onClick={onBulkPause}
             disabled={bulkActionLoading !== null}
-            className="h-8 w-8 p-0 hover:border-yellow-300 hover:bg-yellow-50 dark:hover:bg-yellow-900/30"
+            className="hover:border-warning/40 hover:bg-warning/10 h-8 w-8 p-0"
             title="Pause selected events"
           >
             {bulkActionLoading === "pause" ? (
               <RefreshCw className="h-4 w-4 animate-spin" />
             ) : (
-              <Pause className="h-4 w-4 text-yellow-600" />
+              <Pause className="text-warning h-4 w-4" />
             )}
           </Button>
           <Button
@@ -76,13 +76,13 @@ export function BulkActionsToolbar({
             size="sm"
             onClick={onBulkDownload}
             disabled={bulkActionLoading !== null}
-            className="h-8 w-8 p-0 hover:border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+            className="hover:border-info/40 hover:bg-info/10 h-8 w-8 p-0"
             title="Download selected events"
           >
             {bulkActionLoading === "download" ? (
               <RefreshCw className="h-4 w-4 animate-spin" />
             ) : (
-              <Download className="h-4 w-4 text-blue-600" />
+              <Download className="text-info h-4 w-4" />
             )}
           </Button>
           <Button
@@ -104,13 +104,13 @@ export function BulkActionsToolbar({
             size="sm"
             onClick={onBulkDelete}
             disabled={bulkActionLoading !== null}
-            className="h-8 w-8 p-0 hover:border-red-300 hover:bg-red-50 dark:hover:bg-red-900/30"
+            className="hover:border-destructive/40 hover:bg-destructive/10 h-8 w-8 p-0"
             title="Delete selected events"
           >
             {bulkActionLoading === "delete" ? (
               <RefreshCw className="h-4 w-4 animate-spin" />
             ) : (
-              <Trash2 className="h-4 w-4 text-red-600" />
+              <Trash2 className="text-destructive h-4 w-4" />
             )}
           </Button>
           <Button

@@ -195,7 +195,7 @@ export function TemplateActionParameterForm({
         <div key={key} className="space-y-2">
           <Label htmlFor={key}>
             {formatFieldName(key)}
-            {!isOptional && <span className="ml-1 text-red-500">*</span>}
+            {!isOptional && <span className="text-destructive ml-1">*</span>}
           </Label>
           <div
             className="border-border rounded-md border"
@@ -247,7 +247,7 @@ export function TemplateActionParameterForm({
           {description && (
             <p className="text-muted-foreground text-sm">{description}</p>
           )}
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
       );
     }
@@ -267,7 +267,7 @@ export function TemplateActionParameterForm({
           <div key={key} className="space-y-2">
             <Label htmlFor={key}>
               {formatFieldName(key)}
-              {!isOptional && <span className="ml-1 text-red-500">*</span>}
+              {!isOptional && <span className="text-destructive ml-1">*</span>}
             </Label>
             <Input
               id={key}
@@ -281,7 +281,7 @@ export function TemplateActionParameterForm({
                 description ?? `Enter ${formatFieldName(key).toLowerCase()}`
               }
             />
-            {error && <p className="text-sm text-red-500">{error}</p>}
+            {error && <p className="text-destructive text-sm">{error}</p>}
           </div>
         );
       }
@@ -298,7 +298,7 @@ export function TemplateActionParameterForm({
           <div key={key} className="space-y-2">
             <Label htmlFor={key}>
               {formatFieldName(key)}
-              {!isOptional && <span className="ml-1 text-red-500">*</span>}
+              {!isOptional && <span className="text-destructive ml-1">*</span>}
             </Label>
             <Textarea
               id={key}
@@ -312,7 +312,7 @@ export function TemplateActionParameterForm({
               }
               rows={4}
             />
-            {error && <p className="text-sm text-red-500">{error}</p>}
+            {error && <p className="text-destructive text-sm">{error}</p>}
           </div>
         );
       }
@@ -322,7 +322,7 @@ export function TemplateActionParameterForm({
         <div key={key} className="space-y-2">
           <Label htmlFor={key}>
             {formatFieldName(key)}
-            {!isOptional && <span className="ml-1 text-red-500">*</span>}
+            {!isOptional && <span className="text-destructive ml-1">*</span>}
           </Label>
           <Input
             id={key}
@@ -336,7 +336,7 @@ export function TemplateActionParameterForm({
               description ?? `Enter ${formatFieldName(key).toLowerCase()}`
             }
           />
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
       );
     }
@@ -346,7 +346,7 @@ export function TemplateActionParameterForm({
         <div key={key} className="space-y-2">
           <Label htmlFor={key}>
             {formatFieldName(key)}
-            {!isOptional && <span className="ml-1 text-red-500">*</span>}
+            {!isOptional && <span className="text-destructive ml-1">*</span>}
           </Label>
           <Input
             id={key}
@@ -358,7 +358,7 @@ export function TemplateActionParameterForm({
             disabled={disabled}
             placeholder={description ?? "0"}
           />
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
       );
     }
@@ -368,7 +368,7 @@ export function TemplateActionParameterForm({
         <div key={key} className="flex items-center justify-between space-y-2">
           <Label htmlFor={key}>
             {formatFieldName(key)}
-            {!isOptional && <span className="ml-1 text-red-500">*</span>}
+            {!isOptional && <span className="text-destructive ml-1">*</span>}
           </Label>
           <Switch
             id={key}
@@ -378,7 +378,7 @@ export function TemplateActionParameterForm({
             onBlur={() => handleFieldBlur(key)}
             disabled={disabled}
           />
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
       );
     }
@@ -392,7 +392,7 @@ export function TemplateActionParameterForm({
         <div key={key} className="space-y-2">
           <Label htmlFor={key}>
             {formatFieldName(key)}
-            {!isOptional && <span className="ml-1 text-red-500">*</span>}
+            {!isOptional && <span className="text-destructive ml-1">*</span>}
           </Label>
           <Select
             value={(fieldValue as string) ?? ""}
@@ -416,7 +416,7 @@ export function TemplateActionParameterForm({
               ))}
             </SelectContent>
           </Select>
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
       );
     }
@@ -426,7 +426,7 @@ export function TemplateActionParameterForm({
       <div key={key} className="space-y-2">
         <Label htmlFor={key}>
           {formatFieldName(key)}
-          {!isOptional && <span className="ml-1 text-red-500">*</span>}
+          {!isOptional && <span className="text-destructive ml-1">*</span>}
         </Label>
         <Textarea
           id={key}
@@ -455,7 +455,7 @@ export function TemplateActionParameterForm({
           rows={4}
           className="font-mono text-sm"
         />
-        {error && <p className="text-sm text-red-500">{error}</p>}
+        {error && <p className="text-destructive text-sm">{error}</p>}
       </div>
     );
   };

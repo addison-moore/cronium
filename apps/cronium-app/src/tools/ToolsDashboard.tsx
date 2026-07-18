@@ -194,9 +194,9 @@ function ExecutionHistory() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 {log.status === "SUCCESS" ? (
-                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <CheckCircle className="text-success h-5 w-5" />
                 ) : (
-                  <AlertCircle className="h-5 w-5 text-red-500" />
+                  <AlertCircle className="text-destructive h-5 w-5" />
                 )}
                 <div>
                   <p className="font-medium">{log.actionId}</p>

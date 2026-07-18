@@ -137,7 +137,7 @@ export default function AIScriptAssistant({
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center justify-between text-lg">
           <div className="flex items-center">
-            <Sparkles className="mr-2 h-4 w-4 text-blue-500" />
+            <Sparkles className="text-info mr-2 h-4 w-4" />
             AI Script Assistant
           </div>
           <Button

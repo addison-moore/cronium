@@ -4,15 +4,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { Badge } from "@cronium/ui";
 import { Button } from "@cronium/ui";
-import {
-  CheckCircle,
-  XCircle,
-  Clock,
-  Play,
-  Activity,
-  Info,
-  RefreshCw,
-} from "lucide-react";
+import { Play, Activity, Info } from "lucide-react";
+import { StatusIcon } from "@/components/ui/status-badge";
 import { LogStatus } from "@/shared/schema";
 import type { EventType } from "@/shared/schema";
 import { EventDetailsPopover } from "@/components/ui/event-details-popover";
@@ -420,39 +413,29 @@ export default function WorkflowExecutionGraph({
     };
   }, [stateTransitionTimeout]);
 
-  // Get status icon for a node
+  // Get status icon for a node (canonical mapping via StatusIcon)
   const getStatusIcon = (node: NodeWithStatus) => {
-    if (node.isCurrentlyExecuting) {
-      return <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />;
-    }
-
-    switch (node.status) {
-      case LogStatus.SUCCESS:
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case LogStatus.FAILURE:
-        return <XCircle className="h-4 w-4 text-red-500" />;
-      case LogStatus.RUNNING:
-        return <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />;
-      default:
-        return <Clock className="h-4 w-4 text-gray-400" />;
-    }
+    const status = node.isCurrentlyExecuting
+      ? LogStatus.RUNNING
+      : (node.status ?? "pending");
+    return <StatusIcon status={status} className="h-4 w-4" />;
   };
 
   // Get status color for a node
   const getStatusColor = (node: NodeWithStatus) => {
     if (node.isCurrentlyExecuting) {
-      return "border-blue-500 bg-blue-50 dark:bg-blue-950 dark:border-blue-400 shadow-lg shadow-blue-200 dark:shadow-blue-900/50";
+      return "border-info bg-info/10 shadow-lg shadow-info/20";
     }
 
     switch (node.status) {
       case LogStatus.SUCCESS:
-        return "border-green-500 bg-green-50 dark:bg-green-950 dark:border-green-400";
+        return "border-success bg-success/10";
       case LogStatus.FAILURE:
-        return "border-red-500 bg-red-50 dark:bg-red-950 dark:border-red-400";
+        return "border-destructive bg-destructive/10";
       case LogStatus.RUNNING:
-        return "border-blue-500 bg-blue-50 dark:bg-blue-950 dark:border-blue-400 shadow-lg shadow-blue-200 dark:shadow-blue-900/50";
+        return "border-info bg-info/10 shadow-lg shadow-info/20";
       default:
-        return "border-gray-300 bg-gray-50 dark:bg-gray-800 dark:border-gray-600";
+        return "border-border bg-muted/60";
     }
   };
 
@@ -504,7 +487,7 @@ export default function WorkflowExecutionGraph({
           stroke="currentColor"
           strokeWidth="2"
           fill="none"
-          className="text-gray-400 dark:text-gray-500"
+          className="text-muted-foreground"
           markerEnd="url(#arrowhead)"
         />
       );
@@ -790,10 +773,13 @@ export default function WorkflowExecutionGraph({
 
             {/* Execution summary */}
             {executionEvents.length > 0 && (
-              <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+              <div className="border-border mt-4 border-t pt-4">
                 <div className="flex flex-wrap gap-4 text-sm">
                   <div className="flex items-center gap-1">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <StatusIcon
+                      status={LogStatus.SUCCESS}
+                      className="h-4 w-4"
+                    />
                     <span>
                       {
                         executionEvents.filter(
@@ -804,7 +790,10 @@ export default function WorkflowExecutionGraph({
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <XCircle className="h-4 w-4 text-red-500" />
+                    <StatusIcon
+                      status={LogStatus.FAILURE}
+                      className="h-4 w-4"
+                    />
                     <span>
                       {
                         executionEvents.filter(
@@ -815,7 +804,10 @@ export default function WorkflowExecutionGraph({
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <RefreshCw className="h-4 w-4 text-blue-500" />
+                    <StatusIcon
+                      status={LogStatus.RUNNING}
+                      className="h-4 w-4"
+                    />
                     <span>
                       {
                         executionEvents.filter(
@@ -826,7 +818,7 @@ export default function WorkflowExecutionGraph({
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Clock className="h-4 w-4 text-gray-400" />
+                    <StatusIcon status="pending" className="h-4 w-4" />
                     <span>
                       {nodesWithStatus.length - executionEvents.length} pending
                     </span>

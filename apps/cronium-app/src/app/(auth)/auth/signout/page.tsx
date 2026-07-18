@@ -43,7 +43,7 @@ export default function SignOut() {
 
         {!isSigningOut && (
           <div className="mt-6">
-            <p className="text-red-600">{copy.error}</p>
+            <p className="text-destructive">{copy.error}</p>
             <button
               onClick={() => {
                 setIsSigningOut(true);

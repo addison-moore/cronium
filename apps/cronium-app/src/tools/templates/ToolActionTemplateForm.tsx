@@ -203,7 +203,7 @@ export function ToolActionTemplateForm({
         {/* Template Name */}
         <div className="space-y-2">
           <Label htmlFor="name">
-            Template Name <span className="text-red-500">*</span>
+            Template Name <span className="text-destructive">*</span>
           </Label>
           <Input
             id="name"

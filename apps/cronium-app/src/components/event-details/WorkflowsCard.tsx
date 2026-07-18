@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { trpc } from "@/lib/trpc";
 
 interface WorkflowItem {
@@ -78,29 +79,16 @@ export default function WorkflowsCard({
     void refetch();
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "active":
-        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100";
-      case "paused":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100";
-      case "draft":
-        return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100";
-      default:
-        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100";
-    }
-  };
-
   const getTriggerTypeColor = (triggerType: string) => {
     switch (triggerType.toLowerCase()) {
       case "manual":
-        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100";
+        return "bg-info/10 text-info-text border-info/40";
       case "scheduled":
-        return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100";
+        return "bg-primary/10 text-primary border-primary/40";
       case "webhook":
-        return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100";
+        return "bg-warning/10 text-warning-text border-warning/40";
       default:
-        return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100";
+        return "bg-muted/60 text-muted-foreground border-border";
     }
   };
 
@@ -142,7 +130,7 @@ export default function WorkflowsCard({
               <p className="text-muted-foreground mb-2 text-sm">
                 Failed to load workflows
               </p>
-              <p className="text-xs text-red-600">
+              <p className="text-destructive text-xs">
                 {error.message || "An error occurred"}
               </p>
             </div>
@@ -175,7 +163,7 @@ export default function WorkflowsCard({
       <CardContent>
         {workflows.length === 0 ? (
           <div className="flex h-32 flex-col items-center justify-center text-center">
-            <Workflow className="mb-3 h-12 w-12 text-gray-300" />
+            <Workflow className="text-muted-foreground/40 mb-3 h-12 w-12" />
             <p className="text-muted-foreground mb-2 text-sm">
               No workflows found
             </p>
@@ -196,9 +184,11 @@ export default function WorkflowsCard({
                       <h4 className="truncate text-sm font-medium">
                         {workflow.name}
                       </h4>
-                      <Badge className={getStatusColor(workflow.status)}>
-                        {workflow.status}
-                      </Badge>
+                      <StatusBadge
+                        status={workflow.status.toLowerCase()}
+                        label={workflow.status}
+                        size="sm"
+                      />
                       <Badge
                         variant="outline"
                         className={getTriggerTypeColor(workflow.triggerType)}

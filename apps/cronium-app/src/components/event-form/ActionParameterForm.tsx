@@ -196,7 +196,7 @@ export default function ActionParameterForm({
         <div key={key} className="space-y-2">
           <Label htmlFor={key}>
             {formatFieldName(key)}
-            {!isOptional && <span className="ml-1 text-red-500">*</span>}
+            {!isOptional && <span className="text-destructive ml-1">*</span>}
           </Label>
           <div className="border-border rounded-md border">
             <MonacoEditor
@@ -233,7 +233,7 @@ export default function ActionParameterForm({
           {description && (
             <p className="text-muted-foreground text-sm">{description}</p>
           )}
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
       );
     }
@@ -253,7 +253,7 @@ export default function ActionParameterForm({
           <div key={key} className="space-y-2">
             <Label htmlFor={key}>
               {formatFieldName(key)}
-              {!isOptional && <span className="ml-1 text-red-500">*</span>}
+              {!isOptional && <span className="text-destructive ml-1">*</span>}
             </Label>
             <Input
               id={key}
@@ -265,7 +265,7 @@ export default function ActionParameterForm({
                 description ?? `Enter ${formatFieldName(key).toLowerCase()}`
               }
             />
-            {error && <p className="text-sm text-red-500">{error}</p>}
+            {error && <p className="text-destructive text-sm">{error}</p>}
           </div>
         );
       }
@@ -282,7 +282,7 @@ export default function ActionParameterForm({
           <div key={key} className="space-y-2">
             <Label htmlFor={key}>
               {formatFieldName(key)}
-              {!isOptional && <span className="ml-1 text-red-500">*</span>}
+              {!isOptional && <span className="text-destructive ml-1">*</span>}
             </Label>
             <Textarea
               id={key}
@@ -294,7 +294,7 @@ export default function ActionParameterForm({
               }
               rows={4}
             />
-            {error && <p className="text-sm text-red-500">{error}</p>}
+            {error && <p className="text-destructive text-sm">{error}</p>}
           </div>
         );
       }
@@ -304,7 +304,7 @@ export default function ActionParameterForm({
         <div key={key} className="space-y-2">
           <Label htmlFor={key}>
             {formatFieldName(key)}
-            {!isOptional && <span className="ml-1 text-red-500">*</span>}
+            {!isOptional && <span className="text-destructive ml-1">*</span>}
           </Label>
           <Input
             id={key}
@@ -316,7 +316,7 @@ export default function ActionParameterForm({
               description ?? `Enter ${formatFieldName(key).toLowerCase()}`
             }
           />
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
       );
     }
@@ -326,7 +326,7 @@ export default function ActionParameterForm({
         <div key={key} className="space-y-2">
           <Label htmlFor={key}>
             {formatFieldName(key)}
-            {!isOptional && <span className="ml-1 text-red-500">*</span>}
+            {!isOptional && <span className="text-destructive ml-1">*</span>}
           </Label>
           <Input
             id={key}
@@ -339,7 +339,7 @@ export default function ActionParameterForm({
             disabled={disabled}
             placeholder={description ?? "0"}
           />
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
       );
     }
@@ -349,7 +349,7 @@ export default function ActionParameterForm({
         <div key={key} className="flex items-center justify-between space-y-2">
           <Label htmlFor={key}>
             {formatFieldName(key)}
-            {!isOptional && <span className="ml-1 text-red-500">*</span>}
+            {!isOptional && <span className="text-destructive ml-1">*</span>}
           </Label>
           <Switch
             id={key}
@@ -357,7 +357,7 @@ export default function ActionParameterForm({
             onCheckedChange={(checked) => handleFieldChange(key, checked)}
             disabled={disabled}
           />
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
       );
     }
@@ -369,7 +369,7 @@ export default function ActionParameterForm({
         <div key={key} className="space-y-2">
           <Label htmlFor={key}>
             {formatFieldName(key)}
-            {!isOptional && <span className="ml-1 text-red-500">*</span>}
+            {!isOptional && <span className="text-destructive ml-1">*</span>}
           </Label>
           <Select
             value={(fieldValue as string) ?? ""}
@@ -389,7 +389,7 @@ export default function ActionParameterForm({
               ))}
             </SelectContent>
           </Select>
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
       );
     }
@@ -399,7 +399,7 @@ export default function ActionParameterForm({
       <div key={key} className="space-y-2">
         <Label htmlFor={key}>
           {formatFieldName(key)}
-          {!isOptional && <span className="ml-1 text-red-500">*</span>}
+          {!isOptional && <span className="text-destructive ml-1">*</span>}
         </Label>
         <Textarea
           id={key}
@@ -427,7 +427,7 @@ export default function ActionParameterForm({
         {description && (
           <p className="text-muted-foreground text-sm">{description}</p>
         )}
-        {error && <p className="text-sm text-red-500">{error}</p>}
+        {error && <p className="text-destructive text-sm">{error}</p>}
       </div>
     );
   };

@@ -118,7 +118,7 @@ export function ServerDeleteConfirmDialog({
                       Events using this server:
                     </span>
                     <span
-                      className={`font-semibold ${impact.eventCount > 0 ? "text-amber-600" : "text-green-600"}`}
+                      className={`font-semibold ${impact.eventCount > 0 ? "text-warning-text" : "text-success"}`}
                     >
                       {impact.eventCount}
                     </span>
@@ -130,7 +130,7 @@ export function ServerDeleteConfirmDialog({
                       Multi-server configurations:
                     </span>
                     <span
-                      className={`font-semibold ${impact.eventServerCount > 0 ? "text-amber-600" : "text-green-600"}`}
+                      className={`font-semibold ${impact.eventServerCount > 0 ? "text-warning-text" : "text-success"}`}
                     >
                       {impact.eventServerCount}
                     </span>
@@ -150,8 +150,8 @@ export function ServerDeleteConfirmDialog({
                 {/* Active Events Warning */}
                 {impact.activeEvents.length > 0 && (
                   <Alert className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
-                    <AlertTriangle className="h-4 w-4 text-amber-600" />
-                    <AlertDescription className="text-amber-600">
+                    <AlertTriangle className="text-warning-text h-4 w-4" />
+                    <AlertDescription className="text-warning-text">
                       <strong>Warning:</strong> {impact.activeEvents.length}{" "}
                       active event{impact.activeEvents.length > 1 ? "s" : ""}{" "}
                       will be affected:

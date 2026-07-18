@@ -559,11 +559,11 @@ export default function WorkflowExecutionHistory({
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <span className="text-green-600">
+                        <span className="text-success">
                           {execution.successfulEvents ?? 0}
                         </span>
                         <span>/</span>
-                        <span className="text-red-600">
+                        <span className="text-destructive">
                           {execution.failedEvents ?? 0}
                         </span>
                         <span>/</span>
@@ -639,7 +639,7 @@ export default function WorkflowExecutionHistory({
                                           <div className="flex items-center gap-2">
                                             <Link
                                               href={`/dashboard/events/${String(event.eventId)}`}
-                                              className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                                              className="text-info-text text-sm font-medium hover:underline"
                                             >
                                               {(
                                                 event as WorkflowExecutionEvent & {
@@ -678,7 +678,7 @@ export default function WorkflowExecutionHistory({
                                         )}
                                         {event.errorMessage && (
                                           <div className="mt-2">
-                                            <label className="text-xs font-medium text-red-600">
+                                            <label className="text-destructive text-xs font-medium">
                                               Error:
                                             </label>
                                             <pre className="mt-1 overflow-x-auto rounded bg-red-50 p-2 text-xs dark:bg-red-900/20">

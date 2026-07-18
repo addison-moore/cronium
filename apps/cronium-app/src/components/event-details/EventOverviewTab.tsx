@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Server, CheckCircle2, RefreshCw, Info, Tag } from "lucide-react";
+import { Server, CircleCheck, RefreshCw, Info, Tag } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { Badge } from "@cronium/ui";
@@ -79,7 +79,7 @@ export function EventOverviewTab({
           <CardHeader className="pb-2">
             <CardTitle className="text-base">
               <div className="flex items-center">
-                <Info className="mr-2 h-5 w-5 text-blue-500" />
+                <Info className="text-info mr-2 h-5 w-5" />
                 {copy.eventInfo}
               </div>
             </CardTitle>
@@ -166,7 +166,7 @@ export function EventOverviewTab({
           <CardHeader className="pb-2">
             <CardTitle className="text-base">
               <div className="flex items-center">
-                <Server className="mr-2 h-5 w-5 text-purple-500" />
+                <Server className="text-primary mr-2 h-5 w-5" />
                 {copy.executionInfo}
               </div>
             </CardTitle>
@@ -196,7 +196,7 @@ export function EventOverviewTab({
                         key={server.id}
                         className="flex items-center font-medium"
                       >
-                        <Server className="mr-2 h-4 w-4 text-purple-500" />
+                        <Server className="text-primary mr-2 h-4 w-4" />
                         <span>{server.name}</span>
                         <span className="text-muted-foreground ml-2">
                           ({server.address})
@@ -224,12 +224,12 @@ export function EventOverviewTab({
             {/* Execution Stats */}
             <div className="space-y-3">
               <h4 className="text-muted-foreground flex items-center text-sm font-medium">
-                <CheckCircle2 className="mr-1.5 h-4 w-4" />
+                <CircleCheck className="mr-1.5 h-4 w-4" />
                 {copy.executionStats}
               </h4>
               <div className="mt-1 flex items-center gap-4">
                 <div className="flex items-center">
-                  <span className="mr-2 text-lg font-bold text-green-500">
+                  <span className="text-success mr-2 text-lg font-bold">
                     {event.successCount ?? 0}
                   </span>
                   <span className="text-muted-foreground text-xs">
@@ -237,7 +237,7 @@ export function EventOverviewTab({
                   </span>
                 </div>
                 <div className="flex items-center">
-                  <span className="mr-2 text-lg font-bold text-red-500">
+                  <span className="text-destructive mr-2 text-lg font-bold">
                     {event.failureCount ?? 0}
                   </span>
                   <span className="text-muted-foreground text-xs">
@@ -245,7 +245,7 @@ export function EventOverviewTab({
                   </span>
                 </div>
                 <div className="flex items-center">
-                  <span className="mr-2 text-lg font-bold text-blue-500">
+                  <span className="text-info mr-2 text-lg font-bold">
                     {(event.successCount ?? 0) + (event.failureCount ?? 0)}
                   </span>
                   <span className="text-muted-foreground text-xs">
@@ -255,7 +255,7 @@ export function EventOverviewTab({
               </div>
               <div className="mt-1 flex items-center gap-4">
                 <div className="flex items-center">
-                  <span className="mr-2 text-lg font-bold text-purple-500">
+                  <span className="text-primary mr-2 text-lg font-bold">
                     {event.executionCount ?? 0}
                   </span>
                   <span className="text-muted-foreground text-xs">
@@ -269,7 +269,6 @@ export function EventOverviewTab({
                   size="sm"
                   onClick={onResetCounter}
                   disabled={isResettingCounter}
-                  className="border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
                   {isResettingCounter ? (
                     <>
@@ -302,7 +301,7 @@ export function EventOverviewTab({
                   {event.resetCounterOnActive === true ||
                   (typeof event.resetCounterOnActive === "string" &&
                     event.resetCounterOnActive === "t") ? (
-                    <span className="text-green-500">{copy.enabled}</span>
+                    <span className="text-success">{copy.enabled}</span>
                   ) : (
                     <span className="text-gray-500">{copy.disabled}</span>
                   )}

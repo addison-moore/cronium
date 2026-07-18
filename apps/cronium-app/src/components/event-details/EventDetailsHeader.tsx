@@ -61,7 +61,7 @@ export function EventDetailsHeader({
             size="sm"
             onClick={onRun}
             disabled={isRunning}
-            className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300 dark:hover:bg-blue-900"
+            className="border-info/40 bg-info/10 text-info-text hover:bg-info/20"
           >
             {isRunning ? (
               <>
@@ -81,7 +81,7 @@ export function EventDetailsHeader({
             variant="outline"
             size="sm"
             onClick={onDelete}
-            className="border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-300 dark:hover:bg-red-900 dark:hover:text-red-200"
+            className="border-destructive/40 bg-destructive/10 text-destructive-text hover:bg-destructive/20"
           >
             <Trash2 className="mr-1.5 h-4 w-4" />
             <span className="sm:inline">{copy.delete}</span>

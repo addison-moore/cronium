@@ -27,15 +27,15 @@ export function ApiRequestPreview({
   const getMethodColor = () => {
     switch (method.toUpperCase()) {
       case "GET":
-        return "bg-blue-500";
+        return "bg-info";
       case "POST":
-        return "bg-green-500";
+        return "bg-success";
       case "PUT":
-        return "bg-yellow-500";
+        return "bg-warning";
       case "DELETE":
-        return "bg-red-500";
+        return "bg-destructive";
       case "PATCH":
-        return "bg-orange-500";
+        return "bg-warning";
       default:
         return "bg-gray-500";
     }
@@ -124,10 +124,7 @@ export function ApiRequestPreview({
                 <pre className="text-xs">
                   {Object.entries(formatHeaders()).map(([key, value]) => (
                     <div key={key}>
-                      <span className="text-blue-600 dark:text-blue-400">
-                        {key}
-                      </span>
-                      : {value}
+                      <span className="text-info">{key}</span>: {value}
                     </div>
                   ))}
                 </pre>

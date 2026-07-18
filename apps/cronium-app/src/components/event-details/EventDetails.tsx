@@ -408,7 +408,7 @@ export function EventDetails({ eventId }: EventDetailsProps) {
     return (
       <div className="container mx-auto py-6">
         <div className="text-center">
-          <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-500" />
+          <AlertCircle className="text-destructive mx-auto mb-4 h-12 w-12" />
           <h1 className="mb-2 text-2xl font-bold text-gray-900 dark:text-gray-100">
             Invalid Event ID
           </h1>
@@ -440,7 +440,7 @@ export function EventDetails({ eventId }: EventDetailsProps) {
     return (
       <div className="container mx-auto py-6">
         <div className="text-center">
-          <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-500" />
+          <AlertCircle className="text-destructive mx-auto mb-4 h-12 w-12" />
           <h1 className="mb-2 text-2xl font-bold text-gray-900 dark:text-gray-100">
             {copy.notFoundTitle}
           </h1>

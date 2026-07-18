@@ -1,72 +1,21 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
-import { Badge } from "@cronium/ui";
 import { type Job } from "@/shared/schema";
 import { formatDistanceToNow } from "date-fns";
-import {
-  CheckCircle,
-  Clock,
-  XCircle,
-  AlertCircle,
-  Loader2,
-} from "lucide-react";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 interface JobStatusCardProps {
   job: Job;
 }
 
-const statusConfig = {
-  queued: {
-    label: "Queued",
-    color: "secondary",
-    icon: Clock,
-  },
-  claimed: {
-    label: "Claimed",
-    color: "default",
-    icon: AlertCircle,
-  },
-  running: {
-    label: "Running",
-    color: "warning",
-    icon: Loader2,
-  },
-  completed: {
-    label: "Completed",
-    color: "success",
-    icon: CheckCircle,
-  },
-  failed: {
-    label: "Failed",
-    color: "destructive",
-    icon: XCircle,
-  },
-  cancelled: {
-    label: "Cancelled",
-    color: "secondary",
-    icon: XCircle,
-  },
-};
-
 export function JobStatusCard({ job }: JobStatusCardProps) {
-  const config = statusConfig[job.status] || statusConfig.queued;
-  const Icon = config.icon;
-
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <span>Job Status</span>
-          <Badge
-            variant={
-              config.color as
-                "secondary" | "default" | "warning" | "success" | "destructive"
-            }
-          >
-            <Icon className="mr-1 h-3 w-3" />
-            {config.label}
-          </Badge>
+          <StatusBadge status={job.status} />
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">

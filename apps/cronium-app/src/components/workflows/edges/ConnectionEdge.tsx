@@ -12,28 +12,23 @@ import { ConnectionType } from "@/shared/schema";
 import { Badge } from "@cronium/ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@cronium/ui";
 import { Button } from "@cronium/ui";
-import { useTheme } from "next-themes";
-
-// Style definitions for different connection types
+// Style definitions for different connection types — CSS variables so the
+// edges follow the semantic tokens in both light and dark themes.
 const connectionStyles = {
   [ConnectionType.ALWAYS]: {
-    light: "#000000", // Black for light mode
-    dark: "#ffffff", // White for dark mode
+    color: "var(--foreground-color)",
     label: "Always",
   },
   [ConnectionType.ON_SUCCESS]: {
-    light: "#22c55e", // green-500 for light mode
-    dark: "#4ade80", // green-400 for dark mode - slightly brighter for visibility
+    color: "var(--success-color)",
     label: "On Success",
   },
   [ConnectionType.ON_FAILURE]: {
-    light: "#ef4444", // red-500 for light mode
-    dark: "#f87171", // red-400 for dark mode - slightly brighter for visibility
+    color: "var(--destructive-color)",
     label: "On Failure",
   },
   [ConnectionType.ON_CONDITION]: {
-    light: "#8b5cf6", // purple-500 for light mode
-    dark: "#a78bfa", // purple-400 for dark mode - slightly brighter for visibility
+    color: "var(--primary-color)",
     label: "On Condition",
   },
 };
@@ -42,15 +37,15 @@ const connectionStyles = {
 const getConnectionClasses = (type: ConnectionType): string => {
   switch (type) {
     case ConnectionType.ALWAYS:
-      return "border-black dark:border-white";
+      return "border-foreground";
     case ConnectionType.ON_SUCCESS:
-      return "border-green-500";
+      return "border-success";
     case ConnectionType.ON_FAILURE:
-      return "border-red-500";
+      return "border-destructive";
     case ConnectionType.ON_CONDITION:
-      return "border-purple-500";
+      return "border-primary";
     default:
-      return "border-black dark:border-white";
+      return "border-foreground";
   }
 };
 
@@ -67,8 +62,6 @@ function ConnectionEdge({
 }: EdgeProps) {
   const { getEdges, setEdges } = useReactFlow();
   const [open, setOpen] = useState(false);
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === "dark";
 
   // The edge's condition lives at `data.connectionType` — the single name used
   // by the canvas, the load/save transforms, and `workflow_connections`. Do not
@@ -81,7 +74,7 @@ function ConnectionEdge({
   const { label } = connectionStyle;
 
   // Get the appropriate color based on the current theme
-  const edgeColor = isDark ? connectionStyle.dark : connectionStyle.light;
+  const edgeColor = connectionStyle.color;
 
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
@@ -163,9 +156,9 @@ function ConnectionEdge({
                 variant="outline"
                 className={`h-5 cursor-pointer px-1.5 py-0 text-[10px] ${pathStyles} ${
                   connectionType === ConnectionType.ON_SUCCESS
-                    ? "bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400"
+                    ? "bg-success/10 text-success-text"
                     : connectionType === ConnectionType.ON_FAILURE
-                      ? "bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400"
+                      ? "bg-destructive/10 text-destructive-text"
                       : connectionType === ConnectionType.ON_CONDITION
                         ? "bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-400"
                         : "bg-gray-50 text-gray-600 dark:bg-gray-950 dark:text-gray-400"
@@ -196,12 +189,12 @@ function ConnectionEdge({
                       : "ghost"
                   }
                   size="sm"
-                  className="w-full justify-start text-left font-normal transition-colors hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-900/20 dark:hover:text-green-300"
+                  className="hover:bg-success/10 hover:text-success-text w-full justify-start text-left font-normal transition-colors"
                   onClick={() =>
                     updateConnectionType(ConnectionType.ON_SUCCESS)
                   }
                 >
-                  <span className="mr-2 h-2.5 w-2.5 rounded-full bg-green-500" />
+                  <span className="bg-success mr-2 h-2.5 w-2.5 rounded-full" />
                   On Success
                 </Button>
                 <Button
@@ -211,12 +204,12 @@ function ConnectionEdge({
                       : "ghost"
                   }
                   size="sm"
-                  className="w-full justify-start text-left font-normal transition-colors hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-900/20 dark:hover:text-red-300"
+                  className="hover:bg-destructive/10 hover:text-destructive-text w-full justify-start text-left font-normal transition-colors"
                   onClick={() =>
                     updateConnectionType(ConnectionType.ON_FAILURE)
                   }
                 >
-                  <span className="mr-2 h-2.5 w-2.5 rounded-full bg-red-500" />
+                  <span className="bg-destructive mr-2 h-2.5 w-2.5 rounded-full" />
                   On Failure
                 </Button>
                 <Button

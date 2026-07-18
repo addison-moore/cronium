@@ -221,12 +221,12 @@ function TeamsCredentialDisplay({
                 <StatusBadge status={tool.isActive ? "active" : "offline"} />
                 <ToolHealthBadge toolId={tool.id} />
                 {hasWebhook && (
-                  <Badge variant="outline" className="text-blue-600">
+                  <Badge variant="outline" className="text-info">
                     Webhook
                   </Badge>
                 )}
                 {hasOAuth && (
-                  <Badge variant="outline" className="text-green-600">
+                  <Badge variant="outline" className="text-success">
                     OAuth
                   </Badge>
                 )}

@@ -6,15 +6,8 @@ import { Badge } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { ScrollArea } from "@cronium/ui";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cronium/ui";
-import {
-  Play,
-  Pause,
-  RotateCcw,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  ArrowRight,
-} from "lucide-react";
+import { Play, Pause, RotateCcw, ArrowRight } from "lucide-react";
+import { StatusIcon } from "@/components/ui/status-badge";
 import { useActionBuilder } from "./useActionBuilder";
 
 interface PreviewPanelProps {
@@ -109,20 +102,9 @@ export function PreviewPanel({
     onReset?.();
   };
 
-  const getStatusIcon = (status: ExecutionStep["status"]) => {
-    switch (status) {
-      case "pending":
-        return <Clock className="text-muted-foreground h-4 w-4" />;
-      case "running":
-        return <Clock className="h-4 w-4 animate-spin text-blue-500" />;
-      case "success":
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case "error":
-        return <AlertCircle className="h-4 w-4 text-red-500" />;
-      case "skipped":
-        return <AlertCircle className="h-4 w-4 text-gray-400" />;
-    }
-  };
+  const getStatusIcon = (status: ExecutionStep["status"]) => (
+    <StatusIcon status={status} className="h-4 w-4" />
+  );
 
   const getNodeInfo = (nodeId: string) => {
     const node = nodes.find((n) => n.id === nodeId);

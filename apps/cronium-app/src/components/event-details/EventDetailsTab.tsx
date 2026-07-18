@@ -145,7 +145,7 @@ export function EventDetailsTab({
       <div className="mt-5 space-y-4">
         <div className="flex items-center">
           <span className="w-24 text-sm font-medium">{copy.method}:</span>
-          <Badge className="border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100">
+          <Badge className="border-info/40 bg-info/10 text-info-text hover:bg-info/20">
             {event.httpRequest.method}
           </Badge>
         </div>
@@ -333,7 +333,9 @@ export function EventDetailsTab({
               <div className="mt-1">
                 <Badge
                   variant={Event.active ? "default" : "secondary"}
-                  className={Event.active ? "bg-green-100 text-green-800" : ""}
+                  className={
+                    Event.active ? "bg-success/10 text-success-text" : ""
+                  }
                 >
                   {Event.active ? copy.active : copy.inactive}
                 </Badge>

@@ -558,15 +558,15 @@ export function WorkflowListClient({
         <Button
           variant="outline"
           size="sm"
-          className="h-8 w-8 cursor-pointer rounded-full border-green-500 p-0 transition-colors hover:bg-green-50 hover:text-green-600 dark:border-green-600 dark:hover:bg-green-900/30 dark:hover:text-green-500"
+          className="border-success hover:bg-success/10 hover:text-success h-8 w-8 cursor-pointer rounded-full p-0 transition-colors"
           onClick={() => handleExecute(workflow.id)}
           disabled={executingWorkflows.has(workflow.id)}
           title={copy.execute}
         >
           {executingWorkflows.has(workflow.id) ? (
-            <RefreshCw className="h-4 w-4 animate-spin text-green-500" />
+            <RefreshCw className="text-success h-4 w-4 animate-spin" />
           ) : (
-            <Play className="h-4 w-4 text-green-500" />
+            <Play className="text-success h-4 w-4" />
           )}
           <span className="sr-only">{copy.execute}</span>
         </Button>
@@ -713,7 +713,7 @@ export function WorkflowListClient({
 
       {/* Bulk Actions */}
       {selectedWorkflows.size > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/20">
+        <div className="border-info/40 bg-info/10 flex items-center gap-2 rounded-lg border p-4">
           <span className="text-sm font-medium">
             Selected workflows: {selectedWorkflows.size}
           </span>

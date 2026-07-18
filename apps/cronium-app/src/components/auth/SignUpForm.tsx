@@ -124,7 +124,7 @@ export default function SignUpForm() {
             <h1 className="text-primary dark:text-secondary text-4xl font-bold tracking-tight">
               Cronium
             </h1>
-            <h2 className="mt-6 text-3xl font-bold tracking-tight text-green-600">
+            <h2 className="text-success mt-6 text-3xl font-bold tracking-tight">
               {copy.successTitle}
             </h2>
             <p className="mt-2 text-sm text-gray-600">{successMessage}</p>
@@ -163,13 +163,13 @@ export default function SignUpForm() {
         </div>
 
         {errors.root?.serverError && (
-          <div className="rounded-md bg-red-50 p-4">
+          <div className="bg-destructive/10 rounded-md p-4">
             <div className="flex">
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">
+                <h3 className="text-destructive-text text-sm font-medium">
                   {copy.errorHeading}
                 </h3>
-                <div className="mt-2 text-sm text-red-700">
+                <div className="text-destructive-text mt-2 text-sm">
                   <p>{errors.root.serverError.message}</p>
                 </div>
               </div>

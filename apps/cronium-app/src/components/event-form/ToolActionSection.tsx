@@ -73,10 +73,10 @@ const DEFAULT_CATEGORY_ICONS: Record<string, React.ReactNode> = {
 
 // Default fallback colors for action types (used if action doesn't provide actionTypeColor)
 const DEFAULT_ACTION_TYPE_COLORS: Record<string, string> = {
-  message: "bg-blue-500 text-white",
-  create: "bg-green-500 text-white",
-  update: "bg-yellow-500 text-white",
-  delete: "bg-red-500 text-white",
+  message: "bg-info text-info-foreground",
+  create: "bg-success text-success-foreground",
+  update: "bg-warning text-warning-foreground",
+  delete: "bg-destructive text-destructive-foreground",
   query: "bg-purple-500 text-white",
 };
 
@@ -669,7 +669,9 @@ export default function ToolActionSection({
                           <div
                             className={cn(
                               "h-2 w-2 rounded-full",
-                              tool.isActive ? "bg-green-500" : "bg-gray-400",
+                              tool.isActive
+                                ? "bg-success"
+                                : "bg-muted-foreground/40",
                             )}
                           />
                           <span>{tool.name}</span>

@@ -346,7 +346,7 @@ export default function SettingsPage() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="flex items-center text-red-500"
+                      className="text-destructive flex items-center"
                       onClick={() => setIsDeleteDialogOpen(true)}
                     >
                       <Trash2 className="mr-2 h-4 w-4" />

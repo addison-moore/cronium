@@ -280,7 +280,7 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
                     {fieldState.error && (
                       <p
                         id="customAiBaseUrl-error"
-                        className="text-sm text-red-600"
+                        className="text-destructive text-sm"
                       >
                         {fieldState.error.message}
                       </p>
@@ -314,7 +314,7 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
                   {fieldState.error && (
                     <p
                       id={`${PROVIDER_KEY_FIELD[provider]}-error`}
-                      className="text-sm text-red-600"
+                      className="text-destructive text-sm"
                     >
                       {fieldState.error.message}
                     </p>
@@ -372,7 +372,7 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
                     </Select>
                   )}
                   {modelFetchError ? (
-                    <p className="text-sm text-amber-600 dark:text-amber-500">
+                    <p className="text-warning-text text-sm">
                       Couldn&apos;t fetch the live model list — showing common
                       models instead. Provider error: {modelFetchError}
                     </p>
@@ -385,7 +385,7 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
                     )
                   )}
                   {fieldState.error && (
-                    <p id="aiModel-error" className="text-sm text-red-600">
+                    <p id="aiModel-error" className="text-destructive text-sm">
                       {fieldState.error.message}
                     </p>
                   )}

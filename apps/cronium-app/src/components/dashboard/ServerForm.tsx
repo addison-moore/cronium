@@ -454,12 +454,12 @@ export default function ServerForm({
                   </FormLabel>
 
                   {sshKeyWarning && (
-                    <Alert className="mb-2 border-amber-200 bg-amber-50">
-                      <AlertTriangle className="h-4 w-4 text-amber-600" />
-                      <AlertTitle className="text-amber-800">
+                    <Alert className="border-warning/40 bg-warning/10 mb-2">
+                      <AlertTriangle className="text-warning-text h-4 w-4" />
+                      <AlertTitle className="text-warning-text">
                         SSH Key Format Warning
                       </AlertTitle>
-                      <AlertDescription className="text-amber-700">
+                      <AlertDescription className="text-warning-text">
                         {sshKeyWarning}
                       </AlertDescription>
                     </Alert>
@@ -469,7 +469,7 @@ export default function ServerForm({
                     <div className="relative">
                       <Key className="text-muted-foreground absolute top-2.5 left-2 h-4 w-4" />
                       <Textarea
-                        className={`min-h-[180px] pl-8 font-mono ${sshKeyWarning ? "border-amber-500" : ""}`}
+                        className={`min-h-[180px] pl-8 font-mono ${sshKeyWarning ? "border-warning" : ""}`}
                         placeholder={`-----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEAxyz...
 ...
@@ -543,8 +543,8 @@ MIIEpAIBAAKCAQEAxyz...
           />
         </div>
 
-        <div className="rounded-md bg-blue-50 p-3 dark:bg-blue-950">
-          <p className="text-sm text-blue-800 dark:text-blue-200">
+        <div className="bg-info/10 rounded-md p-3">
+          <p className="text-info-text text-sm">
             <strong>🔒 Security:</strong> Your SSH key is encrypted on your
             device and securely stored.
           </p>

@@ -217,9 +217,9 @@ function CanvasContent({
         <MiniMap
           nodeColor={(node) => {
             if (node.data?.isConfigured) {
-              return "#10b981"; // green
+              return "var(--success-color)";
             }
-            return "#ef4444"; // red
+            return "var(--destructive-color)";
           }}
           className="bg-background"
           maskColor="rgb(0, 0, 0, 0.1)"

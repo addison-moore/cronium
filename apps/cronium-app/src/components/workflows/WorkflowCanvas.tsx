@@ -858,10 +858,10 @@ export default function WorkflowCanvas({
           }}
           connectionLineType={ConnectionLineType.Bezier}
           proOptions={{ hideAttribution: true }}
-          connectionLineStyle={{ stroke: "#999" }}
+          connectionLineStyle={{ stroke: "var(--muted-foreground-color)" }}
           deleteKeyCode="Delete"
         >
-          <Background color="#aaa" gap={16} size={1} />
+          <Background color="var(--border-color)" gap={16} size={1} />
           <Controls
             showInteractive={false}
             className="bg-background border-border fill-foreground border"
@@ -908,7 +908,7 @@ export default function WorkflowCanvas({
                           size="sm"
                           onClick={undo}
                           disabled={!canUndo}
-                          className="h-8 w-8 p-0 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30"
+                          className="hover:bg-info/10 hover:text-info h-8 w-8 p-0"
                         >
                           <Undo className="h-4 w-4" />
                           <span className="sr-only">Undo</span>
@@ -929,7 +929,7 @@ export default function WorkflowCanvas({
                           size="sm"
                           onClick={undoAllChanges}
                           disabled={!canUndoToSave}
-                          className="h-8 w-8 p-0 hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-900/30"
+                          className="hover:bg-warning/10 hover:text-warning h-8 w-8 p-0"
                         >
                           <RotateCcw className="h-4 w-4" />
                           <span className="sr-only">Undo all changes</span>
@@ -991,7 +991,7 @@ export default function WorkflowCanvas({
                           disabled={
                             !selectedNode && edges.every((e) => !e.selected)
                           }
-                          className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30"
+                          className="hover:bg-destructive/10 hover:text-destructive h-8 w-8 p-0"
                         >
                           <Trash2 className="h-4 w-4" />
                           <span className="sr-only">Delete selected</span>

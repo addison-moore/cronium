@@ -213,7 +213,7 @@ function AiCredentialForm({ tool, onSubmit, onCancel }: CredentialFormProps) {
             {...form.register("baseUrl")}
           />
           {form.formState.errors.baseUrl && (
-            <p className="mt-1 text-sm text-red-600">
+            <p className="text-destructive mt-1 text-sm">
               {form.formState.errors.baseUrl.message}
             </p>
           )}
@@ -283,7 +283,7 @@ function AiCredentialForm({ tool, onSubmit, onCancel }: CredentialFormProps) {
           }
         />
         {modelError ? (
-          <p className="mt-1 text-sm text-amber-600 dark:text-amber-500">
+          <p className="text-warning-text mt-1 text-sm">
             Couldn&apos;t fetch the live model list — showing common models.
             Provider error: {modelError}
           </p>
