@@ -1537,7 +1537,7 @@ export default function EventForm({
       {/* Form Actions */}
       {showFooter && (
         <div
-          className={`flex ${onCancel ? "justify-between" : "justify-end"} space-x-4 ${layout === "modal" ? "bg-background sticky bottom-0 border-t pt-4" : ""}`}
+          className={`flex ${onCancel ? "justify-between" : "justify-end"} space-x-4 ${layout === "modal" ? "bg-popover border-border sticky bottom-0 border-t pt-4" : ""}`}
         >
           {onCancel && (
             <Button type="button" variant="outline" onClick={onCancel}>

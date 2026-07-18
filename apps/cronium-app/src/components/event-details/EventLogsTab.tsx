@@ -147,7 +147,7 @@ export function EventLogsTab({
                       </span>
                     </div>
                   )}
-                  <div className="flex justify-between gap-4 border-t pt-1">
+                  <div className="border-border flex justify-between gap-4 border-t pt-1">
                     <span>Total Duration:</span>
                     <span className="font-medium">{totalTime}</span>
                   </div>
