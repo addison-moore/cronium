@@ -2,14 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { Button } from "@cronium/ui";
-import { Badge } from "@cronium/ui";
-import {
-  CheckCircle2,
-  XCircle,
-  AlertCircle,
-  RefreshCw,
-  Loader2,
-} from "lucide-react";
+import { RefreshCw } from "lucide-react";
+import { StatusIcon, getStatusConfig } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@cronium/ui";
@@ -73,18 +67,9 @@ export function ToolHealthIndicator({
     testConnectionMutation.mutate({ id: toolId });
   };
 
-  const getStatusIcon = () => {
-    switch (status) {
-      case "healthy":
-        return <CheckCircle2 className="text-success h-4 w-4" />;
-      case "unhealthy":
-        return <XCircle className="text-destructive h-4 w-4" />;
-      case "checking":
-        return <Loader2 className="text-info h-4 w-4 animate-spin" />;
-      default:
-        return <AlertCircle className="h-4 w-4 text-gray-400" />;
-    }
-  };
+  const getStatusIcon = () => (
+    <StatusIcon status={status} className="h-4 w-4" />
+  );
 
   const getStatusText = () => {
     switch (status) {
@@ -178,29 +163,14 @@ export function ToolHealthBadge({
     testConnectionMutation.mutate({ id: toolId });
   }, [toolId]);
 
-  const getVariant = ():
-    "default" | "destructive" | "secondary" | "outline" => {
-    switch (status) {
-      case "healthy":
-        return "default";
-      case "unhealthy":
-        return "destructive";
-      default:
-        return "secondary";
-    }
-  };
-
+  // Icon-only pill matching StatusBadge's canonical styling
+  const config = getStatusConfig(status);
   return (
-    <Badge variant={getVariant()} className="h-5 px-1.5 text-xs">
-      {status === "checking" ? (
-        <Loader2 className="h-3 w-3 animate-spin" />
-      ) : status === "healthy" ? (
-        <CheckCircle2 className="h-3 w-3" />
-      ) : status === "unhealthy" ? (
-        <XCircle className="h-3 w-3" />
-      ) : (
-        <AlertCircle className="h-3 w-3" />
-      )}
-    </Badge>
+    <span
+      className={`inline-flex h-5 items-center rounded-full border px-1.5 ${config.border} ${config.bgColor}`}
+      title={config.label}
+    >
+      <StatusIcon status={status} className="h-3 w-3" />
+    </span>
   );
 }

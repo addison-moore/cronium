@@ -59,10 +59,14 @@ export function ActionEdge({
             className="nodrag nopan"
           >
             <Badge
-              variant={
-                data.connectionType === "success" ? "default" : "secondary"
-              }
-              className="text-xs"
+              variant="outline"
+              className={`text-xs ${
+                data.connectionType === "success"
+                  ? "border-success/40 bg-success/10 text-success-text"
+                  : data.connectionType === "failure"
+                    ? "border-destructive/40 bg-destructive/10 text-destructive-text"
+                    : "border-border bg-muted/60 text-muted-foreground"
+              }`}
             >
               {(data.label as string) ?? ""}
             </Badge>

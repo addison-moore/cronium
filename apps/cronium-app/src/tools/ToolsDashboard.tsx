@@ -11,12 +11,11 @@ import {
   Zap,
   BarChart3,
   Clock,
-  AlertCircle,
-  CheckCircle,
   Settings,
   Plus,
   Play,
 } from "lucide-react";
+import { StatusBadge, StatusIcon } from "@/components/ui/status-badge";
 import Link from "next/link";
 import { ToolPluginRegistry } from "@/tools/plugins";
 import { useState, useMemo } from "react";
@@ -193,11 +192,7 @@ function ExecutionHistory() {
           <CardContent className="py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                {log.status === "SUCCESS" ? (
-                  <CheckCircle className="text-success h-5 w-5" />
-                ) : (
-                  <AlertCircle className="text-destructive h-5 w-5" />
-                )}
+                <StatusIcon status={log.status} className="h-5 w-5" />
                 <div>
                   <p className="font-medium">{log.actionId}</p>
                   <p className="text-muted-foreground text-sm">
@@ -207,11 +202,7 @@ function ExecutionHistory() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Badge
-                  variant={log.status === "SUCCESS" ? "default" : "destructive"}
-                >
-                  {log.status}
-                </Badge>
+                <StatusBadge status={log.status} />
                 <span className="text-muted-foreground text-sm">
                   {log.executionTime}ms
                 </span>
@@ -326,9 +317,7 @@ function HealthOverview() {
                       </p>
                     </div>
                   </div>
-                  <Badge variant={tool.isActive ? "default" : "secondary"}>
-                    {tool.isActive ? "Active" : "Inactive"}
-                  </Badge>
+                  <StatusBadge status={tool.isActive ? "active" : "inactive"} />
                 </div>
               );
             })}

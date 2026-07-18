@@ -3,8 +3,8 @@
 import { useEffect, useState, useRef } from "react";
 import { CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { ScrollArea } from "@cronium/ui";
-import { Badge } from "@cronium/ui";
 import { Button } from "@cronium/ui";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Terminal, Download, Maximize2, Minimize2 } from "lucide-react";
 import { useSocket } from "@/hooks/use-socket";
 import { cn } from "@/lib/utils";
@@ -106,9 +106,7 @@ export function JobExecutionLogs({ jobId }: JobExecutionLogsProps) {
             Execution Logs
           </span>
           <div className="flex items-center gap-2">
-            <Badge variant={isConnected ? "success" : "secondary"}>
-              {isConnected ? "Connected" : "Disconnected"}
-            </Badge>
+            <StatusBadge status={isConnected ? "connected" : "disconnected"} />
             <Button
               variant="ghost"
               size="icon"

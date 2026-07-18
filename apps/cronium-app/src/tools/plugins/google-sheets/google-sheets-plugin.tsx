@@ -173,7 +173,10 @@ function GoogleConnectSection({ toolId }: { toolId: number }) {
   if (oauthStatus.hasTokens) {
     return (
       <div className="flex items-center gap-2">
-        <Badge variant="outline" className="text-success">
+        <Badge
+          variant="outline"
+          className="border-success/40 bg-success/10 text-success-text"
+        >
           Google account connected
         </Badge>
         <Button

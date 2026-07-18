@@ -226,7 +226,10 @@ function TeamsCredentialDisplay({
                   </Badge>
                 )}
                 {hasOAuth && (
-                  <Badge variant="outline" className="text-success">
+                  <Badge
+                    variant="outline"
+                    className="border-success/40 bg-success/10 text-success-text"
+                  >
                     OAuth
                   </Badge>
                 )}

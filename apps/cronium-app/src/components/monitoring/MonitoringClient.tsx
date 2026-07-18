@@ -4,7 +4,7 @@ import React from "react";
 import { trpc } from "@/lib/trpc";
 import { MonitoringPageSkeleton } from "@/components/dashboard/DashboardStatsSkeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
-import { Badge } from "@cronium/ui";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Activity, Server, Database, Cpu } from "lucide-react";
 
 const SERVICE_LABELS: Record<string, string> = {
@@ -157,13 +157,10 @@ export default function MonitoringClient() {
                           {Math.round(service.latency)}ms
                         </span>
                       )}
-                      <Badge
-                        variant={
-                          service.status === "up" ? "default" : "destructive"
-                        }
-                      >
-                        {service.status === "up" ? "Healthy" : "Down"}
-                      </Badge>
+                      <StatusBadge
+                        status={service.status === "up" ? "healthy" : "offline"}
+                        label={service.status === "up" ? "Healthy" : "Down"}
+                      />
                     </div>
                   </div>
                 ))}

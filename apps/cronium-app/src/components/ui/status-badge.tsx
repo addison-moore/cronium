@@ -238,6 +238,30 @@ const STATUS_MAP: Record<
   timeout: { label: "Timeout", theme: "warning", icon: () => <Clock /> },
   paused: { label: "Paused", theme: "warning", icon: () => <Pause /> },
   draft: { label: "Draft", theme: "neutral", icon: () => <Circle /> },
+  inactive: { label: "Inactive", theme: "neutral", icon: () => <Circle /> },
+  // Connection / health checks
+  healthy: { label: "Healthy", theme: "success", icon: () => <CircleCheck /> },
+  unhealthy: {
+    label: "Unhealthy",
+    theme: "destructive",
+    icon: () => <CircleX />,
+  },
+  checking: {
+    label: "Checking",
+    theme: "info",
+    icon: () => <Loader2 className="animate-spin" />,
+  },
+  unknown: { label: "Unknown", theme: "neutral", icon: () => <Circle /> },
+  connected: {
+    label: "Connected",
+    theme: "success",
+    icon: () => <Circle className="fill-current" />,
+  },
+  disconnected: {
+    label: "Disconnected",
+    theme: "neutral",
+    icon: () => <Circle />,
+  },
 };
 
 /**

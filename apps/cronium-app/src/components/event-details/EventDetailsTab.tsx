@@ -21,6 +21,7 @@ import {
 } from "@cronium/ui";
 import type { Event } from "./types";
 import { Save, Edit, X } from "lucide-react";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@cronium/ui";
 import { formatDate } from "@/lib/utils";
@@ -331,14 +332,10 @@ export function EventDetailsTab({
             <div>
               <span className="text-sm font-medium">{copy.status}:</span>
               <div className="mt-1">
-                <Badge
-                  variant={Event.active ? "default" : "secondary"}
-                  className={
-                    Event.active ? "bg-success/10 text-success-text" : ""
-                  }
-                >
-                  {Event.active ? copy.active : copy.inactive}
-                </Badge>
+                <StatusBadge
+                  status={Event.active ? "active" : "inactive"}
+                  label={Event.active ? copy.active : copy.inactive}
+                />
               </div>
             </div>
           </div>
