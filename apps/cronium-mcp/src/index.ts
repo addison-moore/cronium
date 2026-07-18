@@ -246,6 +246,51 @@ server.registerTool(
   },
 );
 
+// ── validate_plan ─────────────────────────────────────────────────────────
+server.registerTool(
+  "validate_plan",
+  {
+    title: "Validate a draft plan (no changes made)",
+    description:
+      "Dry-run: check a proposed events (+ optional workflow) plan WITHOUT creating " +
+      "anything — event schemas, tool credentials/actions/params, and workflow graph " +
+      "(DAG, no fan-in). Validate a draft before showing it to the user, then call " +
+      "create_workflow_bundle once it's valid.",
+    inputSchema: {
+      events: z.array(z.object({ key: z.string() }).extend(eventFields)).min(1),
+      workflow: z
+        .object({
+          name: z.string().optional(),
+          connections: z
+            .array(
+              z.object({
+                from: z.string(),
+                to: z.string(),
+                connectionType: CONNECTION_TYPE.optional(),
+              }),
+            )
+            .optional(),
+        })
+        .optional(),
+    },
+  },
+  async (args) => {
+    try {
+      const res = await cronium.mutate<{
+        valid: boolean;
+        errors: string[];
+        summary: string;
+      }>("mcp.validatePlan", args);
+      const body = res.valid
+        ? res.summary
+        : `${res.summary}\n${res.errors.map((e) => `  • ${e}`).join("\n")}`;
+      return ok(body);
+    } catch (err) {
+      return fail(err);
+    }
+  },
+);
+
 // ── create_workflow_bundle ───────────────────────────────────────────────────
 server.registerTool(
   "create_workflow_bundle",

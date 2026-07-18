@@ -23,6 +23,8 @@ export class CroniumClient {
     return {
       "content-type": "application/json",
       authorization: `Bearer ${this.token}`,
+      // Provenance: records created through this server are tagged source="mcp".
+      "x-cronium-source": "mcp",
     };
   }
 

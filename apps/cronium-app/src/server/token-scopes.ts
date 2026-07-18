@@ -26,6 +26,7 @@ export function isApiTokenScope(value: string): value is ApiTokenScope {
 const SCOPE_PATHS: Record<ApiTokenScope, ReadonlySet<string>> = {
   mcp: new Set<string>([
     "mcp.getCapabilities",
+    "mcp.validatePlan",
     "events.create",
     "events.activate",
     "events.getById",

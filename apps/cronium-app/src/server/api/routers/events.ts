@@ -111,10 +111,18 @@ export const eventsRouter = createTRPCRouter({
           ...input,
           userId: userId,
           startTime: input.startTime ? new Date(input.startTime) : null,
+          // Provenance (e.g. "mcp") for events created by an AI agent.
+          source: ctx.requestSource ?? null,
         };
 
         // Create the event
         const event = await storage.createScript(eventData);
+
+        if (ctx.requestSource === "mcp") {
+          console.log(
+            `[MCP-AUDIT] user=${userId} created event #${event.id} "${event.name}" (${event.type}) via mcp`,
+          );
+        }
 
         // Handle environment variables
         if (input.envVars && input.envVars.length > 0) {

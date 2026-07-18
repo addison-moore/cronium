@@ -14,13 +14,15 @@ Tools exposed to the model:
 | Tool                     | Purpose                                                                                                                 |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | `get_capabilities`       | **Call first.** Enums, defaults, scheduling guidance, tool types + actions, and your real tool-credential / server ids. |
+| `validate_plan`          | Dry-run: check a draft (events + optional workflow) **without creating anything**.                                      |
 | `create_event`           | Create one event (DRAFT by default).                                                                                    |
 | `activate_event`         | Set a scheduled event ACTIVE (registers the live scheduler).                                                            |
 | `create_workflow`        | Wire existing events into a workflow (DAG).                                                                             |
 | `create_workflow_bundle` | Create several events **and** a workflow chaining them, in one call.                                                    |
 
 Everything is created as **DRAFT** unless you say otherwise, so nothing runs until you review
-and activate it in Cronium — the built-in approval gate.
+and activate it in Cronium — the built-in approval gate. Records created through MCP are tagged
+`source="mcp"` for provenance/audit.
 
 ## Setup
 

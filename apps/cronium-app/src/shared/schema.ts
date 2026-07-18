@@ -165,6 +165,8 @@ export const events = pgTable("events", {
   httpBody: text("http_body"),
   // Tool Action specific fields
   toolActionConfig: jsonb("tool_action_config"),
+  // Provenance: how this event was created (e.g. "mcp"); null for the UI / normal API.
+  source: varchar("source", { length: 50 }),
   // Common fields
   status: varchar("status", { length: 50 })
     .$type<EventStatus>()
@@ -837,6 +839,8 @@ export const workflows = pgTable("workflows", {
     .default(WorkflowTriggerType.MANUAL)
     .notNull(),
   webhookKey: varchar("webhook_key", { length: 255 }),
+  // Provenance: how this workflow was created (e.g. "mcp"); null for the UI / normal API.
+  source: varchar("source", { length: 50 }),
   scheduleNumber: integer("schedule_number"),
   scheduleUnit: varchar("schedule_unit", { length: 50 }).$type<TimeUnit>(),
   customSchedule: varchar("custom_schedule", { length: 255 }),

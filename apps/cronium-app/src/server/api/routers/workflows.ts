@@ -99,10 +99,18 @@ export const workflowsRouter = createTRPCRouter({
           const workflowToCreate = {
             ...workflowData,
             userId: ctx.session.user.id,
+            // Provenance (e.g. "mcp") for workflows created by an AI agent.
+            source: ctx.requestSource ?? null,
           };
 
           // Create the workflow
           const workflow = await storage.createWorkflow(workflowToCreate);
+
+          if (ctx.requestSource === "mcp") {
+            console.log(
+              `[MCP-AUDIT] user=${ctx.session.user.id} created workflow #${workflow.id} "${workflow.name}" via mcp`,
+            );
+          }
 
           // Create workflow nodes
           const nodeIdMap = new Map<string, number>(); // ReactFlow ID -> DB ID

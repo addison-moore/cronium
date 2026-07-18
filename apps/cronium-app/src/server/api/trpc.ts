@@ -28,6 +28,9 @@ interface CreateContextOptions {
   // Scopes of the API/OAuth token that authenticated this request, or null for
   // full rights (cookie sessions, and unscoped tokens). See token-scopes.ts.
   tokenScopes?: string[] | null;
+  // Provenance of the request, e.g. "mcp" — stamped onto created records so
+  // events/workflows made by an AI agent are attributable. null otherwise.
+  requestSource?: string | null;
 }
 
 /**
@@ -46,8 +49,14 @@ const createInnerTRPCContext = (opts: CreateContextOptions) => {
     db,
     headers: opts.headers,
     tokenScopes: opts.tokenScopes ?? null,
+    requestSource: opts.requestSource ?? null,
   };
 };
+
+// Only known provenance values are honored (clients can't stamp arbitrary text).
+function readRequestSource(headers: Headers): string | null {
+  return headers.get("x-cronium-source") === "mcp" ? "mcp" : null;
+}
 
 /**
  * This is the actual context you will use in your router. It will be used to process every request
@@ -103,15 +112,21 @@ export const createTRPCContext = async (
 
   // Cookie session (full rights) takes precedence; fall back to API-token bearer
   // auth for headless callers, carrying that token's scopes for enforcement.
+  const requestSource = readRequestSource(headers);
   const cookieSession = await getCachedServerSession();
   if (cookieSession) {
-    return createInnerTRPCContext({ session: cookieSession, headers });
+    return createInnerTRPCContext({
+      session: cookieSession,
+      headers,
+      requestSource,
+    });
   }
   const tokenAuth = await sessionFromApiToken(headers);
   return createInnerTRPCContext({
     session: tokenAuth?.session ?? null,
     headers,
     tokenScopes: tokenAuth?.scopes ?? null,
+    requestSource,
   });
 };
 

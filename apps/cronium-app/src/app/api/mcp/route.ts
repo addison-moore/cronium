@@ -159,6 +159,7 @@ export async function POST(req: Request): Promise<Response> {
     db,
     headers: req.headers,
     tokenScopes: auth.scopes,
+    requestSource: "mcp",
   });
   const baseUrl = baseUrlFrom(req);
 

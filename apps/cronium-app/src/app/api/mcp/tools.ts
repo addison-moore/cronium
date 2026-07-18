@@ -207,6 +207,59 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
+    name: "validate_plan",
+    title: "Validate a draft plan (no changes made)",
+    description:
+      "Dry-run: check a proposed events (+ optional workflow) plan WITHOUT creating " +
+      "anything — event schemas, tool credentials/actions/params, and workflow graph " +
+      "(DAG, no fan-in). Call this to validate a draft before showing it to the user " +
+      "for approval, then create_workflow_bundle once it's valid.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        events: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "object",
+            properties: { key: { type: "string" }, ...EVENT_PROPS },
+            required: ["key", "name", "type"],
+          },
+        },
+        workflow: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            connections: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  from: { type: "string" },
+                  to: { type: "string" },
+                  connectionType: CONNECTION_TYPE,
+                },
+                required: ["from", "to"],
+              },
+            },
+          },
+        },
+      },
+      required: ["events"],
+    },
+    handler: async (caller, args) => {
+      const res = (await caller.mcp.validatePlan(args as never)) as {
+        valid: boolean;
+        errors: string[];
+        summary: string;
+      };
+      const body = res.valid
+        ? res.summary
+        : `${res.summary}\n${res.errors.map((e) => `  • ${e}`).join("\n")}`;
+      return ok(body);
+    },
+  },
+  {
     name: "create_workflow_bundle",
     title: "Create events + a workflow together",
     description:
