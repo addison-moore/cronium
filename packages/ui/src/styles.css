@@ -20,10 +20,10 @@
 /* ------------------------------------------------------------------ */
 :root {
   /* Core colors */
-  --background-color: #feffff;
+  --background-color: #ffffff;
   --foreground-color: #1f2937;
-  --secondary-bg-color: #f8fafc;
-  --tertiary-bg-color: #f1f5f9;
+  --secondary-bg-color: #f9fafb;
+  --tertiary-bg-color: #f3f4f6;
 
   /* UI element colors */
   --card-color: var(--secondary-bg-color);
@@ -38,7 +38,9 @@
   --secondary-color: #06b6d4;
   --secondary-foreground-color: #ffffff;
 
-  --accent-color: #6c28eb;
+  /* Accent is the subtle hover/selected surface (dropdown focus, list
+     hover) — a violet-tinted step off the background, not a saturated fill */
+  --accent-color: #f3eefe;
   --accent-foreground-color: #1f2937;
 
   --muted-color: #f3f4f6;
@@ -68,7 +70,7 @@
   /* UI elements */
   --border-color: #e5e7eb;
   --input-color: #ffffff;
-  --ring-color: #6c28eb;
+  --ring-color: #7c3aed;
 
   /* Border radius base — all radius steps derive from this */
   --radius: 0.375rem;
@@ -85,42 +87,48 @@
 /* ------------------------------------------------------------------ */
 /* Token values — dark                                                 */
 /* ------------------------------------------------------------------ */
+/*
+ * Dark theme: near-black base with elevation expressed by surface lightness
+ * (page < sidebar/card < popover, ~+3-4 L per layer) — never by shadows.
+ * Accents are the slightly-lighter shades so they don't vibrate on dark.
+ */
 .dark {
-  --background-color: #1f2937;
-  --foreground-color: #f9fafb;
-  --secondary-bg-color: #111827;
-  --tertiary-bg-color: #1c253b;
+  --background-color: #0e1116;
+  --foreground-color: #eceff3;
+  --secondary-bg-color: #151a21;
+  --tertiary-bg-color: #1b212b;
 
+  /* Cards sit ABOVE the page (lighter), per the elevation ladder */
   --card-color: var(--secondary-bg-color);
-  --card-foreground-color: #f9fafb;
+  --card-foreground-color: #eceff3;
 
-  --popover-color: #1f2937;
-  --popover-foreground-color: #f9fafb;
+  --popover-color: #1b212b;
+  --popover-foreground-color: #eceff3;
 
-  --primary-color: #7c3aed;
+  --primary-color: #8b5cf6;
   --primary-foreground-color: #ffffff;
 
   --secondary-color: #06b6d4;
   --secondary-foreground-color: #ffffff;
 
-  --muted-color: #374151;
-  --muted-foreground-color: #9ca3af;
+  --muted-color: #222937;
+  --muted-foreground-color: #9ba5b4;
 
-  --accent-color: #342255;
-  --accent-foreground-color: #f9fafb;
+  --accent-color: #2a2547;
+  --accent-foreground-color: #eceff3;
 
-  /* Bright red in dark mode (like shadcn): the old #b91c1c fill color had
-     ~2.5:1 contrast as text on the dark background */
+  /* Bright red in dark mode (like shadcn): darker red fills have too little
+     contrast as text on the near-black background */
   --destructive-color: #ef4444;
   --destructive-foreground-color: #ffffff;
 
   --success-color: #10b981;
   --success-foreground-color: #ffffff;
 
-  --warning-color: #d97706;
+  --warning-color: #f59e0b;
   --warning-foreground-color: #ffffff;
 
-  --info-color: #2563eb;
+  --info-color: #3b82f6;
   --info-foreground-color: #ffffff;
 
   --success-text-color: #6ee7b7;
@@ -128,9 +136,9 @@
   --destructive-text-color: #fca5a5;
   --info-text-color: #93c5fd;
 
-  --border-color: #374151;
-  --input-color: #1f2937;
-  --ring-color: #6c28eb;
+  --border-color: #2a313c;
+  --input-color: #151a21;
+  --ring-color: #8b5cf6;
 }
 
 /* ------------------------------------------------------------------ */

@@ -12,14 +12,14 @@
  * shadows, fonts) live in @cronium/ui/styles.css.
  */
 
-/* React Flow + terminal (Solarized) variables — light mode */
+/* React Flow + terminal (Solarized) variables */
 :root {
-  /* React Flow Variables for light mode */
-  --xy-controls-button-background-color-default: #ffffff;
-  --xy-controls-button-background-color-hover-default: #f9fafb;
-  --xy-controls-button-color-default: #1f2937;
-  --xy-controls-button-border-color-default: #e5e7eb;
-  --xy-controls-box-shadow-default: 0 0 2px 1px rgba(0, 0, 0, 0.08);
+  /* React Flow controls follow the semantic tokens in both themes */
+  --xy-controls-button-background-color-default: var(--popover-color);
+  --xy-controls-button-background-color-hover-default: var(--muted-color);
+  --xy-controls-button-color-default: var(--foreground-color);
+  --xy-controls-button-border-color-default: var(--border-color);
+  --xy-controls-box-shadow-default: var(--shadow-sm);
 
   /* Solarized Color Scheme */
   --color-solarized-base03: #002b36;
@@ -49,15 +49,6 @@
   --terminal-cursor: var(--color-solarized-base1);
   --terminal-selection: rgba(147, 161, 161, 0.3);
   --terminal-border: var(--color-solarized-base02);
-}
-
-/* React Flow variables — dark mode */
-.dark {
-  --xy-controls-button-background-color-default: #1f2937;
-  --xy-controls-button-background-color-hover-default: #111827;
-  --xy-controls-button-color-default: #f9fafb;
-  --xy-controls-button-border-color-default: #374151;
-  --xy-controls-box-shadow-default: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
 }
 
 /* Base styles using Tailwind 4 layers */
