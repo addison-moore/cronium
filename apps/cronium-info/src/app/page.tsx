@@ -31,7 +31,7 @@ export default function Home() {
         <Hero />
 
         {/* How It Works Section */}
-        <section id="how-it-works" className="bg-muted py-16">
+        <section id="how-it-works" className="bg-muted py-16 md:py-24">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <div className="mb-12 text-center">
               <h2 className="text-foreground text-3xl font-bold">
@@ -91,7 +91,7 @@ export default function Home() {
         <Features />
 
         {/* CTA Section */}
-        <section className="bg-background py-16">
+        <section className="bg-background py-16 md:py-24">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <div className="from-primary to-secondary rounded-xl bg-gradient-to-r px-8 py-12 text-center text-white shadow-lg md:px-12 md:py-16">
               <h2 className="mb-4 text-3xl font-bold">

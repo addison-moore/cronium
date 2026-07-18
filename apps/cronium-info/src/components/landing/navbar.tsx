@@ -40,7 +40,7 @@ export default function Navbar() {
           <div className="hidden items-center md:flex md:space-x-4">
             <Link
               href="/docs"
-              className="hover:text-primary dark:hover:text-secondary text-foreground flex items-center gap-1 px-3 py-2 text-sm font-medium"
+              className="hover:text-link text-foreground flex items-center gap-1 px-3 py-2 text-sm font-medium"
             >
               <Book className="h-4 w-4" />
               Docs
@@ -50,7 +50,7 @@ export default function Navbar() {
               href="https://github.com/addison-moore/cronium"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-primary dark:hover:text-secondary text-foreground flex items-center gap-1 px-3 py-2 text-sm font-medium"
+              className="hover:text-link text-foreground flex items-center gap-1 px-3 py-2 text-sm font-medium"
             >
               <Github className="h-5 w-5" />
             </Link>
@@ -58,7 +58,7 @@ export default function Navbar() {
             {mounted && (
               <button
                 onClick={toggleTheme}
-                className="hover:text-primary dark:hover:text-secondary text-foreground flex cursor-pointer items-center gap-1 rounded-md px-3 py-2 text-sm font-medium"
+                className="hover:text-link text-foreground flex cursor-pointer items-center gap-1 rounded-md px-3 py-2 text-sm font-medium"
                 aria-label="Toggle theme"
               >
                 {theme === "dark" ? (
@@ -74,7 +74,7 @@ export default function Navbar() {
           <div className="flex items-center md:hidden">
             <button
               onClick={toggleMenu}
-              className="text-primary dark:text-secondary hover:text-primary-foreground hover:bg-secondary dark:hover:bg-primary focus:ring-primary dark:focus:ring-secondary inline-flex items-center justify-center rounded-md p-2 focus:ring-2 focus:outline-none"
+              className="text-link hover:text-primary-foreground hover:bg-secondary dark:hover:bg-primary focus:ring-primary dark:focus:ring-secondary inline-flex items-center justify-center rounded-md p-2 focus:ring-2 focus:outline-none"
             >
               <span className="sr-only">
                 {isMenuOpen ? "Close menu" : "Open menu"}
@@ -94,7 +94,7 @@ export default function Navbar() {
         <div className="border-border bg-secondary-bg space-y-1 border-t px-2 pt-2 pb-3">
           <Link
             href="/docs"
-            className="hover:text-primary dark:hover:text-secondary text-foreground hover:bg-muted flex items-center gap-1 rounded-md px-3 py-2 text-base font-medium"
+            className="hover:text-link text-foreground hover:bg-muted flex items-center gap-1 rounded-md px-3 py-2 text-base font-medium"
             onClick={() => setIsMenuOpen(false)}
           >
             <Book className="h-4 w-4" />
@@ -104,7 +104,7 @@ export default function Navbar() {
             href="https://github.com/addison-moore/cronium"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-primary dark:hover:text-secondary text-foreground hover:bg-muted flex items-center gap-1 rounded-md px-3 py-2 text-base font-medium"
+            className="hover:text-link text-foreground hover:bg-muted flex items-center gap-1 rounded-md px-3 py-2 text-base font-medium"
             onClick={() => setIsMenuOpen(false)}
           >
             <Github className="h-5 w-5" />
@@ -116,7 +116,7 @@ export default function Navbar() {
                 toggleTheme();
                 setIsMenuOpen(false);
               }}
-              className="hover:text-primary dark:hover:text-secondary text-foreground hover:bg-muted flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-base font-medium"
+              className="hover:text-link text-foreground hover:bg-muted flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-base font-medium"
             >
               {theme === "dark" ? (
                 <>

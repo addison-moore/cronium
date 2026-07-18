@@ -165,14 +165,12 @@ export default function Footer() {
           aria-label="Footer"
         >
           <div>
-            <h3 className="text-primary dark:text-secondary text-sm font-bold">
-              Documentation
-            </h3>
+            <h3 className="text-link text-sm font-bold">Documentation</h3>
             <ul role="list" className="mt-2 space-y-2">
               <li>
                 <Link
                   href="/docs"
-                  className="hover:text-primary dark:hover:text-secondary text-muted-foreground text-sm"
+                  className="hover:text-link text-muted-foreground text-sm"
                 >
                   Getting Started
                 </Link>
@@ -180,7 +178,7 @@ export default function Footer() {
               <li>
                 <Link
                   href="/docs/api"
-                  className="hover:text-primary dark:hover:text-secondary text-muted-foreground text-sm"
+                  className="hover:text-link text-muted-foreground text-sm"
                 >
                   API Reference
                 </Link>
@@ -189,14 +187,12 @@ export default function Footer() {
           </div>
 
           <div>
-            <h3 className="text-primary dark:text-secondary text-sm font-bold">
-              Connect
-            </h3>
+            <h3 className="text-link text-sm font-bold">Connect</h3>
             <ul role="list" className="mt-2 space-y-2">
               <li>
                 <a
                   href="https://github.com/addison-moore/cronium"
-                  className="hover:text-primary dark:hover:text-secondary text-muted-foreground flex items-center text-sm"
+                  className="hover:text-link text-muted-foreground flex items-center text-sm"
                 >
                   <Github className="mr-2 h-4 w-4" />
                   GitHub
@@ -206,7 +202,7 @@ export default function Footer() {
                 <button
                   type="button"
                   onClick={() => setIsContactOpen(true)}
-                  className="hover:text-primary dark:hover:text-secondary flex cursor-pointer items-center text-sm text-gray-600 transition-colors dark:text-gray-400"
+                  className="hover:text-link flex cursor-pointer items-center text-sm text-gray-600 transition-colors dark:text-gray-400"
                 >
                   <Mail className="mr-2 h-4 w-4" />
                   Contact Us

@@ -50,6 +50,23 @@
  * `.dark` class on <html> (toggled by the ThemeProvider).
  */
 
+/**
+ * Info-site signature accent: links/hovers are violet in light and cyan in
+ * dark (mirroring the Logo wordmark). Defined once as a token — use
+ * `text-link` / `hover:text-link`, never the raw class pair.
+ */
+:root {
+  --link-color: var(--primary-color);
+}
+
+.dark {
+  --link-color: var(--secondary-color);
+}
+
+@theme inline {
+  --color-link: var(--link-color);
+}
+
 @layer base {
   :root {
     color-scheme: light;

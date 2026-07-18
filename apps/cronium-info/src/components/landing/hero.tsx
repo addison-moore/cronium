@@ -19,8 +19,8 @@ export default function Hero() {
             className="animate-fadeIn text-foreground text-4xl font-bold tracking-tight sm:text-6xl"
             style={{ animationDelay: "0.1s" }}
           >
-            <span className="text-primary dark:text-secondary">Cronium</span> is
-            a self-hosted automation platform
+            <span className="text-link">Cronium</span> is a self-hosted
+            automation platform
           </h1>
           <p
             className="animate-fadeIn text-foreground mt-6 text-lg leading-8"
@@ -49,7 +49,7 @@ export default function Hero() {
             </Link>
             <Link
               href="/docs"
-              className="hover:text-primary dark:hover:text-secondary text-foreground text-sm leading-6 font-semibold"
+              className="hover:text-link text-foreground text-sm leading-6 font-semibold"
             >
               Read the docs <span aria-hidden="true">→</span>
             </Link>
