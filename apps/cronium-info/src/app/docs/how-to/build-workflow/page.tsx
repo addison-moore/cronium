@@ -90,21 +90,21 @@ export default function BuildWorkflowPage() {
           <Card>
             <CardContent className="text-muted-foreground space-y-3 pt-6 text-sm">
               <div className="flex items-start gap-3">
-                <CheckCircle className="mt-1 h-5 w-5 text-green-500" />
+                <CheckCircle className="text-success mt-1 h-5 w-5" />
                 <p>
                   Create at least two events you want to orchestrate. Workflows
                   reference existing events rather than defining new scripts.
                 </p>
               </div>
               <div className="flex items-start gap-3">
-                <Workflow className="mt-1 h-5 w-5 text-blue-500" />
+                <Workflow className="text-info mt-1 h-5 w-5" />
                 <p>
                   Decide how the events should hand off execution—success,
                   failure, or manual triggers.
                 </p>
               </div>
               <div className="flex items-start gap-3">
-                <Lightbulb className="mt-1 h-5 w-5 text-amber-500" />
+                <Lightbulb className="text-warning mt-1 h-5 w-5" />
                 <p>
                   Consider tagging events with a naming convention so you can
                   find them quickly in the workflow builder drawer.
@@ -164,7 +164,7 @@ export default function BuildWorkflowPage() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <PlusCircle className="h-5 w-5 text-green-500" />
+                  <PlusCircle className="text-success h-5 w-5" />
                   Tips for placing nodes
                 </CardTitle>
               </CardHeader>
@@ -192,7 +192,7 @@ export default function BuildWorkflowPage() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <GitBranch className="h-5 w-5 text-purple-500" />
+                  <GitBranch className="text-primary h-5 w-5" />
                   Edge types
                 </CardTitle>
               </CardHeader>
@@ -232,7 +232,7 @@ export default function BuildWorkflowPage() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <PlayCircle className="h-5 w-5 text-green-500" />
+                  <PlayCircle className="text-success h-5 w-5" />
                   Promote to schedule (optional)
                 </CardTitle>
               </CardHeader>
@@ -252,21 +252,21 @@ export default function BuildWorkflowPage() {
           <Card>
             <CardContent className="text-muted-foreground space-y-3 pt-6 text-sm">
               <div className="flex items-start gap-3">
-                <Workflow className="mt-1 h-5 w-5 text-blue-500" />
+                <Workflow className="text-info mt-1 h-5 w-5" />
                 <p>
                   Group related events using tags so you can filter the drawer
                   while building larger workflows.
                 </p>
               </div>
               <div className="flex items-start gap-3">
-                <Lightbulb className="mt-1 h-5 w-5 text-amber-500" />
+                <Lightbulb className="text-warning mt-1 h-5 w-5" />
                 <p>
                   Add notification nodes off the failure path so you are alerted
                   when remediation is required.
                 </p>
               </div>
               <div className="flex items-start gap-3">
-                <CheckCircle className="mt-1 h-5 w-5 text-green-500" />
+                <CheckCircle className="text-success mt-1 h-5 w-5" />
                 <p>
                   Review workflow run history in the <strong>Logs</strong>{" "}
                   section to confirm downstream scripts behave as expected over

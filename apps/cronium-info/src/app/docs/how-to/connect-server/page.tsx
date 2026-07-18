@@ -87,7 +87,7 @@ export default function ConnectServerPage() {
           <Card>
             <CardContent className="grid grid-cols-1 gap-4 pt-6 md:grid-cols-2">
               <div className="flex items-start gap-3">
-                <CheckCircle className="mt-1 h-5 w-5 text-green-500" />
+                <CheckCircle className="text-success mt-1 h-5 w-5" />
                 <div>
                   <h4 className="font-semibold">SSH Access</h4>
                   <p className="text-muted-foreground text-sm">
@@ -97,7 +97,7 @@ export default function ConnectServerPage() {
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <Key className="mt-1 h-5 w-5 text-blue-500" />
+                <Key className="text-info mt-1 h-5 w-5" />
                 <div>
                   <h4 className="font-semibold">Credentials</h4>
                   <p className="text-muted-foreground text-sm">
@@ -169,7 +169,7 @@ export default function ConnectServerPage() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Key className="h-5 w-5 text-blue-500" />
+                  <Key className="text-info h-5 w-5" />
                   SSH Private Key
                 </CardTitle>
                 <CardDescription>
@@ -190,7 +190,7 @@ export default function ConnectServerPage() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Lock className="h-5 w-5 text-amber-500" />
+                  <Lock className="text-warning h-5 w-5" />
                   Password Authentication
                 </CardTitle>
                 <CardDescription>
@@ -245,21 +245,21 @@ export default function ConnectServerPage() {
           <Card>
             <CardContent className="text-muted-foreground space-y-3 pt-6 text-sm">
               <div className="flex items-start gap-3">
-                <Terminal className="mt-1 h-5 w-5 text-blue-500" />
+                <Terminal className="text-info mt-1 h-5 w-5" />
                 <p>
                   Run a simple test event that targets your new server to
                   confirm command output is streaming back to Cronium.
                 </p>
               </div>
               <div className="flex items-start gap-3">
-                <ShieldCheck className="mt-1 h-5 w-5 text-purple-500" />
+                <ShieldCheck className="text-primary mt-1 h-5 w-5" />
                 <p>
                   Review server permissions periodically and remove credentials
                   for hosts you no longer need.
                 </p>
               </div>
               <div className="flex items-start gap-3">
-                <Server className="mt-1 h-5 w-5 text-green-500" />
+                <Server className="text-success mt-1 h-5 w-5" />
                 <p>
                   Need to manage multiple targets? Organize servers into groups
                   from the <strong>Groups</strong> tab on the Servers page (e.g.

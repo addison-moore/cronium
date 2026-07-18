@@ -64,7 +64,7 @@ function NavSection({ item, level = 0 }: { item: NavItem; level?: number }) {
       <div className="mb-2">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-medium text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
+          className="text-foreground hover:bg-muted flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-medium"
         >
           {isOpen ? (
             <ChevronDown className="mr-2 h-4 w-4" />
@@ -93,7 +93,7 @@ function NavSection({ item, level = 0 }: { item: NavItem; level?: number }) {
         "block rounded-md px-3 py-2 text-sm transition-colors",
         isActive
           ? "bg-primary text-primary-foreground"
-          : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800",
+          : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
       {item.title}
@@ -111,8 +111,8 @@ function TableOfContents({
   return (
     <aside className="hidden w-64 shrink-0 xl:block">
       <div className="p-4">
-        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-          <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">
+        <div className="border-border bg-card rounded-lg border p-4">
+          <h3 className="text-foreground mb-3 text-sm font-semibold">
             On this page
           </h3>
           <nav className="space-y-1">
@@ -121,7 +121,7 @@ function TableOfContents({
                 key={index}
                 href={item.href}
                 className={cn(
-                  "block py-1 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100",
+                  "text-muted-foreground hover:text-foreground block py-1 text-sm",
                   item.level === 2
                     ? "pl-0"
                     : item.level === 3
@@ -153,7 +153,7 @@ export default function DocsLayout({
         {/* Mobile sidebar overlay */}
         {isSidebarOpen && (
           <div
-            className="bg-opacity-50 fixed inset-0 z-40 bg-black lg:hidden"
+            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
             onClick={() => setIsSidebarOpen(false)}
           />
         )}
@@ -161,7 +161,7 @@ export default function DocsLayout({
         {/* Sidebar */}
         <aside
           className={cn(
-            "fixed top-16 left-0 z-40 h-[calc(100vh-4rem)] w-72 transform overflow-y-auto border-r border-gray-200 bg-white transition-transform duration-200 ease-in-out dark:border-gray-800 dark:bg-gray-900",
+            "border-border bg-card fixed top-16 left-0 z-40 h-[calc(100vh-4rem)] w-72 transform overflow-y-auto border-r transition-transform duration-200 ease-in-out",
             "lg:fixed lg:z-10 lg:block lg:h-[calc(100vh-4rem)] lg:w-72 lg:translate-x-0",
             isSidebarOpen ? "translate-x-0" : "-translate-x-full",
           )}
@@ -171,7 +171,7 @@ export default function DocsLayout({
               <h2 className="text-lg font-semibold">Documentation</h2>
               <button
                 onClick={() => setIsSidebarOpen(false)}
-                className="rounded-md p-2 hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="hover:bg-muted rounded-md p-2"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -194,7 +194,7 @@ export default function DocsLayout({
               <div className="fixed top-20 left-4 z-30 lg:hidden">
                 <button
                   onClick={() => setIsSidebarOpen(true)}
-                  className="rounded-md border border-gray-200 bg-white p-2 shadow-sm hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800"
+                  className="border-border bg-card hover:bg-muted rounded-md border p-2 shadow-sm"
                 >
                   <Menu className="h-5 w-5" />
                 </button>

@@ -67,7 +67,7 @@ function StepCard({
           <div
             className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
               completed
-                ? "bg-green-500 text-white"
+                ? "bg-success text-white"
                 : "bg-primary text-primary-foreground"
             }`}
           >
@@ -132,7 +132,7 @@ export default function QuickStartPage() {
             <CardContent className="pt-6">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="flex items-start gap-3">
-                  <CheckCircle className="mt-1 h-5 w-5 text-green-500" />
+                  <CheckCircle className="text-success mt-1 h-5 w-5" />
                   <div>
                     <h4 className="font-semibold">
                       A running Cronium instance
@@ -150,7 +150,7 @@ export default function QuickStartPage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <Server className="mt-1 h-5 w-5 text-blue-500" />
+                  <Server className="text-info mt-1 h-5 w-5" />
                   <div>
                     <h4 className="font-semibold">Server Access (Optional)</h4>
                     <p className="text-muted-foreground text-sm">
@@ -346,7 +346,7 @@ uptime`}</CodeBlock>
                   <div>Current date: Mon Jan 20 2024 14:30:00</div>
                   <div>Server hostname: production-server</div>
                   <div>System uptime: 15:30:42 up 5 days, 2:15</div>
-                  <div className="mt-2 flex items-center gap-2 text-green-500">
+                  <div className="text-success mt-2 flex items-center gap-2">
                     <CheckCircle className="h-4 w-4" />
                     <span>Execution completed successfully</span>
                   </div>
@@ -437,7 +437,7 @@ uptime`}</CodeBlock>
 
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
               <div className="flex items-start gap-3">
-                <Clock className="mt-1 h-5 w-5 text-blue-500" />
+                <Clock className="text-info mt-1 h-5 w-5" />
                 <div>
                   <p className="text-sm text-blue-800 dark:text-blue-200">
                     <strong>Congratulations!</strong> Your event is now

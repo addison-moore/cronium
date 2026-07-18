@@ -102,14 +102,14 @@ export default function Home() {
                 on your own infrastructure in minutes — no account, no vendor,
                 no per-run pricing.
               </p>
-              <p className="mx-auto mb-8 max-w-2xl text-gray-100">
+              <p className="mx-auto mb-8 max-w-2xl text-white/90">
                 Your scripts, your servers, your data.
               </p>
               <div className="flex flex-col justify-center gap-4 sm:flex-row">
                 <Link href="/docs/self-hosting">
                   <Button
                     size="lg"
-                    className="bg-white px-8 font-semibold text-gray-900 hover:bg-gray-100"
+                    className="bg-white px-8 font-semibold text-gray-900 hover:bg-white/90"
                   >
                     Deploy Cronium
                   </Button>

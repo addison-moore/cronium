@@ -85,7 +85,7 @@ export default function McpPage() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Wrench className="h-5 w-5 text-blue-500" />
+                  <Wrench className="text-info h-5 w-5" />
                   Discover
                 </CardTitle>
               </CardHeader>
@@ -100,7 +100,7 @@ export default function McpPage() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <ListChecks className="h-5 w-5 text-green-500" />
+                  <ListChecks className="text-success h-5 w-5" />
                   Draft &amp; validate
                 </CardTitle>
               </CardHeader>
@@ -115,7 +115,7 @@ export default function McpPage() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <ShieldCheck className="h-5 w-5 text-purple-500" />
+                  <ShieldCheck className="text-primary h-5 w-5" />
                   Create as drafts
                 </CardTitle>
               </CardHeader>

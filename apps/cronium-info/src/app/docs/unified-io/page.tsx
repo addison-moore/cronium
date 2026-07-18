@@ -425,7 +425,7 @@ export default function UnifiedIOPage() {
 
             <div className="mb-8">
               <h3 className="mb-4 flex items-center gap-2 text-xl font-semibold">
-                <Code2 className="h-5 w-5 text-green-600" />
+                <Code2 className="text-success h-5 w-5" />
                 Standard Logging
               </h3>
               <p className="text-muted-foreground mb-4">

@@ -84,7 +84,7 @@ export default function ToolsPage() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Key className="h-5 w-5 text-blue-500" />
+                  <Key className="text-info h-5 w-5" />
                   Credentials
                 </CardTitle>
               </CardHeader>
@@ -99,7 +99,7 @@ export default function ToolsPage() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <FileText className="h-5 w-5 text-green-500" />
+                  <FileText className="text-success h-5 w-5" />
                   Templates
                 </CardTitle>
               </CardHeader>
@@ -114,7 +114,7 @@ export default function ToolsPage() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <TestTube className="h-5 w-5 text-purple-500" />
+                  <TestTube className="text-primary h-5 w-5" />
                   Testing
                 </CardTitle>
               </CardHeader>
@@ -184,7 +184,7 @@ export default function ToolsPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Mail className="h-5 w-5 text-blue-500" />
+                  <Mail className="text-info h-5 w-5" />
                   Email
                 </CardTitle>
                 <CardDescription>
@@ -226,7 +226,7 @@ export default function ToolsPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5 text-green-500" />
+                  <MessageSquare className="text-success h-5 w-5" />
                   Slack
                 </CardTitle>
                 <CardDescription>
@@ -266,7 +266,7 @@ export default function ToolsPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5 text-purple-500" />
+                  <MessageSquare className="text-primary h-5 w-5" />
                   Discord
                 </CardTitle>
                 <CardDescription>
@@ -382,15 +382,15 @@ export default function ToolsPage() {
                     <h4 className="font-medium">Encryption</h4>
                     <div className="text-muted-foreground space-y-2 text-sm">
                       <div className="flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-green-500" />
+                        <Shield className="text-success h-4 w-4" />
                         <span>AES-256-GCM encryption at rest</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-green-500" />
+                        <Shield className="text-success h-4 w-4" />
                         <span>Encrypted at rest with AES-256-GCM</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-green-500" />
+                        <Shield className="text-success h-4 w-4" />
                         <span>Secure master key management</span>
                       </div>
                     </div>
@@ -399,15 +399,15 @@ export default function ToolsPage() {
                     <h4 className="font-medium">Access Control</h4>
                     <div className="text-muted-foreground space-y-2 text-sm">
                       <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-blue-500" />
+                        <User className="text-info h-4 w-4" />
                         <span>User-scoped credential access</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Eye className="h-4 w-4 text-blue-500" />
+                        <Eye className="text-info h-4 w-4" />
                         <span>Masked display in interfaces</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Key className="h-4 w-4 text-blue-500" />
+                        <Key className="text-info h-4 w-4" />
                         <span>Session-based authentication</span>
                       </div>
                     </div>
@@ -427,7 +427,7 @@ export default function ToolsPage() {
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div className="border-border rounded-lg border p-4">
                     <div className="mb-3 flex items-center gap-2">
-                      <Edit className="h-5 w-5 text-blue-500" />
+                      <Edit className="text-info h-5 w-5" />
                       <h4 className="font-medium">Edit</h4>
                     </div>
                     <p className="text-muted-foreground text-sm">
@@ -436,7 +436,7 @@ export default function ToolsPage() {
                   </div>
                   <div className="border-border rounded-lg border p-4">
                     <div className="mb-3 flex items-center gap-2">
-                      <TestTube className="h-5 w-5 text-green-500" />
+                      <TestTube className="text-success h-5 w-5" />
                       <h4 className="font-medium">Test</h4>
                     </div>
                     <p className="text-muted-foreground text-sm">
@@ -445,7 +445,7 @@ export default function ToolsPage() {
                   </div>
                   <div className="border-border rounded-lg border p-4">
                     <div className="mb-3 flex items-center gap-2">
-                      <Trash2 className="h-5 w-5 text-red-500" />
+                      <Trash2 className="text-destructive h-5 w-5" />
                       <h4 className="font-medium">Delete</h4>
                     </div>
                     <p className="text-muted-foreground text-sm">
@@ -483,7 +483,7 @@ export default function ToolsPage() {
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div className="border-border rounded-lg border p-4">
                       <div className="mb-3 flex items-center gap-2">
-                        <Mail className="h-5 w-5 text-blue-500" />
+                        <Mail className="text-info h-5 w-5" />
                         <h4 className="font-medium">Email Templates</h4>
                       </div>
                       <div className="text-muted-foreground space-y-2 text-sm">
@@ -495,7 +495,7 @@ export default function ToolsPage() {
                     </div>
                     <div className="border-border rounded-lg border p-4">
                       <div className="mb-3 flex items-center gap-2">
-                        <MessageSquare className="h-5 w-5 text-green-500" />
+                        <MessageSquare className="text-success h-5 w-5" />
                         <h4 className="font-medium">Slack Templates</h4>
                       </div>
                       <div className="text-muted-foreground space-y-2 text-sm">
@@ -507,7 +507,7 @@ export default function ToolsPage() {
                     </div>
                     <div className="border-border rounded-lg border p-4">
                       <div className="mb-3 flex items-center gap-2">
-                        <MessageSquare className="h-5 w-5 text-purple-500" />
+                        <MessageSquare className="text-primary h-5 w-5" />
                         <h4 className="font-medium">Discord Templates</h4>
                       </div>
                       <div className="text-muted-foreground space-y-2 text-sm">
@@ -561,21 +561,21 @@ export default function ToolsPage() {
                       <h4 className="mb-3 font-medium">Template Features</h4>
                       <div className="text-muted-foreground space-y-2 text-sm">
                         <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-blue-500" />
+                          <FileText className="text-info h-4 w-4" />
                           <span>
                             Monaco code editor with syntax highlighting
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Eye className="h-4 w-4 text-green-500" />
+                          <Eye className="text-success h-4 w-4" />
                           <span>Real-time template preview</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Key className="h-4 w-4 text-purple-500" />
+                          <Key className="text-primary h-4 w-4" />
                           <span>Variable reference tooltips</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Shield className="h-4 w-4 text-orange-500" />
+                          <Shield className="text-warning h-4 w-4" />
                           <span>Template validation and error checking</span>
                         </div>
                       </div>
@@ -627,7 +627,7 @@ export default function ToolsPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Mail className="h-5 w-5 text-blue-500" />
+                  <Mail className="text-info h-5 w-5" />
                   Email Configuration
                 </CardTitle>
               </CardHeader>
@@ -666,7 +666,7 @@ From Name: Cronium Notifications`}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5 text-green-500" />
+                  <MessageSquare className="text-success h-5 w-5" />
                   Slack Configuration
                 </CardTitle>
               </CardHeader>
@@ -718,7 +718,7 @@ From Name: Cronium Notifications`}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5 text-purple-500" />
+                  <MessageSquare className="text-primary h-5 w-5" />
                   Discord Configuration
                 </CardTitle>
               </CardHeader>
@@ -788,17 +788,17 @@ From Name: Cronium Notifications`}
               <div className="space-y-4">
                 <div className="bg-muted/50 flex items-center gap-4 rounded-lg p-3">
                   <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-blue-500" />
+                    <User className="text-info h-4 w-4" />
                     <span className="font-medium">User Settings</span>
                   </div>
                   <ArrowRight className="text-muted-foreground h-4 w-4" />
                   <div className="flex items-center gap-2">
-                    <Settings className="h-4 w-4 text-green-500" />
+                    <Settings className="text-success h-4 w-4" />
                     <span className="font-medium">Tools Tab</span>
                   </div>
                   <ArrowRight className="text-muted-foreground h-4 w-4" />
                   <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-purple-500" />
+                    <Mail className="text-primary h-4 w-4" />
                     <span className="font-medium">Select Tool Type</span>
                   </div>
                 </div>
@@ -814,7 +814,7 @@ From Name: Cronium Notifications`}
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <div className="mt-2 h-2 w-2 rounded-full bg-blue-500"></div>
+                    <div className="bg-info mt-2 h-2 w-2 rounded-full"></div>
                     <div>
                       <p className="font-medium">Tool Selection Sidebar</p>
                       <p className="text-muted-foreground text-sm">
@@ -823,7 +823,7 @@ From Name: Cronium Notifications`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="mt-2 h-2 w-2 rounded-full bg-green-500"></div>
+                    <div className="bg-success mt-2 h-2 w-2 rounded-full"></div>
                     <div>
                       <p className="font-medium">Tabbed Interface</p>
                       <p className="text-muted-foreground text-sm">
@@ -832,7 +832,7 @@ From Name: Cronium Notifications`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="mt-2 h-2 w-2 rounded-full bg-purple-500"></div>
+                    <div className="bg-primary mt-2 h-2 w-2 rounded-full"></div>
                     <div>
                       <p className="font-medium">Management Forms</p>
                       <p className="text-muted-foreground text-sm">
@@ -851,28 +851,28 @@ From Name: Cronium Notifications`}
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-center gap-3 rounded border p-2">
-                    <Plus className="h-4 w-4 text-green-500" />
+                    <Plus className="text-success h-4 w-4" />
                     <span className="text-sm font-medium">Add New</span>
                     <span className="text-muted-foreground ml-auto text-xs">
                       Create credentials/templates
                     </span>
                   </div>
                   <div className="flex items-center gap-3 rounded border p-2">
-                    <Edit className="h-4 w-4 text-blue-500" />
+                    <Edit className="text-info h-4 w-4" />
                     <span className="text-sm font-medium">Edit</span>
                     <span className="text-muted-foreground ml-auto text-xs">
                       Modify existing items
                     </span>
                   </div>
                   <div className="flex items-center gap-3 rounded border p-2">
-                    <TestTube className="h-4 w-4 text-purple-500" />
+                    <TestTube className="text-primary h-4 w-4" />
                     <span className="text-sm font-medium">Test</span>
                     <span className="text-muted-foreground ml-auto text-xs">
                       Validate connections
                     </span>
                   </div>
                   <div className="flex items-center gap-3 rounded border p-2">
-                    <Trash2 className="h-4 w-4 text-red-500" />
+                    <Trash2 className="text-destructive h-4 w-4" />
                     <span className="text-sm font-medium">Delete</span>
                     <span className="text-muted-foreground ml-auto text-xs">
                       Remove items permanently
@@ -891,14 +891,14 @@ From Name: Cronium Notifications`}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg text-green-600">
+                <CardTitle className="text-success text-lg">
                   Security & Management
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <Shield className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
+                    <Shield className="text-success mt-0.5 h-5 w-5 flex-shrink-0" />
                     <div>
                       <p className="font-medium">
                         Use dedicated service accounts
@@ -909,7 +909,7 @@ From Name: Cronium Notifications`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <Key className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
+                    <Key className="text-success mt-0.5 h-5 w-5 flex-shrink-0" />
                     <div>
                       <p className="font-medium">
                         Rotate credentials regularly
@@ -920,7 +920,7 @@ From Name: Cronium Notifications`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <TestTube className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
+                    <TestTube className="text-success mt-0.5 h-5 w-5 flex-shrink-0" />
                     <div>
                       <p className="font-medium">Test before deployment</p>
                       <p className="text-muted-foreground text-sm">
@@ -929,7 +929,7 @@ From Name: Cronium Notifications`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <Eye className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
+                    <Eye className="text-success mt-0.5 h-5 w-5 flex-shrink-0" />
                     <div>
                       <p className="font-medium">Monitor delivery status</p>
                       <p className="text-muted-foreground text-sm">
@@ -943,14 +943,14 @@ From Name: Cronium Notifications`}
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg text-blue-600">
+                <CardTitle className="text-info text-lg">
                   Template & Content
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <FileText className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-500" />
+                    <FileText className="text-info mt-0.5 h-5 w-5 flex-shrink-0" />
                     <div>
                       <p className="font-medium">Create reusable templates</p>
                       <p className="text-muted-foreground text-sm">
@@ -959,7 +959,7 @@ From Name: Cronium Notifications`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <Settings className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-500" />
+                    <Settings className="text-info mt-0.5 h-5 w-5 flex-shrink-0" />
                     <div>
                       <p className="font-medium">Use descriptive names</p>
                       <p className="text-muted-foreground text-sm">
@@ -968,7 +968,7 @@ From Name: Cronium Notifications`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <Code className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-500" />
+                    <Code className="text-info mt-0.5 h-5 w-5 flex-shrink-0" />
                     <div>
                       <p className="font-medium">Validate JSON syntax</p>
                       <p className="text-muted-foreground text-sm">
@@ -977,7 +977,7 @@ From Name: Cronium Notifications`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <User className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-500" />
+                    <User className="text-info mt-0.5 h-5 w-5 flex-shrink-0" />
                     <div>
                       <p className="font-medium">Include relevant context</p>
                       <p className="text-muted-foreground text-sm">

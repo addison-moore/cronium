@@ -23,7 +23,7 @@ export default function Hero() {
             a self-hosted automation platform
           </h1>
           <p
-            className="animate-fadeIn mt-6 text-lg leading-8 text-gray-700 dark:text-gray-200"
+            className="animate-fadeIn text-foreground mt-6 text-lg leading-8"
             style={{ animationDelay: "0.3s" }}
           >
             Schedule Python, Node.js, and Bash scripts. Chain them into

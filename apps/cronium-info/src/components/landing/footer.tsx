@@ -91,7 +91,7 @@ function ContactFormModal({ open, onClose }: ContactFormModalProps) {
               setStatusMessage("");
               onClose();
             }}
-            className="cursor-pointer text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className="hover:text-muted-foreground cursor-pointer text-gray-500 transition-colors dark:hover:text-gray-200"
             aria-label="Close contact form"
           >
             <X className="h-5 w-5" />
@@ -172,7 +172,7 @@ export default function Footer() {
               <li>
                 <Link
                   href="/docs"
-                  className="hover:text-primary dark:hover:text-secondary text-sm text-gray-600 dark:text-gray-400"
+                  className="hover:text-primary dark:hover:text-secondary text-muted-foreground text-sm"
                 >
                   Getting Started
                 </Link>
@@ -180,7 +180,7 @@ export default function Footer() {
               <li>
                 <Link
                   href="/docs/api"
-                  className="hover:text-primary dark:hover:text-secondary text-sm text-gray-600 dark:text-gray-400"
+                  className="hover:text-primary dark:hover:text-secondary text-muted-foreground text-sm"
                 >
                   API Reference
                 </Link>
@@ -196,7 +196,7 @@ export default function Footer() {
               <li>
                 <a
                   href="https://github.com/addison-moore/cronium"
-                  className="hover:text-primary dark:hover:text-secondary flex items-center text-sm text-gray-600 dark:text-gray-400"
+                  className="hover:text-primary dark:hover:text-secondary text-muted-foreground flex items-center text-sm"
                 >
                   <Github className="mr-2 h-4 w-4" />
                   GitHub
@@ -220,8 +220,8 @@ export default function Footer() {
           <p className="mb-2 text-xs text-gray-600 md:mb-0 dark:text-gray-400">
             © {new Date().getFullYear()} Cronium. All rights reserved.
           </p>
-          <p className="flex items-center text-xs text-gray-600 dark:text-gray-400">
-            Made with <Heart className="mx-1 h-3 w-3 text-red-500" /> for
+          <p className="text-muted-foreground flex items-center text-xs">
+            Made with <Heart className="text-destructive mx-1 h-3 w-3" /> for
             developers everywhere
           </p>
         </div>

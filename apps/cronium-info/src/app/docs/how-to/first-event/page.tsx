@@ -79,7 +79,7 @@ export default function FirstEventPage() {
             <CardContent className="pt-6">
               <div className="space-y-4">
                 <div className="flex items-start gap-3">
-                  <CheckCircle className="mt-1 h-5 w-5 text-green-500" />
+                  <CheckCircle className="text-success mt-1 h-5 w-5" />
                   <div>
                     <h4 className="font-semibold">
                       Access to a Cronium instance
@@ -91,7 +91,7 @@ export default function FirstEventPage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <Server className="mt-1 h-5 w-5 text-blue-500" />
+                  <Server className="text-info mt-1 h-5 w-5" />
                   <div>
                     <h4 className="font-semibold">
                       Server Connection (Optional)
@@ -103,7 +103,7 @@ export default function FirstEventPage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <Terminal className="mt-1 h-5 w-5 text-purple-500" />
+                  <Terminal className="text-primary mt-1 h-5 w-5" />
                   <div>
                     <h4 className="font-semibold">Basic Script Knowledge</h4>
                     <p className="text-muted-foreground text-sm">
@@ -133,7 +133,7 @@ export default function FirstEventPage() {
             </ol>
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
               <div className="flex items-start gap-3">
-                <Terminal className="mt-1 h-5 w-5 text-blue-500" />
+                <Terminal className="text-info mt-1 h-5 w-5" />
                 <div>
                   <p className="text-sm text-blue-800 dark:text-blue-200">
                     <strong>Tip:</strong> If you don't see the "Create Event"
@@ -337,7 +337,7 @@ echo "Event completed successfully!"`}</CodeBlock>
                   <div>Running as user: user</div>
                   <div>System uptime: 14:30:42 up 5 days, 2:15, 1 user</div>
                   <div>Event completed successfully!</div>
-                  <div className="mt-2 flex items-center gap-2 text-green-500">
+                  <div className="text-success mt-2 flex items-center gap-2">
                     <CheckCircle className="h-4 w-4" />
                     <span>Execution completed (exit code: 0)</span>
                   </div>
@@ -355,7 +355,7 @@ echo "Event completed successfully!"`}</CodeBlock>
 
             <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950">
               <div className="flex items-start gap-3">
-                <CheckCircle className="mt-1 h-5 w-5 text-green-500" />
+                <CheckCircle className="text-success mt-1 h-5 w-5" />
                 <div>
                   <p className="text-sm text-green-800 dark:text-green-200">
                     <strong>Success!</strong> If you see output similar to the
@@ -495,7 +495,7 @@ echo "Event completed successfully!"`}</CodeBlock>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <AlertCircle className="h-5 w-5 text-red-500" />
+                  <AlertCircle className="text-destructive h-5 w-5" />
                   Common Issues
                 </CardTitle>
               </CardHeader>

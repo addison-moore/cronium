@@ -51,10 +51,10 @@ function DocSection({
           <Icon className="text-primary group-hover:text-primary/80 h-8 w-8" />
         </div>
         <div className="flex-grow">
-          <h3 className="group-hover:text-primary mb-2 text-lg font-semibold text-gray-900 dark:text-gray-100">
+          <h3 className="group-hover:text-primary text-foreground mb-2 text-lg font-semibold">
             {title}
           </h3>
-          <p className="mb-4 text-gray-600 dark:text-gray-400">{description}</p>
+          <p className="text-muted-foreground mb-4">{description}</p>
           <div className="text-primary group-hover:text-primary/80 flex items-center">
             <span className="text-sm font-medium">Learn more</span>
             <ArrowRight className="ml-2 h-4 w-4" />

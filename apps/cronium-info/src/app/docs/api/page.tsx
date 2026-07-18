@@ -132,14 +132,14 @@ function EndpointCard({
             <Badge
               className={
                 method === "GET"
-                  ? "border-transparent bg-blue-500 text-white"
+                  ? "bg-info border-transparent text-white"
                   : method === "POST"
-                    ? "border-transparent bg-green-500 text-white"
+                    ? "bg-success border-transparent text-white"
                     : method === "PUT"
-                      ? "border-transparent bg-yellow-500 text-white"
+                      ? "bg-warning border-transparent text-white"
                       : method === "PATCH"
-                        ? "border-transparent bg-orange-500 text-white"
-                        : "border-transparent bg-red-500 text-white"
+                        ? "bg-warning border-transparent text-white"
+                        : "bg-destructive border-transparent text-white"
               }
             >
               {method}

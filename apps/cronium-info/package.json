@@ -30,6 +30,7 @@
     "@cronium/eslint-config": "workspace:*",
     "@cronium/typescript-config": "workspace:*",
     "@tailwindcss/postcss": "^4.3.2",
+    "@tailwindcss/typography": "^0.5.20",
     "@types/node": "^24.13.3",
     "@types/nodemailer": "^8.0.1",
     "@types/react": "^19.2.17",

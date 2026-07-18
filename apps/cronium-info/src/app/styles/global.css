@@ -1,7 +1,48 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 /* Shared design tokens + theme mapping (single source of truth) */
 @import "@cronium/ui/styles.css";
+
+/**
+ * Prose (typography plugin) themed via the semantic tokens. The token
+ * variables already flip with the `.dark` class, so the invert palette maps
+ * to the same variables — `dark:prose-invert` stays harmless where used.
+ */
+.prose {
+  --tw-prose-body: var(--foreground-color);
+  --tw-prose-headings: var(--foreground-color);
+  --tw-prose-lead: var(--muted-foreground-color);
+  --tw-prose-links: var(--primary-color);
+  --tw-prose-bold: var(--foreground-color);
+  --tw-prose-counters: var(--muted-foreground-color);
+  --tw-prose-bullets: var(--muted-foreground-color);
+  --tw-prose-hr: var(--border-color);
+  --tw-prose-quotes: var(--foreground-color);
+  --tw-prose-quote-borders: var(--border-color);
+  --tw-prose-captions: var(--muted-foreground-color);
+  --tw-prose-code: var(--foreground-color);
+  --tw-prose-pre-code: #e5e7eb;
+  --tw-prose-pre-bg: #1b212b;
+  --tw-prose-th-borders: var(--border-color);
+  --tw-prose-td-borders: var(--border-color);
+  --tw-prose-invert-body: var(--foreground-color);
+  --tw-prose-invert-headings: var(--foreground-color);
+  --tw-prose-invert-lead: var(--muted-foreground-color);
+  --tw-prose-invert-links: var(--primary-color);
+  --tw-prose-invert-bold: var(--foreground-color);
+  --tw-prose-invert-counters: var(--muted-foreground-color);
+  --tw-prose-invert-bullets: var(--muted-foreground-color);
+  --tw-prose-invert-hr: var(--border-color);
+  --tw-prose-invert-quotes: var(--foreground-color);
+  --tw-prose-invert-quote-borders: var(--border-color);
+  --tw-prose-invert-captions: var(--muted-foreground-color);
+  --tw-prose-invert-code: var(--foreground-color);
+  --tw-prose-invert-pre-code: #e5e7eb;
+  --tw-prose-invert-pre-bg: #1b212b;
+  --tw-prose-invert-th-borders: var(--border-color);
+  --tw-prose-invert-td-borders: var(--border-color);
+}
 
 /**
  * Site-specific base styles only — the semantic design tokens (colors,

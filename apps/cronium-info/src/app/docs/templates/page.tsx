@@ -85,7 +85,7 @@ export default function TemplatesPage() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Save className="h-5 w-5 text-blue-500" />
+                  <Save className="text-info h-5 w-5" />
                   Reusable
                 </CardTitle>
               </CardHeader>
@@ -99,7 +99,7 @@ export default function TemplatesPage() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Database className="h-5 w-5 text-green-500" />
+                  <Database className="text-success h-5 w-5" />
                   Rich Editing
                 </CardTitle>
               </CardHeader>
@@ -114,7 +114,7 @@ export default function TemplatesPage() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Settings className="h-5 w-5 text-purple-500" />
+                  <Settings className="text-primary h-5 w-5" />
                   Dynamic Content
                 </CardTitle>
               </CardHeader>
@@ -467,7 +467,7 @@ export default function TemplatesPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-blue-500" />
+                  <Zap className="text-info h-5 w-5" />
                   cronium.event
                 </CardTitle>
                 <CardDescription>
@@ -537,7 +537,7 @@ export default function TemplatesPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Database className="h-5 w-5 text-green-500" />
+                  <Database className="text-success h-5 w-5" />
                   cronium.getVariables
                 </CardTitle>
                 <CardDescription>
@@ -562,7 +562,7 @@ export default function TemplatesPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <ArrowRight className="h-5 w-5 text-purple-500" />
+                  <ArrowRight className="text-primary h-5 w-5" />
                   cronium.input
                 </CardTitle>
                 <CardDescription>
@@ -587,7 +587,7 @@ export default function TemplatesPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5 text-orange-500" />
+                  <Settings className="text-warning h-5 w-5" />
                   cronium.getCondition
                 </CardTitle>
                 <CardDescription>
@@ -923,7 +923,7 @@ Variables: {{json cronium.getVariables}}`}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-blue-500" />
+                  <Shield className="text-info h-5 w-5" />
                   System Templates
                 </CardTitle>
                 <CardDescription>
@@ -933,7 +933,7 @@ Variables: {{json cronium.getVariables}}`}
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <Badge className="border-blue-200 bg-blue-50 text-blue-700">
+                    <Badge className="border-info/40 bg-info/10 text-info-text">
                       <Shield className="mr-1 h-3 w-3" />
                       System
                     </Badge>
@@ -964,7 +964,7 @@ Variables: {{json cronium.getVariables}}`}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5 text-green-500" />
+                  <User className="text-success h-5 w-5" />
                   User Templates
                 </CardTitle>
                 <CardDescription>
@@ -1029,14 +1029,14 @@ Variables: {{json cronium.getVariables}}`}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg text-green-600">
+                <CardTitle className="text-success text-lg">
                   Template Design
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <div className="mt-2 h-2 w-2 rounded-full bg-green-500"></div>
+                    <div className="bg-success mt-2 h-2 w-2 rounded-full"></div>
                     <div>
                       <p className="font-medium">
                         Use descriptive template names
@@ -1047,7 +1047,7 @@ Variables: {{json cronium.getVariables}}`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="mt-2 h-2 w-2 rounded-full bg-green-500"></div>
+                    <div className="bg-success mt-2 h-2 w-2 rounded-full"></div>
                     <div>
                       <p className="font-medium">Include relevant context</p>
                       <p className="text-muted-foreground text-sm">
@@ -1056,7 +1056,7 @@ Variables: {{json cronium.getVariables}}`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="mt-2 h-2 w-2 rounded-full bg-green-500"></div>
+                    <div className="bg-success mt-2 h-2 w-2 rounded-full"></div>
                     <div>
                       <p className="font-medium">Use conditional blocks</p>
                       <p className="text-muted-foreground text-sm">
@@ -1065,7 +1065,7 @@ Variables: {{json cronium.getVariables}}`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="mt-2 h-2 w-2 rounded-full bg-green-500"></div>
+                    <div className="bg-success mt-2 h-2 w-2 rounded-full"></div>
                     <div>
                       <p className="font-medium">Provide fallback values</p>
                       <p className="text-muted-foreground text-sm">
@@ -1079,14 +1079,14 @@ Variables: {{json cronium.getVariables}}`}
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg text-orange-600">
+                <CardTitle className="text-warning text-lg">
                   Common Pitfalls
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-500" />
+                    <AlertCircle className="text-warning mt-0.5 h-5 w-5 flex-shrink-0" />
                     <div>
                       <p className="font-medium">Missing fallbacks</p>
                       <p className="text-muted-foreground text-sm">
@@ -1095,7 +1095,7 @@ Variables: {{json cronium.getVariables}}`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-500" />
+                    <AlertCircle className="text-warning mt-0.5 h-5 w-5 flex-shrink-0" />
                     <div>
                       <p className="font-medium">
                         Invalid JSON in Slack/Discord
@@ -1106,7 +1106,7 @@ Variables: {{json cronium.getVariables}}`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-500" />
+                    <AlertCircle className="text-warning mt-0.5 h-5 w-5 flex-shrink-0" />
                     <div>
                       <p className="font-medium">Hardcoded values</p>
                       <p className="text-muted-foreground text-sm">
@@ -1115,7 +1115,7 @@ Variables: {{json cronium.getVariables}}`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-500" />
+                    <AlertCircle className="text-warning mt-0.5 h-5 w-5 flex-shrink-0" />
                     <div>
                       <p className="font-medium">Overly complex templates</p>
                       <p className="text-muted-foreground text-sm">
