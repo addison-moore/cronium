@@ -128,7 +128,7 @@ export function EventsFilters({
               <SelectTrigger className="focus:ring-primary/20 text-foreground h-10 w-full rounded-md transition-all focus:ring-2">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
+              <SelectContent>
                 {sortOptions.map((option) => (
                   <SelectItem
                     key={option.value}
@@ -175,7 +175,7 @@ export function EventsFilters({
             <SelectTrigger className="focus:ring-primary/20 text-foreground h-10 w-full rounded-md transition-all focus:ring-2">
               <SelectValue placeholder={copy.allTypes} />
             </SelectTrigger>
-            <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
+            <SelectContent>
               <SelectItem
                 value="all"
                 className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm font-medium"
@@ -249,7 +249,7 @@ export function EventsFilters({
             <SelectTrigger className="focus:ring-primary/20 text-foreground h-10 w-full rounded-md transition-all focus:ring-2">
               <SelectValue placeholder={copy.allStatuses} />
             </SelectTrigger>
-            <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
+            <SelectContent>
               <SelectItem
                 value="all"
                 className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm font-medium"
@@ -308,7 +308,7 @@ export function EventsFilters({
             <SelectTrigger className="focus:ring-primary/20 text-foreground h-10 w-full rounded-md transition-all focus:ring-2">
               <SelectValue placeholder={copy.allServers} />
             </SelectTrigger>
-            <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
+            <SelectContent>
               <SelectItem
                 value="all"
                 className="hover:bg-muted data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground text-foreground py-2 pr-3 pl-8 text-sm font-medium"

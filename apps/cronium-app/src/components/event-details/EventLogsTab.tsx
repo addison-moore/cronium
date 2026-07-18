@@ -20,7 +20,7 @@ import {
   TooltipTrigger,
 } from "@cronium/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { ActionMenu } from "@/components/ui/action-menu";
+import { ActionMenu } from "@cronium/ui";
 import { LogStatus } from "@/shared/schema";
 import { Pagination } from "@cronium/ui";
 import {

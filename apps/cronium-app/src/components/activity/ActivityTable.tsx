@@ -38,7 +38,7 @@ import {
   DialogTitle,
 } from "@cronium/ui";
 import { ScrollArea } from "@cronium/ui";
-import { ActionMenu } from "@/components/ui/action-menu";
+import { ActionMenu } from "@cronium/ui";
 import { type LogStatus } from "@/shared/schema";
 import { Spinner } from "@cronium/ui";
 import { format } from "date-fns";

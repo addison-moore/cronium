@@ -67,7 +67,7 @@ export function ServerFilters({
             <SelectTrigger className="focus:ring-primary/20 h-10 w-full rounded-md transition-all focus:ring-2">
               <SelectValue placeholder="All Statuses" />
             </SelectTrigger>
-            <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
+            <SelectContent>
               <SelectItem
                 value="all"
                 className="hover:bg-muted py-2 pr-3 pl-8 text-sm font-medium"
@@ -125,7 +125,7 @@ export function ServerFilters({
               <SelectTrigger className="focus:ring-primary/20 h-10 w-full rounded-md transition-all focus:ring-2">
                 <SelectValue placeholder="All Groups" />
               </SelectTrigger>
-              <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
+              <SelectContent>
                 <SelectItem
                   value="all"
                   className="hover:bg-muted py-2 pr-3 pl-8 text-sm font-medium"
@@ -155,7 +155,7 @@ export function ServerFilters({
             <SelectTrigger className="focus:ring-primary/20 h-10 w-[180px] rounded-md transition-all focus:ring-2">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
-            <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
+            <SelectContent>
               {sortOptions.map((option) => (
                 <SelectItem
                   key={option.value}

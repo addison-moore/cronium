@@ -1,15 +1,126 @@
 /**
- * Shared styles for @cronium/ui components
- * These styles must be imported by any app using the UI package
+ * Shared design tokens + theme mapping for Cronium (@cronium/ui)
+ *
+ * This file is the single source of truth for the semantic design tokens
+ * (colors, radius, shadows, fonts, animations) used by BOTH apps
+ * (cronium-app and cronium-info) and by the @cronium/ui components.
+ *
+ * Apps import it once from their global.css:
+ *   @import "@cronium/ui/styles.css";
+ *
+ * App-specific variables (React Flow, Solarized terminal, etc.) stay in the
+ * consuming app's global.css.
  */
 
-/* Dark mode variant for Tailwind CSS 4 */
+/* Dark mode variant for Tailwind CSS 4 (class-based: `.dark` on <html>) */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/**
- * Custom theme variables for semantic colors
- * Using @theme inline to reference CSS variables from the apps
- */
+/* ------------------------------------------------------------------ */
+/* Token values — light                                                */
+/* ------------------------------------------------------------------ */
+:root {
+  /* Core colors */
+  --background-color: #feffff;
+  --foreground-color: #1f2937;
+  --secondary-bg-color: #f8fafc;
+  --tertiary-bg-color: #f1f5f9;
+
+  /* UI element colors */
+  --card-color: var(--secondary-bg-color);
+  --card-foreground-color: #1f2937;
+
+  --popover-color: #ffffff;
+  --popover-foreground-color: #1f2937;
+
+  --primary-color: #7c3aed;
+  --primary-foreground-color: #ffffff;
+
+  --secondary-color: #06b6d4;
+  --secondary-foreground-color: #ffffff;
+
+  --accent-color: #6c28eb;
+  --accent-foreground-color: #1f2937;
+
+  --muted-color: #f3f4f6;
+  --muted-foreground-color: #6b7280;
+
+  /* Status colors */
+  --destructive-color: #ef4444;
+  --destructive-foreground-color: #ffffff;
+
+  --success-color: #10b981;
+  --success-foreground-color: #ffffff;
+
+  --warning-color: #f59e0b;
+  --warning-foreground-color: #ffffff;
+
+  --info-color: #3b82f6;
+  --info-foreground-color: #ffffff;
+
+  /* UI elements */
+  --border-color: #e5e7eb;
+  --input-color: #ffffff;
+  --ring-color: #6c28eb;
+
+  /* Border radius base — all radius steps derive from this */
+  --radius: 0.375rem;
+
+  /* Shadow variables */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg:
+    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl:
+    0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+}
+
+/* ------------------------------------------------------------------ */
+/* Token values — dark                                                 */
+/* ------------------------------------------------------------------ */
+.dark {
+  --background-color: #1f2937;
+  --foreground-color: #f9fafb;
+  --secondary-bg-color: #111827;
+  --tertiary-bg-color: #1c253b;
+
+  --card-color: var(--secondary-bg-color);
+  --card-foreground-color: #f9fafb;
+
+  --popover-color: #1f2937;
+  --popover-foreground-color: #f9fafb;
+
+  --primary-color: #7c3aed;
+  --primary-foreground-color: #ffffff;
+
+  --secondary-color: #06b6d4;
+  --secondary-foreground-color: #ffffff;
+
+  --muted-color: #374151;
+  --muted-foreground-color: #9ca3af;
+
+  --accent-color: #342255;
+  --accent-foreground-color: #f9fafb;
+
+  --destructive-color: #b91c1c;
+  --destructive-foreground-color: #fef2f2;
+
+  --success-color: #10b981;
+  --success-foreground-color: #ffffff;
+
+  --warning-color: #d97706;
+  --warning-foreground-color: #ffffff;
+
+  --info-color: #2563eb;
+  --info-foreground-color: #ffffff;
+
+  --border-color: #374151;
+  --input-color: #1f2937;
+  --ring-color: #6c28eb;
+}
+
+/* ------------------------------------------------------------------ */
+/* Tailwind theme mapping                                              */
+/* ------------------------------------------------------------------ */
 @theme inline {
   /* Semantic colors for UI components */
   --color-background: var(--background-color);
@@ -35,22 +146,75 @@
   --color-success-foreground: var(--success-foreground-color);
   --color-warning: var(--warning-color);
   --color-warning-foreground: var(--warning-foreground-color);
+  --color-info: var(--info-color);
+  --color-info-foreground: var(--info-foreground-color);
 
-  /* Custom radius tokens */
-  --radius-sm: calc(var(--radius) - 2px);
+  /* Additional surface tokens */
+  --color-secondary-bg: var(--secondary-bg-color);
+  --color-tertiary-bg: var(--tertiary-bg-color);
+
+  /* Radius scale — derived from the single --radius base (0.375rem):
+     sm 0.125rem · md 0.375rem · lg 0.5rem · xl 0.75rem · 2xl 1rem */
+  --radius-sm: calc(var(--radius) - 0.25rem);
   --radius-md: var(--radius);
-  --radius-lg: calc(var(--radius) + 2px);
+  --radius-lg: calc(var(--radius) + 0.125rem);
+  --radius-xl: calc(var(--radius) + 0.375rem);
+  --radius-2xl: calc(var(--radius) + 0.625rem);
+  --radius-full: 9999px;
+
+  /* Typography — apps load Inter via next/font with variable --font-inter */
+  --font-sans:
+    var(--font-inter, ui-sans-serif), ui-sans-serif, system-ui, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+
+  /* Animations */
+  --animate-spin: spin 1s linear infinite;
+  --animate-ping: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+  --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-bounce: bounce 1s infinite;
+  --animate-fade-in: fadeIn 0.3s ease-out;
+  --animate-accordion-down: accordion-down 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --animate-accordion-up: accordion-up 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  @keyframes fadeIn {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+      opacity: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+      opacity: 1;
+    }
+  }
+
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+      opacity: 1;
+    }
+    to {
+      height: 0;
+      opacity: 0;
+    }
+  }
 }
 
-/**
- * Note: Default theme values should be defined by the consuming apps
- * The UI package only maps the semantic tokens to CSS variables
- */
-
-/**
- * Special utility classes for components that need CSS variables
- * Tailwind CSS 4 generates these automatically when we define the colors in @theme
- */
+/* ------------------------------------------------------------------ */
+/* Utility shims                                                       */
+/* ------------------------------------------------------------------ */
 @layer utilities {
   /* Data state utilities for Switch and Checkbox - these need explicit definition */
   .data-\[state\=checked\]\:translate-x-5[data-state="checked"] {

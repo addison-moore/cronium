@@ -395,7 +395,7 @@ export default function WorkflowExecutionHistory({
                   <SelectTrigger className="focus:ring-primary/20 text-foreground h-10 flex-1 rounded-md transition-all focus:ring-2">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
+                  <SelectContent>
                     {/* Conditional sort options based on page context */}
                     {!workflowId && (
                       <SelectItem
@@ -462,7 +462,7 @@ export default function WorkflowExecutionHistory({
                 <SelectTrigger className="focus:ring-primary/20 text-foreground h-10 w-full rounded-md transition-all focus:ring-2">
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
-                <SelectContent className="bg-background border-border overflow-hidden rounded-md border shadow-lg">
+                <SelectContent>
                   {statusOptions.map((option) => (
                     <SelectItem
                       key={option.value}

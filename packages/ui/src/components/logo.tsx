@@ -1,5 +1,3 @@
-import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
 import Image from "next/image";
 
 interface LogoProps {
@@ -13,14 +11,6 @@ export function Logo({
   iconOnly = false,
   size = "md",
 }: LogoProps) {
-  const { theme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  // Avoid hydration mismatch by mounting after initial render
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   // Size mappings
   const iconSizes = {
     sm: "h-5 w-5",
@@ -33,13 +23,6 @@ export function Logo({
     md: "text-xl",
     lg: "text-2xl",
   };
-
-  // Get the right text color based on theme
-  const textColor = !mounted
-    ? "text-primary"
-    : theme === "dark"
-      ? "text-secondary"
-      : "text-primary";
 
   // Get pixel dimensions for the image
   const pixelSizes = {
@@ -62,7 +45,9 @@ export function Logo({
         />
       </div>
       {!iconOnly && (
-        <span className={`${textSizes[size]} font-semibold ${textColor}`}>
+        <span
+          className={`${textSizes[size]} text-primary dark:text-secondary font-semibold`}
+        >
           Cronium
         </span>
       )}

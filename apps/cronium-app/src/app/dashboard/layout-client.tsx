@@ -156,7 +156,7 @@ export default function DashboardLayoutClient({
   return (
     <div className="bg-background text-foreground min-h-screen">
       {/* Mobile Navigation Toggle */}
-      <div className="dashboard-navbar border-border fixed top-0 right-0 left-0 z-30 flex h-16 items-center justify-between border-b px-4 shadow-sm md:hidden">
+      <div className="bg-secondary-bg border-border fixed top-0 right-0 left-0 z-30 flex h-16 items-center justify-between border-b px-4 shadow-sm md:hidden">
         <Link href="/dashboard">
           <Logo size="md" />
         </Link>
@@ -197,7 +197,7 @@ export default function DashboardLayoutClient({
 
       {/* Mobile Navigation Sidebar */}
       <div
-        className={`dashboard-sidebar fixed top-0 bottom-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out md:hidden ${
+        className={`bg-secondary-bg border-border fixed top-0 bottom-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out md:hidden ${
           isMobileNavOpen ? "translate-x-0" : "-translate-x-full"
         } text-foreground flex flex-col border-r p-4 shadow-md`}
       >
@@ -241,8 +241,10 @@ export default function DashboardLayoutClient({
                   <Link
                     href={item.href}
                     onClick={closeMobileNav}
-                    className={`dashboard-nav-item flex items-center rounded-md px-3 py-2 ${
-                      isActive(item.href) ? "active font-medium" : ""
+                    className={`flex items-center gap-2 rounded-md px-3 py-2 transition-colors ${
+                      isActive(item.href)
+                        ? "bg-primary text-primary-foreground font-medium"
+                        : "text-foreground hover:bg-muted"
                     }`}
                   >
                     <span className="mr-3">{item.icon}</span>
@@ -259,7 +261,7 @@ export default function DashboardLayoutClient({
             <Link
               href="/auth/signout"
               onClick={closeMobileNav}
-              className="dashboard-nav-item flex items-center rounded-md px-3 py-2"
+              className="text-foreground hover:bg-muted flex items-center gap-2 rounded-md px-3 py-2 transition-colors"
             >
               <span className="mr-3">
                 <LogOut className="h-5 w-5" />
@@ -272,7 +274,7 @@ export default function DashboardLayoutClient({
 
       {/* Desktop Sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 hidden flex-col md:flex ${isSidebarOpen ? "w-64" : "w-16"} dashboard-sidebar border-border text-foreground border-r shadow-sm transition-all duration-300`}
+        className={`fixed inset-y-0 left-0 hidden flex-col md:flex ${isSidebarOpen ? "w-64" : "w-16"} bg-secondary-bg border-border text-foreground border-r shadow-sm transition-all duration-300`}
       >
         <div className="flex h-full flex-col">
           <div
@@ -321,9 +323,13 @@ export default function DashboardLayoutClient({
                     <li key={item.name}>
                       <Link
                         href={item.href}
-                        className={`dashboard-nav-item flex items-center rounded-md px-3 py-2 transition-colors ${
+                        className={`flex items-center gap-2 rounded-md px-3 py-2 transition-colors ${
                           !isSidebarOpen ? "mx-auto justify-center" : ""
-                        } ${isActive(item.href) ? "active font-medium" : ""}`}
+                        } ${
+                          isActive(item.href)
+                            ? "bg-primary text-primary-foreground font-medium"
+                            : "text-foreground hover:bg-muted"
+                        }`}
                         title={!isSidebarOpen ? item.name : undefined}
                       >
                         <span className={isSidebarOpen ? "mr-3" : ""}>

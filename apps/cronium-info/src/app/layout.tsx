@@ -1,5 +1,6 @@
 import React from "react";
 import { type Metadata } from "next";
+import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { GoogleAnalytics } from "@/components/analytics";
 import {
@@ -11,6 +12,12 @@ import {
   GITHUB_URL,
 } from "@/lib/site";
 import "./styles/global.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
   // Makes every relative canonical/OG URL resolve to an absolute one.
@@ -133,23 +140,31 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`h-full ${inter.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <StructuredData />
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              // Apply dark mode based on system preference
+              // Apply dark mode from stored preference, falling back to the
+              // system preference (mirrors ThemeProvider logic, pre-hydration)
               try {
-                if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                  document.documentElement.classList.add('dark');
-                }
+                var t = localStorage.getItem('theme');
+                var dark = t === 'dark' || (t !== 'light' &&
+                  window.matchMedia('(prefers-color-scheme: dark)').matches);
+                document.documentElement.classList.toggle('dark', dark);
               } catch (e) {}
             `,
           }}
         />
       </head>
-      <body className="bg-background h-full text-gray-900 dark:text-gray-100">
+      <body
+        className={`bg-background text-foreground h-full ${inter.className}`}
+      >
         <ThemeProvider>{children}</ThemeProvider>
         <GoogleAnalytics />
       </body>

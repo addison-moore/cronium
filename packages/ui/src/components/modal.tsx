@@ -8,8 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./dialog";
-import { Button } from "./button";
-import { X } from "lucide-react";
 
 interface ModalProps {
   isOpen: boolean;
@@ -45,23 +43,13 @@ export function Modal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent
         className={`${sizeClasses[size]} ${className}`}
+        showCloseButton={showCloseButton}
         onInteractOutside={(e) => e.preventDefault()}
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => e.stopPropagation()}
       >
-        {(title ?? description ?? showCloseButton) && (
+        {(title ?? description) && (
           <DialogHeader className="relative">
-            {showCloseButton && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute -right-2 -top-2 h-8 w-8 rounded-md"
-                onClick={onClose}
-              >
-                <X className="h-4 w-4" />
-                <span className="sr-only">Close</span>
-              </Button>
-            )}
             {title && <DialogTitle>{title}</DialogTitle>}
             {description && (
               <DialogDescription>{description}</DialogDescription>

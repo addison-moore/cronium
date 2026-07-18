@@ -26,12 +26,19 @@ const toastVariants = cva(
   "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-8 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full sm:data-[state=open]:slide-in-from-right-full toast",
   {
     variants: {
+      // The *-toast classes act as group markers for ToastAction/ToastClose
+      // styling below; the color utilities carry the visual variant styles
+      // (formerly defined in the app's components.css).
       variant: {
-        default: "info-toast",
-        destructive: "destructive-toast",
-        success: "success-toast",
-        warning: "warning-toast",
-        info: "info-toast",
+        default:
+          "info-toast border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-gray-800 dark:text-blue-300",
+        destructive:
+          "destructive-toast border-red-300 bg-red-100 text-red-700 dark:border-red-800 dark:bg-gray-800 dark:text-red-300",
+        success:
+          "success-toast border-green-300 bg-green-100 text-green-700 dark:border-green-800 dark:bg-gray-800 dark:text-green-300",
+        warning:
+          "warning-toast border-orange-300 bg-orange-200 text-orange-700 dark:border-orange-800 dark:bg-gray-800 dark:text-orange-300",
+        info: "info-toast border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-gray-800 dark:text-blue-300",
       },
     },
     defaultVariants: {

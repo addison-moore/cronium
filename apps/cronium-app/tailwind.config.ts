@@ -2,7 +2,7 @@ import { type Config } from "tailwindcss";
 import sharedConfig from "@cronium/tailwind-config";
 
 export default {
-  ...sharedConfig,
+  presets: [sharedConfig],
   content: [
     "./src/app/**/*.{js,ts,jsx,tsx}",
     "./src/components/**/*.{js,ts,jsx,tsx}",
