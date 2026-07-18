@@ -58,18 +58,21 @@ export function ActionEdge({
             }}
             className="nodrag nopan"
           >
-            <Badge
-              variant="outline"
-              className={`text-xs ${
-                data.connectionType === "success"
-                  ? "border-success/40 bg-success/10 text-success-text"
-                  : data.connectionType === "failure"
-                    ? "border-destructive/40 bg-destructive/10 text-destructive-text"
-                    : "border-border bg-muted/60 text-muted-foreground"
-              }`}
-            >
-              {(data.label as string) ?? ""}
-            </Badge>
+            {/* Opaque backing so the edge line passes behind the label */}
+            <div className="bg-background rounded-full">
+              <Badge
+                variant="outline"
+                className={`text-xs ${
+                  data.connectionType === "success"
+                    ? "border-success/40 bg-success/10 text-success-text"
+                    : data.connectionType === "failure"
+                      ? "border-destructive/40 bg-destructive/10 text-destructive-text"
+                      : "border-border bg-muted/60 text-muted-foreground"
+                }`}
+              >
+                {(data.label as string) ?? ""}
+              </Badge>
+            </div>
           </div>
         </EdgeLabelRenderer>
       )}

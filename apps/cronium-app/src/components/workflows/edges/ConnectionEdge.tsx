@@ -152,20 +152,24 @@ function ConnectionEdge({
         >
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-              <Badge
-                variant="outline"
-                className={`h-5 cursor-pointer px-1.5 py-0 text-[10px] ${pathStyles} ${
-                  connectionType === ConnectionType.ON_SUCCESS
-                    ? "bg-success/10 text-success-text"
-                    : connectionType === ConnectionType.ON_FAILURE
-                      ? "bg-destructive/10 text-destructive-text"
-                      : connectionType === ConnectionType.ON_CONDITION
-                        ? "bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-400"
-                        : "bg-gray-50 text-gray-600 dark:bg-gray-950 dark:text-gray-400"
-                } ${selected ? "shadow-sm" : ""} hover:bg-accent hover:text-accent-foreground`}
-              >
-                {label}
-              </Badge>
+              {/* Opaque backing so the edge line passes behind the label,
+                  not through the translucent tint */}
+              <div className="bg-background rounded-full">
+                <Badge
+                  variant="outline"
+                  className={`h-5 cursor-pointer px-1.5 py-0 text-[10px] ${pathStyles} ${
+                    connectionType === ConnectionType.ON_SUCCESS
+                      ? "bg-success/10 text-success-text"
+                      : connectionType === ConnectionType.ON_FAILURE
+                        ? "bg-destructive/10 text-destructive-text"
+                        : connectionType === ConnectionType.ON_CONDITION
+                          ? "bg-primary/10 text-primary"
+                          : "bg-muted/60 text-muted-foreground"
+                  } ${selected ? "shadow-sm" : ""} hover:bg-accent hover:text-accent-foreground`}
+                >
+                  {label}
+                </Badge>
+              </div>
             </PopoverTrigger>
             <PopoverContent className="w-40 p-1">
               <div className="space-y-1">
@@ -179,7 +183,7 @@ function ConnectionEdge({
                   className="hover:bg-accent hover:text-accent-foreground w-full justify-start text-left font-normal transition-colors"
                   onClick={() => updateConnectionType(ConnectionType.ALWAYS)}
                 >
-                  <span className="mr-2 h-2.5 w-2.5 rounded-full bg-black dark:bg-white" />
+                  <span className="bg-foreground mr-2 h-2.5 w-2.5 rounded-full" />
                   Always
                 </Button>
                 <Button
@@ -219,12 +223,12 @@ function ConnectionEdge({
                       : "ghost"
                   }
                   size="sm"
-                  className="w-full justify-start text-left font-normal transition-colors hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-900/20 dark:hover:text-purple-300"
+                  className="hover:bg-primary/10 hover:text-primary w-full justify-start text-left font-normal transition-colors"
                   onClick={() =>
                     updateConnectionType(ConnectionType.ON_CONDITION)
                   }
                 >
-                  <span className="mr-2 h-2.5 w-2.5 rounded-full bg-purple-500" />
+                  <span className="bg-primary mr-2 h-2.5 w-2.5 rounded-full" />
                   On Condition
                 </Button>
               </div>
