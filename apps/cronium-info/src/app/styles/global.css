@@ -91,3 +91,13 @@
     color: var(--foreground-color);
   }
 }
+
+/**
+ * Canonical code-block surface: intentionally dark in both themes (docs
+ * convention), matching --tw-prose-pre-bg. All code fences use this instead
+ * of ad-hoc gray/stone-900 blocks.
+ */
+.code-surface {
+  background-color: #1b212b;
+  color: #e5e7eb;
+}

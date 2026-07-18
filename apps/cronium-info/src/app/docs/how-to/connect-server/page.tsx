@@ -1,4 +1,5 @@
 import React from "react";
+import { Callout } from "@/components/docs/callout";
 import DocsLayout from "@/components/docs/docs-layout";
 import {
   Card,
@@ -73,7 +74,9 @@ export default function ConnectServerPage() {
     <DocsLayout tableOfContents={tableOfContents}>
       <div className="mx-auto max-w-4xl">
         <div className="mb-8">
-          <h1 className="mb-4 text-4xl font-bold">Connect a Server</h1>
+          <h1 className="mb-4 text-4xl font-bold tracking-tight">
+            Connect a Server
+          </h1>
           <p className="text-muted-foreground text-xl">
             Add an SSH server to Cronium so your events can execute scripts on
             remote infrastructure. This guide walks through configuring host
@@ -138,7 +141,7 @@ export default function ConnectServerPage() {
               Fill out the server form with information Cronium uses to reach
               your host.
             </p>
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm dark:border-blue-800 dark:bg-blue-950/30">
+            <Callout variant="info" className="text-sm">
               <ul className="space-y-1">
                 <li>
                   <strong>Server name</strong>: a friendly label displayed in
@@ -157,7 +160,7 @@ export default function ConnectServerPage() {
                   uses a custom SSH port.
                 </li>
               </ul>
-            </div>
+            </Callout>
           </div>
         </StepCard>
 

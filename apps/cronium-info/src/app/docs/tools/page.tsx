@@ -1,4 +1,5 @@
 import React from "react";
+import { Callout } from "@/components/docs/callout";
 import DocsLayout from "@/components/docs/docs-layout";
 import {
   Card,
@@ -59,7 +60,7 @@ export default function ToolsPage() {
             <div className="bg-primary/10 rounded-lg p-2">
               <Settings className="text-primary h-6 w-6" />
             </div>
-            <h1 className="text-4xl font-bold tracking-tight">Tools</h1>
+            <h1 className="mb-4 text-4xl font-bold tracking-tight">Tools</h1>
           </div>
           <p className="text-muted-foreground text-xl">
             Configure communication tools and manage credentials for automated
@@ -213,12 +214,12 @@ export default function ToolsPage() {
                       </ul>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/20">
-                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                  <Callout variant="info">
+                    <p className="text-info-text text-sm">
                       <strong>Use cases:</strong> Error alerts, success
                       notifications, daily reports, system status updates
                     </p>
-                  </div>
+                  </Callout>
                 </div>
               </CardContent>
             </Card>
@@ -253,12 +254,12 @@ export default function ToolsPage() {
                       </ul>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950/20">
-                    <p className="text-sm text-green-700 dark:text-green-300">
+                  <Callout variant="tip">
+                    <p className="text-success-text text-sm">
                       <strong>Use cases:</strong> Team notifications, build
                       status, deployment alerts, automated reports
                     </p>
-                  </div>
+                  </Callout>
                 </div>
               </CardContent>
             </Card>
@@ -293,12 +294,12 @@ export default function ToolsPage() {
                       </ul>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-800 dark:bg-purple-950/20">
-                    <p className="text-sm text-purple-700 dark:text-purple-300">
+                  <Callout variant="note">
+                    <p className="text-primary text-sm">
                       <strong>Use cases:</strong> Gaming communities,
                       development teams, server monitoring, bot notifications
                     </p>
-                  </div>
+                  </Callout>
                 </div>
               </CardContent>
             </Card>
@@ -582,16 +583,16 @@ export default function ToolsPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/20">
+                  <Callout variant="info">
                     <div className="flex items-start gap-3">
-                      <div className="rounded bg-blue-100 p-1 dark:bg-blue-900">
-                        <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      <div className="bg-info/15 rounded p-1">
+                        <FileText className="text-info h-4 w-4" />
                       </div>
                       <div>
-                        <h4 className="mb-1 font-medium text-blue-800 dark:text-blue-200">
+                        <h4 className="text-info-text mb-1 font-medium">
                           Template Documentation
                         </h4>
-                        <p className="text-sm text-blue-700 dark:text-blue-300">
+                        <p className="text-info-text text-sm">
                           For detailed information about template syntax,
                           variables, and helpers, see the
                           <a
@@ -604,7 +605,7 @@ export default function ToolsPage() {
                         </p>
                       </div>
                     </div>
-                  </div>
+                  </Callout>
                 </div>
               </CardContent>
             </Card>
@@ -652,13 +653,13 @@ From Name: Cronium Notifications`}
                       </SimpleCodeBlock>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-950/20">
-                    <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                  <Callout variant="warning">
+                    <p className="text-warning-text text-sm">
                       <strong>Note:</strong> For Gmail and other providers, use
                       app-specific passwords instead of your regular account
                       password.
                     </p>
-                  </div>
+                  </Callout>
                 </div>
               </CardContent>
             </Card>
@@ -705,12 +706,12 @@ From Name: Cronium Notifications`}
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950/20">
-                    <p className="text-sm text-green-700 dark:text-green-300">
+                  <Callout variant="tip">
+                    <p className="text-success-text text-sm">
                       <strong>Webhook URL format:</strong>{" "}
                       https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX
                     </p>
-                  </div>
+                  </Callout>
                 </div>
               </CardContent>
             </Card>
@@ -753,12 +754,12 @@ From Name: Cronium Notifications`}
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-800 dark:bg-purple-950/20">
-                    <p className="text-sm text-purple-700 dark:text-purple-300">
+                  <Callout variant="note">
+                    <p className="text-primary text-sm">
                       <strong>Webhook URL format:</strong>{" "}
                       https://discord.com/api/webhooks/123456789/abcdefghijk...
                     </p>
-                  </div>
+                  </Callout>
                 </div>
               </CardContent>
             </Card>

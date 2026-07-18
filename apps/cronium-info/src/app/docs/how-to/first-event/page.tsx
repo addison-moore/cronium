@@ -1,4 +1,6 @@
 import React from "react";
+import { SimpleCodeBlock } from "@/components/docs/api-code-examples";
+import { Callout } from "@/components/docs/callout";
 import DocsLayout from "@/components/docs/docs-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { CheckCircle, Terminal, Server, Play, AlertCircle } from "lucide-react";
@@ -23,11 +25,7 @@ const tableOfContents = [
 ];
 
 function CodeBlock({ children }: { children: string }) {
-  return (
-    <pre className="overflow-x-auto rounded-lg bg-gray-900 p-4 text-sm text-gray-100">
-      <code>{children}</code>
-    </pre>
-  );
+  return <SimpleCodeBlock language="javascript">{children}</SimpleCodeBlock>;
 }
 
 function StepCard({
@@ -65,7 +63,9 @@ export default function FirstEventPage() {
     <DocsLayout tableOfContents={tableOfContents}>
       <div className="mx-auto max-w-4xl">
         <div className="mb-8">
-          <h1 className="mb-4 text-4xl font-bold">Create Your First Event</h1>
+          <h1 className="mb-4 text-4xl font-bold tracking-tight">
+            Create Your First Event
+          </h1>
           <p className="text-muted-foreground text-xl">
             Learn how to create and run your first automated script in Cronium.
             This guide walks you through the complete process from setup to
@@ -131,18 +131,18 @@ export default function FirstEventPage() {
                 Click the <strong>"Create Event"</strong> button
               </li>
             </ol>
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
+            <Callout variant="info">
               <div className="flex items-start gap-3">
                 <Terminal className="text-info mt-1 h-5 w-5" />
                 <div>
-                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                  <p className="text-info-text text-sm">
                     <strong>Tip:</strong> If you don't see the "Create Event"
                     button, check that you have the necessary permissions.
                     Contact your administrator if needed.
                   </p>
                 </div>
               </div>
-            </div>
+            </Callout>
           </div>
         </StepCard>
 
@@ -180,9 +180,9 @@ export default function FirstEventPage() {
               <div>
                 <h4 className="mb-2 font-semibold">Event Type Options</h4>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <Card className="border-green-200 dark:border-green-800">
+                  <Card className="border-success/40">
                     <CardContent className="pt-4">
-                      <h5 className="font-medium text-green-700 dark:text-green-300">
+                      <h5 className="text-success-text font-medium">
                         Bash Script
                       </h5>
                       <p className="text-muted-foreground mt-1 text-sm">
@@ -325,7 +325,7 @@ echo "Event completed successfully!"`}</CodeBlock>
                   Click the <strong>"Run Now"</strong> button to execute your
                   event immediately.
                 </p>
-                <div className="rounded-lg bg-gray-900 p-4 font-mono text-sm text-green-400">
+                <div className="code-surface rounded-lg p-4 font-mono text-sm text-green-400">
                   <div className="mb-2 flex items-center gap-2">
                     <Play className="h-4 w-4" />
                     <span className="text-white">Execution started...</span>
@@ -353,18 +353,18 @@ echo "Event completed successfully!"`}</CodeBlock>
               </div>
             </div>
 
-            <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950">
+            <Callout variant="tip">
               <div className="flex items-start gap-3">
                 <CheckCircle className="text-success mt-1 h-5 w-5" />
                 <div>
-                  <p className="text-sm text-green-800 dark:text-green-200">
+                  <p className="text-success-text text-sm">
                     <strong>Success!</strong> If you see output similar to the
                     example, your event is working correctly. You're ready to
                     schedule it for automatic execution.
                   </p>
                 </div>
               </div>
-            </div>
+            </Callout>
           </div>
         </StepCard>
 
@@ -502,7 +502,7 @@ echo "Event completed successfully!"`}</CodeBlock>
               <CardContent>
                 <div className="space-y-4">
                   <div>
-                    <h4 className="font-semibold text-red-700 dark:text-red-300">
+                    <h4 className="text-destructive-text font-semibold">
                       Event fails with "Permission denied"
                     </h4>
                     <p className="text-muted-foreground text-sm">
@@ -511,7 +511,7 @@ echo "Event completed successfully!"`}</CodeBlock>
                     </p>
                   </div>
                   <div>
-                    <h4 className="font-semibold text-red-700 dark:text-red-300">
+                    <h4 className="text-destructive-text font-semibold">
                       Script runs locally but fails on server
                     </h4>
                     <p className="text-muted-foreground text-sm">
@@ -520,7 +520,7 @@ echo "Event completed successfully!"`}</CodeBlock>
                     </p>
                   </div>
                   <div>
-                    <h4 className="font-semibold text-red-700 dark:text-red-300">
+                    <h4 className="text-destructive-text font-semibold">
                       Schedule doesn't trigger
                     </h4>
                     <p className="text-muted-foreground text-sm">
@@ -534,7 +534,7 @@ echo "Event completed successfully!"`}</CodeBlock>
           </div>
         </section>
 
-        <div className="rounded-lg border border-green-200 bg-gradient-to-r from-green-50 to-blue-50 p-6 dark:border-green-800 dark:from-green-950 dark:to-blue-950">
+        <div className="border-success/40 from-success/10 to-info/10 rounded-lg border bg-gradient-to-r p-6">
           <h3 className="mb-2 font-semibold">Congratulations!</h3>
           <p className="text-muted-foreground mb-4 text-sm">
             You've successfully created and scheduled your first Cronium event.

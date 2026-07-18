@@ -107,7 +107,7 @@ function CodeExample({
     <div className="mb-6">
       <h4 className="mb-3 font-semibold">{title}</h4>
       <pre
-        className="overflow-x-auto rounded-lg bg-gray-900 p-4 text-sm text-gray-100"
+        className="code-surface overflow-x-auto rounded-lg p-4 text-sm"
         data-language={language}
       >
         <code>{code}</code>
@@ -127,7 +127,9 @@ export default function FeaturesPage() {
     <DocsLayout tableOfContents={tableOfContents}>
       <div className="mx-auto max-w-4xl">
         <div className="mb-12">
-          <h1 className="mb-4 text-4xl font-bold">Cronium Features</h1>
+          <h1 className="mb-4 text-4xl font-bold tracking-tight">
+            Cronium Features
+          </h1>
           <p className="text-muted-foreground text-xl">
             Discover all the powerful features that make Cronium the ultimate
             automation platform for modern development teams.
@@ -216,7 +218,7 @@ export default function FeaturesPage() {
         </div>
 
         <section id="script-automation" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">Script Automation</h2>
+          <h2 className="mb-6 text-2xl font-bold">Script Automation</h2>
           <div className="space-y-6">
             <p className="text-muted-foreground text-lg">
               Cronium supports multiple scripting languages and execution
@@ -280,7 +282,7 @@ if __name__ == "__main__":
         </section>
 
         <section id="remote-execution" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">Remote Execution</h2>
+          <h2 className="mb-6 text-2xl font-bold">Remote Execution</h2>
           <div className="space-y-6">
             <p className="text-muted-foreground text-lg">
               Execute scripts on multiple remote servers simultaneously with
@@ -314,7 +316,7 @@ if __name__ == "__main__":
         </section>
 
         <section id="workflow-engine" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">Workflow Engine</h2>
+          <h2 className="mb-6 text-2xl font-bold">Workflow Engine</h2>
           <div className="space-y-6">
             <p className="text-muted-foreground text-lg">
               Create sophisticated automation workflows with our visual editor.
@@ -371,7 +373,7 @@ if __name__ == "__main__":
         </section>
 
         <section id="scheduling-system" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">Scheduling System</h2>
+          <h2 className="mb-6 text-2xl font-bold">Scheduling System</h2>
           <div className="space-y-6">
             <p className="text-muted-foreground text-lg">
               Flexible scheduling system supporting cron expressions, one-time
@@ -442,7 +444,7 @@ if __name__ == "__main__":
         </section>
 
         <section id="real-time-monitoring" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">Real-time Monitoring</h2>
+          <h2 className="mb-6 text-2xl font-bold">Real-time Monitoring</h2>
           <div className="space-y-6">
             <p className="text-muted-foreground text-lg">
               Comprehensive monitoring and analytics to track performance,
@@ -507,7 +509,7 @@ if __name__ == "__main__":
         </section>
 
         <section id="security-features" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">Security Features</h2>
+          <h2 className="mb-6 text-2xl font-bold">Security Features</h2>
           <div className="space-y-6">
             <p className="text-muted-foreground text-lg">
               Enterprise-grade security features to protect your infrastructure
@@ -577,7 +579,7 @@ if __name__ == "__main__":
         </section>
 
         <section id="api-integration" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">API Integration</h2>
+          <h2 className="mb-6 text-2xl font-bold">API Integration</h2>
           <div className="space-y-6">
             <p className="text-muted-foreground text-lg">
               Comprehensive REST API for integrating Cronium with your existing
@@ -617,7 +619,7 @@ if __name__ == "__main__":
         </section>
 
         <section id="environment-management" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">Environment Management</h2>
+          <h2 className="mb-6 text-2xl font-bold">Environment Management</h2>
           <p className="text-muted-foreground mb-6 text-lg">
             Manage environment variables and configuration across different
             deployment environments.
@@ -652,7 +654,7 @@ if __name__ == "__main__":
         </section>
 
         <section id="notification-system" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">Notification System</h2>
+          <h2 className="mb-6 text-2xl font-bold">Notification System</h2>
           <p className="text-muted-foreground mb-6 text-lg">
             Stay informed about your automation status with comprehensive
             notification options.
@@ -706,7 +708,7 @@ if __name__ == "__main__":
         </section>
 
         <section id="role-based-access" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">Role-Based Access Control</h2>
+          <h2 className="mb-6 text-2xl font-bold">Role-Based Access Control</h2>
           <p className="text-muted-foreground mb-6 text-lg">
             Granular permission system to control user access and maintain
             security.
@@ -755,7 +757,7 @@ if __name__ == "__main__":
           </Card>
         </section>
 
-        <div className="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 dark:border-blue-800 dark:from-blue-950 dark:to-indigo-950">
+        <div className="border-info/40 from-info/10 to-primary/10 rounded-lg border bg-gradient-to-r p-6">
           <h3 className="mb-2 font-semibold">Ready to Get Started?</h3>
           <p className="text-muted-foreground mb-4 text-sm">
             Explore our comprehensive documentation to learn how to use these

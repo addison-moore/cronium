@@ -1,4 +1,5 @@
 import React from "react";
+import { Callout } from "@/components/docs/callout";
 import DocsLayout from "@/components/docs/docs-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { Database, ArrowRight, Settings, FlaskConical } from "lucide-react";
@@ -503,7 +504,9 @@ export default function RuntimeHelpersPage() {
       <ApiCodeExamples>
         <div className="mx-auto max-w-4xl">
           <div className="mb-8">
-            <h1 className="mb-4 text-4xl font-bold">Cronium Runtime Helpers</h1>
+            <h1 className="mb-4 text-4xl font-bold tracking-tight">
+              Cronium Runtime Helpers
+            </h1>
             <p className="text-muted-foreground text-xl">
               Powerful runtime functions for data exchange, state management,
               and workflow control across Python, Node.js, and Bash scripts.
@@ -568,24 +571,24 @@ export default function RuntimeHelpersPage() {
               </CardContent>
             </Card>
 
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950">
-              <h4 className="mb-2 font-semibold text-amber-800 dark:text-amber-200">
+            <Callout variant="warning">
+              <h4 className="text-warning-text mb-2 font-semibold">
                 Naming conventions differ by language
               </h4>
-              <p className="text-sm text-amber-700 dark:text-amber-300">
+              <p className="text-warning-text text-sm">
                 Each helper follows the idiom of its language. Node.js uses
                 camelCase (<code>cronium.getVariable()</code>), Python uses
                 snake_case (<code>cronium.get_variable()</code>), and Bash
                 exposes shell functions (<code>cronium_get_variable</code>). The
                 behavior is identical — only the spelling changes.
               </p>
-            </div>
+            </Callout>
 
-            <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
-              <h4 className="mb-2 font-semibold text-blue-800 dark:text-blue-200">
+            <Callout variant="info" className="mt-4">
+              <h4 className="text-info-text mb-2 font-semibold">
                 Automatic Availability
               </h4>
-              <ul className="space-y-1 text-sm text-blue-700 dark:text-blue-300">
+              <ul className="text-info-text space-y-1 text-sm">
                 <li>
                   • <strong>Python:</strong> <code>cronium</code> object
                   available globally
@@ -601,7 +604,7 @@ export default function RuntimeHelpersPage() {
                 <li>• No imports, requires, or sourcing needed</li>
                 <li>• Works in both local and remote execution environments</li>
               </ul>
-            </div>
+            </Callout>
           </section>
 
           <section id="input-output" className="mb-12">
@@ -631,11 +634,11 @@ export default function RuntimeHelpersPage() {
               />
             </div>
 
-            <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950">
-              <h4 className="mb-2 font-semibold text-green-800 dark:text-green-200">
+            <Callout variant="tip" className="mt-6">
+              <h4 className="text-success-text mb-2 font-semibold">
                 Data Flow
               </h4>
-              <ul className="space-y-1 text-sm text-green-700 dark:text-green-300">
+              <ul className="text-success-text space-y-1 text-sm">
                 <li>
                   • Input from API: Include <code>"input": {"{...}"}</code> in
                   request body
@@ -646,7 +649,7 @@ export default function RuntimeHelpersPage() {
                 <li>• Output becomes input for connected workflow nodes</li>
                 <li>• JSON format ensures cross-language compatibility</li>
               </ul>
-            </div>
+            </Callout>
           </section>
 
           <section id="variables" className="mb-12">
@@ -663,11 +666,11 @@ export default function RuntimeHelpersPage() {
               title="Persistent Variables"
             />
 
-            <div className="mt-6 rounded-lg border border-purple-200 bg-purple-50 p-4 dark:border-purple-800 dark:bg-purple-950">
-              <h4 className="mb-2 font-semibold text-purple-800 dark:text-purple-200">
+            <Callout variant="note" className="mt-6">
+              <h4 className="text-primary mb-2 font-semibold">
                 Variable Features
               </h4>
-              <ul className="space-y-1 text-sm text-purple-700 dark:text-purple-300">
+              <ul className="text-primary space-y-1 text-sm">
                 <li>
                   • <strong>User-scoped:</strong> Each user has their own
                   variable namespace
@@ -689,7 +692,7 @@ export default function RuntimeHelpersPage() {
                   timestamps, configuration
                 </li>
               </ul>
-            </div>
+            </Callout>
           </section>
 
           <section id="conditions" className="mb-12">
@@ -706,11 +709,11 @@ export default function RuntimeHelpersPage() {
               title="Conditional Workflow Routing"
             />
 
-            <div className="mt-6 rounded-lg border border-orange-200 bg-orange-50 p-4 dark:border-orange-800 dark:bg-orange-950">
-              <h4 className="mb-2 font-semibold text-orange-800 dark:text-orange-200">
+            <Callout variant="warning" className="mt-6">
+              <h4 className="text-warning-text mb-2 font-semibold">
                 Workflow Connections
               </h4>
-              <ul className="space-y-1 text-sm text-orange-700 dark:text-orange-300">
+              <ul className="text-warning-text space-y-1 text-sm">
                 <li>
                   • <strong>Always:</strong> Connection always executes
                   (default)
@@ -727,7 +730,7 @@ export default function RuntimeHelpersPage() {
                   <code>cronium.setCondition(true)</code> was called
                 </li>
               </ul>
-            </div>
+            </Callout>
           </section>
 
           <section id="event-metadata" className="mb-12">
@@ -743,11 +746,11 @@ export default function RuntimeHelpersPage() {
               title="Event Information"
             />
 
-            <div className="mt-6 rounded-lg border border-cyan-200 bg-cyan-50 p-4 dark:border-cyan-800 dark:bg-cyan-950">
-              <h4 className="mb-2 font-semibold text-cyan-800 dark:text-cyan-200">
+            <Callout variant="info" className="mt-6">
+              <h4 className="text-info-text mb-2 font-semibold">
                 Available Metadata
               </h4>
-              <ul className="space-y-1 text-sm text-cyan-700 dark:text-cyan-300">
+              <ul className="text-info-text space-y-1 text-sm">
                 <li>
                   • <strong>id:</strong> Unique event identifier
                 </li>
@@ -772,7 +775,7 @@ export default function RuntimeHelpersPage() {
                   • <strong>lastRunAt:</strong> Timestamp of last execution
                 </li>
               </ul>
-            </div>
+            </Callout>
           </section>
 
           <section id="complete-examples" className="mb-12">

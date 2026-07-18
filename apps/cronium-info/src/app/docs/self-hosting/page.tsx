@@ -57,7 +57,9 @@ export default function SelfHostingPage() {
     <DocsLayout tableOfContents={tableOfContents}>
       <div className="mx-auto max-w-4xl">
         <div className="mb-12">
-          <h1 className="mb-4 text-4xl font-bold">Self-Hosting Cronium</h1>
+          <h1 className="mb-4 text-4xl font-bold tracking-tight">
+            Self-Hosting Cronium
+          </h1>
           <p className="text-muted-foreground text-xl">
             Deploy the Cronium application stack with Docker Compose. This guide
             covers the required services, recommended configuration, and the
@@ -67,7 +69,7 @@ export default function SelfHostingPage() {
         </div>
 
         <section id="overview" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">Overview</h2>
+          <h2 className="mb-6 text-2xl font-bold">Overview</h2>
           <p>
             A production Cronium deployment consists of the Next.js control
             plane (<code>cronium-app</code>), the secure job orchestrator (
@@ -79,7 +81,7 @@ export default function SelfHostingPage() {
         </section>
 
         <section id="prerequisites" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">Prerequisites</h2>
+          <h2 className="mb-6 text-2xl font-bold">Prerequisites</h2>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -112,7 +114,7 @@ export default function SelfHostingPage() {
         </section>
 
         <section id="env-setup" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">Prepare Your Environment</h2>
+          <h2 className="mb-6 text-2xl font-bold">Prepare Your Environment</h2>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -173,7 +175,7 @@ JWT_SECRET=<paste value>`}
         </section>
 
         <section id="container-images" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">Container Images</h2>
+          <h2 className="mb-6 text-2xl font-bold">Container Images</h2>
           <div className="space-y-6">
             <p>
               The Compose example below assumes the following images are
@@ -208,7 +210,7 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
         </section>
 
         <section id="docker-compose-example" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">Docker Compose Example</h2>
+          <h2 className="mb-6 text-2xl font-bold">Docker Compose Example</h2>
           <div className="space-y-6">
             <p>
               Copy the following Compose file into{" "}
@@ -352,7 +354,7 @@ volumes:
         </section>
 
         <section id="environment-variables" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">Environment Variables</h2>
+          <h2 className="mb-6 text-2xl font-bold">Environment Variables</h2>
           <div className="space-y-6">
             <p>
               The tables below summarise the key variables per service. Values
@@ -707,7 +709,7 @@ volumes:
         </section>
 
         <section id="deployment-workflow" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">Deployment Workflow</h2>
+          <h2 className="mb-6 text-2xl font-bold">Deployment Workflow</h2>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -762,7 +764,7 @@ volumes:
         </section>
 
         <section id="post-deployment" className="mb-12">
-          <h2 className="mb-6 text-3xl font-bold">Post-Deployment Checklist</h2>
+          <h2 className="mb-6 text-2xl font-bold">Post-Deployment Checklist</h2>
           <div className="space-y-6">
             <Card>
               <CardHeader>
@@ -867,7 +869,7 @@ volumes:
           </div>
         </section>
 
-        <div className="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 dark:border-blue-800 dark:from-blue-950 dark:to-indigo-950">
+        <div className="border-info/40 from-info/10 to-primary/10 rounded-lg border bg-gradient-to-r p-6">
           <h3 className="mb-2 font-semibold">Need Help?</h3>
           <p className="text-muted-foreground mb-4 text-sm">
             Reach out to the Cronium community or open a discussion in the

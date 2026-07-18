@@ -1,4 +1,5 @@
 import React from "react";
+import { Callout } from "@/components/docs/callout";
 import DocsLayout from "@/components/docs/docs-layout";
 import {
   Card,
@@ -77,7 +78,9 @@ export default function BuildWorkflowPage() {
     <DocsLayout tableOfContents={tableOfContents}>
       <div className="mx-auto max-w-4xl">
         <div className="mb-8">
-          <h1 className="mb-4 text-4xl font-bold">Build a Workflow</h1>
+          <h1 className="mb-4 text-4xl font-bold tracking-tight">
+            Build a Workflow
+          </h1>
           <p className="text-muted-foreground text-xl">
             Combine multiple events into a single automation that reacts to
             upstream results. You&apos;ll start with an empty canvas, place
@@ -138,7 +141,7 @@ export default function BuildWorkflowPage() {
               optional summary. The description helps teammates understand the
               automation&apos;s purpose.
             </p>
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm dark:border-blue-800 dark:bg-blue-950/30">
+            <Callout variant="info" className="text-sm">
               <ul className="space-y-1">
                 <li>
                   <strong>Trigger type</strong>: choose <em>manual</em> while
@@ -151,7 +154,7 @@ export default function BuildWorkflowPage() {
                   to group workflows in the dashboard list.
                 </li>
               </ul>
-            </div>
+            </Callout>
           </div>
         </StepCard>
 

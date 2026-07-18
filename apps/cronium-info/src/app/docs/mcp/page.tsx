@@ -33,7 +33,7 @@ export default function McpPage() {
             <div className="bg-primary/10 rounded-lg p-2">
               <Bot className="text-primary h-6 w-6" />
             </div>
-            <h1 className="text-4xl font-bold tracking-tight">
+            <h1 className="mb-4 text-4xl font-bold tracking-tight">
               MCP — build automations with AI
             </h1>
           </div>

@@ -72,7 +72,7 @@ function SimpleCodeBlock({
 }) {
   return (
     <div className="relative">
-      <pre className="border-border overflow-x-auto rounded-lg border bg-stone-900 p-4 text-sm text-gray-100">
+      <pre className="border-border code-surface overflow-x-auto rounded-lg border p-4 text-sm">
         <code>{children}</code>
       </pre>
       <button className="absolute top-2 right-2 p-2 text-gray-400 hover:text-gray-200">
@@ -132,14 +132,14 @@ function EndpointCard({
             <Badge
               className={
                 method === "GET"
-                  ? "bg-info border-transparent text-white"
+                  ? "bg-info text-info-foreground border-transparent"
                   : method === "POST"
-                    ? "bg-success border-transparent text-white"
+                    ? "bg-success text-success-foreground border-transparent"
                     : method === "PUT"
-                      ? "bg-warning border-transparent text-white"
+                      ? "bg-warning text-warning-foreground border-transparent"
                       : method === "PATCH"
-                        ? "bg-warning border-transparent text-white"
-                        : "bg-destructive border-transparent text-white"
+                        ? "bg-warning text-warning-foreground border-transparent"
+                        : "bg-destructive text-destructive-foreground border-transparent"
               }
             >
               {method}
@@ -208,7 +208,9 @@ export default function APIDocsPage() {
       <ApiCodeExamples>
         <div className="mx-auto max-w-4xl">
           <div className="mb-8">
-            <h1 className="mb-4 text-4xl font-bold">API Reference</h1>
+            <h1 className="mb-4 text-4xl font-bold tracking-tight">
+              API Reference
+            </h1>
             <p className="text-muted-foreground text-xl">
               Complete API documentation for integrating with Cronium
               programmatically.
@@ -844,11 +846,11 @@ export default function APIDocsPage() {
               examples={variablesApiExamples.deleteVariable}
             />
 
-            <div className="mt-6 rounded-lg bg-blue-50 p-4 dark:bg-blue-950/20">
-              <h4 className="mb-2 font-semibold text-blue-900 dark:text-blue-100">
+            <div className="bg-info/10 mt-6 rounded-lg p-4">
+              <h4 className="text-info-text mb-2 font-semibold">
                 Using Variables in Scripts
               </h4>
-              <p className="mb-3 text-sm text-blue-700 dark:text-blue-300">
+              <p className="text-info-text mb-3 text-sm">
                 Variables created via the API can be accessed in your scripts
                 using runtime helpers:
               </p>

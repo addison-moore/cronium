@@ -1,4 +1,6 @@
 import React from "react";
+import { SimpleCodeBlock } from "@/components/docs/api-code-examples";
+import { Callout } from "@/components/docs/callout";
 import Link from "next/link";
 import DocsLayout from "@/components/docs/docs-layout";
 import {
@@ -91,11 +93,7 @@ function CodeBlock({
   children: string;
   _language?: string;
 }) {
-  return (
-    <pre className="overflow-x-auto rounded-lg bg-gray-900 p-4 text-sm text-gray-100">
-      <code>{children}</code>
-    </pre>
-  );
+  return <SimpleCodeBlock language={_language}>{children}</SimpleCodeBlock>;
 }
 
 // Enable Partial Prerendering for this page
@@ -109,22 +107,24 @@ export default function QuickStartPage() {
     <DocsLayout tableOfContents={tableOfContents}>
       <div className="mx-auto max-w-4xl">
         <div className="mb-8">
-          <h1 className="mb-4 text-4xl font-bold">Quick Start Guide</h1>
+          <h1 className="mb-4 text-4xl font-bold tracking-tight">
+            Quick Start Guide
+          </h1>
           <p className="text-muted-foreground text-xl">
             Get up and running with Cronium in just a few minutes. This guide
             will walk you through creating your first automated script.
           </p>
         </div>
 
-        <div className="mb-8 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
-          <h3 className="mb-2 font-semibold text-blue-900 dark:text-blue-100">
+        <Callout variant="info" className="mb-8">
+          <h3 className="text-info-text mb-2 font-semibold">
             Estimated Time: 10 minutes
           </h3>
-          <p className="text-sm text-blue-800 dark:text-blue-200">
+          <p className="text-info-text text-sm">
             By the end of this guide, you'll have a working automated script
             that runs on a schedule.
           </p>
-        </div>
+        </Callout>
 
         <section id="prerequisites" className="mb-12">
           <h2 className="mb-4 text-2xl font-bold">Prerequisites</h2>
@@ -239,13 +239,13 @@ ssh-copy-id user@your-server.com`}</CodeBlock>
               </div>
             </div>
 
-            <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950">
-              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+            <Callout variant="warning">
+              <p className="text-warning-text text-sm">
                 <strong>Security Note:</strong> Your SSH keys are encrypted and
                 stored securely. Cronium uses industry-standard encryption to
                 protect your credentials.
               </p>
-            </div>
+            </Callout>
           </div>
         </StepCard>
 
@@ -337,7 +337,7 @@ uptime`}</CodeBlock>
                 <p className="text-muted-foreground mb-2 text-sm">
                   Watch the real-time logs as your script executes:
                 </p>
-                <div className="rounded-lg bg-gray-900 p-4 font-mono text-sm text-green-400">
+                <div className="code-surface rounded-lg p-4 font-mono text-sm text-green-400">
                   <div className="mb-2 flex items-center gap-2">
                     <Play className="h-4 w-4" />
                     <span>Execution started...</span>
@@ -362,12 +362,12 @@ uptime`}</CodeBlock>
               </div>
             </div>
 
-            <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950">
-              <p className="text-sm text-green-800 dark:text-green-200">
+            <Callout variant="tip">
+              <p className="text-success-text text-sm">
                 <strong>Success!</strong> If you see the output above, your
                 event is working correctly and ready to be scheduled.
               </p>
-            </div>
+            </Callout>
           </div>
         </StepCard>
 
@@ -435,18 +435,18 @@ uptime`}</CodeBlock>
               </div>
             </div>
 
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
+            <Callout variant="info">
               <div className="flex items-start gap-3">
                 <Clock className="text-info mt-1 h-5 w-5" />
                 <div>
-                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                  <p className="text-info-text text-sm">
                     <strong>Congratulations!</strong> Your event is now
                     scheduled and will run automatically. You can monitor its
                     execution in the Events dashboard.
                   </p>
                 </div>
               </div>
-            </div>
+            </Callout>
           </div>
         </StepCard>
 
@@ -538,7 +538,7 @@ uptime`}</CodeBlock>
           </div>
         </section>
 
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-900">
+        <div className="border-border bg-muted rounded-lg border p-6">
           <h3 className="mb-2 font-semibold">Need Help?</h3>
           <p className="text-muted-foreground mb-3 text-sm">
             If you run into any issues or have questions, here are some

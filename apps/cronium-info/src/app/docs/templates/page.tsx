@@ -1,4 +1,5 @@
 import React from "react";
+import { Callout } from "@/components/docs/callout";
 import DocsLayout from "@/components/docs/docs-layout";
 import {
   Card,
@@ -19,6 +20,9 @@ import {
   AlertCircle,
   Shield,
   Save,
+  Mail,
+  MessageSquare,
+  Gamepad2,
 } from "lucide-react";
 import { SimpleCodeBlock } from "@/components/docs/api-code-examples";
 import type { Metadata } from "next";
@@ -57,7 +61,7 @@ export default function TemplatesPage() {
             <div className="bg-primary/10 rounded-lg p-2">
               <FileText className="text-primary h-6 w-6" />
             </div>
-            <h1 className="text-4xl font-bold tracking-tight">
+            <h1 className="mb-4 text-4xl font-bold tracking-tight">
               Tool Action Templates
             </h1>
           </div>
@@ -769,7 +773,7 @@ Variables: {{json cronium.getVariables}}`}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  📧 Email Template
+                  <Mail className="text-primary h-4 w-4" /> Email Template
                 </CardTitle>
                 <CardDescription>
                   HTML email template for event notifications
@@ -803,7 +807,8 @@ Variables: {{json cronium.getVariables}}`}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  💬 Slack Template
+                  <MessageSquare className="text-primary h-4 w-4" /> Slack
+                  Template
                 </CardTitle>
                 <CardDescription>
                   JSON Block Kit template for Slack notifications
@@ -857,7 +862,7 @@ Variables: {{json cronium.getVariables}}`}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  🎮 Discord Template
+                  <Gamepad2 className="text-primary h-4 w-4" /> Discord Template
                 </CardTitle>
                 <CardDescription>
                   JSON embed template for Discord webhooks
@@ -1003,23 +1008,23 @@ Variables: {{json cronium.getVariables}}`}
             </Card>
           </div>
 
-          <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/20">
+          <Callout variant="info" className="mt-6">
             <div className="flex items-start gap-3">
-              <div className="rounded bg-blue-100 p-1 dark:bg-blue-900">
-                <Settings className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <div className="bg-info/15 rounded p-1">
+                <Settings className="text-info h-4 w-4" />
               </div>
               <div>
-                <h4 className="mb-1 font-medium text-blue-800 dark:text-blue-200">
+                <h4 className="text-info-text mb-1 font-medium">
                   Template Management
                 </h4>
-                <p className="text-sm text-blue-700 dark:text-blue-300">
+                <p className="text-info-text text-sm">
                   Manage your templates in the Tools → Templates section of your
                   dashboard. Filter by tool and action type to organize your
                   templates effectively.
                 </p>
               </div>
             </div>
-          </div>
+          </Callout>
         </section>
 
         {/* Best Practices */}

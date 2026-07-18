@@ -1,4 +1,5 @@
 import React from "react";
+import { Callout } from "@/components/docs/callout";
 import DocsLayout from "@/components/docs/docs-layout";
 import {
   Card,
@@ -316,7 +317,7 @@ export default function UnifiedIOPage() {
       <ApiCodeExamples>
         <div className="mx-auto max-w-4xl">
           <div className="mb-8">
-            <h1 className="mb-4 text-4xl font-bold">
+            <h1 className="mb-4 text-4xl font-bold tracking-tight">
               Unified Input/Output System
             </h1>
             <p className="text-muted-foreground text-xl">
@@ -384,11 +385,11 @@ export default function UnifiedIOPage() {
               title="Accessing Input Data"
             />
 
-            <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
-              <h4 className="mb-2 font-semibold text-blue-800 dark:text-blue-200">
+            <Callout variant="info" className="mt-6">
+              <h4 className="text-info-text mb-2 font-semibold">
                 Automatic Injection
               </h4>
-              <ul className="space-y-1 text-sm text-blue-700 dark:text-blue-300">
+              <ul className="text-info-text space-y-1 text-sm">
                 <li>
                   • <strong>Python:</strong> <code>cronium</code> object
                   available globally
@@ -404,7 +405,7 @@ export default function UnifiedIOPage() {
                 <li>• Automatic JSON parsing and error handling</li>
                 <li>• Returns empty object if no input provided</li>
               </ul>
-            </div>
+            </Callout>
           </section>
 
           <section id="cronium-output" className="mb-12">
@@ -454,11 +455,11 @@ export default function UnifiedIOPage() {
               title="Accessing Event Metadata"
             />
 
-            <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
-              <h4 className="mb-2 font-semibold text-blue-800 dark:text-blue-200">
+            <Callout variant="info" className="mt-6">
+              <h4 className="text-info-text mb-2 font-semibold">
                 Available Event Data
               </h4>
-              <ul className="space-y-1 text-sm text-blue-700 dark:text-blue-300">
+              <ul className="text-info-text space-y-1 text-sm">
                 <li>
                   • <strong>id:</strong> Unique event identifier
                 </li>
@@ -487,7 +488,7 @@ export default function UnifiedIOPage() {
                   • <strong>createdAt/updatedAt:</strong> Timestamps
                 </li>
               </ul>
-            </div>
+            </Callout>
           </section>
 
           <section id="api-integration" className="mb-12">
@@ -616,35 +617,35 @@ Authorization: Bearer YOUR_API_TOKEN
                   <div>
                     <h4 className="mb-3 font-semibold">Common Issues</h4>
                     <div className="space-y-4">
-                      <div className="border-l-4 border-red-500 bg-red-50 p-4 dark:bg-red-950">
-                        <h5 className="font-medium text-red-800 dark:text-red-200">
+                      <Callout variant="danger" className="border-l-4">
+                        <h5 className="text-destructive-text font-medium">
                           Runtime helper not found
                         </h5>
-                        <p className="mt-1 text-sm text-red-700 dark:text-red-300">
+                        <p className="text-destructive-text mt-1 text-sm">
                           The cronium object is automatically available in
                           containerized execution. No imports needed.
                         </p>
-                      </div>
+                      </Callout>
 
-                      <div className="border-l-4 border-yellow-500 bg-yellow-50 p-4 dark:bg-yellow-950">
-                        <h5 className="font-medium text-yellow-800 dark:text-yellow-200">
+                      <Callout variant="warning" className="border-l-4">
+                        <h5 className="text-warning-text font-medium">
                           cronium.input is empty
                         </h5>
-                        <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
+                        <p className="text-warning-text mt-1 text-sm">
                           Check if input is being passed via API or if workflow
                           connections are properly configured.
                         </p>
-                      </div>
+                      </Callout>
 
-                      <div className="border-l-4 border-blue-500 bg-blue-50 p-4 dark:bg-blue-950">
-                        <h5 className="font-medium text-blue-800 dark:text-blue-200">
+                      <Callout variant="info" className="border-l-4">
+                        <h5 className="text-info-text font-medium">
                           JSON output errors
                         </h5>
-                        <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                        <p className="text-info-text mt-1 text-sm">
                           Validate JSON structure before calling
                           cronium.output(). Use JSON validators or linters.
                         </p>
-                      </div>
+                      </Callout>
                     </div>
                   </div>
 

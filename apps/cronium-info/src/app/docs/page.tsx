@@ -97,7 +97,7 @@ export default function DocsPage() {
 
         {/* Documentation Sections */}
         <div className="mb-16">
-          <h2 className="mb-8 text-3xl font-bold">Documentation</h2>
+          <h2 className="mb-8 text-2xl font-bold">Documentation</h2>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <DocSection

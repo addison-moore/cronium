@@ -64,7 +64,9 @@ export default function HowToPage() {
     <DocsLayout tableOfContents={tableOfContents}>
       <div className="mx-auto max-w-6xl">
         <div className="mb-12">
-          <h1 className="mb-4 text-4xl font-bold">How-to Guides</h1>
+          <h1 className="mb-4 text-4xl font-bold tracking-tight">
+            How-to Guides
+          </h1>
           <p className="text-muted-foreground text-xl">
             Follow focused walkthroughs that show you how to complete the most
             common setup tasks inside the Cronium dashboard.

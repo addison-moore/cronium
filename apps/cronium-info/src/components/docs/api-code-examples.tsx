@@ -112,7 +112,7 @@ export function CodeBlock({
       {/* Code Block */}
       <div className="relative">
         <pre
-          className="border-border overflow-x-auto rounded-lg border bg-stone-900 p-4 text-sm text-gray-100"
+          className="border-border code-surface overflow-x-auto rounded-lg border p-4 text-sm"
           suppressHydrationWarning
         >
           {mounted && highlightedCode !== code ? (
@@ -172,7 +172,7 @@ export function SimpleCodeBlock({
   return (
     <div className="relative">
       <pre
-        className={`border-border overflow-x-auto rounded-lg border bg-stone-900 p-4 text-sm text-gray-100 ${className ?? ""}`}
+        className={`border-border code-surface overflow-x-auto rounded-lg border p-4 text-sm ${className ?? ""}`}
         suppressHydrationWarning
       >
         {mounted && highlightedCode !== children ? (
