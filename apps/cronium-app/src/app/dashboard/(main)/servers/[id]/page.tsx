@@ -12,7 +12,7 @@ import {
   Eye,
   Terminal as TerminalIcon,
 } from "lucide-react";
-import { Button, PageShell } from "@cronium/ui";
+import { Button, PageShell, DetailPageSkeleton } from "@cronium/ui";
 import {
   Card,
   CardContent,
@@ -40,6 +40,7 @@ import ServerForm from "@/components/dashboard/ServerForm";
 import Terminal from "@/components/terminal/Terminal-lazy";
 import { usePermissions } from "@/hooks/usePermissions";
 import { ServerDetailsHeader } from "@/components/server-details/ServerDetailsHeader";
+import { NotFoundCard } from "@/components/error/not-found-card";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 import { type UpdateServerInput } from "@shared/schemas/servers";
@@ -153,23 +154,7 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
   };
 
   if (isLoading) {
-    return (
-      <PageShell>
-        <div className="mb-6 flex items-center">
-          <Button variant="ghost" size="sm" className="mr-2" asChild>
-            <Link href="/dashboard/servers">
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Back to Servers
-            </Link>
-          </Button>
-          <h1 className="text-2xl font-semibold">Loading Server...</h1>
-        </div>
-
-        <div className="flex h-64 items-center justify-center">
-          <Spinner size="lg" />
-        </div>
-      </PageShell>
-    );
+    return <DetailPageSkeleton />;
   }
 
   if (!server) {
@@ -185,20 +170,10 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
           <h1 className="text-2xl font-semibold">Server Not Found</h1>
         </div>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col items-center justify-center p-8">
-              <AlertCircle className="text-destructive mb-4 h-16 w-16" />
-              <h2 className="mb-2 text-xl font-semibold">Server Not Found</h2>
-              <p className="mb-4 text-center text-gray-500">
-                The server you're looking for doesn't exist or has been deleted.
-              </p>
-              <Button asChild>
-                <Link href="/dashboard/servers">View All Servers</Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <NotFoundCard
+          title="Server Not Found"
+          description="The server you're looking for doesn't exist or has been deleted."
+        />
       </PageShell>
     );
   }
@@ -242,7 +217,7 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
             >
               {checkHealthMutation.isPending ? (
                 <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  <RefreshCw className="mr-2 h-4 w-4 motion-safe:animate-spin" />
                   Checking...
                 </>
               ) : (

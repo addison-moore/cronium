@@ -16,7 +16,9 @@ export function ThemeToggle({ showLabel = true }: { showLabel?: boolean }) {
   }, []);
 
   if (!mounted) {
-    return <div className="bg-muted h-9 w-[70px] animate-pulse rounded-md" />;
+    return (
+      <div className="bg-muted h-9 w-[70px] rounded-md motion-safe:animate-pulse" />
+    );
   }
 
   return (

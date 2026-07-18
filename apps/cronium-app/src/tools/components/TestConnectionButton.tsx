@@ -82,7 +82,7 @@ export function TestConnectionButton({
         disabled={isDisabled}
       >
         {isPending ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          <Loader2 className="mr-2 h-4 w-4 motion-safe:animate-spin" />
         ) : (
           <TestTube className="mr-2 h-4 w-4" />
         )}

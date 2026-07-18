@@ -281,7 +281,7 @@ export function ModularToolsManager() {
     return (
       <div className="flex h-96 items-center justify-center">
         <div className="text-center">
-          <div className="border-primary mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-t-transparent" />
+          <div className="border-primary mx-auto mb-4 h-8 w-8 rounded-full border-2 border-t-transparent motion-safe:animate-spin" />
           <p className="text-muted-foreground">Loading tools...</p>
         </div>
       </div>

@@ -9,6 +9,8 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  TableSkeleton,
+  EmptyState,
 } from "@cronium/ui";
 import {
   Table,
@@ -217,9 +219,7 @@ export function ActivityTable({
           <CardTitle>{title}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex h-64 items-center justify-center">
-            <Spinner size="lg" variant="primary" />
-          </div>
+          <TableSkeleton rows={6} columns={6} />
         </CardContent>
       </Card>
     );
@@ -241,7 +241,7 @@ export function ActivityTable({
             className="ml-auto"
           >
             <RefreshCw
-              className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+              className={`mr-2 h-4 w-4 ${isRefreshing ? "motion-safe:animate-spin" : ""}`}
             />
             {isRefreshing ? "Refreshing..." : "Refresh"}
           </Button>
@@ -249,12 +249,10 @@ export function ActivityTable({
       </CardHeader>
       <CardContent>
         {data.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10">
-            <FileText className="text-muted-foreground mb-4 h-16 w-16" />
-            <p className="text-muted-foreground text-center">
-              {emptyStateMessage}
-            </p>
-          </div>
+          <EmptyState
+            icon={<FileText className="h-10 w-10" />}
+            title={emptyStateMessage}
+          />
         ) : (
           <>
             <Table>

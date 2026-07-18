@@ -105,7 +105,7 @@ export default function WorkflowsCard({
         <CardContent>
           <div className="flex h-32 items-center justify-center">
             <div className="text-muted-foreground flex items-center space-x-2">
-              <RefreshCw className="h-4 w-4 animate-spin" />
+              <RefreshCw className="h-4 w-4 motion-safe:animate-spin" />
               <span>Loading workflows...</span>
             </div>
           </div>

@@ -172,7 +172,7 @@ export function ToolErrorDiagnostics({
             disabled={isLoading}
           >
             <RefreshCw
-              className={`mr-1 h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+              className={`mr-1 h-4 w-4 ${isLoading ? "motion-safe:animate-spin" : ""}`}
             />
             Refresh
           </Button>

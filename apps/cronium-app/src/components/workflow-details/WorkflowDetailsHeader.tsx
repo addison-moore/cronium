@@ -54,7 +54,7 @@ export function WorkflowDetailsHeader({
         >
           {isRunning ? (
             <>
-              <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
+              <RefreshCw className="mr-1.5 h-4 w-4 motion-safe:animate-spin" />
               <span className="sm:inline">Running</span>
             </>
           ) : (

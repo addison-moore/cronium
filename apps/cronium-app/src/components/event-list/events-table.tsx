@@ -283,7 +283,7 @@ export function EventsTable({
           title={copy.runEvent}
         >
           {isRunning[event.id] ? (
-            <Loader2 className="text-success h-4 w-4 animate-spin" />
+            <Loader2 className="text-success h-4 w-4 motion-safe:animate-spin" />
           ) : (
             <Play className="text-success h-4 w-4" />
           )}

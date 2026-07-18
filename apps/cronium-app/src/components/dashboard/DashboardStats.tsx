@@ -1,6 +1,6 @@
 "use client";
 
-import { StatCard } from "@cronium/ui";
+import { StatCard, ErrorState } from "@cronium/ui";
 import { ActivityTable } from "@/components/activity";
 import { type LogStatus } from "@/shared/schema";
 import {
@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { DashboardStatsSkeleton } from "@/components/dashboard/DashboardStatsSkeleton";
 import { QUERY_OPTIONS } from "@/trpc/shared";
 
 interface DashboardStats {
@@ -131,6 +132,21 @@ export default function DashboardStats() {
   const refreshData = useCallback(async () => {
     await refetchDashboard();
   }, [refetchDashboard]);
+
+  // First load: render the tailored skeleton instead of zero-value stats
+  if (isLoading && !dashboardData) {
+    return <DashboardStatsSkeleton />;
+  }
+
+  if (error && !dashboardData) {
+    return (
+      <ErrorState
+        title="Failed to load dashboard data"
+        message={error.message}
+        onRetry={() => void refetchDashboard()}
+      />
+    );
+  }
 
   // Calculate pagination values
   const totalItems = activityData?.length ?? 0;

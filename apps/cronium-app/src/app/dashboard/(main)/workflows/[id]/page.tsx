@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
   PageShell,
+  DetailPageSkeleton,
 } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { Badge } from "@cronium/ui";
@@ -16,6 +17,7 @@ import { Separator } from "@cronium/ui";
 import { useToast } from "@cronium/ui";
 import { Spinner } from "@cronium/ui";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
+import { NotFoundCard } from "@/components/error/not-found-card";
 import { trpc } from "@/lib/trpc";
 import WorkflowExecutionHistory from "@/components/workflows/WorkflowExecutionHistory";
 import WorkflowExecutionGraph from "@/components/workflows/WorkflowExecutionGraph";
@@ -743,29 +745,16 @@ export default function WorkflowDetailsPage({
   };
 
   if (isLoading) {
-    return (
-      <PageShell>
-        <div className="animate-pulse">
-          <div className="bg-muted mb-6 h-8 w-1/3 rounded-md"></div>
-          <div className="space-y-4">
-            <div className="bg-muted h-32 rounded-md"></div>
-            <div className="bg-muted h-64 rounded-md"></div>
-          </div>
-        </div>
-      </PageShell>
-    );
+    return <DetailPageSkeleton />;
   }
 
   if (!workflow) {
     return (
       <PageShell>
-        <div className="text-center">
-          <h1 className="mb-4 text-2xl font-semibold">Workflow Not Found</h1>
-          <Button onClick={() => router.back()}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Go Back
-          </Button>
-        </div>
+        <NotFoundCard
+          title="Workflow Not Found"
+          description="The workflow you're looking for doesn't exist or has been deleted."
+        />
       </PageShell>
     );
   }

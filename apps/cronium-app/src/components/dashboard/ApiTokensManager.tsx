@@ -161,7 +161,7 @@ export default function ApiTokensManager() {
   if (isLoading) {
     return (
       <div className="flex h-48 items-center justify-center">
-        <Loader2 className="text-primary h-8 w-8 animate-spin" />
+        <Loader2 className="text-primary h-8 w-8 motion-safe:animate-spin" />
       </div>
     );
   }
@@ -216,7 +216,7 @@ export default function ApiTokensManager() {
                     }
                   >
                     {createTokenMutation.isPending ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="mr-2 h-4 w-4 motion-safe:animate-spin" />
                     ) : (
                       <Plus className="mr-2 h-4 w-4" />
                     )}
@@ -315,7 +315,7 @@ export default function ApiTokensManager() {
                           disabled={revokeTokenMutation.isPending}
                         >
                           {revokeTokenMutation.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <Loader2 className="h-4 w-4 motion-safe:animate-spin" />
                           ) : (
                             "Revoke"
                           )}
@@ -331,7 +331,7 @@ export default function ApiTokensManager() {
                         className="text-destructive hover:text-destructive-text"
                       >
                         {deleteTokenMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <Loader2 className="h-4 w-4 motion-safe:animate-spin" />
                         ) : (
                           <Trash className="h-4 w-4" />
                         )}

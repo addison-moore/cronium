@@ -115,7 +115,7 @@ export function CodeViewer({
         className={cn("bg-muted/50 relative rounded-lg border p-4", className)}
         style={{ height }}
       >
-        <div className="animate-pulse">
+        <div className="motion-safe:animate-pulse">
           <div className="bg-muted-foreground/20 mb-2 h-4 w-3/4 rounded" />
           <div className="bg-muted-foreground/20 mb-2 h-4 w-full rounded" />
           <div className="bg-muted-foreground/20 h-4 w-5/6 rounded" />

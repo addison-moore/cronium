@@ -1,5 +1,5 @@
 import { api } from "@/trpc/server";
-import { Card, PageHeader, PageShell } from "@cronium/ui";
+import { Card, PageHeader, PageShell, JobsTableSkeleton } from "@cronium/ui";
 import { JobsTable } from "@/components/jobs/JobsTable";
 import { JobFilters } from "@/components/jobs/JobFilters";
 import { Suspense } from "react";
@@ -41,13 +41,7 @@ function JobsPageSkeleton() {
         <Skeleton className="h-10 w-32" />
         <Skeleton className="h-10 w-32" />
       </div>
-      <Card>
-        <div className="space-y-4 p-6">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full" />
-          ))}
-        </div>
-      </Card>
+      <JobsTableSkeleton />
     </div>
   );
 }

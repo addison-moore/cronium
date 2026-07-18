@@ -84,7 +84,7 @@ export function Spinner({
     <div className={wrapperClass}>
       <div
         className={cn(
-          "animate-spin rounded-full",
+          "rounded-full motion-safe:animate-spin",
           sizeClasses[size],
           variantClasses[variant],
           className,

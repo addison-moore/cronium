@@ -810,7 +810,7 @@ export default function ToolActionSection({
                       <TestTube
                         className={cn(
                           "h-4 w-4",
-                          isTestingAction && "animate-spin",
+                          isTestingAction && "motion-safe:animate-spin",
                         )}
                       />
                       Test Action

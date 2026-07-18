@@ -11,6 +11,9 @@ import {
   TableRow,
 } from "./table";
 import { ActionMenu } from "./action-menu";
+import { EmptyState } from "./empty-state";
+import { TableSkeleton } from "./table-skeleton";
+import { Inbox } from "lucide-react";
 import { cn } from "../lib/utils";
 
 export interface StandardizedTableAction {
@@ -36,6 +39,13 @@ export interface StandardizedTableProps<T> {
   actions?: (item: T) => StandardizedTableAction[];
   isLoading?: boolean;
   emptyMessage?: string;
+  /** Richer empty rendering (icon/description/action); emptyMessage is the title fallback */
+  empty?: {
+    icon?: React.ReactNode;
+    title?: string;
+    description?: string;
+    action?: { label: string; href: string; icon?: React.ReactNode };
+  };
   className?: string;
   rowClassName?: (item: T) => string;
 }
@@ -54,22 +64,28 @@ export function StandardizedTable<T extends { id: number | string }>({
   actions,
   isLoading = false,
   emptyMessage = "No data available",
+  empty,
   className,
   rowClassName,
 }: StandardizedTableProps<T>) {
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-muted-foreground animate-pulse">Loading...</div>
-      </div>
+      <TableSkeleton
+        rows={5}
+        columns={columns.length}
+        showActions={!!actions}
+      />
     );
   }
 
   if (data.length === 0) {
     return (
-      <div className="text-muted-foreground py-8 text-center">
-        {emptyMessage}
-      </div>
+      <EmptyState
+        icon={empty?.icon ?? <Inbox className="h-10 w-10" />}
+        title={empty?.title ?? emptyMessage}
+        {...(empty?.description ? { description: empty.description } : {})}
+        {...(empty?.action ? { action: empty.action } : {})}
+      />
     );
   }
 

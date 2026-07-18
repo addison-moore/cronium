@@ -171,12 +171,12 @@ const STATUS_MAP: Record<
   [LogStatus.RUNNING]: {
     label: "Running",
     theme: "info",
-    icon: () => <Loader2 className="animate-spin" />,
+    icon: () => <Loader2 className="motion-safe:animate-spin" />,
   },
   running: {
     label: "Running",
     theme: "info",
-    icon: () => <Loader2 className="animate-spin" />,
+    icon: () => <Loader2 className="motion-safe:animate-spin" />,
   },
   [EventStatus.PAUSED]: {
     label: "Paused",
@@ -249,7 +249,7 @@ const STATUS_MAP: Record<
   checking: {
     label: "Checking",
     theme: "info",
-    icon: () => <Loader2 className="animate-spin" />,
+    icon: () => <Loader2 className="motion-safe:animate-spin" />,
   },
   unknown: { label: "Unknown", theme: "neutral", icon: () => <Circle /> },
   connected: {

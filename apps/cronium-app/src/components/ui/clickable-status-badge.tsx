@@ -83,7 +83,9 @@ export function ClickableStatusBadge({
         {isUpdating ? (
           <>
             <span className="mr-0.5 flex-shrink-0">
-              <Loader2 className={`${iconSizeClasses[size]} animate-spin`} />
+              <Loader2
+                className={`${iconSizeClasses[size]} motion-safe:animate-spin`}
+              />
             </span>
             Updating...
           </>

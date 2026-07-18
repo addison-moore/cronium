@@ -707,7 +707,7 @@ export default function WorkflowExecutionGraph({
                       {layoutNodes.map((node) => (
                         <div
                           key={node.id}
-                          className={`absolute flex items-center justify-center rounded-md border px-1 py-1 transition-all duration-300 ${getStatusColor(node)} ${node.isCurrentlyExecuting || node.status === LogStatus.RUNNING ? "ring-opacity-50 animate-pulse ring-2 ring-blue-400" : ""} `}
+                          className={`absolute flex items-center justify-center rounded-md border px-1 py-1 transition-all duration-300 ${getStatusColor(node)} ${node.isCurrentlyExecuting || node.status === LogStatus.RUNNING ? "ring-opacity-50 ring-2 ring-blue-400 motion-safe:animate-pulse" : ""} `}
                           style={{
                             left: `${node.x + offsetX}px`,
                             top: `${node.y + offsetY}px`,

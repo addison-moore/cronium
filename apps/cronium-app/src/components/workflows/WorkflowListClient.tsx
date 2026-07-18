@@ -564,7 +564,7 @@ export function WorkflowListClient({
           title={copy.execute}
         >
           {executingWorkflows.has(workflow.id) ? (
-            <RefreshCw className="text-success h-4 w-4 animate-spin" />
+            <RefreshCw className="text-success h-4 w-4 motion-safe:animate-spin" />
           ) : (
             <Play className="text-success h-4 w-4" />
           )}
@@ -705,7 +705,7 @@ export function WorkflowListClient({
           disabled={isRefreshing}
         >
           <RefreshCw
-            className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+            className={`mr-2 h-4 w-4 ${isRefreshing ? "motion-safe:animate-spin" : ""}`}
           />
           {copy.refresh}
         </Button>

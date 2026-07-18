@@ -3,7 +3,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { Lock } from "lucide-react";
 import EventForm from "@/components/event-form/EventForm-lazy";
-import { PageHeader } from "@cronium/ui";
+import { PageHeader, DetailPageSkeleton } from "@cronium/ui";
 import { Spinner } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { useAuth } from "@/hooks/useAuth";
@@ -54,13 +54,7 @@ export default function EditEventPage() {
   );
 
   if (isLoading) {
-    return (
-      <div className="container py-6">
-        <div className="flex h-64 items-center justify-center">
-          <Spinner size="lg" />
-        </div>
-      </div>
-    );
+    return <DetailPageSkeleton withSidebar={false} />;
   }
 
   if (error || !event) {

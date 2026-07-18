@@ -19,6 +19,8 @@ export * from "./components/confirmation-dialog";
 export * from "./components/dialog";
 export * from "./components/dropdown-menu";
 export * from "./components/empty-state";
+export * from "./components/error-state";
+export * from "./components/detail-page-skeleton";
 export * from "./components/form";
 export * from "./components/input";
 export * from "./components/label";

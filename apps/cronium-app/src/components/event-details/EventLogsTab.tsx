@@ -204,7 +204,7 @@ export function EventLogsTab({
             className="ml-auto"
           >
             <RefreshCw
-              className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+              className={`mr-2 h-4 w-4 ${isLoading ? "motion-safe:animate-spin" : ""}`}
             />
             {isLoading ? "Refreshing..." : "Refresh"}
           </Button>

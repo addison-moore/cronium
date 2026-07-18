@@ -7,6 +7,7 @@ import { toast } from "@cronium/ui";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
+import { EventDetailsSkeleton } from "./EventDetailsSkeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { LogStatus } from "@/shared/schema";
@@ -423,16 +424,9 @@ export function EventDetails({ eventId }: EventDetailsProps) {
     );
   }
 
-  // Loading state
+  // Loading state — same tailored skeleton the RSC Suspense boundary uses
   if (isLoading) {
-    return (
-      <PageShell>
-        <div className="flex items-center justify-center">
-          <Spinner size="lg" />
-          <span className="ml-2">{copy.loading}</span>
-        </div>
-      </PageShell>
-    );
+    return <EventDetailsSkeleton />;
   }
 
   // Error state - event not found

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useParams } from "next/navigation";
+import { NotFoundCard } from "@/components/error/not-found-card";
 import { trpc } from "@/lib/trpc";
 import { LogDetailsSkeleton } from "@/components/logs/LogDetailsSkeleton";
 import {
@@ -32,11 +33,10 @@ export default function LogDetails() {
   if (!log) {
     return (
       <PageShell>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-muted-foreground text-center">Log not found</p>
-          </CardContent>
-        </Card>
+        <NotFoundCard
+          title="Log Not Found"
+          description="The execution log you're looking for doesn't exist or has been deleted."
+        />
       </PageShell>
     );
   }

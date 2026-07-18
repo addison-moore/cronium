@@ -13,7 +13,7 @@ import {
   Trash,
   SendHorizontal,
 } from "lucide-react";
-import { Button, PageShell } from "@cronium/ui";
+import { Button, PageShell, DetailPageSkeleton } from "@cronium/ui";
 import {
   Card,
   CardContent,
@@ -42,6 +42,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@cronium/ui";
+import { NotFoundCard } from "@/components/error/not-found-card";
 import { trpc } from "@/lib/trpc";
 import type { RouterOutputs } from "@/server/api/root";
 
@@ -184,17 +185,16 @@ export default function UserDetailsPage() {
     deleteUserMutation.isPending;
 
   if (isLoading) {
-    return (
-      <PageShell>
-        <div className="text-center">Loading user details...</div>
-      </PageShell>
-    );
+    return <DetailPageSkeleton />;
   }
 
   if (!user?.data) {
     return (
       <PageShell>
-        <div className="text-center">User not found.</div>
+        <NotFoundCard
+          title="User Not Found"
+          description="The user you're looking for doesn't exist or has been deleted."
+        />
       </PageShell>
     );
   }

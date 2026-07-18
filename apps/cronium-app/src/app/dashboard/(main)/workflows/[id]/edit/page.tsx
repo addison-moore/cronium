@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { Button, PageShell } from "@cronium/ui";
+import { Button, PageShell, DetailPageSkeleton } from "@cronium/ui";
 import { toast } from "@cronium/ui";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -330,14 +330,7 @@ export default function EditWorkflowPage() {
   }, [workflowData, loadingWorkflow, form]);
 
   if (loadingWorkflow) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <Spinner size="lg" />
-          <p className="text-muted-foreground mt-4">{copy.loading}</p>
-        </div>
-      </div>
-    );
+    return <DetailPageSkeleton withSidebar={false} />;
   }
 
   if (!workflowData) {

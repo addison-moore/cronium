@@ -35,7 +35,7 @@ export function ActionButton({
     <>
       {isLoading ? (
         <>
-          <div className="mr-2 animate-spin">
+          <div className="mr-2 motion-safe:animate-spin">
             <Loader2 className="h-4 w-4" />
           </div>
           <span>{`${label}...`}</span>

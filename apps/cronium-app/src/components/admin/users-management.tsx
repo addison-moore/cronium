@@ -15,8 +15,9 @@ import {
   Trash,
   RefreshCw,
   MoreVertical,
+  Users,
 } from "lucide-react";
-import { Button } from "@cronium/ui";
+import { Button, Skeleton, EmptyState } from "@cronium/ui";
 import { Input } from "@cronium/ui";
 import { Label } from "@cronium/ui";
 import { Badge } from "@cronium/ui";
@@ -307,7 +308,7 @@ export function UsersManagement({
               className="flex items-center gap-2"
             >
               <RefreshCw
-                className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+                className={`h-4 w-4 ${isRefreshing ? "motion-safe:animate-spin" : ""}`}
               />
               Refresh
             </Button>
@@ -418,17 +419,26 @@ export function UsersManagement({
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center">
-                  Loading users...
-                </TableCell>
-              </TableRow>
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={`skeleton-${i}`}>
+                  {Array.from({ length: 6 }).map((__, j) => (
+                    <TableCell key={j}>
+                      <Skeleton className="h-4 w-full max-w-32" />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
             ) : totalItems === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center">
-                  {searchQuery
-                    ? "No users found matching your search."
-                    : "No users found."}
+                <TableCell colSpan={6} className="p-0">
+                  <EmptyState
+                    icon={<Users className="h-10 w-10" />}
+                    title={
+                      searchQuery
+                        ? "No users found matching your search."
+                        : "No users found."
+                    }
+                  />
                 </TableCell>
               </TableRow>
             ) : (

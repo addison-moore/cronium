@@ -958,7 +958,7 @@ export default function WorkflowCanvas({
                             >
                               {isSaving ? (
                                 <>
-                                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                                  <div className="h-3 w-3 rounded-full border-2 border-current border-t-transparent motion-safe:animate-spin" />
                                   <span className="text-xs">Saving</span>
                                 </>
                               ) : (

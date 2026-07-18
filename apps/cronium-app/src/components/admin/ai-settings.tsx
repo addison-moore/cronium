@@ -339,7 +339,7 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
                       onClick={() => loadModels(provider, apiKey, baseUrl)}
                     >
                       <RefreshCw
-                        className={`h-3 w-3 ${listModels.isPending ? "animate-spin" : ""}`}
+                        className={`h-3 w-3 ${listModels.isPending ? "motion-safe:animate-spin" : ""}`}
                       />
                       {copy.refreshModels}
                     </Button>

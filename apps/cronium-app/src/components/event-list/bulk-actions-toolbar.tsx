@@ -52,7 +52,7 @@ export function BulkActionsToolbar({
             title="Activate selected events"
           >
             {bulkActionLoading === "activate" ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
+              <RefreshCw className="h-4 w-4 motion-safe:animate-spin" />
             ) : (
               <Play className="text-success h-4 w-4" />
             )}
@@ -66,7 +66,7 @@ export function BulkActionsToolbar({
             title="Pause selected events"
           >
             {bulkActionLoading === "pause" ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
+              <RefreshCw className="h-4 w-4 motion-safe:animate-spin" />
             ) : (
               <Pause className="text-warning h-4 w-4" />
             )}
@@ -80,7 +80,7 @@ export function BulkActionsToolbar({
             title="Download selected events"
           >
             {bulkActionLoading === "download" ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
+              <RefreshCw className="h-4 w-4 motion-safe:animate-spin" />
             ) : (
               <Download className="text-info h-4 w-4" />
             )}
@@ -94,7 +94,7 @@ export function BulkActionsToolbar({
             title="Archive selected events"
           >
             {bulkActionLoading === "archive" ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
+              <RefreshCw className="h-4 w-4 motion-safe:animate-spin" />
             ) : (
               <Archive className="h-4 w-4 text-slate-600" />
             )}
@@ -108,7 +108,7 @@ export function BulkActionsToolbar({
             title="Delete selected events"
           >
             {bulkActionLoading === "delete" ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
+              <RefreshCw className="h-4 w-4 motion-safe:animate-spin" />
             ) : (
               <Trash2 className="text-destructive h-4 w-4" />
             )}

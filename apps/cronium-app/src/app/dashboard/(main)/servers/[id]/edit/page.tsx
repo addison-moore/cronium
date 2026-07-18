@@ -4,7 +4,7 @@ import { useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, AlertCircle } from "lucide-react";
-import { Button, PageShell } from "@cronium/ui";
+import { Button, PageShell, DetailPageSkeleton } from "@cronium/ui";
 import { Card, CardContent } from "@cronium/ui";
 import ServerForm from "@/components/dashboard/ServerForm";
 import { Spinner } from "@cronium/ui";
@@ -78,29 +78,7 @@ export default function EditServerPage({ params }: EditServerPageProps) {
   };
 
   if (isLoading) {
-    return (
-      <PageShell>
-        <div className="mb-6 flex items-center">
-          <Button variant="ghost" size="sm" className="mr-2" asChild>
-            <Link
-              href={
-                !isNaN(serverId)
-                  ? `/dashboard/servers/${serverId}`
-                  : "/dashboard/servers"
-              }
-            >
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Back to Server
-            </Link>
-          </Button>
-          <h1 className="text-2xl font-semibold">Loading Server...</h1>
-        </div>
-
-        <div className="flex h-64 items-center justify-center">
-          <Spinner size="lg" />
-        </div>
-      </PageShell>
-    );
+    return <DetailPageSkeleton withSidebar={false} />;
   }
 
   if (serverError ?? !server) {

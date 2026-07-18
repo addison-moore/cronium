@@ -126,7 +126,7 @@ export function ToolHealthIndicator({
           <RefreshCw
             className={cn(
               "h-3.5 w-3.5",
-              status === "checking" && "animate-spin",
+              status === "checking" && "motion-safe:animate-spin",
             )}
           />
           <span className="ml-1.5 text-xs">Test</span>

@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
+import { EmptyState, Skeleton } from "@cronium/ui";
 import { Badge } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cronium/ui";
@@ -170,18 +171,22 @@ function ExecutionHistory() {
   const logs = logsData?.logs ?? [];
 
   if (isLoading) {
-    return <div className="py-8 text-center">Loading execution history...</div>;
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-16 w-full" />
+        ))}
+      </div>
+    );
   }
 
   if (logs.length === 0) {
     return (
-      <div className="py-12 text-center">
-        <Activity className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
-        <h3 className="text-lg font-medium">No executions yet</h3>
-        <p className="text-muted-foreground">
-          Tool actions will appear here when executed
-        </p>
-      </div>
+      <EmptyState
+        icon={<Activity className="h-10 w-10" />}
+        title="No executions yet"
+        description="Tool actions will appear here when executed"
+      />
     );
   }
 

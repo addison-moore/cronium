@@ -314,7 +314,9 @@ export default function WorkflowExecutionHistory({
       <Card>
         <CardContent>
           <div className="flex items-center justify-center py-8">
-            <div className="animate-pulse">Loading execution history...</div>
+            <div className="motion-safe:animate-pulse">
+              Loading execution history...
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -330,7 +332,7 @@ export default function WorkflowExecutionHistory({
           <div className="ml-auto flex items-center gap-2">
             {isRefetching && !isManualRefreshing && (
               <div className="text-muted-foreground flex items-center gap-1 text-sm">
-                <div className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent"></div>
+                <div className="h-3 w-3 rounded-full border border-current border-t-transparent motion-safe:animate-spin"></div>
                 Updating...
               </div>
             )}
@@ -342,7 +344,7 @@ export default function WorkflowExecutionHistory({
               className="h-8"
             >
               <RefreshCw
-                className={`h-4 w-4 ${isManualRefreshing ? "animate-spin" : ""}`}
+                className={`h-4 w-4 ${isManualRefreshing ? "motion-safe:animate-spin" : ""}`}
               />
               {isManualRefreshing ? "Refreshing..." : "Refresh"}
             </Button>
@@ -594,7 +596,7 @@ export default function WorkflowExecutionHistory({
                           </DialogHeader>
                           {isLoadingDetails ? (
                             <div className="flex items-center justify-center py-8">
-                              <div className="animate-pulse">
+                              <div className="motion-safe:animate-pulse">
                                 Loading details...
                               </div>
                             </div>

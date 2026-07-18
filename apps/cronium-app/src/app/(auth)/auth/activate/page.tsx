@@ -150,7 +150,7 @@ export default function ActivatePage() {
             <CardDescription>{copy.verifyingDescription}</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center py-6">
-            <div className="flex animate-pulse space-x-4">
+            <div className="flex space-x-4 motion-safe:animate-pulse">
               <div className="bg-muted h-12 w-12 rounded-full"></div>
               <div className="flex-1 space-y-4 py-1">
                 <div className="bg-muted h-4 w-3/4 rounded-md"></div>

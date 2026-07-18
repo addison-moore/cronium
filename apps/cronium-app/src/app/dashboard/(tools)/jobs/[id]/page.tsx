@@ -1,8 +1,9 @@
+import { Suspense } from "react";
 import { api } from "@/trpc/server";
 import { notFound } from "next/navigation";
 import { JobStatusCard } from "@/components/jobs/JobStatusCard";
 import { JobExecutionLogs } from "@/components/jobs/JobExecutionLogs";
-import { Card, PageHeader, PageShell } from "@cronium/ui";
+import { Card, PageHeader, PageShell, DetailPageSkeleton } from "@cronium/ui";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cronium/ui";
 
 interface JobDetailsPageProps {
@@ -13,6 +14,15 @@ interface JobDetailsPageProps {
 
 export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
   const { id } = await params;
+
+  return (
+    <Suspense fallback={<DetailPageSkeleton />}>
+      <JobDetailsContent id={id} />
+    </Suspense>
+  );
+}
+
+async function JobDetailsContent({ id }: { id: string }) {
   const response = await api.jobs.get({ jobId: id }).catch(() => null);
 
   if (!response?.data) {

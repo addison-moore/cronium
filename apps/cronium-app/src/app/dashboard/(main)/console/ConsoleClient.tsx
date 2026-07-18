@@ -8,6 +8,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Spinner,
 } from "@cronium/ui";
 import { Server, ServerOff, Plus } from "lucide-react";
 import Link from "next/link";
@@ -160,7 +161,7 @@ export default function ConsoleClient() {
         {isLoading ? (
           <div className="bg-card border-border flex h-[60vh] items-center justify-center rounded-lg border">
             <div className="space-y-2 text-center">
-              <div className="border-primary mx-auto h-8 w-8 animate-spin rounded-full border-2 border-t-transparent"></div>
+              <Spinner size="lg" className="mx-auto" />
               <p className="text-muted-foreground">Loading servers...</p>
             </div>
           </div>
