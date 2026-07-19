@@ -1,0 +1,58 @@
+name: Migrations Check
+
+# Fails when src/shared/schema.ts changes without a generated migration:
+# `drizzle-kit generate` must produce no new files on a clean tree.
+# Generate one with: pnpm --filter @cronium/app db:generate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/cronium-app/src/shared/schema.ts
+      - apps/cronium-app/drizzle/**
+      - apps/cronium-app/drizzle.config.ts
+      - .github/workflows/migrations-check.yml
+  pull_request:
+    paths:
+      - apps/cronium-app/src/shared/schema.ts
+      - apps/cronium-app/drizzle/**
+      - apps/cronium-app/drizzle.config.ts
+      - .github/workflows/migrations-check.yml
+  workflow_dispatch:
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate migrations from schema
+        working-directory: apps/cronium-app
+        env:
+          # generate never connects; the config just requires the var to exist
+          DATABASE_URL: postgres://check:check@localhost:5432/check
+        run: pnpm exec drizzle-kit generate --config drizzle.config.ts --name ci-drift-check
+
+      - name: Assert no uncommitted migration was needed
+        run: |
+          if [ -n "$(git status --porcelain apps/cronium-app/drizzle)" ]; then
+            echo "schema.ts changed without a generated migration."
+            echo "Run: pnpm --filter @cronium/app db:generate  and commit the result."
+            git status --porcelain apps/cronium-app/drizzle
+            exit 1
+          fi
+          echo "Migrations are in sync with schema.ts"

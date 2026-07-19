@@ -13,6 +13,7 @@
     "tsc:log": "tsc --noEmit > ../../logs/tsc.log 2>&1 || true",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write . --ignore-path ../../.prettierignore",
+    "db:migrate": "node scripts/run-migrations.cjs",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate",
