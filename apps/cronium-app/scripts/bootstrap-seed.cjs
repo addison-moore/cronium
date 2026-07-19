@@ -18,7 +18,15 @@ if (!databaseUrl) {
 
 const adminUsername = process.env.ADMIN_USERNAME || "admin";
 const adminEmail = process.env.ADMIN_EMAIL || "admin@example.com";
-const adminPassword = process.env.ADMIN_PASSWORD || "admin";
+const adminPassword = process.env.ADMIN_PASSWORD;
+
+if (!adminPassword) {
+  console.error(
+    "[SEED] AUTO_SEED_ADMIN=true requires ADMIN_PASSWORD to be set — there is no default password. " +
+      "Either set ADMIN_PASSWORD, or unset AUTO_SEED_ADMIN and create the admin account in the browser on first visit.",
+  );
+  process.exit(1);
+}
 
 const smtpConfig = {
   host: process.env.SMTP_HOST,
@@ -34,11 +42,12 @@ const pool = new Pool({ connectionString: databaseUrl });
 // sensitive settings (smtpPassword) match what the admin UI stores.
 function encryptSensitiveValue(plaintext) {
   const masterKeyHex = process.env.ENCRYPTION_KEY;
-  if (!masterKeyHex || masterKeyHex.length !== 64) {
-    console.warn(
-      "[SEED] ENCRYPTION_KEY missing or invalid; storing sensitive setting unencrypted",
+  if (!masterKeyHex || !/^[0-9a-fA-F]{64}$/.test(masterKeyHex)) {
+    console.error(
+      "[SEED] ENCRYPTION_KEY must be exactly 64 hex characters (openssl rand -hex 32); " +
+        "refusing to store a sensitive setting unencrypted",
     );
-    return plaintext;
+    process.exit(1);
   }
   const masterKey = Buffer.from(masterKeyHex, "hex");
   const iv = crypto.randomBytes(16);

@@ -4,6 +4,7 @@ import { hash } from "bcrypt";
 import { nanoid } from "nanoid";
 import { UserRole, UserStatus } from "@/shared/schema";
 import { storage } from "@/server/storage";
+import { isSetupRequired } from "@/lib/first-run";
 
 type RegisterFormData = {
   username: string;
@@ -13,6 +14,17 @@ type RegisterFormData = {
 
 export async function registerUser(formData: RegisterFormData) {
   try {
+    // A fresh instance has no users and no registration settings yet — the
+    // first account must be the admin created via /auth/setup, not a public
+    // signup (a missing allowRegistration setting reads as "open" below).
+    if (await isSetupRequired()) {
+      return {
+        success: false,
+        error:
+          "This instance is not set up yet. Create the admin account first.",
+      };
+    }
+
     // Hash the password securely
     const hashedPassword = await hash(formData.password, 12);
 

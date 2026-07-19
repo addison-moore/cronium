@@ -14,12 +14,13 @@
 #        JWT_SECRET=           # openssl rand -hex 32
 #        POSTGRES_PASSWORD=    # openssl rand -hex 16
 #
-#        # Initial admin account (change the password after first login)
-#        ADMIN_PASSWORD=
-#
 #   2. docker compose up -d
-#   3. Open http://localhost:3000 and log in (username "admin" unless you set
-#      ADMIN_USERNAME). Check status with: docker compose ps
+#   3. Open http://localhost:3000 — your first visit walks you through
+#      creating the admin account. Check status with: docker compose ps
+#
+# Headless installs (no browser step): add AUTO_SEED_ADMIN=true and
+# ADMIN_USERNAME / ADMIN_EMAIL / ADMIN_PASSWORD to .env to seed the admin
+# on first boot instead. There is no default admin password.
 #
 # For a domain deployment, set AUTH_URL / PUBLIC_APP_URL to your public URL,
 # put a TLS reverse proxy in front of ports 3000 and 5002, and set
@@ -64,7 +65,8 @@ services:
   cronium-app:
     image: ghcr.io/addison-moore/cronium-app:latest
     env_file:
-      - .env
+      - path: .env
+        required: false # missing values fail below with instructions
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,12 +87,9 @@ services:
       # Must be reachable from the user's browser (not a Docker service name).
       NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL:-http://localhost:5002}
       NEXT_PUBLIC_SOCKET_PORT: ${SOCKET_PORT:-5002}
-      # Seeds the first admin user on boot so you can log in immediately.
-      # Set AUTO_SEED_ADMIN=false in .env once set up.
-      AUTO_SEED_ADMIN: ${AUTO_SEED_ADMIN:-true}
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set the initial admin password in .env}
+      # The first browser visit walks you through creating the admin account.
+      # For headless installs, set AUTO_SEED_ADMIN=true plus ADMIN_USERNAME /
+      # ADMIN_EMAIL / ADMIN_PASSWORD in .env (they pass through via env_file).
     ports:
       - "${APP_PORT:-3000}:3000"
       - "${SOCKET_PORT:-5002}:5002"
@@ -101,7 +100,8 @@ services:
   cronium-orchestrator:
     image: ghcr.io/addison-moore/cronium-orchestrator:latest
     env_file:
-      - .env
+      - path: .env
+        required: false # missing values fail below with instructions
     depends_on:
       cronium-app:
         condition: service_healthy
@@ -142,7 +142,8 @@ services:
   cronium-runtime:
     image: ghcr.io/addison-moore/cronium-runtime:latest
     env_file:
-      - .env
+      - path: .env
+        required: false # missing values fail below with instructions
     depends_on:
       cronium-app:
         condition: service_healthy

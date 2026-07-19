@@ -9,7 +9,12 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
-    AUTH_SECRET: z.string(),
+    AUTH_SECRET: z
+      .string()
+      .min(
+        32,
+        "AUTH_SECRET must be at least 32 characters (openssl rand -hex 32)",
+      ),
     AUTH_URL: z.string().url(),
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: z.string().optional(),
@@ -27,7 +32,12 @@ export const env = createEnv({
     OAUTH_SLACK_CLIENT_ID: z.string().optional(),
     OAUTH_SLACK_CLIENT_SECRET: z.string().optional(),
     PUBLIC_APP_URL: z.string().url().optional(),
-    ENCRYPTION_KEY: z.string(),
+    ENCRYPTION_KEY: z
+      .string()
+      .regex(
+        /^[0-9a-fA-F]{64}$/,
+        "ENCRYPTION_KEY must be exactly 64 hex characters (openssl rand -hex 32)",
+      ),
     ORCHESTRATOR_URL: z
       .string()
       .url()

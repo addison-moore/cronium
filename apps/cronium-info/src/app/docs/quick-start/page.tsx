@@ -170,18 +170,17 @@ export default function QuickStartPage() {
         >
           <div className="space-y-4">
             <p>
-              Open your Cronium instance in a browser and sign in. On a fresh
-              deployment with <code>AUTO_SEED_ADMIN</code> enabled, an admin
-              account is created for you on first boot using the{" "}
-              <code>ADMIN_USERNAME</code> and <code>ADMIN_PASSWORD</code> you
-              configured.
+              Open your Cronium instance in a browser. On a fresh deployment the
+              first visit shows a one-time setup page where you create the admin
+              account — there are no default credentials. (Headless installs can
+              seed the admin instead via <code>AUTO_SEED_ADMIN=true</code> and
+              the <code>ADMIN_*</code> variables.)
             </p>
             <div className="bg-muted rounded-lg p-4">
               <p className="text-sm">
-                <strong>Tip:</strong> Change the seeded admin password
-                immediately after your first sign-in, then set{" "}
-                <code>AUTO_SEED_ADMIN=false</code>. Additional users are added
-                by an administrator from the admin page.
+                <strong>Tip:</strong> Additional users are added by an
+                administrator from the admin page; public registration is closed
+                by default.
               </p>
             </div>
           </div>

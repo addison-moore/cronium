@@ -164,9 +164,7 @@ AUTH_SECRET=<paste value>
 ENCRYPTION_KEY=<paste value>
 INTERNAL_API_KEY=<paste value>
 JWT_SECRET=<paste value>
-POSTGRES_PASSWORD=<paste value>
-# Initial admin login (change it after first sign-in)
-ADMIN_PASSWORD=<choose a password>`}
+POSTGRES_PASSWORD=<paste value>`}
                   </SimpleCodeBlock>
                 </li>
               </ol>
@@ -268,7 +266,8 @@ services:
   cronium-app:
     image: ghcr.io/addison-moore/cronium-app:latest
     env_file:
-      - .env
+      - path: .env
+        required: false # missing values fail below with instructions
     depends_on:
       postgres:
         condition: service_healthy
@@ -289,12 +288,9 @@ services:
       # Must be reachable from the user's browser (not a Docker service name).
       NEXT_PUBLIC_SOCKET_URL: \${NEXT_PUBLIC_SOCKET_URL:-http://localhost:5002}
       NEXT_PUBLIC_SOCKET_PORT: \${SOCKET_PORT:-5002}
-      # Seeds the first admin user on boot so you can log in immediately.
-      # Set AUTO_SEED_ADMIN=false in .env once set up.
-      AUTO_SEED_ADMIN: \${AUTO_SEED_ADMIN:-true}
-      ADMIN_USERNAME: \${ADMIN_USERNAME:-admin}
-      ADMIN_EMAIL: \${ADMIN_EMAIL:-admin@example.com}
-      ADMIN_PASSWORD: \${ADMIN_PASSWORD:?set the initial admin password in .env}
+      # The first browser visit walks you through creating the admin account.
+      # For headless installs, set AUTO_SEED_ADMIN=true plus ADMIN_USERNAME /
+      # ADMIN_EMAIL / ADMIN_PASSWORD in .env (they pass through via env_file).
     ports:
       - "\${APP_PORT:-3000}:3000"
       - "\${SOCKET_PORT:-5002}:5002"
@@ -305,7 +301,8 @@ services:
   cronium-orchestrator:
     image: ghcr.io/addison-moore/cronium-orchestrator:latest
     env_file:
-      - .env
+      - path: .env
+        required: false # missing values fail below with instructions
     depends_on:
       cronium-app:
         condition: service_healthy
@@ -346,7 +343,8 @@ services:
   cronium-runtime:
     image: ghcr.io/addison-moore/cronium-runtime:latest
     env_file:
-      - .env
+      - path: .env
+        required: false # missing values fail below with instructions
     depends_on:
       cronium-app:
         condition: service_healthy
@@ -376,12 +374,12 @@ networks:
 `}
             </SimpleCodeBlock>
             <p className="text-muted-foreground text-sm">
-              On first boot Cronium seeds an admin user (username{" "}
-              <code>admin</code> unless you set <code>ADMIN_USERNAME</code>)
-              with the <code>ADMIN_PASSWORD</code> from your <code>.env</code>.
-              There is no default password — Compose refuses to start until you
-              set one. After the initial setup, set{" "}
-              <code>AUTO_SEED_ADMIN=false</code> in <code>.env</code>.
+              There are no default credentials: your first browser visit shows a
+              one-time setup page where you create the admin account. For
+              headless installs (CI, infrastructure-as-code), set{" "}
+              <code>AUTO_SEED_ADMIN=true</code> plus <code>ADMIN_USERNAME</code>
+              , <code>ADMIN_EMAIL</code>, and <code>ADMIN_PASSWORD</code> in{" "}
+              <code>.env</code> to seed the admin on first boot instead.
             </p>
             <p className="text-muted-foreground text-sm">
               The Cronium app automatically runs database migrations on start.

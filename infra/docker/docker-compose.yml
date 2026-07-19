@@ -65,11 +65,13 @@ services:
       NEXT_PUBLIC_SOCKET_PORT: ${SOCKET_PORT:-5002}
       NODE_ENV: ${NODE_ENV:-production}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      # Seeds the first admin user on boot; disable after initial setup.
-      AUTO_SEED_ADMIN: ${AUTO_SEED_ADMIN:-true}
+      # The first browser visit walks you through creating the admin account.
+      # For headless installs, set AUTO_SEED_ADMIN=true plus ADMIN_USERNAME /
+      # ADMIN_EMAIL / ADMIN_PASSWORD (there is no default admin password).
+      AUTO_SEED_ADMIN: ${AUTO_SEED_ADMIN:-false}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set the initial admin password}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       # Email (optional)
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-}

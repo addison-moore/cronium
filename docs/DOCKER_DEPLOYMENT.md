@@ -257,7 +257,7 @@ unless you are building custom images.
 
 ### 4. Initialize the Database
 
-The database is automatically initialized on first start. The image itself defaults to **not** auto-seeding an admin, but the sample `docker-compose.example.yml` enables it (`AUTO_SEED_ADMIN=true`) so a fresh install is immediately loginable with `ADMIN_USERNAME`/`ADMIN_EMAIL`/`ADMIN_PASSWORD` (defaults `admin`/`admin@example.com`/`admin`). Change `ADMIN_PASSWORD` before deploying, change the password again after first login, and set `AUTO_SEED_ADMIN=false` once set up. SMTP values (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`) can also be seeded when provided.
+The database is automatically initialized on first start. There are no default credentials: the first browser visit shows a one-time setup page where you create the admin account. For headless installs, set `AUTO_SEED_ADMIN=true` plus `ADMIN_USERNAME`/`ADMIN_EMAIL`/`ADMIN_PASSWORD` to seed the admin on first boot instead — seeding refuses to run without an explicit `ADMIN_PASSWORD`. SMTP values (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`) can also be seeded when provided.
 
 To manually run migrations:
 
@@ -268,7 +268,7 @@ pnpm --filter @cronium/app db:push
 
 ### 5. Create Admin User
 
-Open your browser to `http://localhost:3000`, choose **Sign Up**, and create the first admin account (if you didn’t opt into `AUTO_SEED_ADMIN`). Cronium automatically grants admin privileges to the first user. If you enabled bootstrap seeding, log in with the seeded credentials and immediately change the email/password once inside the dashboard.
+Open your browser to `http://localhost:3000`. A fresh instance redirects to a one-time setup page where you create the admin account; after that you land in the dashboard. If you seeded the admin headlessly with `AUTO_SEED_ADMIN`, sign in with those credentials instead.
 
 ## Verification
 

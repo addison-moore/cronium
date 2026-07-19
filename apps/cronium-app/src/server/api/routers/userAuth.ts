@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { storage } from "@/server/storage";
+import { isSetupRequired } from "@/lib/first-run";
 import { nanoid } from "nanoid";
 import { UserRole, UserStatus } from "@/shared/schema";
 import { sendPasswordResetEmail } from "@/lib/email";
@@ -20,12 +21,13 @@ function hasUserEmail(
 }
 
 // Schemas
+// Public registration never accepts a role/status from the caller — it always
+// creates a regular USER (privileged accounts come from admin.createUser or
+// the first-run setup flow).
 const registerSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters long"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters long"),
-  role: z.nativeEnum(UserRole).default(UserRole.USER),
-  status: z.nativeEnum(UserStatus).optional(),
 });
 
 const forgotPasswordSchema = z.object({
@@ -61,8 +63,19 @@ export const userAuthRouter = createTRPCRouter({
     .input(registerSchema)
     .mutation(async ({ input }) => {
       try {
-        const { username, email, password, role } = input;
-        let { status } = input;
+        const { username, email, password } = input;
+        const role = UserRole.USER;
+        let status: UserStatus;
+
+        // A fresh instance's first account must be the admin created via
+        // /auth/setup, not a public registration.
+        if (await isSetupRequired()) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message:
+              "This instance is not set up yet. Create the admin account first.",
+          });
+        }
 
         // Check if username already exists
         const existingUsername = await storage.getUserByUsername(username);
@@ -82,38 +95,29 @@ export const userAuthRouter = createTRPCRouter({
           });
         }
 
-        // Check registration settings and determine user status (for non-admin users)
-        if (role === UserRole.USER) {
-          const allowRegistrationSetting =
-            await storage.getSetting("allowRegistration");
-          const requireAdminApprovalSetting = await storage.getSetting(
-            "requireAdminApproval",
-          );
-          const inviteOnlySetting = await storage.getSetting("inviteOnly");
+        // Check registration settings and determine user status
+        const allowRegistrationSetting =
+          await storage.getSetting("allowRegistration");
+        const requireAdminApprovalSetting = await storage.getSetting(
+          "requireAdminApproval",
+        );
+        const inviteOnlySetting = await storage.getSetting("inviteOnly");
 
-          const allowRegistration = allowRegistrationSetting?.value !== "false";
-          const requireAdminApproval =
-            requireAdminApprovalSetting?.value === "true";
-          const inviteOnly = inviteOnlySetting?.value === "true";
+        const allowRegistration = allowRegistrationSetting?.value !== "false";
+        const requireAdminApproval =
+          requireAdminApprovalSetting?.value === "true";
+        const inviteOnly = inviteOnlySetting?.value === "true";
 
-          // Check if registration is allowed
-          if (inviteOnly || !allowRegistration) {
-            throw new TRPCError({
-              code: "FORBIDDEN",
-              message: "Registration is currently closed",
-            });
-          }
-
-          // Determine user status based on admin approval requirement
-          if (requireAdminApproval) {
-            status = UserStatus.PENDING;
-          } else {
-            status = UserStatus.ACTIVE;
-          }
-        } else {
-          // Admin users are always active by default
-          status = status ?? UserStatus.ACTIVE;
+        // Check if registration is allowed
+        if (inviteOnly || !allowRegistration) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Registration is currently closed",
+          });
         }
+
+        // Determine user status based on admin approval requirement
+        status = requireAdminApproval ? UserStatus.PENDING : UserStatus.ACTIVE;
 
         // Create user
         const user = await storage.createUser({

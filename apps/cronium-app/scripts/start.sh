@@ -1,6 +1,9 @@
 #!/bin/sh
 set -euo pipefail
 
+# Refuse to start on missing/placeholder/invalid secrets
+node apps/cronium-app/scripts/validate-env.cjs
+
 # Run database migrations (script handles AUTO_MIGRATE flag)
 node apps/cronium-app/scripts/run-migrations.cjs
 
