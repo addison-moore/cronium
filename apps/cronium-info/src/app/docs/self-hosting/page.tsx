@@ -243,161 +243,56 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
           <h2 className="mb-6 text-2xl font-bold">Docker Compose Example</h2>
           <div className="space-y-6">
             <p>
-              Copy the following Compose file into{" "}
-              <code>docker-compose.yml</code> — it is the same file the{" "}
-              <code>curl</code> command above downloads. It deploys PostgreSQL,
-              Valkey, the Cronium app, the orchestrator, and the runtime
-              service. Every value is read from <code>.env</code> with sensible
-              defaults, so a standard deployment never edits the YAML. To enable
-              outbound email, add <code>SMTP_HOST</code>, <code>SMTP_PORT</code>
-              , <code>SMTP_USER</code>, <code>SMTP_PASSWORD</code>, and{" "}
-              <code>SMTP_FROM_EMAIL</code> to <code>.env</code>; without them
-              email is disabled and the UI shows a warning.
+              The stack is defined by{" "}
+              <a
+                href="https://github.com/addison-moore/cronium/blob/main/docker-compose.example.yml"
+                className="underline"
+              >
+                docker-compose.example.yml
+              </a>{" "}
+              in the repository — the same file the installer and the{" "}
+              <code>curl</code> command above download. It runs PostgreSQL,
+              Valkey, the Cronium app, the orchestrator, and the runtime service
+              on a shared network with healthchecks, restart policies, and
+              persistent volumes wired in. The file is commented and is the
+              single source of truth; this page deliberately does not duplicate
+              it. What you need to know:
             </p>
+            <ul className="text-muted-foreground list-disc space-y-2 pl-6">
+              <li>
+                Every value is read from <code>.env</code> — a standard
+                deployment never edits the YAML. Required secrets use the{" "}
+                <code>{"${VAR:?error}"}</code> form, so a missing value stops{" "}
+                <code>docker compose up</code> with the exact generation command
+                in the error message:
+              </li>
+            </ul>
             <SimpleCodeBlock language="yaml">
-              {`
-services:
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: \${POSTGRES_USER:-cronium}
-      POSTGRES_PASSWORD: \${POSTGRES_PASSWORD:?generate with openssl rand -hex 16}
-      POSTGRES_DB: \${POSTGRES_DB:-cronium}
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \${POSTGRES_USER:-cronium}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - cronium
-
-  valkey:
-    image: valkey/valkey:7-alpine
-    command: valkey-server --appendonly yes
-    volumes:
-      - valkey-data:/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "valkey-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - cronium
-
+              {`# excerpt — how configuration flows from .env
   cronium-app:
-    image: ghcr.io/addison-moore/cronium-app:latest
-    env_file:
-      - path: .env
-        required: false # missing values fail below with instructions
-    depends_on:
-      postgres:
-        condition: service_healthy
-      valkey:
-        condition: service_healthy
+    image: ghcr.io/addison-moore/cronium-app:\${CRONIUM_IMAGE_TAG:-latest}
     environment:
-      NODE_ENV: production
       AUTH_URL: \${AUTH_URL:-http://localhost:3000}
-      PUBLIC_APP_URL: \${PUBLIC_APP_URL:-http://localhost:3000}
-      NEXT_PUBLIC_APP_URL: \${PUBLIC_APP_URL:-http://localhost:3000}
       AUTH_SECRET: \${AUTH_SECRET:?generate with openssl rand -hex 32}
-      ENCRYPTION_KEY: \${ENCRYPTION_KEY:?generate with openssl rand -hex 32 (must be 64 hex chars)}
-      INTERNAL_API_KEY: \${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
-      JWT_SECRET: \${JWT_SECRET:?generate with openssl rand -hex 32}
-      DATABASE_URL: postgres://\${POSTGRES_USER:-cronium}:\${POSTGRES_PASSWORD:?generate with openssl rand -hex 16}@postgres:5432/\${POSTGRES_DB:-cronium}
-      ORCHESTRATOR_URL: http://cronium-orchestrator:8080
-      VALKEY_URL: valkey://valkey:6379
-      # Must be reachable from the user's browser (not a Docker service name).
-      NEXT_PUBLIC_SOCKET_URL: \${NEXT_PUBLIC_SOCKET_URL:-http://localhost:5002}
-      NEXT_PUBLIC_SOCKET_PORT: \${SOCKET_PORT:-5002}
-      # The first browser visit walks you through creating the admin account.
-      # For headless installs, set AUTO_SEED_ADMIN=true plus ADMIN_USERNAME /
-      # ADMIN_EMAIL / ADMIN_PASSWORD in .env (they pass through via env_file).
-    ports:
-      - "\${APP_PORT:-3000}:3000"
-      - "\${SOCKET_PORT:-5002}:5002"
-    restart: unless-stopped
-    networks:
-      - cronium
-
-  cronium-orchestrator:
-    image: ghcr.io/addison-moore/cronium-orchestrator:latest
-    env_file:
-      - path: .env
-        required: false # missing values fail below with instructions
-    depends_on:
-      cronium-app:
-        condition: service_healthy
-      valkey:
-        condition: service_healthy
-      cronium-runtime:
-        condition: service_healthy
-    environment:
-      CRONIUM_API_ENDPOINT: http://cronium-app:3000
-      CRONIUM_API_TOKEN: \${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
-      CRONIUM_ORCHESTRATOR_ID: \${ORCHESTRATOR_ID:-orchestrator-1}
-      CRONIUM_CONTAINER_RUNTIME_JWT_SECRET: \${JWT_SECRET:?generate with openssl rand -hex 32}
-      CRONIUM_CONTAINER_RUNTIME_BACKEND_URL: http://cronium-app:3000
-      CRONIUM_CONTAINER_RUNTIME_VALKEY_URL: valkey://valkey:6379
-      # Per-job runtime sidecars join this network to reach the app and Valkey;
-      # must match the network name declared at the bottom of this file.
-      CRONIUM_CONTAINER_RUNTIME_SHARED_NETWORK: cronium
-      # Remote (runner) execution tunnels to this shared runtime service; must
-      # match the cronium-runtime service name:port below.
-      RUNTIME_HOST: cronium-runtime
-      RUNTIME_PORT: 8081
-      LOG_LEVEL: \${LOG_LEVEL:-info}
-    healthcheck:
-      test: ["CMD", "/app/orchestrator", "healthcheck"]
-      interval: 30s
-      timeout: 5s
-      start_period: 15s
-      retries: 3
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      # Persists the payload signing key and SSH known_hosts across upgrades.
-      - orchestrator-data:/app/data
-    restart: unless-stopped
-    user: "0:0"
-    networks:
-      - cronium
-
-  cronium-runtime:
-    image: ghcr.io/addison-moore/cronium-runtime:latest
-    env_file:
-      - path: .env
-        required: false # missing values fail below with instructions
-    depends_on:
-      cronium-app:
-        condition: service_healthy
-      valkey:
-        condition: service_healthy
-    environment:
-      RUNTIME_PORT: 8081
-      RUNTIME_JWT_SECRET: \${JWT_SECRET:?generate with openssl rand -hex 32}
-      RUNTIME_BACKEND_URL: http://cronium-app:3000
-      RUNTIME_BACKEND_TOKEN: \${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
-      RUNTIME_VALKEY_URL: valkey://valkey:6379
-      RUNTIME_LOG_LEVEL: \${LOG_LEVEL:-info}
-    restart: unless-stopped
-    networks:
-      - cronium
-
-volumes:
-  postgres-data: {}
-  valkey-data: {}
-  orchestrator-data: {}
-
-networks:
-  # Explicitly named so it doesn't vary with the compose project name — the
-  # orchestrator attaches per-job runtime sidecars to it by this exact name.
-  cronium:
-    name: cronium
-`}
+      DATABASE_URL: postgres://\${POSTGRES_USER:-cronium}:\${POSTGRES_PASSWORD:?generate with openssl rand -hex 16}@postgres:5432/\${POSTGRES_DB:-cronium}`}
             </SimpleCodeBlock>
+            <ul className="text-muted-foreground list-disc space-y-2 pl-6">
+              <li>
+                Only the app's ports (<code>3000</code> web, <code>5002</code>{" "}
+                WebSocket) are published to the host; the orchestrator and
+                runtime are internal-only and monitored via their container
+                healthchecks (<code>docker compose ps</code>).
+              </li>
+              <li>
+                Optional features are enabled purely by adding variables to{" "}
+                <code>.env</code>: <code>SMTP_HOST</code>/<code>SMTP_PORT</code>
+                /<code>SMTP_USER</code>/<code>SMTP_PASSWORD</code>/
+                <code>SMTP_FROM_EMAIL</code> for outbound email,{" "}
+                <code>CRONIUM_IMAGE_TAG</code> to pin a release, and{" "}
+                <code>APP_PORT</code>/<code>SOCKET_PORT</code> to move the
+                published ports.
+              </li>
+            </ul>
             <p className="text-muted-foreground text-sm">
               There are no default credentials: your first browser visit shows a
               one-time setup page where you create the admin account. For
@@ -811,12 +706,15 @@ networks:
                   containers to report healthy states.
                 </li>
                 <li>
-                  Database migrations are applied automatically the first time
-                  the app container starts, so there is nothing to run by hand.
-                  If you set <code>AUTO_MIGRATE=false</code> to manage the
-                  schema yourself, apply it from a clone of the repository with{" "}
-                  <code>pnpm install</code> followed by{" "}
-                  <code>pnpm --filter @cronium/app db:push</code>.
+                  Versioned database migrations are applied automatically every
+                  time the app container starts, so there is nothing to run by
+                  hand. If you set <code>AUTO_MIGRATE=false</code> to control
+                  schema changes yourself, apply pending migrations from a clone
+                  of the repository with <code>pnpm install</code> followed by{" "}
+                  <code>
+                    DATABASE_URL=... pnpm --filter @cronium/app db:migrate
+                  </code>
+                  .
                 </li>
                 <li>
                   Optional: add a custom orchestrator config (copy{" "}

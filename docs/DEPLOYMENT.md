@@ -1,299 +1,236 @@
 # Cronium Deployment Guide
 
-This guide covers deploying Cronium using Docker Compose in various environments.
+How to run Cronium on your own infrastructure with Docker Compose. This is the
+single deployment reference; the same material, formatted for the docs site,
+lives at https://cronium.app/docs/self-hosting.
 
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
-- [Development Deployment](#development-deployment)
-- [Production Deployment](#production-deployment)
+- [Quick Install](#quick-install)
+- [Manual Install](#manual-install)
+- [First Boot](#first-boot)
+- [Building From Source](#building-from-source)
 - [Configuration](#configuration)
-- [Monitoring](#monitoring)
+- [Verification](#verification)
+- [Upgrades](#upgrades)
+- [Backup and Restore](#backup-and-restore)
 - [Troubleshooting](#troubleshooting)
+- [Security Notes](#security-notes)
 
 ## Prerequisites
 
-- Docker Engine 20.10+
-- Docker Compose 2.0+
-- 4GB RAM minimum (8GB recommended)
-- 20GB disk space
-- Linux/macOS/Windows with WSL2
+- Docker Engine 24.x+ with the Docker Compose V2 plugin
+- 4GB RAM minimum (8GB recommended), 20GB disk
+- Linux, macOS, or Windows with WSL2
+- The Docker socket must be available to the orchestrator for container jobs
+  (SSH-only setups can drop that mount)
 
-## Quick Start
+## Quick Install
 
-1. **Clone the repository**:
+```bash
+curl -fsSL https://raw.githubusercontent.com/addison-moore/cronium/main/install.sh | bash
+```
+
+The installer checks your Docker setup, downloads the Compose file for the
+newest release, generates every secret into a chmod-600 `.env`, asks one
+question (the public URL, `--url` for non-interactive use), starts the stack,
+and waits until Cronium is healthy. Useful flags: `--dir`, `--version vX.Y.Z`,
+`--uninstall` (stops the stack, keeps data). Re-running the installer upgrades
+in place and never regenerates existing secrets.
+
+## Manual Install
+
+The installer automates exactly these steps:
+
+1. **Download the Compose file** (no repository clone needed):
 
    ```bash
-   git clone https://github.com/addison-moore/cronium.git
-   cd cronium
+   mkdir cronium && cd cronium
+   curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/addison-moore/cronium/main/docker-compose.example.yml
    ```
 
-2. **Copy the sample Compose file**:
+2. **Create `.env`** next to it:
 
    ```bash
-   cp docker-compose.example.yml docker-compose.yml
-   ```
-
-3. **Create a deployment `.env`**:
-
-   ```bash
+   cat <<ENV > .env
+   AUTH_URL=http://localhost:3000
+   PUBLIC_APP_URL=http://localhost:3000
    AUTH_SECRET=$(openssl rand -hex 32)
    ENCRYPTION_KEY=$(openssl rand -hex 32)
    INTERNAL_API_KEY=$(openssl rand -base64 32)
    JWT_SECRET=$(openssl rand -hex 32)
-
-   cat <<ENV > .env
-   AUTH_URL=http://localhost:3000
-   PUBLIC_APP_URL=http://localhost:3000
-   AUTH_SECRET=$AUTH_SECRET
-   ENCRYPTION_KEY=$ENCRYPTION_KEY
-   INTERNAL_API_KEY=$INTERNAL_API_KEY
-   JWT_SECRET=$JWT_SECRET
+   POSTGRES_PASSWORD=$(openssl rand -hex 16)
    ENV
+   chmod 600 .env
    ```
 
-4. **Start services**:
+   `ENCRYPTION_KEY` must be exactly 64 hex characters — the app refuses to
+   start otherwise (a wrong-length key would silently disable credential
+   encryption in older versions; now it is a hard boot error).
+
+3. **Start the stack**:
 
    ```bash
    docker compose up -d
    ```
 
-   Database migrations run automatically on startup. Leave `AUTO_MIGRATE=true`
-   unless you need to control schema changes manually.
+   A missing or placeholder value stops `docker compose up` immediately with
+   the exact generation command in the error message. Every setting is read
+   from `.env`; a standard deployment never edits the YAML.
 
-5. **Access Cronium**:
-   - Web UI: http://localhost:3000
-   - WebSocket: ws://localhost:5002
-   - Service health: `docker compose ps` (the orchestrator and runtime are
-     internal-only and report health via their container healthchecks)
+For a domain deployment, set `AUTH_URL`/`PUBLIC_APP_URL` to your public URL,
+put a TLS reverse proxy in front of ports 3000 (web) and 5002 (WebSocket), and
+set `NEXT_PUBLIC_SOCKET_URL` to the browser-reachable URL of the WebSocket
+port.
 
-## Development Deployment
+## First Boot
 
-### Using Docker Compose
+- **Migrations** apply automatically when the app container starts (versioned
+  Drizzle migrations). Set `AUTO_MIGRATE=false` to manage the schema yourself,
+  and apply pending migrations from a repo checkout with
+  `pnpm --filter @cronium/app db:migrate`.
+- **Admin account**: there are no default credentials. The first browser visit
+  shows a one-time setup page where you create the admin account. For headless
+  installs, set `AUTO_SEED_ADMIN=true` plus
+  `ADMIN_USERNAME`/`ADMIN_EMAIL`/`ADMIN_PASSWORD` in `.env` — seeding refuses
+  to run without an explicit `ADMIN_PASSWORD`.
+- **Email**: add `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and
+  `SMTP_FROM_EMAIL` to `.env` to enable outbound email.
 
-```bash
-# Start infrastructure services (Valkey + PostgreSQL)
-docker compose -f infra/docker/docker-compose.dev.yml up -d valkey postgres
+## Building From Source
 
-# Then run the app from your workstation
-pnpm install
-pnpm dev
-```
-
-### Development Features
-
-- Hot reload for all services
-- Verbose logging
-- Uses external PostgreSQL (configure DATABASE_URL)
-
-### Using the Setup Script
-
-For automated setup:
+For development or custom builds, use the from-source Compose file, which
+builds the same images CI publishes:
 
 ```bash
-./infra/scripts/setup-dev.sh
+git clone https://github.com/addison-moore/cronium.git && cd cronium
+# .env with the same variables as above (setup helper: ./infra/scripts/setup-secrets.sh)
+docker compose -f infra/docker/docker-compose.yml up -d --build
 ```
 
-This script will:
-
-- Check prerequisites
-- Create `.env.local`
-- Install dependencies
-- Start infrastructure services
-- Run database migrations
-- Build container images
-- Optionally seed the database
-
-## Production Deployment
-
-### Basic Production Setup
-
-1. **Configure environment**:
-
-   ```bash
-   # Generate production secrets
-   ./infra/scripts/setup-secrets.sh
-
-   # Edit production values
-   vim .env
-   ```
-
-2. **Build images**:
-
-   ```bash
-   docker compose build --no-cache
-   ```
-
-3. **Start services**:
-   ```bash
-   docker compose up -d
-   ```
-
-### Production Checklist
-
-- [ ] Generate strong secrets (32+ characters)
-- [ ] Configure proper database credentials
-- [ ] Set up SSL/TLS termination
-- [ ] Configure firewall rules
-- [ ] Enable monitoring
-- [ ] Set up backup procedures
-- [ ] Configure log rotation
-- [ ] Set resource limits
+For the local development loop (app on the host, infrastructure in Docker),
+see [GETTING_STARTED.md](./GETTING_STARTED.md) and `pnpm dev:docker:up`.
 
 ## Configuration
 
-### Service Configuration
+1. **Environment variables** — the complete reference is
+   [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md). Common `.env`
+   options: `APP_PORT`/`SOCKET_PORT` (published ports), `CRONIUM_IMAGE_TAG`
+   (pin a release), `LOG_LEVEL`.
+2. **Orchestrator tuning** — advanced settings (polling cadence, SSH executor
+   limits, metrics) via `apps/orchestrator/configs/cronium-orchestrator.yaml`.
+3. **Networking** — services share a fixed-name `cronium` bridge network. Only
+   the app's ports (3000, 5002) are published; the orchestrator and runtime
+   are internal-only.
+4. **Volumes** — `postgres-data` (database), `valkey-data` (cache),
+   `orchestrator-data` (payload signing key + SSH known_hosts; losing it
+   breaks registered remote runners).
 
-Each service can be configured via:
-
-1. **Environment variables** (see [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md))
-2. **Configuration files**:
-   - `apps/orchestrator/configs/cronium-orchestrator.yaml`
-
-### Network Configuration
-
-Services communicate via internal Docker network:
-
-- Network: `cronium-network`
-- Subnet: `172.20.0.0/16`
-
-### Volume Management
-
-Persistent data volumes:
-
-- `postgres-data`: Database files (production only)
-- `valkey-data`: Cache data
-- `orchestrator-data`: Job execution data
-
-## Monitoring
-
-### Health Check Endpoints
-
-- Main App: http://localhost:3000/api/health
-- All services (including internal orchestrator/runtime): `docker compose ps`
-
-## Scaling
-
-### Horizontal Scaling
-
-Scale specific services:
+## Verification
 
 ```bash
-# Scale orchestrators
-docker compose up -d --scale cronium-orchestrator=3
+# Application health
+curl http://localhost:3000/api/health
+
+# All services (orchestrator and runtime report via container healthchecks)
+docker compose ps
 ```
 
-### Load Balancing
-
-Add nginx for load balancing:
+Images are cosign-signed and Trivy-scanned in CI. To verify a signature:
 
 ```bash
-# Enable nginx profile
-docker compose --profile production up -d
+cosign verify ghcr.io/addison-moore/cronium-app:latest \
+  --certificate-identity-regexp=".*" \
+  --certificate-oidc-issuer=https://token.actions.githubusercontent.com
 ```
 
-## Troubleshooting
-
-### View Logs
+## Upgrades
 
 ```bash
-# All services
-docker compose logs -f
-
-# Specific service
-docker compose logs -f orchestrator
-
-# Last 100 lines
-docker compose logs --tail 100 cronium-app
-```
-
-### Common Issues
-
-1. **Database connection errors**:
-
-   ```bash
-   # Check database is running
-   docker compose ps postgres
-
-   # Check database logs
-   docker compose logs postgres
-   ```
-
-2. **Port conflicts**:
-
-   ```bash
-   # Check port usage
-   sudo lsof -i :5001
-
-   # Change port in .env
-   APP_PORT=5002
-   ```
-
-3. **Memory issues**:
-
-   ```bash
-   # Check resource usage
-   docker stats
-
-   # Increase Docker memory limit
-   # Docker Desktop: Preferences > Resources
-   ```
-
-4. **Service health checks**:
-   ```bash
-   # Check service health (orchestrator and runtime are internal-only)
-   docker compose ps
-   curl http://localhost:3000/api/health  # Main app
-   ```
-
-### Reset Everything
-
-```bash
-# Stop all services
-docker compose down
-
-# Remove volumes (WARNING: deletes all data)
-docker compose down -v
-
-# Remove images
-docker compose down --rmi all
-
-# Fresh start
+docker compose pull
 docker compose up -d
 ```
 
+- Migrations run automatically on the new app container's first start.
+- **Pin releases in production**: set `CRONIUM_IMAGE_TAG=<version>` in `.env`
+  (e.g. `1.2.0`) instead of tracking `latest`, and bump it deliberately.
+  `install.sh --version vX.Y.Z` does this for you.
+- Take a database backup before major-version upgrades.
+- The orchestrator's signing key persists in `orchestrator-data`, so remote
+  runners keep working across upgrades.
+
 ## Backup and Restore
 
-### Backup Database
+The entire state of a deployment is: the three data volumes plus your `.env`.
 
 ```bash
-# Backup
-docker exec cronium-postgres pg_dump -U cronium cronium > backup.sql
+# Database
+docker compose exec postgres pg_dump -U cronium cronium > backup.sql
+docker compose exec -T postgres psql -U cronium cronium < backup.sql
 
-# Restore
-docker exec -i cronium-postgres psql -U cronium cronium < backup.sql
+# Orchestrator data (signing key + known_hosts)
+docker run --rm -v cronium-e2e_orchestrator-data:/data -v "$(pwd)":/backup \
+  alpine tar czf /backup/orchestrator-data.tar.gz -C /data .
 ```
 
-### Backup Volumes
+(Volume names are prefixed with your Compose project name — list them with
+`docker volume ls`.) Store `.env` with your backups: the database is useless
+without the same `ENCRYPTION_KEY`, since stored credentials are encrypted with
+it.
+
+## Troubleshooting
+
+**Container fails to start** — `docker compose logs cronium-app`. A
+`[PREFLIGHT]` error means a secret is missing or malformed; the message names
+the variable and the command to generate it.
+
+**Database connection issues**:
 
 ```bash
-# Backup all volumes
-docker run --rm -v cronium_postgres_data:/data -v $(pwd):/backup alpine tar czf /backup/postgres-backup.tar.gz -C /data .
+docker compose exec postgres psql -U cronium -d cronium -c "SELECT 1;"
+docker compose logs postgres
 ```
 
-## Security Considerations
+**Permission denied on Docker socket** — add your user to the docker group:
+`sudo usermod -aG docker $USER` (log out and back in).
 
-1. **Change default passwords immediately**
-2. **Use Docker secrets in production**
-3. **Enable firewall rules**
-4. **Regular security updates**
-5. **Monitor for vulnerabilities**
-6. **Rotate secrets regularly**
+**Port already in use** — set `APP_PORT`/`SOCKET_PORT` in `.env`.
+
+**Debug logging** — set `LOG_LEVEL=debug` in `.env`.
+
+**Reset everything** (WARNING: `-v` deletes all data):
+
+```bash
+docker compose down        # stop
+docker compose down -v     # stop and delete data volumes
+```
+
+## Security Notes
+
+- Secrets live only in `.env` (chmod 600) — never commit it.
+- Rotate secrets periodically; restart the stack after updating `.env`.
+  Rotating `ENCRYPTION_KEY` requires re-entering stored tool credentials.
+- Keep images fresh (`docker compose pull` on a schedule, or pin and bump).
+- The app runs as a non-root user; the orchestrator image is distroless. The
+  orchestrator needs the Docker socket for container jobs — treat that host
+  accordingly.
 
 ## Support
 
-For issues and questions:
-
 - GitHub Issues: https://github.com/addison-moore/cronium/issues
 - Documentation: https://cronium.app/docs
+
+---
+
+**Maintainers — keep these in sync** when deployment behavior changes
+(compose services/ports/env vars, boot scripts, installer flow):
+`docker-compose.example.yml` (source of truth, including its header comment),
+`install.sh`, `infra/docker/docker-compose.yml`, this file,
+`docs/ENVIRONMENT_VARIABLES.md`, the docs-site `self-hosting` and
+`quick-start` pages, the root `README.md` Quick Start, and
+`env/.env*.example`. The self-hosting page links to the compose file rather
+than inlining it — keep it that way. `.github/workflows/install-smoke.yml`
+runs the installer end-to-end and fails when these drift; schema changes
+require a generated migration (`pnpm --filter @cronium/app db:generate`,
+enforced by `.github/workflows/migrations-check.yml`).

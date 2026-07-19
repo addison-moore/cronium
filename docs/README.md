@@ -13,7 +13,6 @@ are aimed at people **running** or **developing** Cronium.
 | ---------------------------------------------- | ------------------------------------------------------ |
 | [GETTING_STARTED.md](./GETTING_STARTED.md)     | Setting up a local development environment             |
 | [DEVELOPMENT_SETUP.md](./DEVELOPMENT_SETUP.md) | Detailed dev setup: Go services, Docker images, the DB |
-| [DOCKER_DEPLOYMENT.md](./DOCKER_DEPLOYMENT.md) | Deploying with prebuilt images from ghcr.io            |
 | [DEPLOYMENT.md](./DEPLOYMENT.md)               | Production deployment, secrets, and operations         |
 
 ## Concepts

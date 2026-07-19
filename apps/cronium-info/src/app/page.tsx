@@ -102,9 +102,16 @@ export default function Home() {
                 on your own infrastructure in minutes — no account, no vendor,
                 no per-run pricing.
               </p>
-              <p className="mx-auto mb-8 max-w-2xl text-white/90">
+              <p className="mx-auto mb-6 max-w-2xl text-white/90">
                 Your scripts, your servers, your data.
               </p>
+              <div className="mx-auto mb-8 max-w-2xl overflow-x-auto rounded-lg bg-black/30 px-4 py-3 text-left font-mono text-sm text-white/95">
+                <code>
+                  curl -fsSL
+                  https://raw.githubusercontent.com/addison-moore/cronium/main/install.sh
+                  | bash
+                </code>
+              </div>
               <div className="flex flex-col justify-center gap-4 sm:flex-row">
                 <Link href="/docs/self-hosting">
                   <Button

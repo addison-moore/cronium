@@ -1,16 +1,16 @@
 <div align="center">
-  
+
 # <img src="apps/cronium-info/public/assets/logo-icon.svg" alt="Cronium Logo" width="42" height="42" style="vertical-align: middle;" /> Cronium
-  
-  **Open-source automation platform for scheduled scripts and workflows**
-  
-  [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
-  [![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org/)
-  [![Go](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://golang.org/)
-  [![AGPL License](https://img.shields.io/badge/license-AGPL-blue.svg)](LICENSE-AGPL.md)
-  [![Commercial License](https://img.shields.io/badge/license-Commercial-blue.svg)](COMMERCIAL-LICENSE.md)
-  
-  [Website](https://cronium.app) • [Documentation](https://cronium.app/docs) • [Discord](https://discord.gg/cronium)
+
+**Open-source automation platform for scheduled scripts and workflows**
+
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org/)
+[![Go](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://golang.org/)
+[![AGPL License](https://img.shields.io/badge/license-AGPL-blue.svg)](LICENSE-AGPL.md)
+[![Commercial License](https://img.shields.io/badge/license-Commercial-blue.svg)](COMMERCIAL-LICENSE.md)
+
+[Website](https://cronium.app) • [Documentation](https://cronium.app/docs) • [Discord](https://discord.gg/cronium)
 </div>
 
 ---
@@ -18,6 +18,27 @@
 ## ✨ Overview
 
 Cronium is a powerful, self-hosted automation platform designed to simplify the scheduling and execution of scripts, workflows, and HTTP requests. Built with modern technologies and a focus on developer experience, Cronium provides a comprehensive solution for task automation with both local and remote execution capabilities.
+
+## ⚡ Quick Start
+
+Self-host Cronium with one command (Docker Engine 24+ with Compose V2 required):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/addison-moore/cronium/main/install.sh | bash
+```
+
+The installer generates all secrets, starts the stack, and waits until it is
+healthy; your first browser visit walks you through creating the admin
+account. Prefer to see every step? The manual path is two commands:
+
+```bash
+curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/addison-moore/cronium/main/docker-compose.example.yml
+docker compose up -d   # tells you exactly which .env values to generate
+```
+
+Full instructions, upgrades, and backups: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+or https://cronium.app/docs/self-hosting. For local development, see
+[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
 ## 🚀 Key Features
 
@@ -158,5 +179,5 @@ Special thanks to all the open-source projects that make Cronium possible.
 ---
 
 <div align="center">
-  <strong>⚠️ Note: Cronium is currently in active development. Production deployment instructions will be available soon.</strong>
+  <strong>Cronium is in active development — self-hosting is ready today: see the Quick Start above.</strong>
 </div>

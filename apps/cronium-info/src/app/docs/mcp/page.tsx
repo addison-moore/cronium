@@ -171,8 +171,11 @@ export default function McpPage() {
             <p>
               For local clients, run the bundled stdio server (
               <code>apps/cronium-mcp</code> in the Cronium repo) and point it at
-              your instance with an API token. Claude Desktop —{" "}
-              <code>claude_desktop_config.json</code>:
+              your instance with an API token. Set <code>CRONIUM_BASE_URL</code>{" "}
+              to where your instance runs — a production deployment is{" "}
+              <code>http://localhost:3000</code> (or your domain); the examples
+              below use the local development server's port <code>5001</code>.
+              Claude Desktop — <code>claude_desktop_config.json</code>:
             </p>
           </div>
           <SimpleCodeBlock language="json">
