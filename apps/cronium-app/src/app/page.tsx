@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { isSetupRequired } from "@/lib/first-run";
 
+// The setup check queries the database, which must not run at build time.
+export const dynamic = "force-dynamic";
+
 export default async function RootPage() {
   if (await isSetupRequired()) {
     redirect("/auth/setup");
