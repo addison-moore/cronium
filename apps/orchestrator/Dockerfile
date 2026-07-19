@@ -49,6 +49,10 @@ COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 # Expose ports
 EXPOSE 8080 9090
 
+# Distroless has no shell, so the probe is a subcommand of the binary itself
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD ["/app/orchestrator", "healthcheck"]
+
 # Labels for metadata
 LABEL org.opencontainers.image.source="https://github.com/addison-moore/cronium"
 LABEL org.opencontainers.image.description="Cronium Orchestrator - Job execution orchestrator"

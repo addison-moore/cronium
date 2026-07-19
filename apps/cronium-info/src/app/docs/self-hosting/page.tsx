@@ -137,29 +137,36 @@ export default function SelfHostingPage() {
                 <li>
                   <strong>Generate secrets</strong> (repeat for each variable).
                   If <code>openssl</code> is not installed, use a password
-                  manager with a 64-character random string:
+                  manager to generate random strings of the same length:
                   <SimpleCodeBlock language="bash" className="mt-2">
                     {`# macOS / Linux / WSL
-openssl rand -hex 32  # paste into AUTH_SECRET, ENCRYPTION_KEY, JWT_SECRET
-openssl rand -base64 32  # paste into INTERNAL_API_KEY`}
+openssl rand -hex 32     # AUTH_SECRET, ENCRYPTION_KEY, JWT_SECRET
+openssl rand -base64 32  # INTERNAL_API_KEY
+openssl rand -hex 16     # POSTGRES_PASSWORD`}
                   </SimpleCodeBlock>
+                  <code>ENCRYPTION_KEY</code> must be exactly 64 hex characters
+                  (<code>openssl rand -hex 32</code> produces that).
                 </li>
                 <li>
                   <strong>
-                    Create a minimal <code>.env</code> file
+                    Create a <code>.env</code> file
                   </strong>{" "}
-                  with the secrets you generated and your public domain (use{" "}
-                  <code>http://localhost:3000</code> if you are testing
-                  locally). Paste these values into the Compose file
-                  placeholders or add <code>env_file: ['.env']</code> to reuse
-                  them automatically:
+                  next to the Compose file with the secrets you generated and
+                  your public URL (use <code>http://localhost:3000</code> if you
+                  are testing locally). The Compose file reads everything from{" "}
+                  <code>.env</code> — you never need to edit the YAML — and it
+                  refuses to start with a clear error if a required value is
+                  missing:
                   <SimpleCodeBlock language="env" className="mt-2">
                     {`AUTH_URL=https://cronium.example.com
 PUBLIC_APP_URL=https://cronium.example.com
 AUTH_SECRET=<paste value>
 ENCRYPTION_KEY=<paste value>
 INTERNAL_API_KEY=<paste value>
-JWT_SECRET=<paste value>`}
+JWT_SECRET=<paste value>
+POSTGRES_PASSWORD=<paste value>
+# Initial admin login (change it after first sign-in)
+ADMIN_PASSWORD=<choose a password>`}
                   </SimpleCodeBlock>
                 </li>
               </ol>
@@ -214,12 +221,15 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
           <div className="space-y-6">
             <p>
               Copy the following Compose file into{" "}
-              <code>docker-compose.yml</code> and adjust environment variables
-              and volume mounts for your environment. The compose file deploys
-              PostgreSQL, Valkey, the Cronium app, the orchestrator, and the
-              runtime service. SMTP is automatically used whenever credentials
-              are provided; missing credentials will disable outbound email and
-              surface warnings in the UI.
+              <code>docker-compose.yml</code> — it is the same file the{" "}
+              <code>curl</code> command above downloads. It deploys PostgreSQL,
+              Valkey, the Cronium app, the orchestrator, and the runtime
+              service. Every value is read from <code>.env</code> with sensible
+              defaults, so a standard deployment never edits the YAML. To enable
+              outbound email, add <code>SMTP_HOST</code>, <code>SMTP_PORT</code>
+              , <code>SMTP_USER</code>, <code>SMTP_PASSWORD</code>, and{" "}
+              <code>SMTP_FROM_EMAIL</code> to <code>.env</code>; without them
+              email is disabled and the UI shows a warning.
             </p>
             <SimpleCodeBlock language="yaml">
               {`
@@ -227,27 +237,33 @@ services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_USER: cronium
-      POSTGRES_PASSWORD: super-secure-password
-      POSTGRES_DB: cronium
+      POSTGRES_USER: \${POSTGRES_USER:-cronium}
+      POSTGRES_PASSWORD: \${POSTGRES_PASSWORD:?generate with openssl rand -hex 16}
+      POSTGRES_DB: \${POSTGRES_DB:-cronium}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cronium"]
+      test: ["CMD-SHELL", "pg_isready -U \${POSTGRES_USER:-cronium}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - cronium
 
   valkey:
     image: valkey/valkey:7-alpine
     command: valkey-server --appendonly yes
     volumes:
       - valkey-data:/data
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - cronium
 
   cronium-app:
     image: ghcr.io/addison-moore/cronium-app:latest
@@ -259,84 +275,113 @@ services:
       valkey:
         condition: service_healthy
     environment:
-      AUTO_SEED_ADMIN: "true"
-      ADMIN_USERNAME: admin
-      ADMIN_EMAIL: admin@example.com
-      ADMIN_PASSWORD: admin
-      SMTP_HOST: smtp.example.com
-      SMTP_PORT: 587
-      SMTP_USER: smtp_user
-      SMTP_PASSWORD: smtp_password
-      SMTP_FROM_EMAIL: admin@example.com
       NODE_ENV: production
-      AUTH_URL: https://cronium.example.com
-      PUBLIC_APP_URL: https://cronium.example.com
-      NEXT_PUBLIC_APP_URL: https://cronium.example.com
-      AUTH_SECRET: replace-with-random-string
-      ENCRYPTION_KEY: replace-with-32-byte-key
-      INTERNAL_API_KEY: replace-with-shared-internal-key
-      JWT_SECRET: replace-with-runtime-jwt-secret
-      DATABASE_URL: postgres://cronium:super-secure-password@postgres:5432/cronium
+      AUTH_URL: \${AUTH_URL:-http://localhost:3000}
+      PUBLIC_APP_URL: \${PUBLIC_APP_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: \${PUBLIC_APP_URL:-http://localhost:3000}
+      AUTH_SECRET: \${AUTH_SECRET:?generate with openssl rand -hex 32}
+      ENCRYPTION_KEY: \${ENCRYPTION_KEY:?generate with openssl rand -hex 32 (must be 64 hex chars)}
+      INTERNAL_API_KEY: \${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
+      JWT_SECRET: \${JWT_SECRET:?generate with openssl rand -hex 32}
+      DATABASE_URL: postgres://\${POSTGRES_USER:-cronium}:\${POSTGRES_PASSWORD:?generate with openssl rand -hex 16}@postgres:5432/\${POSTGRES_DB:-cronium}
       ORCHESTRATOR_URL: http://cronium-orchestrator:8080
       VALKEY_URL: valkey://valkey:6379
-      # NEXT_PUBLIC_* values are read by the browser, so this must be a URL
-      # your users can reach - not an internal Docker service name.
-      NEXT_PUBLIC_SOCKET_URL: https://cronium.example.com:5002
-      NEXT_PUBLIC_SOCKET_PORT: 5002
+      # Must be reachable from the user's browser (not a Docker service name).
+      NEXT_PUBLIC_SOCKET_URL: \${NEXT_PUBLIC_SOCKET_URL:-http://localhost:5002}
+      NEXT_PUBLIC_SOCKET_PORT: \${SOCKET_PORT:-5002}
+      # Seeds the first admin user on boot so you can log in immediately.
+      # Set AUTO_SEED_ADMIN=false in .env once set up.
+      AUTO_SEED_ADMIN: \${AUTO_SEED_ADMIN:-true}
+      ADMIN_USERNAME: \${ADMIN_USERNAME:-admin}
+      ADMIN_EMAIL: \${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: \${ADMIN_PASSWORD:?set the initial admin password in .env}
     ports:
-      - "3000:3000"
-      - "5002:5002"
+      - "\${APP_PORT:-3000}:3000"
+      - "\${SOCKET_PORT:-5002}:5002"
+    restart: unless-stopped
+    networks:
+      - cronium
 
   cronium-orchestrator:
     image: ghcr.io/addison-moore/cronium-orchestrator:latest
     env_file:
       - .env
     depends_on:
-      - cronium-app
-      - valkey
+      cronium-app:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      cronium-runtime:
+        condition: service_healthy
     environment:
       CRONIUM_API_ENDPOINT: http://cronium-app:3000
-      CRONIUM_API_TOKEN: replace-with-shared-internal-key
-      CRONIUM_ORCHESTRATOR_ID: orchestrator-1
-      CRONIUM_CONTAINER_RUNTIME_JWT_SECRET: replace-with-runtime-jwt-secret
+      CRONIUM_API_TOKEN: \${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
+      CRONIUM_ORCHESTRATOR_ID: \${ORCHESTRATOR_ID:-orchestrator-1}
+      CRONIUM_CONTAINER_RUNTIME_JWT_SECRET: \${JWT_SECRET:?generate with openssl rand -hex 32}
       CRONIUM_CONTAINER_RUNTIME_BACKEND_URL: http://cronium-app:3000
       CRONIUM_CONTAINER_RUNTIME_VALKEY_URL: valkey://valkey:6379
-      LOG_LEVEL: info
-    ports:
-      - "8080:8080"
+      # Per-job runtime sidecars join this network to reach the app and Valkey;
+      # must match the network name declared at the bottom of this file.
+      CRONIUM_CONTAINER_RUNTIME_SHARED_NETWORK: cronium
+      # Remote (runner) execution tunnels to this shared runtime service; must
+      # match the cronium-runtime service name:port below.
+      RUNTIME_HOST: cronium-runtime
+      RUNTIME_PORT: 8081
+      LOG_LEVEL: \${LOG_LEVEL:-info}
+    healthcheck:
+      test: ["CMD", "/app/orchestrator", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # Persists the payload signing key and SSH known_hosts across upgrades.
+      - orchestrator-data:/app/data
+    restart: unless-stopped
     user: "0:0"
+    networks:
+      - cronium
 
   cronium-runtime:
     image: ghcr.io/addison-moore/cronium-runtime:latest
     env_file:
       - .env
     depends_on:
-      - cronium-app
-      - valkey
+      cronium-app:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
     environment:
       RUNTIME_PORT: 8081
-      RUNTIME_JWT_SECRET: replace-with-runtime-jwt-secret
+      RUNTIME_JWT_SECRET: \${JWT_SECRET:?generate with openssl rand -hex 32}
       RUNTIME_BACKEND_URL: http://cronium-app:3000
-      RUNTIME_BACKEND_TOKEN: replace-with-shared-internal-key
+      RUNTIME_BACKEND_TOKEN: \${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
       RUNTIME_VALKEY_URL: valkey://valkey:6379
-      RUNTIME_LOG_LEVEL: info
-    ports:
-      - "8081:8081"
+      RUNTIME_LOG_LEVEL: \${LOG_LEVEL:-info}
+    restart: unless-stopped
+    networks:
+      - cronium
 
 volumes:
   postgres-data: {}
   valkey-data: {}
+  orchestrator-data: {}
+
+networks:
+  # Explicitly named so it doesn't vary with the compose project name — the
+  # orchestrator attaches per-job runtime sidecars to it by this exact name.
+  cronium:
+    name: cronium
 `}
             </SimpleCodeBlock>
             <p className="text-muted-foreground text-sm">
-              Replace the placeholder secrets in <code>.env</code> (or inline
-              them if you prefer). The example already loads <code>.env</code>{" "}
-              for each service. Setting <code>AUTO_SEED_ADMIN=true</code> seeds
-              an admin user and default settings on first boot; change the
-              <code>ADMIN_*</code> and SMTP values to your desired bootstrap
-              credentials before deploying.
+              On first boot Cronium seeds an admin user (username{" "}
+              <code>admin</code> unless you set <code>ADMIN_USERNAME</code>)
+              with the <code>ADMIN_PASSWORD</code> from your <code>.env</code>.
+              There is no default password — Compose refuses to start until you
+              set one. After the initial setup, set{" "}
+              <code>AUTO_SEED_ADMIN=false</code> in <code>.env</code>.
             </p>
             <p className="text-muted-foreground text-sm">
               The Cronium app automatically runs database migrations on start.
@@ -789,13 +834,10 @@ volumes:
                     host running Docker.
                   </li>
                   <li>
-                    Orchestrator health:{" "}
-                    <code>curl http://localhost:8080/health</code>; expect a
-                    JSON payload with <code>status: "healthy"</code>.
-                  </li>
-                  <li>
-                    Runtime API: <code>curl http://localhost:8081/health</code>{" "}
-                    for a simple heartbeat.
+                    Orchestrator and runtime: run <code>docker compose ps</code>{" "}
+                    and confirm every service reports <code>healthy</code> —
+                    both services are internal-only and are probed by their
+                    container healthchecks.
                   </li>
                   <li>
                     Logs/WebSocket: tail{" "}

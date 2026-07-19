@@ -1,28 +1,65 @@
+# Cronium — production stack (pulls published images from GHCR).
+#
+# Quick start:
+#   1. Create a .env file next to this compose file:
+#
+#        # Where users reach Cronium in the browser
+#        AUTH_URL=http://localhost:3000
+#        PUBLIC_APP_URL=http://localhost:3000
+#
+#        # Secrets — generate each value:
+#        AUTH_SECRET=          # openssl rand -hex 32
+#        ENCRYPTION_KEY=       # openssl rand -hex 32  (must be exactly 64 hex chars)
+#        INTERNAL_API_KEY=     # openssl rand -base64 32
+#        JWT_SECRET=           # openssl rand -hex 32
+#        POSTGRES_PASSWORD=    # openssl rand -hex 16
+#
+#        # Initial admin account (change the password after first login)
+#        ADMIN_PASSWORD=
+#
+#   2. docker compose up -d
+#   3. Open http://localhost:3000 and log in (username "admin" unless you set
+#      ADMIN_USERNAME). Check status with: docker compose ps
+#
+# For a domain deployment, set AUTH_URL / PUBLIC_APP_URL to your public URL,
+# put a TLS reverse proxy in front of ports 3000 and 5002, and set
+# NEXT_PUBLIC_SOCKET_URL to the browser-reachable URL of port 5002
+# (e.g. https://cronium.example.com:5002 or a proxied wss endpoint).
+#
+# Every value below can be overridden from .env; none of this file needs
+# editing for a standard deployment.
+
 services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_USER: cronium
-      POSTGRES_PASSWORD: super-secure-password
-      POSTGRES_DB: cronium
+      POSTGRES_USER: ${POSTGRES_USER:-cronium}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?generate with openssl rand -hex 16}
+      POSTGRES_DB: ${POSTGRES_DB:-cronium}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cronium"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cronium}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - cronium
 
   valkey:
     image: valkey/valkey:7-alpine
     command: valkey-server --appendonly yes
     volumes:
       - valkey-data:/data
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - cronium
 
   cronium-app:
     image: ghcr.io/addison-moore/cronium-app:latest
@@ -34,78 +71,101 @@ services:
       valkey:
         condition: service_healthy
     environment:
-      # Seeds the first admin user on boot so you can log in immediately.
-      # Change ADMIN_PASSWORD before deploying, and change the password again
-      # after first login. Set AUTO_SEED_ADMIN to "false" once set up.
-      AUTO_SEED_ADMIN: "true"
-      ADMIN_USERNAME: admin
-      ADMIN_EMAIL: admin@example.com
-      ADMIN_PASSWORD: admin
-      SMTP_HOST: smtp.example.com
-      SMTP_PORT: 587
-      SMTP_USER: smtp_user
-      SMTP_PASSWORD: smtp_password
-      SMTP_FROM_EMAIL: admin@example.com
       NODE_ENV: production
-      AUTH_URL: ${AUTH_URL}
-      PUBLIC_APP_URL: ${PUBLIC_APP_URL}
-      NEXT_PUBLIC_APP_URL: ${PUBLIC_APP_URL}
-      AUTH_SECRET: ${AUTH_SECRET}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
-      JWT_SECRET: ${JWT_SECRET}
-      DATABASE_URL: postgres://cronium:super-secure-password@postgres:5432/cronium
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3000}
+      AUTH_SECRET: ${AUTH_SECRET:?generate with openssl rand -hex 32}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?generate with openssl rand -hex 32 (must be 64 hex chars)}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
+      JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
+      DATABASE_URL: postgres://${POSTGRES_USER:-cronium}:${POSTGRES_PASSWORD:?generate with openssl rand -hex 16}@postgres:5432/${POSTGRES_DB:-cronium}
       ORCHESTRATOR_URL: http://cronium-orchestrator:8080
       VALKEY_URL: valkey://valkey:6379
-      NEXT_PUBLIC_SOCKET_URL: http://cronium-app:5002
-      NEXT_PUBLIC_SOCKET_PORT: 5002
+      # Must be reachable from the user's browser (not a Docker service name).
+      NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL:-http://localhost:5002}
+      NEXT_PUBLIC_SOCKET_PORT: ${SOCKET_PORT:-5002}
+      # Seeds the first admin user on boot so you can log in immediately.
+      # Set AUTO_SEED_ADMIN=false in .env once set up.
+      AUTO_SEED_ADMIN: ${AUTO_SEED_ADMIN:-true}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set the initial admin password in .env}
     ports:
-      - "3000:3000"
-      - "5002:5002"
+      - "${APP_PORT:-3000}:3000"
+      - "${SOCKET_PORT:-5002}:5002"
+    restart: unless-stopped
+    networks:
+      - cronium
 
   cronium-orchestrator:
     image: ghcr.io/addison-moore/cronium-orchestrator:latest
     env_file:
       - .env
     depends_on:
-      - cronium-app
-      - valkey
-      - cronium-runtime
+      cronium-app:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      cronium-runtime:
+        condition: service_healthy
     environment:
       CRONIUM_API_ENDPOINT: http://cronium-app:3000
-      CRONIUM_API_TOKEN: ${INTERNAL_API_KEY}
-      CRONIUM_ORCHESTRATOR_ID: orchestrator-1
-      CRONIUM_CONTAINER_RUNTIME_JWT_SECRET: ${JWT_SECRET}
+      CRONIUM_API_TOKEN: ${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
+      CRONIUM_ORCHESTRATOR_ID: ${ORCHESTRATOR_ID:-orchestrator-1}
+      CRONIUM_CONTAINER_RUNTIME_JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
       CRONIUM_CONTAINER_RUNTIME_BACKEND_URL: http://cronium-app:3000
       CRONIUM_CONTAINER_RUNTIME_VALKEY_URL: valkey://valkey:6379
+      # Per-job runtime sidecars join this network to reach the app and Valkey;
+      # must match the network name declared at the bottom of this file.
+      CRONIUM_CONTAINER_RUNTIME_SHARED_NETWORK: cronium
       # Remote (runner) execution tunnels to this shared runtime service; must
       # match the cronium-runtime service name:port below.
       RUNTIME_HOST: cronium-runtime
       RUNTIME_PORT: 8081
-      LOG_LEVEL: info
-    ports:
-      - "8080:8080"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    healthcheck:
+      test: ["CMD", "/app/orchestrator", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # Persists the payload signing key and SSH known_hosts across upgrades.
+      - orchestrator-data:/app/data
+    restart: unless-stopped
     user: "0:0"
+    networks:
+      - cronium
 
   cronium-runtime:
     image: ghcr.io/addison-moore/cronium-runtime:latest
     env_file:
       - .env
     depends_on:
-      - cronium-app
-      - valkey
+      cronium-app:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
     environment:
       RUNTIME_PORT: 8081
-      RUNTIME_JWT_SECRET: ${JWT_SECRET}
+      RUNTIME_JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
       RUNTIME_BACKEND_URL: http://cronium-app:3000
-      RUNTIME_BACKEND_TOKEN: ${INTERNAL_API_KEY}
+      RUNTIME_BACKEND_TOKEN: ${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
       RUNTIME_VALKEY_URL: valkey://valkey:6379
-      RUNTIME_LOG_LEVEL: info
-    ports:
-      - "8081:8081"
+      RUNTIME_LOG_LEVEL: ${LOG_LEVEL:-info}
+    restart: unless-stopped
+    networks:
+      - cronium
 
 volumes:
   postgres-data: {}
   valkey-data: {}
+  orchestrator-data: {}
+
+networks:
+  # Explicitly named so it doesn't vary with the compose project name — the
+  # orchestrator attaches per-job runtime sidecars to it by this exact name.
+  cronium:
+    name: cronium

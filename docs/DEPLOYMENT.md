@@ -65,8 +65,8 @@ This guide covers deploying Cronium using Docker Compose in various environments
 5. **Access Cronium**:
    - Web UI: http://localhost:3000
    - WebSocket: ws://localhost:5002
-   - Orchestrator health: http://localhost:8080/health
-   - Runtime health: http://localhost:8081/health
+   - Service health: `docker compose ps` (the orchestrator and runtime are
+     internal-only and report health via their container healthchecks)
 
 ## Development Deployment
 
@@ -130,18 +130,6 @@ This script will:
    docker compose up -d
    ```
 
-### Using Docker Secrets
-
-For enhanced security:
-
-```bash
-# Generate secret files
-./infra/scripts/setup-secrets.sh
-
-# Deploy with Docker secrets
-docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.secrets.yml up -d
-```
-
 ### Production Checklist
 
 - [ ] Generate strong secrets (32+ characters)
@@ -182,8 +170,8 @@ Persistent data volumes:
 
 ### Health Check Endpoints
 
-- Orchestrator: http://localhost:8080/health
 - Main App: http://localhost:3000/api/health
+- All services (including internal orchestrator/runtime): `docker compose ps`
 
 ## Scaling
 
@@ -254,8 +242,8 @@ docker compose logs --tail 100 cronium-app
 
 4. **Service health checks**:
    ```bash
-   # Check service health
-   curl http://localhost:8080/health  # Orchestrator
+   # Check service health (orchestrator and runtime are internal-only)
+   docker compose ps
    curl http://localhost:3000/api/health  # Main app
    ```
 

@@ -119,10 +119,16 @@ func (sm *SidecarManager) CreateRuntimeSidecar(ctx context.Context, job *types.J
 		return "", fmt.Errorf("failed to start runtime sidecar: %w", err)
 	}
 
-	// Connect to shared services network if in development mode
-	if os.Getenv("GO_ENV") == "development" {
-		// Try to connect to the development network for access to shared services
-		// Try both possible network names
+	// The per-job network is isolated, so the sidecar must also join a shared
+	// network to resolve BackendURL/ValkeyURL by service name.
+	if shared := sm.executor.config.Runtime.SharedNetwork; shared != "" {
+		if err := sm.executor.dockerClient.NetworkConnect(ctx, shared, resp.ID, nil); err != nil {
+			_ = sm.StopSidecar(ctx, resp.ID)
+			return "", fmt.Errorf("failed to connect sidecar to shared network %q: %w", shared, err)
+		}
+		sm.log.WithField("network", shared).Debug("Connected sidecar to shared network")
+	} else if os.Getenv("GO_ENV") == "development" {
+		// Legacy dev fallback: try the known development network names
 		networks := []string{"docker_cronium-dev-network", "cronium-dev_cronium-dev-network"}
 		connected := false
 		for _, netName := range networks {

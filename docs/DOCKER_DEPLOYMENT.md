@@ -278,10 +278,8 @@ Open your browser to `http://localhost:3000`, choose **Sign Up**, and create the
 # Check application health
 curl http://localhost:3000/api/health
 
-# Check orchestrator health
-curl http://localhost:8080/health
-
-# Check all services
+# Check all services — the orchestrator and runtime are internal-only and
+# report health via their container healthchecks
 docker compose ps
 ```
 

@@ -176,6 +176,10 @@ type RuntimeConfig struct {
 	ValkeyURL      string `yaml:"valkeyURL" envconfig:"VALKEY_URL" default:"valkey://valkey:6379"`
 	JWTSecret      string `yaml:"jwtSecret" envconfig:"JWT_SECRET"`
 	IsolateNetwork bool   `yaml:"isolateNetwork" envconfig:"ISOLATE_NETWORK" default:"true"`
+	// SharedNetwork is a Docker network the runtime sidecar joins in addition
+	// to the isolated per-job network, so it can resolve BackendURL/ValkeyURL
+	// by service name (e.g. the compose stack's network).
+	SharedNetwork string `yaml:"sharedNetwork" envconfig:"SHARED_NETWORK"`
 }
 
 // ConnectionPoolConfig defines connection pool settings

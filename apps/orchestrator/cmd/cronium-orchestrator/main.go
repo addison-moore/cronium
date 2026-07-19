@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
+	"time"
 
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/config"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/health"
@@ -67,6 +68,7 @@ func init() {
 	// Add subcommands
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(validateCmd)
+	rootCmd.AddCommand(healthcheckCmd)
 }
 
 var versionCmd = &cobra.Command{
@@ -82,6 +84,35 @@ var versionCmd = &cobra.Command{
 		fmt.Printf("Git Commit: %s\n", GitCommit)
 		fmt.Printf("Go Version: %s\n", runtime.Version())
 		fmt.Printf("OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
+	},
+}
+
+var healthcheckCmd = &cobra.Command{
+	Use:           "healthcheck",
+	Short:         "Probe the local health endpoint and exit 0/1 (for container HEALTHCHECK)",
+	SilenceUsage:  true,
+	SilenceErrors: false,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Skip configuration loading — the probe must work even when the full
+		// config would fail validation, and distroless has no shell to fall
+		// back on.
+		return nil
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		port := os.Getenv("CRONIUM_MONITORING_HEALTH_PORT")
+		if port == "" {
+			port = "8080"
+		}
+		client := &http.Client{Timeout: 5 * time.Second}
+		resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%s/health", port))
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("health endpoint returned status %d", resp.StatusCode)
+		}
+		return nil
 	},
 }
 
