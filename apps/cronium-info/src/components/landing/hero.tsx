@@ -22,15 +22,6 @@ export default function Hero() {
             <span className="text-link">Cronium</span> is a self-hosted
             automation platform
           </h1>
-          <p
-            className="animate-fadeIn text-foreground mt-6 text-lg leading-8"
-            style={{ animationDelay: "0.3s" }}
-          >
-            Schedule Python, Node.js, and Bash scripts. Chain them into
-            multi-step workflows with conditional logic. Run everything in
-            isolated containers or on your own servers over SSH — on
-            infrastructure you control.
-          </p>
           <div
             className="animate-fadeIn mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row"
             style={{ animationDelay: "0.5s" }}
