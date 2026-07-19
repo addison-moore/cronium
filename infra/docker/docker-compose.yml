@@ -1,7 +1,7 @@
 # From-source Cronium stack: builds the same images CI publishes
 # (ghcr.io/addison-moore/cronium-*) using the Dockerfiles in apps/.
 # For an image-pull deployment, use docker-compose.example.yml at the
-# repo root instead (see docs/DOCKER_DEPLOYMENT.md).
+# repo root instead (see docs/DEPLOYMENT.md).
 #
 # Run from the repo root:
 #   docker compose -f infra/docker/docker-compose.yml up -d --build
