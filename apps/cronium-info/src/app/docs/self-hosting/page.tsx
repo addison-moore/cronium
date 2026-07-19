@@ -30,6 +30,7 @@ export const metadata: Metadata = {
 const tableOfContents = [
   { title: "Overview", href: "#overview", level: 2 },
   { title: "Prerequisites", href: "#prerequisites", level: 2 },
+  { title: "Quick Install", href: "#quick-install", level: 2 },
   { title: "Container Images", href: "#container-images", level: 2 },
   {
     title: "Docker Compose Example",
@@ -111,6 +112,30 @@ export default function SelfHostingPage() {
               </ul>
             </CardContent>
           </Card>
+        </section>
+
+        <section id="quick-install" className="mb-12">
+          <h2 className="mb-6 text-2xl font-bold">Quick Install</h2>
+          <div className="space-y-4">
+            <p>
+              The fastest way to get running is the installer script. It checks
+              your Docker setup, downloads the Compose file, generates every
+              secret into a <code>.env</code> (chmod 600), starts the stack, and
+              waits until Cronium is healthy:
+            </p>
+            <SimpleCodeBlock language="bash">
+              {`curl -fsSL https://raw.githubusercontent.com/addison-moore/cronium/main/install.sh | bash`}
+            </SimpleCodeBlock>
+            <p className="text-muted-foreground text-sm">
+              It asks one question — the URL where Cronium will be reached
+              (defaults to <code>http://localhost:3000</code>; pass{" "}
+              <code>--url https://cronium.example.com</code> for non-interactive
+              installs). Re-running the installer upgrades in place without
+              touching your secrets, and <code>--uninstall</code> stops the
+              stack while keeping your data. Prefer to see every step? The
+              manual path below does exactly what the installer automates.
+            </p>
+          </div>
         </section>
 
         <section id="env-setup" className="mb-12">

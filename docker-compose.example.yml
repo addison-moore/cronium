@@ -63,7 +63,7 @@ services:
       - cronium
 
   cronium-app:
-    image: ghcr.io/addison-moore/cronium-app:latest
+    image: ghcr.io/addison-moore/cronium-app:${CRONIUM_IMAGE_TAG:-latest}
     env_file:
       - path: .env
         required: false # missing values fail below with instructions
@@ -98,7 +98,7 @@ services:
       - cronium
 
   cronium-orchestrator:
-    image: ghcr.io/addison-moore/cronium-orchestrator:latest
+    image: ghcr.io/addison-moore/cronium-orchestrator:${CRONIUM_IMAGE_TAG:-latest}
     env_file:
       - path: .env
         required: false # missing values fail below with instructions
@@ -140,7 +140,7 @@ services:
       - cronium
 
   cronium-runtime:
-    image: ghcr.io/addison-moore/cronium-runtime:latest
+    image: ghcr.io/addison-moore/cronium-runtime:${CRONIUM_IMAGE_TAG:-latest}
     env_file:
       - path: .env
         required: false # missing values fail below with instructions

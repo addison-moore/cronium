@@ -1,0 +1,103 @@
+name: Install Smoke Test
+
+# Builds the three images from source and runs install.sh exactly as a
+# self-hoster would, asserting the stack comes up healthy and a fresh
+# instance lands on the first-run setup page. This is the standing guard
+# against drift between install.sh, docker-compose.example.yml, and the
+# images' boot behavior.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - install.sh
+      - docker-compose.example.yml
+      - apps/cronium-app/Dockerfile
+      - apps/cronium-app/scripts/**
+      - apps/orchestrator/Dockerfile
+      - apps/runtime/cronium-runtime/Dockerfile
+      - .github/workflows/install-smoke.yml
+  pull_request:
+    paths:
+      - install.sh
+      - docker-compose.example.yml
+      - apps/cronium-app/Dockerfile
+      - apps/cronium-app/scripts/**
+      - apps/orchestrator/Dockerfile
+      - apps/runtime/cronium-runtime/Dockerfile
+      - .github/workflows/install-smoke.yml
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build images from source
+        run: |
+          docker build -t ghcr.io/addison-moore/cronium-app:latest \
+            -f apps/cronium-app/Dockerfile .
+          docker build -t ghcr.io/addison-moore/cronium-orchestrator:latest \
+            apps/orchestrator
+          docker build -t ghcr.io/addison-moore/cronium-runtime:latest \
+            apps/runtime/cronium-runtime
+
+      - name: Run installer
+        env:
+          CRONIUM_INSTALL_NO_PULL: "1"
+          CRONIUM_INSTALL_COMPOSE_FILE: ${{ github.workspace }}/docker-compose.example.yml
+        run: ./install.sh --url http://localhost:3000 --dir "$RUNNER_TEMP/cronium-smoke"
+
+      - name: Assert app health endpoint
+        run: curl -fsS http://localhost:3000/api/health
+
+      - name: Assert fresh instance redirects to first-run setup
+        run: |
+          # Next.js may deliver the redirect as an HTTP 3xx or as a streamed
+          # meta refresh in a 200 body — accept either.
+          location=$(curl -s -o /dev/null -w '%{redirect_url}' http://localhost:3000/)
+          echo "redirect header: ${location:-<none>}"
+          case "$location" in
+            */auth/setup*) echo "OK: HTTP redirect to setup"; exit 0 ;;
+          esac
+          if curl -s http://localhost:3000/ | grep -q 'url=/auth/setup'; then
+            echo "OK: meta-refresh redirect to setup"
+          else
+            echo "Fresh instance did not redirect to /auth/setup"
+            exit 1
+          fi
+
+      - name: Assert setup page renders
+        run: |
+          curl -fsS http://localhost:3000/auth/setup | grep -qi "admin" \
+            || { echo "Setup page did not render an admin form"; exit 1; }
+
+      - name: Assert every service reports healthy
+        working-directory: ${{ runner.temp }}/cronium-smoke
+        run: |
+          for i in $(seq 1 36); do
+            statuses=$(docker compose ps --format '{{.Name}} {{.Health}}')
+            echo "$statuses"
+            # Exactly "healthy" per line — "unhealthy" must not slip through —
+            # and all five services present.
+            if echo "$statuses" | awk '$2 != "healthy" {bad=1} END {exit (bad || NR < 5)}'; then
+              echo "All services healthy"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Services never became healthy"
+          exit 1
+
+      - name: Dump state on failure
+        if: failure()
+        working-directory: ${{ runner.temp }}/cronium-smoke
+        run: |
+          docker compose ps || true
+          docker compose logs --tail 100 || true
