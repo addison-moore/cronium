@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { UserRole } from "@/shared/schema";
 import { useSession } from "next-auth/react";
 import { trpc } from "@/lib/trpc";
@@ -34,17 +35,24 @@ export function useAuth() {
     ...QUERY_OPTIONS.static,
   });
 
-  // Transform userData to match the expected User type
-  const user: User | null = userData
-    ? {
-        id: userData.id,
-        email: userData.email,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        profileImageUrl: userData.profileImageUrl,
-        role: userData.role,
-      }
-    : null;
+  // Transform userData to match the expected User type. Memoized so the
+  // object's identity is stable across renders — consumers put `user` in
+  // effect dependency arrays, and a per-render literal re-runs those effects
+  // on every render.
+  const user: User | null = useMemo(
+    () =>
+      userData
+        ? {
+            id: userData.id,
+            email: userData.email,
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            profileImageUrl: userData.profileImageUrl,
+            role: userData.role,
+          }
+        : null,
+    [userData],
+  );
 
   return {
     user,

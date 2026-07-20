@@ -299,7 +299,10 @@ export default function Terminal({ serverId, serverName }: TerminalProps) {
 
       hasInitializedRef.current = false;
     };
-  }, [serverId, isClient, user, isUserLoading]);
+    // Depend on the user's id, not the object — an unstable identity here
+    // tears down and rebuilds the whole terminal on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverId, isClient, user?.id, isUserLoading]);
 
   if (!isClient || isUserLoading) {
     return (

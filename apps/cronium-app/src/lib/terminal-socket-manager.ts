@@ -74,7 +74,15 @@ export const terminalSocketManager = {
         manager.sessionId = null;
       }
 
-      const socket = io("http://localhost:5002", {
+      // Same resolution as use-socket/use-logs-socket: explicit env override,
+      // else same host as the page on the socket port (works for deployed
+      // instances where NEXT_PUBLIC_* was not set at image build time).
+      const socketPort = process.env.NEXT_PUBLIC_SOCKET_PORT ?? "5002";
+      const socketUrl =
+        process.env.NEXT_PUBLIC_SOCKET_URL ??
+        `${window.location.protocol}//${window.location.hostname}:${socketPort}`;
+
+      const socket = io(socketUrl, {
         path: "/api/socketio",
         transports: ["websocket"],
         reconnection: false, // Disable auto-reconnection to prevent duplicate connections

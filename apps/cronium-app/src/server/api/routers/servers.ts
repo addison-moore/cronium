@@ -121,10 +121,14 @@ export const serversRouter = createTRPCRouter({
           });
         }
 
-        // Create the server
+        // Create the server. The connection test above just succeeded, so
+        // record the status instead of leaving the badge "offline" until a
+        // manual check.
         const server = await storage.createServer({
           ...input,
           userId: ctx.session.user.id,
+          online: true,
+          lastChecked: new Date(),
         });
 
         return server;
@@ -178,6 +182,7 @@ export const serversRouter = createTRPCRouter({
         }
 
         // If SSH key or password is provided, test the connection
+        let connectionVerified = false;
         if (updateData.sshKey || updateData.password) {
           const { sshService } = await import("@/lib/ssh");
 
@@ -199,6 +204,7 @@ export const serversRouter = createTRPCRouter({
               message: `SSH connection failed: ${connectionResult.message}`,
             });
           }
+          connectionVerified = true;
         }
 
         // Filter out undefined values before passing to updateServer
@@ -207,6 +213,12 @@ export const serversRouter = createTRPCRouter({
             ([_, value]) => value !== undefined,
           ),
         ) as Partial<InsertServer>;
+
+        // A successful connection test doubles as a status check
+        if (connectionVerified) {
+          filteredUpdateData.online = true;
+          filteredUpdateData.lastChecked = new Date();
+        }
 
         const updatedServer = await storage.updateServer(
           id,
