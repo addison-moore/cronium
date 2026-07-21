@@ -59,11 +59,9 @@ export async function putAuthCode(
 
 /** Fetch + delete an auth code (single use). Returns null if unknown/expired/used. */
 export async function takeAuthCode(code: string): Promise<AuthCodeData | null> {
-  const key = `${CODE_PREFIX}${code}`;
-  const data = await cacheService.get<AuthCodeData>(key);
-  if (!data) return null;
-  await cacheService.delete(key);
-  return data;
+  // Atomic GETDEL: two concurrent token requests with the same code cannot both
+  // consume it (ME-03).
+  return cacheService.getdel<AuthCodeData>(`${CODE_PREFIX}${code}`);
 }
 
 export async function allowRefresh(
@@ -77,9 +75,6 @@ export async function allowRefresh(
 
 /** Consume a refresh jti (rotation): valid only if still in the allowlist. */
 export async function consumeRefresh(jti: string): Promise<RefreshData | null> {
-  const key = `${REFRESH_PREFIX}${jti}`;
-  const data = await cacheService.get<RefreshData>(key);
-  if (!data) return null;
-  await cacheService.delete(key);
-  return data;
+  // Atomic GETDEL so a replayed refresh token cannot be rotated twice (ME-03).
+  return cacheService.getdel<RefreshData>(`${REFRESH_PREFIX}${jti}`);
 }

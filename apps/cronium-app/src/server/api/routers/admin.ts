@@ -20,6 +20,7 @@ import {
   systemStatsSchema,
 } from "@/shared/schemas/admin";
 import { storage } from "@/server/storage";
+import { toUserApiDto } from "@/server/security/api-dto";
 import { UserRole, UserStatus } from "@/shared/schema";
 import { sendInvitationEmail, sendEmailDetailed } from "@/lib/email";
 import { listAvailableModels } from "@/lib/ai";
@@ -38,7 +39,9 @@ export const adminRouter = createTRPCRouter({
           const result = await storage.queryUsers(input);
 
           return {
-            users: result.items,
+            // Explicit secret-free projection: never return password hashes or
+            // invite tokens over the admin API.
+            users: result.items.map(toUserApiDto),
             total: result.total,
             hasMore: result.hasMore,
           };
@@ -59,7 +62,7 @@ export const adminRouter = createTRPCRouter({
         if (!user) {
           throw notFoundError("User");
         }
-        return resourceResponse(user);
+        return resourceResponse(toUserApiDto(user));
       },
       {
         component: "adminRouter",
@@ -105,12 +108,11 @@ export const adminRouter = createTRPCRouter({
             updatedAt: new Date(),
           });
 
-          // Send invitation email
+          // Send invitation email. Never log the invite token — it is a
+          // single-use credential that grants account activation.
           try {
             await sendInvitationEmail(input.email, inviteToken);
-            console.log(
-              `Invitation email sent to ${input.email} with token ${inviteToken}`,
-            );
+            console.log(`Invitation email sent to ${input.email}`);
           } catch (emailError) {
             console.error("Failed to send invitation email:", emailError);
             // Note: We still return success since the user was created

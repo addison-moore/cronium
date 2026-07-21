@@ -1,10 +1,52 @@
-import { RunLocation, type Server } from "@/shared/schema";
+import { RunLocation, type Server, type User } from "@/shared/schema";
 import type { Workflow } from "@/shared/schema";
 import type {
   EventWithRelations,
   WorkflowWithRelations,
   WorkflowNodeWithEvent,
 } from "@/server/storage";
+
+/**
+ * Explicit secret-free projection of a user row for admin responses (security
+ * plan Phase 1.5). The raw row carries the bcrypt password hash and the
+ * plaintext invite token/expiry — none of which may leave the server. Built as
+ * an allowlist (not an Omit) so a future sensitive column is excluded by
+ * default rather than leaked until someone remembers to strip it.
+ */
+export interface UserApiDto {
+  id: string;
+  email: string | null;
+  username: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  profileImageUrl: string | null;
+  role: User["role"];
+  roleId: number | null;
+  status: User["status"];
+  lastLogin: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  hasPendingInvite: boolean;
+}
+
+export function toUserApiDto(user: User): UserApiDto {
+  return {
+    id: user.id,
+    email: user.email,
+    username: user.username,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    profileImageUrl: user.profileImageUrl,
+    role: user.role,
+    roleId: user.roleId,
+    status: user.status,
+    lastLogin: user.lastLogin,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    // Surface only the fact that an invite is outstanding, never the token.
+    hasPendingInvite: Boolean(user.inviteToken),
+  };
+}
 
 export type ServerApiDto = Omit<Server, "sshKey" | "password"> & {
   hasPrivateKey: boolean;

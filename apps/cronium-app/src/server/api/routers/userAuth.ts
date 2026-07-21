@@ -245,8 +245,11 @@ export const userAuthRouter = createTRPCRouter({
       try {
         const { token, password } = input;
 
-        // Validate reset token
-        const resetToken = await storage.getPasswordResetToken(token);
+        // Atomically claim the reset token: it is marked used only if currently
+        // unused and unexpired, so concurrent requests with the same token
+        // cannot both proceed (ME-03). If the claim fails the token is invalid,
+        // already consumed, or expired.
+        const resetToken = await storage.consumePasswordResetToken(token);
 
         if (!resetToken) {
           throw new TRPCError({
@@ -282,9 +285,6 @@ export const userAuthRouter = createTRPCRouter({
             .filter((apiToken) => apiToken.status === TokenStatus.ACTIVE)
             .map((apiToken) => storage.revokeApiToken(apiToken.id)),
         );
-
-        // Mark token as used
-        await storage.markPasswordResetTokenAsUsed(token);
 
         // Clean up expired tokens
         await storage.deleteExpiredPasswordResetTokens();

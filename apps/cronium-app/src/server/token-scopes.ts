@@ -9,8 +9,13 @@
  * Cookie-session (browser) users are never scope-limited.
  */
 
-/** Scopes a user can grant when creating a token. */
-export const API_TOKEN_SCOPES = ["mcp"] as const;
+/**
+ * Scopes a user can grant when creating a token. `full` grants the user's
+ * complete API rights and is the explicit opt-in for a broad token — chosen
+ * deliberately so there is no implicit "no scopes = full access" default
+ * (security plan Phase 1.5).
+ */
+export const API_TOKEN_SCOPES = ["full", "mcp"] as const;
 export type ApiTokenScope = (typeof API_TOKEN_SCOPES)[number];
 
 export function isApiTokenScope(value: string): value is ApiTokenScope {
@@ -22,8 +27,12 @@ export function isApiTokenScope(value: string): value is ApiTokenScope {
  * MCP tools need — create/activate/read events & workflows, discovery, and the
  * credential/server lookups — and nothing else (no admin, no secrets, no other
  * routers), so an MCP connector token can't act beyond its purpose if leaked.
+ * `full` is handled specially in `isPathAllowedForScopes` (any path).
  */
-const SCOPE_PATHS: Record<ApiTokenScope, ReadonlySet<string>> = {
+const SCOPE_PATHS: Record<
+  Exclude<ApiTokenScope, "full">,
+  ReadonlySet<string>
+> = {
   mcp: new Set<string>([
     "mcp.getCapabilities",
     "mcp.validatePlan",
@@ -43,12 +52,21 @@ const SCOPE_PATHS: Record<ApiTokenScope, ReadonlySet<string>> = {
 
 /**
  * Whether a token holding `scopes` may call the tRPC procedure at `path`.
- * `scopes === null` → unrestricted (full rights). An empty array → deny all.
+ *
+ * `scopes === null` → unrestricted. This is reserved for COOKIE SESSIONS
+ * (browser users), which are never scope-limited. API/OAuth bearer tokens never
+ * reach this function with null: their scopes are coerced to an explicit list
+ * (empty = deny-all) at the authentication boundary, so a legacy unscoped token
+ * fails closed rather than acting with full rights. An empty array → deny all.
+ * The `full` scope → allow any path.
  */
 export function isPathAllowedForScopes(
   scopes: readonly string[] | null,
   path: string,
 ): boolean {
   if (scopes === null) return true;
-  return scopes.some((s) => isApiTokenScope(s) && SCOPE_PATHS[s].has(path));
+  if (scopes.includes("full")) return true;
+  return scopes.some(
+    (s) => isApiTokenScope(s) && s !== "full" && SCOPE_PATHS[s].has(path),
+  );
 }

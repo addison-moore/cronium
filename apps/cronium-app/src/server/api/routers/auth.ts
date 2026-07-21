@@ -6,11 +6,25 @@ import { nanoid } from "nanoid";
 import { TokenStatus } from "@/shared/schema";
 import { API_TOKEN_SCOPES } from "@/server/token-scopes";
 
+// Maximum token lifetime (security plan Phase 1.5). Tokens cannot be issued
+// without an expiry, and never longer than this.
+const MAX_TOKEN_EXPIRY_DAYS = 90;
+
 // Schemas
 const createApiTokenSchema = z.object({
   name: z.string().min(1, "Token name is required").max(100),
-  // Optional least-privilege scopes. Omit for a full-access token (default).
-  scopes: z.array(z.enum(API_TOKEN_SCOPES)).min(1).optional(),
+  // Explicit least-privilege scopes are REQUIRED — there is no implicit
+  // full-access default. Use the "full" scope for a broad token deliberately.
+  scopes: z
+    .array(z.enum(API_TOKEN_SCOPES))
+    .min(1, "At least one scope is required"),
+  // Required expiry, capped at 90 days.
+  expiresInDays: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_TOKEN_EXPIRY_DAYS)
+    .default(MAX_TOKEN_EXPIRY_DAYS),
 });
 
 const tokenIdSchema = z.object({
@@ -71,13 +85,18 @@ export const authRouter = createTRPCRouter({
         // Generate a secure token
         const token = nanoid(32);
 
+        const expiresAt = new Date(
+          Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000,
+        );
+
         // Store the token in the database
         const apiToken = await storage.createApiToken({
           userId,
           name: input.name,
           token,
           status: TokenStatus.ACTIVE,
-          scopes: input.scopes ?? null,
+          scopes: input.scopes,
+          expiresAt,
           createdAt: new Date(),
           updatedAt: new Date(),
         });

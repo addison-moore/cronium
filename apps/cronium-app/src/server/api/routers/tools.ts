@@ -1004,21 +1004,29 @@ export const toolsRouter = createTRPCRouter({
         let totalExecutionTime = 0;
 
         try {
-          const { toolActionLogs } = await import("@/shared/schema");
-          const { gte, sql } = await import("drizzle-orm");
+          const { toolActionLogs, events } = await import("@/shared/schema");
+          const { and, eq, gte, sql } = await import("drizzle-orm");
 
           // Get today's executions
           const todayStart = new Date();
           todayStart.setHours(0, 0, 0, 0);
 
+          // Scope to the caller's own events — tool-action logs are joined to
+          // events, and stats must never aggregate across tenants.
           const [todayStats] = await db
             .select({
               count: sql<number>`count(*)::int`,
-              successCount: sql<number>`sum(case when status = 'SUCCESS' then 1 else 0 end)::int`,
-              avgTime: sql<number>`avg(execution_time)::int`,
+              successCount: sql<number>`sum(case when ${toolActionLogs.status} = 'SUCCESS' then 1 else 0 end)::int`,
+              avgTime: sql<number>`avg(${toolActionLogs.executionTime})::int`,
             })
             .from(toolActionLogs)
-            .where(gte(toolActionLogs.createdAt, todayStart));
+            .innerJoin(events, eq(toolActionLogs.eventId, events.id))
+            .where(
+              and(
+                gte(toolActionLogs.createdAt, todayStart),
+                eq(events.userId, ctx.session.user.id),
+              ),
+            );
 
           executionsToday = todayStats?.count ?? 0;
           successCount = todayStats?.successCount ?? 0;

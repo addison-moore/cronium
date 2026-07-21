@@ -157,6 +157,26 @@ export class CacheService {
   }
 
   /**
+   * Atomically get and delete a value (Redis/Valkey GETDEL). Used for
+   * single-use credentials (OAuth authorization codes, refresh-token rotation)
+   * so a get-then-delete race cannot let two callers both consume one token.
+   * Returns null when the key is absent or the cache is unavailable.
+   */
+  async getdel<T>(key: string): Promise<T | null> {
+    try {
+      if (!this.client || !this.isConnected) {
+        return null;
+      }
+      const value = await this.client.getdel(key);
+      if (!value) return null;
+      return superjson.parse(value);
+    } catch (error) {
+      console.error(`Cache getdel error for key ${key}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Delete a value from cache
    */
   async delete(key: string): Promise<boolean> {

@@ -475,6 +475,9 @@ export interface IStorage {
   ): Promise<PasswordResetToken>;
   getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
   markPasswordResetTokenAsUsed(token: string): Promise<void>;
+  consumePasswordResetToken(
+    token: string,
+  ): Promise<PasswordResetToken | undefined>;
   deleteExpiredPasswordResetTokens(): Promise<void>;
 
   // Webhook methods
@@ -3506,6 +3509,30 @@ class DatabaseStorage implements IStorage {
       .update(passwordResetTokens)
       .set({ used: true })
       .where(eq(passwordResetTokens.token, token));
+  }
+
+  /**
+   * Atomically consume a password-reset token: mark it used only if it is
+   * currently unused and unexpired, returning the row when this call is the one
+   * that consumed it. A conditional UPDATE ... RETURNING makes this a single
+   * atomic claim, so two concurrent reset requests with the same token cannot
+   * both succeed (closes the check-then-use race — ME-03).
+   */
+  async consumePasswordResetToken(
+    token: string,
+  ): Promise<PasswordResetToken | undefined> {
+    const [consumed] = await db
+      .update(passwordResetTokens)
+      .set({ used: true })
+      .where(
+        and(
+          eq(passwordResetTokens.token, token),
+          eq(passwordResetTokens.used, false),
+          gte(passwordResetTokens.expiresAt, new Date()),
+        ),
+      )
+      .returning();
+    return consumed;
   }
 
   async deleteExpiredPasswordResetTokens(): Promise<void> {

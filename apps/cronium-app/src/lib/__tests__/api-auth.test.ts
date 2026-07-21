@@ -40,19 +40,34 @@ describe("getBearerToken", () => {
 });
 
 describe("authenticateApiToken", () => {
-  it("accepts an active, unexpired token", async () => {
+  it("accepts an active, unexpired token; a null-scope token is deny-all", async () => {
     mockGet.mockResolvedValue({
       id: 7,
       userId: "user-1",
       status: TokenStatus.ACTIVE,
       expiresAt: null,
+      scopes: null,
     });
     const res = await authenticateApiToken("tok");
-    expect(res).toEqual({ userId: "user-1", tokenId: 7, scopes: null });
+    // A stored null scope is coerced to an explicit empty (deny-all) set so a
+    // legacy unscoped token fails closed rather than acting with full rights.
+    expect(res).toEqual({ userId: "user-1", tokenId: 7, scopes: [] });
     expect(mockUpdate).toHaveBeenCalledWith(
       7,
       expect.objectContaining({ lastUsed: expect.any(Date) }),
     );
+  });
+
+  it("preserves explicit scopes", async () => {
+    mockGet.mockResolvedValue({
+      id: 8,
+      userId: "user-2",
+      status: TokenStatus.ACTIVE,
+      expiresAt: null,
+      scopes: ["mcp"],
+    });
+    const res = await authenticateApiToken("tok2");
+    expect(res).toEqual({ userId: "user-2", tokenId: 8, scopes: ["mcp"] });
   });
 
   it("rejects an unknown token", async () => {

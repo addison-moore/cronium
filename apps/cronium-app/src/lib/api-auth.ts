@@ -39,7 +39,10 @@ export async function authenticateApiToken(token: string): Promise<{
     return {
       userId: apiToken.userId,
       tokenId: apiToken.id,
-      scopes: apiToken.scopes ?? null,
+      // A bearer token with no stored scopes is NOT full access: coerce to an
+      // explicit empty (deny-all) scope set so legacy unscoped tokens fail
+      // closed on scoped transports. New tokens always carry explicit scopes.
+      scopes: apiToken.scopes ?? [],
     };
   } catch (error) {
     console.error("Error validating API token:", error);

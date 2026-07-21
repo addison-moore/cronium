@@ -4,11 +4,19 @@
 import { isPathAllowedForScopes } from "../token-scopes";
 
 describe("isPathAllowedForScopes", () => {
-  it("null scopes = full access (any path allowed)", () => {
+  it("null scopes = full access — reserved for cookie sessions only", () => {
     expect(isPathAllowedForScopes(null, "admin.updateSystemSettings")).toBe(
       true,
     );
     expect(isPathAllowedForScopes(null, "servers.delete")).toBe(true);
+  });
+
+  it("the full scope allows any path (explicit broad token)", () => {
+    expect(isPathAllowedForScopes(["full"], "admin.updateSystemSettings")).toBe(
+      true,
+    );
+    expect(isPathAllowedForScopes(["full"], "servers.delete")).toBe(true);
+    expect(isPathAllowedForScopes(["full", "mcp"], "tools.delete")).toBe(true);
   });
 
   it("the mcp scope allows exactly the MCP operations", () => {

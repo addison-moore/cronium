@@ -57,6 +57,8 @@ const createTokenSchema = z.object({
   // When on, the token is limited to the MCP operation set (see token-scopes.ts)
   // instead of full account access — recommended for AI connectors.
   mcpOnly: z.boolean().optional(),
+  // Required token lifetime (server caps at 90 days).
+  expiresInDays: z.number().int().min(1).max(90),
 });
 
 type CreateTokenFormData = z.infer<typeof createTokenSchema>;
@@ -71,6 +73,7 @@ export default function ApiTokensManager() {
     defaultValues: {
       name: "",
       mcpOnly: false,
+      expiresInDays: 90,
     },
   });
 
@@ -143,7 +146,10 @@ export default function ApiTokensManager() {
   const onSubmit = (data: CreateTokenFormData) => {
     createTokenMutation.mutate({
       name: data.name,
-      ...(data.mcpOnly ? { scopes: ["mcp"] } : {}),
+      // Scopes are always explicit now: MCP-limited, or an explicit full-access
+      // token. There is no implicit unscoped/full default.
+      scopes: data.mcpOnly ? ["mcp"] : ["full"],
+      expiresInDays: data.expiresInDays,
     });
   };
 
@@ -242,6 +248,32 @@ export default function ApiTokensManager() {
                     Limit to MCP — can only create/manage events &amp; workflows
                     (recommended for AI connectors), not full account access.
                   </Label>
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <Label
+                    htmlFor="expiresInDays"
+                    className="text-muted-foreground text-sm"
+                  >
+                    Expires in
+                  </Label>
+                  <FormField
+                    control={form.control}
+                    name="expiresInDays"
+                    render={({ field }) => (
+                      <Input
+                        id="expiresInDays"
+                        type="number"
+                        min={1}
+                        max={90}
+                        className="w-24"
+                        value={field.value}
+                        onChange={(e) => field.onChange(Number(e.target.value))}
+                      />
+                    )}
+                  />
+                  <span className="text-muted-foreground text-sm">
+                    days (max 90)
+                  </span>
                 </div>
               </CardContent>
             </form>
