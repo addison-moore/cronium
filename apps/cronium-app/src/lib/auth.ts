@@ -3,7 +3,8 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { compare } from "bcrypt";
 import { storage } from "@/server/storage";
 import { UserStatus } from "@/shared/schema";
-import { RateLimitService } from "@/lib/rate-limit-service";
+import { consumeAtomicRateLimit } from "@/lib/security/atomic-rate-limiter";
+import { resolveClientIp } from "@/lib/security/client-ip";
 
 export const authOptions: NextAuthOptions = {
   pages: {
@@ -30,10 +31,10 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        // Rate-limit credential logins per client IP. This path does not go
-        // through the tRPC withRateLimit middleware, so it is enforced here to
-        // block brute force / password spraying. Fails open if Redis is down
-        // (matching RateLimitService behaviour elsewhere).
+        // Rate-limit credential logins per trusted client IP. This path does
+        // not go through the tRPC middleware, so it is enforced here to block
+        // brute force / password spraying. Atomic and FAILS CLOSED — a request
+        // is denied when the limiter backend is unavailable.
         const headers = (req?.headers ?? {}) as Record<
           string,
           string | string[] | undefined
@@ -43,10 +44,11 @@ export const authOptions: NextAuthOptions = {
           return Array.isArray(value) ? value[0] : value;
         };
         const clientIp =
-          pickHeader("x-forwarded-for")?.split(",")[0]?.trim() ??
-          pickHeader("x-real-ip") ??
-          "unknown";
-        const { allowed } = await RateLimitService.tryCheckLimit(
+          resolveClientIp(
+            pickHeader("x-forwarded-for") ?? null,
+            pickHeader("x-real-ip") ?? null,
+          ) ?? "unknown-ip";
+        const { allowed } = await consumeAtomicRateLimit(
           clientIp,
           "auth:credentials-login",
           { maxRequests: 10, windowMs: 60_000 },

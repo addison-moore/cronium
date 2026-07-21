@@ -380,6 +380,39 @@ export const withRateLimit = (maxRequests = 100, windowMs = 60000) => {
   });
 };
 
+/**
+ * Fail-closed atomic rate limiting for authentication / high-risk endpoints
+ * (security plan Phase 1.3). Keyed by the trusted-proxy-derived client IP; if
+ * the limiter's Valkey backend is unavailable the request is DENIED rather
+ * than allowed, so brute force cannot be unlocked by knocking out the cache.
+ */
+export const withAuthRateLimit = (maxRequests: number, windowMs: number) => {
+  return t.middleware(async ({ ctx, path, next }) => {
+    const { consumeAtomicRateLimit } =
+      await import("@/lib/security/atomic-rate-limiter");
+    const { clientIpFromHeaders } = await import("@/lib/security/client-ip");
+    // No trusted proxy hop / unknowable IP → a single shared bucket, which is
+    // strict rather than permissive (all such callers share one budget).
+    const identifier = clientIpFromHeaders(ctx.headers) ?? "unknown-ip";
+
+    const { allowed, resetAt } = await consumeAtomicRateLimit(
+      identifier,
+      path,
+      {
+        maxRequests,
+        windowMs,
+      },
+    );
+    if (!allowed) {
+      throw new TRPCError({
+        code: "TOO_MANY_REQUESTS",
+        message: `Too many attempts. Please try again after ${resetAt.toISOString()}`,
+      });
+    }
+    return next();
+  });
+};
+
 // withCache middleware has been removed as part of caching simplification
 // All CRUD operations now return fresh data directly from the database
 

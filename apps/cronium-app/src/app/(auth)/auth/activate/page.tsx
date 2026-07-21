@@ -25,7 +25,7 @@ const accountActivationSchema = z
   .object({
     password: z
       .string()
-      .min(8, { message: "Password must be at least 8 characters" })
+      .min(12, { message: "Password must be at least 12 characters" })
       .max(72, { message: "Password cannot exceed 72 characters" }),
     confirmPassword: z.string(),
   })

@@ -3,10 +3,18 @@
 import { hash } from "bcrypt";
 import { nanoid } from "nanoid";
 import { sql } from "drizzle-orm";
-import { UserRole, UserStatus, roles } from "@/shared/schema";
+import { UserRole, UserStatus, roles, users } from "@/shared/schema";
 import { storage } from "@/server/storage";
 import { db } from "@/server/db";
 import { isSetupRequired } from "@/lib/first-run";
+import { MIN_PASSWORD_LENGTH } from "@/shared/schemas/password";
+
+// A fixed key for a Postgres transaction-scoped advisory lock. Serializes
+// concurrent first-admin creation so the "zero users" check and the insert are
+// effectively atomic (closes the setup TOCTOU: two simultaneous submissions on
+// a fresh database could otherwise both pass the check and both create an
+// admin). Arbitrary constant, unique to this operation.
+const FIRST_ADMIN_LOCK_KEY = 4815162342;
 
 type SetupFormData = {
   username: string;
@@ -72,36 +80,51 @@ async function ensureSetting(key: string, value: string) {
 
 export async function createFirstAdmin(formData: SetupFormData) {
   try {
-    if (!(await isSetupRequired())) {
-      return {
-        success: false,
-        error: "Setup has already been completed. Sign in instead.",
-      };
-    }
-
     if (
       !formData.username ||
       formData.username.length < 3 ||
       !formData.email ||
       !formData.password ||
-      formData.password.length < 8
+      formData.password.length < MIN_PASSWORD_LENGTH
     ) {
       return { success: false, error: "Invalid setup details." };
     }
 
     const hashedPassword = await hash(formData.password, 12);
 
-    await storage.createUser({
-      id: nanoid(),
-      username: formData.username,
-      email: formData.email,
-      password: hashedPassword,
-      role: UserRole.ADMIN,
-      status: UserStatus.ACTIVE,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      skipPasswordHashing: true,
+    // Serialize the whole check-and-create under a transaction-scoped advisory
+    // lock and re-check "zero users" inside it, so concurrent submissions on a
+    // fresh database cannot each create an admin.
+    const created = await db.transaction(async (trx) => {
+      await trx.execute(
+        sql`select pg_advisory_xact_lock(${FIRST_ADMIN_LOCK_KEY})`,
+      );
+
+      const [existing] = await trx
+        .select({ id: users.id })
+        .from(users)
+        .limit(1);
+      if (existing) return false;
+
+      await trx.insert(users).values({
+        id: nanoid(),
+        username: formData.username,
+        email: formData.email,
+        password: hashedPassword,
+        role: UserRole.ADMIN,
+        status: UserStatus.ACTIVE,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      return true;
     });
+
+    if (!created) {
+      return {
+        success: false,
+        error: "Setup has already been completed. Sign in instead.",
+      };
+    }
 
     // Same defaults the headless bootstrap seed applies: registration closed
     // until the admin opens it (the signup path treats a MISSING

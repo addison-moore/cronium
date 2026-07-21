@@ -107,6 +107,7 @@ postgresql://user:password@localhost:5432/cronium?sslmode=require
 | `ORCHESTRATOR_URL` | Orchestrator service URL                                                                | `string` (URL) | `http://orchestrator:8080` | Yes      | 📱      |
 | `VALKEY_URL`       | Valkey/Redis connection URL (for caching static resources, sessions, and rate limiting) | `string` (URL) | `valkey://valkey:6379`     | Yes      | 📱 🎯   |
 | `BACKEND_URL`      | Backend service URL (for orchestrator)                                                  | `string` (URL) | `http://cronium-app:3000`  | Yes      | 🎯      |
+| `TRUSTED_PROXY_HOPS` | Number of trusted reverse-proxy hops in front of the app. Controls how the client IP is derived from `X-Forwarded-For` for rate limiting and IP checks. `0` (default) ignores forwarding headers; set to `1` behind a single TLS proxy. | `number` | `0` | No | 📱 |
 
 ## Optional Variables
 

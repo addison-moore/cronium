@@ -3,7 +3,7 @@ import {
   createTRPCRouter,
   publicProcedure,
   protectedProcedure,
-  withRateLimit,
+  withAuthRateLimit,
 } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { storage } from "@/server/storage";
@@ -12,6 +12,7 @@ import { nanoid } from "nanoid";
 import { TokenStatus, UserRole, UserStatus } from "@/shared/schema";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { encryptionService } from "@/lib/encryption-service";
+import { passwordSchema } from "@/shared/schemas/password";
 
 // Type guard for checking if user email exists in session
 function hasUserEmail(
@@ -32,7 +33,7 @@ function hasUserEmail(
 const registerSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters long"),
   email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters long"),
+  password: passwordSchema,
 });
 
 const forgotPasswordSchema = z.object({
@@ -41,7 +42,7 @@ const forgotPasswordSchema = z.object({
 
 const resetPasswordSchema = z.object({
   token: z.string().min(1, "Reset token is required"),
-  password: z.string().min(8, "Password must be at least 8 characters long"),
+  password: passwordSchema,
 });
 
 const verifyTokenSchema = z.object({
@@ -55,20 +56,22 @@ const loginSchema = z.object({
 
 const activateAccountSchema = z.object({
   token: z.string().min(1, "Token is required"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: passwordSchema,
 });
 
 const verifyInviteTokenSchema = z.object({
   token: z.string().min(1, "Token is required"),
 });
 
-// These endpoints are unauthenticated, so withRateLimit keys on the client IP
-// (x-forwarded-for). The throttles block credential brute force / password
-// spraying, reset- and invite-token guessing, and registration/email spam.
-// A password login costs a bcrypt compare, so it is deliberately the tightest.
-const loginRateLimited = publicProcedure.use(withRateLimit(10, 60_000));
-const signupRateLimited = publicProcedure.use(withRateLimit(5, 60_000));
-const tokenRateLimited = publicProcedure.use(withRateLimit(20, 60_000));
+// These endpoints are unauthenticated, so the limiter keys on the trusted
+// client IP. withAuthRateLimit is atomic and FAILS CLOSED — if Valkey is
+// unavailable the endpoint is denied rather than opened — so brute force,
+// token guessing, and registration/email spam cannot be unlocked by knocking
+// out the cache. A password login costs a bcrypt compare, so it is the
+// tightest bucket.
+const loginRateLimited = publicProcedure.use(withAuthRateLimit(10, 60_000));
+const signupRateLimited = publicProcedure.use(withAuthRateLimit(5, 60_000));
+const tokenRateLimited = publicProcedure.use(withAuthRateLimit(20, 60_000));
 
 export const userAuthRouter = createTRPCRouter({
   // User registration (public)

@@ -46,6 +46,12 @@ export const env = createEnv({
     VALKEY_URL: z.string().optional(),
     REDIS_URL: z.string().optional(),
     SOCKET_INTERNAL_URL: z.string().url().optional(),
+    // Number of trusted reverse-proxy hops in front of the app. The client IP
+    // is taken this many entries from the right of X-Forwarded-For, so an
+    // attacker cannot spoof their source IP by prepending header values.
+    // 0 (default) means no trusted proxy: forwarding headers are ignored and
+    // the direct socket peer is used. Set to 1 behind a single TLS proxy.
+    TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
   },
   client: {
     PUBLIC_APP_URL: z.string().url(),
@@ -74,6 +80,7 @@ export const env = createEnv({
     VALKEY_URL: process.env.VALKEY_URL,
     REDIS_URL: process.env.REDIS_URL,
     SOCKET_INTERNAL_URL: process.env.SOCKET_INTERNAL_URL,
+    TRUSTED_PROXY_HOPS: process.env.TRUSTED_PROXY_HOPS,
   },
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
   emptyStringAsUndefined: true,
