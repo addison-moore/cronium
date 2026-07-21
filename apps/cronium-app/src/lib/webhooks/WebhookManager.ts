@@ -163,26 +163,42 @@ export class WebhookManager extends EventEmitter {
   }
 
   /**
-   * Trigger a webhook event
+   * Trigger a webhook event, fanning out only to the owning tenant's
+   * subscriptions. `ownerUserId` is the tenant that produced the event (the
+   * owner of the inbound webhook); it MUST be provided so one user's payload
+   * can never reach another user's outbound webhook (HI-01).
    */
   async triggerEvent(
     event: string,
     data: Record<string, unknown>,
+    ownerUserId: string,
     metadata?: Record<string, unknown>,
   ): Promise<void> {
-    // Use optimized query to find all active webhooks subscribed to this event
-    const subscribedWebhooks = await storage.getActiveWebhooksForEvent(event);
+    if (!ownerUserId) {
+      throw new Error("triggerEvent requires an owning tenant userId");
+    }
+
+    // Fan out only to the owning tenant's active subscriptions.
+    const subscribedWebhooks = await storage.getActiveWebhooksForEvent(
+      event,
+      ownerUserId,
+    );
 
     if (subscribedWebhooks.length === 0) {
       return;
     }
 
-    // Create webhook event record
+    const sourceWebhookId =
+      typeof metadata?.webhookId === "number" ? metadata.webhookId : null;
+
+    // Create webhook event record, stamped with its owning tenant.
     const result = await db
       .insert(webhookEvents)
       .values({
         event,
         payload: { data, metadata },
+        userId: ownerUserId,
+        sourceWebhookId,
         createdAt: new Date(),
       })
       .returning();

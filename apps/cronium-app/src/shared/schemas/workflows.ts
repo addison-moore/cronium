@@ -115,19 +115,8 @@ export const createWorkflowSchema = z
       path: ["scheduleNumber"],
     },
   )
-  .refine(
-    (data) => {
-      // Validate webhook key for webhook workflows
-      if (data.triggerType === WorkflowTriggerType.WEBHOOK) {
-        return data.webhookKey && data.webhookKey.trim().length > 0;
-      }
-      return true;
-    },
-    {
-      message: "Webhook key is required for webhook-triggered workflows",
-      path: ["webhookKey"],
-    },
-  )
+  // The webhook key is generated server-side (high entropy, unique); a
+  // caller-supplied value is ignored, so there is nothing to validate here.
   .refine(
     (data) => {
       // Validate server override configuration

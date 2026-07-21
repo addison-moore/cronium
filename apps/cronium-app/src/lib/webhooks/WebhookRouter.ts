@@ -160,12 +160,15 @@ export class WebhookRouter {
         webhook.transformations as Record<string, unknown> | undefined,
       );
 
-      // Store event
+      // Store event, stamped with the owning tenant (the inbound webhook's
+      // owner) so downstream fan-out and reads stay tenant-scoped.
       const result = await db
         .insert(webhookEvents)
         .values({
           event: eventType,
           payload: processedData,
+          userId: webhook.userId,
+          sourceWebhookId: webhook.id,
           createdAt: new Date(),
         })
         .returning();
@@ -176,10 +179,11 @@ export class WebhookRouter {
 
       const event = result[0];
 
-      // Trigger internal events
+      // Fan out only within the inbound webhook's own tenant (HI-01).
       await this.webhookManager.triggerEvent(
         `webhook.${eventType}`,
         processedData,
+        webhook.userId,
         {
           webhookId: webhook.id,
           webhookKey: webhook.key,

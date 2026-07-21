@@ -390,7 +390,7 @@ export const webhookSystemRouter = createTRPCRouter({
             throw notFoundError("Webhook");
           }
 
-          // Trigger test event
+          // Trigger test event within the caller's own tenant.
           await webhookManager.triggerEvent(
             "webhook.test",
             {
@@ -398,6 +398,7 @@ export const webhookSystemRouter = createTRPCRouter({
               timestamp: new Date().toISOString(),
               ...input.testData,
             },
+            webhook.userId,
             {
               webhookId: input.webhookId,
               triggeredBy: ctx.session.user.id,

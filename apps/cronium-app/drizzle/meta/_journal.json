@@ -43,6 +43,13 @@
       "when": 1784673492195,
       "tag": "0005_oauth_browser_binding",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784675304091,
+      "tag": "0006_webhook_event_tenant",
+      "breakpoints": true
     }
   ]
 }

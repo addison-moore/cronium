@@ -28,11 +28,20 @@ import { storage, type WorkflowWithRelations } from "@/server/storage";
 import {
   EventStatus,
   LogStatus,
+  WorkflowTriggerType,
   workflowExecutions,
   workflows,
 } from "@shared/schema";
+import { nanoid } from "nanoid";
 import { db } from "@/server/db";
 import { eq, desc, sql } from "drizzle-orm";
+
+// A workflow webhook key is a bearer credential in the public trigger URL.
+// Generate it server-side with high entropy (nanoid(32) ≈ 190 bits) so it is
+// unguessable and effectively unique — never accept a caller-chosen key.
+function generateWorkflowWebhookKey(): string {
+  return nanoid(32);
+}
 import {
   assertWorkflowCapability,
   assertWorkflowDefinition,
@@ -111,7 +120,15 @@ export const workflowsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       return withErrorHandling(
         async () => {
-          const { nodes, edges, ...workflowData } = input;
+          // A caller-supplied webhookKey is ignored: the key is generated
+          // server-side with high entropy so it is unguessable and unique
+          // (HI-12). Never trust a client-chosen key.
+          const {
+            nodes,
+            edges,
+            webhookKey: _ignoredWebhookKey,
+            ...workflowData
+          } = input;
           await assertWorkflowDefinition(
             ctx.session.user.id,
             nodes.map((node) => node.data.eventId),
@@ -122,6 +139,10 @@ export const workflowsRouter = createTRPCRouter({
           const workflowToCreate = {
             ...workflowData,
             userId: ctx.session.user.id,
+            webhookKey:
+              input.triggerType === WorkflowTriggerType.WEBHOOK
+                ? generateWorkflowWebhookKey()
+                : null,
             // Provenance (e.g. "mcp") for workflows created by an AI agent.
             source: ctx.requestSource ?? null,
           };
@@ -187,7 +208,15 @@ export const workflowsRouter = createTRPCRouter({
     .input(updateWorkflowSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const { id, nodes, edges, ...workflowData } = input;
+        // A caller-supplied webhookKey is ignored (see create); the key is
+        // server-generated and never overwritten by client input (HI-12).
+        const {
+          id,
+          nodes,
+          edges,
+          webhookKey: _ignoredWebhookKey,
+          ...workflowData
+        } = input;
 
         // Check if user owns the workflow
         const existingWorkflow = await storage.getWorkflow(id);
@@ -198,6 +227,14 @@ export const workflowsRouter = createTRPCRouter({
           });
         }
         await assertWorkflowCapability(id, ctx.session.user.id, "edit");
+
+        // Ensure a WEBHOOK-triggered workflow always has a strong key: mint one
+        // when switching to (or already on) WEBHOOK without an existing key.
+        const effectiveTriggerType =
+          input.triggerType ?? existingWorkflow.triggerType;
+        const ensureWebhookKey =
+          effectiveTriggerType === WorkflowTriggerType.WEBHOOK &&
+          !existingWorkflow.webhookKey;
 
         const proposedNodes =
           nodes ??
@@ -219,11 +256,15 @@ export const workflowsRouter = createTRPCRouter({
         );
 
         // Update workflow properties
-        if (Object.keys(workflowData).length > 0) {
+        if (Object.keys(workflowData).length > 0 || ensureWebhookKey) {
           // Filter out null values to match the expected Partial<InsertWorkflow> type
           const filteredWorkflowData = Object.fromEntries(
             Object.entries(workflowData).filter(([_, value]) => value !== null),
           ) as Partial<InsertWorkflow>;
+
+          if (ensureWebhookKey) {
+            filteredWorkflowData.webhookKey = generateWorkflowWebhookKey();
+          }
 
           await storage.updateWorkflow(id, filteredWorkflowData);
         }

@@ -1504,6 +1504,15 @@ export const webhookEvents = pgTable("webhook_events", {
   id: serial("id").primaryKey(),
   event: varchar("event", { length: 255 }).notNull(),
   payload: jsonb("payload").notNull(),
+  // Tenant that produced this event and the inbound webhook it came from.
+  // Fan-out to outbound subscriptions is scoped to this owner so one tenant's
+  // inbound payload can never be delivered to another tenant's webhook (HI-01).
+  userId: varchar("user_id", { length: 255 }).references(() => users.id, {
+    onDelete: "cascade",
+  }),
+  sourceWebhookId: integer("source_webhook_id").references(() => webhooks.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

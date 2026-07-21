@@ -483,6 +483,7 @@ export interface IStorage {
   // Webhook methods
   getActiveWebhooksForEvent(
     event: string,
+    ownerUserId: string,
   ): Promise<(typeof webhooks.$inferSelect)[]>;
   getWebhookDeliveryWithRelations(deliveryId: string): Promise<{
     delivery: typeof webhookDeliveries.$inferSelect;
@@ -3544,14 +3545,18 @@ class DatabaseStorage implements IStorage {
   // Webhook methods
   async getActiveWebhooksForEvent(
     event: string,
+    ownerUserId: string,
   ): Promise<(typeof webhooks.$inferSelect)[]> {
-    // Optimized query that filters by event subscription in the database
+    // Fan-out is scoped to the owning tenant: a webhook (including a `*`
+    // wildcard subscription) only ever receives its own tenant's events, never
+    // another user's inbound payloads (HI-01).
     const activeWebhooks = await db
       .select()
       .from(webhooks)
       .where(
         and(
           eq(webhooks.active, true),
+          eq(webhooks.userId, ownerUserId),
           or(
             sql`${webhooks.events}::jsonb @> ${JSON.stringify([event])}::jsonb`,
             sql`${webhooks.events}::jsonb @> ${JSON.stringify(["*"])}::jsonb`,
