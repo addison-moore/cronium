@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { MessageSquare, Hash, AtSign } from "lucide-react";
 import { format } from "date-fns";
+import { formatSlackMessage } from "./format-slack-message";
 
 interface SlackMessagePreviewProps {
   channel?: string;
@@ -53,20 +54,6 @@ export function SlackMessagePreview({
     );
   };
 
-  const formatMessage = (text: string) => {
-    // Basic Slack markdown formatting
-    return text
-      .replace(/\*(.+?)\*/g, "<strong>$1</strong>") // Bold
-      .replace(/_(.+?)_/g, "<em>$1</em>") // Italic
-      .replace(/~(.+?)~/g, "<del>$1</del>") // Strikethrough
-      .replace(/`(.+?)`/g, '<code class="bg-slate-700 px-1 rounded">$1</code>') // Code
-      .replace(
-        /^```([\s\S]+?)```$/gm,
-        '<pre class="bg-slate-700 p-2 rounded mt-2">$1</pre>',
-      ) // Code block
-      .replace(/\n/g, "<br />"); // Line breaks
-  };
-
   const renderChannel = () => {
     const isDirectMessage = channel.startsWith("@");
     const Icon = isDirectMessage ? AtSign : Hash;
@@ -103,12 +90,7 @@ export function SlackMessagePreview({
                 </span>
               </div>
 
-              <div
-                className="mt-1 text-sm"
-                dangerouslySetInnerHTML={{
-                  __html: formatMessage(message),
-                }}
-              />
+              <div className="mt-1 text-sm">{formatSlackMessage(message)}</div>
 
               {/* Blocks rendering (simplified) */}
               {blocks && blocks.length > 0 && (
