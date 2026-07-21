@@ -284,18 +284,20 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
             </SimpleCodeBlock>
             <ul className="text-muted-foreground list-disc space-y-2 pl-6">
               <li>
-                Only the app's ports (<code>3000</code> web, <code>5002</code>{" "}
-                WebSocket) are published to the host; the orchestrator and
-                runtime are internal-only and monitored via their container
-                healthchecks (<code>docker compose ps</code>).
+                Port <code>3000</code> is published for the web app; WebSocket
+                port <code>5002</code> is bound only to host loopback for a
+                reverse proxy. The orchestrator and runtime are internal-only
+                and monitored via their container healthchecks (
+                <code>docker compose ps</code>).
               </li>
               <li>
                 For an Internet-facing deployment, route only the socket
                 transport path (<code>/api/socketio</code>) through your TLS
-                reverse proxy to port <code>5002</code>, and firewall the raw
-                port. The service-only <code>/broadcast/*</code> routes require
-                <code>Authorization: Bearer $INTERNAL_API_KEY</code> and should
-                not be publicly exposed.
+                reverse proxy to <code>127.0.0.1:5002</code>. A proxy container
+                can use <code>cronium-app:5002</code> on the Cronium network.
+                Never proxy the service-only <code>/broadcast/*</code> routes;
+                they also require
+                <code>Authorization: Bearer $INTERNAL_API_KEY</code>.
               </li>
               <li>
                 Optional features are enabled purely by adding variables to{" "}
@@ -303,18 +305,26 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                 /<code>SMTP_USER</code>/<code>SMTP_PASSWORD</code>/
                 <code>SMTP_FROM_EMAIL</code> for outbound email,{" "}
                 <code>CRONIUM_IMAGE_TAG</code> to pin a release, and{" "}
-                <code>APP_PORT</code>/<code>SOCKET_PORT</code> to move the
-                published ports. Use <code>SOCKET_ALLOWED_ORIGINS</code> only
-                when trusted browser clients come from more than the canonical
+                <code>APP_PORT</code> to move the public port or
+                <code>SOCKET_PORT</code> to move the loopback proxy target. Use
+                <code>SOCKET_ALLOWED_ORIGINS</code> only when trusted browser
+                clients come from more than the canonical
                 <code>PUBLIC_APP_URL</code>/<code>AUTH_URL</code> origins.
               </li>
             </ul>
             <p className="text-muted-foreground text-sm">
               Live-log and terminal clients automatically request a short-lived
               authenticated ticket before connecting. The server accepts each
-              ticket once, checks that the account is still active, and also
-              requires console permission for terminal access. Exact origin
-              allowlisting adds a separate browser boundary.
+              ticket once through shared Valkey, checks that the account is
+              still active, and also requires console permission for terminal
+              access. Authorization changes revoke live connections. Exact
+              origin allowlisting adds a separate browser boundary.
+            </p>
+            <p className="text-muted-foreground text-sm">
+              The bundled Valkey service uses <code>noeviction</code> because
+              consumed ticket markers are security state. At its configured
+              memory limit, new security writes fail closed instead of evicting
+              replay protection.
             </p>
             <p className="text-muted-foreground text-sm">
               There are no default credentials: your first browser visit shows a
@@ -333,8 +343,8 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
             <p className="text-muted-foreground text-xs">
               Leave the <code>/var/run/docker.sock</code> mount in place if you
               plan to run container jobs—the orchestrator needs access to the
-              host Docker daemon. Remove it only when you exclusively use SSH
-              runners.
+              host Docker daemon. Remove it only when you exclusively use an
+              externally isolated SSH execution topology.
             </p>
           </div>
         </section>
@@ -581,6 +591,19 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                   </TableRow>
                   <TableRow>
                     <TableCell>
+                      <code>CRONIUM_SSH_EXECUTION_ISOLATION_MODE</code>
+                    </TableCell>
+                    <TableCell>Optional</TableCell>
+                    <TableCell>
+                      Defaults to <code>disabled</code>. Set to
+                      <code>operator-enforced</code> only after a trusted
+                      external launcher guarantees a separate UID or isolated
+                      container for every mutually untrusted remote job. A
+                      normal shared SSH account is not sufficient.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
                       <code>LOG_LEVEL</code>
                     </TableCell>
                     <TableCell>Optional</TableCell>
@@ -592,9 +615,9 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                 </TableBody>
               </Table>
               <p className="text-muted-foreground text-xs">
-                *Required when using container-based execution. For SSH-only
-                environments you may omit the runtime service and related
-                secrets.
+                *Required when using container-based execution. An SSH-only
+                environment must first satisfy and explicitly enable the
+                external per-job isolation requirement.
               </p>
             </div>
 
@@ -801,8 +824,8 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                   <li>
                     Logs/WebSocket: tail{" "}
                     <code>docker compose logs cronium-app</code> while
-                    triggering a job to verify live log streaming on port{" "}
-                    <code>5002</code>.
+                    triggering a job to verify live log streaming through the
+                    proxied <code>/api/socketio</code> path.
                   </li>
                 </ul>
               </CardContent>

@@ -24,13 +24,21 @@ import {
   authenticateSocketTicket,
   createSocketAuthMiddleware,
   mintSocketTicket,
+  socketUserAuthorizationFingerprint,
   verifySocketTicket,
 } from "../socket-ticket";
 
 const mockGetUser = storage.getUser as jest.Mock;
+const consumedTicketIds = new Set<string>();
+const consumeTicket = jest.fn(async (jti: string) => {
+  if (consumedTicketIds.has(jti)) return false;
+  consumedTicketIds.add(jti);
+  return true;
+});
 
 beforeEach(() => {
   jest.clearAllMocks();
+  consumedTicketIds.clear();
   mockGetUser.mockResolvedValue({
     id: "user-1",
     role: UserRole.USER,
@@ -64,12 +72,43 @@ describe("socket tickets", () => {
   it("accepts a ticket once and derives the current active user", async () => {
     const { ticket } = mintSocketTicket("user-1", "logs");
 
-    await expect(authenticateSocketTicket(ticket, "logs")).resolves.toEqual({
-      userId: "user-1",
-      role: UserRole.USER,
-    });
-    await expect(authenticateSocketTicket(ticket, "logs")).resolves.toBeNull();
+    await expect(
+      authenticateSocketTicket(ticket, "logs", { consumeTicket }),
+    ).resolves.toMatchObject({ userId: "user-1", role: UserRole.USER });
+    await expect(
+      authenticateSocketTicket(ticket, "logs", { consumeTicket }),
+    ).resolves.toBeNull();
     expect(mockGetUser).toHaveBeenCalledTimes(1);
+  });
+
+  it("binds a socket principal to password, role, and status state", () => {
+    const user = {
+      id: "user-1",
+      password: "password-hash-1",
+      role: UserRole.USER,
+      roleId: 2,
+      status: UserStatus.ACTIVE,
+    };
+    const fingerprint = socketUserAuthorizationFingerprint(user);
+
+    expect(
+      socketUserAuthorizationFingerprint({
+        ...user,
+        password: "password-hash-2",
+      }),
+    ).not.toBe(fingerprint);
+    expect(
+      socketUserAuthorizationFingerprint({
+        ...user,
+        roleId: 3,
+      }),
+    ).not.toBe(fingerprint);
+    expect(
+      socketUserAuthorizationFingerprint({
+        ...user,
+        status: UserStatus.DISABLED,
+      }),
+    ).not.toBe(fingerprint);
   });
 
   it.each([UserStatus.DISABLED, UserStatus.PENDING, UserStatus.INVITED])(
@@ -83,7 +122,7 @@ describe("socket tickets", () => {
       const { ticket } = mintSocketTicket("user-1", "logs");
 
       await expect(
-        authenticateSocketTicket(ticket, "logs"),
+        authenticateSocketTicket(ticket, "logs", { consumeTicket }),
       ).resolves.toBeNull();
     },
   );
@@ -93,7 +132,7 @@ describe("socket tickets", () => {
     const { ticket } = mintSocketTicket("user-1", "terminal");
 
     await expect(
-      authenticateSocketTicket(ticket, "terminal"),
+      authenticateSocketTicket(ticket, "terminal", { consumeTicket }),
     ).resolves.toBeNull();
   });
 
@@ -104,13 +143,16 @@ describe("socket tickets", () => {
       data: {},
     } as unknown as Socket;
 
-    const middleware = createSocketAuthMiddleware("terminal");
+    const middleware = createSocketAuthMiddleware("terminal", {
+      consumeTicket,
+    });
     const error = await new Promise<Error | undefined>((resolve) => {
       middleware(socket, resolve);
     });
 
     expect(error).toBeUndefined();
     expect(socket.data.userId).toBe("user-1");
+    expect(socket.data.authorizationFingerprint).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("enforces the middleware over a live Socket.IO handshake", async () => {
@@ -119,7 +161,9 @@ describe("socket tickets", () => {
       transports: ["websocket"],
     });
     const terminalNamespace = ioServer.of("/terminal");
-    terminalNamespace.use(createSocketAuthMiddleware("terminal"));
+    terminalNamespace.use(
+      createSocketAuthMiddleware("terminal", { consumeTicket }),
+    );
     terminalNamespace.on("connection", (socket) => {
       socket.emit("authenticated-user", socket.data.userId);
     });

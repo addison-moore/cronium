@@ -24,19 +24,29 @@ type Executor interface {
 
 // Manager manages multiple executors
 type Manager struct {
-	executors map[types.JobType]Executor
+	executors          map[types.JobType]Executor
+	unavailableReasons map[types.JobType]string
 }
 
 // NewManager creates a new executor manager
 func NewManager() *Manager {
 	return &Manager{
-		executors: make(map[types.JobType]Executor),
+		executors:          make(map[types.JobType]Executor),
+		unavailableReasons: make(map[types.JobType]string),
 	}
 }
 
 // Register adds an executor for a specific job type
 func (m *Manager) Register(jobType types.JobType, executor Executor) {
 	m.executors[jobType] = executor
+	delete(m.unavailableReasons, jobType)
+}
+
+// MarkUnavailable preserves a fail-closed reason for a known job type without
+// registering an executor that could run it.
+func (m *Manager) MarkUnavailable(jobType types.JobType, reason string) {
+	delete(m.executors, jobType)
+	m.unavailableReasons[jobType] = reason
 }
 
 // GetExecutor returns the executor for a specific job type
@@ -57,6 +67,14 @@ func (m *Manager) Execute(ctx context.Context, job *types.Job) (<-chan types.Exe
 
 	executor, ok := m.GetExecutor(job.Type)
 	if !ok {
+		if reason, configured := m.unavailableReasons[job.Type]; configured {
+			return nil, types.NewExecutionError(
+				"isolation_required",
+				"SSH_ISOLATION_REQUIRED",
+				reason,
+				false,
+			)
+		}
 		return nil, types.NewExecutionError(
 			"unsupported",
 			"UNSUPPORTED_JOB_TYPE",

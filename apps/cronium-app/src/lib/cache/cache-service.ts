@@ -1,6 +1,7 @@
 import Redis, { type Redis as RedisClient } from "ioredis";
 import { env } from "@/env.mjs";
 import superjson from "superjson";
+import { normalizeValkeyUrl } from "@/lib/valkey-url";
 
 // Cache key prefixes for remaining cache use cases
 export const CACHE_PREFIXES = {
@@ -52,7 +53,7 @@ export class CacheService {
         return;
       }
 
-      this.client = new Redis(redisUrl, {
+      this.client = new Redis(normalizeValkeyUrl(redisUrl), {
         maxRetriesPerRequest: 3,
         enableReadyCheck: true,
         retryStrategy: (times) => {

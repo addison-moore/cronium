@@ -187,6 +187,7 @@ type ConnectionPoolConfig struct {
 
 // SSHExecutionConfig defines SSH execution settings
 type SSHExecutionConfig struct {
+	IsolationMode          string        `yaml:"isolationMode" envconfig:"ISOLATION_MODE" default:"disabled"`
 	DefaultShell           string        `yaml:"defaultShell" envconfig:"DEFAULT_SHELL" default:"/bin/bash"`
 	TempDir                string        `yaml:"tempDir" envconfig:"TEMP_DIR" default:"/tmp/cronium"`
 	CleanupAfter           bool          `yaml:"cleanupAfter" envconfig:"CLEANUP_AFTER" default:"true"`
@@ -196,6 +197,11 @@ type SSHExecutionConfig struct {
 	PayloadRetentionPeriod time.Duration `yaml:"payloadRetentionPeriod" envconfig:"PAYLOAD_RETENTION_PERIOD" default:"24h"`
 	PayloadCleanupInterval time.Duration `yaml:"payloadCleanupInterval" envconfig:"PAYLOAD_CLEANUP_INTERVAL" default:"1h"`
 }
+
+const (
+	SSHIsolationDisabled         = "disabled"
+	SSHIsolationOperatorEnforced = "operator-enforced"
+)
 
 // CircuitBreakerConfig defines circuit breaker settings
 type CircuitBreakerConfig struct {
@@ -346,6 +352,7 @@ func setDefaults() {
 	viper.SetDefault("container.security.user", "1000:1000")
 	viper.SetDefault("container.security.noNewPrivileges", true)
 	viper.SetDefault("container.security.dropCapabilities", []string{"ALL"})
+	viper.SetDefault("ssh.execution.isolationMode", SSHIsolationDisabled)
 
 	viper.SetDefault("logging.level", "info")
 	viper.SetDefault("logging.format", "json")
@@ -358,6 +365,13 @@ func setDefaults() {
 
 // processConfig processes special configuration values
 func processConfig(config *Config) error {
+	config.SSH.Execution.IsolationMode = strings.ToLower(
+		strings.TrimSpace(config.SSH.Execution.IsolationMode),
+	)
+	if config.SSH.Execution.IsolationMode == "" {
+		config.SSH.Execution.IsolationMode = SSHIsolationDisabled
+	}
+
 	// Generate a STABLE orchestrator ID if set to auto. The identity must
 	// survive restarts (no boot timestamp): claims and leases in the database
 	// are keyed on it, and the app's ownership preconditions compare against
@@ -414,6 +428,13 @@ func (c *Config) Validate() error {
 	}
 	if c.Jobs.PollBatchSize < 1 || c.Jobs.PollBatchSize > 50 {
 		errors = append(errors, "jobs.pollBatchSize must be between 1 and 50")
+	}
+	if c.SSH.Execution.IsolationMode != SSHIsolationDisabled &&
+		c.SSH.Execution.IsolationMode != SSHIsolationOperatorEnforced {
+		errors = append(
+			errors,
+			"ssh.execution.isolationMode must be disabled or operator-enforced",
+		)
 	}
 
 	// Validate resource limits

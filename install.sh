@@ -35,6 +35,8 @@ PUBLIC_URL=""
 VERSION=""
 NO_PULL="${CRONIUM_INSTALL_NO_PULL:-0}"
 UNINSTALL=0
+SOCKET_PROXY_REQUIRED=0
+LEGACY_SOCKET_URL=""
 
 log() { printf '\033[1;32m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mWARN:\033[0m %s\n' "$*" >&2; }
@@ -157,13 +159,27 @@ prompt_url() {
 }
 
 derive_socket_url() {
-  # The WebSocket bridge listens on its own port; derive a browser-reachable
-  # URL from the public URL by swapping the port for 5002.
+  # Raw port 5002 is loopback-only. Local installs can reach it directly;
+  # public installs use the page origin and must proxy only /api/socketio.
   local no_scheme="${PUBLIC_URL#*://}"
   local scheme="${PUBLIC_URL%%://*}"
   local hostport="${no_scheme%%/*}"
-  local host="${hostport%%:*}"
-  SOCKET_URL="${scheme}://${host}:5002"
+  local host
+  if [[ "$hostport" == \[* ]]; then
+    host="${hostport%%]*}]"
+  else
+    host="${hostport%%:*}"
+  fi
+  LEGACY_SOCKET_URL="${scheme}://${host}:5002"
+  case "${scheme}:${host}" in
+    http:localhost | http:127.* | "http:[::1]")
+      SOCKET_URL="${scheme}://${host}:5002"
+      ;;
+    *)
+      SOCKET_URL="${PUBLIC_URL%/}"
+      SOCKET_PROXY_REQUIRED=1
+      ;;
+  esac
 }
 
 fetch_compose() {
@@ -188,6 +204,14 @@ fetch_compose() {
 write_env() {
   if [ -f .env ]; then
     log "Keeping existing .env (secrets are never regenerated)"
+    if [ "$SOCKET_PROXY_REQUIRED" = 1 ] &&
+      grep -Fqx "NEXT_PUBLIC_SOCKET_URL=${LEGACY_SOCKET_URL}" .env; then
+      sed -i.bak \
+        "s|^NEXT_PUBLIC_SOCKET_URL=${LEGACY_SOCKET_URL}$|NEXT_PUBLIC_SOCKET_URL=${SOCKET_URL}|" \
+        .env
+      rm -f .env.bak
+      log "Updated the legacy public :5002 socket URL to the proxied app origin"
+    fi
     # Pin the image tag for --version installs even on re-runs.
     if [ -n "$VERSION" ]; then
       if grep -q '^CRONIUM_IMAGE_TAG=' .env; then
@@ -210,7 +234,7 @@ AUTH_URL=${PUBLIC_URL}
 PUBLIC_APP_URL=${PUBLIC_URL}
 # Exact browser origin permitted to open authenticated socket connections
 SOCKET_ALLOWED_ORIGINS=${PUBLIC_URL}
-# Must be reachable from the user's browser (proxy or open port 5002)
+# Public installs use the same origin; proxy only /api/socketio to 127.0.0.1:5002
 NEXT_PUBLIC_SOCKET_URL=${SOCKET_URL}
 
 # Secrets — generated for this installation; keep this file safe
@@ -222,6 +246,10 @@ POSTGRES_PASSWORD=$(rand_hex 16)
 
 # Image version to run
 CRONIUM_IMAGE_TAG=${IMAGE_TAG}
+
+# Remote SSH jobs remain disabled unless an external launcher enforces a
+# separate OS identity or isolated container for every mutually untrusted job.
+CRONIUM_SSH_EXECUTION_ISOLATION_MODE=disabled
 EOF
   umask 022
   chmod 600 .env
@@ -286,6 +314,9 @@ main() {
   printf '  Status:  (cd %s && docker compose ps)\n' "$INSTALL_DIR"
   printf '  Logs:    (cd %s && docker compose logs -f)\n' "$INSTALL_DIR"
   printf '  Upgrade: re-run this installer, or: docker compose pull && docker compose up -d\n'
+  if [ "$SOCKET_PROXY_REQUIRED" = 1 ]; then
+    printf '  Socket:  proxy /api/socketio to http://127.0.0.1:5002 (raw port is loopback-only)\n'
+  fi
   printf '\n'
 }
 

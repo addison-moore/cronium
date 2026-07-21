@@ -1,12 +1,9 @@
-/**
- * Jest configuration for Cronium tests
- */
+const path = require("node:path");
 
-module.exports = {
-  preset: "ts-jest",
+/** @type {import('jest').Config} */
+const sharedProjectConfig = {
+  rootDir: __dirname,
   testEnvironment: "node",
-  roots: ["<rootDir>"],
-  testMatch: ["**/*.test.ts", "**/*.test.tsx"],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/../apps/cronium-app/src/$1",
     "^@shared/(.*)$": "<rootDir>/../apps/cronium-app/src/shared/$1",
@@ -18,41 +15,73 @@ module.exports = {
       "ts-jest",
       {
         tsconfig: {
-          jsx: "react",
+          target: "ES2022",
+          module: "CommonJS",
+          moduleResolution: "Node",
+          jsx: "react-jsx",
           esModuleInterop: true,
           allowSyntheticDefaultImports: true,
+          baseUrl: path.join(__dirname, "../apps/cronium-app"),
+          paths: {
+            "@/*": ["./src/*"],
+            "@shared/*": ["./src/shared/*"],
+            "@server/*": ["./src/server/*"],
+            "@lib/*": ["./src/lib/*"],
+          },
         },
       },
     ],
   },
-  setupFilesAfterEnv: ["<rootDir>/setup.ts"],
+};
+
+module.exports = {
   coverageDirectory: "<rootDir>/coverage",
   coverageReporters: ["text", "lcov", "html"],
   coveragePathIgnorePatterns: ["/node_modules/", "/dist/", "/.next/"],
-  testTimeout: 30000, // 30 seconds for integration tests
   projects: [
     {
+      ...sharedProjectConfig,
       displayName: "Unit Tests",
       testMatch: ["<rootDir>/unit/**/*.test.ts"],
-      testEnvironment: "node",
+      setupFilesAfterEnv: ["<rootDir>/setup.ts"],
+      testTimeout: 30_000,
     },
     {
+      ...sharedProjectConfig,
       displayName: "Integration Tests",
       testMatch: ["<rootDir>/integration/**/*.test.ts"],
-      testEnvironment: "node",
-      testTimeout: 60000, // 60 seconds for integration tests
+      setupFilesAfterEnv: ["<rootDir>/setup.ts"],
+      testTimeout: 60_000,
     },
     {
+      ...sharedProjectConfig,
       displayName: "Performance Tests",
       testMatch: ["<rootDir>/performance/**/*.test.ts"],
-      testEnvironment: "node",
-      testTimeout: 300000, // 5 minutes for performance tests
+      setupFilesAfterEnv: ["<rootDir>/setup.ts"],
+      testTimeout: 300_000,
     },
     {
+      ...sharedProjectConfig,
       displayName: "Security Tests",
-      testMatch: ["<rootDir>/security/**/*.test.ts"],
-      testEnvironment: "node",
-      testTimeout: 60000, // 60 seconds for security tests
+      roots: ["<rootDir>/security", "<rootDir>/../apps/cronium-app/src"],
+      testMatch: [
+        "<rootDir>/security/**/*.test.ts",
+        "<rootDir>/../apps/cronium-app/src/lib/__tests__/api-token-hash.test.ts",
+        "<rootDir>/../apps/cronium-app/src/lib/__tests__/socket-ticket.test.ts",
+        "<rootDir>/../apps/cronium-app/src/lib/__tests__/socket-client-url.test.ts",
+        "<rootDir>/../apps/cronium-app/src/lib/__tests__/ssrf-guard.test.ts",
+        "<rootDir>/../apps/cronium-app/src/lib/__tests__/valkey-url.test.ts",
+        "<rootDir>/../apps/cronium-app/src/lib/mcp-oauth/__tests__/tokens.test.ts",
+        "<rootDir>/../apps/cronium-app/src/lib/security/__tests__/credential-encryption.test.ts",
+        "<rootDir>/../apps/cronium-app/src/server/__tests__/socket-security.test.ts",
+        "<rootDir>/../apps/cronium-app/src/server/__tests__/socket-security-store.test.ts",
+        "<rootDir>/../apps/cronium-app/src/server/__tests__/startup-security.test.ts",
+        "<rootDir>/../apps/cronium-app/src/server/__tests__/terminal-websocket-security.test.ts",
+        "<rootDir>/../apps/cronium-app/src/server/__tests__/token-scopes.test.ts",
+        "<rootDir>/../apps/cronium-app/src/server/security/__tests__/resource-access.test.ts",
+      ],
+      setupFiles: ["<rootDir>/security/setup.ts"],
+      testTimeout: 60_000,
     },
   ],
 };

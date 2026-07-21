@@ -26,8 +26,8 @@ import { toEventListApiDto, toServerApiDto } from "@/server/security/api-dto";
 /**
  * NOTE: Several methods in this router use direct database queries instead of
  * storage module methods due to a TypeScript/Webpack transpilation issue where
- * certain storage methods (getServerDeletionImpact, archiveServer, restoreServer,
- * permanentlyDeleteServer, getArchivedServers, etc.) are not recognized at runtime.
+ * certain storage methods (getServerDeletionImpact, permanentlyDeleteServer,
+ * getArchivedServers, etc.) are not recognized at runtime.
  *
  * This is a known issue that should be investigated further, but the direct
  * implementations work correctly as workarounds.
@@ -342,37 +342,20 @@ export const serversRouter = createTRPCRouter({
           });
         }
 
-        // Using direct database query (see workaround note at top of file)
-        const { db } = await import("@/server/db");
-        const { servers } = await import("@shared/schema");
-        const { eq } = await import("drizzle-orm");
-
-        // Archive the server with sensitive data purging
-        const [archivedServer] = await db
-          .update(servers)
-          .set({
-            isArchived: true,
-            archivedAt: new Date(),
-            archivedBy: ctx.session.user.id,
-            archiveReason: input.reason,
-            sshKey: null, // Immediately purge sensitive data
-            password: null,
-            sshKeyPurged: true,
-            passwordPurged: true,
-            deletionScheduledAt: new Date(
-              Date.now() + 30 * 24 * 60 * 60 * 1000,
-            ), // 30 days from now
-            updatedAt: new Date(),
-          })
-          .where(eq(servers.id, input.id))
-          .returning();
-
-        if (!archivedServer) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to archive server",
-          });
-        }
+        // Purging credentials changes terminal authorization. updateServer
+        // revokes the owner's active socket sessions after the write.
+        const archivedServer = await storage.updateServer(input.id, {
+          isArchived: true,
+          archivedAt: new Date(),
+          archivedBy: ctx.session.user.id,
+          archiveReason: input.reason,
+          sshKey: null,
+          password: null,
+          sshKeyPurged: true,
+          passwordPurged: true,
+          deletionScheduledAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          updatedAt: new Date(),
+        });
 
         return {
           success: true,
@@ -412,30 +395,14 @@ export const serversRouter = createTRPCRouter({
           });
         }
 
-        // Using direct database query (see workaround note at top of file)
-        const { db } = await import("@/server/db");
-        const { servers } = await import("@shared/schema");
-        const { eq } = await import("drizzle-orm");
-
-        const [restoredServer] = await db
-          .update(servers)
-          .set({
-            isArchived: false,
-            archivedAt: null,
-            archivedBy: null,
-            archiveReason: null,
-            deletionScheduledAt: null,
-            updatedAt: new Date(),
-          })
-          .where(eq(servers.id, input.id))
-          .returning();
-
-        if (!restoredServer) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to restore server",
-          });
-        }
+        const restoredServer = await storage.updateServer(input.id, {
+          isArchived: false,
+          archivedAt: null,
+          archivedBy: null,
+          archiveReason: null,
+          deletionScheduledAt: null,
+          updatedAt: new Date(),
+        });
 
         return {
           success: true,
@@ -531,41 +498,7 @@ export const serversRouter = createTRPCRouter({
           });
         }
 
-        // Using direct database query (see workaround note at top of file)
-        const { db } = await import("@/server/db");
-        const { servers, eventServers, events, executions, RunLocation } =
-          await import("@shared/schema");
-        const { eq } = await import("drizzle-orm");
-
-        // Use the deleteServer logic directly (permanent deletion)
-        // Use a transaction to ensure all operations complete or none do
-        await db.transaction(async (tx) => {
-          // 1. Delete event-server relationships FIRST
-          await tx
-            .delete(eventServers)
-            .where(eq(eventServers.serverId, input.id));
-
-          // 2. Update events that use this server to use local execution
-          await tx
-            .update(events)
-            .set({
-              serverId: null,
-              runLocation: RunLocation.LOCAL,
-              updatedAt: new Date(),
-            })
-            .where(eq(events.serverId, input.id));
-
-          // 3. Update executions to remove server reference (keep for audit)
-          await tx
-            .update(executions)
-            .set({
-              serverId: null,
-            })
-            .where(eq(executions.serverId, input.id));
-
-          // 4. Finally delete the server
-          await tx.delete(servers).where(eq(servers.id, input.id));
-        });
+        await storage.deleteServer(input.id);
 
         return {
           success: true,
@@ -603,40 +536,7 @@ export const serversRouter = createTRPCRouter({
           });
         }
 
-        // Using direct database query (see workaround note at top of file)
-        const { db } = await import("@/server/db");
-        const { servers, eventServers, events, executions, RunLocation } =
-          await import("@shared/schema");
-        const { eq } = await import("drizzle-orm");
-
-        // Use a transaction to ensure all operations complete or none do
-        await db.transaction(async (tx) => {
-          // 1. Delete event-server relationships FIRST
-          await tx
-            .delete(eventServers)
-            .where(eq(eventServers.serverId, input.id));
-
-          // 2. Update events that use this server to use local execution
-          await tx
-            .update(events)
-            .set({
-              serverId: null,
-              runLocation: RunLocation.LOCAL,
-              updatedAt: new Date(),
-            })
-            .where(eq(events.serverId, input.id));
-
-          // 3. Update executions to remove server reference (keep for audit)
-          await tx
-            .update(executions)
-            .set({
-              serverId: null,
-            })
-            .where(eq(executions.serverId, input.id));
-
-          // 4. Finally delete the server
-          await tx.delete(servers).where(eq(servers.id, input.id));
-        });
+        await storage.deleteServer(input.id);
 
         return { success: true };
       } catch (error: unknown) {
@@ -840,37 +740,7 @@ export const serversRouter = createTRPCRouter({
 
             switch (input.operation) {
               case "delete":
-                // Using direct database query (see workaround note at top of file)
-                const { db } = await import("@/server/db");
-                const {
-                  servers,
-                  eventServers,
-                  events,
-                  executions,
-                  RunLocation,
-                } = await import("@shared/schema");
-                const { eq } = await import("drizzle-orm");
-
-                await db.transaction(async (tx) => {
-                  await tx
-                    .delete(eventServers)
-                    .where(eq(eventServers.serverId, serverId));
-                  await tx
-                    .update(events)
-                    .set({
-                      serverId: null,
-                      runLocation: RunLocation.LOCAL,
-                      updatedAt: new Date(),
-                    })
-                    .where(eq(events.serverId, serverId));
-                  await tx
-                    .update(executions)
-                    .set({
-                      serverId: null,
-                    })
-                    .where(eq(executions.serverId, serverId));
-                  await tx.delete(servers).where(eq(servers.id, serverId));
-                });
+                await storage.deleteServer(serverId);
                 break;
               case "check_health":
                 const { sshService } = await import("@/lib/ssh");

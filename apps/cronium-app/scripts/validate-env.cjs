@@ -63,6 +63,26 @@ if (!process.env.DATABASE_URL) {
   fail("DATABASE_URL", "is not set");
 }
 
+const valkeyUrl = process.env.VALKEY_URL ?? process.env.REDIS_URL;
+if (!valkeyUrl) {
+  fail(
+    "VALKEY_URL",
+    "or REDIS_URL is required for shared socket replay protection",
+  );
+} else {
+  try {
+    const protocol = new URL(valkeyUrl).protocol;
+    if (!["redis:", "rediss:", "valkey:", "valkeys:"].includes(protocol)) {
+      fail(
+        "VALKEY_URL",
+        "must use redis://, rediss://, valkey://, or valkeys://",
+      );
+    }
+  } catch {
+    fail("VALKEY_URL", "must be a valid connection URL");
+  }
+}
+
 if (errors.length > 0) {
   console.error("[PREFLIGHT] Refusing to start — invalid configuration:\n");
   console.error(errors.join("\n"));

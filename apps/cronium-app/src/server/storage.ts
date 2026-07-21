@@ -86,6 +86,11 @@ import {
 } from "../lib/encryption-service";
 import { hashApiToken, isHashedApiToken } from "../lib/api-token-hash";
 import {
+  assertSocketSecurityStoreAvailable,
+  publishAllSocketRevocation,
+  publishUserSocketRevocation,
+} from "./socket-security-store";
+import {
   normalizePagination,
   createPaginatedResult,
   buildSearchConditions,
@@ -106,6 +111,38 @@ export type Role = typeof roles.$inferSelect;
 export interface RolePermissions {
   console: boolean;
   localServerAccess: boolean;
+}
+
+const SOCKET_SENSITIVE_USER_FIELDS = [
+  "password",
+  "role",
+  "roleId",
+  "status",
+] as const;
+const SOCKET_SENSITIVE_SERVER_FIELDS = [
+  "userId",
+  "address",
+  "sshKey",
+  "password",
+  "username",
+  "port",
+  "isArchived",
+  "sshKeyPurged",
+  "passwordPurged",
+] as const;
+
+function changesSocketAuthorization(updateData: Partial<InsertUser>): boolean {
+  return SOCKET_SENSITIVE_USER_FIELDS.some((field) =>
+    Object.prototype.hasOwnProperty.call(updateData, field),
+  );
+}
+
+function changesTerminalAuthorization(
+  updateData: Partial<InsertServer>,
+): boolean {
+  return SOCKET_SENSITIVE_SERVER_FIELDS.some((field) =>
+    Object.prototype.hasOwnProperty.call(updateData, field),
+  );
 }
 
 // Type alias for backward compatibility
@@ -579,6 +616,9 @@ class DatabaseStorage implements IStorage {
   }
 
   async updateUser(id: string, updateData: Partial<InsertUser>): Promise<User> {
+    const revokeSockets = changesSocketAuthorization(updateData);
+    if (revokeSockets) await assertSocketSecurityStoreAvailable();
+
     const [user] = await db
       .update(users)
       .set(updateData)
@@ -587,6 +627,9 @@ class DatabaseStorage implements IStorage {
 
     if (!user) {
       throw new Error("Failed to update user - user not found");
+    }
+    if (revokeSockets) {
+      await publishUserSocketRevocation(id, "user authorization changed");
     }
     return user;
   }
@@ -605,6 +648,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async disableUser(id: string): Promise<User> {
+    await assertSocketSecurityStoreAvailable();
     const [user] = await db
       .update(users)
       .set({ status: UserStatus.DISABLED })
@@ -614,10 +658,12 @@ class DatabaseStorage implements IStorage {
     if (!user) {
       throw new Error("Failed to disable user - user not found");
     }
+    await publishUserSocketRevocation(id, "user disabled");
     return user;
   }
 
   async deleteUser(id: string): Promise<void> {
+    await assertSocketSecurityStoreAvailable();
     // Use batch operations to delete user data efficiently
     // Note: Due to foreign key constraints, we need to delete in the correct order
 
@@ -682,6 +728,7 @@ class DatabaseStorage implements IStorage {
 
     // Delete the user
     await db.delete(users).where(eq(users.id, id));
+    await publishUserSocketRevocation(id, "user deleted");
   }
 
   // Role methods
@@ -714,11 +761,15 @@ class DatabaseStorage implements IStorage {
     id: number,
     permissions: RolePermissions,
   ): Promise<Role | undefined> {
+    await assertSocketSecurityStoreAvailable();
     const [updated] = await db
       .update(roles)
       .set({ permissions, updatedAt: new Date() })
       .where(eq(roles.id, id))
       .returning();
+    if (updated) {
+      await publishAllSocketRevocation("role permissions changed");
+    }
     return updated;
   }
 
@@ -1844,6 +1895,8 @@ class DatabaseStorage implements IStorage {
     id: number,
     updateData: Partial<InsertServer>,
   ): Promise<Server> {
+    const revokeSockets = changesTerminalAuthorization(updateData);
+    if (revokeSockets) await assertSocketSecurityStoreAvailable();
     // Encrypt sensitive data before updating
     const encryptedData = encryptSensitiveData(updateData, "servers");
 
@@ -1855,6 +1908,13 @@ class DatabaseStorage implements IStorage {
 
     if (!server) {
       throw new Error(`Server with id ${id} not found`);
+    }
+
+    if (revokeSockets) {
+      await publishUserSocketRevocation(
+        server.userId,
+        "server authorization changed",
+      );
     }
 
     // Return decrypted data for immediate use
@@ -1883,17 +1943,28 @@ class DatabaseStorage implements IStorage {
   }
 
   async deleteServer(id: number): Promise<void> {
-    // First update any scripts that use this server to run locally
-    await db
-      .update(events)
-      .set({
-        runLocation: RunLocation.LOCAL,
-        serverId: null,
-      })
-      .where(eq(events.serverId, id));
+    await assertSocketSecurityStoreAvailable();
+    const server = await this.getServer(id);
 
-    // Then delete the server
-    await db.delete(servers).where(eq(servers.id, id));
+    await db.transaction(async (tx) => {
+      await tx.delete(eventServers).where(eq(eventServers.serverId, id));
+      await tx
+        .update(events)
+        .set({
+          runLocation: RunLocation.LOCAL,
+          serverId: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(events.serverId, id));
+      await tx
+        .update(executions)
+        .set({ serverId: null })
+        .where(eq(executions.serverId, id));
+      await tx.delete(servers).where(eq(servers.id, id));
+    });
+    if (server) {
+      await publishUserSocketRevocation(server.userId, "server deleted");
+    }
   }
 
   // Server group methods

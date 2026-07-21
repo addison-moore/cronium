@@ -11,7 +11,14 @@ import {
   resolveAllowedSocketOrigins,
   verifyInternalBroadcastAuthorization,
 } from "./src/server/socket-security";
-import type { Job, Log } from "./src/shared/schema";
+import {
+  assertSocketSecurityStoreAvailable,
+  closeSocketSecurityStore,
+  subscribeToSocketSecurityEvents,
+} from "./src/server/socket-security-store";
+import { socketUserAuthorizationFingerprint } from "./src/lib/socket-ticket";
+import { storage } from "./src/server/storage";
+import { UserStatus, type Job, type Log } from "./src/shared/schema";
 
 // Type definitions for request body
 interface LogUpdateRequest {
@@ -56,8 +63,65 @@ const io = new Server(httpServer, {
   },
 });
 
-new TerminalWebSocketHandler(io);
+const terminalHandler = new TerminalWebSocketHandler(io);
 initializeLogsWebSocket(io);
+
+function disconnectUser(userId: string): void {
+  terminalHandler.revokeUser(userId);
+  for (const namespace of [io.sockets, io.of("/logs")]) {
+    for (const socket of namespace.sockets.values()) {
+      if (socket.data.userId === userId) socket.disconnect(true);
+    }
+  }
+}
+
+function disconnectAllSockets(): void {
+  terminalHandler.revokeAll();
+  for (const namespace of [io.sockets, io.of("/logs")]) {
+    for (const socket of namespace.sockets.values()) {
+      socket.disconnect(true);
+    }
+  }
+}
+
+async function revalidateConnectedUsers(): Promise<void> {
+  const sockets = [
+    ...io.sockets.sockets.values(),
+    ...io.of("/logs").sockets.values(),
+  ];
+  const principals = new Map<string, Set<string>>();
+  for (const socket of sockets) {
+    const userId = socket.data.userId;
+    const fingerprint = socket.data.authorizationFingerprint;
+    if (typeof userId !== "string" || typeof fingerprint !== "string") {
+      socket.disconnect(true);
+      continue;
+    }
+    const fingerprints = principals.get(userId) ?? new Set<string>();
+    fingerprints.add(fingerprint);
+    principals.set(userId, fingerprints);
+  }
+
+  await Promise.all(
+    [...principals].map(async ([userId, connectedFingerprints]) => {
+      try {
+        const user = await storage.getUser(userId);
+        if (
+          !user ||
+          user.status !== UserStatus.ACTIVE ||
+          connectedFingerprints.size !== 1 ||
+          !connectedFingerprints.has(socketUserAuthorizationFingerprint(user))
+        ) {
+          disconnectUser(userId);
+        }
+      } catch (error) {
+        console.error(`Socket user revalidation failed for ${userId}:`, error);
+        disconnectUser(userId);
+      }
+    }),
+  );
+  await terminalHandler.revalidateSessions();
+}
 
 // Health check endpoint
 app.get("/health", (_req, res) => {
@@ -185,6 +249,43 @@ if (!Number.isInteger(PORT) || PORT < 0 || PORT > 65535) {
   throw new Error("SOCKET_PORT must be an integer between 0 and 65535");
 }
 
-httpServer.listen(PORT, () => {
-  console.log(`Socket.IO server listening on port ${PORT}`);
+let unsubscribeSecurityEvents: (() => Promise<void>) | null = null;
+let revalidationInterval: NodeJS.Timeout | null = null;
+let revalidationInFlight = false;
+
+async function start(): Promise<void> {
+  await assertSocketSecurityStoreAvailable();
+  unsubscribeSecurityEvents = await subscribeToSocketSecurityEvents((event) => {
+    if (event.type === "revoke-all") disconnectAllSockets();
+    else if (event.userId) disconnectUser(event.userId);
+  });
+
+  revalidationInterval = setInterval(() => {
+    if (revalidationInFlight) return;
+    revalidationInFlight = true;
+    void revalidateConnectedUsers().finally(() => {
+      revalidationInFlight = false;
+    });
+  }, 10_000);
+
+  httpServer.listen(PORT, () => {
+    console.log(`Socket.IO server listening on port ${PORT}`);
+  });
+}
+
+async function shutdown(): Promise<void> {
+  if (revalidationInterval) clearInterval(revalidationInterval);
+  terminalHandler.cleanup();
+  await unsubscribeSecurityEvents?.();
+  await closeSocketSecurityStore();
+  io.close();
+  httpServer.close();
+}
+
+process.once("SIGTERM", () => void shutdown());
+process.once("SIGINT", () => void shutdown());
+
+void start().catch((error) => {
+  console.error("Socket.IO server failed security preflight:", error);
+  process.exit(1);
 });

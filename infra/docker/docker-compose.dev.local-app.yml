@@ -8,7 +8,7 @@ services:
   valkey:
     image: valkey/valkey:7-alpine
     container_name: cronium-valkey-dev
-    command: valkey-server --appendonly yes --maxmemory ${VALKEY_MAX_MEMORY:-512mb} --maxmemory-policy allkeys-lru --loglevel verbose
+    command: valkey-server --appendonly yes --maxmemory ${VALKEY_MAX_MEMORY:-512mb} --maxmemory-policy noeviction --loglevel verbose
     ports:
       - "${VALKEY_PORT:-6379}:6379"
     volumes:
@@ -41,6 +41,7 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
       JWT_SECRET: ${JWT_SECRET:-}
       VALKEY_URL: valkey://valkey:6379
+      SOCKET_INTERNAL_URL: http://host.docker.internal:5002
       NODE_ENV: development
       LOG_LEVEL: ${LOG_LEVEL:-debug}
       WORKER_ID: ${WORKER_ID:-worker-dev}
@@ -110,6 +111,7 @@ services:
       CRONIUM_CONTAINER_RUNTIME_JWT_SECRET: ${JWT_SECRET}
       CRONIUM_CONTAINER_RUNTIME_BACKEND_URL: http://host.docker.internal:5001
       CRONIUM_CONTAINER_RUNTIME_VALKEY_URL: redis://cronium-valkey-dev:6379
+      CRONIUM_SSH_EXECUTION_ISOLATION_MODE: ${CRONIUM_SSH_EXECUTION_ISOLATION_MODE:-disabled}
 
       # Runtime API Configuration for SSH execution
       RUNTIME_HOST: runtime-api

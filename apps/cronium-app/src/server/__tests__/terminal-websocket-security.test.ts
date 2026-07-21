@@ -22,6 +22,7 @@ import { UserRole, UserStatus, type Server } from "@/shared/schema";
 import {
   authorizeTerminalServerAccess,
   isTerminalSessionOwnedBySocket,
+  terminalAuthorizationFingerprint,
 } from "../terminal-websocket";
 
 const mockGetUser = storage.getUser as jest.Mock;
@@ -106,5 +107,29 @@ describe("terminal session ownership", () => {
     expect(isTerminalSessionOwnedBySocket(session, "socket-1", "user-2")).toBe(
       false,
     );
+  });
+});
+
+describe("terminal authorization fingerprint", () => {
+  it("changes for credentials and connection targets, not display metadata", () => {
+    const baseline = terminalAuthorizationFingerprint(ownedServer);
+
+    expect(
+      terminalAuthorizationFingerprint({
+        ...ownedServer,
+        name: "renamed",
+        shared: true,
+      }),
+    ).toBe(baseline);
+    expect(
+      terminalAuthorizationFingerprint({
+        ...ownedServer,
+        sshKey: "rotated-private-key",
+      }),
+    ).not.toBe(baseline);
+    expect(
+      terminalAuthorizationFingerprint({ ...ownedServer, port: 2222 }),
+    ).not.toBe(baseline);
+    expect(baseline).not.toContain("private-key");
   });
 });

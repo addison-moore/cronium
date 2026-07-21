@@ -1,4 +1,5 @@
 import { io, type Socket } from "socket.io-client";
+import { resolveSocketClientUrl } from "@/lib/socket-client-url";
 import { createSocketAuthProvider } from "@/lib/socket-ticket-client";
 
 interface TerminalSocketManager {
@@ -75,13 +76,7 @@ export const terminalSocketManager = {
         manager.sessionId = null;
       }
 
-      // Same resolution as use-socket/use-logs-socket: explicit env override,
-      // else same host as the page on the socket port (works for deployed
-      // instances where NEXT_PUBLIC_* was not set at image build time).
-      const socketPort = process.env.NEXT_PUBLIC_SOCKET_PORT ?? "5002";
-      const socketUrl =
-        process.env.NEXT_PUBLIC_SOCKET_URL ??
-        `${window.location.protocol}//${window.location.hostname}:${socketPort}`;
+      const socketUrl = resolveSocketClientUrl(window.location);
 
       const socket = io(socketUrl, {
         path: "/api/socketio",

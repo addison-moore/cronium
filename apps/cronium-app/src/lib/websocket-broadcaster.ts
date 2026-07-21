@@ -46,7 +46,7 @@ interface BroadcastConfig {
   maxRetries: number;
   retryDelay: number;
   maxRetryDelay: number;
-  socketPort: string;
+  socketBaseUrl: string;
 }
 
 interface BroadcastResult {
@@ -66,7 +66,9 @@ export class WebSocketBroadcaster {
       maxRetries: 3,
       retryDelay: 1000,
       maxRetryDelay: 10000,
-      socketPort: process.env.SOCKET_PORT ?? "5002",
+      socketBaseUrl:
+        process.env.SOCKET_INTERNAL_URL ??
+        `http://localhost:${process.env.SOCKET_PORT ?? "5002"}`,
       ...config,
     };
 
@@ -189,7 +191,7 @@ export class WebSocketBroadcaster {
     data: BroadcastPayloads[T],
   ): Promise<boolean> {
     const endpoint = this.getEndpointForType(type);
-    const url = `http://localhost:${this.config.socketPort}${endpoint}`;
+    const url = `${this.config.socketBaseUrl.replace(/\/$/, "")}${endpoint}`;
     const internalKey = process.env.INTERNAL_API_KEY;
     if (!internalKey) {
       throw new Error("INTERNAL_API_KEY is required for socket broadcasts");
@@ -324,7 +326,7 @@ export class WebSocketBroadcaster {
   private async checkHealth(): Promise<void> {
     try {
       const response = await fetch(
-        `http://localhost:${this.config.socketPort}/health`,
+        `${this.config.socketBaseUrl.replace(/\/$/, "")}/health`,
         {
           signal: AbortSignal.timeout(3000),
         },

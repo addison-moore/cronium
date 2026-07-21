@@ -192,24 +192,27 @@ click "Connect" on the tool's credential card to authorize their account.
 
 | Variable                  | Description                                                                                      | Type                   | Default                      | Required |
 | ------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------- | ---------------------------- | -------- |
-| `SOCKET_PORT`             | WebSocket server port                                                                            | `number`               | `5002`                       | No       |
+| `SOCKET_PORT`             | Host loopback port used by a reverse proxy to reach the WebSocket server                         | `number`               | `5002`                       | No       |
 | `NEXT_PUBLIC_SOCKET_PORT` | Client-side WebSocket port                                                                       | `number`               | `5002`                       | No       |
 | `NEXT_PUBLIC_SOCKET_URL`  | Browser-reachable URL whose `/api/socketio` path reaches the socket server                       | `string` (URL)         | `http://localhost:5002`      | No       |
 | `SOCKET_ALLOWED_ORIGINS`  | Comma-separated exact browser origins allowed to open sockets; scheme, host, and port must match | `string` (origin list) | `PUBLIC_APP_URL`, `AUTH_URL` | No       |
+| `SOCKET_INTERNAL_URL`     | Service-only base URL used by the worker for authenticated socket broadcasts                     | `string` (URL)         | `http://localhost:5002`      | No       |
 
 Every terminal and live-log connection requires a 30-second,
 audience-specific ticket issued to an authenticated user. A ticket is
-single-use within the socket process, and the socket server rechecks that the
-user is active; terminal tickets also require console permission. Origin
-allowlisting is an additional browser boundary, not a replacement for this
-authentication. Originless requests and origins outside the exact allowlist
-are rejected.
+consumed atomically in shared Valkey across all socket replicas. The socket
+server rechecks that the user is active; terminal tickets also require console
+permission. Authorization changes publish shared revocations, and connected
+principals are periodically revalidated. Origin allowlisting is an additional
+browser boundary, not a replacement for this authentication. Originless
+requests and origins outside the exact allowlist are rejected.
 
 For public deployments, terminate TLS at a reverse proxy and route only
-`/api/socketio` to port 5002. Keep the raw port and `/broadcast/*` routes off
-the public Internet where possible. Internal broadcast producers authenticate
-those routes with `Authorization: Bearer $INTERNAL_API_KEY`; never place that
-key in browser code or proxy configuration sent to clients.
+`/api/socketio` to `127.0.0.1:5002` (or `cronium-app:5002` from a proxy on the
+Docker network). Compose binds host port 5002 to loopback. Never expose
+`/broadcast/*`; internal broadcast producers authenticate those routes with
+`Authorization: Bearer $INTERNAL_API_KEY`. Never place that key in browser
+code or proxy configuration sent to clients.
 
 ### Scheduling Worker (cronium-worker)
 
@@ -259,15 +262,20 @@ These variables are only used by the orchestrator service and should NOT be incl
 | `CRONIUM_SSH_SECURITY_KNOWN_HOSTS_FILE`         | Path to the known_hosts file used for host key verification                                                                                                      | `string` | `/app/data/known_hosts`         | No       |
 | `CRONIUM_SSH_SECURITY_STRICT_HOST_KEY_CHECKING` | Legacy switch; setting `false` disables host key verification entirely (same as `insecure` policy)                                                               | `bool`   | `true`                          | No       |
 | `CRONIUM_SSH_SECURITY_PAYLOAD_SIGNING_KEY_FILE` | Path to the Ed25519 payload signing key (auto-generated on first boot if missing)                                                                                | `string` | `/app/data/payload_signing.key` | No       |
+| `CRONIUM_SSH_EXECUTION_ISOLATION_MODE`          | Remote execution gate: `disabled` or `operator-enforced` after external per-job UID/container isolation is verified                                              | `string` | `disabled`                      | No       |
+
+`operator-enforced` is an explicit operational attestation, not an isolation
+mechanism implemented by Cronium. Never enable it for a normal shared SSH
+account. Without it, SSH jobs fail closed with `SSH_ISOLATION_REQUIRED`.
 
 **Note:** The orchestrator expects environment variables with `CRONIUM_` prefix. Docker Compose should map unprefixed variables to prefixed ones (e.g., `CRONIUM_POSTGRES_URL: ${POSTGRES_URL}`).
 
 ### Valkey/Redis
 
-| Variable            | Description               | Type     | Default | Required |
-| ------------------- | ------------------------- | -------- | ------- | -------- |
-| `VALKEY_PORT`       | Valkey/Redis port         | `number` | `6379`  | No       |
-| `VALKEY_MAX_MEMORY` | Maximum memory allocation | `string` | `256mb` | No       |
+| Variable            | Description                                                                                        | Type     | Default | Required |
+| ------------------- | -------------------------------------------------------------------------------------------------- | -------- | ------- | -------- |
+| `VALKEY_PORT`       | Valkey/Redis port                                                                                  | `number` | `6379`  | No       |
+| `VALKEY_MAX_MEMORY` | Maximum memory allocation; `noeviction` is fixed so security-state writes fail closed at the limit | `string` | `256mb` | No       |
 
 **Caching Strategy Note:** As of 2025-07-16, Cronium uses selective caching only for:
 
@@ -428,7 +436,8 @@ BACKEND_URL="http://cronium-app:5001"
 # WebSocket
 SOCKET_PORT="5002"
 NEXT_PUBLIC_SOCKET_PORT="443"  # If using reverse proxy
-NEXT_PUBLIC_SOCKET_URL="wss://cronium.yourdomain.com"
+NEXT_PUBLIC_SOCKET_URL="https://cronium.yourdomain.com"
+SOCKET_INTERNAL_URL="http://cronium-app:5002"
 SOCKET_ALLOWED_ORIGINS="https://cronium.yourdomain.com"
 
 # Email (using SendGrid)

@@ -168,6 +168,11 @@ ssh:
 
   # Execution settings
   execution:
+    # Disabled by default. Set operator-enforced only when an external trusted
+    # launcher guarantees a separate OS identity or container for every
+    # mutually untrusted remote job. A normal shared SSH account is unsafe.
+    isolationMode: disabled
+
     # Default shell
     defaultShell: /bin/bash
 

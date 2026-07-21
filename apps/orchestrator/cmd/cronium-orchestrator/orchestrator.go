@@ -100,14 +100,23 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 		}
 	}
 	jwtSecret := cfg.Container.Runtime.JWTSecret
-	sshExec, err := ssh.NewMultiServerExecutor(cfg.SSH, apiClient, runtimeHost, runtimePort, jwtSecret, log)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create SSH executor: %w", err)
+	if cfg.SSH.Execution.IsolationMode == config.SSHIsolationOperatorEnforced {
+		log.Warn("SSH execution enabled with operator-enforced isolation; the operator is responsible for a separate OS identity or container for every mutually untrusted remote job")
+		sshExec, err := ssh.NewMultiServerExecutor(cfg.SSH, apiClient, runtimeHost, runtimePort, jwtSecret, log)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create SSH executor: %w", err)
+		}
+		// Wire the container executor in as the local branch of LOCAL_AND_REMOTE
+		// jobs (events that run on the Cronium host and remote servers at once).
+		sshExec.SetLocalExecutor(containerExec)
+		executorMgr.Register(types.JobTypeSSH, sshExec)
+	} else {
+		executorMgr.MarkUnavailable(
+			types.JobTypeSSH,
+			"SSH execution is disabled until CRONIUM_SSH_EXECUTION_ISOLATION_MODE=operator-enforced is set for an externally isolated remote execution topology",
+		)
+		log.Warn("SSH execution disabled: remote jobs require operator-enforced per-job OS identity or container isolation")
 	}
-	// Wire the container executor in as the local branch of LOCAL_AND_REMOTE
-	// jobs (events that run on the Cronium host and remote servers at once)
-	sshExec.SetLocalExecutor(containerExec)
-	executorMgr.Register(types.JobTypeSSH, sshExec)
 
 	// Create log streamer
 	logStreamer := logger.NewStreamer(cfg.Logging.WebSocket, cfg.API.WSEndpoint, cfg.API.Token, log)

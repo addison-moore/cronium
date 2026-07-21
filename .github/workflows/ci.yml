@@ -59,6 +59,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Security regression tests
+        run: pnpm test:security
+
   sdk-sync:
     name: SDK Sync (container mirror vs canonical)
     runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'self-hosted' }}

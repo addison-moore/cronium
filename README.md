@@ -39,9 +39,8 @@ docker compose up -d   # tells you exactly which .env values to generate
 Full instructions, upgrades, and backups: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 or https://cronium.app/docs/self-hosting. For local development, see
 [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md). For a public deployment,
-route `/api/socketio` through your TLS proxy and keep raw port 5002 private;
-Cronium applies exact origin checks and short-lived authenticated tickets to
-live logs and terminals.
+route only `/api/socketio` through your TLS proxy to the loopback-bound port 5002. Cronium applies exact origin checks, shared one-time tickets, and active
+authorization revocation to live logs and terminals.
 
 ## 🚀 Key Features
 
@@ -62,7 +61,7 @@ live logs and terminals.
 ### 🖥️ **Execution Environments**
 
 - **Local Execution**: Isolated Docker containers for security
-- **Remote Execution**: SSH-based execution on remote servers
+- **Remote Execution**: SSH execution gated on operator-enforced per-job isolation
 - **Server Management**: Organize and manage multiple execution targets
 
 ### 🔧 **Developer Tools**

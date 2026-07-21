@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import { createSocketAuthProvider } from "@/lib/socket-ticket-client";
+import { resolveSocketClientUrl } from "@/lib/socket-client-url";
 
 let socket: Socket | null = null;
 
@@ -10,10 +11,7 @@ export function useSocket(): Socket | null {
   useEffect(() => {
     // Initialize socket connection if not already connected
     if (!socket) {
-      const socketPort = process.env.NEXT_PUBLIC_SOCKET_PORT ?? "5002";
-      const socketUrl =
-        process.env.NEXT_PUBLIC_SOCKET_URL ??
-        `${window.location.protocol}//${window.location.hostname}:${socketPort}`;
+      const socketUrl = resolveSocketClientUrl(window.location);
 
       socket = io(socketUrl, {
         path: "/api/socketio",

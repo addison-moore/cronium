@@ -6,8 +6,8 @@
  *  - Migrated database         → run the migrator (applies anything pending).
  *  - Legacy database created by the old `drizzle-kit push` flow (schema
  *    exists, no migration records) → one-time transition: push to sync the
- *    schema to the current baseline, then stamp all existing migrations as
- *    applied so future boots use the migrator alone.
+ *    schema to the current baseline, execute marked custom migrations, then
+ *    stamp all existing migrations so future boots use the migrator alone.
  */
 
 const path = require("node:path");
@@ -78,32 +78,47 @@ function runDrizzleKitPush() {
   }
 }
 
-async function stampMigrations(pool) {
-  // Record every existing migration as applied, exactly the way the drizzle
-  // migrator would (hash = sha256 of the SQL file, created_at = journal
-  // "when"), so the next boot's migrate() sees nothing pending.
+async function transitionLegacyDatabase(pool) {
+  // drizzle-kit push applies the declarative schema but cannot apply custom
+  // SQL such as triggers. Stamp schema migrations and execute explicitly
+  // marked custom migrations in journal order so legacy installations receive
+  // the same invariants as fresh databases.
   const journal = readJournal();
-  await pool.query(`create schema if not exists "drizzle"`);
-  await pool.query(`
-    create table if not exists "drizzle"."__drizzle_migrations" (
-      id serial primary key,
-      hash text not null,
-      created_at bigint
-    )
-  `);
-  for (const entry of journal.entries) {
-    const sql = fs.readFileSync(
-      path.join(MIGRATIONS_DIR, `${entry.tag}.sql`),
-      "utf8",
-    );
-    const hash = crypto.createHash("sha256").update(sql).digest("hex");
-    await pool.query(
-      `insert into "drizzle"."__drizzle_migrations" (hash, created_at) values ($1, $2)`,
-      [hash, entry.when],
-    );
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query(`create schema if not exists "drizzle"`);
+    await client.query(`
+      create table if not exists "drizzle"."__drizzle_migrations" (
+        id serial primary key,
+        hash text not null,
+        created_at bigint
+      )
+    `);
+    for (const entry of journal.entries) {
+      const sql = fs.readFileSync(
+        path.join(MIGRATIONS_DIR, `${entry.tag}.sql`),
+        "utf8",
+      );
+      if (sql.includes("-- cronium:custom-migration")) {
+        console.log(`[MIGRATIONS] Applying custom migration ${entry.tag}...`);
+        await client.query(sql);
+      }
+      const hash = crypto.createHash("sha256").update(sql).digest("hex");
+      await client.query(
+        `insert into "drizzle"."__drizzle_migrations" (hash, created_at) values ($1, $2)`,
+        [hash, entry.when],
+      );
+    }
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
   }
   console.log(
-    `[MIGRATIONS] Stamped ${journal.entries.length} migration(s) as applied (legacy transition complete)`,
+    `[MIGRATIONS] Transitioned ${journal.entries.length} migration(s) (legacy transition complete)`,
   );
 }
 
@@ -118,7 +133,7 @@ async function main() {
 
     if (state.hasSchema && !state.hasRecords) {
       runDrizzleKitPush();
-      await stampMigrations(pool);
+      await transitionLegacyDatabase(pool);
       console.log("[MIGRATIONS] Database is up to date.");
       return;
     }

@@ -24,7 +24,7 @@ lives at https://cronium.app/docs/self-hosting.
 - 4GB RAM minimum (8GB recommended), 20GB disk
 - Linux, macOS, or Windows with WSL2
 - The Docker socket must be available to the orchestrator for container jobs
-  (SSH-only setups can drop that mount)
+  (an externally isolated SSH-only setup can drop that mount)
 
 ## Quick Install
 
@@ -37,7 +37,9 @@ newest release, generates every secret into a chmod-600 `.env`, asks one
 question (the public URL, `--url` for non-interactive use), starts the stack,
 and waits until Cronium is healthy. Useful flags: `--dir`, `--version vX.Y.Z`,
 `--uninstall` (stops the stack, keeps data). Re-running the installer upgrades
-in place and never regenerates existing secrets.
+in place and never regenerates existing secrets. For a non-loopback public URL,
+the installer configures sockets on that same origin and prints the required
+`/api/socketio` reverse-proxy target.
 
 ## Manual Install
 
@@ -57,6 +59,7 @@ The installer automates exactly these steps:
    AUTH_URL=http://localhost:3000
    PUBLIC_APP_URL=http://localhost:3000
    SOCKET_ALLOWED_ORIGINS=http://localhost:3000
+   NEXT_PUBLIC_SOCKET_URL=http://localhost:5002
    AUTH_SECRET=$(openssl rand -hex 32)
    ENCRYPTION_KEY=$(openssl rand -hex 32)
    INTERNAL_API_KEY=$(openssl rand -base64 32)
@@ -80,12 +83,13 @@ The installer automates exactly these steps:
    the exact generation command in the error message. Every setting is read
    from `.env`; a standard deployment never edits the YAML.
 
-For a domain deployment, set `AUTH_URL`/`PUBLIC_APP_URL` to your public URL and
-set `NEXT_PUBLIC_SOCKET_URL` to the browser-reachable HTTPS URL used for live
-logs and terminals. Route that URL's `/api/socketio` path through a TLS reverse
-proxy to port 5002. Keep the raw port off the public Internet when possible;
-the `/broadcast/*` routes on it are intended only for Cronium services and
-require `Authorization: Bearer $INTERNAL_API_KEY`.
+For a domain deployment, set `AUTH_URL`, `PUBLIC_APP_URL`, and
+`NEXT_PUBLIC_SOCKET_URL` to the same public HTTPS origin. Route only its
+`/api/socketio` path through a TLS reverse proxy to `127.0.0.1:5002`. A proxy
+container on the Cronium network can instead use `http://cronium-app:5002`.
+Compose binds host port 5002 to loopback; never proxy `/broadcast/*`. Those
+routes are intended only for Cronium services and require
+`Authorization: Bearer $INTERNAL_API_KEY`.
 
 The socket server accepts browser handshakes only from exact trusted origins.
 It uses `PUBLIC_APP_URL` and `AUTH_URL` by default. If more than one frontend
@@ -93,8 +97,22 @@ origin is legitimate, set `SOCKET_ALLOWED_ORIGINS` to a comma-separated list
 such as `https://cronium.example.com,https://admin.example.com`. Include the
 scheme and non-default port, if any; paths and wildcards are not supported.
 Authenticated users obtain a 30-second, audience-specific ticket before each
-connection. Tickets are single-use within the socket process, and the server
-rechecks that the user is active (plus console permission for terminals).
+connection. Tickets are consumed atomically in shared Valkey across replicas.
+The server rechecks that the user is active (plus console permission for
+terminals), subscribes to authorization revocations, and periodically
+revalidates connected principals.
+
+The bundled Valkey service uses the `noeviction` policy because consumed socket
+ticket markers are security state, not disposable cache entries. If Valkey
+reaches its configured memory limit, new security-sensitive writes fail closed.
+
+Remote SSH execution is disabled by default. Cronium's static SSH credential
+cannot create a new Unix identity on an arbitrary target, so a normal shared
+SSH account does not satisfy the execution isolation boundary. Set
+`CRONIUM_SSH_EXECUTION_ISOLATION_MODE=operator-enforced` only when a trusted
+external launcher guarantees a separate OS identity or isolated container for
+every mutually untrusted remote job. The orchestrator otherwise rejects SSH
+jobs with `SSH_ISOLATION_REQUIRED`.
 
 ## First Boot
 
@@ -128,17 +146,18 @@ see [GETTING_STARTED.md](./GETTING_STARTED.md) and `pnpm dev:docker:up`.
 
 1. **Environment variables** — the complete reference is
    [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md). Common `.env`
-   options: `APP_PORT`/`SOCKET_PORT` (published ports),
+   options: `APP_PORT` (public web port), `SOCKET_PORT` (loopback proxy target),
    `SOCKET_ALLOWED_ORIGINS` (exact trusted browser origins),
    `CRONIUM_IMAGE_TAG` (pin a release), `LOG_LEVEL`.
 2. **Orchestrator tuning** — advanced settings (polling cadence, SSH executor
    limits, metrics) via `apps/orchestrator/configs/cronium-orchestrator.yaml`.
-3. **Networking** — services share a fixed-name `cronium` bridge network. Only
-   the app's ports (3000, 5002) are published; the worker, orchestrator, and
-   runtime are internal-only. On an Internet-facing deployment, firewall the
-   raw socket port and proxy only `/api/socketio` to it. Do not expose
-   `/broadcast/*`; those endpoints are authenticated with `INTERNAL_API_KEY`
-   but remain service-only.
+   SSH remains disabled unless the operator explicitly attests to external
+   per-job identity/container isolation.
+3. **Networking** — services share a fixed-name `cronium` bridge network. Port
+   3000 is published normally; port 5002 is published only on `127.0.0.1` for a
+   host reverse proxy. The worker, orchestrator, and runtime are internal-only.
+   Proxy only `/api/socketio`; do not expose `/broadcast/*`, which remains a
+   service-only authenticated endpoint.
 4. **Volumes** — `postgres-data` (database), `valkey-data` (cache),
    `orchestrator-data` (payload signing key + SSH known_hosts; losing it
    breaks registered remote runners).
@@ -224,7 +243,8 @@ docker compose logs postgres
 **Permission denied on Docker socket** — add your user to the docker group:
 `sudo usermod -aG docker $USER` (log out and back in).
 
-**Port already in use** — set `APP_PORT`/`SOCKET_PORT` in `.env`.
+**Port already in use** — set `APP_PORT` or the loopback `SOCKET_PORT` in
+`.env`.
 
 **Debug logging** — set `LOG_LEVEL=debug` in `.env`.
 
@@ -241,6 +261,8 @@ docker compose down -v     # stop and delete data volumes
 - Rotate secrets periodically; restart the stack after updating `.env`.
   Rotating `ENCRYPTION_KEY` requires re-entering stored tool credentials.
 - Keep images fresh (`docker compose pull` on a schedule, or pin and bump).
+- Keep port 5002 loopback-only and proxy only `/api/socketio`; never expose the
+  `/broadcast/*` internal routes.
 - The app runs as a non-root user; the orchestrator image is distroless. The
   orchestrator needs the Docker socket for container jobs — treat that host
   accordingly.

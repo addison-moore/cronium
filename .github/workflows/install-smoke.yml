@@ -57,6 +57,21 @@ jobs:
       - name: Assert app health endpoint
         run: curl -fsS http://localhost:3000/api/health
 
+      - name: Assert socket port is loopback-only
+        working-directory: ${{ runner.temp }}/cronium-smoke
+        run: |
+          binding=$(docker compose port cronium-app 5002)
+          case "$binding" in
+            127.0.0.1:*) echo "Socket bind is private: $binding" ;;
+            *) echo "Socket port is not loopback-only: $binding"; exit 1 ;;
+          esac
+
+      - name: Assert security state cannot be evicted
+        working-directory: ${{ runner.temp }}/cronium-smoke
+        run: |
+          policy=$(docker compose exec -T valkey valkey-cli --raw CONFIG GET maxmemory-policy | tail -n 1)
+          test "$policy" = "noeviction"
+
       - name: Assert fresh instance redirects to first-run setup
         run: |
           # Next.js may deliver the redirect as an HTTP 3xx or as a streamed

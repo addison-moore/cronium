@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { type Server as SocketIOServer, type Socket } from "socket.io";
 import { storage } from "./storage";
 import { sshService } from "@/lib/ssh";
@@ -20,7 +20,26 @@ interface TerminalSession {
   createdAt: number;
   lastActivity: number;
   socketId: string; // Track the socket ID associated with the session
+  authorizationFingerprint: string;
   cleanup?: () => void; // Manual cleanup function for channel count
+}
+
+export function terminalAuthorizationFingerprint(
+  server: CroniumServer,
+): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        server.userId,
+        server.address,
+        server.username,
+        server.port,
+        server.sshKey,
+        server.password,
+        server.isArchived,
+      ]),
+    )
+    .digest("hex");
 }
 
 // WebSocket event data interfaces
@@ -350,6 +369,8 @@ export class TerminalWebSocketHandler {
       createdAt: Date.now(),
       lastActivity: Date.now(),
       socketId: socket.id ?? "unknown",
+      authorizationFingerprint:
+        terminalAuthorizationFingerprint(decryptedServer),
       cleanup, // Store the cleanup function
     };
 
@@ -463,15 +484,47 @@ export class TerminalWebSocketHandler {
     return this.activeSessions.get(sessionId);
   }
 
+  public revokeUser(userId: string): void {
+    for (const [sessionId, session] of this.activeSessions) {
+      if (session.userId === userId) this.destroyTerminalSession(sessionId);
+    }
+  }
+
+  public revokeAll(): void {
+    for (const sessionId of this.activeSessions.keys()) {
+      this.destroyTerminalSession(sessionId);
+    }
+  }
+
+  public async revalidateSessions(): Promise<void> {
+    const sessions = [...this.activeSessions.entries()];
+    await Promise.all(
+      sessions.map(async ([sessionId, session]) => {
+        try {
+          const server = await authorizeTerminalServerAccess(
+            session.userId,
+            session.serverId,
+          );
+          if (
+            terminalAuthorizationFingerprint(server) !==
+            session.authorizationFingerprint
+          ) {
+            throw new Error("Terminal authorization changed");
+          }
+        } catch {
+          this.destroyTerminalSession(sessionId);
+          this.io.sockets.sockets.get(session.socketId)?.disconnect(true);
+        }
+      }),
+    );
+  }
+
   public cleanup(): void {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
     }
 
-    // Destroy all active sessions
-    this.activeSessions.forEach((_, sessionId) => {
-      this.destroyTerminalSession(sessionId);
-    });
+    this.revokeAll();
     this.activeSessions.clear();
     console.log("Server: TerminalWebSocketHandler cleaned up.");
   }

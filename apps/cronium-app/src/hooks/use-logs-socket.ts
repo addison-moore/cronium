@@ -3,6 +3,7 @@ import { io, type Socket } from "socket.io-client";
 import type { LogStatus } from "@/shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import { createSocketAuthProvider } from "@/lib/socket-ticket-client";
+import { resolveSocketClientUrl } from "@/lib/socket-client-url";
 
 interface LogUpdate {
   logId: number;
@@ -34,10 +35,7 @@ export function useLogsSocket(): {
     if (!user?.id) return;
 
     // Initialize socket connection to logs namespace
-    const socketPort = process.env.NEXT_PUBLIC_SOCKET_PORT ?? "5002";
-    const socketUrl =
-      process.env.NEXT_PUBLIC_SOCKET_URL ??
-      `${window.location.protocol}//${window.location.hostname}:${socketPort}`;
+    const socketUrl = resolveSocketClientUrl(window.location);
 
     const logsSocket = io(`${socketUrl}/logs`, {
       path: "/api/socketio",

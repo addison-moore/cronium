@@ -45,6 +45,7 @@ export const env = createEnv({
       .default("http://orchestrator:8080"),
     VALKEY_URL: z.string().optional(),
     REDIS_URL: z.string().optional(),
+    SOCKET_INTERNAL_URL: z.string().url().optional(),
   },
   client: {
     PUBLIC_APP_URL: z.string().url(),
@@ -72,6 +73,7 @@ export const env = createEnv({
     ORCHESTRATOR_URL: process.env.ORCHESTRATOR_URL,
     VALKEY_URL: process.env.VALKEY_URL,
     REDIS_URL: process.env.REDIS_URL,
+    SOCKET_INTERNAL_URL: process.env.SOCKET_INTERNAL_URL,
   },
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
   emptyStringAsUndefined: true,

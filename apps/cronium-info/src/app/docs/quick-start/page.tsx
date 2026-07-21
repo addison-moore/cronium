@@ -187,10 +187,11 @@ export default function QuickStartPage() {
               <p className="text-sm">
                 <strong>Self-hosting note:</strong> Live logs and terminals use
                 short-lived authenticated socket tickets. On a public instance,
-                proxy <code>/api/socketio</code> over TLS, keep raw port 5002
-                private, and configure exact <code>SOCKET_ALLOWED_ORIGINS</code>{" "}
-                only if your trusted browser origin differs from{" "}
-                <code>PUBLIC_APP_URL</code>/<code>AUTH_URL</code>.
+                proxy only <code>/api/socketio</code> over TLS to the
+                loopback-bound port 5002, and configure exact
+                <code>SOCKET_ALLOWED_ORIGINS</code> only if your trusted browser
+                origin differs from <code>PUBLIC_APP_URL</code>/
+                <code>AUTH_URL</code>.
               </p>
             </div>
           </div>
@@ -250,9 +251,14 @@ ssh-copy-id user@your-server.com`}</CodeBlock>
 
             <Callout variant="warning">
               <p className="text-warning-text text-sm">
-                <strong>Security Note:</strong> Your SSH keys are encrypted and
-                stored securely. Cronium uses industry-standard encryption to
-                protect your credentials.
+                <strong>Remote execution is disabled by default.</strong> A
+                stored SSH credential alone cannot isolate untrusted jobs. Set
+                <code>
+                  CRONIUM_SSH_EXECUTION_ISOLATION_MODE=operator-enforced
+                </code>{" "}
+                only when a trusted external launcher gives every mutually
+                untrusted job a separate UID or isolated container. Do not
+                enable it for a normal shared SSH account.
               </p>
             </Callout>
           </div>

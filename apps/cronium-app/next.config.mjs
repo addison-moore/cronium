@@ -25,20 +25,18 @@ const nextConfig = {
     PUBLIC_APP_URL: env.PUBLIC_APP_URL,
   },
   webpack: (config, { isServer, dev }) => {
-    // Handle SSH binary modules properly. mysql2 (SQL tool driver), mongodb
-    // (MongoDB tool driver) and @anthropic-ai/sdk (AI tool provider) are
-    // externalized too: they are only ever loaded via server-executed dynamic
-    // imports, and they use `node:`-scheme and subpath builtins (e.g.
-    // timers/promises, node:path) the client webpack can't resolve —
-    // externalizing keeps them out of the client trace entirely. Scoped
-    // package names must use the object/commonjs form: the bare-string form
-    // emits `module.exports = @anthropic-ai/sdk`, which is not parseable JS.
+    // Handle SSH binary modules properly. Database/cache drivers and the
+    // Anthropic SDK are externalized too: they are only ever loaded via
+    // server-executed dynamic imports, and they use `node:`-scheme and subpath
+    // builtins the client webpack cannot resolve. Scoped package names must use
+    // the object/commonjs form: the bare-string form emits invalid JavaScript.
     config.externals = [
       ...(config.externals || []),
       "ssh2",
       "mysql2/promise",
       "mysql2",
       "mongodb",
+      "ioredis",
       { "@anthropic-ai/sdk": "commonjs @anthropic-ai/sdk" },
     ];
 
@@ -153,6 +151,7 @@ const nextConfig = {
     "node-ssh",
     "mysql2",
     "mongodb",
+    "ioredis",
     "@anthropic-ai/sdk",
     "handlebars",
     "@xterm/xterm",

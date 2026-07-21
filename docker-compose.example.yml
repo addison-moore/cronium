@@ -25,11 +25,13 @@
 # on first boot instead. There is no default admin password.
 #
 # For a domain deployment, set AUTH_URL / PUBLIC_APP_URL to your public URL and
-# route /api/socketio through a TLS reverse proxy to port 5002. Set
-# NEXT_PUBLIC_SOCKET_URL to that browser-reachable HTTPS URL. Keep port 5002
-# private when possible; its /broadcast/* routes are service-only and require
-# INTERNAL_API_KEY. If trusted frontends use multiple origins, list each exact
-# origin (scheme, host, and port) in comma-separated SOCKET_ALLOWED_ORIGINS.
+# route only /api/socketio through a TLS reverse proxy to 127.0.0.1:5002 (or
+# cronium-app:5002 from a proxy on this Docker network). Set
+# NEXT_PUBLIC_SOCKET_URL to the public HTTPS origin. Compose binds host port
+# 5002 to loopback so /broadcast/* is not independently public; those routes
+# are service-only and also require INTERNAL_API_KEY. If trusted frontends use
+# multiple origins, list each exact origin (scheme, host, and port) in
+# comma-separated SOCKET_ALLOWED_ORIGINS.
 #
 # Every value below can be overridden from .env; none of this file needs
 # editing for a standard deployment.
@@ -54,7 +56,9 @@ services:
 
   valkey:
     image: valkey/valkey:7-alpine
-    command: valkey-server --appendonly yes
+    # Security state (socket ticket consumption/revocation) must never be
+    # evicted before its TTL. Writes fail closed if the memory limit is reached.
+    command: valkey-server --appendonly yes --maxmemory-policy noeviction
     volumes:
       - valkey-data:/data
     restart: unless-stopped
@@ -97,9 +101,9 @@ services:
       # ADMIN_EMAIL / ADMIN_PASSWORD in .env (they pass through via env_file).
     ports:
       - "${APP_PORT:-3000}:3000"
-      # For public deployments, firewall this backend port and expose only the
-      # TLS-proxied /api/socketio path described above.
-      - "${SOCKET_PORT:-5002}:5002"
+      # Host reverse proxies can reach this loopback bind. Containerized
+      # proxies should use http://cronium-app:5002 on the cronium network.
+      - "127.0.0.1:${SOCKET_PORT:-5002}:5002"
     restart: unless-stopped
     networks:
       - cronium
@@ -132,6 +136,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
       DATABASE_URL: postgres://${POSTGRES_USER:-cronium}:${POSTGRES_PASSWORD:?generate with openssl rand -hex 16}@postgres:5432/${POSTGRES_DB:-cronium}
       VALKEY_URL: valkey://valkey:6379
+      SOCKET_INTERNAL_URL: http://cronium-app:5002
       WORKER_HEALTH_PORT: 5003
     healthcheck:
       test:
@@ -171,6 +176,9 @@ services:
       # Per-job runtime sidecars join this network to reach the app and Valkey;
       # must match the network name declared at the bottom of this file.
       CRONIUM_CONTAINER_RUNTIME_SHARED_NETWORK: cronium
+      # SSH stays disabled unless an external launcher provides per-job OS
+      # identity/container isolation. Never enable this for a shared SSH UID.
+      CRONIUM_SSH_EXECUTION_ISOLATION_MODE: ${CRONIUM_SSH_EXECUTION_ISOLATION_MODE:-disabled}
       # Remote (runner) execution tunnels to this shared runtime service; must
       # match the cronium-runtime service name:port below.
       RUNTIME_HOST: cronium-runtime

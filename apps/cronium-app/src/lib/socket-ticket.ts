@@ -1,6 +1,8 @@
 import type { Socket } from "socket.io";
+import { createHash } from "node:crypto";
 import { randomId, signTicket, verifyTicket } from "@/lib/mcp-oauth/tokens";
 import { storage } from "@/server/storage";
+import { consumeSocketTicketOnce } from "@/server/socket-security-store";
 import { UserStatus, type UserRole } from "@/shared/schema";
 
 export const SOCKET_TICKET_TTL_SECONDS = 30;
@@ -21,22 +23,36 @@ interface SocketTicketClaims {
 export interface SocketPrincipal {
   userId: string;
   role: UserRole;
+  authorizationFingerprint: string;
 }
 
 interface SocketUserRecord {
   id: string;
   role: UserRole;
   status: UserStatus;
+  roleId?: number | null;
+  password?: string | null;
 }
 
-interface AuthenticateSocketTicketOptions {
+export function socketUserAuthorizationFingerprint(
+  user: SocketUserRecord,
+): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify([user.password, user.role, user.roleId, user.status]),
+    )
+    .digest("hex");
+}
+
+export interface AuthenticateSocketTicketOptions {
   now?: number;
-  consume?: boolean;
+  consumeTicket?: (
+    jti: string,
+    expiresAt: number,
+    now: number,
+  ) => Promise<boolean>;
   getUser?: (userId: string) => Promise<SocketUserRecord | undefined>;
 }
-
-const consumedTickets = new Map<string, number>();
-const MAX_CONSUMED_TICKETS = 100_000;
 
 function nowSeconds(): number {
   return Math.floor(Date.now() / 1000);
@@ -112,19 +128,8 @@ export function verifySocketTicket(
   return claims as SocketTicketClaims;
 }
 
-function consumeTicket(jti: string, expiresAt: number, now: number): boolean {
-  for (const [consumedJti, expiry] of consumedTickets) {
-    if (expiry <= now) consumedTickets.delete(consumedJti);
-  }
-
-  if (consumedTickets.has(jti)) return false;
-  if (consumedTickets.size >= MAX_CONSUMED_TICKETS) return false;
-  consumedTickets.set(jti, expiresAt);
-  return true;
-}
-
 /**
- * Validate a short-lived ticket, consume it once in this socket process, and
+ * Validate a short-lived ticket, consume it once in shared Valkey state, and
  * re-check the authoritative user row. Session claims alone are deliberately
  * insufficient because a user may have been disabled since signing in.
  */
@@ -137,10 +142,11 @@ export async function authenticateSocketTicket(
   const claims = verifySocketTicket(ticket, audience, now);
   if (!claims) return null;
 
-  if (
-    options.consume !== false &&
-    !consumeTicket(claims.jti, claims.exp, now)
-  ) {
+  const consumeTicket = options.consumeTicket ?? consumeSocketTicketOnce;
+  try {
+    if (!(await consumeTicket(claims.jti, claims.exp, now))) return null;
+  } catch (error) {
+    console.error("Socket ticket consumption failed:", error);
     return null;
   }
 
@@ -152,7 +158,11 @@ export async function authenticateSocketTicket(
       return null;
     }
 
-    return { userId: user.id, role: user.role };
+    return {
+      userId: user.id,
+      role: user.role,
+      authorizationFingerprint: socketUserAuthorizationFingerprint(user),
+    };
   } catch (error) {
     console.error("Socket authentication lookup failed:", error);
     return null;
@@ -161,6 +171,7 @@ export async function authenticateSocketTicket(
 
 export function createSocketAuthMiddleware(
   audience: SocketTicketAudience,
+  options: AuthenticateSocketTicketOptions = {},
 ): (socket: Socket, next: (error?: Error) => void) => void {
   return (socket, next) => {
     const ticket = (socket.handshake.auth as { ticket?: unknown }).ticket;
@@ -169,7 +180,7 @@ export function createSocketAuthMiddleware(
       return;
     }
 
-    void authenticateSocketTicket(ticket, audience)
+    void authenticateSocketTicket(ticket, audience, options)
       .then((principal) => {
         if (!principal) {
           next(new Error("Authentication failed"));
@@ -179,6 +190,8 @@ export function createSocketAuthMiddleware(
         const socketData = socket.data as unknown as Record<string, unknown>;
         socketData.userId = principal.userId;
         socketData.role = principal.role;
+        socketData.authorizationFingerprint =
+          principal.authorizationFingerprint;
         next();
       })
       .catch((error) => {
