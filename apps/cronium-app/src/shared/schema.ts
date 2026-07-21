@@ -776,6 +776,10 @@ export const oauthStates = pgTable("oauth_states", {
   providerId: varchar("provider_id", { length: 50 }).notNull(),
   redirectUri: text("redirect_uri").notNull(),
   codeVerifier: text("code_verifier"),
+  // SHA-256 hash of an HttpOnly cookie nonce set in the initiating browser.
+  // The callback must present the matching nonce, binding completion to the
+  // browser that started the flow (login-CSRF / account-linking defense).
+  browserNonceHash: text("browser_nonce_hash"),
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at")
     .default(sql`CURRENT_TIMESTAMP`)

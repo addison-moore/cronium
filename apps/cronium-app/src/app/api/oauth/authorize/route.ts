@@ -55,14 +55,25 @@ export async function POST(request: NextRequest) {
 
     // Initialize OAuth flow
     const flow = new OAuthFlow(provider);
-    const authUrl = await flow.initiate(
+    const { authUrl, browserNonce } = await flow.initiate(
       session.user.id,
       toolId,
       redirectUri,
       scope,
     );
 
-    return NextResponse.json({ authUrl });
+    // Bind the flow to this browser: an HttpOnly SameSite cookie the callback
+    // must echo (its hash is stored with the state). SameSite=Lax so it is sent
+    // on the top-level GET redirect back from the provider.
+    const response = NextResponse.json({ authUrl });
+    response.cookies.set("cronium-oauth-nonce", browserNonce, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/api/oauth",
+      maxAge: 10 * 60,
+    });
+    return response;
   } catch (error) {
     console.error("OAuth authorize error:", error);
 

@@ -1,10 +1,24 @@
-import { randomBytes } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import { db } from "@/server/db";
 import { oauthStates } from "@/shared/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, gte } from "drizzle-orm";
 import { type OAuthProvider } from "./providers";
 import { TokenManager } from "./TokenManager";
 import { type OAuthCallbackParams, OAuthError } from "./types";
+
+function sha256Base64Url(value: string): string {
+  return createHash("sha256").update(value).digest("base64url");
+}
+
+function sha256Hex(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+/** Result of starting a flow: the provider URL plus the browser-binding nonce. */
+export interface OAuthInitiation {
+  authUrl: string;
+  browserNonce: string;
+}
 
 export class OAuthFlow {
   private tokenManager: TokenManager;
@@ -21,14 +35,22 @@ export class OAuthFlow {
     toolId: number,
     redirectUri: string,
     scope?: string,
-  ): Promise<string> {
+  ): Promise<OAuthInitiation> {
     // Generate state for CSRF protection
     const state = randomBytes(32).toString("hex");
 
-    // Generate PKCE code verifier (for providers that support it)
+    // PKCE: the verifier is stored server-side; the S256 challenge is sent to
+    // the provider so an intercepted authorization code cannot be exchanged
+    // without the verifier.
     const codeVerifier = randomBytes(32).toString("base64url");
+    const codeChallenge = sha256Base64Url(codeVerifier);
 
-    // Store state in database
+    // Browser-binding nonce: the plaintext goes to the initiating browser as an
+    // HttpOnly cookie; only its hash is stored. The callback must present the
+    // matching nonce, so an attacker's authorization URL cannot complete in a
+    // victim's browser (HI-06).
+    const browserNonce = randomBytes(32).toString("base64url");
+
     await db.insert(oauthStates).values({
       state,
       userId,
@@ -36,19 +58,26 @@ export class OAuthFlow {
       providerId: this.provider.id,
       redirectUri,
       codeVerifier,
+      browserNonceHash: sha256Hex(browserNonce),
       expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
     });
 
-    // Get authorization URL
-    const authUrl = this.provider.getAuthorizationUrl(state, scope);
+    const authUrl = this.provider.getAuthorizationUrl(
+      state,
+      scope,
+      codeChallenge,
+    );
 
-    return authUrl;
+    return { authUrl, browserNonce };
   }
 
   /**
    * Handle OAuth callback
    */
-  async handleCallback(params: OAuthCallbackParams): Promise<{
+  async handleCallback(
+    params: OAuthCallbackParams,
+    browserNonce?: string,
+  ): Promise<{
     userId: string;
     toolId: number;
   }> {
@@ -61,26 +90,40 @@ export class OAuthFlow {
       );
     }
 
-    // Validate state
-    const stateRecord = await db
-      .select()
-      .from(oauthStates)
-      .where(eq(oauthStates.state, params.state))
-      .limit(1);
+    // Atomically claim the state: delete-and-return only if unexpired, so a
+    // replayed callback can't reuse it and two concurrent callbacks can't both
+    // proceed.
+    const [authRequest] = await db
+      .delete(oauthStates)
+      .where(
+        and(
+          eq(oauthStates.state, params.state),
+          gte(oauthStates.expiresAt, new Date()),
+        ),
+      )
+      .returning();
 
-    if (stateRecord.length === 0) {
-      throw new OAuthError("Invalid state parameter", "invalid_state", 400);
-    }
-
-    const authRequest = stateRecord[0];
     if (!authRequest) {
-      throw new OAuthError("Invalid state parameter", "invalid_state", 400);
+      throw new OAuthError(
+        "Invalid or expired state parameter",
+        "invalid_state",
+        400,
+      );
     }
 
-    // Check if state is expired
-    if (authRequest.expiresAt < new Date()) {
-      await db.delete(oauthStates).where(eq(oauthStates.state, params.state));
-      throw new OAuthError("State has expired", "state_expired", 400);
+    // Bind to the initiating browser: the callback must present the nonce whose
+    // hash was stored at initiation (HI-06). A flow started without a nonce
+    // (legacy row) is rejected rather than trusted.
+    if (
+      !authRequest.browserNonceHash ||
+      !browserNonce ||
+      sha256Hex(browserNonce) !== authRequest.browserNonceHash
+    ) {
+      throw new OAuthError(
+        "OAuth session could not be verified for this browser",
+        "invalid_browser_binding",
+        400,
+      );
     }
 
     // Exchange code for tokens
@@ -90,24 +133,18 @@ export class OAuthFlow {
         authRequest.codeVerifier ?? undefined,
       );
 
-      // Store tokens
+      // Store tokens (state was already consumed atomically above).
       await this.tokenManager.storeTokens(
         authRequest.userId,
         authRequest.toolId,
         tokens,
       );
 
-      // Clean up state
-      await db.delete(oauthStates).where(eq(oauthStates.state, params.state));
-
       return {
         userId: authRequest.userId,
         toolId: authRequest.toolId,
       };
     } catch (error) {
-      // Clean up state on error
-      await db.delete(oauthStates).where(eq(oauthStates.state, params.state));
-
       if (error instanceof OAuthError) {
         throw error;
       }
@@ -131,6 +168,7 @@ export class OAuthFlow {
    * Clean up expired states
    */
   static async cleanupExpiredStates(): Promise<void> {
-    await db.delete(oauthStates).where(eq(oauthStates.expiresAt, new Date()));
+    const { lt } = await import("drizzle-orm");
+    await db.delete(oauthStates).where(lt(oauthStates.expiresAt, new Date()));
   }
 }

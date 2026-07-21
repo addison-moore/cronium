@@ -17,7 +17,11 @@ export abstract class BaseOAuthProvider implements OAuthProvider {
     return this.config.name;
   }
 
-  abstract getAuthorizationUrl(state: string, scope?: string): string;
+  abstract getAuthorizationUrl(
+    state: string,
+    scope?: string,
+    codeChallenge?: string,
+  ): string;
 
   async exchangeCodeForTokens(
     code: string,

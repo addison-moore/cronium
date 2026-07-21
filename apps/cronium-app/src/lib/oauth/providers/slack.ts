@@ -23,13 +23,22 @@ export class SlackOAuthProvider extends BaseOAuthProvider {
     });
   }
 
-  getAuthorizationUrl(state: string, scope?: string): string {
+  getAuthorizationUrl(
+    state: string,
+    scope?: string,
+    codeChallenge?: string,
+  ): string {
     const params: Record<string, string> = {
       client_id: this.config.clientId,
       redirect_uri: this.config.redirectUri,
       state,
       scope: scope ?? this.config.scope,
     };
+
+    if (codeChallenge) {
+      params.code_challenge = codeChallenge;
+      params.code_challenge_method = "S256";
+    }
 
     // Add user_scope for user tokens if needed
     if (this.config.options?.userScope) {

@@ -4,6 +4,7 @@ import { WebhookManager } from "./WebhookManager";
 import { WebhookSecurity } from "./WebhookSecurity";
 import { db } from "@/server/db";
 import { webhookEvents, webhookLogs } from "@/shared/schema";
+import { resolveClientIp } from "@/lib/security/client-ip";
 
 export interface WebhookRequest {
   method: string;
@@ -11,6 +12,14 @@ export interface WebhookRequest {
   body: unknown;
   query: Record<string, string>;
   ip?: string;
+}
+
+/** Thrown when an inbound webhook body exceeds the size cap. */
+class WebhookBodyTooLargeError extends Error {
+  constructor() {
+    super("Request body too large");
+    this.name = "WebhookBodyTooLargeError";
+  }
 }
 
 export interface WebhookResponse {
@@ -67,8 +76,22 @@ export class WebhookRouter {
         );
       }
 
-      // Parse request body
-      const body = await this.parseRequestBody(request);
+      // Parse request body (size-capped before parsing)
+      let body: unknown;
+      try {
+        body = await this.parseRequestBody(request);
+      } catch (parseError) {
+        if (parseError instanceof WebhookBodyTooLargeError) {
+          return NextResponse.json(
+            { error: "Request body too large" },
+            { status: 413 },
+          );
+        }
+        return NextResponse.json(
+          { error: "Invalid request body" },
+          { status: 400 },
+        );
+      }
 
       // Get headers
       const headers = this.extractHeaders(request.headers);
@@ -215,22 +238,40 @@ export class WebhookRouter {
   private async parseRequestBody(request: NextRequest): Promise<unknown> {
     const contentType = request.headers.get("content-type") ?? "";
 
+    // Enforce a body-size cap BEFORE parsing so an oversized payload can't
+    // exhaust memory (HI-12). Read the raw text once (bounded by the cap) and
+    // parse from it, rather than calling request.json() unbounded.
+    const raw = await this.readBoundedText(request);
+
     if (contentType.includes("application/json")) {
-      return await request.json();
+      return JSON.parse(raw);
     } else if (contentType.includes("application/x-www-form-urlencoded")) {
-      const text = await request.text();
-      const params = new URLSearchParams(text);
+      const params = new URLSearchParams(raw);
       const result: Record<string, string> = {};
       for (const [key, value] of params) {
         result[key] = value;
       }
       return result;
-    } else if (contentType.includes("text/plain")) {
-      return await request.text();
-    } else {
-      // Default to raw text
-      return await request.text();
     }
+    // text/plain and any other type: raw text.
+    return raw;
+  }
+
+  /** Read the request body as text, rejecting anything over the size cap. */
+  private async readBoundedText(request: NextRequest): Promise<string> {
+    const MAX_WEBHOOK_BODY_BYTES = 1 * 1024 * 1024; // 1 MB
+
+    const declared = request.headers.get("content-length");
+    if (declared && Number(declared) > MAX_WEBHOOK_BODY_BYTES) {
+      throw new WebhookBodyTooLargeError();
+    }
+
+    const text = await request.text();
+    // Guard against a lying/absent Content-Length by checking the actual bytes.
+    if (Buffer.byteLength(text, "utf8") > MAX_WEBHOOK_BODY_BYTES) {
+      throw new WebhookBodyTooLargeError();
+    }
+    return text;
   }
 
   /**
@@ -245,23 +286,17 @@ export class WebhookRouter {
   }
 
   /**
-   * Get client IP from request
+   * Get the trusted client IP. Uses the TRUSTED_PROXY_HOPS policy so an
+   * attacker can't spoof their source IP (which feeds the IP allowlist and
+   * rate limiting) by prepending X-Forwarded-For entries.
    */
   private getClientIP(request: NextRequest): string | undefined {
-    // Check common headers for client IP
-    const forwardedFor = request.headers.get("x-forwarded-for");
-    if (forwardedFor) {
-      const firstIp = forwardedFor.split(",")[0];
-      return firstIp?.trim();
-    }
-
-    const realIP = request.headers.get("x-real-ip");
-    if (realIP) {
-      return realIP;
-    }
-
-    // No IP found
-    return undefined;
+    return (
+      resolveClientIp(
+        request.headers.get("x-forwarded-for"),
+        request.headers.get("x-real-ip"),
+      ) ?? undefined
+    );
   }
 
   /**

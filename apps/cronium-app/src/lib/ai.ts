@@ -448,8 +448,14 @@ export async function listAvailableModels(
   apiKey?: string,
   baseUrl?: string,
 ): Promise<ListModelsResult> {
+  // A caller-supplied base URL is an attacker-controllable origin. The platform
+  // provider key must NEVER be sent there (HI-02): if the caller points the
+  // request at their own origin, they must supply their own key. The stored
+  // platform key is used only with the Admin-configured origin (no caller URL).
+  const callerSuppliedBaseUrl = baseUrl?.trim() ? baseUrl.trim() : undefined;
+
   let resolvedKey = apiKey;
-  if (!resolvedKey) {
+  if (!resolvedKey && !callerSuppliedBaseUrl) {
     const keySetting = await storage.getSetting(
       AI_PROVIDER_KEY_SETTING[provider],
     );
@@ -458,10 +464,20 @@ export async function listAvailableModels(
       resolvedKey = env.OPENAI_API_KEY ?? resolvedKey;
     }
   }
-  let resolvedBaseUrl = baseUrl;
+
+  let resolvedBaseUrl = callerSuppliedBaseUrl;
   if (provider === "custom" && !resolvedBaseUrl) {
     const baseUrlSetting = await storage.getSetting("customAiBaseUrl");
     resolvedBaseUrl = baseUrlSetting?.value ?? undefined;
+  }
+
+  if (callerSuppliedBaseUrl && !apiKey) {
+    return {
+      models: FALLBACK_AI_MODELS[provider],
+      source: "fallback",
+      error:
+        "A caller-provided AI base URL requires a caller-provided API key; the platform key is never sent to a custom origin.",
+    };
   }
 
   let fetchError: string | undefined;

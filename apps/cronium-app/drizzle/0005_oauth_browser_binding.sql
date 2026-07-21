@@ -1,0 +1,1 @@
+ALTER TABLE "oauth_states" ADD COLUMN "browser_nonce_hash" text;

@@ -81,7 +81,11 @@ export interface OAuthProvider {
   name: string;
 
   // Generate authorization URL
-  getAuthorizationUrl(state: string, scope?: string): string;
+  getAuthorizationUrl(
+    state: string,
+    scope?: string,
+    codeChallenge?: string,
+  ): string;
 
   // Exchange code for tokens
   exchangeCodeForTokens(

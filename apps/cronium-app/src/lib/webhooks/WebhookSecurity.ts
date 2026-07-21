@@ -63,6 +63,12 @@ export class WebhookSecurity {
   verifyTimestamp(timestamp: string | Date): SignatureVerificationResult {
     try {
       const webhookTime = new Date(timestamp).getTime();
+      // A malformed timestamp parses to NaN; Math.abs(NaN) > tolerance is false,
+      // which previously let an unparseable timestamp bypass the replay window.
+      // Reject any non-finite time explicitly (HI-12).
+      if (!Number.isFinite(webhookTime)) {
+        return { isValid: false, error: "Invalid timestamp" };
+      }
       const currentTime = Date.now();
       const difference = Math.abs(currentTime - webhookTime);
 

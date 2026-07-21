@@ -43,16 +43,15 @@ export async function GET(
   });
 }
 
-// Handle OPTIONS for CORS
+// Webhooks are server-to-server (HMAC-signed POSTs from backends, not
+// browsers), so no cross-origin access is granted. The previous wildcard
+// `Access-Control-Allow-Origin: *` was unnecessary (audit-2 L5); advertise the
+// allowed methods without opening CORS to any origin.
 export async function OPTIONS() {
   return new NextResponse(null, {
-    status: 200,
+    status: 204,
     headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-      "Access-Control-Allow-Headers":
-        "Content-Type, X-Webhook-Signature, X-Webhook-Timestamp",
-      "Access-Control-Max-Age": "86400",
+      Allow: "POST, GET, OPTIONS",
     },
   });
 }

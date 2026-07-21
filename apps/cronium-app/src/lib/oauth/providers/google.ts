@@ -19,7 +19,11 @@ export class GoogleOAuthProvider extends BaseOAuthProvider {
     });
   }
 
-  getAuthorizationUrl(state: string, scope?: string): string {
+  getAuthorizationUrl(
+    state: string,
+    scope?: string,
+    codeChallenge?: string,
+  ): string {
     const params: Record<string, string> = {
       client_id: this.config.clientId,
       redirect_uri: this.config.redirectUri,
@@ -29,6 +33,11 @@ export class GoogleOAuthProvider extends BaseOAuthProvider {
       access_type: "offline", // Request refresh token
       prompt: "consent", // Force consent to get refresh token
     };
+
+    if (codeChallenge) {
+      params.code_challenge = codeChallenge;
+      params.code_challenge_method = "S256";
+    }
 
     // Add any provider-specific options
     if (this.config.options?.hd) {

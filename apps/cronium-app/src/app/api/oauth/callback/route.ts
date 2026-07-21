@@ -54,16 +54,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Handle callback
+    // Handle callback, binding to the nonce set in the initiating browser.
     const flow = new OAuthFlow(provider);
+    const browserNonce = request.cookies.get("cronium-oauth-nonce")?.value;
 
     try {
-      await flow.handleCallback(params);
+      await flow.handleCallback(params, browserNonce);
 
-      // Redirect to success page
-      return NextResponse.redirect(
+      // Redirect to success page and clear the one-time binding cookie.
+      const success = NextResponse.redirect(
         new URL(`${RETURN_PATH}?oauth=success`, request.url),
       );
+      success.cookies.delete("cronium-oauth-nonce");
+      return success;
     } catch (error) {
       console.error("OAuth callback error:", error);
 

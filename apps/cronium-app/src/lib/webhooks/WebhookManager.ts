@@ -1,6 +1,7 @@
 import { EventEmitter } from "events";
 import crypto from "crypto";
 import { z } from "zod";
+import axios from "axios";
 import { db } from "@/server/db";
 import { webhooks, webhookEvents, webhookDeliveries } from "@/shared/schema";
 import { eq, and, desc } from "drizzle-orm";
@@ -8,6 +9,15 @@ import { storage } from "@/server/storage";
 import { WebhookSecurity } from "./WebhookSecurity";
 import { WebhookQueue } from "./WebhookQueue";
 import { nanoid } from "nanoid";
+import {
+  assertRequestUrlIsPublic,
+  ssrfHttpAgent,
+  ssrfHttpsAgent,
+} from "@/lib/ssrf-guard";
+import { SsrfBlockedError } from "@/lib/tools/safe-fetch";
+
+// Cap the response body we buffer from a webhook target.
+const MAX_WEBHOOK_RESPONSE_BYTES = 1 * 1024 * 1024;
 
 // Webhook configuration schema
 export const WebhookConfigSchema = z.object({
@@ -232,6 +242,39 @@ export class WebhookManager extends EventEmitter {
     const startTime = Date.now();
     const deliveryId = nanoid();
 
+    // SSRF guard: reject internal/metadata/loopback targets before delivering.
+    // A webhook URL is user-supplied, so outbound delivery is a server-side
+    // fetch that must not be able to reach the control plane (HI-11).
+    try {
+      assertRequestUrlIsPublic(url);
+    } catch (guardError) {
+      if (guardError instanceof SsrfBlockedError) {
+        const duration = Date.now() - startTime;
+        await db.insert(webhookDeliveries).values({
+          webhookId,
+          webhookEventId,
+          deliveryId,
+          status: "failed",
+          statusCode: 0,
+          response: null,
+          error: guardError.message,
+          headers: {},
+          duration,
+          attemptedAt: new Date(),
+        });
+        return {
+          id: deliveryId,
+          webhookId,
+          success: false,
+          statusCode: 0,
+          response: guardError.message,
+          duration,
+          retryCount: 0,
+        };
+      }
+      throw guardError;
+    }
+
     try {
       // Generate signature
       const signature = this.webhookSecurity.generateSignature(
@@ -250,23 +293,39 @@ export class WebhookManager extends EventEmitter {
         ...headers,
       };
 
-      // Send webhook
-      const response = await fetch(url, {
+      // Send webhook through the SSRF-guarded HTTP client: the guarded agents
+      // re-validate the resolved IP at connect time (defeats DNS rebinding) and
+      // redirects are not followed so a 3xx cannot bounce past the guard.
+      const response = await axios.request({
         method: "POST",
+        url,
         headers: requestHeaders,
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(30000), // 30 second timeout
+        data: JSON.stringify(payload),
+        timeout: 30000,
+        httpAgent: ssrfHttpAgent,
+        httpsAgent: ssrfHttpsAgent,
+        maxRedirects: 0,
+        maxContentLength: MAX_WEBHOOK_RESPONSE_BYTES,
+        maxBodyLength: MAX_WEBHOOK_RESPONSE_BYTES,
+        // Treat any status as a resolved response; we record the code.
+        validateStatus: () => true,
+        responseType: "text",
+        transitional: { clarifyTimeoutError: true },
       });
 
       const duration = Date.now() - startTime;
-      const responseText = await response.text();
+      const responseText =
+        typeof response.data === "string"
+          ? response.data
+          : JSON.stringify(response.data);
+      const ok = response.status >= 200 && response.status < 300;
 
       // Record delivery
       await db.insert(webhookDeliveries).values({
         webhookId,
         webhookEventId,
         deliveryId,
-        status: response.ok ? "success" : "failed",
+        status: ok ? "success" : "failed",
         statusCode: response.status,
         response: responseText.substring(0, 1000), // Limit response size
         headers: requestHeaders,
@@ -277,7 +336,7 @@ export class WebhookManager extends EventEmitter {
       return {
         id: deliveryId,
         webhookId,
-        success: response.ok,
+        success: ok,
         statusCode: response.status,
         response: responseText,
         duration,
