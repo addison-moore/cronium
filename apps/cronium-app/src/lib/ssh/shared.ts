@@ -5,6 +5,11 @@
  */
 
 import { NodeSSH, type Config } from "node-ssh";
+import {
+  createSSHPoolKey,
+  type SSHAuthType,
+  type SSHConnectionScope,
+} from "@/lib/ssh/pool-key";
 
 export interface SSHConnection {
   ssh: NodeSSH;
@@ -20,6 +25,16 @@ export interface SSHConnectionConfig {
   port: number;
 }
 
+export interface SSHConnectionRequest {
+  connectionScope: SSHConnectionScope;
+  host: string;
+  authCredential: string;
+  username: string;
+  port: number;
+  forceNew?: boolean;
+  authType: SSHAuthType;
+}
+
 export class SSHConnectionManager {
   private connectionPool = new Map<string, SSHConnection>();
   private connectionLocks = new Map<string, Promise<SSHConnection>>();
@@ -30,14 +45,6 @@ export class SSHConnectionManager {
 
   constructor() {
     this.startCleanupInterval();
-  }
-
-  private getConnectionKey(
-    host: string,
-    username: string,
-    port: number,
-  ): string {
-    return `${username}@${host}:${port}`;
   }
 
   private startCleanupInterval() {
@@ -73,14 +80,25 @@ export class SSHConnectionManager {
 
   // Updated to support both privateKey and password authentication
   async getPooledConnection(
-    host: string,
-    authCredential: string, // Can be either privateKey or password
-    username = "root",
-    port = 22,
-    forceNew = false,
-    authType: "privateKey" | "password" = "privateKey",
+    request: SSHConnectionRequest,
   ): Promise<SSHConnection> {
-    const connectionKey = this.getConnectionKey(host, username, port);
+    const {
+      connectionScope,
+      host,
+      authCredential,
+      username,
+      port,
+      forceNew = false,
+      authType,
+    } = request;
+    const connectionKey = createSSHPoolKey({
+      connectionScope,
+      host,
+      username,
+      port,
+      authType,
+      authCredential,
+    });
 
     // Check if there's already a connection being established for this key
     if (this.connectionLocks.has(connectionKey)) {
@@ -224,6 +242,7 @@ export class SSHConnectionManager {
 
   // Updated to support both privateKey and password authentication
   async testConnection(
+    connectionScope: SSHConnectionScope,
     host: string,
     authCredential: string,
     username = "root",
@@ -231,14 +250,15 @@ export class SSHConnectionManager {
     authType: "privateKey" | "password" = "privateKey",
   ): Promise<{ success: boolean; message: string }> {
     try {
-      const connection = await this.getPooledConnection(
+      const connection = await this.getPooledConnection({
+        connectionScope,
         host,
         authCredential,
         username,
         port,
-        true,
+        forceNew: true,
         authType,
-      );
+      });
 
       const testResult = await connection.ssh.execCommand(
         'echo "Connection test successful"',

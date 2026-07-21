@@ -7,6 +7,10 @@ export async function getLogsByJobId(jobId: string) {
   return db.select().from(logs).where(eq(logs.jobId, jobId));
 }
 
+export async function getLogsByExecutionId(executionId: string) {
+  return db.select().from(logs).where(eq(logs.executionId, executionId));
+}
+
 export async function getLog(logId: number) {
   const [log] = await db.select().from(logs).where(eq(logs.id, logId)).limit(1);
   return log ?? null;

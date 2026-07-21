@@ -208,6 +208,8 @@ write_env() {
 # Where users reach Cronium in the browser
 AUTH_URL=${PUBLIC_URL}
 PUBLIC_APP_URL=${PUBLIC_URL}
+# Exact browser origin permitted to open authenticated socket connections
+SOCKET_ALLOWED_ORIGINS=${PUBLIC_URL}
 # Must be reachable from the user's browser (proxy or open port 5002)
 NEXT_PUBLIC_SOCKET_URL=${SOCKET_URL}
 

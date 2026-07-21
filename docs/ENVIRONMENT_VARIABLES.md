@@ -190,11 +190,26 @@ click "Connect" on the tool's credential card to authorize their account.
 
 ### WebSocket Server
 
-| Variable                  | Description                | Type           | Default                 | Required |
-| ------------------------- | -------------------------- | -------------- | ----------------------- | -------- |
-| `SOCKET_PORT`             | WebSocket server port      | `number`       | `5002`                  | No       |
-| `NEXT_PUBLIC_SOCKET_PORT` | Client-side WebSocket port | `number`       | `5002`                  | No       |
-| `NEXT_PUBLIC_SOCKET_URL`  | Client-side WebSocket URL  | `string` (URL) | `http://localhost:5002` | No       |
+| Variable                  | Description                                                                                      | Type                   | Default                      | Required |
+| ------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------- | ---------------------------- | -------- |
+| `SOCKET_PORT`             | WebSocket server port                                                                            | `number`               | `5002`                       | No       |
+| `NEXT_PUBLIC_SOCKET_PORT` | Client-side WebSocket port                                                                       | `number`               | `5002`                       | No       |
+| `NEXT_PUBLIC_SOCKET_URL`  | Browser-reachable URL whose `/api/socketio` path reaches the socket server                       | `string` (URL)         | `http://localhost:5002`      | No       |
+| `SOCKET_ALLOWED_ORIGINS`  | Comma-separated exact browser origins allowed to open sockets; scheme, host, and port must match | `string` (origin list) | `PUBLIC_APP_URL`, `AUTH_URL` | No       |
+
+Every terminal and live-log connection requires a 30-second,
+audience-specific ticket issued to an authenticated user. A ticket is
+single-use within the socket process, and the socket server rechecks that the
+user is active; terminal tickets also require console permission. Origin
+allowlisting is an additional browser boundary, not a replacement for this
+authentication. Originless requests and origins outside the exact allowlist
+are rejected.
+
+For public deployments, terminate TLS at a reverse proxy and route only
+`/api/socketio` to port 5002. Keep the raw port and `/broadcast/*` routes off
+the public Internet where possible. Internal broadcast producers authenticate
+those routes with `Authorization: Bearer $INTERNAL_API_KEY`; never place that
+key in browser code or proxy configuration sent to clients.
 
 ### Scheduling Worker (cronium-worker)
 
@@ -367,6 +382,7 @@ BACKEND_URL="http://localhost:5001"
 SOCKET_PORT="5002"
 NEXT_PUBLIC_SOCKET_PORT="5002"
 NEXT_PUBLIC_SOCKET_URL="http://localhost:5002"
+SOCKET_ALLOWED_ORIGINS="http://localhost:5001"
 
 # Email (using Gmail)
 SMTP_HOST="smtp.gmail.com"
@@ -413,6 +429,7 @@ BACKEND_URL="http://cronium-app:5001"
 SOCKET_PORT="5002"
 NEXT_PUBLIC_SOCKET_PORT="443"  # If using reverse proxy
 NEXT_PUBLIC_SOCKET_URL="wss://cronium.yourdomain.com"
+SOCKET_ALLOWED_ORIGINS="https://cronium.yourdomain.com"
 
 # Email (using SendGrid)
 SMTP_HOST="smtp.sendgrid.net"

@@ -3,8 +3,22 @@ import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { RunLocation, UserRole, EventStatus, TimeUnit } from "@/shared/schema";
+import {
+  RunLocation,
+  UserRole,
+  EventStatus,
+  TimeUnit,
+  type InsertEvent,
+} from "@/shared/schema";
 import { authenticateApiRequest } from "@/lib/api-auth";
+import { legacyEventPatchSchema } from "@/shared/schemas/events";
+import {
+  assertEventCapability,
+  assertEventRelations,
+  assertProposedEventServers,
+  resourceAccessHttpStatus,
+} from "@/server/security/resource-access";
+import { toEventApiDto } from "@/server/security/api-dto";
 
 // Helper function to authenticate user via session or API token
 async function authenticateUser(
@@ -118,30 +132,19 @@ export async function GET(
       });
     }
 
-    // Check if the user can view this event (they created it or it's shared)
-    const canView = await storage.canViewEvent(eventId, userId);
-    if (!canView) {
-      return new NextResponse(
-        JSON.stringify({
-          error: "Unauthorized. This event is not shared with you.",
-        }),
-        {
-          status: 403,
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-    }
+    await assertEventRelations(eventId, userId, "view");
 
-    return NextResponse.json(script);
+    return NextResponse.json(toEventApiDto(script, userId));
   } catch (error) {
     console.error(
       "Error fetching script:",
       error instanceof Error ? error.message : String(error),
     );
+    const accessStatus = resourceAccessHttpStatus(error);
     return new NextResponse(
       JSON.stringify({ error: "Internal server error" }),
       {
-        status: 500,
+        status: accessStatus ?? 500,
         headers: { "Content-Type": "application/json" },
       },
     );
@@ -187,43 +190,20 @@ export async function PATCH(
       });
     }
 
-    // Check if the user has permission to edit this event
-    const canEdit = await storage.canEditEvent(eventId, userId);
-    if (!canEdit) {
-      return new NextResponse(
-        JSON.stringify({
-          error: "Unauthorized. You can only edit events you created.",
-        }),
-        {
-          status: 403,
-          headers: { "Content-Type": "application/json" },
-        },
+    await assertEventCapability(eventId, userId, "edit");
+
+    const requestBody: unknown = await request.json();
+    if (
+      typeof requestBody !== "object" ||
+      requestBody === null ||
+      Array.isArray(requestBody)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 },
       );
     }
-
-    interface UpdateEventBody {
-      runLocation?: RunLocation;
-      serverId?: number | null;
-      httpRequest?: string;
-      httpMethod?: string;
-      httpUrl?: string;
-      httpHeaders?: string;
-      httpBody?: string;
-      scheduleUnit?: TimeUnit;
-      status?: EventStatus;
-      resetCounterOnActive?: boolean;
-      envVars?: Array<{ key: string; value: string }>;
-      selectedServerIds?: number[];
-      startTime?: Date | null;
-      [key: string]: unknown;
-    }
-
-    const body = (await request.json()) as UpdateEventBody;
-
-    // Handle date/time values
-    if (body.startTime && typeof body.startTime === "string") {
-      body.startTime = new Date(body.startTime);
-    }
+    const body: Record<string, unknown> = { ...requestBody };
 
     // Handle serverId based on runLocation
     // If runLocation is LOCAL, explicitly set serverId to null
@@ -237,7 +217,7 @@ export async function PATCH(
         const httpRequestData = JSON.parse(body.httpRequest) as {
           method?: string;
           url?: string;
-          headers?: Record<string, string>;
+          headers?: Array<{ key: string; value: string }>;
           body?: string;
         };
         if (httpRequestData.method !== undefined) {
@@ -247,7 +227,7 @@ export async function PATCH(
           body.httpUrl = httpRequestData.url;
         }
         if (httpRequestData.headers !== undefined) {
-          body.httpHeaders = JSON.stringify(httpRequestData.headers);
+          body.httpHeaders = httpRequestData.headers;
         }
         if (httpRequestData.body !== undefined) {
           body.httpBody = httpRequestData.body;
@@ -261,11 +241,11 @@ export async function PATCH(
     }
 
     // Special handling for scheduleUnit to ensure SECONDS is preserved
-    if (body.scheduleUnit) {
+    if (typeof body.scheduleUnit === "string") {
       // Normalize the scheduleUnit value to uppercase enum format
       const normalizedUnit = String(body.scheduleUnit).toUpperCase();
       if (["SECONDS", "MINUTES", "HOURS", "DAYS"].includes(normalizedUnit)) {
-        body.scheduleUnit = normalizedUnit as TimeUnit;
+        body.scheduleUnit = normalizedUnit;
       } else if (normalizedUnit.includes("SECOND")) {
         body.scheduleUnit = TimeUnit.SECONDS;
       } else if (normalizedUnit.includes("MINUTE")) {
@@ -278,11 +258,11 @@ export async function PATCH(
     }
 
     // Special handling for status to ensure it's properly set
-    if (body.status) {
+    if (typeof body.status === "string") {
       // Normalize the status value to uppercase enum format
       const normalizedStatus = String(body.status).toUpperCase();
       if (["ACTIVE", "PAUSED", "DRAFT"].includes(normalizedStatus)) {
-        body.status = normalizedStatus as EventStatus;
+        body.status = normalizedStatus;
       } else if (normalizedStatus.includes("ACTIVE")) {
         body.status = EventStatus.ACTIVE;
       } else if (normalizedStatus.includes("PAUSE")) {
@@ -293,21 +273,47 @@ export async function PATCH(
     }
 
     // Fix boolean fields handling to ensure they are processed as true booleans
-    if ("resetCounterOnActive" in body) {
-      // Explicitly force the value to be a proper boolean, needed for PostgreSQL
-      body.resetCounterOnActive = body.resetCounterOnActive === true;
+    const parsed = legacyEventPatchSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: parsed.error.format() },
+        { status: 400 },
+      );
     }
 
-    // Update the script
-    await storage.updateScript(eventId, body);
+    const {
+      envVars,
+      selectedServerIds,
+      httpRequest: _httpRequest,
+      startTime,
+      ...allowedFields
+    } = parsed.data;
+    void _httpRequest;
+    await assertProposedEventServers(
+      userId,
+      allowedFields.serverId,
+      selectedServerIds,
+    );
+
+    // Explicit allowed-field mapping is provided by the strict schema above;
+    // owner, source, counters and every unknown security field are rejected.
+    const filteredAllowedFields = Object.fromEntries(
+      Object.entries(allowedFields).filter(([, value]) => value !== undefined),
+    ) as Partial<InsertEvent>;
+    await storage.updateScript(eventId, {
+      ...filteredAllowedFields,
+      ...(startTime !== undefined && {
+        startTime: startTime ? new Date(startTime) : null,
+      }),
+    });
 
     // If env vars are provided, handle them
-    if (Array.isArray(body.envVars)) {
+    if (envVars !== undefined) {
       // Delete existing env vars
       await storage.deleteEnvVarsByEventId(eventId);
 
       // Add new env vars
-      for (const envVar of body.envVars) {
+      for (const envVar of envVars) {
         await storage.createEnvVar({
           eventId,
           key: envVar.key,
@@ -317,23 +323,26 @@ export async function PATCH(
     }
 
     // Handle multiple server selection for remote events
-    if (body.selectedServerIds !== undefined) {
-      await storage.setEventServers(eventId, body.selectedServerIds ?? []);
+    if (selectedServerIds !== undefined) {
+      await storage.setEventServers(eventId, selectedServerIds, userId);
     }
 
     // Get the full updated script with all relations
     const fullScript = await storage.getEventWithRelations(eventId);
 
-    return NextResponse.json(fullScript);
+    return NextResponse.json(
+      fullScript ? toEventApiDto(fullScript, userId) : null,
+    );
   } catch (error) {
     console.error(
       "Error updating script:",
       error instanceof Error ? error.message : String(error),
     );
+    const accessStatus = resourceAccessHttpStatus(error);
     return new NextResponse(
       JSON.stringify({ error: "Internal server error" }),
       {
-        status: 500,
+        status: accessStatus ?? 500,
         headers: { "Content-Type": "application/json" },
       },
     );
@@ -385,19 +394,7 @@ export async function DELETE(
       });
     }
 
-    // Check if the user has permission to edit this event
-    const canEdit = await storage.canEditEvent(eventId, userId);
-    if (!canEdit) {
-      return new NextResponse(
-        JSON.stringify({
-          error: "Unauthorized. You can only delete events you created.",
-        }),
-        {
-          status: 403,
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-    }
+    await assertEventCapability(eventId, userId, "edit");
 
     // Delete the script and all related entities (cascade)
     await storage.deleteScript(eventId);
@@ -409,6 +406,7 @@ export async function DELETE(
       message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
+    const accessStatus = resourceAccessHttpStatus(error);
     return new NextResponse(
       JSON.stringify({
         error: "Internal server error",
@@ -420,7 +418,7 @@ export async function DELETE(
             : undefined,
       }),
       {
-        status: 500,
+        status: accessStatus ?? 500,
         headers: { "Content-Type": "application/json" },
       },
     );

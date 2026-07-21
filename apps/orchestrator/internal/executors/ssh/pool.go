@@ -2,7 +2,15 @@ package ssh
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
+	"hash"
+	"io"
+	"strconv"
 	"sync"
 	"time"
 
@@ -22,6 +30,7 @@ type ConnectionPool struct {
 
 	mu          sync.RWMutex
 	connections map[string]*poolEntry
+	identityKey [sha256.Size]byte
 
 	// Circuit breaker state
 	breakers   map[string]*CircuitBreaker
@@ -37,7 +46,12 @@ type poolEntry struct {
 }
 
 // NewConnectionPool creates a new connection pool
-func NewConnectionPool(cfg config.ConnectionPoolConfig, securityCfg config.SSHSecurityConfig, breakerCfg config.CircuitBreakerConfig, log *logrus.Logger) *ConnectionPool {
+func NewConnectionPool(cfg config.ConnectionPoolConfig, securityCfg config.SSHSecurityConfig, breakerCfg config.CircuitBreakerConfig, log *logrus.Logger) (*ConnectionPool, error) {
+	var identityKey [sha256.Size]byte
+	if _, err := rand.Read(identityKey[:]); err != nil {
+		return nil, fmt.Errorf("generate SSH connection identity key: %w", err)
+	}
+
 	pool := &ConnectionPool{
 		config:      cfg,
 		breakerCfg:  breakerCfg,
@@ -45,6 +59,7 @@ func NewConnectionPool(cfg config.ConnectionPoolConfig, securityCfg config.SSHSe
 		hostKeys:    NewHostKeyVerifier(securityCfg, log),
 		connections: make(map[string]*poolEntry),
 		breakers:    make(map[string]*CircuitBreaker),
+		identityKey: identityKey,
 	}
 
 	// Start health check routine
@@ -53,44 +68,49 @@ func NewConnectionPool(cfg config.ConnectionPoolConfig, securityCfg config.SSHSe
 	// Start cleanup routine
 	go pool.cleanupLoop()
 
-	return pool
+	return pool, nil
 }
 
-// Get retrieves or creates a connection
-func (p *ConnectionPool) Get(ctx context.Context, serverKey string, server *types.ServerDetails) (*ssh.Client, error) {
+// Get retrieves or creates a connection. The identity is derived internally so
+// callers cannot accidentally pool by endpoint alone and cross authentication
+// or tenant boundaries. The returned identity must be used when releasing it.
+func (p *ConnectionPool) Get(ctx context.Context, server *types.ServerDetails) (*ssh.Client, string, error) {
+	connectionID := p.connectionIdentity(server)
+
 	// Check circuit breaker
-	breaker := p.getOrCreateBreaker(serverKey)
+	breaker := p.getOrCreateBreaker(connectionID)
 	if !breaker.Allow() {
-		return nil, fmt.Errorf("circuit breaker open for %s", serverKey)
+		return nil, connectionID, fmt.Errorf("circuit breaker open for server %q", server.ID)
 	}
 
 	// Try to get existing connection
-	conn := p.getExistingConnection(serverKey)
+	conn := p.getExistingConnection(connectionID)
 	if conn != nil {
-		return conn, nil
+		return conn, connectionID, nil
 	}
 
 	// Create new connection
 	conn, err := p.createConnection(ctx, server)
 	if err != nil {
 		breaker.RecordFailure()
-		return nil, err
+		return nil, connectionID, err
 	}
 
 	breaker.RecordSuccess()
 
 	// Add to pool
-	p.addConnection(serverKey, conn)
+	p.addConnection(connectionID, conn)
 
-	return conn, nil
+	return conn, connectionID, nil
 }
 
-// Put returns a connection to the pool
-func (p *ConnectionPool) Put(serverKey string, conn *ssh.Client, healthy bool) {
+// Put returns a connection to the pool using the opaque identity returned by
+// Get. It must never be reconstructed from only an endpoint.
+func (p *ConnectionPool) Put(connectionID string, conn *ssh.Client, healthy bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if entry, exists := p.connections[serverKey]; exists && entry.conn == conn {
+	if entry, exists := p.connections[connectionID]; exists && entry.conn == conn {
 		entry.inUse = false
 		entry.lastUsed = time.Now()
 		entry.healthy = healthy
@@ -98,17 +118,46 @@ func (p *ConnectionPool) Put(serverKey string, conn *ssh.Client, healthy bool) {
 		// If unhealthy, close and remove
 		if !healthy {
 			conn.Close()
-			delete(p.connections, serverKey)
+			delete(p.connections, connectionID)
 		}
 	}
 }
 
+// connectionIdentity includes every value that determines the authenticated
+// SSH security context. Credential bytes are represented by a process-keyed
+// HMAC so the in-memory pool key is not an offline password verifier.
+func (p *ConnectionPool) connectionIdentity(server *types.ServerDetails) string {
+	credentialFingerprint := p.credentialFingerprint(server)
+	digest := sha256.New()
+	writeIdentityField(digest, "server-id", server.ID)
+	writeIdentityField(digest, "host", server.Host)
+	writeIdentityField(digest, "port", strconv.Itoa(server.Port))
+	writeIdentityField(digest, "username", server.Username)
+	writeIdentityField(digest, "credential", credentialFingerprint)
+	return "ssh:" + hex.EncodeToString(digest.Sum(nil))
+}
+
+func (p *ConnectionPool) credentialFingerprint(server *types.ServerDetails) string {
+	digest := hmac.New(sha256.New, p.identityKey[:])
+	writeIdentityField(digest, "password", server.Password)
+	writeIdentityField(digest, "private-key", server.PrivateKey)
+	writeIdentityField(digest, "passphrase", server.Passphrase)
+	return hex.EncodeToString(digest.Sum(nil))
+}
+
+func writeIdentityField(digest hash.Hash, name, value string) {
+	_ = binary.Write(digest, binary.BigEndian, uint64(len(name)))
+	_, _ = io.WriteString(digest, name)
+	_ = binary.Write(digest, binary.BigEndian, uint64(len(value)))
+	_, _ = io.WriteString(digest, value)
+}
+
 // getExistingConnection tries to get an existing healthy connection
-func (p *ConnectionPool) getExistingConnection(serverKey string) *ssh.Client {
+func (p *ConnectionPool) getExistingConnection(connectionID string) *ssh.Client {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if entry, exists := p.connections[serverKey]; exists && !entry.inUse && entry.healthy {
+	if entry, exists := p.connections[connectionID]; exists && !entry.inUse && entry.healthy {
 		entry.inUse = true
 		entry.lastUsed = time.Now()
 		return entry.conn
@@ -227,11 +276,11 @@ func (p *ConnectionPool) createConnection(ctx context.Context, server *types.Ser
 }
 
 // addConnection adds a connection to the pool
-func (p *ConnectionPool) addConnection(serverKey string, conn *ssh.Client) {
+func (p *ConnectionPool) addConnection(connectionID string, conn *ssh.Client) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.connections[serverKey] = &poolEntry{
+	p.connections[connectionID] = &poolEntry{
 		conn:     conn,
 		lastUsed: time.Now(),
 		inUse:    true,
@@ -240,11 +289,11 @@ func (p *ConnectionPool) addConnection(serverKey string, conn *ssh.Client) {
 }
 
 // getOrCreateBreaker gets or creates a circuit breaker for a server
-func (p *ConnectionPool) getOrCreateBreaker(serverKey string) *CircuitBreaker {
+func (p *ConnectionPool) getOrCreateBreaker(connectionID string) *CircuitBreaker {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if breaker, exists := p.breakers[serverKey]; exists {
+	if breaker, exists := p.breakers[connectionID]; exists {
 		return breaker
 	}
 
@@ -263,7 +312,7 @@ func (p *ConnectionPool) getOrCreateBreaker(serverKey string) *CircuitBreaker {
 		timeout = 60 * time.Second
 	}
 	breaker := NewCircuitBreaker(failureThreshold, successThreshold, timeout)
-	p.breakers[serverKey] = breaker
+	p.breakers[connectionID] = breaker
 	return breaker
 }
 

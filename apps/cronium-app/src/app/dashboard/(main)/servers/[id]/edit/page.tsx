@@ -10,7 +10,6 @@ import ServerForm from "@/components/dashboard/ServerForm";
 import { Spinner } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@cronium/ui";
-import { type UpdateServerInput } from "@shared/schemas/servers";
 
 interface EditServerPageProps {
   params: Promise<{ id: string }>;
@@ -133,7 +132,7 @@ export default function EditServerPage({ params }: EditServerPageProps) {
 
       <div className="bg-card border-input mx-auto max-w-4xl rounded-lg border p-6">
         <ServerForm
-          initialServer={server as Partial<UpdateServerInput>}
+          initialServer={server}
           isEditing={true}
           onSuccess={handleSuccess}
         />

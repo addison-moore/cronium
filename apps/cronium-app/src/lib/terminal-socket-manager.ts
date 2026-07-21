@@ -1,4 +1,5 @@
 import { io, type Socket } from "socket.io-client";
+import { createSocketAuthProvider } from "@/lib/socket-ticket-client";
 
 interface TerminalSocketManager {
   socket: Socket | null;
@@ -85,6 +86,7 @@ export const terminalSocketManager = {
       const socket = io(socketUrl, {
         path: "/api/socketio",
         transports: ["websocket"],
+        auth: createSocketAuthProvider("terminal"),
         reconnection: false, // Disable auto-reconnection to prevent duplicate connections
       });
 

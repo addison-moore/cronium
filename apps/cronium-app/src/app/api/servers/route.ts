@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sshService } from "@/lib/ssh";
 import { z } from "zod";
+import { toServerApiDto } from "@/server/security/api-dto";
 
 export async function GET(_req: NextRequest) {
   try {
@@ -17,7 +18,7 @@ export async function GET(_req: NextRequest) {
     const userId = session.user.id;
     const servers = await storage.getAllServers(userId);
 
-    return NextResponse.json(servers);
+    return NextResponse.json(servers.map(toServerApiDto));
   } catch (error) {
     console.error("Error fetching servers:", error);
     return NextResponse.json(
@@ -27,13 +28,15 @@ export async function GET(_req: NextRequest) {
   }
 }
 
-const createServerSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  address: z.string().min(1, "Address is required"),
-  sshKey: z.string().min(1, "SSH Key is required"),
-  username: z.string().default("root"),
-  port: z.number().default(22),
-});
+const createServerSchema = z
+  .object({
+    name: z.string().min(1, "Name is required"),
+    address: z.string().min(1, "Address is required"),
+    sshKey: z.string().min(1, "SSH Key is required"),
+    username: z.string().default("root"),
+    port: z.number().default(22),
+  })
+  .strict();
 
 export async function POST(req: NextRequest) {
   try {
@@ -117,7 +120,7 @@ export async function POST(req: NextRequest) {
       userId,
     });
 
-    return NextResponse.json(server, { status: 201 });
+    return NextResponse.json(toServerApiDto(server), { status: 201 });
   } catch (error) {
     console.error("Error creating server:", error);
     return NextResponse.json(

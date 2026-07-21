@@ -5,22 +5,22 @@
 # Pinned to BUILDPLATFORM so the Go toolchain always runs natively on the
 # builder; cross-compilation to TARGETARCH below is free, whereas letting
 # buildx run this stage under QEMU for a foreign platform is not.
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS orchestrator-builder
 
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata
 
 # Set working directory
-WORKDIR /build
+WORKDIR /build/orchestrator
 
 # Copy go mod files first for better caching
-COPY go.mod go.sum ./
+COPY apps/orchestrator/go.mod apps/orchestrator/go.sum ./
 
 # Download dependencies
 RUN go mod download && go mod verify
 
 # Copy source code
-COPY . .
+COPY apps/orchestrator/ ./
 
 # Build with security flags and version info
 ARG BUILD_VERSION=latest
@@ -34,6 +34,31 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -a -installsuffix cgo \
     -o orchestrator ./cmd/cronium-orchestrator
 
+# Build the remote runner from the same tracked source snapshot as the
+# orchestrator. The artifacts directory is intentionally gitignored, so an
+# image build must never depend on binaries left behind on a developer host.
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS runner-builder
+
+RUN apk add --no-cache ca-certificates
+
+WORKDIR /build/runner
+
+COPY apps/runner/cronium-runner/go.mod apps/runner/cronium-runner/go.sum ./
+RUN go mod download && go mod verify
+COPY apps/runner/cronium-runner/ ./
+
+ARG BUILD_TIME
+ARG RUNNER_VERSION=dev
+RUN mkdir -p "/out/${RUNNER_VERSION}" && \
+    for arch in amd64 arm64; do \
+      output="/out/${RUNNER_VERSION}/cronium-runner-linux-${arch}"; \
+      CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" go build \
+        -trimpath \
+        -ldflags="-w -s -X main.Version=${RUNNER_VERSION} -X main.BuildTime=${BUILD_TIME}" \
+        -o "${output}" ./cmd/runner; \
+      (cd "/out/${RUNNER_VERSION}" && sha256sum "cronium-runner-linux-${arch}" > "cronium-runner-linux-${arch}.sha256"); \
+    done
+
 # Runtime stage - using distroless for maximum security
 FROM gcr.io/distroless/static:nonroot
 
@@ -41,10 +66,15 @@ FROM gcr.io/distroless/static:nonroot
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder --chown=nonroot:nonroot /build/orchestrator /app/orchestrator
+COPY --from=orchestrator-builder --chown=nonroot:nonroot /build/orchestrator/orchestrator /app/orchestrator
+
+# SSH execution verifies these root-owned artifacts against their adjacent
+# SHA-256 manifests before deployment. Keep them outside the nonroot process's
+# write ownership so the digest pinned at startup remains a meaningful anchor.
+COPY --from=runner-builder /out /app/artifacts/runners
 
 # Copy timezone data
-COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=orchestrator-builder /usr/share/zoneinfo /usr/share/zoneinfo
 
 # Expose ports
 EXPOSE 8080 9090

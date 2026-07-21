@@ -1,6 +1,7 @@
-# Development environment for running only Valkey and cronium-orchestrator in Docker
-# while running the Cronium Next.js app locally
-# Usage: ./scripts/dev-docker-local-app.sh up
+# Development infrastructure for running the Cronium app and socket server on
+# the host. The scheduling worker runs in Docker with Valkey, the orchestrator,
+# and the runtime API.
+# Usage: ./infra/scripts/dev-docker-local-app.sh up
 
 services:
   # Valkey (Redis-compatible) for caching and queue
@@ -20,6 +21,62 @@ services:
       retries: 5
     networks:
       - cronium-dev-network
+
+  # Scheduling worker: uses the production worker bundle while the Next.js app
+  # and socket server run on the host. The helper script rewrites loopback
+  # DATABASE_URL hosts to host.docker.internal for this container.
+  cronium-worker:
+    build:
+      context: ../..
+      dockerfile: apps/cronium-app/Dockerfile
+    image: cronium/worker:dev
+    container_name: cronium-worker-dev
+    command: ["apps/cronium-app/scripts/start-worker.sh"]
+    environment:
+      DATABASE_URL: ${CRONIUM_DEV_WORKER_DATABASE_URL:-${DATABASE_URL:-}}
+      AUTH_URL: ${AUTH_URL:-http://localhost:5001}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:5001}
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+      VALKEY_URL: valkey://valkey:6379
+      NODE_ENV: development
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      WORKER_ID: ${WORKER_ID:-worker-dev}
+      WORKER_HEALTH_PORT: 5003
+      WORKER_DISPATCH_INTERVAL_MS: ${WORKER_DISPATCH_INTERVAL_MS:-5000}
+      WORKER_CLAIM_INTERVAL_MS: ${WORKER_CLAIM_INTERVAL_MS:-2000}
+      WORKER_MAX_CONCURRENT: ${WORKER_MAX_CONCURRENT:-10}
+      CRONIUM_JOB_RETENTION_DAYS: ${CRONIUM_JOB_RETENTION_DAYS:-30}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ports:
+      - "${WORKER_HEALTH_PORT:-5003}:5003"
+    depends_on:
+      valkey:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:5003/health', (r) => {if (r.statusCode !== 200) process.exit(1)})",
+        ]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    networks:
+      - cronium-dev-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # Orchestrator Service (cronium-orchestrator)
   cronium-orchestrator:

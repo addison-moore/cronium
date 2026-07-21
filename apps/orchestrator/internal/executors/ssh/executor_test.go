@@ -271,7 +271,8 @@ func TestRunnerCache(t *testing.T) {
 	assert.True(t, valid)
 	assert.Equal(t, entry.Version, cached.Version)
 
-	// Test expiration (cache checks LastVerified > 1 hour)
+	// LastVerified is observability metadata, not a trust window. Even an old
+	// entry remains a location hint and must be reverified by the caller.
 	expiredEntry := &RunnerCacheEntry{
 		ServerID:     "server2",
 		RunnerPath:   "/tmp/runner",
@@ -283,8 +284,8 @@ func TestRunnerCache(t *testing.T) {
 	cache.Set("server2", expiredEntry)
 
 	cached, valid = cache.Get("server2")
-	assert.False(t, valid)   // Should be invalid (needs verification)
-	assert.NotNil(t, cached) // But entry is still returned
+	assert.True(t, valid)
+	assert.NotNil(t, cached)
 
 	// Test remove
 	cache.Remove("server1")

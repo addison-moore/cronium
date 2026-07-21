@@ -46,6 +46,7 @@ const serverFormSchema = z
     name: z.string().min(1, "Server name is required").max(100),
     address: z.string().min(1, "Server address is required").max(255),
     authType: z.nativeEnum(AuthType),
+    existingAuthType: z.nativeEnum(AuthType).optional(),
     sshKey: z.string().optional(),
     password: z.string().optional(),
     username: z.string().min(1, "Username is required").max(50),
@@ -58,9 +59,15 @@ const serverFormSchema = z
   .refine(
     (data) => {
       if (data.authType === AuthType.SSH_KEY) {
-        return data.sshKey && data.sshKey.length > 0;
+        return (
+          (data.sshKey?.length ?? 0) > 0 ||
+          data.existingAuthType === AuthType.SSH_KEY
+        );
       } else if (data.authType === AuthType.PASSWORD) {
-        return data.password && data.password.length > 0;
+        return (
+          (data.password?.length ?? 0) > 0 ||
+          data.existingAuthType === AuthType.PASSWORD
+        );
       }
       return false;
     },
@@ -74,7 +81,10 @@ const serverFormSchema = z
 type ServerFormInput = z.infer<typeof serverFormSchema>;
 
 interface ServerFormProps {
-  initialServer?: Partial<UpdateServerInput>;
+  initialServer?: Partial<UpdateServerInput> & {
+    hasPrivateKey?: boolean;
+    hasPassword?: boolean;
+  };
   isEditing: boolean;
   onSuccess: (serverId?: number) => void;
 }
@@ -90,9 +100,9 @@ export default function ServerForm({
   const determineAuthType = (): AuthType => {
     if (initialServer) {
       // If editing, check which auth method is currently used
-      if (initialServer.sshKey && initialServer.sshKey !== null) {
+      if (initialServer.hasPrivateKey) {
         return AuthType.SSH_KEY;
-      } else if (initialServer.password && initialServer.password !== null) {
+      } else if (initialServer.hasPassword) {
         return AuthType.PASSWORD;
       }
     }
@@ -104,6 +114,7 @@ export default function ServerForm({
     name: "",
     address: "",
     authType: AuthType.SSH_KEY,
+    existingAuthType: undefined,
     sshKey: "",
     password: "",
     username: "root",
@@ -122,6 +133,7 @@ export default function ServerForm({
           name: initialServer.name ?? "",
           address: initialServer.address ?? "",
           authType: determineAuthType(),
+          existingAuthType: determineAuthType(),
           sshKey: "", // For security, don't populate auth fields when editing
           password: "", // For security, don't populate auth fields when editing
           username: initialServer.username ?? "root",
@@ -232,8 +244,13 @@ export default function ServerForm({
     }
 
     // Remove authType from payload as it's not stored in DB
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { authType, ...serverPayload } = payload;
+    const {
+      authType,
+      existingAuthType: _existingAuthType,
+      ...serverPayload
+    } = payload;
+    void authType;
+    void _existingAuthType;
 
     try {
       if (isEditing) {

@@ -6,6 +6,8 @@
 #        # Where users reach Cronium in the browser
 #        AUTH_URL=http://localhost:3000
 #        PUBLIC_APP_URL=http://localhost:3000
+#        # Optional comma-separated exact origins; defaults to the URLs above
+#        SOCKET_ALLOWED_ORIGINS=http://localhost:3000
 #
 #        # Secrets — generate each value:
 #        AUTH_SECRET=          # openssl rand -hex 32
@@ -22,10 +24,12 @@
 # ADMIN_USERNAME / ADMIN_EMAIL / ADMIN_PASSWORD to .env to seed the admin
 # on first boot instead. There is no default admin password.
 #
-# For a domain deployment, set AUTH_URL / PUBLIC_APP_URL to your public URL,
-# put a TLS reverse proxy in front of ports 3000 and 5002, and set
-# NEXT_PUBLIC_SOCKET_URL to the browser-reachable URL of port 5002
-# (e.g. https://cronium.example.com:5002 or a proxied wss endpoint).
+# For a domain deployment, set AUTH_URL / PUBLIC_APP_URL to your public URL and
+# route /api/socketio through a TLS reverse proxy to port 5002. Set
+# NEXT_PUBLIC_SOCKET_URL to that browser-reachable HTTPS URL. Keep port 5002
+# private when possible; its /broadcast/* routes are service-only and require
+# INTERNAL_API_KEY. If trusted frontends use multiple origins, list each exact
+# origin (scheme, host, and port) in comma-separated SOCKET_ALLOWED_ORIGINS.
 #
 # Every value below can be overridden from .env; none of this file needs
 # editing for a standard deployment.
@@ -77,6 +81,7 @@ services:
       AUTH_URL: ${AUTH_URL:-http://localhost:3000}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3000}
+      SOCKET_ALLOWED_ORIGINS: ${SOCKET_ALLOWED_ORIGINS:-}
       AUTH_SECRET: ${AUTH_SECRET:?generate with openssl rand -hex 32}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?generate with openssl rand -hex 32 (must be 64 hex chars)}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
@@ -92,6 +97,8 @@ services:
       # ADMIN_EMAIL / ADMIN_PASSWORD in .env (they pass through via env_file).
     ports:
       - "${APP_PORT:-3000}:3000"
+      # For public deployments, firewall this backend port and expose only the
+      # TLS-proxied /api/socketio path described above.
       - "${SOCKET_PORT:-5002}:5002"
     restart: unless-stopped
     networks:

@@ -21,6 +21,7 @@ import {
 import { type InsertServer } from "@shared/schema";
 import { storage } from "@/server/storage";
 import { type Log } from "@shared/schema";
+import { toEventListApiDto, toServerApiDto } from "@/server/security/api-dto";
 
 /**
  * NOTE: Several methods in this router use direct database queries instead of
@@ -44,7 +45,7 @@ export const serversRouter = createTRPCRouter({
           const result = await storage.queryServers(ctx.session.user.id, input);
 
           return {
-            servers: result.items,
+            servers: result.items.map(toServerApiDto),
             total: result.total,
             hasMore: result.hasMore,
           };
@@ -79,7 +80,7 @@ export const serversRouter = createTRPCRouter({
           throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
         }
 
-        return server;
+        return toServerApiDto(server);
       } catch (error: unknown) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -131,7 +132,7 @@ export const serversRouter = createTRPCRouter({
           lastChecked: new Date(),
         });
 
-        return server;
+        return toServerApiDto(server);
       } catch (error: unknown) {
         if (error instanceof TRPCError) throw error;
 
@@ -224,7 +225,7 @@ export const serversRouter = createTRPCRouter({
           id,
           filteredUpdateData,
         );
-        return updatedServer;
+        return toServerApiDto(updatedServer);
       } catch (error: unknown) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -375,7 +376,7 @@ export const serversRouter = createTRPCRouter({
 
         return {
           success: true,
-          server: archivedServer,
+          server: toServerApiDto(archivedServer),
           message:
             "Server archived successfully. Sensitive data has been purged.",
         };
@@ -438,7 +439,7 @@ export const serversRouter = createTRPCRouter({
 
         return {
           success: true,
-          server: restoredServer,
+          server: toServerApiDto(restoredServer),
           requiresCredentials:
             restoredServer.sshKeyPurged || restoredServer.passwordPurged,
           message:
@@ -489,7 +490,7 @@ export const serversRouter = createTRPCRouter({
         .orderBy(desc(servers.archivedAt));
 
       return {
-        servers: archivedServers,
+        servers: archivedServers.map(toServerApiDto),
         total: archivedServers.length,
       };
     } catch (error: unknown) {
@@ -674,21 +675,18 @@ export const serversRouter = createTRPCRouter({
     .input(serverHealthCheckSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        // Check if user owns the server
-        const server = await storage.getServer(input.id);
+        // Health checks use stored credentials, so shared/view access is not
+        // sufficient; resolve them only through the owner-bound boundary.
+        const server = await storage.getServerForExecution(
+          input.id,
+          ctx.session.user.id,
+        );
         if (!server) {
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "Server not found",
           });
         }
-        if (server.userId !== ctx.session.user.id) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Not authorized to check this server",
-          });
-        }
-
         // Perform health check
         const { sshService } = await import("@/lib/ssh");
 
@@ -804,7 +802,9 @@ export const serversRouter = createTRPCRouter({
         );
 
         return {
-          events: paginatedEvents,
+          events: paginatedEvents.map((event) =>
+            toEventListApiDto(event, ctx.session.user.id),
+          ),
           total: filteredEvents.length,
           hasMore: pagination.offset + pagination.limit < filteredEvents.length,
         };
@@ -874,7 +874,18 @@ export const serversRouter = createTRPCRouter({
                 break;
               case "check_health":
                 const { sshService } = await import("@/lib/ssh");
-                const healthCheck = await sshService.checkServerHealth(server);
+                const credentialServer = await storage.getServerForExecution(
+                  serverId,
+                  ctx.session.user.id,
+                );
+                if (!credentialServer) {
+                  throw new TRPCError({
+                    code: "FORBIDDEN",
+                    message: "Access denied",
+                  });
+                }
+                const healthCheck =
+                  await sshService.checkServerHealth(credentialServer);
                 await storage.updateServerStatus(
                   serverId,
                   healthCheck.online,
@@ -1010,7 +1021,7 @@ export const serversRouter = createTRPCRouter({
             ),
           );
 
-        return archivedServers;
+        return archivedServers.map(toServerApiDto);
       } catch (error) {
         console.error("Error fetching upcoming deletions:", error);
         throw new TRPCError({

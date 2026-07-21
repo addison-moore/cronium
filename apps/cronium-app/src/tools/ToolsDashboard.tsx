@@ -141,7 +141,7 @@ function ActionBrowser({ locale }: { locale: string }) {
                 </p>
                 <div className="flex items-center justify-between">
                   <Link
-                    href={`/${locale}/dashboard/events/new?type=TOOL_ACTION&toolType=${tool.id}&actionId=${action.id}`}
+                    href={`/dashboard/events/new?type=TOOL_ACTION&toolType=${tool.id}&actionId=${action.id}`}
                   >
                     <Button size="sm" variant="outline">
                       <Plus className="mr-1 h-3 w-3" />

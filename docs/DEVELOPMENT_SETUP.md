@@ -58,6 +58,7 @@ pnpm build:go
 
 Build all required Docker images including:
 
+- Scheduling worker
 - Runtime API (sidecar for containerized execution)
 - Execution environments (Bash, Node.js, Python)
 - Orchestrator
@@ -68,6 +69,7 @@ pnpm dev:docker:build
 
 This command builds and tags:
 
+- `cronium/worker:dev` - Scheduling dispatcher and in-process executor
 - `cronium/runtime-api:latest` - Runtime API for helper functions
 - `cronium/runner:bash-alpine` - Bash execution environment
 - `cronium/runner:node-alpine` - Node.js execution environment
@@ -95,13 +97,17 @@ Start the application and Docker services:
 # Terminal 1: Start the Next.js app
 pnpm dev:app
 
-# Terminal 2: Start Docker services (Orchestrator, Runtime API, Valkey)
+# Terminal 2: Start Docker services (Worker, Orchestrator, Runtime API, Valkey)
 pnpm dev:docker:up
+
+# Terminal 3: Start the WebSocket server
+pnpm dev:socket
 ```
 
 The following services will be running:
 
 - **Cronium App**: http://localhost:5001
+- **Scheduling Worker**: http://localhost:5003/health
 - **Orchestrator**: http://localhost:8080
 - **Runtime API**: http://localhost:8089 — the dev compose file overrides `PORT`
   to 8089. The runtime binary's own default is 8081, which is what you get when
@@ -153,6 +159,8 @@ docker ps
 ### Database connection errors
 
 Verify your DATABASE_URL in `env/.env.local` and ensure PostgreSQL is running.
+`pnpm dev:docker:up` rewrites `localhost` and `127.0.0.1` to
+`host.docker.internal` for the worker container only.
 
 ## Development Commands
 
@@ -160,12 +168,14 @@ Verify your DATABASE_URL in `env/.env.local` and ensure PostgreSQL is running.
 # Start all services
 pnpm dev              # Start everything
 pnpm dev:app          # Start only the Next.js app
-pnpm dev:docker:up        # Start Docker services
+pnpm dev:socket       # Start only the WebSocket server
+pnpm dev:worker       # Start a native worker (not with dev:docker:up)
+pnpm dev:docker:up    # Start worker, orchestrator, runtime, and Valkey
 
 # Building
 pnpm build            # Build everything
 pnpm build:go         # Build Go services
-pnpm dev:docker:build     # Build all Docker images
+pnpm dev:docker:build # Build all Docker images, including the worker
 
 # Database
 pnpm db:push          # Push schema changes
@@ -185,6 +195,7 @@ pnpm typecheck        # Type checking
 ## Architecture Overview
 
 - **Cronium App**: Next.js application (port 5001)
+- **Scheduling Worker**: Dispatches schedules and executes tool/HTTP jobs
 - **Orchestrator**: Go service that manages job queue and execution
 - **Runtime API**: Provides helper functions for containerized scripts
 - **Execution Environments**: Docker containers for running scripts
@@ -204,6 +215,7 @@ pnpm dev:docker:logs
 # Specific service
 docker logs cronium-orchestrator-dev
 docker logs cronium-runtime-api-dev
+docker logs cronium-worker-dev
 ```
 
 ### Rebuild from scratch

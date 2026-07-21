@@ -262,6 +262,12 @@ export const updateEventSchema = z.object({
   envVars: z.array(envVarSchema).optional(),
 });
 
+/** Strict compatibility schema for the legacy REST PATCH/PUT endpoint. */
+export const legacyEventPatchSchema = updateEventSchema
+  .omit({ id: true })
+  .extend({ httpRequest: z.string().optional() })
+  .strict();
+
 // Event ID parameter schema
 export const eventIdSchema = z.object({
   id: z.number().int().positive("Event ID must be a positive integer"),

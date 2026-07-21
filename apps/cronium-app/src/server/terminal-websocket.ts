@@ -1,7 +1,14 @@
-import { type Server, type Socket } from "socket.io";
+import { randomUUID } from "node:crypto";
+import { type Server as SocketIOServer, type Socket } from "socket.io";
 import { storage } from "./storage";
-import { decryptSensitiveData } from "@/lib/encryption-service";
 import { sshService } from "@/lib/ssh";
+import { createServerSSHConnectionScope } from "@/lib/ssh/pool-key";
+import {
+  createSocketAuthMiddleware,
+  getAuthenticatedSocketUserId,
+} from "@/lib/socket-ticket";
+import { hasServerPermission } from "@/server/permissions";
+import { UserStatus, type Server as CroniumServer } from "@/shared/schema";
 import type { ClientChannel } from "ssh2";
 
 interface TerminalSession {
@@ -18,7 +25,6 @@ interface TerminalSession {
 
 // WebSocket event data interfaces
 interface CreateTerminalData {
-  userId: string;
   serverId?: number;
   cols: number;
   rows: number;
@@ -40,14 +46,16 @@ interface DestroyTerminalData {
 }
 
 export class TerminalWebSocketHandler {
-  private io: Server;
+  private io: SocketIOServer;
   private activeSessions = new Map<string, TerminalSession>();
   private cleanupInterval: NodeJS.Timeout;
   private pendingCreations = new Map<string, boolean>(); // Track pending session creations per socket
   private socketSessions = new Map<string, string>(); // Map socket ID to session ID
 
-  constructor(io: Server) {
+  constructor(io: SocketIOServer) {
     this.io = io;
+    // The terminal namespace must never be installed without authentication.
+    this.io.use(createSocketAuthMiddleware("terminal"));
     this.setupEventHandlers();
     // Start cleanup interval on construction
     this.cleanupInterval = setInterval(
@@ -65,9 +73,24 @@ export class TerminalWebSocketHandler {
       );
 
       socket.on("create-terminal", async (data: CreateTerminalData) => {
-        const { userId, serverId, cols, rows } = data;
+        const userId = getAuthenticatedSocketUserId(socket);
+        if (
+          !data ||
+          !Number.isInteger(data.serverId) ||
+          (data.serverId ?? 0) <= 0 ||
+          !Number.isInteger(data.cols) ||
+          data.cols < 1 ||
+          data.cols > 1000 ||
+          !Number.isInteger(data.rows) ||
+          data.rows < 1 ||
+          data.rows > 1000
+        ) {
+          socket.emit("terminal-error", { error: "Invalid terminal request" });
+          return;
+        }
+        const { serverId, cols, rows } = data;
         console.log(
-          `Server: Received 'create-terminal' from ${socket.id ?? ""}. userId: ${userId}, serverId: ${serverId ?? ""}, cols: ${cols}, rows: ${rows}`,
+          `Server: Received 'create-terminal' from ${socket.id ?? ""}. serverId: ${serverId ?? ""}, cols: ${cols}, rows: ${rows}`,
         );
 
         // Check if this socket already has a session
@@ -90,9 +113,9 @@ export class TerminalWebSocketHandler {
         }
 
         if (!userId) {
-          socket.emit("terminal-error", { error: "User ID required" });
+          socket.emit("terminal-error", { error: "Authentication required" });
           console.error(
-            `Server: 'create-terminal' failed: User ID required for socket ${socket.id ?? ""}`,
+            `Server: 'create-terminal' failed: authentication missing for socket ${socket.id ?? ""}`,
           );
           return;
         }
@@ -108,6 +131,15 @@ export class TerminalWebSocketHandler {
             cols,
             rows,
           );
+
+          // The SSH handshake can outlive the browser socket. Do not leave an
+          // authenticated shell orphaned if the client disconnected while the
+          // remote session was being created.
+          if (!socket.connected) {
+            this.destroyTerminalSession(sessionId);
+            return;
+          }
+
           // Store the socket-session mapping
           this.socketSessions.set(socket.id, sessionId);
           socket.emit("terminal-created", { sessionId });
@@ -126,11 +158,21 @@ export class TerminalWebSocketHandler {
       });
 
       socket.on("terminal-input", (data: TerminalInputData) => {
+        if (!data || typeof data.sessionId !== "string") {
+          socket.emit("terminal-error", { error: "Invalid terminal request" });
+          return;
+        }
         const { sessionId, input } = data;
-        // console.log(`Server: Received 'terminal-input' for sessionId: ${sessionId}, input length: ${input.length}`);
         const session = this.activeSessions.get(sessionId);
+        const userId = getAuthenticatedSocketUserId(socket);
 
-        if (session) {
+        if (
+          session &&
+          userId &&
+          isTerminalSessionOwnedBySocket(session, socket.id, userId) &&
+          typeof input === "string" &&
+          input.length <= 64 * 1024
+        ) {
           session.lastActivity = Date.now(); // Update last activity on input
           // Check if it's a node-pty process or node-ssh shell stream
           if ("write" in session.ptyProcess) {
@@ -138,19 +180,35 @@ export class TerminalWebSocketHandler {
           }
         } else {
           console.warn(
-            `Server: 'terminal-input' received for unknown sessionId: ${sessionId}`,
+            `Server: rejected 'terminal-input' for socket ${socket.id}`,
           );
+          socket.emit("terminal-error", { error: "Terminal session denied" });
         }
       });
 
       socket.on("terminal-resize", (data: TerminalResizeData) => {
+        if (!data || typeof data.sessionId !== "string") {
+          socket.emit("terminal-error", { error: "Invalid terminal request" });
+          return;
+        }
         const { sessionId, cols, rows } = data;
         console.log(
           `Server: Received 'terminal-resize' for sessionId: ${sessionId}, cols: ${cols}, rows: ${rows}`,
         );
         const session = this.activeSessions.get(sessionId);
+        const userId = getAuthenticatedSocketUserId(socket);
 
-        if (session) {
+        if (
+          session &&
+          userId &&
+          isTerminalSessionOwnedBySocket(session, socket.id, userId) &&
+          Number.isInteger(cols) &&
+          cols >= 1 &&
+          cols <= 1000 &&
+          Number.isInteger(rows) &&
+          rows >= 1 &&
+          rows <= 1000
+        ) {
           session.lastActivity = Date.now(); // Update last activity on resize
           // Check if it's a node-pty process or node-ssh shell stream
           if (typeof session.ptyProcess.resize === "function") {
@@ -160,16 +218,31 @@ export class TerminalWebSocketHandler {
           }
         } else {
           console.warn(
-            `Server: 'terminal-resize' received for unknown sessionId: ${sessionId}`,
+            `Server: rejected 'terminal-resize' for socket ${socket.id}`,
           );
+          socket.emit("terminal-error", { error: "Terminal session denied" });
         }
       });
 
       socket.on("destroy-terminal", (data: DestroyTerminalData) => {
+        if (!data || typeof data.sessionId !== "string") {
+          socket.emit("terminal-error", { error: "Invalid terminal request" });
+          return;
+        }
         const { sessionId } = data;
         console.log(
           `Server: Received 'destroy-terminal' for sessionId: ${sessionId}`,
         );
+        const session = this.activeSessions.get(sessionId);
+        const userId = getAuthenticatedSocketUserId(socket);
+        if (
+          !session ||
+          !userId ||
+          !isTerminalSessionOwnedBySocket(session, socket.id, userId)
+        ) {
+          socket.emit("terminal-error", { error: "Terminal session denied" });
+          return;
+        }
         this.destroyTerminalSession(sessionId);
       });
 
@@ -198,20 +271,11 @@ export class TerminalWebSocketHandler {
       );
     }
 
-    const sessionId = `${userId}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-
-    // Remote server connection via SSH using sshService
-    const servers = await storage.getAllServers(userId);
-    const server = servers.find((s) => s.id === serverId);
-
-    if (!server) {
-      console.error(
-        `Server: Server not found for userId: ${userId}, serverId: ${serverId}`,
-      );
-      throw new Error("Server not found");
-    }
-
-    const decryptedServer = decryptSensitiveData(server, "servers");
+    const sessionId = randomUUID();
+    const decryptedServer = await authorizeTerminalServerAccess(
+      userId,
+      serverId,
+    );
 
     // Determine auth type and credential
     const authCredential =
@@ -225,7 +289,7 @@ export class TerminalWebSocketHandler {
     // Validate credentials
     if (!authCredential) {
       throw new Error(
-        `No ${authType === "privateKey" ? "SSH key" : "password"} found for server ${server.name}`,
+        `No ${authType === "privateKey" ? "SSH key" : "password"} found for server ${decryptedServer.name}`,
       );
     }
 
@@ -234,6 +298,7 @@ export class TerminalWebSocketHandler {
 
     try {
       const result = await sshService.openShell(
+        createServerSSHConnectionScope(userId, serverId),
         decryptedServer.address,
         authCredential,
         decryptedServer.username,
@@ -302,11 +367,17 @@ export class TerminalWebSocketHandler {
       );
       socket.emit("terminal-exit", { sessionId, exitCode: code });
       this.activeSessions.delete(sessionId);
+      if (this.socketSessions.get(socket.id) === sessionId) {
+        this.socketSessions.delete(socket.id);
+      }
     });
     shellProcess.on("error", (err: Error) => {
       console.error(`Server: Remote shell session ${sessionId} error:`, err);
       socket.emit("terminal-error", { sessionId, error: err.message });
       this.activeSessions.delete(sessionId);
+      if (this.socketSessions.get(socket.id) === sessionId) {
+        this.socketSessions.delete(socket.id);
+      }
     });
 
     return sessionId;
@@ -404,4 +475,38 @@ export class TerminalWebSocketHandler {
     this.activeSessions.clear();
     console.log("Server: TerminalWebSocketHandler cleaned up.");
   }
+}
+
+export function isTerminalSessionOwnedBySocket(
+  session: Pick<TerminalSession, "socketId" | "userId">,
+  socketId: string,
+  userId: string,
+): boolean {
+  return session.socketId === socketId && session.userId === userId;
+}
+
+/**
+ * Resolve the one exact credential-bearing server a terminal may use. A shared
+ * flag is intentionally not an execution grant: until explicit scoped grants
+ * exist, only the owner can open a terminal with the stored credential.
+ */
+export async function authorizeTerminalServerAccess(
+  userId: string,
+  serverId: number,
+): Promise<CroniumServer> {
+  const user = await storage.getUser(userId);
+  if (user?.status !== UserStatus.ACTIVE) {
+    throw new Error("Terminal access denied");
+  }
+
+  if (!(await hasServerPermission(userId, "console"))) {
+    throw new Error("Terminal access denied");
+  }
+
+  const server = await storage.getServerForExecution(serverId, userId);
+  if (server?.userId !== userId || server.isArchived) {
+    throw new Error("Server not found or access denied");
+  }
+
+  return server;
 }

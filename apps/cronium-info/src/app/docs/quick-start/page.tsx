@@ -183,6 +183,16 @@ export default function QuickStartPage() {
                 by default.
               </p>
             </div>
+            <div className="bg-muted rounded-lg p-4">
+              <p className="text-sm">
+                <strong>Self-hosting note:</strong> Live logs and terminals use
+                short-lived authenticated socket tickets. On a public instance,
+                proxy <code>/api/socketio</code> over TLS, keep raw port 5002
+                private, and configure exact <code>SOCKET_ALLOWED_ORIGINS</code>{" "}
+                only if your trusted browser origin differs from{" "}
+                <code>PUBLIC_APP_URL</code>/<code>AUTH_URL</code>.
+              </p>
+            </div>
           </div>
         </StepCard>
 

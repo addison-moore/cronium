@@ -1,7 +1,9 @@
 #!/bin/bash
 
-# Script for running Valkey and cronium-orchestrator containers while running the app locally
-# This allows for faster development by avoiding frequent Docker builds of the main app
+# Run Valkey, the worker, orchestrator, and runtime containers while the app
+# and socket server run locally.
+
+set -e
 
 # Change to project root
 cd "$(dirname "$0")/../.."
@@ -19,9 +21,21 @@ else
     echo "Warning: No env/.env.local or env/.env file found. Some environment variables may be missing."
 fi
 
+# DATABASE_URL is host-oriented for the local Next.js process. Translate only
+# loopback hosts so the worker container reaches that same database through the
+# Docker host gateway; hosted database URLs are left unchanged.
+if [ -z "${CRONIUM_DEV_WORKER_DATABASE_URL:-}" ] && [ -n "${DATABASE_URL:-}" ]; then
+    CRONIUM_DEV_WORKER_DATABASE_URL="$DATABASE_URL"
+    CRONIUM_DEV_WORKER_DATABASE_URL="${CRONIUM_DEV_WORKER_DATABASE_URL/@localhost:/@host.docker.internal:}"
+    CRONIUM_DEV_WORKER_DATABASE_URL="${CRONIUM_DEV_WORKER_DATABASE_URL/\/\/localhost:/\/\/host.docker.internal:}"
+    CRONIUM_DEV_WORKER_DATABASE_URL="${CRONIUM_DEV_WORKER_DATABASE_URL/@127.0.0.1:/@host.docker.internal:}"
+    CRONIUM_DEV_WORKER_DATABASE_URL="${CRONIUM_DEV_WORKER_DATABASE_URL/\/\/127.0.0.1:/\/\/host.docker.internal:}"
+    export CRONIUM_DEV_WORKER_DATABASE_URL
+fi
+
 # Display helpful information
-echo "Starting Valkey and cronium-orchestrator containers..."
-echo "Make sure to run 'pnpm dev' in a separate terminal to start the Next.js app locally"
+echo "Starting Valkey, scheduling worker, orchestrator, and runtime containers..."
+echo "Run 'pnpm dev:app' and 'pnpm dev:socket' separately for the host app."
 echo ""
 echo "The local app should have these environment variables set:"
 echo "  VALKEY_URL=redis://localhost:6379"
@@ -31,7 +45,6 @@ echo ""
 # Run docker compose with the local app configuration
 # If no arguments provided, default to "up"
 if [ $# -eq 0 ]; then
-    exec docker compose -f infra/docker/docker-compose.dev.local-app.yml up
-else
-    exec docker compose -f infra/docker/docker-compose.dev.local-app.yml "$@" --build
+    set -- up
 fi
+exec docker compose -f infra/docker/docker-compose.dev.local-app.yml "$@"

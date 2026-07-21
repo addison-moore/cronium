@@ -49,7 +49,10 @@ export async function enhancedTransformJobForOrchestrator(
     }
 
     // Fetch the server details
-    const server = await storage.getServer(Number(serverId));
+    const server = await storage.getServerForExecution(
+      Number(serverId),
+      job.userId,
+    );
     if (!server) {
       console.error(`Server ${serverId} not found for job ${job.id}`);
       return transformedJob;
@@ -91,7 +94,10 @@ export async function enhancedTransformJobForOrchestrator(
     ) {
       const servers = [];
       for (const eventServer of eventServers) {
-        const srv = await storage.getServer(eventServer.serverId);
+        const srv = await storage.getServerForExecution(
+          eventServer.serverId,
+          job.userId,
+        );
         if (!srv) continue;
 
         const serverInfo: {

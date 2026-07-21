@@ -44,7 +44,7 @@ jobs:
           docker build -t ghcr.io/addison-moore/cronium-app:latest \
             -f apps/cronium-app/Dockerfile .
           docker build -t ghcr.io/addison-moore/cronium-orchestrator:latest \
-            apps/orchestrator
+            -f apps/orchestrator/Dockerfile .
           docker build -t ghcr.io/addison-moore/cronium-runtime:latest \
             apps/runtime/cronium-runtime
 

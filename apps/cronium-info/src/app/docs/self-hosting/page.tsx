@@ -187,6 +187,7 @@ openssl rand -hex 16     # POSTGRES_PASSWORD`}
                   <SimpleCodeBlock language="env" className="mt-2">
                     {`AUTH_URL=https://cronium.example.com
 PUBLIC_APP_URL=https://cronium.example.com
+SOCKET_ALLOWED_ORIGINS=https://cronium.example.com
 AUTH_SECRET=<paste value>
 ENCRYPTION_KEY=<paste value>
 INTERNAL_API_KEY=<paste value>
@@ -234,7 +235,7 @@ POSTGRES_PASSWORD=<paste value>`}
                 If you prefer to build the images locally:
                 <SimpleCodeBlock language="bash" className="my-2">
                   {`docker build -t cronium-app:latest -f apps/cronium-app/Dockerfile . 
-docker build -t cronium-orchestrator:latest apps/orchestrator 
+docker build -t cronium-orchestrator:latest -f apps/orchestrator/Dockerfile .
 docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                 </SimpleCodeBlock>
                 Then update the Compose file to reference your local tags.
@@ -277,6 +278,7 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
     image: ghcr.io/addison-moore/cronium-app:\${CRONIUM_IMAGE_TAG:-latest}
     environment:
       AUTH_URL: \${AUTH_URL:-http://localhost:3000}
+      SOCKET_ALLOWED_ORIGINS: \${SOCKET_ALLOWED_ORIGINS:-}
       AUTH_SECRET: \${AUTH_SECRET:?generate with openssl rand -hex 32}
       DATABASE_URL: postgres://\${POSTGRES_USER:-cronium}:\${POSTGRES_PASSWORD:?generate with openssl rand -hex 16}@postgres:5432/\${POSTGRES_DB:-cronium}`}
             </SimpleCodeBlock>
@@ -288,15 +290,32 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                 healthchecks (<code>docker compose ps</code>).
               </li>
               <li>
+                For an Internet-facing deployment, route only the socket
+                transport path (<code>/api/socketio</code>) through your TLS
+                reverse proxy to port <code>5002</code>, and firewall the raw
+                port. The service-only <code>/broadcast/*</code> routes require
+                <code>Authorization: Bearer $INTERNAL_API_KEY</code> and should
+                not be publicly exposed.
+              </li>
+              <li>
                 Optional features are enabled purely by adding variables to{" "}
                 <code>.env</code>: <code>SMTP_HOST</code>/<code>SMTP_PORT</code>
                 /<code>SMTP_USER</code>/<code>SMTP_PASSWORD</code>/
                 <code>SMTP_FROM_EMAIL</code> for outbound email,{" "}
                 <code>CRONIUM_IMAGE_TAG</code> to pin a release, and{" "}
                 <code>APP_PORT</code>/<code>SOCKET_PORT</code> to move the
-                published ports.
+                published ports. Use <code>SOCKET_ALLOWED_ORIGINS</code> only
+                when trusted browser clients come from more than the canonical
+                <code>PUBLIC_APP_URL</code>/<code>AUTH_URL</code> origins.
               </li>
             </ul>
+            <p className="text-muted-foreground text-sm">
+              Live-log and terminal clients automatically request a short-lived
+              authenticated ticket before connecting. The server accepts each
+              ticket once, checks that the account is still active, and also
+              requires console permission for terminal access. Exact origin
+              allowlisting adds a separate browser boundary.
+            </p>
             <p className="text-muted-foreground text-sm">
               There are no default credentials: your first browser visit shows a
               one-time setup page where you create the admin account. For
@@ -372,6 +391,19 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                   </TableRow>
                   <TableRow>
                     <TableCell>
+                      <code>SOCKET_ALLOWED_ORIGINS</code>
+                    </TableCell>
+                    <TableCell>Optional</TableCell>
+                    <TableCell>
+                      Comma-separated exact browser origins permitted to open
+                      live-log and terminal sockets. Defaults to{" "}
+                      <code>PUBLIC_APP_URL</code> and <code>AUTH_URL</code>;
+                      include the scheme and any non-default port. Wildcards and
+                      URL paths are not supported.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
                       <code>AUTH_SECRET</code>
                     </TableCell>
                     <TableCell>Yes</TableCell>
@@ -410,7 +442,9 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                     <TableCell>
                       Shared token that internal services (orchestrator,
                       runtime) must present when calling the app&apos;s internal
-                      APIs; generate with <code>openssl rand -base64 32</code>.
+                      APIs and socket broadcast routes; generate with{" "}
+                      <code>openssl rand -base64 32</code>. Never expose it to
+                      browser clients.
                     </TableCell>
                   </TableRow>
                   <TableRow>

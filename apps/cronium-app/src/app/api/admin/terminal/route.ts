@@ -6,7 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { hasServerPermission } from "@/server/permissions";
 import { storage } from "@/server/storage";
 import { terminalSSHService } from "@/lib/ssh/terminal";
-import { decryptSensitiveData } from "@/lib/encryption-service";
+import { createServerSSHConnectionScope } from "@/lib/ssh/pool-key";
 import path from "path";
 import fs from "fs";
 import { promisify } from "util";
@@ -304,9 +304,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // Handle remote server execution
     if (serverId) {
       try {
-        // Get server information
-        const servers = await storage.getAllServers(userId);
-        const server = servers.find((s) => s.id === serverId);
+        // Fetch credentials only through the owner-bound execution resolver.
+        const server = await storage.getServerForExecution(serverId, userId);
         if (!server) {
           return NextResponse.json(
             { error: "Server not found" },
@@ -315,6 +314,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         }
 
         const sessionKey = `${String(userId)}-${String(serverId)}`;
+        const connectionScope = createServerSSHConnectionScope(
+          userId,
+          serverId,
+        );
         const remoteCwd = remoteUserSessions.get(sessionKey) ?? "~";
 
         // Handle autocomplete request for remote server
@@ -330,12 +333,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         // Handle connection prewarming request (when no command is provided)
         if (!command) {
           // Prewarm the connection when terminal is first opened for this server
-          const decryptedServer = decryptSensitiveData(server, "servers");
           // Determine auth type and credential
-          const authCredential =
-            decryptedServer.sshKey ?? decryptedServer.password ?? "";
-          const authType = decryptedServer.sshKey ? "privateKey" : "password";
+          const authCredential = server.sshKey ?? server.password ?? "";
+          const authType = server.sshKey ? "privateKey" : "password";
           await terminalSSHService.prewarmConnection(
+            connectionScope,
             server.address,
             authCredential,
             server.username,
@@ -345,6 +347,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
           // Get the actual shell prompt from the remote server
           const actualPrompt = await terminalSSHService.getShellPrompt(
+            connectionScope,
             server.address,
             authCredential,
             server.username,
@@ -362,12 +365,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           });
         }
 
-        // Decrypt the authentication credentials for secure connection
-        const decryptedServer = decryptSensitiveData(server, "servers");
         // Determine auth type and credential
-        const authCredential =
-          decryptedServer.sshKey ?? decryptedServer.password ?? "";
-        const authType = decryptedServer.sshKey ? "privateKey" : "password";
+        const authCredential = server.sshKey ?? server.password ?? "";
+        const authType = server.sshKey ? "privateKey" : "password";
 
         // For cd commands, try to track directory changes
         let newRemoteCwd = remoteCwd;
@@ -375,6 +375,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         // Execute the command on the remote server using pooled connection
         try {
           const result = await terminalSSHService.executeCommand(
+            connectionScope,
             server.address,
             authCredential,
             server.username,
@@ -387,6 +388,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           if (String(command).trim().startsWith("cd ")) {
             try {
               const pwdResult = await terminalSSHService.executeCommand(
+                connectionScope,
                 server.address,
                 authCredential,
                 server.username,
@@ -411,6 +413,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
           // Get the updated shell prompt after command execution
           const updatedPrompt = await terminalSSHService.getShellPrompt(
+            connectionScope,
             server.address,
             authCredential,
             server.username,

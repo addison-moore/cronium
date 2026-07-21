@@ -29,18 +29,19 @@ import {
   LogStatus,
   WorkflowLogLevel,
   WorkflowStepStatus,
-  WorkflowTriggerType,
   jobs as jobsTable,
   workflowExecutions,
   workflowStepRuns,
   type Job,
   type WorkflowConnection,
   type WorkflowNode,
+  type WorkflowTriggerType,
   type WorkflowStepRun,
 } from "@/shared/schema";
 import { and, eq, inArray, lt } from "drizzle-orm";
 import { resolveWorkflowInput } from "@/lib/unified-io/resolve-input";
 import { dispatchEventJob } from "./dispatch";
+import { assertWorkflowGraphCapability } from "@/server/security/resource-access";
 
 const TERMINAL_RUN_STATUSES: LogStatus[] = [
   LogStatus.SUCCESS,
@@ -148,6 +149,7 @@ export async function startWorkflowRun(
     }
 
     const userId = opts.userId ?? workflow.userId;
+    await assertWorkflowGraphCapability(workflowId, userId, "execute");
     const startedAt = new Date();
 
     const run = await storage.createWorkflowExecution({
@@ -213,6 +215,7 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
   let initialInput: Record<string, unknown> = {};
   let connections: WorkflowConnection[] = [];
   let stepsSnapshot: WorkflowStepRun[] = [];
+  let runUserId = "";
 
   const advanced = await db.transaction(async (tx) => {
     const [run] = await tx
@@ -222,6 +225,7 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
       .for("update", { skipLocked: true });
     if (!run) return false; // busy elsewhere (or gone)
     if (TERMINAL_RUN_STATUSES.includes(run.status)) return true;
+    runUserId = run.userId;
 
     const executionData = run.executionData as {
       inputData?: Record<string, unknown>;
@@ -450,10 +454,32 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
       .select({ workflowId: workflowExecutions.workflowId })
       .from(workflowExecutions)
       .where(eq(workflowExecutions.id, runId));
+    if (run?.workflowId) {
+      try {
+        await assertWorkflowGraphCapability(
+          run.workflowId,
+          runUserId,
+          "execute",
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Authorization changed";
+        await Promise.all(
+          claimed.map(({ step }) =>
+            failClaimedStep(
+              step,
+              `Workflow authorization changed before dispatch: ${message}`,
+            ),
+          ),
+        );
+        return;
+      }
+    }
     for (const { step } of claimed) {
       await dispatchClaimedStep(
         step,
         run?.workflowId,
+        runUserId,
         connections,
         stepsSnapshot,
         initialInput,
@@ -507,6 +533,7 @@ async function settleStep(
 async function dispatchClaimedStep(
   step: WorkflowStepRun,
   workflowId: number | undefined,
+  authorizedUserId: string,
   connections: WorkflowConnection[],
   steps: WorkflowStepRun[],
   initialInput: Record<string, unknown>,
@@ -560,6 +587,7 @@ async function dispatchClaimedStep(
       workflowExecutionId: step.workflowExecutionId,
       workflowStepRunId: step.id,
       actor: `workflow-engine:${step.workflowExecutionId}`,
+      authorizedUserId,
     });
 
     if (result.skipped) {

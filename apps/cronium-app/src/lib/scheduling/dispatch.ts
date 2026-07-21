@@ -27,6 +27,7 @@ import { jobService } from "@/lib/services/job-service";
 import { buildJobPayload } from "@/lib/scheduler/job-payload-builder";
 import { eventTimeoutMs } from "@/lib/scheduler/event-timeout";
 import { recordJobCreated } from "./job-transition";
+import { assertEventRelations } from "@/server/security/resource-access";
 
 export type TriggerSource = "schedule" | "manual" | "workflow" | "webhook";
 
@@ -49,10 +50,9 @@ export interface DispatchOptions {
   scheduledMiss?: boolean;
   /** Overrides the audit actor; defaults to the trigger source. */
   actor?: string;
-  /** Attribute the job/log to this user (manual runs: the session user, who
-   * may differ from the event owner for shared events). Defaults to the
-   * event owner. */
-  runAsUserId?: string;
+  /** Principal whose execute/use-secret capabilities must still hold at the
+   * final dispatch boundary. System schedules default to the event owner. */
+  authorizedUserId?: string;
 }
 
 export type DispatchResult =
@@ -118,6 +118,12 @@ export async function dispatchEventJob(
   opts: DispatchOptions,
 ): Promise<DispatchResult> {
   const actor = opts.actor ?? opts.triggeredBy;
+  const authorizedUserId = opts.authorizedUserId ?? String(event.userId);
+
+  // Re-authorize against fresh relationship rows immediately before payload
+  // construction. A previously valid workflow/event cannot keep executing if
+  // its ownership or server relationships have changed.
+  await assertEventRelations(event.id, authorizedUserId, "execute");
 
   if (!(await checkMaxExecutions(event, opts.triggeredBy))) {
     return { job: null, logId: null, skipped: "max_executions" };
@@ -126,7 +132,7 @@ export async function dispatchEventJob(
   const jobType = jobTypeForEvent(event);
   const runsInProcess =
     jobType === JobType.TOOL_ACTION || jobType === JobType.HTTP_REQUEST;
-  const runAsUserId = opts.runAsUserId ?? String(event.userId);
+  const runAsUserId = authorizedUserId;
 
   const log = await storage.createLog({
     eventId: event.id,
@@ -153,7 +159,7 @@ export async function dispatchEventJob(
       eventId: event.id,
       userId: runAsUserId,
       type: jobType,
-      priority: (event.priority ?? JobPriority.NORMAL) as JobPriority,
+      priority: event.priority ?? JobPriority.NORMAL,
       payload,
       source: SOURCE_MAP[opts.triggeredBy],
       timeoutMs: eventTimeoutMs(event),

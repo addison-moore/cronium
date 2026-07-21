@@ -27,13 +27,16 @@ build_image() {
     
     echo -e "${YELLOW}Building ${description}...${NC}"
     
-    if docker-compose -f infra/docker/docker-compose.dev.local-app.yml build --no-cache "$service_name"; then
+    if docker compose -f infra/docker/docker-compose.dev.local-app.yml build --no-cache "$service_name"; then
         echo -e "${GREEN}✓ ${description} built successfully${NC}"
     else
         echo -e "${RED}✗ Failed to build ${description}${NC}"
         exit 1
     fi
 }
+
+# Build the scheduling worker image used by the dev Docker stack.
+build_image "cronium-worker" "Scheduling Worker (cronium/worker:dev)"
 
 # Build runtime API (used as sidecar for containerized execution)
 build_image "runtime-api" "Runtime API (cronium/runtime-api:latest)"
@@ -42,7 +45,7 @@ build_image "runtime-api" "Runtime API (cronium/runtime-api:latest)"
 echo -e "${YELLOW}Building execution environment images...${NC}"
 
 # Build all execution environments with the build-only profile
-if docker-compose -f infra/docker/docker-compose.dev.local-app.yml --profile build-only build bash-executor nodejs-executor python-executor; then
+if docker compose -f infra/docker/docker-compose.dev.local-app.yml --profile build-only build bash-executor nodejs-executor python-executor; then
     echo -e "${GREEN}✓ Execution environment images built successfully${NC}"
 else
     echo -e "${RED}✗ Failed to build execution environment images${NC}"
@@ -54,7 +57,7 @@ build_image "cronium-orchestrator" "Orchestrator (cronium-orchestrator)"
 
 # List all built images
 echo -e "\n${GREEN}Successfully built images:${NC}"
-docker images | grep -E "cronium/(runtime-api|runner)" | head -10
+docker images | grep -E "cronium/(worker|runtime-api|runner)" | head -10
 
 echo -e "\n${GREEN}✓ All Docker images built successfully!${NC}"
 echo -e "${YELLOW}You can now run 'pnpm dev:docker:up' to start the services.${NC}"

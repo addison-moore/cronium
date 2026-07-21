@@ -24,6 +24,7 @@ type RunnerCache struct {
 	mu      sync.RWMutex
 	entries map[string]*RunnerCacheEntry // key: serverID
 	log     *logrus.Logger
+	locks   sync.Map // key: server identity, value: *sync.Mutex
 }
 
 // NewRunnerCache creates a new runner cache
@@ -34,7 +35,9 @@ func NewRunnerCache(log *logrus.Logger) *RunnerCache {
 	}
 }
 
-// Get retrieves a cached runner entry
+// Get retrieves a cached runner entry. A cache hit is only deployment
+// metadata; callers must still verify the remote file's checksum before using
+// it. In particular, LastVerified must never be used as a trust window.
 func (rc *RunnerCache) Get(serverID string) (*RunnerCacheEntry, bool) {
 	rc.mu.RLock()
 	defer rc.mu.RUnlock()
@@ -44,12 +47,8 @@ func (rc *RunnerCache) Get(serverID string) (*RunnerCacheEntry, bool) {
 		return nil, false
 	}
 
-	// Check if entry is stale (not verified in last hour)
-	if time.Since(entry.LastVerified) > time.Hour {
-		return entry, false // Return entry but indicate it needs verification
-	}
-
-	return entry, true
+	entryCopy := *entry
+	return &entryCopy, true
 }
 
 // Set stores a runner deployment in the cache
@@ -57,12 +56,22 @@ func (rc *RunnerCache) Set(serverID string, entry *RunnerCacheEntry) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 
-	rc.entries[serverID] = entry
+	entryCopy := *entry
+	rc.entries[serverID] = &entryCopy
 	rc.log.WithFields(logrus.Fields{
 		"serverID": serverID,
 		"version":  entry.Version,
 		"path":     entry.RunnerPath,
 	}).Debug("Cached runner deployment")
+}
+
+// Lock serializes verification and deployment for one remote server identity.
+// This prevents concurrent jobs from racing atomic runner replacements.
+func (rc *RunnerCache) Lock(serverID string) func() {
+	lockValue, _ := rc.locks.LoadOrStore(serverID, &sync.Mutex{})
+	lock := lockValue.(*sync.Mutex)
+	lock.Lock()
+	return lock.Unlock
 }
 
 // UpdateVerified updates the last verified time for an entry

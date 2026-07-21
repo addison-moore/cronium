@@ -22,7 +22,8 @@
     "clear-logs": "tsx src/scripts/clear-all-logs.ts",
     "dev:socket": "tsx --env-file=../../env/.env.local server.ts",
     "dev:worker": "tsx --env-file=../../env/.env.local worker.ts",
-    "build:worker": "esbuild worker.ts --bundle --platform=node --format=cjs --packages=external --alias:@cronium/ui=./worker-stubs/ui.cjs --tsconfig=tsconfig.json --outfile=dist/worker.cjs"
+    "build:worker": "esbuild worker.ts --bundle --platform=node --format=cjs --packages=external --alias:@cronium/ui=./worker-stubs/ui.cjs --tsconfig=tsconfig.json --outfile=dist/worker.cjs",
+    "build:socket": "esbuild server.ts --bundle --platform=node --format=cjs --packages=external --tsconfig=tsconfig.json --outfile=dist/socket-server.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",

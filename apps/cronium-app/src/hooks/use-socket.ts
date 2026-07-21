@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { io, type Socket } from "socket.io-client";
+import { createSocketAuthProvider } from "@/lib/socket-ticket-client";
 
 let socket: Socket | null = null;
 
@@ -11,12 +12,14 @@ export function useSocket(): Socket | null {
     if (!socket) {
       const socketPort = process.env.NEXT_PUBLIC_SOCKET_PORT ?? "5002";
       const socketUrl =
-        process.env.NEXT_PUBLIC_SOCKET_URL ?? `http://localhost:${socketPort}`;
+        process.env.NEXT_PUBLIC_SOCKET_URL ??
+        `${window.location.protocol}//${window.location.hostname}:${socketPort}`;
 
       socket = io(socketUrl, {
         path: "/api/socketio",
         transports: ["websocket", "polling"],
         autoConnect: true,
+        auth: createSocketAuthProvider("terminal"),
       });
 
       socket.on("connect", () => {

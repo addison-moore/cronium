@@ -41,7 +41,8 @@ type Executor struct {
 	pool *ConnectionPool
 
 	// Runner binary info
-	runnerInfo RunnerInfo
+	runnerInfo   RunnerInfo
+	runnerInfoMu sync.Mutex
 
 	// Runner cache
 	runnerCache *RunnerCache
@@ -65,22 +66,36 @@ type Executor struct {
 
 // Session represents an active SSH session
 type Session struct {
-	jobID      string
-	conn       *ssh.Client
-	session    *ssh.Session
-	cancelFunc context.CancelFunc
+	jobID                  string
+	conn                   *ssh.Client
+	session                *ssh.Session
+	cancelFunc             context.CancelFunc
+	connectionID           string
+	remotePayloadMu        sync.Mutex
+	remotePayloadDirectory string
 }
 
 // NewExecutor creates a new SSH executor
 func NewExecutor(cfg config.SSHConfig, apiClient *api.Client, runtimeHost string, runtimePort int, jwtSecret string, log *logrus.Logger) (*Executor, error) {
 	// Create connection pool
-	pool := NewConnectionPool(cfg.ConnectionPool, cfg.Security, cfg.CircuitBreaker, log)
+	pool, err := NewConnectionPool(cfg.ConnectionPool, cfg.Security, cfg.CircuitBreaker, log)
+	if err != nil {
+		return nil, err
+	}
 
-	// Get runner binary info
+	// Get runner binary info. A missing artifact does not disable non-SSH jobs,
+	// but SSH deployment will fail closed until a valid artifact and checksum
+	// manifest are available.
+	runnerPath := getRunnerPath()
+	runnerChecksum, checksumErr := loadTrustedRunnerChecksum(runnerPath)
+	if checksumErr != nil {
+		log.WithError(checksumErr).WithField("runnerPath", runnerPath).
+			Warn("SSH runner artifact is unavailable or failed local integrity verification")
+	}
 	runnerInfo := RunnerInfo{
 		Version:  getRunnerVersion(),
-		Path:     getRunnerPath(),
-		Checksum: getRunnerChecksum(),
+		Path:     runnerPath,
+		Checksum: runnerChecksum,
 	}
 
 	// Create runner cache
@@ -193,11 +208,11 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 
 		// SETUP PHASE: Get connection from pool
 		timing.ConnectionStart = time.Now()
-		serverKey := fmt.Sprintf("%s:%d", job.Execution.Target.ServerDetails.Host, job.Execution.Target.ServerDetails.Port)
-		conn, err := e.pool.Get(ctx, serverKey, job.Execution.Target.ServerDetails)
+		server := job.Execution.Target.ServerDetails
+		conn, connectionID, err := e.pool.Get(ctx, server)
 		timing.ConnectionEnd = time.Now()
 		if err != nil {
-			connError := fmt.Errorf("SSH connection failed to %s: %w", serverKey, err)
+			connError := fmt.Errorf("SSH connection failed to %s:%d: %w", server.Host, server.Port, err)
 			e.sendError(updates, connError, true)
 
 			// Update execution record with connection failure and timing
@@ -227,7 +242,7 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 		// Create session
 		session, err := conn.NewSession()
 		if err != nil {
-			e.pool.Put(serverKey, conn, false) // Return connection as failed
+			e.pool.Put(connectionID, conn, false) // Return connection as failed
 			sessionError := fmt.Errorf("failed to create SSH session: %w", err)
 			e.sendError(updates, sessionError, true)
 
@@ -275,10 +290,11 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 
 		// Track session
 		sess := &Session{
-			jobID:      job.ID,
-			conn:       conn,
-			session:    session,
-			cancelFunc: cancel,
+			jobID:        job.ID,
+			conn:         conn,
+			session:      session,
+			cancelFunc:   cancel,
+			connectionID: connectionID,
 		}
 		e.trackSession(job.ID, sess)
 		defer e.untrackSession(job.ID)
@@ -286,7 +302,7 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 		// Clean up session
 		defer func() {
 			session.Close()
-			e.pool.Put(serverKey, conn, true) // Return connection as healthy
+			e.pool.Put(connectionID, conn, true) // Return connection as healthy
 		}()
 
 		// Execute with runner
@@ -332,17 +348,10 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 	}
 	defer e.cleanupPayload(payloadPath, job)
 
-	// SETUP PHASE: Ensure runner is deployed (create a new session for deployment)
+	// SETUP PHASE: Ensure the trusted runner is deployed.
 	timing.RunnerDeployStart = time.Now()
-	runnerPath := fmt.Sprintf("/tmp/cronium-runner-%s", e.runnerInfo.Version)
-	deploySession, err := sess.conn.NewSession()
+	runnerPath, runnerChecksum, err := e.ensureRunnerDeployed(ctx, sess.conn, job.Execution.Target.ServerDetails)
 	if err != nil {
-		e.sendError(updates, fmt.Errorf("failed to create deployment session: %w", err), true)
-		return
-	}
-	defer deploySession.Close()
-
-	if err := e.ensureRunnerDeployed(ctx, deploySession, sess.conn, job.Execution.Target.ServerDetails, runnerPath); err != nil {
 		timing.RunnerDeployEnd = time.Now()
 		deployError := fmt.Errorf("failed to deploy runner: %w", err)
 		e.sendError(updates, deployError, true)
@@ -374,15 +383,9 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 
 	// SETUP PHASE: Verify runner is ready
 	timing.RunnerVerifyStart = time.Now()
-	verifySession, err := sess.conn.NewSession()
-	if err != nil {
-		e.sendError(updates, fmt.Errorf("failed to create verify session: %w", err), true)
-		return
-	}
-	defer verifySession.Close()
-
-	if err := verifySession.Run(fmt.Sprintf("%s version", runnerPath)); err != nil {
-		e.sendError(updates, fmt.Errorf("failed to verify runner: %w", err), true)
+	if err := verifyRemoteRunner(sess.conn, runnerPath, runnerChecksum); err != nil {
+		e.runnerCache.Remove(runnerCacheKey(job.Execution.Target.ServerDetails))
+		e.sendError(updates, fmt.Errorf("failed to verify runner integrity: %w", err), true)
 		return
 	}
 	timing.RunnerVerifyEnd = time.Now()
@@ -450,31 +453,30 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		defer tunnelManager.Stop()
 	}
 
-	// SETUP PHASE: Copy payload to server (create a new session for file transfer)
+	// SETUP PHASE: Create a private randomized directory and atomically publish
+	// the payload (and signature, when present) inside it.
 	timing.PayloadTransferStart = time.Now()
-	remotePayloadPath := fmt.Sprintf("/tmp/cronium-payload-%s.tar.gz", job.ID)
-	copySession, err := sess.conn.NewSession()
+	remotePayload, err := createRemotePayloadDirectory(sess.conn)
 	if err != nil {
-		e.sendError(updates, fmt.Errorf("failed to create copy session: %w", err), true)
+		timing.PayloadTransferEnd = time.Now()
+		e.sendError(updates, fmt.Errorf("failed to prepare remote payload directory: %w", err), true)
 		return
 	}
-	defer copySession.Close()
+	sess.setRemotePayloadDirectory(remotePayload.Directory)
+	defer func() {
+		if err := cleanupRemotePayloadDirectory(sess.conn, remotePayload.Directory); err != nil {
+			e.log.WithError(err).Warn("Failed to clean up private remote payload directory")
+		}
+		sess.clearRemotePayloadDirectory(remotePayload.Directory)
+	}()
 
-	if err := e.copyPayloadToServer(copySession, sess.conn, payloadPath, remotePayloadPath); err != nil {
+	if err := uploadPayloadToServer(sess.conn, payloadPath, remotePayload); err != nil {
 		timing.PayloadTransferEnd = time.Now()
 		e.sendError(updates, fmt.Errorf("failed to copy payload: %w", err), true)
 		return
 	}
 	timing.PayloadTransferEnd = time.Now()
-
-	// Clean up payload after execution
-	defer func() {
-		cleanupSession, _ := sess.conn.NewSession()
-		if cleanupSession != nil {
-			cleanupSession.Run(fmt.Sprintf("rm -f %s %s.sig", remotePayloadPath, remotePayloadPath))
-			cleanupSession.Close()
-		}
-	}()
+	remotePayloadPath := remotePayload.PayloadPath
 
 	// Set up pipes for stdout and stderr
 	stdout, err := sess.session.StdoutPipe()
@@ -494,38 +496,31 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 
 	// Always include job ID and execution ID
 	envVars = append(envVars,
-		fmt.Sprintf("CRONIUM_JOB_ID=%s", job.ID),
-		fmt.Sprintf("CRONIUM_EXECUTION_ID=%s", executionID),
+		shellExport("CRONIUM_JOB_ID", job.ID),
+		shellExport("CRONIUM_EXECUTION_ID", executionID),
 	)
 
 	// Pass the payload verification key so the runner enforces the signature
 	if verifyKey := e.payloadVerifyKey(payloadPath); verifyKey != "" {
-		envVars = append(envVars, fmt.Sprintf("CRONIUM_VERIFY_KEY=%s", verifyKey))
+		envVars = append(envVars, shellExport("CRONIUM_VERIFY_KEY", verifyKey))
 	}
 
 	if useAPIMode {
 		envVars = append(envVars,
-			fmt.Sprintf("CRONIUM_HELPER_MODE=api"),
-			fmt.Sprintf("CRONIUM_API_ENDPOINT=%s", apiEndpoint),
-			fmt.Sprintf("CRONIUM_API_TOKEN=%s", apiToken),
+			shellExport("CRONIUM_HELPER_MODE", "api"),
+			shellExport("CRONIUM_API_ENDPOINT", apiEndpoint),
+			shellExport("CRONIUM_API_TOKEN", apiToken),
 		)
 	}
 
-	// Build the command with environment variables
-	var cmd string
-	if e.log.GetLevel() == logrus.DebugLevel {
-		cmd = fmt.Sprintf("%s --log-level=debug run %s", runnerPath, remotePayloadPath)
-	} else {
-		cmd = fmt.Sprintf("%s run %s", runnerPath, remotePayloadPath)
-	}
+	// Hash the runner again in the final remote shell immediately before exec.
+	// This narrows the verification-to-execution window and fails closed if a
+	// previously cached binary was replaced during setup.
+	cmd := buildRunnerCommand(runnerPath, runnerChecksum, remotePayloadPath, e.log.GetLevel() == logrus.DebugLevel)
 
 	// Add environment variables using export
 	if len(envVars) > 0 {
-		exports := make([]string, len(envVars))
-		for i, env := range envVars {
-			exports[i] = fmt.Sprintf("export %s", env)
-		}
-		cmd = fmt.Sprintf("%s && %s", strings.Join(exports, " && "), cmd)
+		cmd = fmt.Sprintf("%s && %s", strings.Join(envVars, " && "), cmd)
 	}
 
 	// EXECUTION PHASE: Mark setup complete and start execution
@@ -650,6 +645,9 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		if err != nil {
 			if exitErr, ok := err.(*ssh.ExitError); ok {
 				exitCode = exitErr.ExitStatus()
+				if exitCode == runnerIntegrityFailureExitCode {
+					e.runnerCache.Remove(runnerCacheKey(job.Execution.Target.ServerDetails))
+				}
 			} else {
 				e.sendError(updates, fmt.Errorf("runner failed: %w", err), true)
 				totalSeconds := time.Duration(timing.GetTotalDuration()) * time.Millisecond
@@ -703,8 +701,15 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 	}
 }
 
-// ensureRunnerDeployed checks if the runner is deployed and deploys it if necessary
-func (e *Executor) ensureRunnerDeployed(ctx context.Context, session *ssh.Session, conn *ssh.Client, server *types.ServerDetails, runnerPath string) error {
+// ensureRunnerDeployed checks if the exact trusted runner artifact is deployed
+// and returns its content-addressed remote path and pinned checksum.
+func (e *Executor) ensureRunnerDeployed(ctx context.Context, conn *ssh.Client, server *types.ServerDetails) (string, string, error) {
+	checksum, err := e.trustedRunnerChecksum()
+	if err != nil {
+		return "", "", fmt.Errorf("local runner integrity verification failed: %w", err)
+	}
+	runnerPath := runnerRemotePath(server, checksum)
+
 	// Configure retry for deployment
 	retryCfg := retry.Config{
 		MaxAttempts:  3,
@@ -719,8 +724,8 @@ func (e *Executor) ensureRunnerDeployed(ctx context.Context, session *ssh.Sessio
 	})
 
 	// Use retry utility for deployment attempts
-	err := retry.WithRetry(ctx, retryCfg, func() error {
-		deployErr := e.deployRunnerWithRetry(ctx, session, conn, server, runnerPath)
+	err = retry.WithRetry(ctx, retryCfg, func() error {
+		deployErr := e.deployRunnerWithRetry(ctx, conn, server, runnerPath, checksum)
 		if deployErr != nil {
 			// Create typed SSH error for deployment failures
 			sshErr := errors.NewSSHError(
@@ -737,60 +742,50 @@ func (e *Executor) ensureRunnerDeployed(ctx context.Context, session *ssh.Sessio
 	}, logEntry)
 
 	if err != nil {
-		return fmt.Errorf("failed to deploy runner after retries: %w", err)
+		return "", "", fmt.Errorf("failed to deploy runner after retries: %w", err)
 	}
 
-	return nil
+	return runnerPath, checksum, nil
 }
 
 // deployRunnerWithRetry performs a single deployment attempt
-func (e *Executor) deployRunnerWithRetry(ctx context.Context, session *ssh.Session, conn *ssh.Client, server *types.ServerDetails, runnerPath string) error {
+func (e *Executor) deployRunnerWithRetry(ctx context.Context, conn *ssh.Client, server *types.ServerDetails, runnerPath, checksum string) error {
 	deployStart := time.Now()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
-	// Check cache first
-	cachedEntry, isValid := e.runnerCache.Get(server.ID)
-	// In dev mode, always redeploy to ensure we have the latest runner
-	if isValid && cachedEntry.Version == e.runnerInfo.Version && e.runnerInfo.Version != "dev" {
+	cacheKey := runnerCacheKey(server)
+	unlock := e.runnerCache.Lock(cacheKey)
+	defer unlock()
+
+	verify := func() error {
+		return verifyRemoteRunner(conn, runnerPath, checksum)
+	}
+	if e.verifyCachedRunner(cacheKey, runnerPath, checksum, verify) {
 		e.log.WithFields(logrus.Fields{
 			"serverID": server.ID,
-			"version":  cachedEntry.Version,
-		}).Debug("Using cached runner deployment")
+			"version":  e.runnerInfo.Version,
+		}).Debug("Using checksum-verified cached runner deployment")
 		e.metrics.RecordDeployment(server.ID, true, true, time.Since(deployStart))
 		return nil
 	}
 
-	// If we have a cached entry but it needs verification
-	// Skip verification in dev mode to always redeploy
-	if cachedEntry != nil && cachedEntry.Version == e.runnerInfo.Version && e.runnerInfo.Version != "dev" {
-		// Quick version check
-		checkCmd := fmt.Sprintf("test -f %s && %s version | grep -q %s", runnerPath, runnerPath, e.runnerInfo.Version)
-		if err := session.Run(checkCmd); err == nil {
-			// Runner still valid, update cache
-			e.runnerCache.UpdateVerified(server.ID)
-			e.log.Debug("Runner verified from cache")
-			return nil
-		}
-		// Runner invalid, remove from cache
-		e.runnerCache.Remove(server.ID)
-	}
-
-	// Check if runner exists and has correct version
-	// In dev mode, always redeploy
-	if e.runnerInfo.Version != "dev" {
-		checkCmd := fmt.Sprintf("test -f %s && %s version | grep -q %s", runnerPath, runnerPath, e.runnerInfo.Version)
-		if err := session.Run(checkCmd); err == nil {
-			// Runner exists and has correct version, add to cache
-			e.runnerCache.Set(server.ID, &RunnerCacheEntry{
-				ServerID:     server.ID,
-				RunnerPath:   runnerPath,
-				Version:      e.runnerInfo.Version,
-				Checksum:     e.runnerInfo.Checksum,
-				DeployedAt:   time.Now(),
-				LastVerified: time.Now(),
-			})
-			e.log.Debug("Runner already deployed, added to cache")
-			return nil
-		}
+	// A process restart loses the in-memory cache. Reuse the content-addressed
+	// remote file only after hashing it; never execute it to discover a version.
+	if err := verify(); err == nil {
+		now := time.Now()
+		e.runnerCache.Set(cacheKey, &RunnerCacheEntry{
+			ServerID:     server.ID,
+			RunnerPath:   runnerPath,
+			Version:      e.runnerInfo.Version,
+			Checksum:     checksum,
+			DeployedAt:   now,
+			LastVerified: now,
+		})
+		e.log.WithField("serverID", server.ID).Debug("Reused checksum-verified remote runner")
+		e.metrics.RecordDeployment(server.ID, true, true, time.Since(deployStart))
+		return nil
 	}
 
 	// Need to deploy runner
@@ -799,84 +794,17 @@ func (e *Executor) deployRunnerWithRetry(ctx context.Context, session *ssh.Sessi
 		"version":  e.runnerInfo.Version,
 	}).Info("Deploying runner to server")
 
-	// Ensure deployment directory exists
-	mkdirSession, err := conn.NewSession()
-	if err != nil {
-		return fmt.Errorf("failed to create mkdir session: %w", err)
-	}
-	defer mkdirSession.Close()
-
-	runnerDir := "/tmp/cronium"
-	if err := mkdirSession.Run(fmt.Sprintf("mkdir -p %s", runnerDir)); err != nil {
-		return fmt.Errorf("failed to create runner directory: %w", err)
-	}
-
-	// Create new session for deployment
-	deploySession, err := conn.NewSession()
-	if err != nil {
-		return fmt.Errorf("failed to create deployment session: %w", err)
-	}
-	defer deploySession.Close()
-
-	// Copy runner binary with cleanup on failure
-	localRunnerPath := e.runnerInfo.Path
-	if err := e.copyFileToServer(deploySession, conn, localRunnerPath, runnerPath); err != nil {
-		// Clean up partial deployment
-		cleanupSession, _ := conn.NewSession()
-		if cleanupSession != nil {
-			cleanupSession.Run(fmt.Sprintf("rm -f %s", runnerPath))
-			cleanupSession.Close()
-		}
-		return fmt.Errorf("failed to copy runner binary: %w", err)
-	}
-
-	// Make runner executable
-	chmodSession, err := conn.NewSession()
-	if err != nil {
-		// Clean up partial deployment
-		cleanupSession, _ := conn.NewSession()
-		if cleanupSession != nil {
-			cleanupSession.Run(fmt.Sprintf("rm -f %s", runnerPath))
-			cleanupSession.Close()
-		}
-		return fmt.Errorf("failed to create chmod session: %w", err)
-	}
-	defer chmodSession.Close()
-
-	if err := chmodSession.Run(fmt.Sprintf("chmod +x %s", runnerPath)); err != nil {
-		// Clean up partial deployment
-		cleanupSession, _ := conn.NewSession()
-		if cleanupSession != nil {
-			cleanupSession.Run(fmt.Sprintf("rm -f %s", runnerPath))
-			cleanupSession.Close()
-		}
-		return fmt.Errorf("failed to make runner executable: %w", err)
-	}
-
-	// Verify deployment
-	verifySession, err := conn.NewSession()
-	if err != nil {
-		return fmt.Errorf("failed to create verify session: %w", err)
-	}
-	defer verifySession.Close()
-
-	verifyCmd := fmt.Sprintf("test -x %s && %s version", runnerPath, runnerPath)
-	if err := verifySession.Run(verifyCmd); err != nil {
-		// Clean up failed deployment
-		cleanupSession, _ := conn.NewSession()
-		if cleanupSession != nil {
-			cleanupSession.Run(fmt.Sprintf("rm -f %s", runnerPath))
-			cleanupSession.Close()
-		}
-		return fmt.Errorf("failed to verify runner deployment: %w", err)
+	if err := e.installRunnerAtomically(conn, e.runnerInfo.Path, runnerPath, checksum); err != nil {
+		e.runnerCache.Remove(cacheKey)
+		return err
 	}
 
 	// Add to cache
-	e.runnerCache.Set(server.ID, &RunnerCacheEntry{
+	e.runnerCache.Set(cacheKey, &RunnerCacheEntry{
 		ServerID:     server.ID,
 		RunnerPath:   runnerPath,
 		Version:      e.runnerInfo.Version,
-		Checksum:     e.runnerInfo.Checksum,
+		Checksum:     checksum,
 		DeployedAt:   time.Now(),
 		LastVerified: time.Now(),
 	})
@@ -886,67 +814,103 @@ func (e *Executor) deployRunnerWithRetry(ctx context.Context, session *ssh.Sessi
 	return nil
 }
 
-// copyPayloadToServer copies a payload file (and its detached signature, when
-// present) to the server
-func (e *Executor) copyPayloadToServer(session *ssh.Session, conn *ssh.Client, localPath, remotePath string) error {
-	if err := e.copyLocalFile(conn, localPath, remotePath); err != nil {
+func (e *Executor) installRunnerAtomically(conn *ssh.Client, localPath, runnerPath, checksum string) error {
+	runnerDir := filepath.Dir(runnerPath)
+	quotedDir := shellQuote(runnerDir)
+	ensureDirCmd := fmt.Sprintf(
+		"if [ -e %s ]; then test -d %s && test ! -L %s; else umask 077 && mkdir %s; fi && chmod 0700 %s",
+		quotedDir,
+		quotedDir,
+		quotedDir,
+		quotedDir,
+		quotedDir,
+	)
+	if err := runRemoteCommand(conn, ensureDirCmd); err != nil {
+		return fmt.Errorf("create private runner directory: %w", err)
+	}
+
+	uploadPath, err := randomRunnerUploadPath(runnerPath)
+	if err != nil {
 		return err
 	}
+	defer removeRemoteFile(conn, uploadPath)
 
-	// Copy the payload signature alongside the payload when it exists
-	sigLocal := localPath + ".sig"
-	if _, err := os.Stat(sigLocal); err == nil {
-		if err := e.copyLocalFile(conn, sigLocal, remotePath+".sig"); err != nil {
-			return fmt.Errorf("failed to copy payload signature: %w", err)
-		}
+	if err := copyRunnerFile(conn, localPath, uploadPath); err != nil {
+		return fmt.Errorf("upload runner to random temporary path: %w", err)
+	}
+	if err := runRemoteCommand(conn, fmt.Sprintf("chmod 0500 %s", shellQuote(uploadPath))); err != nil {
+		return fmt.Errorf("set restrictive runner upload permissions: %w", err)
+	}
+	if err := verifyRemoteRunner(conn, uploadPath, checksum); err != nil {
+		return fmt.Errorf("verify uploaded runner before install: %w", err)
 	}
 
+	// Rename within the same directory is atomic, so no job can observe a
+	// partially written final runner.
+	installCmd := fmt.Sprintf(
+		"mv -f %s %s && chmod 0500 %s",
+		shellQuote(uploadPath),
+		shellQuote(runnerPath),
+		shellQuote(runnerPath),
+	)
+	if err := runRemoteCommand(conn, installCmd); err != nil {
+		return fmt.Errorf("atomically install runner: %w", err)
+	}
+	if err := verifyRemoteRunner(conn, runnerPath, checksum); err != nil {
+		removeRemoteFile(conn, runnerPath)
+		return fmt.Errorf("verify installed runner: %w", err)
+	}
 	return nil
 }
 
-// copyLocalFile streams a local file to the server over a new SSH session
-func (e *Executor) copyLocalFile(conn *ssh.Client, localPath, remotePath string) error {
-	// Read local file
-	data, err := os.ReadFile(localPath)
+func runRemoteCommand(conn *ssh.Client, command string) error {
+	session, err := conn.NewSession()
 	if err != nil {
-		return fmt.Errorf("failed to read payload file: %w", err)
+		return err
 	}
+	defer session.Close()
+	return session.Run(command)
+}
 
-	// Create new session for copy
+func removeRemoteFile(conn *ssh.Client, path string) {
+	if err := runRemoteCommand(conn, fmt.Sprintf("rm -f %s", shellQuote(path))); err != nil {
+		// Cleanup is best-effort; deployment verification still fails closed.
+		return
+	}
+}
+
+func copyRunnerFile(conn *ssh.Client, localPath, remotePath string) error {
+	localFile, err := os.Open(localPath)
+	if err != nil {
+		return fmt.Errorf("open local runner: %w", err)
+	}
+	defer localFile.Close()
+
 	copySession, err := conn.NewSession()
 	if err != nil {
-		return fmt.Errorf("failed to create copy session: %w", err)
+		return fmt.Errorf("create runner upload session: %w", err)
 	}
 	defer copySession.Close()
 
-	// Set up stdin pipe
 	stdin, err := copySession.StdinPipe()
 	if err != nil {
-		return fmt.Errorf("failed to create stdin pipe: %w", err)
+		return fmt.Errorf("create runner upload pipe: %w", err)
 	}
-
-	// Start cat command
-	if err := copySession.Start(fmt.Sprintf("cat > %s", remotePath)); err != nil {
-		return fmt.Errorf("failed to start cat command: %w", err)
+	command := fmt.Sprintf("umask 077 && set -C && cat > %s", shellQuote(remotePath))
+	if err := copySession.Start(command); err != nil {
+		return fmt.Errorf("start runner upload: %w", err)
 	}
-
-	// Write data
-	if _, err := stdin.Write(data); err != nil {
-		return fmt.Errorf("failed to write data: %w", err)
+	if _, err := io.Copy(stdin, localFile); err != nil {
+		stdin.Close()
+		return fmt.Errorf("stream runner upload: %w", err)
 	}
-	stdin.Close()
-
-	// Wait for completion
+	if err := stdin.Close(); err != nil {
+		return fmt.Errorf("close runner upload: %w", err)
+	}
 	if err := copySession.Wait(); err != nil {
-		return fmt.Errorf("failed to copy file: %w", err)
+		return fmt.Errorf("finish runner upload: %w", err)
 	}
-
 	return nil
-}
-
-// copyFileToServer copies a file to the server using scp-like functionality
-func (e *Executor) copyFileToServer(session *ssh.Session, conn *ssh.Client, localPath, remotePath string) error {
-	return e.copyLocalFile(conn, localPath, remotePath)
 }
 
 // streamOutputWithContextAndCollect reads from a reader, sends log updates, and collects output
@@ -1039,25 +1003,20 @@ func (e *Executor) Cleanup(ctx context.Context, job *types.Job) error {
 			sess.session.Close()
 		}
 
-		// Clean up remote files if we have a connection
-		if sess.conn != nil && job.Execution.Target.ServerDetails != nil {
-			// Clean up payload file
-			payloadPath := fmt.Sprintf("/tmp/cronium/payloads/%s.tar.gz", job.ID)
-			cleanupSession, err := sess.conn.NewSession()
-			if err == nil {
-				e.log.WithField("jobID", job.ID).Debug("Cleaning up remote payload file")
-				cleanupCmd := fmt.Sprintf("rm -f %s %s.sig", payloadPath, payloadPath)
-				if err := cleanupSession.Run(cleanupCmd); err != nil {
-					e.log.WithError(err).Warn("Failed to clean up payload file")
+		// Clean up only the exact random directory allocated for this session.
+		if sess.conn != nil {
+			if payloadDirectory := sess.getRemotePayloadDirectory(); payloadDirectory != "" {
+				if err := cleanupRemotePayloadDirectory(sess.conn, payloadDirectory); err != nil {
+					e.log.WithError(err).WithField("jobID", job.ID).Warn("Failed to clean up private remote payload directory")
+				} else {
+					sess.clearRemotePayloadDirectory(payloadDirectory)
 				}
-				cleanupSession.Close()
 			}
 
-			// Return connection to pool
-			serverKey := fmt.Sprintf("%s:%d",
-				job.Execution.Target.ServerDetails.Host,
-				job.Execution.Target.ServerDetails.Port)
-			e.pool.Put(serverKey, sess.conn, false)
+			// Return the exact authenticated connection identity acquired for this
+			// session. Recomputing from mutable job details could release it under
+			// a different tenant or credential key.
+			e.pool.Put(sess.connectionID, sess.conn, false)
 		}
 
 		e.untrackSession(job.ID)
@@ -1078,6 +1037,26 @@ func (e *Executor) untrackSession(jobID string) {
 	e.mu.Lock()
 	delete(e.sessions, jobID)
 	e.mu.Unlock()
+}
+
+func (s *Session) setRemotePayloadDirectory(directory string) {
+	s.remotePayloadMu.Lock()
+	s.remotePayloadDirectory = directory
+	s.remotePayloadMu.Unlock()
+}
+
+func (s *Session) getRemotePayloadDirectory() string {
+	s.remotePayloadMu.Lock()
+	defer s.remotePayloadMu.Unlock()
+	return s.remotePayloadDirectory
+}
+
+func (s *Session) clearRemotePayloadDirectory(directory string) {
+	s.remotePayloadMu.Lock()
+	if s.remotePayloadDirectory == directory {
+		s.remotePayloadDirectory = ""
+	}
+	s.remotePayloadMu.Unlock()
 }
 
 // sendUpdate sends an execution update
@@ -1136,20 +1115,6 @@ func getRunnerPath() string {
 
 	version := getRunnerVersion()
 	return filepath.Join(runnerDir, version, fmt.Sprintf("cronium-runner-%s", arch))
-}
-
-func getRunnerChecksum() string {
-	// In production, this would read the checksum file
-	checksumPath := getRunnerPath() + ".sha256"
-	data, err := os.ReadFile(checksumPath)
-	if err != nil {
-		return ""
-	}
-	parts := strings.Fields(string(data))
-	if len(parts) > 0 {
-		return parts[0]
-	}
-	return ""
 }
 
 // intPtr returns a pointer to an int value

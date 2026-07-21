@@ -258,6 +258,10 @@ export interface IStorage {
 
   // Server methods
   getServer(id: number): Promise<Server | undefined>;
+  getServerForExecution(
+    id: number,
+    userId: string,
+  ): Promise<Server | undefined>;
   getAllServers(userId: string): Promise<Server[]>;
   queryServers(
     userId: string,
@@ -287,9 +291,21 @@ export interface IStorage {
 
   // Event-Server relationship methods
   getEventServers(eventId: number): Promise<EventServer[]>;
-  addEventServer(eventId: number, serverId: number): Promise<EventServer>;
-  removeEventServer(eventId: number, serverId: number): Promise<void>;
-  setEventServers(eventId: number, serverIds: number[]): Promise<void>;
+  addEventServer(
+    eventId: number,
+    serverId: number,
+    userId: string,
+  ): Promise<EventServer>;
+  removeEventServer(
+    eventId: number,
+    serverId: number,
+    userId: string,
+  ): Promise<void>;
+  setEventServers(
+    eventId: number,
+    serverIds: number[],
+    userId: string,
+  ): Promise<void>;
 
   // Settings methods
   getSetting(key: string): Promise<Setting | undefined>;
@@ -865,9 +881,11 @@ class DatabaseStorage implements IStorage {
         event.eventServers
           ?.map((es) => es.server)
           .filter((s): s is Server => s !== null) || [];
+      const { eventServers: _eventServers, ...baseEvent } = event;
+      void _eventServers;
 
       const result: EventWithRelations = {
-        ...event,
+        ...baseEvent,
         servers,
       };
 
@@ -971,8 +989,10 @@ class DatabaseStorage implements IStorage {
 
     // Transform the results
     return activeEvents.map((event) => {
+      const { eventServers: _eventServers, ...baseEvent } = event;
+      void _eventServers;
       const transformed: EventWithRelations = {
-        ...event,
+        ...baseEvent,
         envVars: event.envVars ?? [],
         server: event.server ?? null,
         servers:
@@ -1176,44 +1196,107 @@ class DatabaseStorage implements IStorage {
   }
 
   async createScript(insertScript: InsertEvent): Promise<Event> {
-    const [script] = await db.insert(events).values(insertScript).returning();
+    return db.transaction(async (tx) => {
+      if (
+        insertScript.serverId !== null &&
+        insertScript.serverId !== undefined
+      ) {
+        const [authorizedServer] = await tx
+          .select({ id: servers.id })
+          .from(servers)
+          .where(
+            and(
+              eq(servers.id, insertScript.serverId),
+              eq(servers.userId, insertScript.userId),
+              eq(servers.isArchived, false),
+            ),
+          )
+          .limit(1);
+        if (!authorizedServer) {
+          throw new Error("Unauthorized event server relationship");
+        }
+      }
 
-    if (!script) {
-      throw new Error("Failed to create script");
-    }
-    return script;
+      const [script] = await tx.insert(events).values(insertScript).returning();
+
+      if (!script) {
+        throw new Error("Failed to create script");
+      }
+      return script;
+    });
   }
 
   async updateScript(
     id: number,
     updateData: Partial<InsertEvent>,
   ): Promise<Event> {
+    // Ownership/provenance are immutable at the storage boundary. This keeps
+    // a future route from reintroducing the legacy mass-assignment flaw.
+    const {
+      userId: _immutableUserId,
+      source: _immutableSource,
+      createdAt: _immutableCreatedAt,
+      ...mutableUpdateData
+    } = updateData;
+    void _immutableUserId;
+    void _immutableSource;
+    void _immutableCreatedAt;
+
     // Special handling for boolean values to ensure they are stored correctly
     if (
-      "resetCounterOnActive" in updateData &&
-      updateData.resetCounterOnActive !== undefined
+      "resetCounterOnActive" in mutableUpdateData &&
+      mutableUpdateData.resetCounterOnActive !== undefined
     ) {
       // Force the value to be a true boolean to prevent PostgreSQL string conversion
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-      (updateData as any).resetCounterOnActive =
+      (mutableUpdateData as any).resetCounterOnActive =
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-        (updateData as any).resetCounterOnActive === true;
+        (mutableUpdateData as any).resetCounterOnActive === true;
       console.log(
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-        `In storage layer - resetCounterOnActive: ${String((updateData as any).resetCounterOnActive)}`,
+        `In storage layer - resetCounterOnActive: ${String((mutableUpdateData as any).resetCounterOnActive)}`,
       );
     }
 
-    const [script] = await db
-      .update(events)
-      .set(updateData)
-      .where(eq(events.id, id))
-      .returning();
+    return db.transaction(async (tx) => {
+      if (
+        mutableUpdateData.serverId !== null &&
+        mutableUpdateData.serverId !== undefined
+      ) {
+        const [event] = await tx
+          .select({ userId: events.userId })
+          .from(events)
+          .where(eq(events.id, id))
+          .limit(1);
+        if (!event) throw new Error("Event not found");
 
-    if (!script) {
-      throw new Error("Failed to update script - script not found");
-    }
-    return script;
+        const [authorizedServer] = await tx
+          .select({ id: servers.id })
+          .from(servers)
+          .where(
+            and(
+              eq(servers.id, mutableUpdateData.serverId),
+              eq(servers.userId, event.userId),
+              eq(servers.isArchived, false),
+            ),
+          )
+          .limit(1);
+        if (!authorizedServer) {
+          throw new Error("Unauthorized event server relationship");
+        }
+      }
+
+      const [script] = await tx
+        .update(events)
+        .set(mutableUpdateData)
+        .where(eq(events.id, id))
+        .returning();
+
+      if (!script) {
+        throw new Error("Failed to update script - script not found");
+      }
+      return script;
+    });
   }
 
   async deleteScript(id: number): Promise<void> {
@@ -1629,16 +1712,34 @@ class DatabaseStorage implements IStorage {
   // Server methods
   async getServer(id: number): Promise<Server | undefined> {
     const [server] = await db.select().from(servers).where(eq(servers.id, id));
-    if (server) {
-      try {
-        return decryptSensitiveData<Server>(server, "servers");
-      } catch (error) {
-        console.error(`Error decrypting server ${id} data:`, error);
-        // Return server without decryption rather than failing
-        return server;
-      }
-    }
+    // Metadata reads deliberately retain encrypted credential fields. Callers
+    // expose only ServerApiDto presence flags; plaintext resolution is limited
+    // to the owner-bound, fail-closed getServerForExecution boundary below.
     return server;
+  }
+
+  /**
+   * The only credential-bearing server resolver used by job/terminal
+   * execution. Ownership and archival state are checked in the same query as
+   * the credential fetch, and decryption failures are fatal rather than
+   * returning ciphertext as if it were a usable secret.
+   */
+  async getServerForExecution(
+    id: number,
+    userId: string,
+  ): Promise<Server | undefined> {
+    const [server] = await db
+      .select()
+      .from(servers)
+      .where(
+        and(
+          eq(servers.id, id),
+          eq(servers.userId, userId),
+          eq(servers.isArchived, false),
+        ),
+      )
+      .limit(1);
+    return server ? decryptSensitiveData<Server>(server, "servers") : undefined;
   }
 
   async getAllServers(userId: string): Promise<Server[]> {
@@ -1654,10 +1755,9 @@ class DatabaseStorage implements IStorage {
       )
       .orderBy(servers.name);
 
-    // Decrypt sensitive data for all servers
-    return allUserServers.map((server) =>
-      decryptSensitiveData(server, "servers"),
-    );
+    // Bulk/list reads never need credential plaintext. API DTOs derive only
+    // has-credential flags from the encrypted value's presence.
+    return allUserServers;
   }
 
   async queryServers(
@@ -1708,11 +1808,7 @@ class DatabaseStorage implements IStorage {
       .limit(pagination.limit)
       .offset(pagination.offset);
 
-    const decrypted = rows.map((server) =>
-      decryptSensitiveData<Server>(server, "servers"),
-    );
-
-    return createPaginatedResult(decrypted, total, pagination);
+    return createPaginatedResult(rows, total, pagination);
   }
 
   async canUserAccessServer(
@@ -2241,10 +2337,36 @@ class DatabaseStorage implements IStorage {
   }
 
   async createWorkflow(insertWorkflow: InsertWorkflow): Promise<Workflow> {
-    const [workflow] = await db
-      .insert(workflows)
-      .values(insertWorkflow)
-      .returning();
+    const workflow = await db.transaction(async (tx) => {
+      const overrideServerIds = Array.isArray(insertWorkflow.overrideServerIds)
+        ? insertWorkflow.overrideServerIds.filter(
+            (value): value is number =>
+              Number.isInteger(value) && Number(value) > 0,
+          )
+        : [];
+      if (overrideServerIds.length > 0) {
+        const uniqueIds = [...new Set(overrideServerIds)];
+        const ownedServers = await tx
+          .select({ id: servers.id })
+          .from(servers)
+          .where(
+            and(
+              inArray(servers.id, uniqueIds),
+              eq(servers.userId, insertWorkflow.userId),
+              eq(servers.isArchived, false),
+            ),
+          );
+        if (ownedServers.length !== uniqueIds.length) {
+          throw new Error("Unauthorized workflow server relationship");
+        }
+      }
+
+      const [created] = await tx
+        .insert(workflows)
+        .values(insertWorkflow)
+        .returning();
+      return created;
+    });
 
     if (!workflow) {
       throw new Error("Failed to create workflow");
@@ -2295,8 +2417,10 @@ class DatabaseStorage implements IStorage {
               ?.map((es) => es.server)
               .filter((s): s is Server => s !== null) || [];
 
+          const { eventServers: _eventServers, ...baseEvent } = node.event;
+          void _eventServers;
           const eventWithRelations: EventWithRelations = {
-            ...node.event,
+            ...baseEvent,
             envVars: node.event.envVars ?? [],
             server: node.event.server ?? null,
             servers,
@@ -2324,11 +2448,56 @@ class DatabaseStorage implements IStorage {
     id: number,
     updateData: Partial<InsertWorkflow>,
   ): Promise<Workflow> {
-    const [workflow] = await db
-      .update(workflows)
-      .set(updateData)
-      .where(eq(workflows.id, id))
-      .returning();
+    const {
+      userId: _immutableUserId,
+      source: _immutableSource,
+      createdAt: _immutableCreatedAt,
+      ...mutableUpdateData
+    } = updateData;
+    void _immutableUserId;
+    void _immutableSource;
+    void _immutableCreatedAt;
+
+    const workflow = await db.transaction(async (tx) => {
+      if (Array.isArray(mutableUpdateData.overrideServerIds)) {
+        const uniqueIds = [
+          ...new Set(
+            mutableUpdateData.overrideServerIds.filter(
+              (value): value is number =>
+                Number.isInteger(value) && Number(value) > 0,
+            ),
+          ),
+        ];
+        const [owner] = await tx
+          .select({ userId: workflows.userId })
+          .from(workflows)
+          .where(eq(workflows.id, id))
+          .limit(1);
+        if (!owner) throw new Error("Workflow not found");
+        if (uniqueIds.length > 0) {
+          const ownedServers = await tx
+            .select({ id: servers.id })
+            .from(servers)
+            .where(
+              and(
+                inArray(servers.id, uniqueIds),
+                eq(servers.userId, owner.userId),
+                eq(servers.isArchived, false),
+              ),
+            );
+          if (ownedServers.length !== uniqueIds.length) {
+            throw new Error("Unauthorized workflow server relationship");
+          }
+        }
+      }
+
+      const [updated] = await tx
+        .update(workflows)
+        .set(mutableUpdateData)
+        .where(eq(workflows.id, id))
+        .returning();
+      return updated;
+    });
 
     if (!workflow) {
       throw new Error("Failed to update workflow - workflow not found");
@@ -2338,11 +2507,11 @@ class DatabaseStorage implements IStorage {
     // changed (status, trigger, cadence). One hook covers every router call
     // site — see src/lib/scheduling/materialize.ts.
     if (
-      "status" in updateData ||
-      "triggerType" in updateData ||
-      "scheduleNumber" in updateData ||
-      "scheduleUnit" in updateData ||
-      "customSchedule" in updateData
+      "status" in mutableUpdateData ||
+      "triggerType" in mutableUpdateData ||
+      "scheduleNumber" in mutableUpdateData ||
+      "scheduleUnit" in mutableUpdateData ||
+      "customSchedule" in mutableUpdateData
     ) {
       const { refreshWorkflowSchedule } =
         await import("@/lib/scheduling/materialize");
@@ -2396,10 +2565,29 @@ class DatabaseStorage implements IStorage {
   async createWorkflowNode(
     insertNode: InsertWorkflowNode,
   ): Promise<WorkflowNode> {
-    const [node] = await db
-      .insert(workflowNodes)
-      .values(insertNode)
-      .returning();
+    const node = await db.transaction(async (tx) => {
+      const [relationship] = await tx
+        .select({
+          workflowUserId: workflows.userId,
+          eventUserId: events.userId,
+        })
+        .from(workflows)
+        .innerJoin(events, eq(events.id, insertNode.eventId))
+        .where(eq(workflows.id, insertNode.workflowId))
+        .limit(1);
+      if (
+        !relationship ||
+        relationship.workflowUserId !== relationship.eventUserId
+      ) {
+        throw new Error("Unauthorized workflow event relationship");
+      }
+
+      const [created] = await tx
+        .insert(workflowNodes)
+        .values(insertNode)
+        .returning();
+      return created;
+    });
 
     if (!node) {
       throw new Error("Failed to create workflow node");
@@ -2411,11 +2599,33 @@ class DatabaseStorage implements IStorage {
     id: number,
     updateData: Partial<InsertWorkflowNode>,
   ): Promise<WorkflowNode> {
-    const [node] = await db
-      .update(workflowNodes)
-      .set(updateData)
-      .where(eq(workflowNodes.id, id))
-      .returning();
+    const node = await db.transaction(async (tx) => {
+      if (updateData.eventId !== undefined) {
+        const [relationship] = await tx
+          .select({
+            workflowUserId: workflows.userId,
+            eventUserId: events.userId,
+          })
+          .from(workflowNodes)
+          .innerJoin(workflows, eq(workflows.id, workflowNodes.workflowId))
+          .innerJoin(events, eq(events.id, updateData.eventId))
+          .where(eq(workflowNodes.id, id))
+          .limit(1);
+        if (
+          !relationship ||
+          relationship.workflowUserId !== relationship.eventUserId
+        ) {
+          throw new Error("Unauthorized workflow event relationship");
+        }
+      }
+
+      const [updated] = await tx
+        .update(workflowNodes)
+        .set(updateData)
+        .where(eq(workflowNodes.id, id))
+        .returning();
+      return updated;
+    });
 
     if (!node) {
       throw new Error("Failed to update workflow node - node not found");
@@ -2740,11 +2950,32 @@ class DatabaseStorage implements IStorage {
   async addEventServer(
     eventId: number,
     serverId: number,
+    userId: string,
   ): Promise<EventServer> {
-    const [eventServer] = await db
-      .insert(eventServers)
-      .values({ eventId, serverId })
-      .returning();
+    const eventServer = await db.transaction(async (tx) => {
+      const [authorized] = await tx
+        .select({ eventId: events.id, serverId: servers.id })
+        .from(events)
+        .innerJoin(servers, eq(servers.id, serverId))
+        .where(
+          and(
+            eq(events.id, eventId),
+            eq(events.userId, userId),
+            eq(servers.userId, userId),
+            eq(servers.isArchived, false),
+          ),
+        )
+        .limit(1);
+      if (!authorized) {
+        throw new Error("Unauthorized event server relationship");
+      }
+
+      const [created] = await tx
+        .insert(eventServers)
+        .values({ eventId, serverId })
+        .returning();
+      return created;
+    });
 
     if (!eventServer) {
       throw new Error("Failed to add event server association");
@@ -2752,30 +2983,61 @@ class DatabaseStorage implements IStorage {
     return eventServer;
   }
 
-  async removeEventServer(eventId: number, serverId: number): Promise<void> {
-    await db
-      .delete(eventServers)
-      .where(
-        and(
-          eq(eventServers.eventId, eventId),
-          eq(eventServers.serverId, serverId),
-        ),
-      );
+  async removeEventServer(
+    eventId: number,
+    serverId: number,
+    userId: string,
+  ): Promise<void> {
+    await db.delete(eventServers).where(
+      and(
+        eq(eventServers.eventId, eventId),
+        eq(eventServers.serverId, serverId),
+        sql`EXISTS (
+            SELECT 1 FROM ${events}
+            WHERE ${events.id} = ${eventId}
+              AND ${events.userId} = ${userId}
+          )`,
+      ),
+    );
   }
 
-  async setEventServers(eventId: number, serverIds: number[]): Promise<void> {
-    // Remove all existing event-server relationships for this event
-    await db.delete(eventServers).where(eq(eventServers.eventId, eventId));
+  async setEventServers(
+    eventId: number,
+    serverIds: number[],
+    userId: string,
+  ): Promise<void> {
+    await db.transaction(async (tx) => {
+      const [ownedEvent] = await tx
+        .select({ id: events.id })
+        .from(events)
+        .where(and(eq(events.id, eventId), eq(events.userId, userId)))
+        .limit(1);
+      if (!ownedEvent) throw new Error("Unauthorized event relationship");
 
-    // Add new relationships if serverIds is not empty
-    if (serverIds.length > 0) {
-      const eventServerData = serverIds.map((serverId) => ({
-        eventId,
-        serverId,
-      }));
+      const ids = [...new Set(serverIds)];
+      if (ids.length > 0) {
+        const ownedServers = await tx
+          .select({ id: servers.id })
+          .from(servers)
+          .where(
+            and(
+              inArray(servers.id, ids),
+              eq(servers.userId, userId),
+              eq(servers.isArchived, false),
+            ),
+          );
+        if (ownedServers.length !== ids.length) {
+          throw new Error("Unauthorized event server relationship");
+        }
+      }
 
-      await db.insert(eventServers).values(eventServerData);
-    }
+      await tx.delete(eventServers).where(eq(eventServers.eventId, eventId));
+      if (ids.length > 0) {
+        await tx
+          .insert(eventServers)
+          .values(ids.map((serverId) => ({ eventId, serverId })));
+      }
+    });
   }
 
   // API Token methods

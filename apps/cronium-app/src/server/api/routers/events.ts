@@ -26,6 +26,16 @@ import {
 import { storage } from "@/server/storage";
 import { scheduler } from "@/lib/scheduler";
 import { payloadService } from "@/lib/services/payload-service";
+import {
+  assertEventCapability,
+  assertEventRelations,
+  assertProposedEventServers,
+} from "@/server/security/resource-access";
+import {
+  toEventApiDto,
+  toEventForkSecurityProjection,
+  toEventListApiDto,
+} from "@/server/security/api-dto";
 
 // Use the centralized development-friendly protected procedure
 // This handles authentication and auto-login in development mode
@@ -41,11 +51,12 @@ export const eventsRouter = createTRPCRouter({
         const result = await storage.queryEvents(userId, input);
 
         return {
-          events: result.items,
+          events: result.items.map((event) => toEventListApiDto(event, userId)),
           total: result.total,
           hasMore: result.hasMore,
         };
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to fetch events",
@@ -60,14 +71,7 @@ export const eventsRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       try {
-        // Check permissions first (not cached)
-        const canView = await storage.canViewEvent(input.id, userId);
-        if (!canView) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Event not found",
-          });
-        }
+        await assertEventRelations(input.id, userId, "view");
 
         // Direct storage call without caching
         const event = await storage.getEventWithRelations(input.id);
@@ -77,7 +81,7 @@ export const eventsRouter = createTRPCRouter({
             message: "Event not found",
           });
         }
-        return event;
+        return toEventApiDto(event, userId);
       } catch (error) {
         if (error instanceof TRPCError) throw error;
 
@@ -106,6 +110,11 @@ export const eventsRouter = createTRPCRouter({
       }
       const userId = ctx.session.user.id;
       try {
+        await assertProposedEventServers(
+          userId,
+          input.serverId,
+          input.selectedServerIds,
+        );
         // Add user ID to event data
         const eventData = {
           ...input,
@@ -146,7 +155,11 @@ export const eventsRouter = createTRPCRouter({
           input.runLocation !== RunLocation.LOCAL &&
           input.selectedServerIds.length > 0
         ) {
-          await storage.setEventServers(event.id, input.selectedServerIds);
+          await storage.setEventServers(
+            event.id,
+            input.selectedServerIds,
+            userId,
+          );
         }
 
         // Payload generation moved to orchestrator
@@ -155,8 +168,9 @@ export const eventsRouter = createTRPCRouter({
         // Get the complete event with relations
         const completeEvent = await storage.getEventWithRelations(event.id);
 
-        return completeEvent;
+        return completeEvent ? toEventApiDto(completeEvent, userId) : undefined;
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to create event",
@@ -180,14 +194,12 @@ export const eventsRouter = createTRPCRouter({
       }
       const userId = ctx.session.user.id;
       try {
-        // Check permissions
-        const canEdit = await storage.canEditEvent(input.id, userId);
-        if (!canEdit) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Not authorized to edit this event",
-          });
-        }
+        await assertEventCapability(input.id, userId, "edit");
+        await assertProposedEventServers(
+          userId,
+          input.serverId,
+          input.selectedServerIds,
+        );
 
         const { id, envVars, selectedServerIds, ...eventData } = input;
 
@@ -228,7 +240,7 @@ export const eventsRouter = createTRPCRouter({
 
         // Handle server associations
         if (selectedServerIds !== undefined) {
-          await storage.setEventServers(id, selectedServerIds);
+          await storage.setEventServers(id, selectedServerIds, userId);
         }
 
         // Get the updated event with relations
@@ -267,7 +279,7 @@ export const eventsRouter = createTRPCRouter({
           }
         }
 
-        return updatedEvent;
+        return updatedEvent ? toEventApiDto(updatedEvent, userId) : undefined;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -285,15 +297,7 @@ export const eventsRouter = createTRPCRouter({
       const userId = ctx.session.user.id;
 
       try {
-        // Check permissions
-        const canEdit = await storage.canEditEvent(input.id, userId);
-
-        if (!canEdit) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Not authorized to delete this event",
-          });
-        }
+        await assertEventCapability(input.id, userId, "edit");
 
         // Clean up payloads before deleting the event
         await payloadService.cleanupEventPayloads(input.id);
@@ -320,14 +324,7 @@ export const eventsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       try {
-        // Check permissions
-        const canEdit = await storage.canEditEvent(input.id, userId);
-        if (!canEdit) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Not authorized to activate this event",
-          });
-        }
+        await assertEventRelations(input.id, userId, "execute");
 
         // Update event status to ACTIVE
         await storage.updateScript(input.id, { status: EventStatus.ACTIVE });
@@ -365,14 +362,7 @@ export const eventsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       try {
-        // Check permissions
-        const canEdit = await storage.canEditEvent(input.id, userId);
-        if (!canEdit) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Not authorized to deactivate this event",
-          });
-        }
+        await assertEventCapability(input.id, userId, "edit");
 
         // Update event status to PAUSED
         await storage.updateScript(input.id, { status: EventStatus.PAUSED });
@@ -405,14 +395,7 @@ export const eventsRouter = createTRPCRouter({
       }
       const userId = ctx.session.user.id;
       try {
-        // Check permissions
-        const canView = await storage.canViewEvent(input.id, userId);
-        if (!canView) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Event not found",
-          });
-        }
+        await assertEventRelations(input.id, userId, "execute");
 
         const event = await storage.getEventWithRelations(input.id);
         if (!event) {
@@ -430,7 +413,7 @@ export const eventsRouter = createTRPCRouter({
         const result = await dispatchEventJob(event, {
           triggeredBy: "manual",
           input: (input as { input?: Record<string, unknown> }).input,
-          runAsUserId: String(userId),
+          authorizedUserId: String(userId),
           actor: `user:${String(userId)}`,
         });
 
@@ -459,14 +442,9 @@ export const eventsRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       try {
-        // Check permissions
-        const canView = await storage.canViewEvent(input.id, userId);
-        if (!canView) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Event not found",
-          });
-        }
+        // Logs may contain output or secret-derived data; sharing an event is
+        // not a grant to read its execution history.
+        await assertEventCapability(input.id, userId, "execute");
 
         const logsResult = await storage.getLogsByEventId(input.id, {
           limit: input.limit,
@@ -498,14 +476,7 @@ export const eventsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       try {
-        // Check permissions
-        const canEdit = await storage.canEditEvent(input.id, userId);
-        if (!canEdit) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Not authorized to reset counter for this event",
-          });
-        }
+        await assertEventCapability(input.id, userId, "edit");
 
         await storage.updateScript(input.id, { executionCount: 0 });
         return { success: true };
@@ -525,14 +496,7 @@ export const eventsRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       try {
-        // Check permissions
-        const canView = await storage.canViewEvent(input.id, userId);
-        if (!canView) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Event not found",
-          });
-        }
+        await assertEventCapability(input.id, userId, "view");
 
         const workflows = await storage.getWorkflowsUsingEvent(
           input.id,
@@ -585,21 +549,31 @@ export const eventsRouter = createTRPCRouter({
               message: "Event not found",
             });
           }
+          await assertEventRelations(eventId, userId, "view");
           return {
             format: "json",
             filename: `${String(event.name ?? "event")}.json`,
-            data: JSON.stringify(event, null, 2),
+            data: JSON.stringify(toEventApiDto(event, userId), null, 2),
           };
         }
 
         // Multiple events JSON download
+        await Promise.all(
+          allowedEventIds.map((id) => assertEventRelations(id, userId, "view")),
+        );
         const events = await Promise.all(
           allowedEventIds.map((id) => storage.getEventWithRelations(id)),
         );
         return {
           format: "json",
           filename: "events.json",
-          data: JSON.stringify(events, null, 2),
+          data: JSON.stringify(
+            events.map((event) =>
+              event ? toEventApiDto(event, userId) : null,
+            ),
+            null,
+            2,
+          ),
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -627,14 +601,7 @@ export const eventsRouter = createTRPCRouter({
       const userId = ctx.session.user.id;
 
       try {
-        // Check if the user can view the event (includes shared events)
-        const canView = await storage.canViewEvent(input.id, userId);
-        if (!canView) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Event not found",
-          });
-        }
+        await assertEventCapability(input.id, userId, "fork");
 
         // Get the original event with all its data
         const originalEvent = await storage.getEventWithRelations(input.id);
@@ -643,6 +610,13 @@ export const eventsRouter = createTRPCRouter({
             code: "NOT_FOUND",
             message: "Event not found",
           });
+        }
+        const forkProjection = toEventForkSecurityProjection(
+          originalEvent,
+          userId,
+        );
+        if (forkProjection.owner) {
+          await assertEventRelations(input.id, userId, "view");
         }
 
         // Create forked event data
@@ -655,18 +629,18 @@ export const eventsRouter = createTRPCRouter({
           shared: false, // Forked events are not shared by default
           tags: (originalEvent.tags as string[]) ?? [],
           httpMethod: originalEvent.httpMethod,
-          httpUrl: originalEvent.httpUrl,
+          httpUrl: forkProjection.httpUrl,
           httpHeaders:
-            (originalEvent.httpHeaders as Array<{
+            (forkProjection.httpHeaders as Array<{
               key: string;
               value: string;
             }>) ?? [],
-          httpBody: originalEvent.httpBody,
+          httpBody: forkProjection.httpBody,
           scheduleNumber: originalEvent.scheduleNumber,
           scheduleUnit: originalEvent.scheduleUnit,
           customSchedule: originalEvent.customSchedule,
-          runLocation: originalEvent.runLocation,
-          serverId: originalEvent.serverId,
+          runLocation: forkProjection.runLocation,
+          serverId: forkProjection.serverId,
           timeoutValue: originalEvent.timeoutValue,
           timeoutUnit: originalEvent.timeoutUnit,
           retries: originalEvent.retries,
@@ -678,8 +652,8 @@ export const eventsRouter = createTRPCRouter({
         const forkedEvent = await storage.createScript(forkedEventData);
 
         // Copy environment variables
-        if (originalEvent.envVars && originalEvent.envVars.length > 0) {
-          for (const envVar of originalEvent.envVars) {
+        if (forkProjection.envVars && forkProjection.envVars.length > 0) {
+          for (const envVar of forkProjection.envVars) {
             await storage.createEnvVar({
               eventId: forkedEvent.id,
               key: envVar.key,
@@ -689,7 +663,7 @@ export const eventsRouter = createTRPCRouter({
         }
 
         // Copy server associations
-        const servers = originalEvent.servers;
+        const servers = forkProjection.servers;
         if (servers && Array.isArray(servers) && servers.length > 0) {
           const serverIds: number[] = [];
           for (const server of servers) {
@@ -703,7 +677,7 @@ export const eventsRouter = createTRPCRouter({
             }
           }
           if (serverIds.length > 0) {
-            await storage.setEventServers(forkedEvent.id, serverIds);
+            await storage.setEventServers(forkedEvent.id, serverIds, userId);
           }
         }
 
@@ -715,7 +689,9 @@ export const eventsRouter = createTRPCRouter({
           forkedEvent.id,
         );
 
-        return completeForkedEvent;
+        return completeForkedEvent
+          ? toEventApiDto(completeForkedEvent, userId)
+          : undefined;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -807,13 +783,11 @@ export const eventsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const canView = await storage.canViewEvent(
+      await assertEventCapability(
         input.eventId,
         ctx.session.user.id,
+        "execute",
       );
-      if (!canView) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
-      }
       const { db } = await import("@/server/db");
       const { scheduleIncidents } = await import("@/shared/schema");
       const { desc: descOp, eq: eqOp } = await import("drizzle-orm");

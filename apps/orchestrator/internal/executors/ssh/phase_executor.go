@@ -41,8 +41,7 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 
 	// SETUP PHASE: Get SSH connection
 	timing.ConnectionStart = time.Now()
-	serverKey := fmt.Sprintf("%s:%d", server.Host, server.Port)
-	conn, err := e.pool.Get(setupCtx, serverKey, server)
+	conn, connectionID, err := e.pool.Get(setupCtx, server)
 	timing.ConnectionEnd = time.Now()
 
 	if err != nil {
@@ -57,7 +56,7 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 		})
 		return
 	}
-	defer e.pool.Put(serverKey, conn, true)
+	defer e.pool.Put(connectionID, conn, true)
 
 	// Create SSH session for main execution
 	session, err := conn.NewSession()
@@ -92,19 +91,8 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 
 	// SETUP PHASE: Deploy runner
 	timing.RunnerDeployStart = time.Now()
-	runnerPath := fmt.Sprintf("/tmp/cronium-runner-%s", e.runnerInfo.Version)
-	deploySession, err := conn.NewSession()
+	runnerPath, runnerChecksum, err := e.ensureRunnerDeployed(setupCtx, conn, server)
 	if err != nil {
-		e.sendError(updates, fmt.Errorf("failed to create deployment session: %w", err), true)
-		e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
-			Status:  types.JobStatusFailed,
-			Message: "Setup phase failed: deployment session",
-		})
-		return
-	}
-	defer deploySession.Close()
-
-	if err := e.ensureRunnerDeployed(setupCtx, deploySession, conn, server, runnerPath); err != nil {
 		timing.RunnerDeployEnd = time.Now()
 		if setupCtx.Err() == context.DeadlineExceeded {
 			e.sendError(updates, fmt.Errorf("setup timeout exceeded while deploying runner"), true)
@@ -121,19 +109,36 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 
 	// SETUP PHASE: Transfer payload
 	timing.PayloadTransferStart = time.Now()
-	remotePayloadPath := fmt.Sprintf("/tmp/cronium-payload-%s.tar.gz", job.ID)
-	copySession, err := conn.NewSession()
+	remotePayload, err := createRemotePayloadDirectory(conn)
 	if err != nil {
-		e.sendError(updates, fmt.Errorf("failed to create copy session: %w", err), true)
+		timing.PayloadTransferEnd = time.Now()
+		e.sendError(updates, fmt.Errorf("failed to prepare private remote payload directory: %w", err), true)
 		e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
 			Status:  types.JobStatusFailed,
-			Message: "Setup phase failed: copy session",
+			Message: "Setup phase failed: payload directory",
 		})
 		return
 	}
-	defer copySession.Close()
+	payloadTransferred := false
+	defer func() {
+		if err := cleanupRemotePayloadDirectory(conn, remotePayload.Directory); err != nil {
+			e.log.WithError(err).Warn("Failed to clean up private remote payload directory")
+		}
+		if payloadTransferred {
+			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), e.timeoutConfig.CleanupTimeout)
+			defer cleanupCancel()
 
-	if err := e.copyPayloadToServer(copySession, conn, payloadPath, remotePayloadPath); err != nil {
+			timing.MarkCleanupComplete()
+			if e.apiClient != nil {
+				finalUpdate := timing.ToExecutionStatusUpdate()
+				if err := e.apiClient.UpdateExecution(cleanupCtx, executionID, types.JobStatusCompleted, finalUpdate); err != nil {
+					e.log.WithError(err).Warn("Failed to update final execution timing")
+				}
+			}
+		}
+	}()
+
+	if err := uploadPayloadToServer(conn, payloadPath, remotePayload); err != nil {
 		timing.PayloadTransferEnd = time.Now()
 		if setupCtx.Err() == context.DeadlineExceeded {
 			e.sendError(updates, fmt.Errorf("setup timeout exceeded while transferring payload"), true)
@@ -147,28 +152,8 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 		return
 	}
 	timing.PayloadTransferEnd = time.Now()
-
-	// Cleanup payload after execution
-	defer func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), e.timeoutConfig.CleanupTimeout)
-		defer cleanupCancel()
-		
-		cleanupSession, _ := conn.NewSession()
-		if cleanupSession != nil {
-			cleanupSession.Run(fmt.Sprintf("rm -f %s %s.sig", remotePayloadPath, remotePayloadPath))
-			cleanupSession.Close()
-		}
-		
-		timing.MarkCleanupComplete()
-		
-		// Update final timing
-		if e.apiClient != nil {
-			finalUpdate := timing.ToExecutionStatusUpdate()
-			if err := e.apiClient.UpdateExecution(cleanupCtx, executionID, types.JobStatusCompleted, finalUpdate); err != nil {
-				e.log.WithError(err).Warn("Failed to update final execution timing")
-			}
-		}
-	}()
+	payloadTransferred = true
+	remotePayloadPath := remotePayload.PayloadPath
 
 	// Mark setup as complete
 	timing.MarkSetupComplete()
@@ -188,14 +173,14 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 
 	// Execute the script
 	e.log.WithFields(logrus.Fields{
-		"jobID":      job.ID,
-		"server":     server.Name,
-		"timeout":    execTimeout.String(),
-		"runner":     runnerPath,
-		"payload":    remotePayloadPath,
+		"jobID":   job.ID,
+		"server":  server.Name,
+		"timeout": execTimeout.String(),
+		"runner":  runnerPath,
+		"payload": remotePayloadPath,
 	}).Info("Starting script execution phase")
 
-	exitCode := e.runScriptWithTimeout(execCtx, session, conn, runnerPath, remotePayloadPath, e.payloadVerifyKey(payloadPath), job, updates, executionID, timing, execTimeout)
+	exitCode := e.runScriptWithTimeout(execCtx, session, conn, runnerPath, runnerChecksum, remotePayloadPath, e.payloadVerifyKey(payloadPath), job, updates, executionID, timing, execTimeout)
 
 	// Mark execution as complete
 	timing.MarkExecutionComplete()
@@ -227,7 +212,7 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 	if e.apiClient != nil {
 		updateData := timing.ToExecutionStatusUpdate()
 		updateData.ExitCode = &exitCode
-		
+
 		if err := e.apiClient.UpdateExecution(ctx, executionID, finalStatus, updateData); err != nil {
 			e.log.WithError(err).Warn("Failed to update execution final status")
 		}
@@ -235,7 +220,7 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 }
 
 // runScriptWithTimeout executes the script with the given timeout
-func (e *Executor) runScriptWithTimeout(ctx context.Context, session *ssh.Session, conn *ssh.Client, runnerPath, payloadPath, verifyKey string, job *types.Job, updates chan types.ExecutionUpdate, executionID string, timing *ExecutionTiming, timeout time.Duration) int {
+func (e *Executor) runScriptWithTimeout(ctx context.Context, session *ssh.Session, conn *ssh.Client, runnerPath, runnerChecksum, payloadPath, verifyKey string, job *types.Job, updates chan types.ExecutionUpdate, executionID string, timing *ExecutionTiming, timeout time.Duration) int {
 	// Set up pipes for stdout and stderr
 	stdout, err := session.StdoutPipe()
 	if err != nil {
@@ -254,13 +239,13 @@ func (e *Executor) runScriptWithTimeout(ctx context.Context, session *ssh.Sessio
 
 	// Always include job ID and execution ID
 	envVars = append(envVars,
-		fmt.Sprintf("CRONIUM_JOB_ID=%s", job.ID),
-		fmt.Sprintf("CRONIUM_EXECUTION_ID=%s", executionID),
+		shellExport("CRONIUM_JOB_ID", job.ID),
+		shellExport("CRONIUM_EXECUTION_ID", executionID),
 	)
 
 	// Pass the payload verification key so the runner enforces the signature
 	if verifyKey != "" {
-		envVars = append(envVars, fmt.Sprintf("CRONIUM_VERIFY_KEY=%s", verifyKey))
+		envVars = append(envVars, shellExport("CRONIUM_VERIFY_KEY", verifyKey))
 	}
 
 	// Check if we should use API mode
@@ -269,18 +254,18 @@ func (e *Executor) runScriptWithTimeout(ctx context.Context, session *ssh.Sessio
 		// Set up reverse tunnel for API mode
 		remotePort := 9090
 		tunnelManager := NewTunnelManager(e.runtimeHost, e.runtimePort, remotePort, e.log)
-		
+
 		if err := tunnelManager.Start(conn); err != nil {
 			e.log.WithError(err).Warn("Failed to establish SSH tunnel, falling back to bundled mode")
 			useAPIMode = false
 		} else {
 			defer tunnelManager.Stop()
-			
+
 			// Generate JWT token for this execution
 			jwtManager := auth.NewJWTManager(e.jwtSecret)
 			userID := ""
 			eventID := ""
-			
+
 			if job.Metadata != nil {
 				if uid, ok := job.Metadata["userId"].(string); ok {
 					userID = uid
@@ -289,7 +274,7 @@ func (e *Executor) runScriptWithTimeout(ctx context.Context, session *ssh.Sessio
 					eventID = eid
 				}
 			}
-			
+
 			token, err := jwtManager.GenerateJobToken(job.ID, executionID, userID, eventID)
 			if err != nil {
 				e.log.WithError(err).Warn("Failed to generate JWT token, falling back to bundled mode")
@@ -299,9 +284,9 @@ func (e *Executor) runScriptWithTimeout(ctx context.Context, session *ssh.Sessio
 				apiEndpoint := tunnelManager.GetRemoteEndpoint()
 				apiToken := token
 				envVars = append(envVars,
-					fmt.Sprintf("CRONIUM_HELPER_MODE=api"),
-					fmt.Sprintf("CRONIUM_API_ENDPOINT=%s", apiEndpoint),
-					fmt.Sprintf("CRONIUM_API_TOKEN=%s", apiToken),
+					shellExport("CRONIUM_HELPER_MODE", "api"),
+					shellExport("CRONIUM_API_ENDPOINT", apiEndpoint),
+					shellExport("CRONIUM_API_TOKEN", apiToken),
 				)
 				e.log.WithFields(logrus.Fields{
 					"endpoint":    apiEndpoint,
@@ -311,21 +296,12 @@ func (e *Executor) runScriptWithTimeout(ctx context.Context, session *ssh.Sessio
 		}
 	}
 
-	// Build the command with environment variables
-	var cmd string
-	if e.log.GetLevel() == logrus.DebugLevel {
-		cmd = fmt.Sprintf("%s --log-level=debug run %s", runnerPath, payloadPath)
-	} else {
-		cmd = fmt.Sprintf("%s run %s", runnerPath, payloadPath)
-	}
+	// Verify the content digest in the final shell immediately before exec.
+	cmd := buildRunnerCommand(runnerPath, runnerChecksum, payloadPath, e.log.GetLevel() == logrus.DebugLevel)
 
 	// Add environment variables using export
 	if len(envVars) > 0 {
-		exports := make([]string, len(envVars))
-		for i, env := range envVars {
-			exports[i] = fmt.Sprintf("export %s", env)
-		}
-		cmd = fmt.Sprintf("%s && %s", strings.Join(exports, " && "), cmd)
+		cmd = fmt.Sprintf("%s && %s", strings.Join(envVars, " && "), cmd)
 	}
 
 	// Start the command
@@ -390,19 +366,22 @@ func (e *Executor) runScriptWithTimeout(ctx context.Context, session *ssh.Sessio
 		if err != nil {
 			if exitErr, ok := err.(*ssh.ExitError); ok {
 				exitCode = exitErr.ExitStatus()
+				if exitCode == runnerIntegrityFailureExitCode && job.Execution.Target.ServerDetails != nil {
+					e.runnerCache.Remove(runnerCacheKey(job.Execution.Target.ServerDetails))
+				}
 			} else {
 				e.sendError(updates, fmt.Errorf("runner failed: %w", err), true)
 				return -1
 			}
 		}
-		
+
 		// Update execution with output
 		if e.apiClient != nil {
 			outputMu.Lock()
 			outputStr := stdoutBuf.String()
 			errorStr := stderrBuf.String()
 			outputMu.Unlock()
-			
+
 			updateData := &api.ExecutionStatusUpdate{}
 			if outputStr != "" {
 				updateData.Output = &outputStr
@@ -410,14 +389,14 @@ func (e *Executor) runScriptWithTimeout(ctx context.Context, session *ssh.Sessio
 			if errorStr != "" {
 				updateData.Error = &errorStr
 			}
-			
+
 			apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer apiCancel()
 			if err := e.apiClient.UpdateExecution(apiCtx, executionID, types.JobStatusRunning, updateData); err != nil {
 				e.log.WithError(err).Warn("Failed to update execution output")
 			}
 		}
-		
+
 		return exitCode
 	}
 }

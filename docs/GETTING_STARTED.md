@@ -138,18 +138,31 @@ pnpm dev:worker
 #### Option B: Run with Docker
 
 ```bash
-# Start all services with Docker Compose
-pnpm dev:docker:up
+# Build the worker, runtime, orchestrator, and execution images
+pnpm dev:docker:build
 
-# Or manually (the helper script sources env/.env.local for you):
-docker compose -f infra/docker/docker-compose.dev.local-app.yml up -d
+# Start the Docker development infrastructure
+pnpm dev:docker:up
 ```
 
 This will start:
 
-- **cronium-app-dev**: Next.js application with hot reloading on port 5001
+- **cronium-worker-dev**: Scheduling worker with health endpoint on port 5003
 - **cronium-orchestrator-dev**: Orchestrator service with Air (Go hot reloading)
-- **valkey**: Redis-compatible cache/queue service
+- **cronium-runtime-api-dev**: Runtime API on port 8089
+- **cronium-valkey-dev**: Redis-compatible cache/queue service
+
+Run the host processes separately; do not also run `pnpm dev:worker` when the
+Docker worker is active:
+
+```bash
+pnpm dev:app
+pnpm dev:socket
+```
+
+The helper reads `env/.env.local` and rewrites a loopback `DATABASE_URL` host
+to `host.docker.internal` for the worker container. Hosted database URLs are
+passed through unchanged.
 
 ### 7. Verify Services are Running
 
@@ -160,7 +173,7 @@ For local development:
 For Docker:
 
 ```bash
-docker-compose -f infra/docker/docker-compose.dev.local-app.yml ps
+docker compose -f infra/docker/docker-compose.dev.local-app.yml ps
 ```
 
 You should see all services with "Up" status.
@@ -169,6 +182,7 @@ You should see all services with "Up" status.
 
 - **Web Application**: http://localhost:5001
 - **WebSocket Server**: http://localhost:5002
+- **Scheduling Worker Health**: http://localhost:5003/health
 - **Orchestrator Health**: http://localhost:8080/health
 
 ## Development Workflow
@@ -207,8 +221,8 @@ For Docker:
 pnpm dev:docker:logs
 
 # View specific service logs
-docker-compose -f infra/docker/docker-compose.dev.local-app.yml logs -f cronium-app-dev
-docker-compose -f infra/docker/docker-compose.dev.local-app.yml logs -f cronium-orchestrator-dev
+docker compose -f infra/docker/docker-compose.dev.local-app.yml logs -f cronium-worker
+docker compose -f infra/docker/docker-compose.dev.local-app.yml logs -f cronium-orchestrator
 ```
 
 ### Stopping Services
@@ -224,7 +238,7 @@ For Docker:
 pnpm dev:docker:down
 
 # Stop and remove volumes (clean slate)
-docker-compose -f infra/docker/docker-compose.dev.local-app.yml down -v
+docker compose -f infra/docker/docker-compose.dev.local-app.yml down -v
 ```
 
 ## Common Development Tasks

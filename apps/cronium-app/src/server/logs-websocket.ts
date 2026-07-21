@@ -1,17 +1,23 @@
 import type { Server, Socket } from "socket.io";
 import { storage } from "@/server/storage";
-import { getLogsByJobId } from "@/server/storage-extensions";
+import {
+  getLogsByExecutionId,
+  getLogsByJobId,
+} from "@/server/storage-extensions";
 import { jobService } from "@/lib/services/job-service";
+import {
+  createSocketAuthMiddleware,
+  getAuthenticatedSocketUserId,
+} from "@/lib/socket-ticket";
 import type { LogStatus, Job, Log } from "@/shared/schema";
 
 interface LogStreamAuth {
-  userId: string;
+  ticket?: string;
   jobId?: string;
   logId?: number;
 }
 
 interface SocketData {
-  userId: string;
   job?: Job;
   log?: Log;
 }
@@ -28,13 +34,14 @@ export class LogsWebSocketHandler {
   private setupNamespace() {
     const logsNamespace = this.io.of("/logs");
 
+    logsNamespace.use(createSocketAuthMiddleware("logs"));
+
     logsNamespace.use(
       (socket, next) =>
         void (async () => {
           try {
-            // Validate authentication
-            const { userId, jobId, logId } = socket.handshake
-              .auth as LogStreamAuth;
+            const { jobId, logId } = socket.handshake.auth as LogStreamAuth;
+            const userId = getAuthenticatedSocketUserId(socket);
 
             if (!userId) {
               return next(new Error("Authentication required"));
@@ -57,7 +64,6 @@ export class LogsWebSocketHandler {
               (socket.data as SocketData).log = log;
             }
 
-            (socket.data as SocketData).userId = userId;
             next();
           } catch {
             next(new Error("Authentication failed"));
@@ -74,16 +80,17 @@ export class LogsWebSocketHandler {
         async (data: { logId?: number; jobId?: string }) => {
           try {
             let logId: number | undefined;
+            const userId = getAuthenticatedSocketUserId(socket);
+            if (!userId || !data || typeof data !== "object") {
+              socket.emit("error", { message: "Authentication required" });
+              return;
+            }
 
             if (data.jobId) {
               // Get log ID from job
               const job = await jobService.getJob(data.jobId);
-              if (job?.userId === (socket.data as SocketData).userId) {
-                // Find associated log
-                const logs = await storage.getLogsByEventId(job.eventId, {
-                  limit: 1,
-                });
-                const logList = (logs as { logs: Log[] }).logs;
+              if (job?.userId === userId) {
+                const logList = await getLogsByJobId(job.id);
                 if (logList.length > 0) {
                   logId = logList[0]?.id;
                 }
@@ -99,7 +106,7 @@ export class LogsWebSocketHandler {
 
             // Verify access
             const log = await storage.getLog(logId);
-            if (log?.userId !== (socket.data as SocketData).userId) {
+            if (log?.userId !== userId) {
               socket.emit("error", { message: "Access denied" });
               return;
             }
@@ -137,6 +144,7 @@ export class LogsWebSocketHandler {
 
       // Unsubscribe from log updates
       socket.on("unsubscribe", (data: { logId: number }) => {
+        if (!data || !Number.isInteger(data.logId) || data.logId <= 0) return;
         const roomName = `log:${data.logId}`;
         void socket.leave(roomName);
 
@@ -249,6 +257,29 @@ export class LogsWebSocketHandler {
       })
       .catch((error) => {
         console.error("Error broadcasting job update:", error);
+      });
+  }
+
+  /** Broadcast execution changes only to rooms for logs on that execution. */
+  public broadcastExecutionUpdate(
+    executionId: string,
+    status: string,
+    data: Record<string, unknown>,
+  ): void {
+    void getLogsByExecutionId(executionId)
+      .then((logs) => {
+        const logsNamespace = this.io.of("/logs");
+        for (const log of logs) {
+          logsNamespace.to(`log:${log.id}`).emit("execution:update", {
+            executionId,
+            status,
+            ...data,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      })
+      .catch((error) => {
+        console.error("Error broadcasting execution update:", error);
       });
   }
 

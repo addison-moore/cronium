@@ -56,6 +56,7 @@ The installer automates exactly these steps:
    cat <<ENV > .env
    AUTH_URL=http://localhost:3000
    PUBLIC_APP_URL=http://localhost:3000
+   SOCKET_ALLOWED_ORIGINS=http://localhost:3000
    AUTH_SECRET=$(openssl rand -hex 32)
    ENCRYPTION_KEY=$(openssl rand -hex 32)
    INTERNAL_API_KEY=$(openssl rand -base64 32)
@@ -79,10 +80,21 @@ The installer automates exactly these steps:
    the exact generation command in the error message. Every setting is read
    from `.env`; a standard deployment never edits the YAML.
 
-For a domain deployment, set `AUTH_URL`/`PUBLIC_APP_URL` to your public URL,
-put a TLS reverse proxy in front of ports 3000 (web) and 5002 (WebSocket), and
-set `NEXT_PUBLIC_SOCKET_URL` to the browser-reachable URL of the WebSocket
-port.
+For a domain deployment, set `AUTH_URL`/`PUBLIC_APP_URL` to your public URL and
+set `NEXT_PUBLIC_SOCKET_URL` to the browser-reachable HTTPS URL used for live
+logs and terminals. Route that URL's `/api/socketio` path through a TLS reverse
+proxy to port 5002. Keep the raw port off the public Internet when possible;
+the `/broadcast/*` routes on it are intended only for Cronium services and
+require `Authorization: Bearer $INTERNAL_API_KEY`.
+
+The socket server accepts browser handshakes only from exact trusted origins.
+It uses `PUBLIC_APP_URL` and `AUTH_URL` by default. If more than one frontend
+origin is legitimate, set `SOCKET_ALLOWED_ORIGINS` to a comma-separated list
+such as `https://cronium.example.com,https://admin.example.com`. Include the
+scheme and non-default port, if any; paths and wildcards are not supported.
+Authenticated users obtain a 30-second, audience-specific ticket before each
+connection. Tickets are single-use within the socket process, and the server
+rechecks that the user is active (plus console permission for terminals).
 
 ## First Boot
 
@@ -116,13 +128,17 @@ see [GETTING_STARTED.md](./GETTING_STARTED.md) and `pnpm dev:docker:up`.
 
 1. **Environment variables** — the complete reference is
    [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md). Common `.env`
-   options: `APP_PORT`/`SOCKET_PORT` (published ports), `CRONIUM_IMAGE_TAG`
-   (pin a release), `LOG_LEVEL`.
+   options: `APP_PORT`/`SOCKET_PORT` (published ports),
+   `SOCKET_ALLOWED_ORIGINS` (exact trusted browser origins),
+   `CRONIUM_IMAGE_TAG` (pin a release), `LOG_LEVEL`.
 2. **Orchestrator tuning** — advanced settings (polling cadence, SSH executor
    limits, metrics) via `apps/orchestrator/configs/cronium-orchestrator.yaml`.
 3. **Networking** — services share a fixed-name `cronium` bridge network. Only
    the app's ports (3000, 5002) are published; the worker, orchestrator, and
-   runtime are internal-only.
+   runtime are internal-only. On an Internet-facing deployment, firewall the
+   raw socket port and proxy only `/api/socketio` to it. Do not expose
+   `/broadcast/*`; those endpoints are authenticated with `INTERNAL_API_KEY`
+   but remain service-only.
 4. **Volumes** — `postgres-data` (database), `valkey-data` (cache),
    `orchestrator-data` (payload signing key + SSH known_hosts; losing it
    breaks registered remote runners).

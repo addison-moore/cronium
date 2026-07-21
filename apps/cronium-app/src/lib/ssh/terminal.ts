@@ -5,6 +5,11 @@
  * with shell detection and prompt management
  */
 
+import {
+  createSSHPoolKey,
+  type SSHAuthType,
+  type SSHConnectionScope,
+} from "./pool-key";
 import { SSHConnectionManager } from "./shared";
 
 export class TerminalSSHService {
@@ -15,25 +20,25 @@ export class TerminalSSHService {
     this.connectionManager = new SSHConnectionManager();
   }
 
-  private getConnectionKey(
-    host: string,
-    username: string,
-    port: number,
-  ): string {
-    return `${username}@${host}:${port}`;
-  }
-
   /**
    * Get the user's default shell for a remote server (cached)
    */
   private async getUserShell(
+    connectionScope: SSHConnectionScope,
     host: string,
     authCredential: string,
     username = "root",
     port = 22,
-    authType: "privateKey" | "password" = "privateKey",
+    authType: SSHAuthType = "privateKey",
   ): Promise<string> {
-    const connectionKey = this.getConnectionKey(host, username, port);
+    const connectionKey = createSSHPoolKey({
+      connectionScope,
+      host,
+      username,
+      port,
+      authType,
+      authCredential,
+    });
 
     // Return cached shell if available
     if (this.shellCache.has(connectionKey)) {
@@ -42,14 +47,14 @@ export class TerminalSSHService {
 
     try {
       // Get user's default shell from $SHELL environment variable
-      const connection = await this.connectionManager.getPooledConnection(
+      const connection = await this.connectionManager.getPooledConnection({
+        connectionScope,
         host,
         authCredential,
         username,
         port,
-        false,
         authType,
-      );
+      });
       const result = await connection.ssh.execCommand('echo "$SHELL"');
 
       const userShell = result.stdout ? result.stdout.trim() : "/bin/bash";
@@ -70,27 +75,29 @@ export class TerminalSSHService {
    * Execute a terminal command on a remote server using the user's default shell
    */
   async executeCommand(
+    connectionScope: SSHConnectionScope,
     host: string,
     authCredential: string,
     username = "root",
     port = 22,
     command: string,
     workingDirectory?: string,
-    authType: "privateKey" | "password" = "privateKey",
+    authType: SSHAuthType = "privateKey",
   ): Promise<{ stdout: string; stderr: string }> {
     try {
       // Get pooled connection for fast execution
-      const connection = await this.connectionManager.getPooledConnection(
+      const connection = await this.connectionManager.getPooledConnection({
+        connectionScope,
         host,
         authCredential,
         username,
         port,
-        false, // Don't force new connection
         authType,
-      );
+      });
 
       // Get the user's default shell for this connection
       const userShell = await this.getUserShell(
+        connectionScope,
         host,
         authCredential,
         username,
@@ -133,16 +140,18 @@ export class TerminalSSHService {
    * Get the actual shell prompt from the remote server
    */
   async getShellPrompt(
+    connectionScope: SSHConnectionScope,
     host: string,
     authCredential: string,
     username: string,
     port = 22,
     workingDirectory?: string,
-    authType: "privateKey" | "password" = "privateKey",
+    authType: SSHAuthType = "privateKey",
   ): Promise<string> {
     try {
       // Get the user's default shell (cached)
       const userShell = await this.getUserShell(
+        connectionScope,
         host,
         authCredential,
         username,
@@ -152,6 +161,7 @@ export class TerminalSSHService {
 
       // Get the current shell prompt by echoing PS1 variable using the user's shell
       const result = await this.executeCommand(
+        connectionScope,
         host,
         authCredential,
         username,
@@ -167,6 +177,7 @@ export class TerminalSSHService {
 
         // Replace common PS1 variables with actual values
         const pwdResult = await this.executeCommand(
+          connectionScope,
           host,
           authCredential,
           username,
@@ -201,6 +212,7 @@ export class TerminalSSHService {
 
     // Fallback to a reasonable prompt format
     const pwdResult = await this.executeCommand(
+      connectionScope,
       host,
       authCredential,
       username,
@@ -220,11 +232,12 @@ export class TerminalSSHService {
    * Prewarm a connection for terminal use to reduce first-command latency
    */
   async prewarmConnection(
+    connectionScope: SSHConnectionScope,
     host: string,
     authCredential: string,
     username = "root",
     port = 22,
-    authType: "privateKey" | "password" = "privateKey",
+    authType: SSHAuthType = "privateKey",
   ): Promise<boolean> {
     try {
       console.log(
@@ -232,14 +245,14 @@ export class TerminalSSHService {
       );
 
       // Create or get pooled connection
-      const connection = await this.connectionManager.getPooledConnection(
+      const connection = await this.connectionManager.getPooledConnection({
+        connectionScope,
         host,
         authCredential,
         username,
         port,
-        false,
         authType,
-      );
+      });
 
       // Test connection with a simple command with timeout
       await Promise.race([
@@ -269,6 +282,7 @@ export class TerminalSSHService {
    * Test SSH connection
    */
   async testConnection(
+    connectionScope: SSHConnectionScope,
     host: string,
     authCredential: string,
     username = "root",
@@ -276,6 +290,7 @@ export class TerminalSSHService {
     authType: "privateKey" | "password" = "privateKey",
   ): Promise<{ success: boolean; message: string }> {
     return this.connectionManager.testConnection(
+      connectionScope,
       host,
       authCredential,
       username,

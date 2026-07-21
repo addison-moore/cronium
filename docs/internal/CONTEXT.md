@@ -100,6 +100,9 @@ src/
 pnpm dev              # Start Next.js dev server on port 5001
 pnpm dev:socket       # Start WebSocket server (terminal + live logs)
 pnpm dev:worker       # Start scheduling worker (REQUIRED for schedules and tool/HTTP jobs)
+pnpm dev:docker:up    # Start worker + orchestrator + runtime + Valkey in Docker
+pnpm dev:docker:down  # Stop the Docker development infrastructure
+pnpm dev:docker:build # Build worker/runtime/orchestrator/executor images
 
 # Building & Testing
 pnpm build            # Build Next.js application

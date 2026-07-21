@@ -12,6 +12,11 @@ import {
 } from "@/shared/schema";
 import { z } from "zod";
 import { authenticateApiRequest } from "@/lib/api-auth";
+import {
+  assertProposedEventServers,
+  resourceAccessHttpStatus,
+} from "@/server/security/resource-access";
+import { toEventApiDto, toEventListApiDto } from "@/server/security/api-dto";
 
 // Schema for validating new script input
 const createEventSchema = z
@@ -28,6 +33,7 @@ const createEventSchema = z
     ]),
     // Make content optional since it's not needed for HTTP requests
     content: z.string().optional(),
+    httpRequest: z.string().optional(),
 
     // HTTP Request specific fields
     httpMethod: z.string().optional(),
@@ -55,9 +61,9 @@ const createEventSchema = z
     startTime: z.union([z.string(), z.null(), z.undefined()]),
     runLocation: z.enum([RunLocation.LOCAL, RunLocation.REMOTE]),
     // Allow serverId to be null, undefined, or a number
-    serverId: z.union([z.number(), z.null(), z.undefined()]),
+    serverId: z.union([z.number().int().positive(), z.null(), z.undefined()]),
     // Support multiple servers
-    selectedServerIds: z.array(z.number()).optional(),
+    selectedServerIds: z.array(z.number().int().positive()).optional(),
     timeoutValue: z.number().min(1),
     timeoutUnit: z.enum([TimeUnit.SECONDS, TimeUnit.MINUTES, TimeUnit.HOURS]),
     retries: z.number().min(0),
@@ -70,6 +76,7 @@ const createEventSchema = z
       )
       .optional(),
   })
+  .strict()
   .refine(
     (data) => {
       // For HTTP_REQUEST type, require httpUrl and httpMethod
@@ -172,7 +179,9 @@ export async function GET(request: NextRequest) {
 
     console.log(`Found ${events.length} events for user ${auth.userId}`);
 
-    return NextResponse.json(events);
+    return NextResponse.json(
+      events.map((event) => toEventListApiDto(event, auth.userId)),
+    );
   } catch (error) {
     console.error("Error fetching scripts:", error);
     return new NextResponse(
@@ -232,6 +241,11 @@ export async function POST(request: NextRequest) {
     );
 
     const data = validationResult.data;
+    await assertProposedEventServers(
+      auth.userId,
+      data.serverId,
+      data.selectedServerIds,
+    );
 
     // Create the script
     interface ScriptData {
@@ -352,19 +366,27 @@ export async function POST(request: NextRequest) {
 
     // Handle multiple server selection for remote events
     if (data.selectedServerIds && data.selectedServerIds.length > 0) {
-      await storage.setEventServers(script.id, data.selectedServerIds);
+      await storage.setEventServers(
+        script.id,
+        data.selectedServerIds,
+        auth.userId,
+      );
     }
 
     // Get the full script with all relations
     const fullScript = await storage.getEventWithRelations(script.id);
 
-    return NextResponse.json(fullScript, { status: 201 });
+    return NextResponse.json(
+      fullScript ? toEventApiDto(fullScript, auth.userId) : null,
+      { status: 201 },
+    );
   } catch (error) {
     console.error("Error creating script:", error);
+    const accessStatus = resourceAccessHttpStatus(error);
     return new NextResponse(
       JSON.stringify({ error: "Internal server error" }),
       {
-        status: 500,
+        status: accessStatus ?? 500,
         headers: { "Content-Type": "application/json" },
       },
     );

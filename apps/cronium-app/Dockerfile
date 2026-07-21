@@ -42,14 +42,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 ENV SKIP_ENV_VALIDATION=true
 
-# Set placeholder values for required environment variables during build
-# These will be overridden at runtime with actual values
-ENV AUTH_SECRET=build-placeholder
-ENV AUTH_URL=http://localhost:3000
-ENV DATABASE_URL=postgresql://user:pass@localhost:5432/db
-ENV PUBLIC_APP_URL=http://localhost:3000
-ENV ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000
-
 # Build the application
 # First build dependencies, then the app
 RUN pnpm --filter @cronium/ui build
@@ -58,6 +50,8 @@ WORKDIR /app/apps/cronium-app
 RUN pnpm exec next build
 # Bundle the scheduling worker (own compose service, same image)
 RUN pnpm run build:worker
+# Bundle the authenticated terminal/log Socket.IO bridge.
+RUN pnpm run build:socket
 WORKDIR /app
 
 # Stage 3: Runtime
@@ -76,7 +70,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/.next/standalone
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/.next/static ./apps/cronium-app/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/drizzle ./apps/cronium-app/drizzle
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/scripts ./apps/cronium-app/scripts
-# Scheduling worker bundle (run via scripts/start-worker.sh in its own service)
+# Scheduling worker and Socket.IO server bundles
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/dist ./apps/cronium-app/dist
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/drizzle.config.ts ./apps/cronium-app/drizzle.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/src/shared ./apps/cronium-app/src/shared

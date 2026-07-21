@@ -7,7 +7,6 @@ import * as path from "path";
 const PRIORITY_FILES = [
   // API routes
   "/src/app/api/admin/terminal/route.ts",
-  "/src/app/api/internal/servers/[serverId]/credentials/route.ts",
 
   // Server-side critical
   "/src/server/storage.ts",

@@ -10,7 +10,7 @@ node apps/cronium-app/scripts/run-migrations.cjs
 # Seed bootstrap admin/settings when enabled
 node apps/cronium-app/scripts/bootstrap-seed.cjs
 
-SOCKET_ENTRY="server.js"
+SOCKET_ENTRY="apps/cronium-app/dist/socket-server.cjs"
 SOCKET_PID=""
 
 if [ -f "$SOCKET_ENTRY" ]; then
@@ -18,7 +18,8 @@ if [ -f "$SOCKET_ENTRY" ]; then
   node "$SOCKET_ENTRY" &
   SOCKET_PID=$!
 else
-  echo "[SOCKET] $SOCKET_ENTRY not found; skipping socket server"
+  echo "[SOCKET] Required socket server bundle not found: $SOCKET_ENTRY" >&2
+  exit 1
 fi
 
 cleanup() {

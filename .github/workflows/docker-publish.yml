@@ -129,7 +129,7 @@ jobs:
         id: build-orchestrator
         uses: docker/build-push-action@v6
         with:
-          context: ./apps/orchestrator
+          context: .
           file: ./apps/orchestrator/Dockerfile
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}

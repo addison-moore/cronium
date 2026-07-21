@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sshService } from "@/lib/ssh";
 import { z } from "zod";
+import { toServerApiDto } from "@/server/security/api-dto";
 
 export async function GET(
   req: NextRequest,
@@ -40,7 +41,7 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(server);
+    return NextResponse.json(toServerApiDto(server));
   } catch (error) {
     console.error("Error fetching server:", error);
     return NextResponse.json(
@@ -50,13 +51,15 @@ export async function GET(
   }
 }
 
-const updateServerSchema = z.object({
-  name: z.string().min(1, "Name is required").optional(),
-  address: z.string().min(1, "Address is required").optional(),
-  sshKey: z.string().optional(), // Allow empty string to keep existing key
-  username: z.string().optional(),
-  port: z.number().optional(),
-});
+const updateServerSchema = z
+  .object({
+    name: z.string().min(1, "Name is required").optional(),
+    address: z.string().min(1, "Address is required").optional(),
+    sshKey: z.string().optional(), // Allow empty string to keep existing key
+    username: z.string().optional(),
+    port: z.number().optional(),
+  })
+  .strict();
 
 export async function PUT(
   req: NextRequest,
@@ -162,7 +165,7 @@ export async function PUT(
     );
     const updatedServer = await storage.updateServer(serverId, updateData);
 
-    return NextResponse.json(updatedServer);
+    return NextResponse.json(toServerApiDto(updatedServer));
   } catch (error) {
     console.error("Error updating server:", error);
     return NextResponse.json(

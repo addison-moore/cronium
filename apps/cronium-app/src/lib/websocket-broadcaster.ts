@@ -190,11 +190,16 @@ export class WebSocketBroadcaster {
   ): Promise<boolean> {
     const endpoint = this.getEndpointForType(type);
     const url = `http://localhost:${this.config.socketPort}${endpoint}`;
+    const internalKey = process.env.INTERNAL_API_KEY;
+    if (!internalKey) {
+      throw new Error("INTERNAL_API_KEY is required for socket broadcasts");
+    }
 
     const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${internalKey}`,
       },
       body: JSON.stringify(data),
       signal: AbortSignal.timeout(5000), // 5 second timeout

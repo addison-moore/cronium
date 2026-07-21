@@ -202,11 +202,10 @@ export default function Terminal({ serverId, serverName }: TerminalProps) {
         // Only create a new terminal session if we don't have one and we're not already creating one
         if (!existingSessionId && !terminalSocketManager.isCreatingSession()) {
           console.log(
-            `Terminal: Creating terminal session for user ${user.id} on server ${serverId}`,
+            `Terminal: Creating terminal session on server ${serverId}`,
           );
           terminalSocketManager.setCreatingSession(true);
           socket.emit("create-terminal", {
-            userId: user.id,
             serverId: serverId,
             cols: term.cols,
             rows: term.rows,

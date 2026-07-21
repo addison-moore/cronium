@@ -1,11 +1,26 @@
 import { EventType } from "@/shared/schema";
+import {
+  createSSHPoolKey,
+  type SSHAuthType,
+  type SSHConnectionScope,
+} from "@/lib/ssh/pool-key";
 import { Client } from "ssh2"; // Import Client from ssh2
 import type { ClientChannel } from "ssh2";
 interface SSHConnection {
   ssh: Client; // Changed from NodeSSH to ssh2 Client
   isConnected: boolean;
-  host: string;
+  poolKey: string;
   lastUsed: number;
+}
+
+interface SSHConnectionRequest {
+  connectionScope: SSHConnectionScope;
+  host: string;
+  authCredential: string;
+  username: string;
+  port: number;
+  forceNew?: boolean;
+  authType: SSHAuthType;
 }
 
 export class SSHService {
@@ -47,26 +62,29 @@ export class SSHService {
     keysToDelete.forEach((key) => this.connectionPool.delete(key));
   }
 
-  private getConnectionKey(
-    host: string,
-    username: string,
-    port: number,
-  ): string {
-    return `${username ?? ""}@${host ?? ""}:${String(port)}`;
-  }
-
   private connectionLocks = new Map<string, Promise<SSHConnection>>();
   private shellCache = new Map<string, string>(); // Cache user shells per server
 
   private async getPooledConnection(
-    host: string,
-    authCredential: string,
-    username = "root",
-    port = 22,
-    forceNew = false,
-    authType: "privateKey" | "password" = "privateKey",
+    request: SSHConnectionRequest,
   ): Promise<SSHConnection> {
-    const connectionKey = this.getConnectionKey(host, username, port);
+    const {
+      connectionScope,
+      host,
+      authCredential,
+      username,
+      port,
+      forceNew = false,
+      authType,
+    } = request;
+    const connectionKey = createSSHPoolKey({
+      connectionScope,
+      host,
+      username,
+      port,
+      authType,
+      authCredential,
+    });
 
     // Check if there's already a connection being established for this key
     if (this.connectionLocks.has(connectionKey)) {
@@ -170,7 +188,7 @@ export class SSHService {
         const connection: SSHConnection = {
           ssh,
           isConnected: true,
-          host: connectionKey,
+          poolKey: connectionKey,
           lastUsed: Date.now(),
         };
         this.connectionPool.set(connectionKey, connection);
@@ -361,6 +379,7 @@ export class SSHService {
     scriptContent: string,
     envVars: Record<string, string> = {},
     server?: {
+      connectionScope: SSHConnectionScope;
       address: string;
       sshKey: string;
       username: string;
@@ -384,13 +403,14 @@ export class SSHService {
     try {
       // Use pooled connection for server-based execution
       if (server) {
-        connection = await this.getPooledConnection(
-          server.address,
-          server.sshKey,
-          server.username,
-          server.port,
-          false, // Don't force new connection unless needed
-        );
+        connection = await this.getPooledConnection({
+          connectionScope: server.connectionScope,
+          host: server.address,
+          authCredential: server.sshKey,
+          username: server.username,
+          port: server.port,
+          authType: "privateKey",
+        });
         usePooledConnection = true;
       } else if (!this.isConnected) {
         throw new Error("SSH connection not established");
@@ -1320,6 +1340,7 @@ module.exports = croniumInstance;`;
    * This is optimized for terminal-like operations with minimal latency
    */
   async executeCommand(
+    connectionScope: SSHConnectionScope,
     host: string,
     privateKey: string,
     username = "root",
@@ -1331,16 +1352,18 @@ module.exports = croniumInstance;`;
 
     try {
       // Get pooled connection for fast execution
-      connection = await this.getPooledConnection(
+      connection = await this.getPooledConnection({
+        connectionScope,
         host,
-        privateKey,
+        authCredential: privateKey,
         username,
         port,
-        false, // Don't force new connection
-      );
+        authType: "privateKey",
+      });
 
       // Get the user's default shell for this connection
       const userShell = await this.getUserShell(
+        connectionScope,
         host,
         privateKey,
         username,
@@ -1407,12 +1430,20 @@ module.exports = croniumInstance;`;
    * Get the user's default shell for a remote server (cached)
    */
   private async getUserShell(
+    connectionScope: SSHConnectionScope,
     host: string,
     privateKey: string,
     username = "root",
     port = 22,
   ): Promise<string> {
-    const connectionKey = this.getConnectionKey(host, username, port);
+    const connectionKey = createSSHPoolKey({
+      connectionScope,
+      host,
+      username,
+      port,
+      authType: "privateKey",
+      authCredential: privateKey,
+    });
 
     // Return cached shell if available
     if (this.shellCache.has(connectionKey)) {
@@ -1421,13 +1452,14 @@ module.exports = croniumInstance;`;
 
     try {
       // Get user's default shell from $SHELL environment variable
-      const connection = await this.getPooledConnection(
+      const connection = await this.getPooledConnection({
+        connectionScope,
         host,
-        privateKey,
+        authCredential: privateKey,
         username,
         port,
-        false,
-      );
+        authType: "privateKey",
+      });
       const result = await new Promise<{ stdout: string; stderr: string }>(
         (resolve, reject) => {
           connection.ssh.exec('echo "$SHELL"', (err, stream) => {
@@ -1462,6 +1494,7 @@ module.exports = croniumInstance;`;
    * Get the actual shell prompt from the remote server
    */
   async getShellPrompt(
+    connectionScope: SSHConnectionScope,
     host: string,
     privateKey: string,
     username: string,
@@ -1471,6 +1504,7 @@ module.exports = croniumInstance;`;
     try {
       // Get the user's default shell (cached)
       const userShell = await this.getUserShell(
+        connectionScope,
         host,
         privateKey,
         username,
@@ -1479,6 +1513,7 @@ module.exports = croniumInstance;`;
 
       // Get the current shell prompt by echoing PS1 variable using the user's shell
       const result = await this.executeCommand(
+        connectionScope,
         host,
         privateKey,
         username,
@@ -1493,6 +1528,7 @@ module.exports = croniumInstance;`;
 
         // Replace common PS1 variables with actual values
         const pwdResult = await this.executeCommand(
+          connectionScope,
           host,
           privateKey,
           username,
@@ -1526,6 +1562,7 @@ module.exports = croniumInstance;`;
 
     // Fallback to a reasonable prompt format
     const pwdResult = await this.executeCommand(
+      connectionScope,
       host,
       privateKey,
       username,
@@ -1544,6 +1581,7 @@ module.exports = croniumInstance;`;
    * Prewarm a connection for terminal use to reduce first-command latency
    */
   async prewarmConnection(
+    connectionScope: SSHConnectionScope,
     host: string,
     privateKey: string,
     username = "root",
@@ -1555,13 +1593,14 @@ module.exports = croniumInstance;`;
       );
 
       // Create or get pooled connection
-      const connection = await this.getPooledConnection(
+      const connection = await this.getPooledConnection({
+        connectionScope,
         host,
-        privateKey,
+        authCredential: privateKey,
         username,
         port,
-        false,
-      );
+        authType: "privateKey",
+      });
 
       // Test connection with a simple command
       await new Promise<void>((resolve, reject) => {
@@ -1585,6 +1624,7 @@ module.exports = croniumInstance;`;
   }
 
   async openShell(
+    connectionScope: SSHConnectionScope,
     host: string,
     authCredential: string,
     username = "root",
@@ -1597,7 +1637,14 @@ module.exports = croniumInstance;`;
     connectionKey: string;
     cleanup: () => void;
   }> {
-    const connectionKey = this.getConnectionKey(host, username, port);
+    const connectionKey = createSSHPoolKey({
+      connectionScope,
+      host,
+      username,
+      port,
+      authType,
+      authCredential,
+    });
 
     // Check if we've hit the channel limit for this connection
     const currentChannels = this.channelCounts.get(connectionKey) ?? 0;
@@ -1631,14 +1678,15 @@ module.exports = croniumInstance;`;
       }
     }
 
-    const connection = await this.getPooledConnection(
+    const connection = await this.getPooledConnection({
+      connectionScope,
       host,
       authCredential,
       username,
       port,
-      shouldForceNew, // Force new if approaching limit
+      forceNew: shouldForceNew,
       authType,
-    );
+    });
 
     // Verify connection is actually connected
     if (!connection.isConnected || !connection.ssh) {
@@ -1656,18 +1704,19 @@ module.exports = croniumInstance;`;
         `SSH client socket is not connected or destroyed for ${host}`,
       );
       // Try to remove the bad connection and create a new one
-      this.connectionPool.delete(connection.host);
-      this.channelCounts.delete(connection.host);
+      this.connectionPool.delete(connection.poolKey);
+      this.channelCounts.delete(connection.poolKey);
 
       // Get a fresh connection
-      const freshConnection = await this.getPooledConnection(
+      const freshConnection = await this.getPooledConnection({
+        connectionScope,
         host,
         authCredential,
         username,
         port,
-        true, // Force new connection
+        forceNew: true,
         authType,
-      );
+      });
 
       const shell = await new Promise<ClientChannel>((resolve, reject) => {
         const timeoutId = setTimeout(() => {
@@ -1687,8 +1736,8 @@ module.exports = croniumInstance;`;
 
             if (err) {
               // Clean up the fresh connection if it fails
-              this.connectionPool.delete(freshConnection.host);
-              this.channelCounts.delete(freshConnection.host);
+              this.connectionPool.delete(freshConnection.poolKey);
+              this.channelCounts.delete(freshConnection.poolKey);
               try {
                 freshConnection.ssh.end();
               } catch {
@@ -1702,7 +1751,7 @@ module.exports = croniumInstance;`;
             }
 
             // Track channel count
-            const key = freshConnection.host;
+            const key = freshConnection.poolKey;
             const newCount = (this.channelCounts.get(key) ?? 0) + 1;
             this.channelCounts.set(key, newCount);
             console.log(
@@ -1737,13 +1786,13 @@ module.exports = croniumInstance;`;
       });
 
       console.log(
-        `Opened interactive shell for ${freshConnection.host} (new connection)`,
+        `Opened interactive shell for ${freshConnection.poolKey} (new connection)`,
       );
       freshConnection.lastUsed = Date.now();
 
       // Create manual cleanup function
       const cleanup = () => {
-        const key = freshConnection.host;
+        const key = freshConnection.poolKey;
         const count = this.channelCounts.get(key) ?? 0;
         if (count > 0) {
           const newCount = count - 1;
@@ -1758,7 +1807,7 @@ module.exports = croniumInstance;`;
         }
       };
 
-      return { shell, connectionKey: freshConnection.host, cleanup };
+      return { shell, connectionKey: freshConnection.poolKey, cleanup };
     }
 
     const shell = await new Promise<ClientChannel>((resolve, reject) => {
@@ -1782,8 +1831,8 @@ module.exports = croniumInstance;`;
               console.error(
                 `Shell creation failed due to channel limits, removing connection from pool`,
               );
-              this.connectionPool.delete(connection.host);
-              this.channelCounts.delete(connection.host);
+              this.connectionPool.delete(connection.poolKey);
+              this.channelCounts.delete(connection.poolKey);
 
               // Try to gracefully close the connection
               try {
@@ -1796,7 +1845,7 @@ module.exports = croniumInstance;`;
           }
 
           // Track channel count
-          const key = connection.host;
+          const key = connection.poolKey;
           const newCount = (this.channelCounts.get(key) ?? 0) + 1;
           this.channelCounts.set(key, newCount);
           console.log(`Channel opened for ${key}, total channels: ${newCount}`);
@@ -1829,13 +1878,13 @@ module.exports = croniumInstance;`;
     });
 
     console.log(
-      `Opened interactive shell for ${connection.host}, channels: ${this.channelCounts.get(connection.host) ?? 1}`,
+      `Opened interactive shell for ${connection.poolKey}, channels: ${this.channelCounts.get(connection.poolKey) ?? 1}`,
     );
     connection.lastUsed = Date.now(); // Update last used time
 
     // Create manual cleanup function
     const cleanup = () => {
-      const key = connection.host;
+      const key = connection.poolKey;
       const count = this.channelCounts.get(key) ?? 0;
       if (count > 0) {
         const newCount = count - 1;
@@ -1850,7 +1899,7 @@ module.exports = croniumInstance;`;
       }
     };
 
-    return { shell, connectionKey: connection.host, cleanup };
+    return { shell, connectionKey: connection.poolKey, cleanup };
   }
 }
 

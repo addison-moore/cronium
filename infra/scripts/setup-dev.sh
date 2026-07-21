@@ -59,9 +59,9 @@ echo "🔨 Building Runtime API service..."
 echo "🔨 Building Orchestrator service..."
 (cd apps/orchestrator && go mod download && go build -o orchestrator ./cmd/cronium-orchestrator)
 
-# Build container images (orchestrator + runtime sidecar + executors)
+# Build container images (worker + orchestrator + runtime sidecar + executors)
 echo "🐳 Building container images..."
-docker compose -f "$COMPOSE_FILE" build runtime-api cronium-orchestrator
+docker compose -f "$COMPOSE_FILE" build cronium-worker runtime-api cronium-orchestrator
 docker compose -f "$COMPOSE_FILE" --profile build-only build bash-executor nodejs-executor python-executor
 
 # Seed database (optional)
@@ -72,9 +72,10 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     (cd apps/cronium-app && pnpm seed)
 fi
 
-# Start supporting services (Valkey, orchestrator, runtime API)
+# Start supporting services (Valkey, worker, orchestrator, runtime API). The
+# helper sources env/.env.local and translates loopback DB URLs for the worker.
 echo "🚀 Starting supporting services..."
-docker compose -f "$COMPOSE_FILE" up -d
+./infra/scripts/dev-docker-local-app.sh up -d
 
 # Show service status
 echo "
@@ -88,15 +89,14 @@ echo "
 🌐 Access Points:
 - Main App: http://localhost:5001 (run 'pnpm dev' to start it)
 - WebSocket: ws://localhost:5002
+- Scheduling Worker: http://localhost:5003/health
 - Runtime API: http://localhost:8081
 - Orchestrator: http://localhost:8080
 - Valkey/Redis: redis://localhost:6379
 
 📝 Next Steps:
-1. Start the app: pnpm dev
-2. Or start individually:
-   - Next.js: pnpm dev:app
-   - WebSocket: cd apps/cronium-app && pnpm dev:socket
+1. Start Next.js: pnpm dev:app
+2. Start the WebSocket server: pnpm dev:socket
 3. View logs: docker compose -f $COMPOSE_FILE logs -f
 
 🛠️ Useful Commands:

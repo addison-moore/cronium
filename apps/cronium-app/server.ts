@@ -6,7 +6,12 @@ import {
   initializeLogsWebSocket,
   getLogsWebSocketHandler,
 } from "./src/server/logs-websocket";
-import type { Log } from "./src/shared/schema";
+import {
+  isAllowedSocketOrigin,
+  resolveAllowedSocketOrigins,
+  verifyInternalBroadcastAuthorization,
+} from "./src/server/socket-security";
+import type { Job, Log } from "./src/shared/schema";
 
 // Type definitions for request body
 interface LogUpdateRequest {
@@ -16,15 +21,38 @@ interface LogUpdateRequest {
 
 // Create Express app for HTTP endpoints
 const app = express();
-app.use(express.json());
+app.disable("x-powered-by");
+
+// Authenticate producers before parsing their potentially large request body.
+app.use("/broadcast", (req, res, next) => {
+  if (!verifyInternalBroadcastAuthorization(req.headers.authorization)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  next();
+});
+app.use(express.json({ limit: "1mb" }));
 
 // Create HTTP server with Express
 const httpServer = createServer(app);
+const allowedOrigins = resolveAllowedSocketOrigins();
+if (allowedOrigins.length === 0) {
+  throw new Error(
+    "PUBLIC_APP_URL, AUTH_URL, or SOCKET_ALLOWED_ORIGINS must configure a trusted socket origin",
+  );
+}
+
 const io = new Server(httpServer, {
   path: "/api/socketio",
   cors: {
-    origin: "*", // Adjust for production
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
+  },
+  allowRequest: (request, callback) => {
+    callback(
+      null,
+      isAllowedSocketOrigin(request.headers.origin, allowedOrigins),
+    );
   },
 });
 
@@ -76,7 +104,7 @@ app.post("/broadcast/log-update", (req, res) => {
 // HTTP endpoint for broadcasting job updates
 app.post("/broadcast/job-update", (req, res) => {
   try {
-    const job = req.body as any;
+    const job = req.body as Job;
 
     if (!job || !job.id) {
       return res.status(400).json({ error: "Missing job data" });
@@ -110,19 +138,10 @@ app.post("/broadcast/execution-update", (req, res) => {
 
     const wsHandler = getLogsWebSocketHandler();
     if (wsHandler) {
-      // Find associated logs and broadcast update
       console.log(
         `[WebSocket] Broadcasting execution update for ${executionId}`,
       );
-      // Note: We'll need to implement a method to find logs by execution ID
-      // For now, we'll emit a general execution update
-      const logsNamespace = io.of("/logs");
-      logsNamespace.emit("execution:update", {
-        executionId,
-        status,
-        ...data,
-        timestamp: new Date().toISOString(),
-      });
+      wsHandler.broadcastExecutionUpdate(executionId, status, data);
       return res.json({ success: true });
     } else {
       console.error("[WebSocket] Handler not initialized");
@@ -161,7 +180,10 @@ app.post("/broadcast/log-line", (req, res) => {
   }
 });
 
-const PORT = process.env.SOCKET_PORT ?? 5002;
+const PORT = Number.parseInt(process.env.SOCKET_PORT ?? "5002", 10);
+if (!Number.isInteger(PORT) || PORT < 0 || PORT > 65535) {
+  throw new Error("SOCKET_PORT must be an integer between 0 and 65535");
+}
 
 httpServer.listen(PORT, () => {
   console.log(`Socket.IO server listening on port ${PORT}`);
