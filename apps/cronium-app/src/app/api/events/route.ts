@@ -90,7 +90,11 @@ const createEventSchema = z
 // GET all scripts for the authenticated user
 export async function GET(request: NextRequest) {
   try {
-    const auth = await authenticateRestPrincipal(request, "view");
+    const auth = await authenticateRestPrincipal(
+      request,
+      "view",
+      "events.getAll",
+    );
 
     if (!auth.ok) {
       return restPrincipalErrorResponse(auth);
@@ -125,7 +129,11 @@ interface RequestBody {
 // POST to create a new script
 export async function POST(request: NextRequest) {
   try {
-    const auth = await authenticateRestPrincipal(request, "edit");
+    const auth = await authenticateRestPrincipal(
+      request,
+      "edit",
+      "events.create",
+    );
 
     if (!auth.ok) {
       return restPrincipalErrorResponse(auth);

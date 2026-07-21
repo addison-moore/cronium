@@ -8,14 +8,38 @@ jest.mock("@/server/storage", () => ({
   },
 }));
 
+// authenticateRestPrincipal dynamically imports the authorization module; mock
+// it so the live-principal check resolves to a known role without a database.
+jest.mock("@/server/security/authorization", () => ({
+  getAuthorizedPrincipal: jest.fn(async (userId: string) => ({
+    id: userId,
+    role: "USER",
+    roleId: 2,
+    status: "ACTIVE",
+    sessionVersion: 1,
+  })),
+  roleAllowsCapability: () => true,
+}));
+
+import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
-import { getBearerToken, authenticateApiToken } from "../api-auth";
+import {
+  getBearerToken,
+  authenticateApiToken,
+  authenticateRestPrincipal,
+} from "../api-auth";
 import { TokenStatus } from "@/shared/schema";
 
 const mockGet = storage.getApiTokenByToken as jest.Mock;
 const mockUpdate = storage.updateApiToken as jest.Mock;
 
 beforeEach(() => jest.clearAllMocks());
+
+function bearerRequest(token: string): NextRequest {
+  return {
+    headers: new Headers({ Authorization: `Bearer ${token}` }),
+  } as unknown as NextRequest;
+}
 
 describe("getBearerToken", () => {
   it("extracts a bearer token", () => {
@@ -100,5 +124,72 @@ describe("authenticateApiToken", () => {
   it("returns null (not throw) when the lookup errors", async () => {
     mockGet.mockRejectedValue(new Error("db down"));
     expect(await authenticateApiToken("tok")).toBeNull();
+  });
+});
+
+describe("authenticateRestPrincipal — bearer token scope enforcement (HI-25)", () => {
+  it("allows an mcp-scoped token on a path its scope permits", async () => {
+    mockGet.mockResolvedValue({
+      id: 1,
+      userId: "u",
+      status: TokenStatus.ACTIVE,
+      expiresAt: null,
+      scopes: ["mcp"],
+    });
+    const res = await authenticateRestPrincipal(
+      bearerRequest("t"),
+      "view",
+      "events.getAll",
+    );
+    expect(res.ok).toBe(true);
+  });
+
+  it("denies an mcp-scoped token on a path outside its scope (REST cannot bypass scope)", async () => {
+    mockGet.mockResolvedValue({
+      id: 1,
+      userId: "u",
+      status: TokenStatus.ACTIVE,
+      expiresAt: null,
+      scopes: ["mcp"],
+    });
+    // events.update is NOT in the mcp scope set.
+    const res = await authenticateRestPrincipal(
+      bearerRequest("t"),
+      "edit",
+      "events.update",
+    );
+    expect(res).toEqual({ ok: false, status: 403 });
+  });
+
+  it("denies a legacy null-scope (deny-all) token everywhere", async () => {
+    mockGet.mockResolvedValue({
+      id: 1,
+      userId: "u",
+      status: TokenStatus.ACTIVE,
+      expiresAt: null,
+      scopes: null,
+    });
+    const res = await authenticateRestPrincipal(
+      bearerRequest("t"),
+      "view",
+      "events.getAll",
+    );
+    expect(res).toEqual({ ok: false, status: 403 });
+  });
+
+  it("allows a full-scope token on any path", async () => {
+    mockGet.mockResolvedValue({
+      id: 1,
+      userId: "u",
+      status: TokenStatus.ACTIVE,
+      expiresAt: null,
+      scopes: ["full"],
+    });
+    const res = await authenticateRestPrincipal(
+      bearerRequest("t"),
+      "edit",
+      "servers.delete",
+    );
+    expect(res.ok).toBe(true);
   });
 });

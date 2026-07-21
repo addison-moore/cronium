@@ -26,7 +26,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const auth = await authenticateRestPrincipal(request, "view");
+    const auth = await authenticateRestPrincipal(
+      request,
+      "view",
+      "events.getById",
+    );
 
     if (!auth.ok) {
       return restPrincipalErrorResponse(auth);
@@ -81,7 +85,11 @@ export async function PATCH(
   const { id } = await params;
   console.log("PATCH request received for event ID:", id);
   try {
-    const auth = await authenticateRestPrincipal(request, "edit");
+    const auth = await authenticateRestPrincipal(
+      request,
+      "edit",
+      "events.update",
+    );
 
     if (!auth.ok) {
       return restPrincipalErrorResponse(auth);
@@ -282,7 +290,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const auth = await authenticateRestPrincipal(request, "edit");
+    const auth = await authenticateRestPrincipal(
+      request,
+      "edit",
+      "events.delete",
+    );
 
     if (!auth.ok) {
       return restPrincipalErrorResponse(auth);

@@ -14,7 +14,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const auth = await authenticateRestPrincipal(req, "view");
+    const auth = await authenticateRestPrincipal(
+      req,
+      "view",
+      "servers.getById",
+    );
 
     if (!auth.ok) {
       return restPrincipalErrorResponse(auth);
@@ -68,7 +72,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const auth = await authenticateRestPrincipal(req, "edit");
+    const auth = await authenticateRestPrincipal(req, "edit", "servers.update");
 
     if (!auth.ok) {
       return restPrincipalErrorResponse(auth);
@@ -182,7 +186,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const auth = await authenticateRestPrincipal(req, "edit");
+    const auth = await authenticateRestPrincipal(req, "edit", "servers.delete");
 
     if (!auth.ok) {
       return restPrincipalErrorResponse(auth);

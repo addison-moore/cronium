@@ -11,7 +11,7 @@ import { toServerApiDto } from "@/server/security/api-dto";
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = await authenticateRestPrincipal(req, "view");
+    const auth = await authenticateRestPrincipal(req, "view", "servers.getAll");
 
     if (!auth.ok) {
       return restPrincipalErrorResponse(auth);
@@ -43,7 +43,7 @@ const createServerSchema = z
 export async function POST(req: NextRequest) {
   try {
     // Creating a server stores an SSH credential: "edit" capability required.
-    const auth = await authenticateRestPrincipal(req, "edit");
+    const auth = await authenticateRestPrincipal(req, "edit", "servers.create");
 
     if (!auth.ok) {
       return restPrincipalErrorResponse(auth);

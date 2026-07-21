@@ -100,6 +100,11 @@ export type RestPrincipal =
 export async function authenticateRestPrincipal(
   request: NextRequest,
   capability: Capability,
+  // tRPC-equivalent path for this REST route. When the request is authenticated
+  // by a *scoped* bearer token, the token's scopes must permit this path — the
+  // same policy tRPC enforces (HI-25), so a scoped token can't exceed its scope
+  // by switching to the REST transport. Cookie sessions are never scope-limited.
+  scopePath?: string,
 ): Promise<RestPrincipal> {
   // Deferred imports keep this module light for token-only callers and avoid
   // pulling the NextAuth/env graph in at module load (mirrors trpc.ts).
@@ -108,10 +113,13 @@ export async function authenticateRestPrincipal(
 
   let userId: string | null = null;
   let expectedSessionVersion: number | undefined;
+  let tokenScopes: string[] | null = null;
 
-  const tokenAuth = await authenticateApiRequest(request);
-  if (tokenAuth.authenticated && tokenAuth.userId) {
+  const token = getBearerToken(request.headers);
+  const tokenAuth = token ? await authenticateApiToken(token) : null;
+  if (tokenAuth) {
     userId = tokenAuth.userId;
+    tokenScopes = tokenAuth.scopes;
   } else {
     const [{ getServerSession }, { authOptions }] = await Promise.all([
       import("next-auth"),
@@ -131,6 +139,14 @@ export async function authenticateRestPrincipal(
 
   if (!userId) {
     return { ok: false, status: 401 };
+  }
+
+  // Enforce token scope for bearer-authenticated requests.
+  if (tokenScopes !== null && scopePath) {
+    const { isPathAllowedForScopes } = await import("@/server/token-scopes");
+    if (!isPathAllowedForScopes(tokenScopes, scopePath)) {
+      return { ok: false, status: 403 };
+    }
   }
 
   try {
