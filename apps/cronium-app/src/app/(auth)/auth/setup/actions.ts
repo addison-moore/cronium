@@ -2,12 +2,32 @@
 
 import { hash } from "bcrypt";
 import { nanoid } from "nanoid";
+import { createHash, timingSafeEqual } from "crypto";
 import { sql } from "drizzle-orm";
 import { UserRole, UserStatus, roles, users } from "@/shared/schema";
 import { storage } from "@/server/storage";
 import { db } from "@/server/db";
+import { env } from "@/env.mjs";
 import { isSetupRequired } from "@/lib/first-run";
 import { MIN_PASSWORD_LENGTH } from "@/shared/schemas/password";
+
+/**
+ * Whether the first-admin flow requires a bootstrap token. True when the
+ * installer provisioned a token hash. Exposed so the setup page can render the
+ * token field only when it is actually needed.
+ */
+export async function isBootstrapTokenRequired(): Promise<boolean> {
+  return Boolean(env.BOOTSTRAP_TOKEN_HASH);
+}
+
+function bootstrapTokenMatches(token: string): boolean {
+  const expected = env.BOOTSTRAP_TOKEN_HASH;
+  if (!expected) return true; // No token configured → not required.
+  const actual = createHash("sha256").update(token).digest("hex");
+  const a = Buffer.from(actual, "hex");
+  const b = Buffer.from(expected.toLowerCase(), "hex");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 // A fixed key for a Postgres transaction-scoped advisory lock. Serializes
 // concurrent first-admin creation so the "zero users" check and the insert are
@@ -20,6 +40,7 @@ type SetupFormData = {
   username: string;
   email: string;
   password: string;
+  bootstrapToken?: string;
 };
 
 // Mirrors src/scripts/seed-roles.ts — insert-if-missing only, so the two
@@ -88,6 +109,22 @@ export async function createFirstAdmin(formData: SetupFormData) {
       formData.password.length < MIN_PASSWORD_LENGTH
     ) {
       return { success: false, error: "Invalid setup details." };
+    }
+
+    // Require and verify the installer's one-time bootstrap token (HI-05).
+    // Constant-time comparison; a wrong/missing token is rejected before any
+    // account is created.
+    if (env.BOOTSTRAP_TOKEN_HASH) {
+      if (
+        !formData.bootstrapToken ||
+        !bootstrapTokenMatches(formData.bootstrapToken)
+      ) {
+        return {
+          success: false,
+          error:
+            "Invalid setup token. Use the token shown by the installer at the end of installation.",
+        };
+      }
     }
 
     const hashedPassword = await hash(formData.password, 12);

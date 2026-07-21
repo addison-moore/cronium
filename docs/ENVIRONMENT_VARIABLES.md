@@ -119,6 +119,7 @@ postgresql://user:password@localhost:5432/cronium?sslmode=require
 | `ADMIN_USERNAME`  | Admin username for bootstrap                                        | `string` | `admin`             | No       |
 | `ADMIN_EMAIL`     | Admin email for bootstrap                                           | `string` | `admin@example.com` | No       |
 | `ADMIN_PASSWORD`  | Admin password for bootstrap                                        | `string` | `admin`             | No       |
+| `BOOTSTRAP_TOKEN_HASH` | SHA-256 hex hash of the one-time first-admin **setup token**. When set, the browser first-admin flow requires the matching plaintext token (shown once by `install.sh`), so a random visitor can't claim the admin account. Generated automatically by the installer; set it manually for hand-rolled production deploys (`printf '%s' "$TOKEN" \| sha256sum`). Absent in dev, where setup needs no token. | `string` (64 hex) | – | No |
 
 ### Email Configuration
 

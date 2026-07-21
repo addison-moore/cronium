@@ -28,6 +28,7 @@ const setupSchema = z
       .regex(/[a-z]/, "Password must contain at least one lowercase letter")
       .regex(/[0-9]/, "Password must contain at least one number"),
     confirmPassword: z.string(),
+    bootstrapToken: z.string().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
@@ -47,13 +48,20 @@ const copy = {
   emailPlaceholder: "you@example.com",
   passwordLabel: "Password",
   confirmPasswordLabel: "Confirm Password",
+  bootstrapTokenLabel: "Setup token",
+  bootstrapTokenHint:
+    "The one-time token shown by the installer at the end of installation.",
   submitIdle: "Create Admin Account",
   submitBusy: "Creating account...",
   setupFailed: "Setup failed. Please try again.",
   unexpectedError: "An unexpected error occurred. Please try again.",
 };
 
-export default function SetupForm() {
+export default function SetupForm({
+  bootstrapTokenRequired = false,
+}: {
+  bootstrapTokenRequired?: boolean;
+}) {
   const router = useRouter();
 
   const form = useForm<FormData>({
@@ -63,6 +71,7 @@ export default function SetupForm() {
       email: "",
       password: "",
       confirmPassword: "",
+      bootstrapToken: "",
     },
   });
 
@@ -78,6 +87,7 @@ export default function SetupForm() {
         username: data.username,
         email: data.email,
         password: data.password,
+        ...(data.bootstrapToken ? { bootstrapToken: data.bootstrapToken } : {}),
       });
 
       if (!result.success) {
@@ -232,6 +242,34 @@ export default function SetupForm() {
                   </FormItem>
                 )}
               />
+
+              {bootstrapTokenRequired && (
+                <FormField
+                  control={form.control}
+                  name="bootstrapToken"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel htmlFor="bootstrapToken">
+                        {copy.bootstrapTokenLabel}
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          id="bootstrapToken"
+                          type="text"
+                          autoComplete="off"
+                          required
+                          placeholder="Paste the installer token"
+                        />
+                      </FormControl>
+                      <p className="text-xs text-gray-500">
+                        {copy.bootstrapTokenHint}
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </div>
 
             <div>
