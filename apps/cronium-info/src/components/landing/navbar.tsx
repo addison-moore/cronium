@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Menu, X, Book, Github, Moon, Sun } from "lucide-react";
+import { Menu, X, Book, Moon, Sun } from "lucide-react";
+import { GithubIcon } from "../icons/github-icon";
 import { Logo } from "@cronium/ui";
 import { useTheme } from "@/components/theme-provider";
 
@@ -52,7 +53,7 @@ export default function Navbar() {
               rel="noopener noreferrer"
               className="hover:text-link text-foreground flex items-center gap-1 px-3 py-2 text-sm font-medium"
             >
-              <Github className="h-5 w-5" />
+              <GithubIcon className="h-5 w-5" />
             </Link>
 
             {mounted && (
@@ -107,7 +108,7 @@ export default function Navbar() {
             className="hover:text-link text-foreground hover:bg-muted flex items-center gap-1 rounded-md px-3 py-2 text-base font-medium"
             onClick={() => setIsMenuOpen(false)}
           >
-            <Github className="h-5 w-5" />
+            <GithubIcon className="h-5 w-5" />
             GitHub
           </Link>
           {mounted && (

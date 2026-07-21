@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Github, Mail, Heart, X } from "lucide-react";
+import { Mail, Heart, X } from "lucide-react";
+import { GithubIcon } from "../icons/github-icon";
 import {
   Input,
   Textarea,
@@ -194,7 +195,7 @@ export default function Footer() {
                   href="https://github.com/addison-moore/cronium"
                   className="hover:text-link text-muted-foreground flex items-center text-sm"
                 >
-                  <Github className="mr-2 h-4 w-4" />
+                  <GithubIcon className="mr-2 h-4 w-4" />
                   GitHub
                 </a>
               </li>

@@ -35,3 +35,8 @@ onlyBuiltDependencies:
   - sharp
   - ssh2
   - unrs-resolver
+
+minimumReleaseAgeExclude:
+  - postcss@8.5.21
+  - react-dom@19.2.8
+  - react@19.2.8
