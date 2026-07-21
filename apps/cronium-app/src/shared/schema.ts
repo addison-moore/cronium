@@ -212,6 +212,11 @@ export const users = pgTable("users", {
   // sensitive request. Bumped transactionally on password/role/status changes
   // so stale JWTs and cached principals fail closed immediately.
   sessionVersion: integer("session_version").default(1).notNull(),
+  // TOTP multi-factor auth. `mfaSecret` is the encrypted base32 secret;
+  // `mfaRecoveryCodes` holds SHA-256 hashes of single-use recovery codes.
+  mfaEnabled: boolean("mfa_enabled").default(false).notNull(),
+  mfaSecret: text("mfa_secret"),
+  mfaRecoveryCodes: jsonb("mfa_recovery_codes").$type<string[]>(),
   inviteToken: varchar("invite_token", { length: 255 }),
   inviteExpiry: timestamp("invite_expiry"),
   lastLogin: timestamp("last_login"),

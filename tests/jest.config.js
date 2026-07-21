@@ -88,6 +88,8 @@ module.exports = {
         "<rootDir>/../apps/cronium-app/src/server/api/__tests__/trpc-authorization.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/security/__tests__/client-ip.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/security/__tests__/security-headers.test.ts",
+        "<rootDir>/../apps/cronium-app/src/lib/security/__tests__/totp.test.ts",
+        "<rootDir>/../apps/cronium-app/src/lib/security/__tests__/mfa-recovery.test.ts",
       ],
       setupFiles: ["<rootDir>/security/setup.ts"],
       testTimeout: 60_000,

@@ -20,6 +20,7 @@ import { toolActionTemplatesRouter } from "./routers/toolActionTemplates";
 import { jobsRouter } from "./routers/jobs";
 import { staticResourcesRouter } from "./routers/static-resources";
 import { mcpRouter } from "./routers/mcp";
+import { mfaRouter } from "./routers/mfa";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 
 /**
@@ -49,6 +50,7 @@ export const appRouter = createTRPCRouter({
   jobs: jobsRouter,
   staticResources: staticResourcesRouter,
   mcp: mcpRouter,
+  mfa: mfaRouter,
 });
 
 // export type definition of API

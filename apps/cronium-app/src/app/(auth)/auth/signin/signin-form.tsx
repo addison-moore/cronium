@@ -2,6 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
 import Link from "next/link";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -21,6 +22,7 @@ import { Button } from "@cronium/ui";
 const signinSchema = z.object({
   username: z.string().min(1, "Username or email is required"),
   password: z.string().min(1, "Password is required"),
+  totp: z.string().optional(),
 });
 
 type FormData = z.infer<typeof signinSchema>;
@@ -33,10 +35,15 @@ const copy = {
   usernameLabel: "Username or Email",
   usernamePlaceholder: "you@example.com",
   passwordLabel: "Password",
+  totpLabel: "Authenticator code",
+  totpHint:
+    "Enter the 6-digit code from your authenticator app, or a recovery code.",
+  mfaPrompt: "Enter your authenticator code to finish signing in.",
   forgotPassword: "Forgot your password?",
   submitIdle: "Sign In",
   submitBusy: "Signing in...",
   invalidCredentials: "Invalid username/email or password.",
+  invalidMfa: "Invalid authenticator or recovery code.",
   sessionRequired: "You must be signed in to continue.",
   generalError: "Something went wrong. Please try again.",
   unexpectedError: "An unexpected error occurred. Please try again.",
@@ -46,11 +53,14 @@ export default function SignIn() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const [mfaRequired, setMfaRequired] = useState(false);
+
   const form = useForm<FormData>({
     resolver: zodResolver(signinSchema),
     defaultValues: {
       username: "",
       password: "",
+      totp: "",
     },
   });
 
@@ -90,9 +100,20 @@ export default function SignIn() {
       const result = await loginMutation.mutateAsync({
         username: data.username,
         password: data.password,
+        ...(data.totp ? { totp: data.totp } : {}),
       });
 
       if (!result.success) {
+        // Password was accepted but a second factor is needed: reveal the code
+        // field and prompt, without treating it as a credential failure.
+        if ("mfaRequired" in result && result.mfaRequired) {
+          setMfaRequired(true);
+          setError("root.serverError", {
+            type: "manual",
+            message: copy.mfaPrompt,
+          });
+          return;
+        }
         setError("root.serverError", {
           type: "manual",
           message: copy.invalidCredentials,
@@ -100,17 +121,28 @@ export default function SignIn() {
         return;
       }
 
-      // Successfully authenticated, now create NextAuth session
+      // Successfully authenticated, now create NextAuth session (this is the
+      // authority that verifies and consumes the second factor).
       const nextAuthResult = await signIn("credentials", {
         redirect: false,
         username: data.username,
         password: data.password,
+        ...(data.totp ? { totp: data.totp } : {}),
       });
 
       if (nextAuthResult?.error) {
+        // A correct password with a missing/invalid factor surfaces here.
+        if (nextAuthResult.error === "MFA_REQUIRED") {
+          setMfaRequired(true);
+          setError("root.serverError", {
+            type: "manual",
+            message: copy.mfaPrompt,
+          });
+          return;
+        }
         setError("root.serverError", {
           type: "manual",
-          message: copy.invalidCredentials,
+          message: mfaRequired ? copy.invalidMfa : copy.invalidCredentials,
         });
         return;
       }
@@ -224,6 +256,31 @@ export default function SignIn() {
                   )}
                 />
               </div>
+
+              {mfaRequired && (
+                <FormField
+                  control={form.control}
+                  name="totp"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel htmlFor="totp">{copy.totpLabel}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          id="totp"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          autoFocus
+                          placeholder="123456"
+                        />
+                      </FormControl>
+                      <p className="text-xs text-gray-500">{copy.totpHint}</p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </div>
 
             <div>

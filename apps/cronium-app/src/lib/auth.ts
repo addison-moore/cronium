@@ -5,6 +5,7 @@ import { storage } from "@/server/storage";
 import { UserStatus } from "@/shared/schema";
 import { consumeAtomicRateLimit } from "@/lib/security/atomic-rate-limiter";
 import { resolveClientIp } from "@/lib/security/client-ip";
+import { verifyTotp } from "@/lib/security/totp";
 
 export const authOptions: NextAuthOptions = {
   pages: {
@@ -25,6 +26,7 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         username: { label: "Username or Email", type: "text" },
         password: { label: "Password", type: "password" },
+        totp: { label: "Authenticator code", type: "text" },
       },
       async authorize(credentials, req) {
         if (!credentials?.username || !credentials?.password) {
@@ -84,6 +86,30 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
+          // Second factor: once the password is correct, enforce TOTP for
+          // MFA-enabled accounts. A specific error here only reveals MFA status
+          // to someone who already proved the password (acceptable).
+          if (user.mfaEnabled) {
+            const submitted = (credentials.totp ?? "").trim();
+            if (!submitted) {
+              throw new Error("MFA_REQUIRED");
+            }
+            const secret = await storage.getMfaSecret(user.id);
+            const totpOk = secret ? verifyTotp(secret, submitted) : false;
+            if (!totpOk) {
+              // Fall back to a single-use recovery code.
+              const { hashRecoveryCode } =
+                await import("@/lib/security/mfa-recovery");
+              const recoveryOk = await storage.consumeMfaRecoveryCode(
+                user.id,
+                hashRecoveryCode(submitted),
+              );
+              if (!recoveryOk) {
+                throw new Error("Invalid authenticator or recovery code.");
+              }
+            }
+          }
+
           // Update last login time
           await storage.updateUser(user.id, {
             lastLogin: new Date(),
@@ -101,6 +127,15 @@ export const authOptions: NextAuthOptions = {
             sessionVersion: user.sessionVersion,
           };
         } catch (error) {
+          // MFA challenge signals must reach the client (they drive the
+          // second-factor UI); every other error is a generic auth failure.
+          if (
+            error instanceof Error &&
+            (error.message === "MFA_REQUIRED" ||
+              error.message === "Invalid authenticator or recovery code.")
+          ) {
+            throw error;
+          }
           console.error("Error in authorize:", error);
           return null;
         }

@@ -8,7 +8,6 @@ import { UserRole, UserStatus, roles, users } from "@/shared/schema";
 import { storage } from "@/server/storage";
 import { db } from "@/server/db";
 import { env } from "@/env.mjs";
-import { isSetupRequired } from "@/lib/first-run";
 import { MIN_PASSWORD_LENGTH } from "@/shared/schemas/password";
 
 /**

@@ -63,6 +63,14 @@ export const ROUTE_CAPABILITIES: Record<string, RouteCapability> = {
 
   "mcp.validatePlan": "view",
 
+  // Self-service MFA on the caller's own account. These manage the caller's
+  // own security factor, so "edit" (any non-viewer principal) is appropriate;
+  // each mutation independently reauthenticates with the account password.
+  "mfa.beginEnrollment": "edit",
+  "mfa.confirmEnrollment": "edit",
+  "mfa.disable": "edit",
+  "mfa.regenerateRecoveryCodes": "edit",
+
   "quotaManagement.exportReport": "view",
   "quotaManagement.resetUserQuotas": "admin",
   "quotaManagement.updateUserQuota": "admin",

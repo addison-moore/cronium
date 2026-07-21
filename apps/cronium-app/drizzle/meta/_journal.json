@@ -50,6 +50,13 @@
       "when": 1784675304091,
       "tag": "0006_webhook_event_tenant",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784676297757,
+      "tag": "0007_user_mfa",
+      "breakpoints": true
     }
   ]
 }

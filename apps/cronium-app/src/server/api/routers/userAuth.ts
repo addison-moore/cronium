@@ -52,6 +52,8 @@ const verifyTokenSchema = z.object({
 const loginSchema = z.object({
   username: z.string().min(1, "Username or email is required"),
   password: z.string().min(1, "Password is required"),
+  // Second factor, supplied on the follow-up submit for MFA-enabled accounts.
+  totp: z.string().optional(),
 });
 
 const activateAccountSchema = z.object({
@@ -149,7 +151,12 @@ export const userAuthRouter = createTRPCRouter({
         });
 
         // Return user without password
-        const { password: _, ...userWithoutPassword } = user;
+        const {
+          password: _password,
+          mfaSecret: _mfaSecret,
+          mfaRecoveryCodes: _mfaRecoveryCodes,
+          ...userWithoutPassword
+        } = user;
 
         return userWithoutPassword;
       } catch (error) {
@@ -357,7 +364,12 @@ export const userAuthRouter = createTRPCRouter({
       }
 
       // Return user without password
-      const { password: _, ...userWithoutPassword } = user;
+      const {
+        password: _password,
+        mfaSecret: _mfaSecret,
+        mfaRecoveryCodes: _mfaRecoveryCodes,
+        ...userWithoutPassword
+      } = user;
 
       return userWithoutPassword;
     } catch (error) {
@@ -428,7 +440,12 @@ export const userAuthRouter = createTRPCRouter({
         });
 
         // Return user without password
-        const { password: _, ...userWithoutPassword } = updatedUser;
+        const {
+          password: _password,
+          mfaSecret: _mfaSecret,
+          mfaRecoveryCodes: _mfaRecoveryCodes,
+          ...userWithoutPassword
+        } = updatedUser;
 
         return userWithoutPassword;
       } catch (error) {
@@ -510,11 +527,23 @@ export const userAuthRouter = createTRPCRouter({
         throw uniformFailure();
       }
 
+      // MFA gate: once the password is correct, an MFA-enabled account needs a
+      // second factor. Signal the client to collect the code; the NextAuth
+      // sign-in that follows is the authority that verifies/consumes it.
+      if (user.mfaEnabled && !input.totp?.trim()) {
+        return { success: false, mfaRequired: true } as const;
+      }
+
       // Update last login
       await storage.updateUser(user.id, { lastLogin: new Date() });
 
       // Return success with user data (without password)
-      const { password: _, ...userWithoutPassword } = user;
+      const {
+        password: _password,
+        mfaSecret: _mfaSecret,
+        mfaRecoveryCodes: _mfaRecoveryCodes,
+        ...userWithoutPassword
+      } = user;
 
       return {
         success: true,

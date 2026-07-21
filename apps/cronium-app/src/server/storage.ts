@@ -220,6 +220,15 @@ export interface IStorage {
   disableUser(id: string): Promise<User>;
   revokeUserSessions(id: string): Promise<User>;
   deleteUser(id: string): Promise<void>;
+  getMfaSecret(userId: string): Promise<string | null>;
+  setPendingMfaSecret(userId: string, secret: string): Promise<void>;
+  enableMfa(userId: string, recoveryCodeHashes: string[]): Promise<void>;
+  disableMfa(userId: string): Promise<void>;
+  consumeMfaRecoveryCode(userId: string, codeHash: string): Promise<boolean>;
+  replaceMfaRecoveryCodes(
+    userId: string,
+    recoveryCodeHashes: string[],
+  ): Promise<void>;
 
   // Role methods
   listRoles(): Promise<Role[]>;
@@ -659,6 +668,110 @@ class DatabaseStorage implements IStorage {
       // Create new user
       return await this.createUser(userData);
     }
+  }
+
+  // --- MFA (TOTP) ---
+
+  /** Return the decrypted TOTP secret for a user, or null when MFA is unset. */
+  async getMfaSecret(userId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ mfaSecret: users.mfaSecret })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!row?.mfaSecret) return null;
+    try {
+      return encryptionService.decrypt(row.mfaSecret);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Persist a pending (not-yet-enabled) TOTP secret, encrypted at rest. Used
+   * during enrollment before the user proves possession with a valid code.
+   */
+  async setPendingMfaSecret(userId: string, secret: string): Promise<void> {
+    await db
+      .update(users)
+      .set({
+        mfaSecret: encryptionService.encrypt(secret),
+        mfaEnabled: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+  }
+
+  /**
+   * Enable MFA and store single-use recovery codes (hashed). Bumps
+   * sessionVersion so the security change propagates like other credential
+   * changes.
+   */
+  async enableMfa(userId: string, recoveryCodeHashes: string[]): Promise<void> {
+    await db
+      .update(users)
+      .set({
+        mfaEnabled: true,
+        mfaRecoveryCodes: recoveryCodeHashes,
+        sessionVersion: sql`${users.sessionVersion} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+    await invalidatePrincipal(userId);
+  }
+
+  /** Disable MFA and clear all secret material. Bumps sessionVersion. */
+  async disableMfa(userId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({
+        mfaEnabled: false,
+        mfaSecret: null,
+        mfaRecoveryCodes: null,
+        sessionVersion: sql`${users.sessionVersion} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+    await invalidatePrincipal(userId);
+  }
+
+  /**
+   * Atomically consume one recovery code: succeeds only if `codeHash` is still
+   * present, removing it in the same UPDATE so it cannot be reused.
+   */
+  async consumeMfaRecoveryCode(
+    userId: string,
+    codeHash: string,
+  ): Promise<boolean> {
+    const [user] = await db
+      .select({ codes: users.mfaRecoveryCodes })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    const codes = user?.codes ?? [];
+    if (!codes.includes(codeHash)) return false;
+    const remaining = codes.filter((c) => c !== codeHash);
+    const result = await db
+      .update(users)
+      .set({ mfaRecoveryCodes: remaining, updatedAt: new Date() })
+      .where(
+        and(
+          eq(users.id, userId),
+          sql`${users.mfaRecoveryCodes}::jsonb @> ${JSON.stringify([codeHash])}::jsonb`,
+        ),
+      )
+      .returning({ id: users.id });
+    return result.length > 0;
+  }
+
+  async replaceMfaRecoveryCodes(
+    userId: string,
+    recoveryCodeHashes: string[],
+  ): Promise<void> {
+    await db
+      .update(users)
+      .set({ mfaRecoveryCodes: recoveryCodeHashes, updatedAt: new Date() })
+      .where(eq(users.id, userId));
   }
 
   async disableUser(id: string): Promise<User> {
