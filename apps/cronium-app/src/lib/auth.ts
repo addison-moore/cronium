@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { compare } from "bcrypt";
 import { storage } from "@/server/storage";
 import { UserStatus } from "@/shared/schema";
+import { RateLimitService } from "@/lib/rate-limit-service";
 
 export const authOptions: NextAuthOptions = {
   pages: {
@@ -20,9 +21,34 @@ export const authOptions: NextAuthOptions = {
         username: { label: "Username or Email", type: "text" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.username || !credentials?.password) {
           return null;
+        }
+
+        // Rate-limit credential logins per client IP. This path does not go
+        // through the tRPC withRateLimit middleware, so it is enforced here to
+        // block brute force / password spraying. Fails open if Redis is down
+        // (matching RateLimitService behaviour elsewhere).
+        const headers = (req?.headers ?? {}) as Record<
+          string,
+          string | string[] | undefined
+        >;
+        const pickHeader = (name: string): string | undefined => {
+          const value = headers[name];
+          return Array.isArray(value) ? value[0] : value;
+        };
+        const clientIp =
+          pickHeader("x-forwarded-for")?.split(",")[0]?.trim() ??
+          pickHeader("x-real-ip") ??
+          "unknown";
+        const { allowed } = await RateLimitService.tryCheckLimit(
+          clientIp,
+          "auth:credentials-login",
+          { maxRequests: 10, windowMs: 60_000 },
+        );
+        if (!allowed) {
+          throw new Error("Too many login attempts. Please try again later.");
         }
 
         try {

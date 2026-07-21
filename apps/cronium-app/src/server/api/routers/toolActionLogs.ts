@@ -1,13 +1,17 @@
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure } from "../trpc";
-import { toolActionLogs } from "@/shared/schema";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { events, toolActionLogs } from "@/shared/schema";
 import { desc, eq, and } from "drizzle-orm";
 import { db } from "@/server/db";
 import { TRPCError } from "@trpc/server";
 
+// Tool-action logs can contain message payloads, recipients, and API
+// responses, so every read is scoped to logs belonging to the caller's own
+// events. The join to `events` (an inner join) both enforces ownership and
+// excludes orphaned logs with no owning event.
 export const toolActionLogsRouter = createTRPCRouter({
-  // Get recent tool action logs
-  getRecent: publicProcedure
+  // Get recent tool action logs for the current user
+  getRecent: protectedProcedure
     .input(
       z.object({
         limit: z.number().min(1).max(100).default(50),
@@ -15,10 +19,9 @@ export const toolActionLogsRouter = createTRPCRouter({
         status: z.enum(["SUCCESS", "FAILURE"]).optional(),
       }),
     )
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       try {
-        // Build conditions array first
-        const conditions = [];
+        const conditions = [eq(events.userId, ctx.session.user.id)];
         if (input.toolType) {
           conditions.push(eq(toolActionLogs.toolType, input.toolType));
         }
@@ -26,23 +29,15 @@ export const toolActionLogsRouter = createTRPCRouter({
           conditions.push(eq(toolActionLogs.status, input.status));
         }
 
-        // Build query with or without where clause
-        const logs = await (conditions.length > 0
-          ? db
-              .select()
-              .from(toolActionLogs)
-              .where(
-                conditions.length === 1 ? conditions[0] : and(...conditions),
-              )
-              .orderBy(desc(toolActionLogs.createdAt))
-              .limit(input.limit)
-          : db
-              .select()
-              .from(toolActionLogs)
-              .orderBy(desc(toolActionLogs.createdAt))
-              .limit(input.limit));
+        const rows = await db
+          .select({ log: toolActionLogs })
+          .from(toolActionLogs)
+          .innerJoin(events, eq(toolActionLogs.eventId, events.id))
+          .where(and(...conditions))
+          .orderBy(desc(toolActionLogs.createdAt))
+          .limit(input.limit);
 
-        return { logs };
+        return { logs: rows.map((r) => r.log) };
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -52,18 +47,24 @@ export const toolActionLogsRouter = createTRPCRouter({
       }
     }),
 
-  // Get logs for a specific event
-  getByEventId: publicProcedure
+  // Get logs for a specific event owned by the current user
+  getByEventId: protectedProcedure
     .input(z.object({ eventId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       try {
-        const logs = await db
-          .select()
+        const rows = await db
+          .select({ log: toolActionLogs })
           .from(toolActionLogs)
-          .where(eq(toolActionLogs.eventId, input.eventId))
+          .innerJoin(events, eq(toolActionLogs.eventId, events.id))
+          .where(
+            and(
+              eq(toolActionLogs.eventId, input.eventId),
+              eq(events.userId, ctx.session.user.id),
+            ),
+          )
           .orderBy(desc(toolActionLogs.createdAt));
 
-        return { logs };
+        return { logs: rows.map((r) => r.log) };
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -74,7 +75,7 @@ export const toolActionLogsRouter = createTRPCRouter({
     }),
 
   // Get aggregated stats
-  getStats: publicProcedure
+  getStats: protectedProcedure
     .input(
       z.object({
         period: z.enum(["hour", "day", "week", "month"]).default("day"),

@@ -1,4 +1,14 @@
 import axios, { type AxiosError, type AxiosRequestConfig } from "axios";
+import {
+  assertRequestUrlIsPublic,
+  ssrfHttpAgent,
+  ssrfHttpsAgent,
+} from "@/lib/ssrf-guard";
+import { SsrfBlockedError } from "@/lib/tools/safe-fetch";
+
+// Cap the response we buffer so a large internal/external body can't exhaust
+// memory (there is no other bound besides the timeout).
+const MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
 
 /**
  * Execute an HTTP request
@@ -24,6 +34,16 @@ export async function executeHttpRequest(
     return { data: null, error: "No URL provided for HTTP request" };
   }
 
+  // SSRF guard: reject internal/metadata targets before making the request.
+  try {
+    assertRequestUrlIsPublic(url);
+  } catch (guardError) {
+    if (guardError instanceof SsrfBlockedError) {
+      return { data: null, error: guardError.message };
+    }
+    throw guardError;
+  }
+
   try {
     // Convert header array to object
     const headerObj: Record<string, string> = {};
@@ -39,6 +59,14 @@ export async function executeHttpRequest(
       url,
       headers: headerObj,
       timeout: 30000, // 30-second timeout
+      // SSRF hardening: the guarded agents re-validate the resolved IP at
+      // connect time (defeats DNS rebinding); redirects are not followed so a
+      // 3xx can't bounce past the guard; response/request size is capped.
+      httpAgent: ssrfHttpAgent,
+      httpsAgent: ssrfHttpsAgent,
+      maxRedirects: 0,
+      maxContentLength: MAX_RESPONSE_BYTES,
+      maxBodyLength: MAX_RESPONSE_BYTES,
     };
 
     // Add body for POST/PUT/PATCH

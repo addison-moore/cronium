@@ -84,6 +84,7 @@ import {
   encryptionService,
   isSystemSettingSensitive,
 } from "../lib/encryption-service";
+import { hashApiToken, isHashedApiToken } from "../lib/api-token-hash";
 import {
   normalizePagination,
   createPaginatedResult,
@@ -2778,39 +2779,65 @@ class DatabaseStorage implements IStorage {
   }
 
   // API Token methods
+  //
+  // Tokens are stored as a one-way SHA-256 hash (see lib/api-token-hash.ts), so
+  // the raw value only ever exists at creation time. Read paths therefore
+  // return the stored hash in the `token` field — callers must never surface it
+  // (the auth router already strips `token` from every response), so no
+  // decryption happens here.
   async getApiToken(id: number): Promise<ApiToken | undefined> {
     const [token] = await db
       .select()
       .from(apiTokens)
       .where(eq(apiTokens.id, id));
-    if (token?.token && typeof token.token === "string") {
-      try {
-        token.token = encryptionService.decrypt(token.token);
-      } catch (error) {
-        console.warn("Failed to decrypt API token:", error);
-      }
-    }
     return token;
   }
 
   async getApiTokenByToken(token: string): Promise<ApiToken | undefined> {
-    const allTokens = await db
+    const tokenHash = hashApiToken(token);
+
+    // Fast path: indexed equality lookup on the hash (constant work per request,
+    // no decryption). This is the only path once all tokens are migrated.
+    const [byHash] = await db
+      .select()
+      .from(apiTokens)
+      .where(
+        and(
+          eq(apiTokens.token, tokenHash),
+          eq(apiTokens.status, TokenStatus.ACTIVE),
+        ),
+      );
+    if (byHash) {
+      return byHash;
+    }
+
+    // Legacy fallback: tokens created before hashing are stored encrypted.
+    // Decrypt-compare ONLY those rows that aren't already hashes, and migrate a
+    // match to a hash on use so this scan shrinks to nothing over time.
+    const legacyTokens = await db
       .select()
       .from(apiTokens)
       .where(eq(apiTokens.status, TokenStatus.ACTIVE));
 
-    for (const apiToken of allTokens) {
+    for (const apiToken of legacyTokens) {
+      if (
+        typeof apiToken.token !== "string" ||
+        isHashedApiToken(apiToken.token)
+      ) {
+        continue;
+      }
       try {
-        if (typeof apiToken.token === "string") {
-          const decryptedToken = encryptionService.decrypt(apiToken.token);
-          if (decryptedToken === token) {
-            return { ...apiToken, token: decryptedToken };
-          }
+        if (encryptionService.decrypt(apiToken.token) === token) {
+          const [migrated] = await db
+            .update(apiTokens)
+            .set({ token: tokenHash })
+            .where(eq(apiTokens.id, apiToken.id))
+            .returning();
+          return migrated ?? { ...apiToken, token: tokenHash };
         }
       } catch (error) {
-        // Log the error but continue processing other tokens
         console.error(
-          `Failed to decrypt API token (ID: ${apiToken.id}):`,
+          `Failed to decrypt legacy API token (ID: ${apiToken.id}):`,
           error instanceof Error ? error.message : "Unknown error",
         );
         continue;
@@ -2821,39 +2848,24 @@ class DatabaseStorage implements IStorage {
   }
 
   async getUserApiTokens(userId: string): Promise<ApiToken[]> {
-    const tokens = await db
+    return db
       .select()
       .from(apiTokens)
       .where(eq(apiTokens.userId, userId))
       .orderBy(desc(apiTokens.createdAt));
-
-    return tokens.map((token) => {
-      try {
-        if (typeof token.token === "string") {
-          return { ...token, token: encryptionService.decrypt(token.token) };
-        }
-        return token;
-      } catch (error) {
-        console.warn("Failed to decrypt API token:", error);
-        return token;
-      }
-    });
   }
 
   async createApiToken(insertToken: InsertApiToken): Promise<ApiToken> {
-    const encryptedToken = {
-      ...insertToken,
-      token: encryptionService.encrypt(insertToken.token),
-    };
-
     const [token] = await db
       .insert(apiTokens)
-      .values(encryptedToken)
+      .values({ ...insertToken, token: hashApiToken(insertToken.token) })
       .returning();
 
     if (!token) {
       throw new Error("Failed to create API token");
     }
+    // Return the raw token once so the caller can display it a single time; it
+    // is not retrievable afterwards.
     return { ...token, token: insertToken.token };
   }
 
@@ -2861,29 +2873,20 @@ class DatabaseStorage implements IStorage {
     id: number,
     updateData: Partial<InsertApiToken>,
   ): Promise<ApiToken> {
-    const updateDataWithEncryption = { ...updateData };
+    const updateDataWithHash = { ...updateData };
 
     if (updateData.token) {
-      updateDataWithEncryption.token = encryptionService.encrypt(
-        updateData.token,
-      );
+      updateDataWithHash.token = hashApiToken(updateData.token);
     }
 
     const [token] = await db
       .update(apiTokens)
-      .set({ ...updateDataWithEncryption, updatedAt: new Date() })
+      .set({ ...updateDataWithHash, updatedAt: new Date() })
       .where(eq(apiTokens.id, id))
       .returning();
 
     if (!token) {
       throw new Error("Failed to update API token - token not found");
-    }
-    if (token.token && typeof token.token === "string") {
-      try {
-        token.token = encryptionService.decrypt(token.token);
-      } catch (error) {
-        console.warn("Failed to decrypt API token:", error);
-      }
     }
 
     return token;
@@ -2905,13 +2908,6 @@ class DatabaseStorage implements IStorage {
 
     if (!token) {
       throw new Error("Failed to revoke API token - token not found");
-    }
-    if (token.token && typeof token.token === "string") {
-      try {
-        token.token = encryptionService.decrypt(token.token);
-      } catch (error) {
-        console.warn("Failed to decrypt API token:", error);
-      }
     }
 
     return token;

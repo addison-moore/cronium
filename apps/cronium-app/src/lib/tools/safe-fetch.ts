@@ -72,7 +72,7 @@ const IPV4_BLOCKED: Array<[string, number]> = [
   ["240.0.0.0", 4], // reserved / broadcast
 ];
 
-function isDisallowedIp(ip: string): boolean {
+export function isDisallowedIp(ip: string): boolean {
   const kind = net.isIP(ip);
   if (kind === 4) {
     const n = ipv4ToInt(ip);

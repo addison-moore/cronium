@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure, protectedProcedure } from "../trpc";
+import {
+  createTRPCRouter,
+  publicProcedure,
+  protectedProcedure,
+  withRateLimit,
+} from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { storage } from "@/server/storage";
 import { isSetupRequired } from "@/lib/first-run";
@@ -57,9 +62,17 @@ const verifyInviteTokenSchema = z.object({
   token: z.string().min(1, "Token is required"),
 });
 
+// These endpoints are unauthenticated, so withRateLimit keys on the client IP
+// (x-forwarded-for). The throttles block credential brute force / password
+// spraying, reset- and invite-token guessing, and registration/email spam.
+// A password login costs a bcrypt compare, so it is deliberately the tightest.
+const loginRateLimited = publicProcedure.use(withRateLimit(10, 60_000));
+const signupRateLimited = publicProcedure.use(withRateLimit(5, 60_000));
+const tokenRateLimited = publicProcedure.use(withRateLimit(20, 60_000));
+
 export const userAuthRouter = createTRPCRouter({
   // User registration (public)
-  register: publicProcedure
+  register: signupRateLimited
     .input(registerSchema)
     .mutation(async ({ input }) => {
       try {
@@ -149,7 +162,7 @@ export const userAuthRouter = createTRPCRouter({
     }),
 
   // Forgot password (public)
-  forgotPassword: publicProcedure
+  forgotPassword: signupRateLimited
     .input(forgotPasswordSchema)
     .mutation(async ({ input }) => {
       try {
@@ -223,7 +236,7 @@ export const userAuthRouter = createTRPCRouter({
     }),
 
   // Reset password (public)
-  resetPassword: publicProcedure
+  resetPassword: tokenRateLimited
     .input(resetPasswordSchema)
     .mutation(async ({ input }) => {
       try {
@@ -281,7 +294,7 @@ export const userAuthRouter = createTRPCRouter({
     }),
 
   // Verify reset token (public)
-  verifyToken: publicProcedure
+  verifyToken: tokenRateLimited
     .input(verifyTokenSchema)
     .query(async ({ input }) => {
       try {
@@ -454,7 +467,7 @@ export const userAuthRouter = createTRPCRouter({
   }),
 
   // Login (passport compatibility)
-  login: publicProcedure.input(loginSchema).mutation(async ({ input }) => {
+  login: loginRateLimited.input(loginSchema).mutation(async ({ input }) => {
     try {
       const { username, password } = input;
 
@@ -520,7 +533,7 @@ export const userAuthRouter = createTRPCRouter({
   }),
 
   // Activate account with invite token
-  activateAccount: publicProcedure
+  activateAccount: tokenRateLimited
     .input(activateAccountSchema)
     .mutation(async ({ input }) => {
       try {
@@ -581,7 +594,7 @@ export const userAuthRouter = createTRPCRouter({
     }),
 
   // Verify invite token
-  verifyInviteToken: publicProcedure
+  verifyInviteToken: tokenRateLimited
     .input(verifyInviteTokenSchema)
     .query(async ({ input }) => {
       try {
