@@ -37,13 +37,12 @@ type OrchestratorConfig struct {
 
 // APIConfig defines backend API settings
 type APIConfig struct {
-	Endpoint       string          `yaml:"endpoint" envconfig:"ENDPOINT" required:"true"`
-	Token          string          `yaml:"token" envconfig:"TOKEN" required:"true"`
-	WSEndpoint     string          `yaml:"wsEndpoint" envconfig:"WS_ENDPOINT"`
-	Timeout        time.Duration   `yaml:"timeout" envconfig:"TIMEOUT" default:"5m"`
-	RetryConfig    RetryConfig     `yaml:"retry" envconfig:"RETRY"`
-	RateLimit      RateLimitConfig `yaml:"rateLimit" envconfig:"RATE_LIMIT"`
-	OrchestratorID string          `yaml:"-"` // Set from OrchestratorConfig.ID
+	Endpoint       string        `yaml:"endpoint" envconfig:"ENDPOINT" required:"true"`
+	Token          string        `yaml:"token" envconfig:"TOKEN" required:"true"`
+	WSEndpoint     string        `yaml:"wsEndpoint" envconfig:"WS_ENDPOINT"`
+	Timeout        time.Duration `yaml:"timeout" envconfig:"TIMEOUT" default:"5m"`
+	RetryConfig    RetryConfig   `yaml:"retry" envconfig:"RETRY"`
+	OrchestratorID string        `yaml:"-"` // Set from OrchestratorConfig.ID
 }
 
 // JobsConfig defines job processing settings
@@ -117,12 +116,6 @@ type RetryConfig struct {
 	BackoffType  string        `yaml:"backoffType" envconfig:"BACKOFF_TYPE" default:"exponential"`
 	InitialDelay time.Duration `yaml:"initialDelay" envconfig:"INITIAL_DELAY" default:"1s"`
 	MaxDelay     time.Duration `yaml:"maxDelay" envconfig:"MAX_DELAY" default:"30s"`
-}
-
-// RateLimitConfig defines rate limiting
-type RateLimitConfig struct {
-	Enabled           bool    `yaml:"enabled" envconfig:"ENABLED" default:"true"`
-	RequestsPerSecond float64 `yaml:"requestsPerSecond" envconfig:"REQUESTS_PER_SECOND" default:"10"`
 }
 
 // DockerConfig defines Docker daemon settings

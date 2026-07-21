@@ -178,6 +178,7 @@ export default function LogsPageClient() {
         id: workflow.id,
         name: workflow.name,
         // Set all required fields with default values
+        nextRunAt: null,
         userId: "",
         description: null,
         triggerType: WorkflowTriggerType.MANUAL,

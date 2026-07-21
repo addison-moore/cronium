@@ -15,6 +15,13 @@
       "when": 1784597783019,
       "tag": "0001_scheduling-kernel",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784602710572,
+      "tag": "0002_workflow-engine",
+      "breakpoints": true
     }
   ]
 }

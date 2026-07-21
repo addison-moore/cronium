@@ -42,6 +42,9 @@ export interface DispatchOptions {
   input?: Record<string, unknown> | undefined;
   workflowId?: number | undefined;
   workflowExecutionId?: number | undefined;
+  /** Stamped into job metadata so the workflow engine can re-attach a job to
+   * its step after a crash between claim and dispatch. */
+  workflowStepRunId?: number | undefined;
   /** Dispatched late past the misfire grace (RUN_ONCE catch-up). */
   scheduledMiss?: boolean;
   /** Overrides the audit actor; defaults to the trigger source. */
@@ -169,6 +172,9 @@ export async function dispatchEventJob(
         ...(opts.workflowId !== undefined && { workflowId: opts.workflowId }),
         ...(opts.workflowExecutionId !== undefined && {
           workflowExecutionId: opts.workflowExecutionId,
+        }),
+        ...(opts.workflowStepRunId !== undefined && {
+          workflowStepRunId: opts.workflowStepRunId,
         }),
       },
     });

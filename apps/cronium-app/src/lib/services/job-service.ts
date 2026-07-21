@@ -23,6 +23,7 @@ import {
   gte,
   inArray,
   sql,
+  count,
 } from "drizzle-orm";
 
 /** Claim-lease duration; owners renew via heartbeat well inside this window
@@ -224,19 +225,20 @@ export class JobService {
 
     const jobs = await query;
 
-    // Get total count
-    const countQuery = this.db.select({ count: jobsTable.id }).from(jobsTable);
-
+    // Get total count — a real aggregate (the old select({count: id}) returned
+    // an id string and every non-empty total computed NaN — review D2)
+    const countQuery = this.db
+      .select({ value: count() })
+      .from(jobsTable)
+      .$dynamic();
     if (conditions.length > 0) {
       countQuery.where(and(...conditions));
     }
-
-    const countResult = await countQuery;
-    const count = countResult[0]?.count ?? "0";
+    const [countRow] = await countQuery;
 
     return {
       jobs,
-      total: Number(count),
+      total: countRow?.value ?? 0,
     };
   }
 
@@ -471,75 +473,31 @@ export class JobService {
     failed: number;
     cancelled: number;
   }> {
+    // One grouped aggregate instead of six pseudo-counts that computed NaN
+    // (review D2)
     const baseCondition = userId ? eq(jobsTable.userId, userId) : undefined;
+    const grouped = await this.db
+      .select({ status: jobsTable.status, value: count() })
+      .from(jobsTable)
+      .where(baseCondition)
+      .groupBy(jobsTable.status);
 
-    const stats = await Promise.all([
-      this.db
-        .select({ count: jobsTable.id })
-        .from(jobsTable)
-        .where(baseCondition),
-      this.db
-        .select({ count: jobsTable.id })
-        .from(jobsTable)
-        .where(and(baseCondition, eq(jobsTable.status, JobStatus.QUEUED))),
-      this.db
-        .select({ count: jobsTable.id })
-        .from(jobsTable)
-        .where(
-          and(
-            baseCondition,
-            or(
-              eq(jobsTable.status, JobStatus.RUNNING),
-              eq(jobsTable.status, JobStatus.CLAIMED),
-            ),
-          ),
-        ),
-      this.db
-        .select({ count: jobsTable.id })
-        .from(jobsTable)
-        .where(and(baseCondition, eq(jobsTable.status, JobStatus.COMPLETED))),
-      this.db
-        .select({ count: jobsTable.id })
-        .from(jobsTable)
-        .where(and(baseCondition, eq(jobsTable.status, JobStatus.FAILED))),
-      this.db
-        .select({ count: jobsTable.id })
-        .from(jobsTable)
-        .where(and(baseCondition, eq(jobsTable.status, JobStatus.CANCELLED))),
-    ]);
+    const byStatus = new Map(grouped.map((row) => [row.status, row.value]));
+    const get = (status: JobStatus) => byStatus.get(status) ?? 0;
 
     return {
-      total: Number(stats[0][0]?.count ?? 0),
-      queued: Number(stats[1][0]?.count ?? 0),
-      running: Number(stats[2][0]?.count ?? 0),
-      completed: Number(stats[3][0]?.count ?? 0),
-      failed: Number(stats[4][0]?.count ?? 0),
-      cancelled: Number(stats[5][0]?.count ?? 0),
+      total: grouped.reduce((sum, row) => sum + row.value, 0),
+      queued: get(JobStatus.QUEUED),
+      running: get(JobStatus.RUNNING) + get(JobStatus.CLAIMED),
+      completed: get(JobStatus.COMPLETED),
+      failed: get(JobStatus.FAILED) + get(JobStatus.TIMED_OUT),
+      cancelled: get(JobStatus.CANCELLED),
     };
   }
 
-  /**
-   * Clean up old jobs
-   */
-  async cleanupOldJobs(olderThanDays = 30): Promise<number> {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
-
-    const result = await this.db
-      .delete(jobsTable)
-      .where(
-        and(
-          lte(jobsTable.completedAt, cutoffDate),
-          or(
-            eq(jobsTable.status, JobStatus.COMPLETED),
-            eq(jobsTable.status, JobStatus.FAILED),
-            eq(jobsTable.status, JobStatus.CANCELLED),
-          ),
-        ),
-      );
-
-    return result.rowCount ?? 0;
-  }
+  // (Job retention lives in src/lib/scheduling/retention.ts, run by the
+  // worker — the old cleanupOldJobs here was never called and would have
+  // violated FKs anyway.)
 
   /**
    * If a failed job still has retry budget (payload.retries), requeue it with

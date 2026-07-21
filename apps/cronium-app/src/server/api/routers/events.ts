@@ -3,6 +3,7 @@
  */
 
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 import {
   createTRPCRouter,
   protectedProcedure,
@@ -123,6 +124,11 @@ export const eventsRouter = createTRPCRouter({
           );
         }
 
+        // Materialize the durable schedule — an event created directly as
+        // ACTIVE + SCHEDULE starts firing without needing a separate edit
+        // (scheduling review M6)
+        await scheduler.updateScript(event.id);
+
         // Handle environment variables
         if (input.envVars && input.envVars.length > 0) {
           for (const envVar of input.envVars) {
@@ -233,9 +239,13 @@ export const eventsRouter = createTRPCRouter({
         // if the event is ACTIVE)
         if (
           input.status !== undefined ||
+          input.triggerType !== undefined ||
           input.scheduleNumber !== undefined ||
           input.scheduleUnit !== undefined ||
           input.customSchedule !== undefined ||
+          input.timezone !== undefined ||
+          input.catchupPolicy !== undefined ||
+          input.overlapPolicy !== undefined ||
           input.startTime !== undefined
         ) {
           await scheduler.updateScript(id);
@@ -766,5 +776,53 @@ export const eventsRouter = createTRPCRouter({
           cause: error,
         });
       }
+    }),
+
+  // Validate a cron expression and preview upcoming fire times (schedule form)
+  validateCron: protectedProcedure
+    .input(
+      z.object({
+        expression: z.string().min(1).max(255),
+        timezone: z.string().max(64).default("UTC"),
+      }),
+    )
+    .query(async ({ input }) => {
+      const { validateCronExpr } =
+        await import("@/lib/scheduling/schedule-math");
+      const result = validateCronExpr(input.expression, input.timezone);
+      return {
+        valid: result.valid,
+        error: result.error ?? null,
+        next: (result.next ?? []).map((d) => d.toISOString()),
+      };
+    }),
+
+  // Recent schedule incidents (missed/skipped/auto-paused/lease-lost) for an
+  // event — the "didn't run" half of the run history (PLAN.md §8)
+  getScheduleIncidents: protectedProcedure
+    .input(
+      z.object({
+        eventId: z.number().int().positive(),
+        limit: z.number().int().min(1).max(100).default(20),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const canView = await storage.canViewEvent(
+        input.eventId,
+        ctx.session.user.id,
+      );
+      if (!canView) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
+      }
+      const { db } = await import("@/server/db");
+      const { scheduleIncidents } = await import("@/shared/schema");
+      const { desc: descOp, eq: eqOp } = await import("drizzle-orm");
+      const incidents = await db
+        .select()
+        .from(scheduleIncidents)
+        .where(eqOp(scheduleIncidents.eventId, input.eventId))
+        .orderBy(descOp(scheduleIncidents.createdAt))
+        .limit(input.limit);
+      return { incidents };
     }),
 });

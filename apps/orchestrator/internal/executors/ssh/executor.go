@@ -74,7 +74,7 @@ type Session struct {
 // NewExecutor creates a new SSH executor
 func NewExecutor(cfg config.SSHConfig, apiClient *api.Client, runtimeHost string, runtimePort int, jwtSecret string, log *logrus.Logger) (*Executor, error) {
 	// Create connection pool
-	pool := NewConnectionPool(cfg.ConnectionPool, cfg.Security, log)
+	pool := NewConnectionPool(cfg.ConnectionPool, cfg.Security, cfg.CircuitBreaker, log)
 
 	// Get runner binary info
 	runnerInfo := RunnerInfo{
@@ -380,7 +380,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		return
 	}
 	defer verifySession.Close()
-	
+
 	if err := verifySession.Run(fmt.Sprintf("%s version", runnerPath)); err != nil {
 		e.sendError(updates, fmt.Errorf("failed to verify runner: %w", err), true)
 		return
@@ -574,7 +574,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		// Context cancelled or timed out
 		// Mark execution as complete and start cleanup
 		timing.MarkExecutionComplete()
-		
+
 		// First cancel the streaming goroutines
 		cancelStream()
 
@@ -645,7 +645,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 	case err := <-done:
 		// Command completed - mark execution phase complete
 		timing.MarkExecutionComplete()
-		
+
 		exitCode := 0
 		if err != nil {
 			if exitErr, ok := err.(*ssh.ExitError); ok {

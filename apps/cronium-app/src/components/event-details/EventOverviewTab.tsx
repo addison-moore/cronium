@@ -7,6 +7,7 @@ import { Badge } from "@cronium/ui";
 import { type Event } from "./types";
 import { EventTypeIcon } from "@/components/ui/event-type-icon";
 import WorkflowsCard from "./WorkflowsCard";
+import { ScheduleIncidentsCard } from "./ScheduleIncidentsCard";
 import { formatDate as formatDateUtil } from "@/lib/utils";
 
 const copy = {
@@ -310,6 +311,9 @@ export function EventOverviewTab({
             </div>
           </CardContent>
         </Card>
+
+        {/* Schedule incidents (renders only when there are any) */}
+        <ScheduleIncidentsCard eventId={event.id} />
 
         {/* Workflows Card */}
         <WorkflowsCard eventId={event.id} eventLoaded={isEventLoaded} />

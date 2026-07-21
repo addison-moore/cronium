@@ -5,7 +5,32 @@ import {
   RunLocation,
   TimeUnit,
   EventTriggerType,
+  CatchupPolicy,
+  OverlapPolicy,
+  LeaseLossPolicy,
 } from "../schema";
+import {
+  intervalSecondsFor,
+  validateCronExpr,
+  validateIntervalSeconds,
+} from "@/lib/scheduling/schedule-math";
+
+// Shared refinement pieces for schedule fields
+const timezoneField = z
+  .string()
+  .max(64)
+  .refine(
+    (tz) => {
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: tz });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    { message: "Unknown timezone (use an IANA name like America/New_York)" },
+  );
+const priorityField = z.number().int().min(0).max(3);
 
 // Base event query schema
 export const eventQuerySchema = z.object({
@@ -68,6 +93,15 @@ export const createEventSchema = z
     scheduleUnit: z.nativeEnum(TimeUnit).default(TimeUnit.MINUTES),
     customSchedule: z.string().optional(),
     startTime: z.string().datetime().optional().nullable(),
+
+    // Durable-scheduler options (PLAN.md §3.1)
+    timezone: timezoneField.default("UTC"),
+    catchupPolicy: z.nativeEnum(CatchupPolicy).default(CatchupPolicy.SKIP),
+    overlapPolicy: z.nativeEnum(OverlapPolicy).default(OverlapPolicy.ALLOW),
+    leaseLossPolicy: z
+      .nativeEnum(LeaseLossPolicy)
+      .default(LeaseLossPolicy.RETRY),
+    priority: priorityField.default(1),
 
     // Execution settings
     runLocation: z.nativeEnum(RunLocation).default(RunLocation.LOCAL),
@@ -160,6 +194,31 @@ export const createEventSchema = z
       message: "Schedule configuration is required for active scheduled events",
       path: ["scheduleNumber"],
     },
+  )
+  .refine(
+    (data) =>
+      !data.customSchedule ||
+      validateCronExpr(data.customSchedule, data.timezone ?? "UTC").valid,
+    {
+      message: "Invalid cron expression",
+      path: ["customSchedule"],
+    },
+  )
+  .refine(
+    (data) => {
+      if (data.customSchedule || data.triggerType !== EventTriggerType.SCHEDULE)
+        return true;
+      if (!data.scheduleNumber) return true;
+      return (
+        validateIntervalSeconds(
+          intervalSecondsFor(data.scheduleNumber, data.scheduleUnit),
+        ) === null
+      );
+    },
+    {
+      message: "Intervals below 10 seconds are not supported",
+      path: ["scheduleNumber"],
+    },
   );
 
 // Update event schema (partial of create schema with id)
@@ -180,8 +239,18 @@ export const updateEventSchema = z.object({
   triggerType: z.nativeEnum(EventTriggerType).optional(),
   scheduleNumber: z.number().min(1).optional(),
   scheduleUnit: z.nativeEnum(TimeUnit).optional(),
-  customSchedule: z.string().optional(),
+  customSchedule: z
+    .string()
+    .optional()
+    .refine((expr) => !expr || validateCronExpr(expr).valid, {
+      message: "Invalid cron expression",
+    }),
   startTime: z.string().datetime().optional().nullable(),
+  timezone: timezoneField.optional(),
+  catchupPolicy: z.nativeEnum(CatchupPolicy).optional(),
+  overlapPolicy: z.nativeEnum(OverlapPolicy).optional(),
+  leaseLossPolicy: z.nativeEnum(LeaseLossPolicy).optional(),
+  priority: priorityField.optional(),
   runLocation: z.nativeEnum(RunLocation).optional(),
   serverId: z.number().optional().nullable(),
   selectedServerIds: z.array(z.number()).optional(),

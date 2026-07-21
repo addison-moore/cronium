@@ -29,6 +29,10 @@ import {
   outboxBacklog,
 } from "./src/lib/scheduling/outbox";
 import { InProcessWorkerPool } from "./src/lib/scheduling/worker-executor";
+import {
+  advanceRunsForJob,
+  reconcileWorkflowRuns,
+} from "./src/lib/scheduling/workflow-engine";
 import { writeWorkerHeartbeat } from "./src/lib/scheduling/heartbeat";
 import {
   initializeCleanupService,
@@ -153,6 +157,17 @@ const retentionLoop = startLoop(
   },
 );
 
+// Reconciliation sweep for workflow runs: NOTIFY-driven advances are the fast
+// path (see the job_changed handler below); this loop is the guarantee that
+// every RUNNING workflow converges even if all notifications are lost, and it
+// doubles as the boot-time recovery pass (PLAN.md §4.4).
+const workflowLoop = startLoop("workflow-reconcile", 60_000, async () => {
+  const advanced = await reconcileWorkflowRuns();
+  if (advanced > 0) {
+    console.log(`[Worker] Reconciled ${advanced} running workflow(s)`);
+  }
+});
+
 // --- LISTEN (accelerant only; loops poll regardless) -----------------------
 
 let listenClient: PgClient | null = null;
@@ -182,6 +197,15 @@ async function startListener(): Promise<void> {
           break;
         case "job_changed":
           outboxLoop.poke();
+          // Job completion drives workflow advancement (no per-node polling)
+          if (msg.payload) {
+            void advanceRunsForJob(msg.payload).catch((error) => {
+              console.error(
+                "[Worker] Workflow advance on job change failed:",
+                error instanceof Error ? error.message : String(error),
+              );
+            });
+          }
           break;
       }
     });
@@ -255,11 +279,13 @@ async function main(): Promise<void> {
     console.log(`[Worker] Health endpoint on :${HEALTH_PORT}/health`);
   });
 
-  // Startup passes: retention once, then let the intervals take over
+  // Startup passes: retention once, boot reconciliation for workflow runs
+  // interrupted by the previous shutdown, then the intervals take over
   retentionLoop.poke();
   dispatchLoop.poke();
   claimLoop.poke();
   sweepLoop.poke();
+  workflowLoop.poke();
 }
 
 async function shutdown(signal: string): Promise<void> {
@@ -274,6 +300,7 @@ async function shutdown(signal: string): Promise<void> {
     outboxLoop,
     leaseLoop,
     retentionLoop,
+    workflowLoop,
   ]) {
     loop.stop();
   }

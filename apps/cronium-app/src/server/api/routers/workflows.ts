@@ -296,15 +296,17 @@ export const workflowsRouter = createTRPCRouter({
           throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
         }
 
-        // Import and use workflow executor
-        const { workflowExecutor } = await import("@/lib/workflow-executor");
+        // Event-sourced engine: creates the run + step rows and dispatches
+        // the starting nodes; the scheduling worker advances it to completion.
+        const { startWorkflowRun } =
+          await import("@/lib/scheduling/workflow-engine");
+        const { WorkflowTriggerType } = await import("@/shared/schema");
 
-        // Execute the workflow (it will create its own execution record)
-        const result = await workflowExecutor.executeWorkflow(
-          input.id,
-          ctx.session.user.id,
-          input.payload,
-        );
+        const result = await startWorkflowRun(input.id, {
+          userId: ctx.session.user.id,
+          triggerType: WorkflowTriggerType.MANUAL,
+          input: input.payload,
+        });
 
         return result;
       } catch (error: unknown) {

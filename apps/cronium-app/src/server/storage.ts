@@ -2248,6 +2248,11 @@ class DatabaseStorage implements IStorage {
     if (!workflow) {
       throw new Error("Failed to create workflow");
     }
+
+    // Materialize the durable schedule for SCHEDULE-triggered workflows
+    const { refreshWorkflowSchedule } =
+      await import("@/lib/scheduling/materialize");
+    await refreshWorkflowSchedule(workflow.id).catch(() => undefined);
     return workflow;
   }
 
@@ -2326,6 +2331,26 @@ class DatabaseStorage implements IStorage {
 
     if (!workflow) {
       throw new Error("Failed to update workflow - workflow not found");
+    }
+
+    // Re-materialize the durable schedule when anything schedule-affecting
+    // changed (status, trigger, cadence). One hook covers every router call
+    // site — see src/lib/scheduling/materialize.ts.
+    if (
+      "status" in updateData ||
+      "triggerType" in updateData ||
+      "scheduleNumber" in updateData ||
+      "scheduleUnit" in updateData ||
+      "customSchedule" in updateData
+    ) {
+      const { refreshWorkflowSchedule } =
+        await import("@/lib/scheduling/materialize");
+      await refreshWorkflowSchedule(id).catch((error) => {
+        console.error(
+          `Failed to refresh schedule for workflow ${id}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+      });
     }
     return workflow;
   }

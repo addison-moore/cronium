@@ -12,9 +12,23 @@
  */
 
 import { db } from "@/server/db";
-import { events, EventStatus, EventTriggerType } from "@/shared/schema";
+import {
+  events,
+  workflows,
+  EventStatus,
+  EventTriggerType,
+  ScheduleKind,
+  TimeUnit,
+  WorkflowTriggerType,
+  type Workflow,
+} from "@/shared/schema";
 import { eq, sql } from "drizzle-orm";
-import { computeNextRun, specFromEvent } from "./schedule-math";
+import {
+  computeNextRun,
+  intervalSecondsFor,
+  specFromEvent,
+  type ScheduleSpec,
+} from "./schedule-math";
 
 export async function notifyScheduleChanged(eventId: number): Promise<void> {
   try {
@@ -67,5 +81,75 @@ export async function refreshEventSchedule(
     .set({ nextRunAt: next, updatedAt: new Date() })
     .where(eq(events.id, eventId));
   await notifyScheduleChanged(eventId);
+  return next;
+}
+
+/** Build a ScheduleSpec from a workflow's schedule fields. Workflows have no
+ * timezone/policy columns yet (Phase 4 deviation) — cron evaluates in UTC and
+ * the dispatcher applies default policies. */
+export function specFromWorkflow(
+  workflow: Pick<
+    Workflow,
+    "scheduleNumber" | "scheduleUnit" | "customSchedule"
+  >,
+): ScheduleSpec | null {
+  if (workflow.customSchedule) {
+    return {
+      kind: ScheduleKind.CRON,
+      cronExpr: workflow.customSchedule,
+      timezone: "UTC",
+    };
+  }
+  if (workflow.scheduleNumber && workflow.scheduleUnit) {
+    return {
+      kind: ScheduleKind.INTERVAL,
+      intervalSeconds: intervalSecondsFor(
+        workflow.scheduleNumber,
+        workflow.scheduleUnit as TimeUnit,
+      ),
+      timezone: "UTC",
+    };
+  }
+  return null;
+}
+
+/** Workflow twin of refreshEventSchedule: fixes the review's C2 ("scheduled
+ * workflows never fire") — SCHEDULE-triggered ACTIVE workflows materialize a
+ * durable next_run_at the dispatcher consumes. */
+export async function refreshWorkflowSchedule(
+  workflowId: number,
+): Promise<Date | null> {
+  const [workflow] = await db
+    .select()
+    .from(workflows)
+    .where(eq(workflows.id, workflowId))
+    .limit(1);
+  if (!workflow) return null;
+
+  let next: Date | null = null;
+  if (
+    workflow.status === EventStatus.ACTIVE &&
+    workflow.triggerType === WorkflowTriggerType.SCHEDULE
+  ) {
+    const spec = specFromWorkflow(workflow);
+    next = spec
+      ? computeNextRun(spec, { from: new Date(), prevNext: null })
+      : null;
+    if (!next) {
+      console.warn(
+        `[Materialize] Workflow ${workflowId} is ACTIVE + SCHEDULE but has no computable next run (invalid schedule?)`,
+      );
+    }
+  }
+
+  await db
+    .update(workflows)
+    .set({ nextRunAt: next, updatedAt: new Date() })
+    .where(eq(workflows.id, workflowId));
+  await db
+    .execute(
+      sql`SELECT pg_notify('schedule_changed', ${`workflow:${workflowId}`})`,
+    )
+    .catch(() => undefined);
   return next;
 }

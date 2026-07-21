@@ -20,16 +20,23 @@ import {
   events,
   jobs,
   scheduleIncidents,
+  workflows,
+  CatchupPolicy,
   EventStatus,
   EventTriggerType,
   JobStatus,
   OverlapPolicy,
   ScheduleIncidentKind,
+  WorkflowTriggerType,
 } from "@/shared/schema";
 import { and, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import { planTicks, type TickPlan } from "./plan-ticks";
 import { specFromEvent } from "./schedule-math";
-import { refreshEventSchedule } from "./materialize";
+import {
+  refreshEventSchedule,
+  refreshWorkflowSchedule,
+  specFromWorkflow,
+} from "./materialize";
 import { dispatchEventJob } from "./dispatch";
 
 const DISPATCH_BATCH = 50;
@@ -157,16 +164,98 @@ export interface DispatchTickResult {
   dueEvents: number;
   dispatched: number;
   incidents: number;
+  workflowRunsStarted: number;
+}
+
+interface WorkflowPlan {
+  workflowId: number;
+  plan: TickPlan;
+}
+
+/** Same materialize-missing pass for SCHEDULE-triggered workflows. */
+async function materializeMissingWorkflows(): Promise<void> {
+  const missing = await db
+    .select({ id: workflows.id })
+    .from(workflows)
+    .where(
+      and(
+        eq(workflows.status, EventStatus.ACTIVE),
+        eq(workflows.triggerType, WorkflowTriggerType.SCHEDULE),
+        isNull(workflows.nextRunAt),
+        sql`${workflows.updatedAt} < now() - interval '60 seconds'`,
+      ),
+    )
+    .limit(MATERIALIZE_BATCH);
+  for (const row of missing) {
+    await refreshWorkflowSchedule(row.id);
+  }
+}
+
+/** Lock due SCHEDULE workflows, plan ticks (default policies: SKIP catch-up,
+ * 60s grace — workflows have no per-row policy columns yet), advance
+ * next_run_at atomically. */
+async function claimDueWorkflowPlans(now: Date): Promise<WorkflowPlan[]> {
+  return db.transaction(async (tx) => {
+    const due = await tx
+      .select()
+      .from(workflows)
+      .where(
+        and(
+          eq(workflows.status, EventStatus.ACTIVE),
+          eq(workflows.triggerType, WorkflowTriggerType.SCHEDULE),
+          lte(workflows.nextRunAt, now),
+        ),
+      )
+      .orderBy(workflows.nextRunAt)
+      .limit(DISPATCH_BATCH)
+      .for("update", { skipLocked: true });
+
+    const plans: WorkflowPlan[] = [];
+    for (const workflow of due) {
+      if (!workflow.nextRunAt) continue;
+      const spec = specFromWorkflow(workflow);
+      if (!spec) {
+        await tx
+          .update(workflows)
+          .set({ nextRunAt: null, updatedAt: now })
+          .where(eq(workflows.id, workflow.id));
+        await tx.insert(scheduleIncidents).values({
+          workflowId: workflow.id,
+          kind: ScheduleIncidentKind.MISSED,
+          details: {
+            scheduledFor: workflow.nextRunAt.toISOString(),
+            reason: "unschedulable: invalid or missing schedule expression",
+          },
+        });
+        continue;
+      }
+      const plan = planTicks({
+        spec,
+        dueAt: workflow.nextRunAt,
+        now,
+        catchupPolicy: CatchupPolicy.SKIP,
+        misfireGraceS: 60,
+      });
+      await tx
+        .update(workflows)
+        .set({ nextRunAt: plan.nextRunAt, updatedAt: now })
+        .where(eq(workflows.id, workflow.id));
+      plans.push({ workflowId: workflow.id, plan });
+    }
+    return plans;
+  });
 }
 
 export async function runDispatchTick(
   now: Date = new Date(),
 ): Promise<DispatchTickResult> {
   await materializeMissing();
+  await materializeMissingWorkflows();
 
   const plans = await claimDuePlans(now);
   let dispatched = 0;
   let incidents = 0;
+  let workflowRunsStarted = 0;
 
   for (const { eventId, overlapPolicy, plan } of plans) {
     for (const incident of plan.incidents) {
@@ -236,5 +325,51 @@ export async function runDispatchTick(
     }
   }
 
-  return { dueEvents: plans.length, dispatched, incidents };
+  // --- SCHEDULE-triggered workflows (review C2: these never fired before) ---
+  const workflowPlans = await claimDueWorkflowPlans(now);
+  for (const { workflowId, plan } of workflowPlans) {
+    for (const incident of plan.incidents) {
+      await db.insert(scheduleIncidents).values({
+        workflowId,
+        kind: incident.kind,
+        details: incident.details,
+      });
+      incidents++;
+    }
+    for (const tick of plan.ticks) {
+      try {
+        const { startWorkflowRun } = await import("./workflow-engine");
+        const { WorkflowTriggerType: TriggerType } =
+          await import("@/shared/schema");
+        const result = await startWorkflowRun(workflowId, {
+          triggerType: TriggerType.SCHEDULE,
+        });
+        if (result.success) {
+          workflowRunsStarted++;
+        } else {
+          await db.insert(scheduleIncidents).values({
+            workflowId,
+            kind: ScheduleIncidentKind.MISSED,
+            details: {
+              scheduledFor: tick.at.toISOString(),
+              reason: `start failed: ${result.output ?? "unknown"}`,
+            },
+          });
+          incidents++;
+        }
+      } catch (error) {
+        console.error(
+          `[Dispatcher] Failed to start scheduled workflow ${workflowId}:`,
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
+  }
+
+  return {
+    dueEvents: plans.length,
+    dispatched,
+    incidents,
+    workflowRunsStarted,
+  };
 }

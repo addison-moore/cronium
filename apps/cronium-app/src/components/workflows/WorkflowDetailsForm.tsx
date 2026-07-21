@@ -156,6 +156,7 @@ export default function WorkflowDetailsForm({
           description: updatedWorkflow.description,
           triggerType: updatedWorkflow.triggerType,
           status: updatedWorkflow.status,
+          nextRunAt: updatedWorkflow.nextRunAt ?? null,
           tags: updatedWorkflow.tags,
           customSchedule: updatedWorkflow.customSchedule,
           scheduleNumber: updatedWorkflow.scheduleNumber,

@@ -62,10 +62,18 @@ Execute pre-built integrations with third-party services:
 #### 🕐 Flexible Scheduling
 
 - **Manual Execution**: Run events on-demand with a single click
-- **Time-based Scheduling**: Set intervals (minutes, hours, days, weeks, months)
-- **Cron Expressions**: Advanced scheduling with full cron syntax support
+- **Time-based Scheduling**: True elapsed-time intervals (10-second minimum)
+- **Cron Expressions**: Validated at save time, with a next-runs preview
+- **Timezones**: Cron schedules fire in the event's IANA timezone (DST-aware)
 - **Start Time Control**: Schedule events to begin at specific dates/times
-- **Max Execution Limits**: Automatically stop after N executions
+- **Missed-run (catch-up) policy**: When Cronium was down at a scheduled time —
+  skip (recorded as an incident), run once on recovery, or run each missed tick
+- **Overlap policy**: When a run comes due while the previous one is still
+  active — allow concurrency, skip, queue one behind, or cancel the previous run
+- **Priority**: Higher-priority jobs are picked up by executors first
+- **Max Execution Limits**: Automatically pause after N scheduled executions
+- **Schedule incidents**: Missed, skipped, and degraded runs are recorded and
+  shown on the event's overview — "didn't run" is as visible as "ran and failed"
 
 #### 🖥️ Execution Environments
 

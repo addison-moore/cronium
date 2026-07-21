@@ -19,6 +19,9 @@ import {
   EventTriggerType,
   RunLocation,
   TimeUnit,
+  CatchupPolicy,
+  OverlapPolicy,
+  LeaseLossPolicy,
 } from "@/shared/schema";
 import { trpc } from "@/lib/trpc";
 import { type z } from "zod";
@@ -210,6 +213,11 @@ export function JsonImportModal({ isOpen, onClose }: JsonImportModalProps) {
         type: eventType,
         description: importData.description,
         shared: importData.shared ?? false,
+        timezone: "UTC",
+        catchupPolicy: CatchupPolicy.SKIP,
+        overlapPolicy: OverlapPolicy.ALLOW,
+        leaseLossPolicy: LeaseLossPolicy.RETRY,
+        priority: 1,
         content: importData.content,
         httpMethod: importData.httpMethod ?? undefined,
         httpUrl: importData.httpUrl ?? undefined,

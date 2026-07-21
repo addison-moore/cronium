@@ -4,7 +4,7 @@ import { db } from "@/server/db";
 import { eq, and } from "drizzle-orm";
 import { workflows } from "@/shared/schema";
 import { WorkflowTriggerType, EventStatus } from "@/shared/schema";
-import { workflowExecutor } from "@/lib/workflow-executor";
+import { startWorkflowRun } from "@/lib/scheduling/workflow-engine";
 import { RateLimitService } from "@/lib/rate-limit-service";
 
 // Cap webhook payloads to keep untrusted input bounded
@@ -93,18 +93,22 @@ export async function POST(
       `Webhook triggered for workflow ${workflow.id} with key ${webhookKey}`,
     );
 
-    // Run the workflow asynchronously
-    workflowExecutor
-      .runWorkflowImmediately(workflow.id, inputData)
+    // Start the run asynchronously; the scheduling worker advances it.
+    startWorkflowRun(workflow.id, {
+      triggerType: WorkflowTriggerType.WEBHOOK,
+      input: inputData,
+    })
       .then((result) => {
         console.log(
-          `Webhook workflow ${workflow.id} execution completed:`,
-          result.success ? "SUCCESS" : "FAILURE",
+          `Webhook workflow ${workflow.id} run started:`,
+          result.success
+            ? `execution ${String(result.executionId)}`
+            : result.output,
         );
       })
       .catch((error) => {
         console.error(
-          `Error running workflow ${workflow.id} via webhook:`,
+          `Error starting workflow ${workflow.id} via webhook:`,
           error,
         );
       });

@@ -171,10 +171,28 @@ export async function PUT(
         )
           jobUpdateData.setupDuration = execution.setupDuration;
 
+        // Derive the job status with the same semantics as the /complete
+        // route (exit -2 = cancelled, -1 = timed out): this sync races the
+        // orchestrator's completion report, and under the CAS state machine
+        // both writers must agree on the terminal status or one gets a
+        // spurious 409 (observed live: a cancelled job landed FAILED here
+        // first and the real `cancelled` completion was rejected).
+        let syncStatus = execution.status;
+        if (execution.exitCode === -2) {
+          syncStatus = JobStatus.CANCELLED;
+        } else if (execution.exitCode === -1) {
+          syncStatus = JobStatus.TIMED_OUT;
+        } else if (execution.status === JobStatus.FAILED) {
+          syncStatus = JobStatus.FAILED;
+        } else if (execution.exitCode === 0) {
+          syncStatus = JobStatus.COMPLETED;
+        }
+
         await jobService.updateJobStatus(
           execution.jobId,
-          execution.status,
+          syncStatus,
           jobUpdateData,
+          "execution-sync",
         );
       }
     }

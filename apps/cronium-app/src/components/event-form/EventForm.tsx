@@ -36,6 +36,8 @@ import {
   RunLocation,
   TimeUnit,
   EventTriggerType,
+  CatchupPolicy,
+  OverlapPolicy,
   type Event,
   type Tool,
 } from "@/shared/schema";
@@ -142,6 +144,10 @@ const eventFormSchema = z
     startTime: z.string().optional().nullable(),
     useCronScheduling: z.boolean().default(false),
     customSchedule: z.string().optional(),
+    timezone: z.string().default("UTC"),
+    catchupPolicy: z.nativeEnum(CatchupPolicy).default(CatchupPolicy.SKIP),
+    overlapPolicy: z.nativeEnum(OverlapPolicy).default(OverlapPolicy.ALLOW),
+    priority: z.number().int().min(0).max(3).default(1),
     timeoutValue: z.number().min(1).default(30),
     timeoutUnit: z.nativeEnum(TimeUnit).default(TimeUnit.SECONDS),
     runLocation: z.nativeEnum(RunLocation).default(RunLocation.LOCAL),
@@ -291,6 +297,10 @@ export default function EventForm({
         : null,
       useCronScheduling: !!initialData?.customSchedule,
       customSchedule: initialData?.customSchedule ?? "",
+      timezone: initialData?.timezone ?? "UTC",
+      catchupPolicy: initialData?.catchupPolicy ?? CatchupPolicy.SKIP,
+      overlapPolicy: initialData?.overlapPolicy ?? OverlapPolicy.ALLOW,
+      priority: initialData?.priority ?? 1,
       timeoutValue: initialData?.timeoutValue ?? 30,
       timeoutUnit: initialData?.timeoutUnit ?? TimeUnit.SECONDS,
       runLocation: initialData?.runLocation ?? RunLocation.LOCAL,
@@ -318,6 +328,37 @@ export default function EventForm({
   const type = watch("type");
   const triggerType = watch("triggerType");
   const useCronScheduling = watch("useCronScheduling");
+  const watchedCron = watch("customSchedule");
+  const watchedTimezone = watch("timezone");
+
+  // Live cron validation + next-fire preview (debounced by react-query keying)
+  const cronPreview = trpc.events.validateCron.useQuery(
+    { expression: watchedCron ?? "", timezone: watchedTimezone || "UTC" },
+    { enabled: useCronScheduling && !!watchedCron, retry: false },
+  );
+
+  const timezoneOptions = (() => {
+    const curated = [
+      "UTC",
+      Intl.DateTimeFormat().resolvedOptions().timeZone,
+      "America/New_York",
+      "America/Chicago",
+      "America/Denver",
+      "America/Los_Angeles",
+      "Europe/London",
+      "Europe/Berlin",
+      "Europe/Paris",
+      "Asia/Tokyo",
+      "Asia/Shanghai",
+      "Asia/Kolkata",
+      "Australia/Sydney",
+    ];
+    const all =
+      typeof Intl.supportedValuesOf === "function"
+        ? Intl.supportedValuesOf("timeZone")
+        : curated;
+    return [...new Set([...curated, ...all])];
+  })();
 
   // Derived state
   const isScriptType = [
@@ -518,6 +559,10 @@ export default function EventForm({
           customSchedule: data.useCronScheduling
             ? data.customSchedule
             : undefined,
+          timezone: data.timezone,
+          catchupPolicy: data.catchupPolicy,
+          overlapPolicy: data.overlapPolicy,
+          priority: data.priority,
           serverId: null, // Deprecated, using selectedServerIds
           toolActionConfig:
             isToolAction && data.toolActionConfig
@@ -1246,8 +1291,143 @@ export default function EventForm({
                   Use standard cron syntax. Examples: "0 */5 * * *" (every 5
                   minutes), "0 0 * * *" (daily at midnight)
                 </p>
+                {watchedCron &&
+                  cronPreview.data &&
+                  (cronPreview.data.valid ? (
+                    <div className="text-muted-foreground text-xs">
+                      Next runs ({watchedTimezone || "UTC"}):{" "}
+                      {cronPreview.data.next
+                        .slice(0, 3)
+                        .map((iso) =>
+                          new Date(iso).toLocaleString(undefined, {
+                            timeZone: watchedTimezone || "UTC",
+                          }),
+                        )
+                        .join("; ")}
+                    </div>
+                  ) : (
+                    <div className="text-destructive text-xs">
+                      Invalid cron expression
+                      {cronPreview.data.error
+                        ? `: ${cronPreview.data.error}`
+                        : ""}
+                    </div>
+                  ))}
               </div>
             )}
+
+            {/* Durable-scheduler options */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="timezone">Timezone</Label>
+                <Controller
+                  name="timezone"
+                  control={control}
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger id="timezone">
+                        <SelectValue placeholder="UTC" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-64">
+                        {timezoneOptions.map((tz) => (
+                          <SelectItem key={tz} value={tz}>
+                            {tz}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <p className="text-muted-foreground text-xs">
+                  Cron schedules fire in this timezone.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="priority">Priority</Label>
+                <Controller
+                  name="priority"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={String(field.value)}
+                      onValueChange={(v) => field.onChange(Number(v))}
+                    >
+                      <SelectTrigger id="priority">
+                        <SelectValue placeholder="Normal" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">Low</SelectItem>
+                        <SelectItem value="1">Normal</SelectItem>
+                        <SelectItem value="2">High</SelectItem>
+                        <SelectItem value="3">Critical</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <p className="text-muted-foreground text-xs">
+                  Higher-priority jobs are picked up first.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="catchupPolicy">Missed runs</Label>
+                <Controller
+                  name="catchupPolicy"
+                  control={control}
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger id="catchupPolicy">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={CatchupPolicy.SKIP}>
+                          Skip (record only)
+                        </SelectItem>
+                        <SelectItem value={CatchupPolicy.RUN_ONCE}>
+                          Run once on recovery
+                        </SelectItem>
+                        <SelectItem value={CatchupPolicy.RUN_ALL}>
+                          Run each missed tick
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <p className="text-muted-foreground text-xs">
+                  What happens to runs missed while Cronium was down.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="overlapPolicy">Overlapping runs</Label>
+                <Controller
+                  name="overlapPolicy"
+                  control={control}
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger id="overlapPolicy">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={OverlapPolicy.ALLOW}>
+                          Allow concurrent runs
+                        </SelectItem>
+                        <SelectItem value={OverlapPolicy.SKIP}>
+                          Skip while previous is running
+                        </SelectItem>
+                        <SelectItem value={OverlapPolicy.QUEUE}>
+                          Queue one behind the running run
+                        </SelectItem>
+                        <SelectItem value={OverlapPolicy.CANCEL_PREVIOUS}>
+                          Cancel the previous run
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <p className="text-muted-foreground text-xs">
+                  What a due run does when the previous one is still active.
+                </p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}

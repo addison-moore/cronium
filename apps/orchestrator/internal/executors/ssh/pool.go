@@ -24,7 +24,8 @@ type ConnectionPool struct {
 	connections map[string]*poolEntry
 
 	// Circuit breaker state
-	breakers map[string]*CircuitBreaker
+	breakers   map[string]*CircuitBreaker
+	breakerCfg config.CircuitBreakerConfig
 }
 
 // poolEntry represents a pooled connection
@@ -36,9 +37,10 @@ type poolEntry struct {
 }
 
 // NewConnectionPool creates a new connection pool
-func NewConnectionPool(cfg config.ConnectionPoolConfig, securityCfg config.SSHSecurityConfig, log *logrus.Logger) *ConnectionPool {
+func NewConnectionPool(cfg config.ConnectionPoolConfig, securityCfg config.SSHSecurityConfig, breakerCfg config.CircuitBreakerConfig, log *logrus.Logger) *ConnectionPool {
 	pool := &ConnectionPool{
 		config:      cfg,
+		breakerCfg:  breakerCfg,
 		log:         log,
 		hostKeys:    NewHostKeyVerifier(securityCfg, log),
 		connections: make(map[string]*poolEntry),
@@ -246,7 +248,21 @@ func (p *ConnectionPool) getOrCreateBreaker(serverKey string) *CircuitBreaker {
 		return breaker
 	}
 
-	breaker := NewCircuitBreaker(5, 2, 60*time.Second)
+	// Honor the configured thresholds (these were hardcoded before —
+	// scheduling review M9); fall back to the documented defaults when unset.
+	failureThreshold := p.breakerCfg.FailureThreshold
+	if failureThreshold <= 0 {
+		failureThreshold = 5
+	}
+	successThreshold := p.breakerCfg.SuccessThreshold
+	if successThreshold <= 0 {
+		successThreshold = 2
+	}
+	timeout := p.breakerCfg.Timeout
+	if timeout <= 0 {
+		timeout = 60 * time.Second
+	}
+	breaker := NewCircuitBreaker(failureThreshold, successThreshold, timeout)
 	p.breakers[serverKey] = breaker
 	return breaker
 }

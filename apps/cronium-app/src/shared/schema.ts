@@ -163,6 +163,19 @@ export enum JobSource {
   WEBHOOK = "WEBHOOK",
 }
 
+/** Step states for the event-sourced workflow engine (PLAN.md §3.5).
+ * SKIPPED = branch not taken (no incoming edge satisfied); UNSATISFIABLE =
+ * conflicting edges can never all hold (the old engine stalled 30 minutes on
+ * these). Both are terminal and visible, not silently absent. */
+export enum WorkflowStepStatus {
+  PENDING = "PENDING",
+  DISPATCHED = "DISPATCHED",
+  SUCCEEDED = "SUCCEEDED",
+  FAILED = "FAILED",
+  SKIPPED = "SKIPPED",
+  UNSATISFIABLE = "UNSATISFIABLE",
+}
+
 /** Schedule-level occurrences that produced no job (or a degraded one) —
  * queryable per event so "didn't run" is as visible as "ran and failed". */
 export enum ScheduleIncidentKind {
@@ -1026,6 +1039,9 @@ export const workflows = pgTable("workflows", {
   scheduleNumber: integer("schedule_number"),
   scheduleUnit: varchar("schedule_unit", { length: 50 }).$type<TimeUnit>(),
   customSchedule: varchar("custom_schedule", { length: 255 }),
+  // Durable schedule materialization for SCHEDULE-triggered workflows —
+  // dispatched by the worker's dispatcher loop, same as events (PLAN.md §4.1)
+  nextRunAt: timestamp("next_run_at"),
   runLocation: varchar("run_location", { length: 50 })
     .$type<RunLocation>()
     .default(RunLocation.LOCAL)
@@ -1172,6 +1188,50 @@ export const workflowExecutionEvents = pgTable("workflow_execution_events", {
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),
 });
+
+// Source-of-truth step state for the event-sourced workflow engine
+// (src/lib/scheduling/workflow-engine.ts). One row per node per run; the
+// engine's advance() reducer is a pure function of these rows plus the jobs
+// they reference. workflow_execution_events remains as UI-facing telemetry
+// (dual-written by the engine).
+export const workflowStepRuns = pgTable(
+  "workflow_step_runs",
+  {
+    id: serial("id").primaryKey(),
+    workflowExecutionId: integer("workflow_execution_id")
+      .references(() => workflowExecutions.id, { onDelete: "cascade" })
+      .notNull(),
+    // Mirrors workflow_execution_events.nodeId: plain integer, no FK — a run's
+    // history must survive graph edits
+    nodeId: integer("node_id").notNull(),
+    eventId: integer("event_id").notNull(),
+    status: varchar("status", { length: 20 })
+      .$type<WorkflowStepStatus>()
+      .default(WorkflowStepStatus.PENDING)
+      .notNull(),
+    // Plain varchar (no FK): retention deletes old job rows; the run history
+    // must not block that
+    jobId: varchar("job_id", { length: 50 }),
+    // Snapshots read by downstream steps (input resolution + ON_CONDITION)
+    output: jsonb("output"),
+    condition: boolean("condition"),
+    error: text("error"),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    // Companion telemetry row in workflow_execution_events (UI graph)
+    executionEventId: integer("execution_event_id"),
+    createdAt: timestamp("created_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: timestamp("updated_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (t) => [
+    index("workflow_step_runs_exec_idx").on(t.workflowExecutionId),
+    index("workflow_step_runs_job_idx").on(t.jobId),
+  ],
+);
 
 export const toolActionLogs = pgTable("tool_action_logs", {
   id: serial("id").primaryKey(),
@@ -1351,6 +1411,9 @@ export type InsertExecution = typeof executions.$inferInsert;
 
 export type JobTransition = typeof jobTransitions.$inferSelect;
 export type InsertJobTransition = typeof jobTransitions.$inferInsert;
+
+export type WorkflowStepRun = typeof workflowStepRuns.$inferSelect;
+export type InsertWorkflowStepRun = typeof workflowStepRuns.$inferInsert;
 
 export type ScheduleIncident = typeof scheduleIncidents.$inferSelect;
 export type InsertScheduleIncident = typeof scheduleIncidents.$inferInsert;
