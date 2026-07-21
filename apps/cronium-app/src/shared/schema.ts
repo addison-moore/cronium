@@ -9,6 +9,8 @@ import {
   boolean,
   jsonb,
   unique,
+  index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // Enums
@@ -108,6 +110,7 @@ export enum JobStatus {
   RUNNING = "running",
   COMPLETED = "completed",
   FAILED = "failed",
+  TIMED_OUT = "timed_out",
   CANCELLED = "cancelled",
 }
 
@@ -116,6 +119,58 @@ export enum JobPriority {
   NORMAL = 1,
   HIGH = 2,
   CRITICAL = 3,
+}
+
+// Scheduling enums (see _plans/scheduling/PLAN.md)
+
+/** How an event's schedule is expressed. Legacy rows have NULL and derive the
+ * kind from customSchedule presence. */
+export enum ScheduleKind {
+  INTERVAL = "INTERVAL",
+  CRON = "CRON",
+}
+
+/** What the dispatcher does with ticks that were missed (app down / paused
+ * past a tick / dispatcher behind). */
+export enum CatchupPolicy {
+  SKIP = "SKIP",
+  RUN_ONCE = "RUN_ONCE",
+  RUN_ALL = "RUN_ALL",
+}
+
+/** What a due tick does when a previous run of the same event is still active.
+ * QUEUE coalesces: at most one queued job waits behind the running one. */
+export enum OverlapPolicy {
+  ALLOW = "ALLOW",
+  SKIP = "SKIP",
+  QUEUE = "QUEUE",
+  CANCEL_PREVIOUS = "CANCEL_PREVIOUS",
+}
+
+/** What the lease sweeper does when a job's owner stops renewing its lease.
+ * RETRY re-queues (at-least-once); FAIL terminates loudly (at-most-once, for
+ * non-idempotent work). */
+export enum LeaseLossPolicy {
+  RETRY = "RETRY",
+  FAIL = "FAIL",
+}
+
+/** What created a job. */
+export enum JobSource {
+  EVENT = "EVENT",
+  WORKFLOW_STEP = "WORKFLOW_STEP",
+  MANUAL = "MANUAL",
+  WEBHOOK = "WEBHOOK",
+}
+
+/** Schedule-level occurrences that produced no job (or a degraded one) —
+ * queryable per event so "didn't run" is as visible as "ran and failed". */
+export enum ScheduleIncidentKind {
+  MISSED = "MISSED",
+  SKIPPED_OVERLAP = "SKIPPED_OVERLAP",
+  CATCHUP_OVERFLOW = "CATCHUP_OVERFLOW",
+  AUTO_PAUSED = "AUTO_PAUSED",
+  LEASE_LOST = "LEASE_LOST",
 }
 
 export type ScriptType = EventType.NODEJS | EventType.PYTHON | EventType.BASH;
@@ -148,70 +203,101 @@ export const users = pgTable("users", {
     .notNull(),
 });
 
-export const events = pgTable("events", {
-  id: serial("id").primaryKey(),
-  userId: varchar("user_id", { length: 255 })
-    .references(() => users.id)
-    .notNull(),
-  name: varchar("name", { length: 255 }).notNull(),
-  description: text("description"),
-  shared: boolean("shared").default(false).notNull(),
-  type: varchar("type", { length: 50 }).$type<EventType>().notNull(),
-  content: text("content"),
-  // HTTP Request specific fields
-  httpMethod: varchar("http_method", { length: 20 }),
-  httpUrl: varchar("http_url", { length: 1000 }),
-  httpHeaders: jsonb("http_headers"),
-  httpBody: text("http_body"),
-  // Tool Action specific fields
-  toolActionConfig: jsonb("tool_action_config"),
-  // Provenance: how this event was created (e.g. "mcp"); null for the UI / normal API.
-  source: varchar("source", { length: 50 }),
-  // Common fields
-  status: varchar("status", { length: 50 })
-    .$type<EventStatus>()
-    .default(EventStatus.DRAFT)
-    .notNull(),
-  triggerType: varchar("trigger_type", { length: 50 })
-    .$type<EventTriggerType>()
-    .default(EventTriggerType.MANUAL)
-    .notNull(),
-  scheduleNumber: integer("schedule_number").default(1).notNull(),
-  scheduleUnit: varchar("schedule_unit", { length: 50 })
-    .$type<TimeUnit>()
-    .default(TimeUnit.MINUTES)
-    .notNull(),
-  customSchedule: varchar("custom_schedule", { length: 255 }),
-  runLocation: varchar("run_location", { length: 50 })
-    .$type<RunLocation>()
-    .default(RunLocation.LOCAL)
-    .notNull(),
-  serverId: integer("server_id").references(() => servers.id),
-  timeoutValue: integer("timeout_value").default(30).notNull(),
-  timeoutUnit: varchar("timeout_unit", { length: 50 })
-    .$type<TimeUnit>()
-    .default(TimeUnit.SECONDS)
-    .notNull(),
-  retries: integer("retries").default(0).notNull(),
-  startTime: timestamp("start_time"),
-  executionCount: integer("execution_count").default(0).notNull(),
-  maxExecutions: integer("max_executions").default(0).notNull(), // 0 means unlimited
-  resetCounterOnActive: boolean("reset_counter_on_active")
-    .default(false)
-    .notNull(),
-  payloadVersion: integer("payload_version").default(1).notNull(),
-  lastRunAt: timestamp("last_run_at"),
-  nextRunAt: timestamp("next_run_at"),
-  successCount: integer("success_count").default(0).notNull(),
-  failureCount: integer("failure_count").default(0).notNull(),
-  tags: jsonb("tags").default("[]").notNull(), // Array of strings for tags
-  createdAt: timestamp("created_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-  updatedAt: timestamp("updated_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-});
+export const events = pgTable(
+  "events",
+  {
+    id: serial("id").primaryKey(),
+    userId: varchar("user_id", { length: 255 })
+      .references(() => users.id)
+      .notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    shared: boolean("shared").default(false).notNull(),
+    type: varchar("type", { length: 50 }).$type<EventType>().notNull(),
+    content: text("content"),
+    // HTTP Request specific fields
+    httpMethod: varchar("http_method", { length: 20 }),
+    httpUrl: varchar("http_url", { length: 1000 }),
+    httpHeaders: jsonb("http_headers"),
+    httpBody: text("http_body"),
+    // Tool Action specific fields
+    toolActionConfig: jsonb("tool_action_config"),
+    // Provenance: how this event was created (e.g. "mcp"); null for the UI / normal API.
+    source: varchar("source", { length: 50 }),
+    // Common fields
+    status: varchar("status", { length: 50 })
+      .$type<EventStatus>()
+      .default(EventStatus.DRAFT)
+      .notNull(),
+    triggerType: varchar("trigger_type", { length: 50 })
+      .$type<EventTriggerType>()
+      .default(EventTriggerType.MANUAL)
+      .notNull(),
+    scheduleNumber: integer("schedule_number").default(1).notNull(),
+    scheduleUnit: varchar("schedule_unit", { length: 50 })
+      .$type<TimeUnit>()
+      .default(TimeUnit.MINUTES)
+      .notNull(),
+    customSchedule: varchar("custom_schedule", { length: 255 }),
+    // NULL on legacy rows: derive from customSchedule (set → CRON, else INTERVAL)
+    scheduleKind: varchar("schedule_kind", {
+      length: 20,
+    }).$type<ScheduleKind>(),
+    // IANA zone name; cron schedules are evaluated in this zone
+    timezone: varchar("timezone", { length: 64 }).default("UTC").notNull(),
+    catchupPolicy: varchar("catchup_policy", { length: 20 })
+      .$type<CatchupPolicy>()
+      .default(CatchupPolicy.SKIP)
+      .notNull(),
+    overlapPolicy: varchar("overlap_policy", { length: 20 })
+      .$type<OverlapPolicy>()
+      .default(OverlapPolicy.ALLOW)
+      .notNull(),
+    misfireGraceS: integer("misfire_grace_s").default(60).notNull(),
+    leaseLossPolicy: varchar("lease_loss_policy", { length: 10 })
+      .$type<LeaseLossPolicy>()
+      .default(LeaseLossPolicy.RETRY)
+      .notNull(),
+    priority: integer("priority")
+      .$type<JobPriority>()
+      .default(JobPriority.NORMAL)
+      .notNull(),
+    runLocation: varchar("run_location", { length: 50 })
+      .$type<RunLocation>()
+      .default(RunLocation.LOCAL)
+      .notNull(),
+    serverId: integer("server_id").references(() => servers.id),
+    timeoutValue: integer("timeout_value").default(30).notNull(),
+    timeoutUnit: varchar("timeout_unit", { length: 50 })
+      .$type<TimeUnit>()
+      .default(TimeUnit.SECONDS)
+      .notNull(),
+    retries: integer("retries").default(0).notNull(),
+    startTime: timestamp("start_time"),
+    executionCount: integer("execution_count").default(0).notNull(),
+    maxExecutions: integer("max_executions").default(0).notNull(), // 0 means unlimited
+    resetCounterOnActive: boolean("reset_counter_on_active")
+      .default(false)
+      .notNull(),
+    payloadVersion: integer("payload_version").default(1).notNull(),
+    lastRunAt: timestamp("last_run_at"),
+    nextRunAt: timestamp("next_run_at"),
+    successCount: integer("success_count").default(0).notNull(),
+    failureCount: integer("failure_count").default(0).notNull(),
+    tags: jsonb("tags").default("[]").notNull(), // Array of strings for tags
+    createdAt: timestamp("created_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: timestamp("updated_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (t) => [
+    index("events_dispatch_idx")
+      .on(t.nextRunAt)
+      .where(sql`${t.status} = 'ACTIVE' AND ${t.triggerType} = 'SCHEDULE'`),
+  ],
+);
 
 export const envVars = pgTable("env_vars", {
   id: serial("id").primaryKey(),
@@ -295,117 +381,213 @@ export const serverGroupMembers = pgTable(
   }),
 );
 
-export const logs = pgTable("logs", {
-  id: serial("id").primaryKey(),
-  eventId: integer("event_id")
-    .references(() => events.id)
-    .notNull(),
-  workflowId: integer("workflow_id").references(() => workflows.id),
-  jobId: varchar("job_id", { length: 50 }).references(() => jobs.id),
-  executionId: varchar("execution_id", { length: 100 }).references(
-    () => executions.id,
-  ),
-  status: varchar("status", { length: 50 })
-    .$type<LogStatus>()
-    .default(LogStatus.RUNNING)
-    .notNull(),
-  output: text("output"),
-  startTime: timestamp("start_time")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-  endTime: timestamp("end_time"),
-  duration: integer("duration"), // in milliseconds - total duration
-  executionDuration: integer("execution_duration"), // in milliseconds - actual script execution time
-  setupDuration: integer("setup_duration"), // in milliseconds - setup time (container/SSH)
-  successful: boolean("successful").default(false),
-  eventName: varchar("event_name", { length: 255 }),
-  eventType: varchar("event_type", { length: 50 }).$type<EventType>(),
-  retries: integer("retries").default(0),
-  error: text("error"),
-  userId: varchar("user_id", { length: 255 }),
-  exitCode: integer("exit_code"),
-  createdAt: timestamp("created_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-  updatedAt: timestamp("updated_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-});
+export const logs = pgTable(
+  "logs",
+  {
+    id: serial("id").primaryKey(),
+    eventId: integer("event_id")
+      .references(() => events.id)
+      .notNull(),
+    workflowId: integer("workflow_id").references(() => workflows.id),
+    jobId: varchar("job_id", { length: 50 }).references(() => jobs.id),
+    executionId: varchar("execution_id", { length: 100 }).references(
+      () => executions.id,
+    ),
+    status: varchar("status", { length: 50 })
+      .$type<LogStatus>()
+      .default(LogStatus.RUNNING)
+      .notNull(),
+    output: text("output"),
+    startTime: timestamp("start_time")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    endTime: timestamp("end_time"),
+    duration: integer("duration"), // in milliseconds - total duration
+    executionDuration: integer("execution_duration"), // in milliseconds - actual script execution time
+    setupDuration: integer("setup_duration"), // in milliseconds - setup time (container/SSH)
+    successful: boolean("successful").default(false),
+    eventName: varchar("event_name", { length: 255 }),
+    eventType: varchar("event_type", { length: 50 }).$type<EventType>(),
+    retries: integer("retries").default(0),
+    error: text("error"),
+    userId: varchar("user_id", { length: 255 }),
+    exitCode: integer("exit_code"),
+    createdAt: timestamp("created_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: timestamp("updated_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (t) => [
+    index("logs_job_id_idx").on(t.jobId),
+    index("logs_event_created_idx").on(t.eventId, t.createdAt),
+  ],
+);
 
 // Job Queue Table
-export const jobs = pgTable("jobs", {
-  id: varchar("id", { length: 50 }).primaryKey(),
-  eventId: integer("event_id")
-    .references(() => events.id)
-    .notNull(),
-  userId: varchar("user_id", { length: 255 })
-    .references(() => users.id)
-    .notNull(),
-  type: varchar("type", { length: 50 }).$type<JobType>().notNull(),
-  status: varchar("status", { length: 50 })
-    .$type<JobStatus>()
-    .default(JobStatus.QUEUED)
-    .notNull(),
-  priority: integer("priority")
-    .$type<JobPriority>()
-    .default(JobPriority.NORMAL)
-    .notNull(),
-  payload: jsonb("payload").notNull(),
-  scheduledFor: timestamp("scheduled_for")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-  orchestratorId: varchar("orchestrator_id", { length: 255 }),
-  startedAt: timestamp("started_at"),
-  completedAt: timestamp("completed_at"),
-  result: jsonb("result"),
-  attempts: integer("attempts").default(0).notNull(),
-  lastError: text("last_error"),
-  metadata: jsonb("metadata").default("{}").notNull(),
-  createdAt: timestamp("created_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-  updatedAt: timestamp("updated_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-});
+export const jobs = pgTable(
+  "jobs",
+  {
+    id: varchar("id", { length: 50 }).primaryKey(),
+    eventId: integer("event_id")
+      .references(() => events.id)
+      .notNull(),
+    userId: varchar("user_id", { length: 255 })
+      .references(() => users.id)
+      .notNull(),
+    type: varchar("type", { length: 50 }).$type<JobType>().notNull(),
+    status: varchar("status", { length: 50 })
+      .$type<JobStatus>()
+      .default(JobStatus.QUEUED)
+      .notNull(),
+    priority: integer("priority")
+      .$type<JobPriority>()
+      .default(JobPriority.NORMAL)
+      .notNull(),
+    payload: jsonb("payload").notNull(),
+    scheduledFor: timestamp("scheduled_for")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    orchestratorId: varchar("orchestrator_id", { length: 255 }),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    result: jsonb("result"),
+    attempts: integer("attempts").default(0).notNull(),
+    lastError: text("last_error"),
+    metadata: jsonb("metadata").default("{}").notNull(),
+    // Scheduling kernel fields (see _plans/scheduling/PLAN.md §3.2)
+    source: varchar("source", { length: 20 }).$type<JobSource>(),
+    // Resolved from the event at enqueue; every consumer honors this value
+    timeoutMs: integer("timeout_ms"),
+    maxAttempts: integer("max_attempts").default(0).notNull(),
+    leaseExpiresAt: timestamp("lease_expires_at"),
+    leaseLossPolicy: varchar("lease_loss_policy", { length: 10 })
+      .$type<LeaseLossPolicy>()
+      .default(LeaseLossPolicy.RETRY)
+      .notNull(),
+    cancelRequested: boolean("cancel_requested").default(false).notNull(),
+    // = eventId for SKIP-overlap events while the job is active, else NULL;
+    // the partial unique index below is the DB-level overlap backstop
+    activeKey: varchar("active_key", { length: 64 }),
+    // Dispatched late past the event's misfire grace (RUN_ONCE catch-up)
+    scheduledMiss: boolean("scheduled_miss").default(false).notNull(),
+    createdAt: timestamp("created_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: timestamp("updated_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (t) => [
+    index("jobs_claim_idx")
+      .on(t.type, t.priority.desc(), t.scheduledFor)
+      .where(sql`${t.status} = 'queued'`),
+    index("jobs_lease_idx")
+      .on(t.leaseExpiresAt)
+      .where(sql`${t.status} IN ('claimed', 'running')`),
+    index("jobs_event_created_idx").on(t.eventId, t.createdAt),
+    uniqueIndex("jobs_active_key_uq")
+      .on(t.activeKey)
+      .where(
+        sql`${t.status} IN ('queued', 'claimed', 'running') AND ${t.activeKey} IS NOT NULL`,
+      ),
+  ],
+);
 
 // Executions Table - tracks individual execution attempts for jobs
-export const executions = pgTable("executions", {
-  id: varchar("id", { length: 100 }).primaryKey(), // Format: exec-{jobId}-{timestamp}
-  jobId: varchar("job_id", { length: 50 })
-    .references(() => jobs.id)
-    .notNull(),
-  serverId: integer("server_id").references(() => servers.id), // NULL for local/container executions
-  serverName: varchar("server_name", { length: 255 }), // Quick reference for server name
-  status: varchar("status", { length: 50 })
-    .$type<JobStatus>()
-    .default(JobStatus.QUEUED)
-    .notNull(),
-  startedAt: timestamp("started_at"),
-  completedAt: timestamp("completed_at"),
-  exitCode: integer("exit_code"),
-  output: text("output"), // stdout/stderr combined
-  error: text("error"), // Error message if failed
-  metadata: jsonb("metadata").default("{}").notNull(), // Additional execution data
-  // Phase-based timing fields for separating setup/execution/cleanup
-  setupStartedAt: timestamp("setup_started_at"),
-  setupCompletedAt: timestamp("setup_completed_at"),
-  executionStartedAt: timestamp("execution_started_at"),
-  executionCompletedAt: timestamp("execution_completed_at"),
-  cleanupStartedAt: timestamp("cleanup_started_at"),
-  cleanupCompletedAt: timestamp("cleanup_completed_at"),
-  setupDuration: integer("setup_duration"), // milliseconds for setup phase
-  executionDuration: integer("execution_duration"), // milliseconds for actual script execution
-  cleanupDuration: integer("cleanup_duration"), // milliseconds for cleanup phase
-  totalDuration: integer("total_duration"), // total milliseconds (cached calculation)
-  executionMetadata: jsonb("execution_metadata"), // Detailed timing breakdown (imagePullTime, connectionTime, etc.)
-  createdAt: timestamp("created_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-  updatedAt: timestamp("updated_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-});
+export const executions = pgTable(
+  "executions",
+  {
+    id: varchar("id", { length: 100 }).primaryKey(), // Format: exec-{jobId}-{timestamp}
+    jobId: varchar("job_id", { length: 50 })
+      .references(() => jobs.id)
+      .notNull(),
+    serverId: integer("server_id").references(() => servers.id), // NULL for local/container executions
+    serverName: varchar("server_name", { length: 255 }), // Quick reference for server name
+    status: varchar("status", { length: 50 })
+      .$type<JobStatus>()
+      .default(JobStatus.QUEUED)
+      .notNull(),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    exitCode: integer("exit_code"),
+    output: text("output"), // stdout/stderr combined
+    error: text("error"), // Error message if failed
+    metadata: jsonb("metadata").default("{}").notNull(), // Additional execution data
+    // Phase-based timing fields for separating setup/execution/cleanup
+    setupStartedAt: timestamp("setup_started_at"),
+    setupCompletedAt: timestamp("setup_completed_at"),
+    executionStartedAt: timestamp("execution_started_at"),
+    executionCompletedAt: timestamp("execution_completed_at"),
+    cleanupStartedAt: timestamp("cleanup_started_at"),
+    cleanupCompletedAt: timestamp("cleanup_completed_at"),
+    setupDuration: integer("setup_duration"), // milliseconds for setup phase
+    executionDuration: integer("execution_duration"), // milliseconds for actual script execution
+    cleanupDuration: integer("cleanup_duration"), // milliseconds for cleanup phase
+    totalDuration: integer("total_duration"), // total milliseconds (cached calculation)
+    executionMetadata: jsonb("execution_metadata"), // Detailed timing breakdown (imagePullTime, connectionTime, etc.)
+    createdAt: timestamp("created_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: timestamp("updated_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (t) => [index("executions_job_id_idx").on(t.jobId)],
+);
+
+// Per-job status-transition audit + transactional outbox. Written only by
+// transitionJob() (src/lib/scheduling/job-transition.ts). `processedAt` is the
+// outbox cursor: NULL rows have side effects (conditional actions, broadcasts,
+// alerts) still pending; the worker's outbox consumer marks them processed.
+export const jobTransitions = pgTable(
+  "job_transitions",
+  {
+    id: serial("id").primaryKey(),
+    jobId: varchar("job_id", { length: 50 })
+      .references(() => jobs.id)
+      .notNull(),
+    // NULL = job creation (no prior status)
+    fromStatus: varchar("from_status", { length: 50 }).$type<JobStatus>(),
+    toStatus: varchar("to_status", { length: 50 }).$type<JobStatus>().notNull(),
+    // Who drove the transition: "app", "worker:<id>", "orchestrator:<id>", "user:<id>"
+    actor: varchar("actor", { length: 255 }).notNull(),
+    reason: text("reason"),
+    data: jsonb("data"),
+    processedAt: timestamp("processed_at"),
+    createdAt: timestamp("created_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (t) => [
+    index("job_transitions_job_idx").on(t.jobId),
+    index("job_transitions_outbox_idx")
+      .on(t.id)
+      .where(sql`${t.processedAt} IS NULL`),
+  ],
+);
+
+// Schedule-level occurrences that produced no job (missed tick, overlap skip,
+// catch-up overflow, auto-pause, lease loss) — the "didn't run" record the UI
+// surfaces alongside runs. Exactly one of eventId/workflowId is set.
+export const scheduleIncidents = pgTable(
+  "schedule_incidents",
+  {
+    id: serial("id").primaryKey(),
+    eventId: integer("event_id").references(() => events.id),
+    workflowId: integer("workflow_id").references(() => workflows.id),
+    kind: varchar("kind", { length: 30 })
+      .$type<ScheduleIncidentKind>()
+      .notNull(),
+    // e.g. { scheduledFor, ticksFolded, jobId }
+    details: jsonb("details"),
+    createdAt: timestamp("created_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (t) => [index("schedule_incidents_event_idx").on(t.eventId, t.createdAt)],
+);
 
 export const eventServers = pgTable("event_servers", {
   id: serial("id").primaryKey(),
@@ -1166,6 +1348,12 @@ export type InsertJob = typeof jobs.$inferInsert;
 
 export type Execution = typeof executions.$inferSelect;
 export type InsertExecution = typeof executions.$inferInsert;
+
+export type JobTransition = typeof jobTransitions.$inferSelect;
+export type InsertJobTransition = typeof jobTransitions.$inferInsert;
+
+export type ScheduleIncident = typeof scheduleIncidents.$inferSelect;
+export type InsertScheduleIncident = typeof scheduleIncidents.$inferInsert;
 
 export type Setting = typeof systemSettings.$inferSelect;
 export type InsertSetting = typeof systemSettings.$inferInsert;

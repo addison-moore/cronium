@@ -5,9 +5,13 @@ import {
   JobType,
   type ScriptType,
   JobPriority,
+  type JobSource,
+  type LeaseLossPolicy,
   jobs as jobsTable,
+  jobTransitions,
   LogStatus,
 } from "@shared/schema";
+import { transitionJob } from "@/lib/scheduling/job-transition";
 import { eq, ne, desc, and, or, isNull, lte, gte } from "drizzle-orm";
 import { customAlphabet } from "nanoid";
 
@@ -56,6 +60,13 @@ export interface CreateJobInput {
   };
   scheduledFor?: Date;
   metadata?: Record<string, unknown>;
+  // Scheduling kernel fields (PLAN.md §3.2); all resolved by dispatchEventJob
+  source?: JobSource;
+  timeoutMs?: number;
+  maxAttempts?: number;
+  leaseLossPolicy?: LeaseLossPolicy;
+  activeKey?: string;
+  scheduledMiss?: boolean;
 }
 
 export interface UpdateJobInput {
@@ -110,6 +121,14 @@ export class JobService {
         scheduledFor: input.scheduledFor ?? new Date(),
         metadata: input.metadata ?? {},
         attempts: 0,
+        source: input.source ?? null,
+        timeoutMs: input.timeoutMs ?? null,
+        maxAttempts: input.maxAttempts ?? 0,
+        ...(input.leaseLossPolicy && {
+          leaseLossPolicy: input.leaseLossPolicy,
+        }),
+        activeKey: input.activeKey ?? null,
+        scheduledMiss: input.scheduledMiss ?? false,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
@@ -238,7 +257,13 @@ export class JobService {
   }
 
   /**
-   * Claim jobs for processing by an orchestrator
+   * Claim jobs for processing by an orchestrator.
+   *
+   * The guarded batch UPDATE (status = QUEUED AND orchestrator_id IS NULL) is
+   * the claim's atomicity; the audit rows below record each claim on the
+   * transition trail. Lease stamping arrives with the orchestrator rework
+   * (PLAN.md Phase 3) — setting leases before owners heartbeat would hand the
+   * sweeper false positives.
    */
   async claimJobs(
     orchestratorId: string,
@@ -295,7 +320,7 @@ export class JobService {
       );
 
     // Return the claimed jobs
-    return this.db
+    const claimed = await this.db
       .select()
       .from(jobsTable)
       .where(
@@ -304,16 +329,30 @@ export class JobService {
           eq(jobsTable.orchestratorId, orchestratorId),
         ),
       );
+
+    if (claimed.length > 0) {
+      await this.db.insert(jobTransitions).values(
+        claimed.map((job) => ({
+          jobId: job.id,
+          fromStatus: JobStatus.QUEUED,
+          toStatus: JobStatus.CLAIMED,
+          actor: `orchestrator:${orchestratorId}`,
+        })),
+      );
+    }
+
+    return claimed;
   }
 
   /**
    * Mark a job as started
    */
-  async startJob(jobId: string): Promise<Job | null> {
-    return this.updateJob(jobId, {
-      status: JobStatus.RUNNING,
-      startedAt: new Date(),
+  async startJob(jobId: string, actor = "app"): Promise<Job | null> {
+    const outcome = await transitionJob(jobId, JobStatus.RUNNING, {
+      actor,
+      set: { startedAt: new Date() },
     });
+    return outcome.ok ? outcome.job : null;
   }
 
   /**
@@ -322,6 +361,7 @@ export class JobService {
   async completeJob(
     jobId: string,
     result: UpdateJobInput["result"],
+    actor = "app",
   ): Promise<Job | null> {
     const isSuccess = !result?.error && result?.exitCode === 0;
 
@@ -335,39 +375,63 @@ export class JobService {
       minimalResult.metrics = result.metrics;
     }
 
-    return this.updateJob(jobId, {
-      status: isSuccess ? JobStatus.COMPLETED : JobStatus.FAILED,
-      completedAt: new Date(),
-      result: minimalResult,
-    });
+    const outcome = await transitionJob(
+      jobId,
+      isSuccess ? JobStatus.COMPLETED : JobStatus.FAILED,
+      {
+        actor,
+        set: {
+          completedAt: new Date(),
+          result: minimalResult,
+          // Terminal: release the overlap slot
+          activeKey: null,
+        },
+      },
+    );
+    return outcome.ok ? outcome.job : null;
   }
 
   /**
    * Fail a job with error
    */
-  async failJob(jobId: string, error: string): Promise<Job | null> {
+  async failJob(
+    jobId: string,
+    error: string,
+    actor = "app",
+  ): Promise<Job | null> {
     const job = await this.getJob(jobId);
     if (!job) return null;
 
-    return this.updateJob(jobId, {
-      status: JobStatus.FAILED,
-      completedAt: new Date(),
-      lastError: error,
-      attempts: (job.attempts || 0) + 1,
-      result: {
-        exitCode: 1,
+    const outcome = await transitionJob(jobId, JobStatus.FAILED, {
+      actor,
+      reason: error,
+      set: {
+        completedAt: new Date(),
+        lastError: error,
+        attempts: (job.attempts || 0) + 1,
+        result: { exitCode: 1 },
+        activeKey: null,
       },
     });
+    return outcome.ok ? outcome.job : null;
   }
 
   /**
-   * Cancel a job
+   * Cancel a job. cancelRequested is set so a future cooperative-cancel
+   * consumer (orchestrator heartbeat) can observe it even when the CAS to
+   * CANCELLED is rejected because the job is already terminal.
    */
-  async cancelJob(jobId: string): Promise<Job | null> {
-    return this.updateJob(jobId, {
-      status: JobStatus.CANCELLED,
-      completedAt: new Date(),
+  async cancelJob(jobId: string, actor = "app"): Promise<Job | null> {
+    await this.db
+      .update(jobsTable)
+      .set({ cancelRequested: true, updatedAt: new Date() })
+      .where(eq(jobsTable.id, jobId));
+
+    const outcome = await transitionJob(jobId, JobStatus.CANCELLED, {
+      actor,
+      set: { completedAt: new Date(), activeKey: null },
     });
+    return outcome.ok ? outcome.job : null;
   }
 
   /**
@@ -465,7 +529,9 @@ export class JobService {
     if (!job) return null;
 
     const payload = job.payload as { retries?: number } | undefined;
-    const maxAttempts = payload?.retries ?? 0;
+    // maxAttempts column (set by dispatchEventJob); legacy jobs carried the
+    // budget in payload.retries
+    const maxAttempts = job.maxAttempts || (payload?.retries ?? 0);
     const currentAttempts = job.attempts ?? 0;
 
     if (!shouldRetry(currentAttempts, maxAttempts)) {
@@ -476,15 +542,21 @@ export class JobService {
     const backoffMs = computeRetryBackoffMs(currentAttempts);
     const scheduledFor = new Date(Date.now() + backoffMs);
 
-    const requeued = await this.updateJob(jobId, {
-      status: JobStatus.QUEUED,
-      orchestratorId: undefined,
-      startedAt: undefined,
-      completedAt: undefined,
-      attempts: nextAttempt,
-      lastError: error,
-      scheduledFor,
+    const outcome = await transitionJob(jobId, JobStatus.QUEUED, {
+      actor: "app",
+      reason: `retry ${nextAttempt}/${maxAttempts}: ${error ?? "unknown error"}`,
+      set: {
+        orchestratorId: null,
+        startedAt: null,
+        completedAt: null,
+        leaseExpiresAt: null,
+        attempts: nextAttempt,
+        lastError: error ?? null,
+        scheduledFor,
+      },
     });
+    const requeued = outcome.ok ? outcome.job : null;
+    if (!requeued) return null;
 
     console.log(
       `[JobService] Job ${jobId} failed (attempt ${nextAttempt}/${maxAttempts}); ` +
@@ -531,6 +603,7 @@ export class JobService {
       executionDuration?: number; // Actual script execution time in milliseconds
       setupDuration?: number; // Setup time in milliseconds
     },
+    actor?: string,
   ): Promise<Job | null> {
     // Retry-with-backoff: when a job fails but has retry budget left, requeue
     // it with an exponential backoff delay instead of finalizing as FAILED.
@@ -542,36 +615,56 @@ export class JobService {
       }
     }
 
-    // Update the job
-    const updateInput: UpdateJobInput = {
-      status,
-    };
+    // Build the column updates that ride along with the status change
+    const set: Parameters<typeof transitionJob>[2]["set"] = {};
 
     if (data?.startedAt !== undefined) {
-      updateInput.startedAt = data.startedAt;
+      set.startedAt = data.startedAt;
     }
     if (data?.completedAt !== undefined) {
-      updateInput.completedAt = data.completedAt;
+      set.completedAt = data.completedAt;
     }
     if (data) {
       // If result is provided directly, use it (for scriptOutput, condition, etc.)
       if (data.result !== undefined) {
-        updateInput.result = data.result;
+        set.result = data.result;
       } else {
         // Otherwise build minimal result from exitCode and metrics
-        const result: UpdateJobInput["result"] = {};
+        const result: NonNullable<UpdateJobInput["result"]> = {};
         if (data.exitCode !== undefined) result.exitCode = data.exitCode;
         if (data.metrics !== undefined) result.metrics = data.metrics;
 
         if (Object.keys(result).length > 0) {
-          updateInput.result = result;
+          set.result = result;
         }
       }
     }
 
-    const job = await this.updateJob(jobId, updateInput);
+    const isTerminal =
+      status === JobStatus.COMPLETED ||
+      status === JobStatus.FAILED ||
+      status === JobStatus.TIMED_OUT ||
+      status === JobStatus.CANCELLED;
+    if (isTerminal) {
+      // Release the overlap slot
+      set.activeKey = null;
+    }
 
-    if (!job) return null;
+    // CAS through the state machine: late/duplicate reports against a job
+    // that already reached a terminal state are rejected here (review D3)
+    // instead of silently overwriting it.
+    const outcome = await transitionJob(jobId, status, {
+      actor: actor ?? "app",
+      ...(data?.error !== undefined && { reason: data.error }),
+      set,
+    });
+    if (!outcome.ok) {
+      console.warn(
+        `[JobService] Status update to ${status} rejected for job ${jobId}: ${outcome.error}`,
+      );
+      return null;
+    }
+    const job = outcome.job;
 
     // Extract executionLogId from job payload or metadata
     const payload = job.payload as { executionLogId?: number } | undefined;
@@ -599,6 +692,7 @@ export class JobService {
       const isCompleting =
         status === JobStatus.COMPLETED ||
         status === JobStatus.FAILED ||
+        status === JobStatus.TIMED_OUT ||
         status === JobStatus.CANCELLED;
 
       if (isCompleting && existingLog?.startTime) {
@@ -716,6 +810,8 @@ export class JobService {
         return LogStatus.SUCCESS;
       case JobStatus.FAILED:
         return LogStatus.FAILURE;
+      case JobStatus.TIMED_OUT:
+        return LogStatus.TIMEOUT;
       case JobStatus.CANCELLED:
         return LogStatus.FAILURE;
       default:

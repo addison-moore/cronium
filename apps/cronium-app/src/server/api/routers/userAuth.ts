@@ -65,7 +65,6 @@ export const userAuthRouter = createTRPCRouter({
       try {
         const { username, email, password } = input;
         const role = UserRole.USER;
-        let status: UserStatus;
 
         // A fresh instance's first account must be the admin created via
         // /auth/setup, not a public registration.
@@ -117,7 +116,9 @@ export const userAuthRouter = createTRPCRouter({
         }
 
         // Determine user status based on admin approval requirement
-        status = requireAdminApproval ? UserStatus.PENDING : UserStatus.ACTIVE;
+        const status = requireAdminApproval
+          ? UserStatus.PENDING
+          : UserStatus.ACTIVE;
 
         // Create user
         const user = await storage.createUser({

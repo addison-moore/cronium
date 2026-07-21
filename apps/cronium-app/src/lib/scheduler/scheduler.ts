@@ -582,85 +582,34 @@ export class ScriptScheduler {
     }
   }
 
-  // Execute a script by creating a job in the queue
+  // Execute a script by creating a job in the queue (single enqueue path:
+  // src/lib/scheduling/dispatch.ts)
   async executeScript(
     event: EventWithRelations,
     inputData?: Record<string, unknown>,
+    triggeredBy: "schedule" | "manual" = "schedule",
   ) {
-    // Create a unique execution ID to help with debugging
-    const executionId = `exec-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-    console.log(
-      `[${executionId}] Creating job for script ${String(event.id)}: ${event.name ?? ""}`,
-    );
-
     try {
-      // Import necessary modules
-      const { jobService } = await import("@/lib/services/job-service");
-      const { JobType, LogStatus } = await import("@/shared/schema");
+      const { dispatchEventJob } = await import("@/lib/scheduling/dispatch");
+      const result = await dispatchEventJob(event, {
+        triggeredBy,
+        input: inputData,
+      });
 
-      // Determine job type based on event type
-      const jobTypeMap: Record<string, (typeof JobType)[keyof typeof JobType]> =
-        {
-          HTTP_REQUEST: JobType.HTTP_REQUEST,
-          TOOL_ACTION: JobType.TOOL_ACTION,
+      if (result.skipped) {
+        return {
+          success: true,
+          output: `Run skipped (${result.skipped})`,
         };
-      const jobType = jobTypeMap[event.type] ?? JobType.SCRIPT;
-
-      // Create log entry
-      const log = await storage.createLog({
-        eventId: event.id,
-        status: LogStatus.PENDING,
-        startTime: new Date(),
-        eventName: event.name ?? "Unknown",
-        eventType: event.type,
-        userId: event.userId,
-      });
-
-      // Import job payload builder
-      const { buildJobPayload } =
-        await import("@/lib/scheduler/job-payload-builder");
-
-      // Build comprehensive job payload
-      const jobPayload = buildJobPayload(event, log.id, inputData);
-
-      // Create job in the queue
-      const job = await jobService.createJob({
-        eventId: event.id,
-        userId: String(event.userId),
-        type: jobType,
-        payload: jobPayload,
-        metadata: {
-          eventName: event.name,
-          triggeredBy: "schedule",
-          logId: log.id,
-        },
-      });
-
-      // Update log with job ID
-      await storage.updateLog(log.id, {
-        jobId: job.id,
-        status: LogStatus.PENDING,
-      });
-
-      console.log(
-        `[${executionId}] Created job ${job.id} for script ${String(event.id)}: ${event.name ?? ""}`,
-      );
-
-      // Tool actions run in-process (the orchestrator only runs container/ssh).
-      const { isInProcessJobType, runInProcessJob } =
-        await import("@/lib/scheduler/in-process-executor");
-      if (isInProcessJobType(jobType)) {
-        void runInProcessJob(job, event, inputData);
       }
 
-      // Return a result that matches the expected interface
       return {
         success: true,
-        output: `Job ${job.id} created and queued for execution`,
+        output: `Job ${result.job.id} created and queued for execution`,
       };
     } catch (error) {
       console.error(
-        `[${executionId}] Error creating job for script ${String(event.id)}:`,
+        `Error creating job for script ${String(event.id)}:`,
         error instanceof Error ? error.message : String(error),
       );
       throw error;
@@ -702,70 +651,24 @@ export class ScriptScheduler {
 
     const startTime = Date.now();
 
-    // Import necessary modules
-    const { jobService } = await import("@/lib/services/job-service");
-    const { JobType, LogStatus } = await import("@/shared/schema");
-
-    // Determine job type based on event type
-    const jobTypeMap: Record<string, (typeof JobType)[keyof typeof JobType]> = {
-      HTTP_REQUEST: JobType.HTTP_REQUEST,
-      TOOL_ACTION: JobType.TOOL_ACTION,
-    };
-    const jobType = jobTypeMap[event.type] ?? JobType.SCRIPT;
-
-    // Create log entry
-    const log = await storage.createLog({
-      eventId: event.id,
-      workflowId: workflowId,
-      status: LogStatus.PENDING,
-      startTime: new Date(),
-      eventName: event.name ?? "Unknown",
-      eventType: event.type,
-      userId: event.userId,
+    // Single enqueue path; in-process types are started inside dispatch,
+    // before the wait block below, so the job-completion poll observes them.
+    const { dispatchEventJob } = await import("@/lib/scheduling/dispatch");
+    const dispatched = await dispatchEventJob(event, {
+      triggeredBy: "workflow",
+      input,
+      workflowId,
+      workflowExecutionId,
     });
 
-    // Import job payload builder
-    const { buildJobPayload } =
-      await import("@/lib/scheduler/job-payload-builder");
-
-    // Build comprehensive job payload
-    const basePayload = buildJobPayload(event, log.id, input);
-    const jobPayload = {
-      ...basePayload,
-      ...(workflowId !== undefined && { workflowId }),
-      ...(workflowExecutionId !== undefined && { workflowExecutionId }),
-    };
-
-    // Create job in the queue
-    const job = await jobService.createJob({
-      eventId: event.id,
-      userId: String(event.userId),
-      type: jobType,
-      payload: jobPayload,
-      metadata: {
-        eventName: event.name,
-        triggeredBy: "workflow",
-        logId: log.id,
-        workflowId: workflowId,
-        workflowExecutionId: workflowExecutionId,
-      },
-    });
-
-    // Update log with job ID
-    await storage.updateLog(log.id, {
-      jobId: job.id,
-      status: LogStatus.PENDING,
-    });
-
-    // Tool actions run in-process; the orchestrator never claims them. Started
-    // before the wait block below so a workflow's job-completion poll observes it.
-    {
-      const { isInProcessJobType, runInProcessJob } =
-        await import("@/lib/scheduler/in-process-executor");
-      if (isInProcessJobType(jobType)) {
-        void runInProcessJob(job, event, input);
-      }
+    if (dispatched.skipped) {
+      return {
+        success: false,
+        output: `Run skipped (${dispatched.skipped})`,
+        duration: Date.now() - startTime,
+      };
     }
+    const job = dispatched.job;
 
     // If waitForCompletion is true (for workflows), wait for job to complete
     console.log(
@@ -859,8 +762,8 @@ export class ScriptScheduler {
 
     console.log(`Running script ${String(eventId)} immediately`);
 
-    // Use the same executeScript method which now creates jobs
-    return this.executeScript(event);
+    // Same enqueue path, attributed as a manual run (exempt from maxExecutions)
+    return this.executeScript(event, undefined, "manual");
   }
 
   // Update an existing script's schedule

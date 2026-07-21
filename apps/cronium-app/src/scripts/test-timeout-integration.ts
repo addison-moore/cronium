@@ -7,7 +7,12 @@
 
 import { transformJobForOrchestrator } from "@/lib/services/job-transformer";
 import type { Job } from "@/shared/schema";
-import { JobType, JobPriority, JobStatus } from "@/shared/schema";
+import {
+  JobType,
+  JobPriority,
+  LeaseLossPolicy,
+  JobStatus,
+} from "@/shared/schema";
 
 console.log("🧪 Testing Timeout Integration\n");
 console.log("=".repeat(60));
@@ -41,6 +46,14 @@ const testJob: Job = {
   lastError: null,
   metadata: {},
   orchestratorId: null,
+  source: null,
+  timeoutMs: null,
+  maxAttempts: 0,
+  leaseExpiresAt: null,
+  leaseLossPolicy: LeaseLossPolicy.RETRY,
+  cancelRequested: false,
+  activeKey: null,
+  scheduledMiss: false,
 };
 
 const transformed = transformJobForOrchestrator(testJob);

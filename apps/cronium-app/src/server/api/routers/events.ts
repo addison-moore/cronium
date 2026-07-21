@@ -10,8 +10,7 @@ import {
   withRateLimit,
   withTransaction,
 } from "../trpc";
-import { EventStatus, LogStatus, RunLocation } from "@/shared/schema";
-import type { ScriptType } from "@/shared/schema";
+import { EventStatus, RunLocation } from "@/shared/schema";
 import {
   createEventSchema,
   updateEventSchema,
@@ -413,105 +412,27 @@ export const eventsRouter = createTRPCRouter({
           });
         }
 
-        // Import job service
-        const { jobService } = await import("@/lib/services/job-service");
-        const { JobType } = await import("@/shared/schema");
-
-        // Determine job type based on event type
-        const jobTypeMap: Record<
-          string,
-          (typeof JobType)[keyof typeof JobType]
-        > = {
-          HTTP_REQUEST: JobType.HTTP_REQUEST,
-          TOOL_ACTION: JobType.TOOL_ACTION,
-        };
-        const jobType = jobTypeMap[event.type] ?? JobType.SCRIPT;
-
-        // Create log entry
-        const log = await storage.createLog({
-          eventId: input.id,
-          status: LogStatus.PENDING,
-          startTime: new Date(),
-          eventName: event.name ?? "Unknown",
-          eventType: event.type,
-          userId: userId,
+        // Single enqueue path (src/lib/scheduling/dispatch.ts); in-process
+        // types (tool actions, HTTP requests) are started inside dispatch,
+        // fire-and-forget — the runner finalizes the job/log itself and the
+        // UI polls the log for the result.
+        const { dispatchEventJob } = await import("@/lib/scheduling/dispatch");
+        const result = await dispatchEventJob(event, {
+          triggeredBy: "manual",
+          input: (input as { input?: Record<string, unknown> }).input,
+          runAsUserId: String(userId),
+          actor: `user:${String(userId)}`,
         });
 
-        // Import job payload builder
-        const { buildJobPayload } =
-          await import("@/lib/scheduler/job-payload-builder");
-
-        // Build comprehensive job payload
-        const jobPayload = buildJobPayload(
-          event,
-          log.id,
-          (input as { input?: Record<string, unknown> }).input,
-        ) as {
-          script?: {
-            type: ScriptType;
-            content: string;
-          };
-          httpRequest?: {
-            method: string;
-            url: string;
-            headers?: Record<string, string>;
-            body?: string;
-          };
-          toolAction?: {
-            toolType: string;
-            config: Record<string, unknown>;
-          };
-          environment?: Record<string, string>;
-          target?: {
-            serverId?: number;
-            containerImage?: string;
-          };
-          input?: Record<string, unknown>;
-          workflowId?: number;
-          executionLogId?: number;
-          timeout?: {
-            value: number;
-            unit: string;
-          };
-          retries?: number;
-        };
-
-        // Payload generation moved to orchestrator
-        // No need to get payload path - orchestrator creates payloads on-demand
-
-        // Create job in the queue
-        const job = await jobService.createJob({
-          eventId: input.id,
-          userId: String(userId),
-          type: jobType,
-          payload: jobPayload,
-          metadata: {
-            eventName: event.name,
-            triggeredBy: "manual",
-            logId: log.id,
-          },
-        });
-
-        // Update log with job ID
-        await storage.updateLog(log.id, {
-          jobId: job.id,
-          status: LogStatus.PENDING,
-        });
-
-        // Tool actions run in-process (the orchestrator only runs container/ssh
-        // scripts). Fire-and-forget: the runner finalizes the job/log itself and
-        // the UI polls the log for the result.
-        const { isInProcessJobType, runInProcessJob } =
-          await import("@/lib/scheduler/in-process-executor");
-        if (isInProcessJobType(jobType)) {
-          void runInProcessJob(
-            job,
-            event,
-            (input as { input?: Record<string, unknown> }).input,
-          );
+        if (result.skipped) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message:
+              "A previous run of this event is still active (overlap policy: SKIP)",
+          });
         }
 
-        return { success: true, logId: log.id, jobId: job.id };
+        return { success: true, logId: result.logId, jobId: result.job.id };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({

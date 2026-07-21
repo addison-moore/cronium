@@ -222,19 +222,29 @@ export class WorkflowCleanupService {
     try {
       console.log(`[WorkflowCleanup] Marking job ${jobId} as timed out`);
 
-      // Update job status
-      await db
-        .update(jobs)
-        .set({
-          status: JobStatus.FAILED,
+      // Through the state machine: if the executor's real completion landed
+      // first, this CAS is rejected and we leave the genuine result alone
+      // (the old blind update raced it — review H3/D3).
+      const { transitionJob } = await import("@/lib/scheduling/job-transition");
+      const outcome = await transitionJob(jobId, JobStatus.TIMED_OUT, {
+        actor: "sweeper",
+        reason: "Job timed out - no response from executor",
+        set: {
           completedAt: now,
           lastError: "Job timed out - no response from executor",
           result: {
             exitCode: -1,
             error: "Timeout",
           },
-        })
-        .where(eq(jobs.id, jobId));
+          activeKey: null,
+        },
+      });
+      if (!outcome.ok) {
+        console.log(
+          `[WorkflowCleanup] Skipping job ${jobId}: ${outcome.error}`,
+        );
+        return;
+      }
 
       // Update associated log if exists
       const [log] = await db
