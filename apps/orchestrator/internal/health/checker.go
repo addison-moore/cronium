@@ -115,55 +115,56 @@ func (c *Checker) GetHealth() *HealthResponse {
 	}
 }
 
-// checkAll performs all health checks
+// checkAll performs all health checks. The probes run WITHOUT holding the
+// mutex — holding it across network calls (the old behavior) meant a slow
+// Docker daemon blocked GetHealth, which blocked the /health endpoint, which
+// failed the container healthcheck's own timeout: the orchestrator looked
+// unhealthy precisely because something else was slow.
 func (c *Checker) checkAll(ctx context.Context) {
+	dockerStatus := c.checkDocker(ctx)
+	apiStatus := c.checkAPI(ctx)
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
 	c.lastCheck = time.Now()
-
-	// Check Docker
-	c.checkDocker(ctx)
-
-	// Check API connectivity
-	c.checkAPI(ctx)
-
-	// Add more checks as needed
+	c.components["docker"] = dockerStatus
+	c.components["api"] = apiStatus
 }
 
 // checkDocker checks Docker daemon health
-func (c *Checker) checkDocker(ctx context.Context) {
+func (c *Checker) checkDocker(ctx context.Context) ComponentStatus {
 	if c.dockerClient == nil {
 		// Try to create client
 		var err error
 		c.dockerClient, err = client.NewClientWithOpts(client.FromEnv)
 		if err != nil {
-			c.components["docker"] = ComponentStatus{
+			return ComponentStatus{
 				Status:    StatusUnhealthy,
 				LastCheck: time.Now(),
 				Message:   "Failed to create Docker client",
 				Details:   map[string]interface{}{"error": err.Error()},
 			}
-			return
 		}
 	}
 
-	// Ping Docker daemon
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	// Ping Docker daemon. Generous timeout: on small CI runners a daemon busy
+	// with container churn (e.g. another service crash-looping) can take
+	// several seconds to answer Info, and a slow daemon must read as slow,
+	// not as an unhealthy orchestrator.
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	info, err := c.dockerClient.Info(ctx)
 	if err != nil {
-		c.components["docker"] = ComponentStatus{
+		return ComponentStatus{
 			Status:    StatusUnhealthy,
 			LastCheck: time.Now(),
 			Message:   "Failed to connect to Docker daemon",
 			Details:   map[string]interface{}{"error": err.Error()},
 		}
-		return
 	}
 
-	c.components["docker"] = ComponentStatus{
+	return ComponentStatus{
 		Status:    StatusHealthy,
 		LastCheck: time.Now(),
 		Details: map[string]interface{}{
@@ -175,28 +176,26 @@ func (c *Checker) checkDocker(ctx context.Context) {
 }
 
 // checkAPI checks backend API connectivity
-func (c *Checker) checkAPI(ctx context.Context) {
+func (c *Checker) checkAPI(ctx context.Context) ComponentStatus {
 	// Without a configured pinger we cannot verify connectivity; report
 	// unknown as degraded rather than falsely healthy.
 	if c.apiPinger == nil {
-		c.components["api"] = ComponentStatus{
+		return ComponentStatus{
 			Status:    StatusDegraded,
 			LastCheck: time.Now(),
 			Message:   "API connectivity probe not configured",
 		}
-		return
 	}
 
 	if err := c.apiPinger(ctx); err != nil {
-		c.components["api"] = ComponentStatus{
+		return ComponentStatus{
 			Status:    StatusUnhealthy,
 			LastCheck: time.Now(),
 			Message:   fmt.Sprintf("API unreachable: %v", err),
 		}
-		return
 	}
 
-	c.components["api"] = ComponentStatus{
+	return ComponentStatus{
 		Status:    StatusHealthy,
 		LastCheck: time.Now(),
 		Message:   "API reachable",
