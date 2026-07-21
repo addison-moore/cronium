@@ -13,20 +13,23 @@
  * render below makes it loud instead of silently returning null.
  */
 
-const inert = new Proxy(function stubComponent() {
-  throw new Error(
-    "@cronium/ui was invoked inside the scheduling worker — server code must not render UI",
-  );
-}, {
-  get(_target, prop) {
-    if (prop === "__esModule") return true;
-    return inert;
-  },
-  apply() {
+const inert = new Proxy(
+  function stubComponent() {
     throw new Error(
       "@cronium/ui was invoked inside the scheduling worker — server code must not render UI",
     );
   },
-});
+  {
+    get(_target, prop) {
+      if (prop === "__esModule") return true;
+      return inert;
+    },
+    apply() {
+      throw new Error(
+        "@cronium/ui was invoked inside the scheduling worker — server code must not render UI",
+      );
+    },
+  },
+);
 
 module.exports = inert;

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { isSocketTicketAudience, mintSocketTicket } from "@/lib/socket-ticket";
 import { hasServerPermission } from "@/server/permissions";
+import { roleAllowsCapability } from "@/server/security/authorization";
 import { storage } from "@/server/storage";
 import { UserStatus } from "@/shared/schema";
 
@@ -37,9 +38,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     return noStoreJson({ error: "Authentication required" }, { status: 401 });
   }
 
+  // A terminal is command execution: read-only roles are denied regardless of
+  // their granular console permission.
   if (
     audience === "terminal" &&
-    !(await hasServerPermission(userId, "console"))
+    (!roleAllowsCapability(user.role, "execute") ||
+      !(await hasServerPermission(userId, "console")))
   ) {
     return noStoreJson({ error: "Access denied" }, { status: 403 });
   }

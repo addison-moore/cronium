@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import {
   RunLocation,
-  UserRole,
   EventStatus,
   TimeUnit,
   type InsertEvent,
 } from "@/shared/schema";
-import { authenticateApiRequest } from "@/lib/api-auth";
+import {
+  authenticateRestPrincipal,
+  restPrincipalErrorResponse,
+} from "@/lib/api-auth";
 import { legacyEventPatchSchema } from "@/shared/schemas/events";
 import {
   assertEventCapability,
@@ -20,94 +20,16 @@ import {
 } from "@/server/security/resource-access";
 import { toEventApiDto } from "@/server/security/api-dto";
 
-// Helper function to authenticate user via session or API token
-async function authenticateUser(
-  request: NextRequest,
-): Promise<{ userId: string } | null> {
-  // First try API token
-  const apiAuth = await authenticateApiRequest(request);
-
-  if (apiAuth.authenticated && apiAuth.userId) {
-    return { userId: apiAuth.userId };
-  }
-
-  // Check if this is an API request (has Authorization header or is accessing /api/ endpoints)
-  const authHeader = request.headers.get("Authorization");
-  const isApiRequest = authHeader !== null || request.url.includes("/api/");
-
-  // For session authentication, we need to properly handle cookies
-  // Create a Request object with proper headers for getServerSession
-  const headers = new Headers();
-  const cookieHeader = request.headers.get("cookie");
-  if (cookieHeader) {
-    headers.set("cookie", cookieHeader);
-  }
-
-  try {
-    // Try to get session with proper request context
-    const session = await getServerSession({
-      ...authOptions,
-      callbacks: {
-        ...authOptions.callbacks,
-        // Simplified session callback for API routes
-        session: async ({ session, token }) => {
-          if (token?.id && session?.user) {
-            session.user.id = token.id;
-          }
-          return session;
-        },
-      },
-    });
-
-    if (session?.user?.id) {
-      return { userId: session.user.id };
-    }
-  } catch (error) {
-    console.log(
-      "Session auth failed:",
-      error instanceof Error ? error.message : String(error),
-    );
-  }
-
-  // Only use fallback for browser requests (no Authorization header)
-  // API requests should fail with 401 if no valid auth is provided
-  if (!isApiRequest) {
-    try {
-      const allUsers = await storage.getAllUsers();
-      if (allUsers.length > 0) {
-        // Use the first admin user for development browser sessions
-        const adminUser =
-          allUsers.find((u) => u.role === UserRole.ADMIN) ?? allUsers[0];
-        if (!adminUser) {
-          throw new Error("No admin user found for development session");
-        }
-        return { userId: adminUser.id };
-      }
-    } catch (error) {
-      console.error(
-        "Fallback user lookup failed:",
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-  }
-
-  // No authentication found
-  return null;
-}
-
 // GET a specific script
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const auth = await authenticateUser(request);
+    const auth = await authenticateRestPrincipal(request, "view");
 
-    if (!auth) {
-      return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
+    if (!auth.ok) {
+      return restPrincipalErrorResponse(auth);
     }
 
     const userId = auth.userId;
@@ -159,13 +81,10 @@ export async function PATCH(
   const { id } = await params;
   console.log("PATCH request received for event ID:", id);
   try {
-    const auth = await authenticateUser(request);
+    const auth = await authenticateRestPrincipal(request, "edit");
 
-    if (!auth) {
-      return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
+    if (!auth.ok) {
+      return restPrincipalErrorResponse(auth);
     }
 
     const userId = auth.userId;
@@ -363,13 +282,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const auth = await authenticateUser(request);
+    const auth = await authenticateRestPrincipal(request, "edit");
 
-    if (!auth) {
-      return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
+    if (!auth.ok) {
+      return restPrincipalErrorResponse(auth);
     }
 
     const userId = auth.userId;

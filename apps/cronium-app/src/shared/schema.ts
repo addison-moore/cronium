@@ -17,6 +17,9 @@ import {
 export enum UserRole {
   USER = "USER",
   ADMIN = "ADMIN",
+  // Read-only: may view, but never create, fork, mutate, execute, open a
+  // terminal, or use a secret. Enforced centrally in server/security/authorization.ts.
+  VIEWER = "VIEWER",
 }
 
 export enum EventType {
@@ -205,6 +208,10 @@ export const users = pgTable("users", {
     .$type<UserStatus>()
     .default(UserStatus.ACTIVE)
     .notNull(),
+  // Monotonic counter embedded in browser sessions and checked on every
+  // sensitive request. Bumped transactionally on password/role/status changes
+  // so stale JWTs and cached principals fail closed immediately.
+  sessionVersion: integer("session_version").default(1).notNull(),
   inviteToken: varchar("invite_token", { length: 255 }),
   inviteExpiry: timestamp("invite_expiry"),
   lastLogin: timestamp("last_login"),

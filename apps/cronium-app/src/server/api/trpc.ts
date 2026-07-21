@@ -12,8 +12,13 @@ import superjson from "superjson";
 import { ZodError } from "zod";
 import type { Session } from "next-auth";
 import { getCachedServerSession } from "../../lib/auth-cache";
-import { UserRole } from "../../shared/schema";
+import { UserRole, UserStatus } from "../../shared/schema";
 import { db } from "../db";
+import {
+  assertRoleCapability,
+  getAuthorizedPrincipal,
+} from "../security/authorization";
+import { capabilityForRoute } from "../security/route-capabilities";
 
 /**
  * 1. CONTEXT
@@ -83,7 +88,9 @@ export const sessionFromApiToken = async (
 
   const { storage } = await import("../storage");
   const user = await storage.getUser(auth.userId);
-  if (!user) return null;
+  // Bearer principals must be live: a disabled/pending owner's tokens stop
+  // working immediately, not at token expiry.
+  if (!user || user.status !== UserStatus.ACTIVE) return null;
 
   const name =
     user.firstName || user.lastName
@@ -96,6 +103,8 @@ export const sessionFromApiToken = async (
       email: user.email ?? "",
       name,
       role: user.role,
+      status: user.status,
+      sessionVersion: user.sessionVersion,
       image: null,
     },
     expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
@@ -196,6 +205,61 @@ const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
       session: ctx.session,
     },
   });
+});
+
+/**
+ * Authoritative per-request principal check. The session (JWT or bearer-token
+ * derived) is only proof of authentication; role, status, and session version
+ * are re-read from the database (through a short shared cache) so disabling,
+ * demoting, or resetting a user revokes access immediately. Sessions without a
+ * sessionVersion claim (issued before this security upgrade) are rejected —
+ * the user must sign in again. Fails closed when current state cannot be
+ * established.
+ */
+const enforceLivePrincipal = t.middleware(async ({ ctx, next }) => {
+  const sessionUser = ctx.session?.user;
+  if (!sessionUser?.id) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  if (typeof sessionUser.sessionVersion !== "number") {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Session is no longer valid. Please sign in again.",
+    });
+  }
+  const principal = await getAuthorizedPrincipal(sessionUser.id, {
+    expectedSessionVersion: sessionUser.sessionVersion,
+  });
+  return next({
+    ctx: {
+      ...ctx,
+      session: {
+        ...ctx.session,
+        user: {
+          ...sessionUser,
+          // Live values win over whatever the session was issued with.
+          role: principal.role,
+          status: principal.status,
+          sessionVersion: principal.sessionVersion,
+        },
+      } as Session,
+    },
+  });
+});
+
+/**
+ * Deny-by-default role capability enforcement. Every mutation must declare its
+ * capability in route-capabilities.ts (CI enforces the inventory); queries are
+ * `view`. Read-only roles are denied all write/execute capabilities here,
+ * before any resource-level ownership check runs.
+ */
+const enforceRouteCapability = t.middleware(({ ctx, path, type, next }) => {
+  const role = ctx.session?.user?.role;
+  if (!role) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  assertRoleCapability(role, capabilityForRoute(path, type));
+  return next();
 });
 
 /**
@@ -320,12 +384,18 @@ export const withRateLimit = (maxRequests = 100, windowMs = 60000) => {
 // All CRUD operations now return fresh data directly from the database
 
 /**
- * Development-only middleware that auto-authenticates as first admin user
- * This should ONLY be used in development environments
+ * Development-only middleware that auto-authenticates as first admin user.
+ * Requires BOTH development mode and the explicit CRONIUM_DEV_AUTO_AUTH=true
+ * opt-in, so a production deployment that mis-sets NODE_ENV does not become an
+ * unauthenticated admin API (audit-2 I1).
  */
+const devAutoAuthEnabled = () =>
+  process.env.NODE_ENV === "development" &&
+  process.env.CRONIUM_DEV_AUTO_AUTH === "true";
+
 const devAutoAuth = t.middleware(async ({ ctx, next }) => {
   // Only apply in development when there's no session
-  if (process.env.NODE_ENV === "development" && !ctx.session?.user) {
+  if (devAutoAuthEnabled() && !ctx.session?.user) {
     try {
       // Import storage dynamically to avoid circular dependencies
       const { storage } = await import("../storage");
@@ -350,10 +420,12 @@ const devAutoAuth = t.middleware(async ({ ctx, next }) => {
                     ? `${adminUser.firstName ?? ""} ${adminUser.lastName ?? ""}`.trim()
                     : (adminUser.email ?? "User"),
                 role: adminUser.role,
+                status: adminUser.status,
+                sessionVersion: adminUser.sessionVersion,
                 image: null,
               },
               expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-            },
+            } as Session,
           },
         });
       }
@@ -366,14 +438,22 @@ const devAutoAuth = t.middleware(async ({ ctx, next }) => {
 });
 
 /**
- * Protected procedure (require user to be logged in)
+ * Protected procedure (require user to be logged in). Order matters:
+ * authentication → live principal (status/role/sessionVersion re-check) →
+ * role capability (deny-by-default) → token scopes.
  */
 export const protectedProcedure =
   process.env.NODE_ENV !== "development"
-    ? t.procedure.use(enforceUserIsAuthed).use(enforceTokenScopes)
+    ? t.procedure
+        .use(enforceUserIsAuthed)
+        .use(enforceLivePrincipal)
+        .use(enforceRouteCapability)
+        .use(enforceTokenScopes)
     : t.procedure
         .use(devAutoAuth)
         .use(enforceUserIsAuthed)
+        .use(enforceLivePrincipal)
+        .use(enforceRouteCapability)
         .use(enforceTokenScopes);
 
 /**

@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 import { storage } from "@/server/storage";
 import { logs } from "@/shared/schema";
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
+import {
+  authenticateRestPrincipal,
+  restPrincipalErrorResponse,
+} from "@/lib/api-auth";
 
 // GET details for a specific log
 export async function GET(
@@ -12,16 +14,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const auth = await authenticateRestPrincipal(request, "view");
 
-    if (!session?.user?.id) {
-      return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
+    if (!auth.ok) {
+      return restPrincipalErrorResponse(auth);
     }
 
-    const userId = session.user.id;
+    const userId = auth.userId;
     // For Next.js 15, we need to await params
     const unwrappedParams = await params;
     const logId = parseInt(unwrappedParams.id, 10);

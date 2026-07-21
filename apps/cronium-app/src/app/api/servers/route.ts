@@ -1,21 +1,23 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { sshService } from "@/lib/ssh";
 import { z } from "zod";
+import {
+  authenticateRestPrincipal,
+  restPrincipalErrorResponse,
+} from "@/lib/api-auth";
 import { toServerApiDto } from "@/server/security/api-dto";
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const auth = await authenticateRestPrincipal(req, "view");
 
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!auth.ok) {
+      return restPrincipalErrorResponse(auth);
     }
 
-    const userId = session.user.id;
+    const userId = auth.userId;
     const servers = await storage.getAllServers(userId);
 
     return NextResponse.json(servers.map(toServerApiDto));
@@ -40,13 +42,14 @@ const createServerSchema = z
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    // Creating a server stores an SSH credential: "edit" capability required.
+    const auth = await authenticateRestPrincipal(req, "edit");
 
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!auth.ok) {
+      return restPrincipalErrorResponse(auth);
     }
 
-    const userId = session.user.id;
+    const userId = auth.userId;
     const body: unknown = await req.json();
 
     const parsedBody = createServerSchema.safeParse(body);

@@ -441,6 +441,34 @@ export const adminRouter = createTRPCRouter({
       );
     }),
 
+  // Administrator-requested sign-out-all: bumps the user's sessionVersion so
+  // every browser session and bearer principal fails the live check
+  // immediately, and tears down the user's live sockets/terminals.
+  revokeUserSessions: adminProcedure
+    .input(userIdSchema)
+    .mutation(async ({ ctx, input }) => {
+      return withErrorHandling(
+        async () => {
+          const user = await storage.getUser(input.id);
+          if (!user) {
+            throw notFoundError("User");
+          }
+
+          await storage.revokeUserSessions(input.id);
+
+          return mutationResponse(
+            { id: input.id },
+            "All sessions for this user have been revoked",
+          );
+        },
+        {
+          component: "adminRouter",
+          operationName: "revokeUserSessions",
+          userId: ctx.session.user.id,
+        },
+      );
+    }),
+
   // Promote user to admin
   promoteUser: adminProcedure
     .input(userIdSchema)

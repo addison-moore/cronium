@@ -90,6 +90,7 @@ import {
   publishAllSocketRevocation,
   publishUserSocketRevocation,
 } from "./socket-security-store";
+import { invalidatePrincipal } from "./security/authorization";
 import {
   normalizePagination,
   createPaginatedResult,
@@ -217,6 +218,7 @@ export interface IStorage {
   updateUser(id: string, updateData: Partial<InsertUser>): Promise<User>;
   upsertUser(userData: InsertUser): Promise<User>;
   disableUser(id: string): Promise<User>;
+  revokeUserSessions(id: string): Promise<User>;
   deleteUser(id: string): Promise<void>;
 
   // Role methods
@@ -616,19 +618,27 @@ class DatabaseStorage implements IStorage {
   }
 
   async updateUser(id: string, updateData: Partial<InsertUser>): Promise<User> {
-    const revokeSockets = changesSocketAuthorization(updateData);
-    if (revokeSockets) await assertSocketSecurityStoreAvailable();
+    const revokeSessions = changesSocketAuthorization(updateData);
+    if (revokeSessions) await assertSocketSecurityStoreAvailable();
 
+    // Password/role/status changes invalidate every outstanding session and
+    // bearer principal: the version bump happens in the same UPDATE statement
+    // so there is no window where the new credentials and old sessions coexist.
     const [user] = await db
       .update(users)
-      .set(updateData)
+      .set(
+        revokeSessions
+          ? { ...updateData, sessionVersion: sql`${users.sessionVersion} + 1` }
+          : updateData,
+      )
       .where(eq(users.id, id))
       .returning();
 
     if (!user) {
       throw new Error("Failed to update user - user not found");
     }
-    if (revokeSockets) {
+    if (revokeSessions) {
+      await invalidatePrincipal(id);
       await publishUserSocketRevocation(id, "user authorization changed");
     }
     return user;
@@ -651,14 +661,39 @@ class DatabaseStorage implements IStorage {
     await assertSocketSecurityStoreAvailable();
     const [user] = await db
       .update(users)
-      .set({ status: UserStatus.DISABLED })
+      .set({
+        status: UserStatus.DISABLED,
+        sessionVersion: sql`${users.sessionVersion} + 1`,
+      })
       .where(eq(users.id, id))
       .returning();
 
     if (!user) {
       throw new Error("Failed to disable user - user not found");
     }
+    await invalidatePrincipal(id);
     await publishUserSocketRevocation(id, "user disabled");
+    return user;
+  }
+
+  /**
+   * Invalidate every outstanding browser session and bearer principal for a
+   * user without changing role/status, and disconnect their live sockets.
+   * Used for administrator-requested sign-out-all and account recovery.
+   */
+  async revokeUserSessions(id: string): Promise<User> {
+    await assertSocketSecurityStoreAvailable();
+    const [user] = await db
+      .update(users)
+      .set({ sessionVersion: sql`${users.sessionVersion} + 1` })
+      .where(eq(users.id, id))
+      .returning();
+
+    if (!user) {
+      throw new Error("Failed to revoke sessions - user not found");
+    }
+    await invalidatePrincipal(id);
+    await publishUserSocketRevocation(id, "sessions revoked");
     return user;
   }
 
@@ -728,6 +763,7 @@ class DatabaseStorage implements IStorage {
 
     // Delete the user
     await db.delete(users).where(eq(users.id, id));
+    await invalidatePrincipal(id);
     await publishUserSocketRevocation(id, "user deleted");
   }
 

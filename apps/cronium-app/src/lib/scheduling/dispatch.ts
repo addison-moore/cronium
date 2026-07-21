@@ -28,6 +28,10 @@ import { buildJobPayload } from "@/lib/scheduler/job-payload-builder";
 import { eventTimeoutMs } from "@/lib/scheduler/event-timeout";
 import { recordJobCreated } from "./job-transition";
 import { assertEventRelations } from "@/server/security/resource-access";
+import {
+  assertRoleCapability,
+  getAuthorizedPrincipal,
+} from "@/server/security/authorization";
 
 export type TriggerSource = "schedule" | "manual" | "workflow" | "webhook";
 
@@ -120,9 +124,12 @@ export async function dispatchEventJob(
   const actor = opts.actor ?? opts.triggeredBy;
   const authorizedUserId = opts.authorizedUserId ?? String(event.userId);
 
-  // Re-authorize against fresh relationship rows immediately before payload
-  // construction. A previously valid workflow/event cannot keep executing if
-  // its ownership or server relationships have changed.
+  // Re-authorize the principal and relationship rows immediately before
+  // payload construction. A previously valid schedule cannot keep executing
+  // if its owner was disabled/deleted or demoted to a read-only role, or if
+  // event ownership or server relationships have changed. Fails closed.
+  const principal = await getAuthorizedPrincipal(authorizedUserId);
+  assertRoleCapability(principal.role, "execute");
   await assertEventRelations(event.id, authorizedUserId, "execute");
 
   if (!(await checkMaxExecutions(event, opts.triggeredBy))) {

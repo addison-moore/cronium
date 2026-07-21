@@ -1,6 +1,7 @@
 import type { Session } from "next-auth";
 import { getBearerToken } from "@/lib/api-auth";
 import { storage } from "@/server/storage";
+import { UserStatus } from "@/shared/schema";
 import { verifyAccessToken } from "./tokens";
 
 /**
@@ -18,7 +19,9 @@ export async function sessionFromOAuthToken(
   if (!payload) return null;
 
   const user = await storage.getUser(payload.sub);
-  if (!user) return null;
+  // Bearer principals must be live: a disabled owner's OAuth tokens stop
+  // working immediately, not at token expiry.
+  if (!user || user.status !== UserStatus.ACTIVE) return null;
 
   const name =
     user.firstName || user.lastName
@@ -31,6 +34,8 @@ export async function sessionFromOAuthToken(
       email: user.email ?? "",
       name,
       role: user.role,
+      status: user.status,
+      sessionVersion: user.sessionVersion,
       image: null,
     },
     expires: new Date(Date.now() + 60 * 60 * 1000).toISOString(),

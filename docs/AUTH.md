@@ -32,12 +32,42 @@ This document outlines the authentication and user management system in Cronium 
 
 ### 4. Roles and Permissions
 
-- Each user has a `role` (e.g., `admin`, `user`, `viewer`), stored in the database.
-- Role-based access is enforced both in the frontend UI and server APIs.
+- Each user has a `role` — `ADMIN`, `USER`, or `VIEWER` — stored in the database.
+- Role behavior is enforced centrally through a deny-by-default capability
+  matrix (`src/server/security/authorization.ts`) with capabilities `view`,
+  `fork`, `edit`, `execute`, `use-secret`, and `admin`:
+  - **Admin** may perform audited platform administration, but has no implicit
+    secret-use bypass — resource ownership is still checked at execution and
+    secret resolution.
+  - **User** may mutate and execute owned resources and use only owned or
+    narrowly granted secrets.
+  - **Viewer** is read-only: no create, fork, mutate, execute, terminal, or
+    secret use, on any transport (tRPC, REST, MCP, sockets, scheduled
+    dispatch).
+- Every state-changing tRPC route declares its capability in
+  `src/server/security/route-capabilities.ts`; a CI test
+  (`tests/security/route-capability-inventory.test.ts`) fails when a new
+  mutation lacks a declaration.
 - Admins can:
   - Enable/disable users
   - Delete users
   - Change roles
+  - Revoke all of a user's sessions (`admin.revokeUserSessions`)
+
+### 4a. Sessions and revocation
+
+- Browser sessions are JWT-based with an explicit **8-hour maximum**.
+- Users carry a monotonic `sessionVersion`. It is embedded in every session and
+  bumped transactionally on password, role, and status changes, so stale
+  sessions fail immediately — not at JWT expiry.
+- Every sensitive request re-checks the live principal (status/role/version)
+  against the database through a short (15 s) shared cache that is invalidated
+  in the same security event; if current state cannot be established the
+  request **fails closed**.
+- API/MCP bearer tokens are checked against the owner's live status on every
+  request; password reset (account recovery) also revokes all active API
+  tokens. Live sockets and terminals are disconnected via the shared
+  revocation channel.
 
 ### 5. Admin Dashboard
 

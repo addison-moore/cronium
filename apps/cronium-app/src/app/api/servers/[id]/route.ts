@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { sshService } from "@/lib/ssh";
 import { z } from "zod";
+import {
+  authenticateRestPrincipal,
+  restPrincipalErrorResponse,
+} from "@/lib/api-auth";
 import { toServerApiDto } from "@/server/security/api-dto";
 
 export async function GET(
@@ -12,13 +14,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const auth = await authenticateRestPrincipal(req, "view");
 
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!auth.ok) {
+      return restPrincipalErrorResponse(auth);
     }
 
-    const userId = session.user.id;
+    const userId = auth.userId;
     const { id } = await params;
     const serverId = parseInt(id, 10);
 
@@ -66,13 +68,13 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const auth = await authenticateRestPrincipal(req, "edit");
 
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!auth.ok) {
+      return restPrincipalErrorResponse(auth);
     }
 
-    const userId = session.user.id;
+    const userId = auth.userId;
     const { id } = await params;
     const serverId = parseInt(id, 10);
 
@@ -180,13 +182,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const auth = await authenticateRestPrincipal(req, "edit");
 
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!auth.ok) {
+      return restPrincipalErrorResponse(auth);
     }
 
-    const userId = session.user.id;
+    const userId = auth.userId;
     const { id } = await params;
     const serverId = parseInt(id, 10);
 

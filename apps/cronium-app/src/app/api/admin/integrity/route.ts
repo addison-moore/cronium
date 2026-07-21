@@ -1,26 +1,19 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { integrityService } from "@/lib/services/integrity-service";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import {
+  authenticateRestPrincipal,
+  restPrincipalErrorResponse,
+} from "@/lib/api-auth";
 
 // Check execution-log integrity
 export async function GET(request: NextRequest) {
   try {
-    // Check authentication - admin only
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check if user is admin
-    const user = session.user as { role?: string };
-    if (user.role !== "admin") {
-      return NextResponse.json(
-        { error: "Admin access required" },
-        { status: 403 },
-      );
+    // Admin only, checked against the live principal (the previous
+    // string comparison against a lowercase "admin" role could never match).
+    const auth = await authenticateRestPrincipal(request, "admin");
+    if (!auth.ok) {
+      return restPrincipalErrorResponse(auth);
     }
 
     // Get action from query params

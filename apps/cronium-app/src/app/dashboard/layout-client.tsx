@@ -46,9 +46,10 @@ const navLabels = {
   admin: "Admin",
 };
 
-const roleLabels = {
+const roleLabels: Record<UserRole, string> = {
   [UserRole.ADMIN]: "Administrator",
   [UserRole.USER]: "User",
+  [UserRole.VIEWER]: "Viewer",
 };
 
 export default function DashboardLayoutClient({

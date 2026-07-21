@@ -9,6 +9,8 @@ const sharedProjectConfig = {
     "^@shared/(.*)$": "<rootDir>/../apps/cronium-app/src/shared/$1",
     "^@server/(.*)$": "<rootDir>/../apps/cronium-app/src/server/$1",
     "^@lib/(.*)$": "<rootDir>/../apps/cronium-app/src/lib/$1",
+    // superjson ships ESM-only; ts-jest here has no JS transform for it.
+    "^superjson$": "<rootDir>/superjson-stub.ts",
   },
   transform: {
     "^.+\\.tsx?$": [
@@ -79,6 +81,8 @@ module.exports = {
         "<rootDir>/../apps/cronium-app/src/server/__tests__/terminal-websocket-security.test.ts",
         "<rootDir>/../apps/cronium-app/src/server/__tests__/token-scopes.test.ts",
         "<rootDir>/../apps/cronium-app/src/server/security/__tests__/resource-access.test.ts",
+        "<rootDir>/../apps/cronium-app/src/server/security/__tests__/authorization.test.ts",
+        "<rootDir>/../apps/cronium-app/src/server/api/__tests__/trpc-authorization.test.ts",
       ],
       setupFiles: ["<rootDir>/security/setup.ts"],
       testTimeout: 60_000,

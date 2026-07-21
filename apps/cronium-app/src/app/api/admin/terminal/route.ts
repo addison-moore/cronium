@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { exec, execSync } from "child_process";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import {
+  authenticateRestPrincipal,
+  restPrincipalErrorResponse,
+} from "@/lib/api-auth";
 import { hasServerPermission } from "@/server/permissions";
 import { storage } from "@/server/storage";
 import { terminalSSHService } from "@/lib/ssh/terminal";
@@ -262,12 +264,13 @@ const getAutocompleteSuggestions = async (
 // Create a POST endpoint to handle terminal commands
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    // Check authentication + console permission (admins always pass)
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Live principal check + role capability: a terminal is command
+    // execution, so read-only roles are denied before granular permissions.
+    const auth = await authenticateRestPrincipal(req, "execute");
+    if (!auth.ok) {
+      return restPrincipalErrorResponse(auth);
     }
-    if (!(await hasServerPermission(session.user.id, "console"))) {
+    if (!(await hasServerPermission(auth.userId, "console"))) {
       return NextResponse.json(
         { error: "Unauthorized: console permission required" },
         { status: 403 },
@@ -275,7 +278,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     // Get user ID to maintain separate session state
-    const userId = session.user.id || "default";
+    const userId = auth.userId;
 
     // Get command and current path from request body
     const body: unknown = await req.json();
@@ -290,7 +293,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // it runs commands directly on the Cronium host
     if (
       !serverId &&
-      !(await hasServerPermission(session.user.id, "localServerAccess"))
+      !(await hasServerPermission(auth.userId, "localServerAccess"))
     ) {
       return NextResponse.json(
         {

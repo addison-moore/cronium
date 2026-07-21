@@ -32,6 +32,7 @@ interface SocketUserRecord {
   status: UserStatus;
   roleId?: number | null;
   password?: string | null;
+  sessionVersion?: number | null;
 }
 
 export function socketUserAuthorizationFingerprint(
@@ -39,7 +40,13 @@ export function socketUserAuthorizationFingerprint(
 ): string {
   return createHash("sha256")
     .update(
-      JSON.stringify([user.password, user.role, user.roleId, user.status]),
+      JSON.stringify([
+        user.password,
+        user.role,
+        user.roleId,
+        user.status,
+        user.sessionVersion ?? null,
+      ]),
     )
     .digest("hex");
 }

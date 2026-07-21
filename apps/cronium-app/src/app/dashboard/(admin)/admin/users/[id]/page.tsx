@@ -307,6 +307,9 @@ export default function UserDetailsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={UserRole.VIEWER}>
+                  Viewer (read-only)
+                </SelectItem>
                 <SelectItem value={UserRole.USER}>User</SelectItem>
                 <SelectItem value={UserRole.ADMIN}>Admin</SelectItem>
               </SelectContent>

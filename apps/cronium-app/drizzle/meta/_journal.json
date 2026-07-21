@@ -29,6 +29,13 @@
       "when": 1784661677237,
       "tag": "0003_tenant_relationship_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784667848309,
+      "tag": "0004_session_version",
+      "breakpoints": true
     }
   ]
 }

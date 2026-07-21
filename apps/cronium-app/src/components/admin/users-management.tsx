@@ -269,6 +269,8 @@ export function UsersManagement({
         return <Badge variant="destructive">Admin</Badge>;
       case UserRole.USER:
         return <Badge variant="default">User</Badge>;
+      case UserRole.VIEWER:
+        return <Badge variant="secondary">Viewer</Badge>;
       default:
         return <Badge variant="secondary">{role}</Badge>;
     }
@@ -369,6 +371,9 @@ export function UsersManagement({
                               <SelectValue placeholder="Select role" />
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectItem value={UserRole.VIEWER}>
+                                Viewer (read-only)
+                              </SelectItem>
                               <SelectItem value={UserRole.USER}>
                                 User
                               </SelectItem>

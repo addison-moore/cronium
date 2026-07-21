@@ -57,9 +57,7 @@ function encryptSensitiveValue(plaintext) {
     cipher.update(plaintext, "utf8"),
     cipher.final(),
   ]);
-  return Buffer.concat([iv, encrypted, cipher.getAuthTag()]).toString(
-    "base64",
-  );
+  return Buffer.concat([iv, encrypted, cipher.getAuthTag()]).toString("base64");
 }
 
 async function ensureAdmin() {

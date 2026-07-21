@@ -20,6 +20,10 @@ const customJestConfig = {
     "^@components/(.*)$": "<rootDir>/src/components/$1",
     "^@server/(.*)$": "<rootDir>/src/server/$1",
     "^@lib/(.*)$": "<rootDir>/src/lib/$1",
+    // superjson ships ESM-only and next/jest never transforms node_modules
+    // (transformIgnorePatterns cannot override its built-in /node_modules/
+    // entry); the stub provides passthrough semantics for server-side tests.
+    "^superjson$": "<rootDir>/../../tests/superjson-stub.ts",
   },
   transformIgnorePatterns: ["/node_modules/(?!@hookform|next-auth|superjson)"],
 };

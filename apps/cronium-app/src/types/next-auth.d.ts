@@ -8,6 +8,7 @@ declare module "next-auth" {
     username?: string | null;
     role: UserRole;
     status: UserStatus;
+    sessionVersion: number;
     firstName?: string | null;
     lastName?: string | null;
     profileImageUrl?: string | null;
@@ -21,6 +22,7 @@ declare module "next-auth/jwt" {
     username?: string | null;
     role: UserRole;
     status: UserStatus;
+    sessionVersion: number;
     firstName?: string | null;
     lastName?: string | null;
     profileImageUrl?: string | null;
@@ -35,6 +37,7 @@ declare module "next-auth/core/types" {
       username?: string | null;
       role: UserRole;
       status: UserStatus;
+      sessionVersion: number;
       firstName?: string | null;
       lastName?: string | null;
       profileImageUrl?: string | null;

@@ -287,11 +287,17 @@ All CRUD operations (events, workflows, servers, logs) and real-time data (dashb
 
 ## Development Variables
 
-| Variable              | Description                          | Type     | Default | Required |
-| --------------------- | ------------------------------------ | -------- | ------- | -------- |
-| `SKIP_ENV_VALIDATION` | Skip environment variable validation | `string` | -       | No       |
+| Variable               | Description                                                                                             | Type     | Default | Required |
+| ---------------------- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | -------- |
+| `SKIP_ENV_VALIDATION`  | Skip environment variable validation                                                                     | `string` | -       | No       |
+| `CRONIUM_DEV_AUTO_AUTH` | When `true` **and** `NODE_ENV=development`, auto-authenticates sessionless API requests as the first admin | `bool`   | `false` | No       |
 
 **Warning:** Only use `SKIP_ENV_VALIDATION` in development. Any non-empty value will skip validation.
+
+**Warning:** `CRONIUM_DEV_AUTO_AUTH` is a development convenience only. It is
+ignored outside development mode, and the explicit flag ensures a production
+deployment that accidentally sets `NODE_ENV=development` does not expose an
+unauthenticated admin API.
 
 ## Future Container Execution Variables
 

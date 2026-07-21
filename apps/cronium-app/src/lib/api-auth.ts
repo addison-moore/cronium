@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
+import type { Capability } from "@/server/security/authorization";
 import { TokenStatus } from "@/shared/schema";
 
 /** Extract a bearer token from an `Authorization` header, if present. */
@@ -79,5 +80,75 @@ export function createApiAuthErrorResponse(error: string): NextResponse {
   return NextResponse.json(
     { error },
     { status: 401, headers: { "WWW-Authenticate": "Bearer" } },
+  );
+}
+
+export type RestPrincipal =
+  { ok: true; userId: string; role: string } | { ok: false; status: 401 | 403 };
+
+/**
+ * Single REST authentication + authorization choke point (security plan Phase
+ * 1.1/1.2). Resolves the caller from a bearer API token or the NextAuth
+ * session, re-checks live status/role/sessionVersion against the database
+ * (fail closed), and enforces the route's declared role capability. There is
+ * deliberately no fallback principal of any kind: unauthenticated requests are
+ * rejected.
+ */
+export async function authenticateRestPrincipal(
+  request: NextRequest,
+  capability: Capability,
+): Promise<RestPrincipal> {
+  // Deferred imports keep this module light for token-only callers and avoid
+  // pulling the NextAuth/env graph in at module load (mirrors trpc.ts).
+  const { getAuthorizedPrincipal, roleAllowsCapability } =
+    await import("@/server/security/authorization");
+
+  let userId: string | null = null;
+  let expectedSessionVersion: number | undefined;
+
+  const tokenAuth = await authenticateApiRequest(request);
+  if (tokenAuth.authenticated && tokenAuth.userId) {
+    userId = tokenAuth.userId;
+  } else {
+    const [{ getServerSession }, { authOptions }] = await Promise.all([
+      import("next-auth"),
+      import("@/lib/auth"),
+    ]);
+    const session = await getServerSession(authOptions);
+    const sessionUser = session?.user;
+    if (sessionUser?.id) {
+      // Sessions issued before the sessionVersion upgrade are rejected.
+      if (typeof sessionUser.sessionVersion !== "number") {
+        return { ok: false, status: 401 };
+      }
+      userId = sessionUser.id;
+      expectedSessionVersion = sessionUser.sessionVersion;
+    }
+  }
+
+  if (!userId) {
+    return { ok: false, status: 401 };
+  }
+
+  try {
+    const principal = await getAuthorizedPrincipal(
+      userId,
+      expectedSessionVersion === undefined ? {} : { expectedSessionVersion },
+    );
+    if (!roleAllowsCapability(principal.role, capability)) {
+      return { ok: false, status: 403 };
+    }
+    return { ok: true, userId: principal.id, role: principal.role };
+  } catch {
+    return { ok: false, status: 401 };
+  }
+}
+
+export function restPrincipalErrorResponse(
+  result: Extract<RestPrincipal, { ok: false }>,
+): NextResponse {
+  return NextResponse.json(
+    { error: result.status === 401 ? "Unauthorized" : "Forbidden" },
+    { status: result.status },
   );
 }

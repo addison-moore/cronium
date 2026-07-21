@@ -1,17 +1,19 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { storage, type LogFilters } from "@/server/storage";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import {
+  authenticateRestPrincipal,
+  restPrincipalErrorResponse,
+} from "@/lib/api-auth";
 import { z } from "zod";
 import { LogStatus } from "@/shared/schema";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const auth = await authenticateRestPrincipal(req, "view");
 
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!auth.ok) {
+      return restPrincipalErrorResponse(auth);
     }
 
     const { searchParams } = new URL(req.url);
@@ -39,7 +41,7 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      if (script.userId !== session.user.id) {
+      if (script.userId !== auth.userId) {
         return NextResponse.json(
           { error: "Unauthorized access to script" },
           { status: 403 },
@@ -69,7 +71,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Always filter by current user
-    filters.userId = session.user.id;
+    filters.userId = auth.userId;
     filters.ownEventsOnly = ownEventsOnly;
     filters.sharedOnly = sharedOnly;
 
@@ -115,10 +117,10 @@ const createLogSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const auth = await authenticateRestPrincipal(req, "edit");
 
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!auth.ok) {
+      return restPrincipalErrorResponse(auth);
     }
 
     const body: unknown = await req.json();
@@ -139,7 +141,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Script not found" }, { status: 404 });
     }
 
-    if (script.userId !== session.user.id) {
+    if (script.userId !== auth.userId) {
       return NextResponse.json(
         { error: "Unauthorized access to script" },
         { status: 403 },

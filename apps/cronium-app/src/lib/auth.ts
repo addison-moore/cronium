@@ -13,6 +13,10 @@ export const authOptions: NextAuthOptions = {
   },
   session: {
     strategy: "jwt",
+    // Explicit 8-hour maximum for browser sessions (security plan Phase 1.2);
+    // after that the user must reauthenticate. Server-side revocation is
+    // enforced per-request via sessionVersion, independent of this expiry.
+    maxAge: 8 * 60 * 60,
   },
   providers: [
     CredentialsProvider({
@@ -62,11 +66,9 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
-          // Check if user is disabled or pending approval
-          if (
-            user.status === UserStatus.DISABLED ||
-            user.status === UserStatus.PENDING
-          ) {
+          // Only ACTIVE accounts may sign in (uniform null for every
+          // non-active status; INVITED accounts must finish activation).
+          if (user.status !== UserStatus.ACTIVE) {
             return null;
           }
 
@@ -94,6 +96,7 @@ export const authOptions: NextAuthOptions = {
             profileImageUrl: user.profileImageUrl,
             role: user.role,
             status: user.status,
+            sessionVersion: user.sessionVersion,
           };
         } catch (error) {
           console.error("Error in authorize:", error);
@@ -113,6 +116,7 @@ export const authOptions: NextAuthOptions = {
         token.profileImageUrl = user.profileImageUrl ?? null;
         token.role = user.role;
         token.status = user.status;
+        token.sessionVersion = user.sessionVersion;
       }
       return token;
     },
@@ -125,6 +129,7 @@ export const authOptions: NextAuthOptions = {
         session.user.profileImageUrl = token.profileImageUrl!;
         session.user.role = token.role;
         session.user.status = token.status;
+        session.user.sessionVersion = token.sessionVersion;
       }
       return session;
     },

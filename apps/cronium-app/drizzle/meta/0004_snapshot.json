@@ -1,6 +1,6 @@
 {
-  "id": "3c5bbd92-4621-4d9b-ae2b-9e7f94ebafcf",
-  "prevId": "cba4a594-fbda-49db-bf5e-ace8cd99c109",
+  "id": "608895df-966a-4f79-a73b-01464f08e98c",
+  "prevId": "3c5bbd92-4621-4d9b-ae2b-9e7f94ebafcf",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -77,19 +77,19 @@
         "api_tokens_user_id_users_id_fk": {
           "name": "api_tokens_user_id_users_id_fk",
           "tableFrom": "api_tokens",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "api_tokens_token_unique": {
           "name": "api_tokens_token_unique",
-          "columns": ["token"],
-          "nullsNotDistinct": false
+          "nullsNotDistinct": false,
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -144,11 +144,11 @@
         "env_vars_event_id_events_id_fk": {
           "name": "env_vars_event_id_events_id_fk",
           "tableFrom": "env_vars",
-          "columnsFrom": ["event_id"],
           "tableTo": "events",
+          "columnsFrom": ["event_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -192,20 +192,20 @@
         "event_servers_event_id_events_id_fk": {
           "name": "event_servers_event_id_events_id_fk",
           "tableFrom": "event_servers",
-          "columnsFrom": ["event_id"],
           "tableTo": "events",
+          "columnsFrom": ["event_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "event_servers_server_id_servers_id_fk": {
           "name": "event_servers_server_id_servers_id_fk",
           "tableFrom": "event_servers",
-          "columnsFrom": ["server_id"],
           "tableTo": "servers",
+          "columnsFrom": ["server_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -507,30 +507,30 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"events\".\"status\" = 'ACTIVE' AND \"events\".\"trigger_type\" = 'SCHEDULE'",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "events_user_id_users_id_fk": {
           "name": "events_user_id_users_id_fk",
           "tableFrom": "events",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "events_server_id_servers_id_fk": {
           "name": "events_server_id_servers_id_fk",
           "tableFrom": "events",
-          "columnsFrom": ["server_id"],
           "tableTo": "servers",
+          "columnsFrom": ["server_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -704,29 +704,29 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "executions_job_id_jobs_id_fk": {
           "name": "executions_job_id_jobs_id_fk",
           "tableFrom": "executions",
-          "columnsFrom": ["job_id"],
           "tableTo": "jobs",
+          "columnsFrom": ["job_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "executions_server_id_servers_id_fk": {
           "name": "executions_server_id_servers_id_fk",
           "tableFrom": "executions",
-          "columnsFrom": ["server_id"],
           "tableTo": "servers",
+          "columnsFrom": ["server_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -807,9 +807,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "job_transitions_outbox_idx": {
           "name": "job_transitions_outbox_idx",
@@ -822,21 +822,21 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"job_transitions\".\"processed_at\" IS NULL",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "job_transitions_job_id_jobs_id_fk": {
           "name": "job_transitions_job_id_jobs_id_fk",
           "tableFrom": "job_transitions",
-          "columnsFrom": ["job_id"],
           "tableTo": "jobs",
+          "columnsFrom": ["job_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1035,10 +1035,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"jobs\".\"status\" = 'queued'",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "jobs_lease_idx": {
           "name": "jobs_lease_idx",
@@ -1051,10 +1051,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"jobs\".\"status\" IN ('claimed', 'running')",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "jobs_event_created_idx": {
           "name": "jobs_event_created_idx",
@@ -1073,9 +1073,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "jobs_active_key_uq": {
           "name": "jobs_active_key_uq",
@@ -1088,30 +1088,30 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "\"jobs\".\"status\" IN ('queued', 'claimed', 'running') AND \"jobs\".\"active_key\" IS NOT NULL",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "jobs_event_id_events_id_fk": {
           "name": "jobs_event_id_events_id_fk",
           "tableFrom": "jobs",
-          "columnsFrom": ["event_id"],
           "tableTo": "events",
+          "columnsFrom": ["event_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "jobs_user_id_users_id_fk": {
           "name": "jobs_user_id_users_id_fk",
           "tableFrom": "jobs",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1269,9 +1269,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "logs_event_created_idx": {
           "name": "logs_event_created_idx",
@@ -1290,47 +1290,47 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "logs_event_id_events_id_fk": {
           "name": "logs_event_id_events_id_fk",
           "tableFrom": "logs",
-          "columnsFrom": ["event_id"],
           "tableTo": "events",
+          "columnsFrom": ["event_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "logs_workflow_id_workflows_id_fk": {
           "name": "logs_workflow_id_workflows_id_fk",
           "tableFrom": "logs",
-          "columnsFrom": ["workflow_id"],
           "tableTo": "workflows",
+          "columnsFrom": ["workflow_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "logs_job_id_jobs_id_fk": {
           "name": "logs_job_id_jobs_id_fk",
           "tableFrom": "logs",
-          "columnsFrom": ["job_id"],
           "tableTo": "jobs",
+          "columnsFrom": ["job_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "logs_execution_id_executions_id_fk": {
           "name": "logs_execution_id_executions_id_fk",
           "tableFrom": "logs",
-          "columnsFrom": ["execution_id"],
           "tableTo": "executions",
+          "columnsFrom": ["execution_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1404,28 +1404,28 @@
         "oauth_states_user_id_users_id_fk": {
           "name": "oauth_states_user_id_users_id_fk",
           "tableFrom": "oauth_states",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "oauth_states_tool_id_tool_credentials_id_fk": {
           "name": "oauth_states_tool_id_tool_credentials_id_fk",
           "tableFrom": "oauth_states",
-          "columnsFrom": ["tool_id"],
           "tableTo": "tool_credentials",
+          "columnsFrom": ["tool_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "oauth_states_state_unique": {
           "name": "oauth_states_state_unique",
-          "columns": ["state"],
-          "nullsNotDistinct": false
+          "nullsNotDistinct": false,
+          "columns": ["state"]
         }
       },
       "policies": {},
@@ -1511,28 +1511,28 @@
         "oauth_tokens_user_id_users_id_fk": {
           "name": "oauth_tokens_user_id_users_id_fk",
           "tableFrom": "oauth_tokens",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "oauth_tokens_tool_id_tool_credentials_id_fk": {
           "name": "oauth_tokens_tool_id_tool_credentials_id_fk",
           "tableFrom": "oauth_tokens",
-          "columnsFrom": ["tool_id"],
           "tableTo": "tool_credentials",
+          "columnsFrom": ["tool_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "unique_user_tool_provider": {
           "name": "unique_user_tool_provider",
-          "columns": ["user_id", "tool_id", "provider_id"],
-          "nullsNotDistinct": false
+          "nullsNotDistinct": false,
+          "columns": ["user_id", "tool_id", "provider_id"]
         }
       },
       "policies": {},
@@ -1587,19 +1587,19 @@
         "password_reset_tokens_user_id_users_id_fk": {
           "name": "password_reset_tokens_user_id_users_id_fk",
           "tableFrom": "password_reset_tokens",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "password_reset_tokens_token_unique": {
           "name": "password_reset_tokens_token_unique",
-          "columns": ["token"],
-          "nullsNotDistinct": false
+          "nullsNotDistinct": false,
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -1654,11 +1654,11 @@
         "quota_usage_user_id_users_id_fk": {
           "name": "quota_usage_user_id_users_id_fk",
           "tableFrom": "quota_usage",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1798,8 +1798,8 @@
       "uniqueConstraints": {
         "roles_name_unique": {
           "name": "roles_name_unique",
-          "columns": ["name"],
-          "nullsNotDistinct": false
+          "nullsNotDistinct": false,
+          "columns": ["name"]
         }
       },
       "policies": {},
@@ -1866,11 +1866,11 @@
         "runner_deployments_server_id_servers_id_fk": {
           "name": "runner_deployments_server_id_servers_id_fk",
           "tableFrom": "runner_deployments",
-          "columnsFrom": ["server_id"],
           "tableTo": "servers",
+          "columnsFrom": ["server_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1945,11 +1945,11 @@
         "runner_payloads_event_id_events_id_fk": {
           "name": "runner_payloads_event_id_events_id_fk",
           "tableFrom": "runner_payloads",
-          "columnsFrom": ["event_id"],
           "tableTo": "events",
+          "columnsFrom": ["event_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2018,29 +2018,29 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "schedule_incidents_event_id_events_id_fk": {
           "name": "schedule_incidents_event_id_events_id_fk",
           "tableFrom": "schedule_incidents",
-          "columnsFrom": ["event_id"],
           "tableTo": "events",
+          "columnsFrom": ["event_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "schedule_incidents_workflow_id_workflows_id_fk": {
           "name": "schedule_incidents_workflow_id_workflows_id_fk",
           "tableFrom": "schedule_incidents",
-          "columnsFrom": ["workflow_id"],
           "tableTo": "workflows",
+          "columnsFrom": ["workflow_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2110,20 +2110,20 @@
         "server_deletion_notifications_server_id_servers_id_fk": {
           "name": "server_deletion_notifications_server_id_servers_id_fk",
           "tableFrom": "server_deletion_notifications",
-          "columnsFrom": ["server_id"],
           "tableTo": "servers",
+          "columnsFrom": ["server_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "server_deletion_notifications_user_id_users_id_fk": {
           "name": "server_deletion_notifications_user_id_users_id_fk",
           "tableFrom": "server_deletion_notifications",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2167,28 +2167,28 @@
         "server_group_members_group_id_server_groups_id_fk": {
           "name": "server_group_members_group_id_server_groups_id_fk",
           "tableFrom": "server_group_members",
-          "columnsFrom": ["group_id"],
           "tableTo": "server_groups",
+          "columnsFrom": ["group_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "server_group_members_server_id_servers_id_fk": {
           "name": "server_group_members_server_id_servers_id_fk",
           "tableFrom": "server_group_members",
-          "columnsFrom": ["server_id"],
           "tableTo": "servers",
+          "columnsFrom": ["server_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "unique_group_server": {
           "name": "unique_group_server",
-          "columns": ["group_id", "server_id"],
-          "nullsNotDistinct": false
+          "nullsNotDistinct": false,
+          "columns": ["group_id", "server_id"]
         }
       },
       "policies": {},
@@ -2237,11 +2237,11 @@
         "server_groups_user_id_users_id_fk": {
           "name": "server_groups_user_id_users_id_fk",
           "tableFrom": "server_groups",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2388,11 +2388,11 @@
         "servers_user_id_users_id_fk": {
           "name": "servers_user_id_users_id_fk",
           "tableFrom": "servers",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2444,8 +2444,8 @@
       "uniqueConstraints": {
         "system_settings_key_unique": {
           "name": "system_settings_key_unique",
-          "columns": ["key"],
-          "nullsNotDistinct": false
+          "nullsNotDistinct": false,
+          "columns": ["key"]
         }
       },
       "policies": {},
@@ -2529,11 +2529,11 @@
         "tool_action_logs_event_id_events_id_fk": {
           "name": "tool_action_logs_event_id_events_id_fk",
           "tableFrom": "tool_action_logs",
-          "columnsFrom": ["event_id"],
           "tableTo": "events",
+          "columnsFrom": ["event_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2615,11 +2615,11 @@
         "tool_action_templates_user_id_users_id_fk": {
           "name": "tool_action_templates_user_id_users_id_fk",
           "tableFrom": "tool_action_templates",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2700,11 +2700,11 @@
         "tool_audit_logs_tool_id_tool_credentials_id_fk": {
           "name": "tool_audit_logs_tool_id_tool_credentials_id_fk",
           "tableFrom": "tool_audit_logs",
-          "columnsFrom": ["tool_id"],
           "tableTo": "tool_credentials",
+          "columnsFrom": ["tool_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2787,11 +2787,11 @@
         "tool_credentials_user_id_users_id_fk": {
           "name": "tool_credentials_user_id_users_id_fk",
           "tableFrom": "tool_credentials",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2862,8 +2862,8 @@
       "uniqueConstraints": {
         "unique_user_tool_window": {
           "name": "unique_user_tool_window",
-          "columns": ["user_id", "tool_type", "window_start"],
-          "nullsNotDistinct": false
+          "nullsNotDistinct": false,
+          "columns": ["user_id", "tool_type", "window_start"]
         }
       },
       "policies": {},
@@ -2935,11 +2935,11 @@
         "tool_usage_metrics_user_id_users_id_fk": {
           "name": "tool_usage_metrics_user_id_users_id_fk",
           "tableFrom": "tool_usage_metrics",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2990,19 +2990,19 @@
         "user_quotas_user_id_users_id_fk": {
           "name": "user_quotas_user_id_users_id_fk",
           "tableFrom": "user_quotas",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "user_quotas_user_id_unique": {
           "name": "user_quotas_user_id_unique",
-          "columns": ["user_id"],
-          "nullsNotDistinct": false
+          "nullsNotDistinct": false,
+          "columns": ["user_id"]
         }
       },
       "policies": {},
@@ -3051,19 +3051,19 @@
         "user_settings_user_id_users_id_fk": {
           "name": "user_settings_user_id_users_id_fk",
           "tableFrom": "user_settings",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "user_settings_user_id_unique": {
           "name": "user_settings_user_id_unique",
-          "columns": ["user_id"],
-          "nullsNotDistinct": false
+          "nullsNotDistinct": false,
+          "columns": ["user_id"]
         }
       },
       "policies": {},
@@ -3144,8 +3144,8 @@
       "uniqueConstraints": {
         "unique_user_tool": {
           "name": "unique_user_tool",
-          "columns": ["user_id", "tool_type"],
-          "nullsNotDistinct": false
+          "nullsNotDistinct": false,
+          "columns": ["user_id", "tool_type"]
         }
       },
       "policies": {},
@@ -3207,8 +3207,8 @@
       "uniqueConstraints": {
         "unique_user_key": {
           "name": "unique_user_key",
-          "columns": ["user_id", "key"],
-          "nullsNotDistinct": false
+          "nullsNotDistinct": false,
+          "columns": ["user_id", "key"]
         }
       },
       "policies": {},
@@ -3281,6 +3281,13 @@
           "notNull": true,
           "default": "'ACTIVE'"
         },
+        "session_version": {
+          "name": "session_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
         "invite_token": {
           "name": "invite_token",
           "type": "varchar(255)",
@@ -3319,24 +3326,24 @@
         "users_role_id_roles_id_fk": {
           "name": "users_role_id_roles_id_fk",
           "tableFrom": "users",
-          "columnsFrom": ["role_id"],
           "tableTo": "roles",
+          "columnsFrom": ["role_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "users_email_unique": {
           "name": "users_email_unique",
-          "columns": ["email"],
-          "nullsNotDistinct": false
+          "nullsNotDistinct": false,
+          "columns": ["email"]
         },
         "users_username_unique": {
           "name": "users_username_unique",
-          "columns": ["username"],
-          "nullsNotDistinct": false
+          "nullsNotDistinct": false,
+          "columns": ["username"]
         }
       },
       "policies": {},
@@ -3419,20 +3426,20 @@
         "webhook_deliveries_webhook_id_webhooks_id_fk": {
           "name": "webhook_deliveries_webhook_id_webhooks_id_fk",
           "tableFrom": "webhook_deliveries",
-          "columnsFrom": ["webhook_id"],
           "tableTo": "webhooks",
+          "columnsFrom": ["webhook_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "webhook_deliveries_webhook_event_id_webhook_events_id_fk": {
           "name": "webhook_deliveries_webhook_event_id_webhook_events_id_fk",
           "tableFrom": "webhook_deliveries",
-          "columnsFrom": ["webhook_event_id"],
           "tableTo": "webhook_events",
+          "columnsFrom": ["webhook_event_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3532,11 +3539,11 @@
         "webhook_logs_webhook_id_webhooks_id_fk": {
           "name": "webhook_logs_webhook_id_webhooks_id_fk",
           "tableFrom": "webhook_logs",
-          "columnsFrom": ["webhook_id"],
           "tableTo": "webhooks",
+          "columnsFrom": ["webhook_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3657,19 +3664,19 @@
         "webhooks_user_id_users_id_fk": {
           "name": "webhooks_user_id_users_id_fk",
           "tableFrom": "webhooks",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "webhooks_key_unique": {
           "name": "webhooks_key_unique",
-          "columns": ["key"],
-          "nullsNotDistinct": false
+          "nullsNotDistinct": false,
+          "columns": ["key"]
         }
       },
       "policies": {},
@@ -3731,29 +3738,29 @@
         "workflow_connections_workflow_id_workflows_id_fk": {
           "name": "workflow_connections_workflow_id_workflows_id_fk",
           "tableFrom": "workflow_connections",
-          "columnsFrom": ["workflow_id"],
           "tableTo": "workflows",
+          "columnsFrom": ["workflow_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "workflow_connections_source_node_id_workflow_nodes_id_fk": {
           "name": "workflow_connections_source_node_id_workflow_nodes_id_fk",
           "tableFrom": "workflow_connections",
-          "columnsFrom": ["source_node_id"],
           "tableTo": "workflow_nodes",
+          "columnsFrom": ["source_node_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "workflow_connections_target_node_id_workflow_nodes_id_fk": {
           "name": "workflow_connections_target_node_id_workflow_nodes_id_fk",
           "tableFrom": "workflow_connections",
-          "columnsFrom": ["target_node_id"],
           "tableTo": "workflow_nodes",
+          "columnsFrom": ["target_node_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3864,20 +3871,20 @@
         "workflow_execution_events_workflow_execution_id_workflow_executions_id_fk": {
           "name": "workflow_execution_events_workflow_execution_id_workflow_executions_id_fk",
           "tableFrom": "workflow_execution_events",
-          "columnsFrom": ["workflow_execution_id"],
           "tableTo": "workflow_executions",
+          "columnsFrom": ["workflow_execution_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "workflow_execution_events_event_id_events_id_fk": {
           "name": "workflow_execution_events_event_id_events_id_fk",
           "tableFrom": "workflow_execution_events",
-          "columnsFrom": ["event_id"],
           "tableTo": "events",
+          "columnsFrom": ["event_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3987,11 +3994,11 @@
         "workflow_executions_workflow_id_workflows_id_fk": {
           "name": "workflow_executions_workflow_id_workflows_id_fk",
           "tableFrom": "workflow_executions",
-          "columnsFrom": ["workflow_id"],
           "tableTo": "workflows",
+          "columnsFrom": ["workflow_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -4087,11 +4094,11 @@
         "workflow_logs_workflow_id_workflows_id_fk": {
           "name": "workflow_logs_workflow_id_workflows_id_fk",
           "tableFrom": "workflow_logs",
-          "columnsFrom": ["workflow_id"],
           "tableTo": "workflows",
+          "columnsFrom": ["workflow_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -4156,20 +4163,20 @@
         "workflow_nodes_workflow_id_workflows_id_fk": {
           "name": "workflow_nodes_workflow_id_workflows_id_fk",
           "tableFrom": "workflow_nodes",
-          "columnsFrom": ["workflow_id"],
           "tableTo": "workflows",
+          "columnsFrom": ["workflow_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "workflow_nodes_event_id_events_id_fk": {
           "name": "workflow_nodes_event_id_events_id_fk",
           "tableFrom": "workflow_nodes",
-          "columnsFrom": ["event_id"],
           "tableTo": "events",
+          "columnsFrom": ["event_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -4282,9 +4289,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "workflow_step_runs_job_idx": {
           "name": "workflow_step_runs_job_idx",
@@ -4297,20 +4304,20 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "workflow_step_runs_workflow_execution_id_workflow_executions_id_fk": {
           "name": "workflow_step_runs_workflow_execution_id_workflow_executions_id_fk",
           "tableFrom": "workflow_step_runs",
-          "columnsFrom": ["workflow_execution_id"],
           "tableTo": "workflow_executions",
+          "columnsFrom": ["workflow_execution_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -4451,11 +4458,11 @@
         "workflows_user_id_users_id_fk": {
           "name": "workflows_user_id_users_id_fk",
           "tableFrom": "workflows",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -4467,10 +4474,10 @@
   },
   "enums": {},
   "schemas": {},
-  "views": {},
   "sequences": {},
   "roles": {},
   "policies": {},
+  "views": {},
   "_meta": {
     "columns": {},
     "schemas": {},

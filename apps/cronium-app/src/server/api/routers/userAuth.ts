@@ -9,7 +9,7 @@ import { TRPCError } from "@trpc/server";
 import { storage } from "@/server/storage";
 import { isSetupRequired } from "@/lib/first-run";
 import { nanoid } from "nanoid";
-import { UserRole, UserStatus } from "@/shared/schema";
+import { TokenStatus, UserRole, UserStatus } from "@/shared/schema";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { encryptionService } from "@/lib/encryption-service";
 
@@ -265,10 +265,20 @@ export const userAuthRouter = createTRPCRouter({
         // Hash the new password
         const hashedPassword = await encryptionService.hashPassword(password);
 
-        // Update user password
+        // Update user password. This bumps sessionVersion in the same UPDATE,
+        // invalidating every outstanding browser session and cached principal.
         await storage.updateUser(user.id, {
           password: hashedPassword,
         });
+
+        // Account recovery is a security event: the account may have been
+        // compromised, so revoke all long-lived bearer credentials too.
+        const tokens = await storage.getUserApiTokens(user.id);
+        await Promise.all(
+          tokens
+            .filter((apiToken) => apiToken.status === TokenStatus.ACTIVE)
+            .map((apiToken) => storage.revokeApiToken(apiToken.id)),
+        );
 
         // Mark token as used
         await storage.markPasswordResetTokenAsUsed(token);
@@ -475,39 +485,26 @@ export const userAuthRouter = createTRPCRouter({
       let user = await storage.getUserByUsername(username);
       user ??= await storage.getUserByEmail(username);
 
-      if (!user) {
-        throw new TRPCError({
+      // Uniform failure for unknown user, wrong password, and non-active
+      // account status: distinct messages enable user enumeration (audit-2 L7).
+      const uniformFailure = () =>
+        new TRPCError({
           code: "UNAUTHORIZED",
           message: "Invalid username/email or password",
         });
+
+      if (!user) {
+        throw uniformFailure();
       }
 
-      // Check user status
-      if (user.status === UserStatus.DISABLED) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Account is disabled",
-        });
-      }
-
-      if (user.status === UserStatus.PENDING) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Account is pending approval",
-        });
-      }
-
-      // Verify password
+      // Verify password before revealing nothing about status either way
       const isValidPassword = await encryptionService.verifyPassword(
         password,
         user.password ?? "",
       );
 
-      if (!isValidPassword) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Invalid username/email or password",
-        });
+      if (!isValidPassword || user.status !== UserStatus.ACTIVE) {
+        throw uniformFailure();
       }
 
       // Update last login

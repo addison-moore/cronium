@@ -3,16 +3,16 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import {
+  authenticateRestPrincipal,
+  restPrincipalErrorResponse,
+} from "@/lib/api-auth";
 import { getCleanupService } from "@/lib/services/workflow-cleanup-service";
-import { UserRole } from "@/shared/schema";
 
-export async function GET() {
-  // Check authentication
-  const session = await getServerSession(authOptions);
-  if (session?.user?.role !== UserRole.ADMIN) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(request: NextRequest) {
+  const auth = await authenticateRestPrincipal(request, "admin");
+  if (!auth.ok) {
+    return restPrincipalErrorResponse(auth);
   }
 
   try {
@@ -34,10 +34,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  // Check authentication
-  const session = await getServerSession(authOptions);
-  if (session?.user?.role !== UserRole.ADMIN) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await authenticateRestPrincipal(request, "admin");
+  if (!auth.ok) {
+    return restPrincipalErrorResponse(auth);
   }
 
   try {
