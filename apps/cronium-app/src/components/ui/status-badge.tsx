@@ -341,7 +341,7 @@ export function StatusBadge({
       className={`inline-flex items-center rounded-full border font-medium ${config.border ?? ""} ${sizeClasses[size]} ${config.bgColor} ${config.textColor} ${className ?? ""}`}
     >
       {config.icon ? (
-        <span className="mr-0.5 flex-shrink-0">
+        <span className="mr-0.5 shrink-0">
           {isValidElement(config.icon)
             ? cloneElement(
                 config.icon as React.ReactElement<{ className?: string }>,

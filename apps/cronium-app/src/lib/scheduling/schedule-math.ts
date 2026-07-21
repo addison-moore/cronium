@@ -16,7 +16,7 @@
 
 import { CronExpressionParser } from "cron-parser";
 import { ScheduleKind, TimeUnit } from "@/shared/schema";
-import type { Event } from "@/shared/schema";
+import type { Event, Workflow } from "@/shared/schema";
 
 /** Sub-10s intervals are not supported (PLAN.md §3.1): dispatch precision is
  * ± one dispatcher tick, and we refuse to pretend otherwise. */
@@ -33,6 +33,8 @@ const UNIT_SECONDS: Record<TimeUnit, number> = {
   [TimeUnit.DAYS]: 86_400,
 };
 
+const TIME_UNIT_VALUES = new Set<string>(Object.values(TimeUnit));
+
 export interface ScheduleSpec {
   kind: ScheduleKind;
   /** Required when kind = INTERVAL. */
@@ -45,8 +47,18 @@ export interface ScheduleSpec {
   startAt?: Date | null;
 }
 
-export function intervalSecondsFor(n: number, unit: TimeUnit): number {
-  return n * UNIT_SECONDS[unit];
+/** Database rows predating the enum migration store lowercase units. Runtime
+ * normalization is required because Drizzle's enum type is compile-time only. */
+export function normalizeTimeUnit(unit: unknown): TimeUnit | null {
+  if (typeof unit !== "string") return null;
+  const normalized = unit.trim().toUpperCase();
+  return TIME_UNIT_VALUES.has(normalized) ? (normalized as TimeUnit) : null;
+}
+
+export function intervalSecondsFor(n: number, unit: unknown): number {
+  const normalized = normalizeTimeUnit(unit);
+  if (!normalized || !Number.isFinite(n)) return Number.NaN;
+  return n * UNIT_SECONDS[normalized];
 }
 
 /** Validation error (not a clamp): the schedule form and dispatcher both
@@ -118,14 +130,49 @@ export function specFromEvent(event: ScheduleEventFields): ScheduleSpec | null {
     };
   }
 
+  const intervalSeconds = intervalSecondsFor(
+    event.scheduleNumber,
+    event.scheduleUnit,
+  );
+  if (validateIntervalSeconds(intervalSeconds)) return null;
+
   return {
     kind,
-    intervalSeconds: intervalSecondsFor(
-      event.scheduleNumber,
-      event.scheduleUnit,
-    ),
+    intervalSeconds,
     timezone: event.timezone || "UTC",
     startAt: event.startTime ?? null,
+  };
+}
+
+type ScheduleWorkflowFields = Pick<
+  Workflow,
+  "scheduleNumber" | "scheduleUnit" | "customSchedule"
+>;
+
+/** Workflows have no timezone/policy columns yet. Legacy workflow rows may
+ * contain lowercase interval units, which normalize through intervalSecondsFor. */
+export function specFromWorkflow(
+  workflow: ScheduleWorkflowFields,
+): ScheduleSpec | null {
+  if (workflow.customSchedule) {
+    return {
+      kind: ScheduleKind.CRON,
+      cronExpr: workflow.customSchedule,
+      timezone: "UTC",
+    };
+  }
+  if (workflow.scheduleNumber === null || !workflow.scheduleUnit) return null;
+
+  const intervalSeconds = intervalSecondsFor(
+    workflow.scheduleNumber,
+    workflow.scheduleUnit,
+  );
+  if (validateIntervalSeconds(intervalSeconds)) return null;
+
+  return {
+    kind: ScheduleKind.INTERVAL,
+    intervalSeconds,
+    timezone: "UTC",
   };
 }
 
@@ -145,19 +192,25 @@ export function computeNextRun(
   opts: { from: Date; prevNext?: Date | null },
 ): Date | null {
   const { from, prevNext } = opts;
-  const floor =
-    spec.startAt && spec.startAt.getTime() > from.getTime()
-      ? spec.startAt
-      : null;
+  const fromMs = from.getTime();
+  if (!Number.isFinite(fromMs)) return null;
+
+  let floor: Date | null = null;
+  if (spec.startAt) {
+    const startAtMs = spec.startAt.getTime();
+    if (!Number.isFinite(startAtMs)) return null;
+    if (startAtMs > fromMs) floor = spec.startAt;
+  }
 
   if (spec.kind === ScheduleKind.INTERVAL) {
     const intervalMs = (spec.intervalSeconds ?? 0) * 1000;
-    if (intervalMs <= 0) return null;
+    if (!Number.isFinite(intervalMs) || intervalMs <= 0) return null;
     if (floor && !prevNext) return floor;
-    const base = prevNext
-      ? prevNext.getTime() + intervalMs
-      : from.getTime() + intervalMs;
-    const next = new Date(Math.max(base, from.getTime()));
+    const prevNextMs = prevNext?.getTime();
+    if (prevNextMs !== undefined && !Number.isFinite(prevNextMs)) return null;
+    const base = (prevNextMs ?? fromMs) + intervalMs;
+    if (!Number.isFinite(base)) return null;
+    const next = new Date(Math.max(base, fromMs));
     return floor && floor.getTime() > next.getTime() ? floor : next;
   }
 
@@ -207,15 +260,24 @@ export function missedTicks(
   cap: number = CATCHUP_RUN_ALL_CAP,
 ): MissedTicksResult {
   const ticks: Date[] = [];
-  if (until.getTime() <= afterTick.getTime() || cap <= 0) {
+  const afterTickMs = afterTick.getTime();
+  const untilMs = until.getTime();
+  if (
+    !Number.isFinite(afterTickMs) ||
+    !Number.isFinite(untilMs) ||
+    untilMs <= afterTickMs ||
+    cap <= 0
+  ) {
     return { ticks, overflowed: false };
   }
 
   if (spec.kind === ScheduleKind.INTERVAL) {
     const intervalMs = (spec.intervalSeconds ?? 0) * 1000;
-    if (intervalMs <= 0) return { ticks, overflowed: false };
-    let t = afterTick.getTime() + intervalMs;
-    while (t <= until.getTime()) {
+    if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+      return { ticks, overflowed: false };
+    }
+    let t = afterTickMs + intervalMs;
+    while (t <= untilMs) {
       if (ticks.length >= cap) return { ticks, overflowed: true };
       ticks.push(new Date(t));
       t += intervalMs;

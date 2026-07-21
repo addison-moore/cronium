@@ -263,7 +263,7 @@ export default function TemplatesPage() {
             <CardContent>
               <div className="space-y-4">
                 <div className="flex items-start gap-3">
-                  <div className="bg-primary/10 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full">
+                  <div className="bg-primary/10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
                     <span className="text-sm font-semibold">1</span>
                   </div>
                   <div>
@@ -275,7 +275,7 @@ export default function TemplatesPage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="bg-primary/10 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full">
+                  <div className="bg-primary/10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
                     <span className="text-sm font-semibold">2</span>
                   </div>
                   <div>
@@ -287,7 +287,7 @@ export default function TemplatesPage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="bg-primary/10 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full">
+                  <div className="bg-primary/10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
                     <span className="text-sm font-semibold">3</span>
                   </div>
                   <div>
@@ -299,7 +299,7 @@ export default function TemplatesPage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="bg-primary/10 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full">
+                  <div className="bg-primary/10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
                     <span className="text-sm font-semibold">4</span>
                   </div>
                   <div>
@@ -1091,7 +1091,7 @@ Variables: {{json cronium.getVariables}}`}
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="text-warning mt-0.5 h-5 w-5 flex-shrink-0" />
+                    <AlertCircle className="text-warning mt-0.5 h-5 w-5 shrink-0" />
                     <div>
                       <p className="font-medium">Missing fallbacks</p>
                       <p className="text-muted-foreground text-sm">
@@ -1100,7 +1100,7 @@ Variables: {{json cronium.getVariables}}`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="text-warning mt-0.5 h-5 w-5 flex-shrink-0" />
+                    <AlertCircle className="text-warning mt-0.5 h-5 w-5 shrink-0" />
                     <div>
                       <p className="font-medium">
                         Invalid JSON in Slack/Discord
@@ -1111,7 +1111,7 @@ Variables: {{json cronium.getVariables}}`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="text-warning mt-0.5 h-5 w-5 flex-shrink-0" />
+                    <AlertCircle className="text-warning mt-0.5 h-5 w-5 shrink-0" />
                     <div>
                       <p className="font-medium">Hardcoded values</p>
                       <p className="text-muted-foreground text-sm">
@@ -1120,7 +1120,7 @@ Variables: {{json cronium.getVariables}}`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="text-warning mt-0.5 h-5 w-5 flex-shrink-0" />
+                    <AlertCircle className="text-warning mt-0.5 h-5 w-5 shrink-0" />
                     <div>
                       <p className="font-medium">Overly complex templates</p>
                       <p className="text-muted-foreground text-sm">

@@ -143,7 +143,7 @@ export function EventsFilters({
             <Button
               variant="outline"
               size="sm"
-              className="h-10 w-10 flex-shrink-0 p-0"
+              className="h-10 w-10 shrink-0 p-0"
               onClick={() => {
                 onFiltersChange({
                   sortOrder: filters.sortOrder === "asc" ? "desc" : "asc",

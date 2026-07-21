@@ -47,10 +47,10 @@ function DocSection({
       className="group hover:border-primary dark:hover:border-primary border-border bg-card block rounded-lg border p-6 transition-colors"
     >
       <div className="flex items-start space-x-4">
-        <div className="flex-shrink-0">
+        <div className="shrink-0">
           <Icon className="text-primary group-hover:text-primary/80 h-8 w-8" />
         </div>
-        <div className="flex-grow">
+        <div className="grow">
           <h3 className="group-hover:text-primary text-foreground mb-2 text-lg font-semibold">
             {title}
           </h3>

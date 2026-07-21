@@ -82,7 +82,7 @@ export function ClickableStatusBadge({
       >
         {isUpdating ? (
           <>
-            <span className="mr-0.5 flex-shrink-0">
+            <span className="mr-0.5 shrink-0">
               <Loader2
                 className={`${iconSizeClasses[size]} motion-safe:animate-spin`}
               />
@@ -92,7 +92,7 @@ export function ClickableStatusBadge({
         ) : (
           <>
             {currentConfig.icon && (
-              <span className="mr-0.5 flex-shrink-0">
+              <span className="mr-0.5 shrink-0">
                 {isValidElement(currentConfig.icon)
                   ? cloneElementWithClassName(
                       currentConfig.icon as ReactElement,
@@ -115,7 +115,7 @@ export function ClickableStatusBadge({
           className={`inline-flex cursor-pointer items-center rounded-full border font-medium transition-opacity hover:opacity-80 ${currentConfig.border ?? ""} ${sizeClasses[size]} ${currentConfig.bgColor} ${currentConfig.textColor} ${className}`}
         >
           {currentConfig.icon && (
-            <span className="mr-0.5 flex-shrink-0">
+            <span className="mr-0.5 shrink-0">
               {isValidElement(currentConfig.icon)
                 ? cloneElementWithClassName(
                     currentConfig.icon as ReactElement,
@@ -142,7 +142,7 @@ export function ClickableStatusBadge({
                 className={`pointer-events-none inline-flex items-center rounded-full border font-medium ${config.border ?? ""} ${sizeClasses[size]} ${config.bgColor} ${config.textColor}`}
               >
                 {config.icon && (
-                  <span className="mr-0.5 flex-shrink-0">
+                  <span className="mr-0.5 shrink-0">
                     {isValidElement(config.icon)
                       ? cloneElementWithClassName(
                           config.icon as ReactElement,

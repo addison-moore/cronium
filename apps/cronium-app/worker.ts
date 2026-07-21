@@ -104,12 +104,13 @@ function startLoop(
 // --- Loops -----------------------------------------------------------------
 
 const dispatchLoop = startLoop("dispatch", DISPATCH_INTERVAL_MS, async () => {
-  // Heartbeat from inside the loop: a stalled dispatcher stops heartbeating
+  const result = await runDispatchTick();
+  lastDispatchTickAt = new Date();
+  // Heartbeat only after a successful tick: a consistently failing dispatcher
+  // must not advertise healthy scheduling to the web app.
   await writeWorkerHeartbeat(WORKER_ID).catch((error) => {
     console.error("[Worker] Heartbeat write failed:", error);
   });
-  const result = await runDispatchTick();
-  lastDispatchTickAt = new Date();
   if (result.dispatched > 0 || result.incidents > 0) {
     console.log(
       `[Worker] Dispatch tick: ${result.dueEvents} due, ${result.dispatched} dispatched, ${result.incidents} incident(s)`,

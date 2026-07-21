@@ -716,7 +716,7 @@ export default function WorkflowExecutionGraph({
                           }}
                         >
                           <div className="flex w-full items-center gap-1 overflow-hidden">
-                            <div className="relative flex-shrink-0">
+                            <div className="relative shrink-0">
                               {getStatusIcon(node)}
                             </div>
                             <span

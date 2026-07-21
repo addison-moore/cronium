@@ -26,7 +26,7 @@ export default function Home() {
     <div className="flex min-h-screen flex-col pt-16">
       <Navbar />
 
-      <main className="flex-grow">
+      <main className="grow">
         {/* Hero Section */}
         <Hero />
 

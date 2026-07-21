@@ -17,17 +17,13 @@ import {
   workflows,
   EventStatus,
   EventTriggerType,
-  ScheduleKind,
-  TimeUnit,
   WorkflowTriggerType,
-  type Workflow,
 } from "@/shared/schema";
 import { eq, sql } from "drizzle-orm";
 import {
   computeNextRun,
-  intervalSecondsFor,
   specFromEvent,
-  type ScheduleSpec,
+  specFromWorkflow,
 } from "./schedule-math";
 
 export async function notifyScheduleChanged(eventId: number): Promise<void> {
@@ -82,35 +78,6 @@ export async function refreshEventSchedule(
     .where(eq(events.id, eventId));
   await notifyScheduleChanged(eventId);
   return next;
-}
-
-/** Build a ScheduleSpec from a workflow's schedule fields. Workflows have no
- * timezone/policy columns yet (Phase 4 deviation) — cron evaluates in UTC and
- * the dispatcher applies default policies. */
-export function specFromWorkflow(
-  workflow: Pick<
-    Workflow,
-    "scheduleNumber" | "scheduleUnit" | "customSchedule"
-  >,
-): ScheduleSpec | null {
-  if (workflow.customSchedule) {
-    return {
-      kind: ScheduleKind.CRON,
-      cronExpr: workflow.customSchedule,
-      timezone: "UTC",
-    };
-  }
-  if (workflow.scheduleNumber && workflow.scheduleUnit) {
-    return {
-      kind: ScheduleKind.INTERVAL,
-      intervalSeconds: intervalSecondsFor(
-        workflow.scheduleNumber,
-        workflow.scheduleUnit as TimeUnit,
-      ),
-      timezone: "UTC",
-    };
-  }
-  return null;
 }
 
 /** Workflow twin of refreshEventSchedule: fixes the review's C2 ("scheduled

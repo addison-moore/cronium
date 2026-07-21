@@ -111,9 +111,9 @@ export default function ConsoleClient() {
               {selectedServer ? (
                 <div className="flex w-full min-w-0 items-center gap-2">
                   {selectedServer.online ? (
-                    <Server className="text-success h-4 w-4 flex-shrink-0" />
+                    <Server className="text-success h-4 w-4 shrink-0" />
                   ) : (
-                    <ServerOff className="text-destructive h-4 w-4 flex-shrink-0" />
+                    <ServerOff className="text-destructive h-4 w-4 shrink-0" />
                   )}
                   <div className="flex min-w-0 flex-1 items-center gap-1">
                     <span className="truncate font-medium">
@@ -141,9 +141,9 @@ export default function ConsoleClient() {
                 <SelectItem key={server.id} value={server.id.toString()}>
                   <div className="flex w-full min-w-0 items-center gap-2">
                     {server.online ? (
-                      <Server className="text-success h-4 w-4 flex-shrink-0" />
+                      <Server className="text-success h-4 w-4 shrink-0" />
                     ) : (
-                      <ServerOff className="text-destructive h-4 w-4 flex-shrink-0" />
+                      <ServerOff className="text-destructive h-4 w-4 shrink-0" />
                     )}
                     <span className="truncate font-medium">{server.name}</span>
                     <span className="text-muted-foreground truncate text-xs">
@@ -157,7 +157,7 @@ export default function ConsoleClient() {
         </Select>
       </div>
 
-      <div className="flex-grow">
+      <div className="grow">
         {isLoading ? (
           <div className="bg-card border-border flex h-[60vh] items-center justify-center rounded-lg border">
             <div className="space-y-2 text-center">

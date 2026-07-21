@@ -899,7 +899,7 @@ From Name: Cronium Notifications`}
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <Shield className="text-success mt-0.5 h-5 w-5 flex-shrink-0" />
+                    <Shield className="text-success mt-0.5 h-5 w-5 shrink-0" />
                     <div>
                       <p className="font-medium">
                         Use dedicated service accounts
@@ -910,7 +910,7 @@ From Name: Cronium Notifications`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <Key className="text-success mt-0.5 h-5 w-5 flex-shrink-0" />
+                    <Key className="text-success mt-0.5 h-5 w-5 shrink-0" />
                     <div>
                       <p className="font-medium">
                         Rotate credentials regularly
@@ -921,7 +921,7 @@ From Name: Cronium Notifications`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <TestTube className="text-success mt-0.5 h-5 w-5 flex-shrink-0" />
+                    <TestTube className="text-success mt-0.5 h-5 w-5 shrink-0" />
                     <div>
                       <p className="font-medium">Test before deployment</p>
                       <p className="text-muted-foreground text-sm">
@@ -930,7 +930,7 @@ From Name: Cronium Notifications`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <Eye className="text-success mt-0.5 h-5 w-5 flex-shrink-0" />
+                    <Eye className="text-success mt-0.5 h-5 w-5 shrink-0" />
                     <div>
                       <p className="font-medium">Monitor delivery status</p>
                       <p className="text-muted-foreground text-sm">
@@ -951,7 +951,7 @@ From Name: Cronium Notifications`}
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <FileText className="text-info mt-0.5 h-5 w-5 flex-shrink-0" />
+                    <FileText className="text-info mt-0.5 h-5 w-5 shrink-0" />
                     <div>
                       <p className="font-medium">Create reusable templates</p>
                       <p className="text-muted-foreground text-sm">
@@ -960,7 +960,7 @@ From Name: Cronium Notifications`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <Settings className="text-info mt-0.5 h-5 w-5 flex-shrink-0" />
+                    <Settings className="text-info mt-0.5 h-5 w-5 shrink-0" />
                     <div>
                       <p className="font-medium">Use descriptive names</p>
                       <p className="text-muted-foreground text-sm">
@@ -969,7 +969,7 @@ From Name: Cronium Notifications`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <Code className="text-info mt-0.5 h-5 w-5 flex-shrink-0" />
+                    <Code className="text-info mt-0.5 h-5 w-5 shrink-0" />
                     <div>
                       <p className="font-medium">Validate JSON syntax</p>
                       <p className="text-muted-foreground text-sm">
@@ -978,7 +978,7 @@ From Name: Cronium Notifications`}
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <User className="text-info mt-0.5 h-5 w-5 flex-shrink-0" />
+                    <User className="text-info mt-0.5 h-5 w-5 shrink-0" />
                     <div>
                       <p className="font-medium">Include relevant context</p>
                       <p className="text-muted-foreground text-sm">

@@ -295,7 +295,7 @@ export function ModularToolsManager() {
         <div className="order-2 min-h-0 flex-1 lg:order-1">
           {selectedPluginInstance ? (
             <Card className="flex h-full flex-col lg:min-h-[calc(100vh-200px)]">
-              <CardHeader className="flex-shrink-0 pb-3">
+              <CardHeader className="shrink-0 pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <selectedPluginInstance.icon
@@ -323,7 +323,7 @@ export function ModularToolsManager() {
                   }
                   className="flex h-full flex-col"
                 >
-                  <TabsList className="grid w-full flex-shrink-0 grid-cols-3">
+                  <TabsList className="grid w-full shrink-0 grid-cols-3">
                     <TabsTrigger value="credentials">Credentials</TabsTrigger>
                     <TabsTrigger value="actions">Actions</TabsTrigger>
                     <TabsTrigger value="templates">Templates</TabsTrigger>
@@ -727,7 +727,7 @@ export function ModularToolsManager() {
         {/* Available Tools - Top on small screens, Right Side on large screens */}
         <div className="order-1 lg:order-2">
           <Card className="flex h-full flex-col lg:min-h-[calc(100vh-200px)]">
-            <CardHeader className="flex-shrink-0 pb-3">
+            <CardHeader className="shrink-0 pb-3">
               <CardTitle className="text-lg">Available Tools</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -771,7 +771,7 @@ export function ModularToolsManager() {
                         setSelectedActionType("all");
                       }}
                     >
-                      <Icon size={20} className="text-primary flex-shrink-0" />
+                      <Icon size={20} className="text-primary shrink-0" />
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium">
                           {plugin.name}
@@ -789,7 +789,7 @@ export function ModularToolsManager() {
                         </div>
                       </div>
                       {isSelected && (
-                        <ChevronRight className="text-muted-foreground h-4 w-4 flex-shrink-0" />
+                        <ChevronRight className="text-muted-foreground h-4 w-4 shrink-0" />
                       )}
                     </div>
                   );

@@ -209,7 +209,7 @@ export default function DashboardLayoutClient({
           </Button>
         </div>
 
-        <nav className="flex-grow overflow-y-auto">
+        <nav className="grow overflow-y-auto">
           <ul className="space-y-2">
             {navItems.map((item) => {
               // Skip admin items for non-admin users
@@ -291,7 +291,7 @@ export default function DashboardLayoutClient({
               />
             </Button>
           </div>
-          <div className="flex-grow">
+          <div className="grow">
             <nav className="flex-1 overflow-y-auto border-none px-3 py-6">
               <ul className="space-y-2">
                 {navItems.map((item) => {
@@ -371,7 +371,7 @@ export default function DashboardLayoutClient({
                   href="/dashboard/settings#profile"
                   className="flex min-w-0 flex-1 items-center gap-3"
                 >
-                  <div className="flex-shrink-0">
+                  <div className="shrink-0">
                     {user.profileImageUrl ? (
                       <Image
                         src={user.profileImageUrl}
@@ -396,12 +396,7 @@ export default function DashboardLayoutClient({
                   </div>
                 </Link>
               )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="flex-shrink-0"
-                asChild
-              >
+              <Button variant="ghost" size="icon" className="shrink-0" asChild>
                 <Link href="/auth/signout">
                   <LogOut className="h-5 w-5" />
                 </Link>

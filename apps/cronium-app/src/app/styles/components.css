@@ -44,7 +44,7 @@
     width: 16px !important;
     height: 16px !important;
     margin-right: 6px !important;
-    flex-shrink: 0 !important;
+    shrink: 0 !important;
   }
 
   .monaco-editor .suggest-widget .monaco-list .monaco-list-row .contents {

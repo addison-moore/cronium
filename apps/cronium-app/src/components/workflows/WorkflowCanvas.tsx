@@ -1120,7 +1120,7 @@ export default function WorkflowCanvas({
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-5 w-5 flex-shrink-0 p-0 opacity-70 transition-opacity hover:bg-white/20 hover:opacity-100"
+                                  className="h-5 w-5 shrink-0 p-0 opacity-70 transition-opacity hover:bg-white/20 hover:opacity-100"
                                   onClick={(e) => e.stopPropagation()}
                                   onDragStart={(e) => e.preventDefault()}
                                   draggable={false}

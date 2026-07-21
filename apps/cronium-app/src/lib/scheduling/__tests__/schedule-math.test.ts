@@ -10,7 +10,9 @@ import {
   effectiveMisfireGraceMs,
   intervalSecondsFor,
   missedTicks,
+  normalizeTimeUnit,
   specFromEvent,
+  specFromWorkflow,
   validateCronExpr,
   validateIntervalSeconds,
   MIN_INTERVAL_SECONDS,
@@ -49,6 +51,12 @@ describe("intervalSecondsFor / validateIntervalSeconds", () => {
     expect(intervalSecondsFor(3, TimeUnit.DAYS)).toBe(259_200);
   });
 
+  it("normalizes lowercase units from legacy database rows", () => {
+    expect(normalizeTimeUnit("hours")).toBe(TimeUnit.HOURS);
+    expect(intervalSecondsFor(5, "hours")).toBe(18_000);
+    expect(intervalSecondsFor(5, "unknown")).toBeNaN();
+  });
+
   it("rejects sub-floor and nonsense intervals", () => {
     expect(validateIntervalSeconds(MIN_INTERVAL_SECONDS)).toBeNull();
     expect(validateIntervalSeconds(9)).toMatch(/not supported/);
@@ -59,6 +67,19 @@ describe("intervalSecondsFor / validateIntervalSeconds", () => {
 });
 
 describe("computeNextRun — INTERVAL (true elapsed time)", () => {
+  it("returns null instead of constructing an invalid date", () => {
+    const from = utc("2026-07-20T10:00:00Z");
+    expect(computeNextRun(interval(Number.NaN), { from })).toBeNull();
+    expect(
+      computeNextRun(interval(Number.POSITIVE_INFINITY), { from }),
+    ).toBeNull();
+    expect(
+      computeNextRun(interval(60), {
+        from: new Date(Number.NaN),
+      }),
+    ).toBeNull();
+  });
+
   it("every 45 seconds means 45 elapsed seconds, not once per minute (C7)", () => {
     const spec = interval(45);
     const t0 = utc("2026-07-20T10:00:00Z");
@@ -271,6 +292,40 @@ describe("specFromEvent", () => {
   it("returns null for CRON kind without an expression", () => {
     expect(
       specFromEvent({ ...base, scheduleKind: ScheduleKind.CRON }),
+    ).toBeNull();
+  });
+
+  it("normalizes a legacy lowercase interval unit", () => {
+    const spec = specFromEvent({
+      ...base,
+      scheduleKind: ScheduleKind.INTERVAL,
+      scheduleUnit: "minutes" as TimeUnit,
+    });
+    expect(spec?.intervalSeconds).toBe(300);
+  });
+});
+
+describe("specFromWorkflow", () => {
+  it("normalizes the lowercase unit stored by legacy workflows", () => {
+    const spec = specFromWorkflow({
+      scheduleNumber: 5,
+      scheduleUnit: "hours" as TimeUnit,
+      customSchedule: "",
+    });
+    expect(spec).toEqual({
+      kind: ScheduleKind.INTERVAL,
+      intervalSeconds: 18_000,
+      timezone: "UTC",
+    });
+  });
+
+  it("returns null for an unknown interval unit", () => {
+    expect(
+      specFromWorkflow({
+        scheduleNumber: 5,
+        scheduleUnit: "fortnights" as TimeUnit,
+        customSchedule: "",
+      }),
     ).toBeNull();
   });
 });
