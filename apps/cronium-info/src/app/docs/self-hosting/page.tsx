@@ -73,11 +73,13 @@ export default function SelfHostingPage() {
           <h2 className="mb-6 text-2xl font-bold">Overview</h2>
           <p>
             A production Cronium deployment consists of the Next.js control
-            plane (<code>cronium-app</code>), the secure job orchestrator (
-            <code>cronium-orchestrator</code>), the runtime API used by
-            containerised scripts, and supporting services (PostgreSQL for
-            persistence and Valkey/Redis for caching). Docker Compose offers a
-            simple way to run these services together.
+            plane (<code>cronium-app</code>), the scheduling worker (
+            <code>cronium-worker</code> — dispatches due schedules, runs
+            tool-action and HTTP jobs, and recovers stuck work), the secure job
+            orchestrator (<code>cronium-orchestrator</code>), the runtime API
+            used by containerised scripts, and supporting services (PostgreSQL
+            for persistence and Valkey/Redis for caching). Docker Compose offers
+            a simple way to run these services together.
           </p>
         </section>
 
@@ -213,7 +215,9 @@ POSTGRES_PASSWORD=<paste value>`}
             </p>
             <ul className="text-muted-foreground list-disc space-y-2 pl-6">
               <li>
-                <code>cronium-app</code> – Next.js control plane UI & API
+                <code>cronium-app</code> – Next.js control plane UI & API (the
+                same image also runs the <code>cronium-worker</code> scheduling
+                service with a different entrypoint)
               </li>
               <li>
                 <code>cronium-orchestrator</code> – Go daemon that executes jobs

@@ -196,6 +196,22 @@ click "Connect" on the tool's credential card to authorize their account.
 | `NEXT_PUBLIC_SOCKET_PORT` | Client-side WebSocket port | `number`       | `5002`                  | No       |
 | `NEXT_PUBLIC_SOCKET_URL`  | Client-side WebSocket URL  | `string` (URL) | `http://localhost:5002` | No       |
 
+### Scheduling Worker (cronium-worker)
+
+The worker is a separate process/service using the app image (entrypoint
+`scripts/start-worker.sh`; dev: `pnpm dev:worker`). It hosts the schedule
+dispatcher, the in-process executor pool for tool-action/HTTP jobs, the lease
+sweeper, and retention. All values have sensible defaults.
+
+| Variable                      | Description                                        | Type     | Default             | Required |
+| ----------------------------- | -------------------------------------------------- | -------- | ------------------- | -------- |
+| `WORKER_ID`                   | Stable worker identity (leases, audit actor)       | `string` | `worker-<hostname>` | No       |
+| `WORKER_HEALTH_PORT`          | HTTP health endpoint port (container healthcheck)  | `number` | `5003`              | No       |
+| `WORKER_DISPATCH_INTERVAL_MS` | Schedule dispatcher tick interval                  | `number` | `5000`              | No       |
+| `WORKER_CLAIM_INTERVAL_MS`    | In-process job claim interval                      | `number` | `2000`              | No       |
+| `WORKER_MAX_CONCURRENT`       | Max concurrent in-process (tool/HTTP) executions   | `number` | `10`                | No       |
+| `CRONIUM_JOB_RETENTION_DAYS`  | Days before terminal job queue records are deleted | `number` | `30`                | No       |
+
 ### Orchestrator Service (cronium-orchestrator)
 
 #### Orchestrator-Only Variables

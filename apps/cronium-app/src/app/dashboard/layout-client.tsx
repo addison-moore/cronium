@@ -26,6 +26,7 @@ import { UserRole } from "@/shared/schema";
 import { Logo } from "@cronium/ui";
 import { useTheme } from "next-themes";
 import { usePermissions } from "@/hooks/usePermissions";
+import { SchedulerStatusBanner } from "@/components/system/SchedulerStatusBanner";
 import type { User } from "next-auth";
 
 interface DashboardLayoutClientProps {
@@ -147,6 +148,7 @@ export default function DashboardLayoutClient({
 
   return (
     <div className="bg-background text-foreground min-h-screen">
+      <SchedulerStatusBanner />
       {/* Mobile Navigation Toggle */}
       <div className="bg-secondary-bg border-border fixed top-0 right-0 left-0 z-30 flex h-16 items-center justify-between border-b px-4 shadow-sm md:hidden">
         <Link href="/dashboard">

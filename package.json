@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "turbo dev",
     "dev:app": "turbo dev --filter=@cronium/app",
+    "dev:socket": "pnpm --filter @cronium/app dev:socket",
+    "dev:worker": "pnpm --filter @cronium/app dev:worker",
     "dev:info": "turbo dev --filter=@cronium/info",
     "dev:all": "turbo dev --parallel",
     "build": "turbo build",

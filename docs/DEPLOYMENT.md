@@ -121,8 +121,8 @@ see [GETTING_STARTED.md](./GETTING_STARTED.md) and `pnpm dev:docker:up`.
 2. **Orchestrator tuning** — advanced settings (polling cadence, SSH executor
    limits, metrics) via `apps/orchestrator/configs/cronium-orchestrator.yaml`.
 3. **Networking** — services share a fixed-name `cronium` bridge network. Only
-   the app's ports (3000, 5002) are published; the orchestrator and runtime
-   are internal-only.
+   the app's ports (3000, 5002) are published; the worker, orchestrator, and
+   runtime are internal-only.
 4. **Volumes** — `postgres-data` (database), `valkey-data` (cache),
    `orchestrator-data` (payload signing key + SSH known_hosts; losing it
    breaks registered remote runners).
@@ -133,9 +133,16 @@ see [GETTING_STARTED.md](./GETTING_STARTED.md) and `pnpm dev:docker:up`.
 # Application health
 curl http://localhost:3000/api/health
 
-# All services (orchestrator and runtime report via container healthchecks)
+# All six services (postgres, valkey, app, worker, orchestrator, runtime)
+# report health via container healthchecks
 docker compose ps
 ```
+
+The `cronium-worker` service is the scheduler: it turns due schedules into
+jobs, executes tool-action/HTTP jobs, and recovers stuck work. If it is down,
+scheduled events do not run and the app shows a persistent "scheduling is
+offline" banner (also visible as `scheduler.healthy: false` in
+`/api/health`).
 
 Images are cosign-signed and Trivy-scanned in CI. To verify a signature:
 
@@ -184,6 +191,12 @@ it.
 **Container fails to start** — `docker compose logs cronium-app`. A
 `[PREFLIGHT]` error means a secret is missing or malformed; the message names
 the variable and the command to generate it.
+
+**"Scheduling is offline" banner / scheduled events not running** — the
+`cronium-worker` service is down or can't reach the database. Check
+`docker compose ps` and `docker compose logs cronium-worker`. Missed ticks
+while the worker is down are recorded per event (visible on the event's run
+history) and handled by each event's catch-up policy when the worker returns.
 
 **Database connection issues**:
 

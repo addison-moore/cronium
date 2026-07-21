@@ -53,9 +53,11 @@ ENV ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000
 # Build the application
 # First build dependencies, then the app
 RUN pnpm --filter @cronium/ui build
-# Use next build directly to avoid dotenv dependency on missing .env.local file  
+# Use next build directly to avoid dotenv dependency on missing .env.local file
 WORKDIR /app/apps/cronium-app
 RUN pnpm exec next build
+# Bundle the scheduling worker (own compose service, same image)
+RUN pnpm run build:worker
 WORKDIR /app
 
 # Stage 3: Runtime
@@ -74,6 +76,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/.next/standalone
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/.next/static ./apps/cronium-app/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/drizzle ./apps/cronium-app/drizzle
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/scripts ./apps/cronium-app/scripts
+# Scheduling worker bundle (run via scripts/start-worker.sh in its own service)
+COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/dist ./apps/cronium-app/dist
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/drizzle.config.ts ./apps/cronium-app/drizzle.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/src/shared ./apps/cronium-app/src/shared
 # Provide runtime dependencies required for migration/bootstrap scripts
@@ -88,7 +92,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/cronium-app/package.json ./p
 # Create necessary directories
 RUN mkdir -p /app/logs /app/uploads /app/tmp && \
     chown -R nextjs:nodejs /app/logs /app/uploads /app/tmp && \
-    chmod +x /app/apps/cronium-app/scripts/start.sh
+    chmod +x /app/apps/cronium-app/scripts/start.sh /app/apps/cronium-app/scripts/start-worker.sh
 
 # Switch to non-root user
 USER nextjs

@@ -92,6 +92,57 @@ services:
     networks:
       - cronium-network
 
+  # Scheduling worker: dispatches due schedules into the job queue, executes
+  # tool-action/HTTP jobs, sweeps expired leases, applies retention. Same image
+  # as cronium-app with a different entrypoint.
+  cronium-worker:
+    build:
+      context: ../..
+      dockerfile: apps/cronium-app/Dockerfile
+    image: ghcr.io/addison-moore/cronium-app:${BUILD_VERSION:-latest}
+    container_name: cronium-worker
+    command: ["apps/cronium-app/scripts/start-worker.sh"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cronium}:${POSTGRES_PASSWORD:?generate with openssl rand -hex 16}@postgres:5432/${POSTGRES_DB:-cronium}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3000}
+      AUTH_SECRET: ${AUTH_SECRET:?generate with openssl rand -hex 32}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?generate with openssl rand -hex 32 (must be 64 hex chars)}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
+      JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
+      VALKEY_URL: valkey://valkey:6379
+      NODE_ENV: ${NODE_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      WORKER_HEALTH_PORT: 5003
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:5003/health', (r) => {if (r.statusCode !== 200) process.exit(1)})",
+        ]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    depends_on:
+      cronium-app:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - cronium-network
+
   cronium-orchestrator:
     build:
       context: ../..

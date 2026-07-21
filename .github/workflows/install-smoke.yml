@@ -85,8 +85,9 @@ jobs:
             statuses=$(docker compose ps --format '{{.Name}} {{.Health}}')
             echo "$statuses"
             # Exactly "healthy" per line — "unhealthy" must not slip through —
-            # and all five services present.
-            if echo "$statuses" | awk '$2 != "healthy" {bad=1} END {exit (bad || NR < 5)}'; then
+            # and all six services present (postgres, valkey, app, worker,
+            # orchestrator, runtime).
+            if echo "$statuses" | awk '$2 != "healthy" {bad=1} END {exit (bad || NR < 6)}'; then
               echo "All services healthy"
               exit 0
             fi

@@ -20,6 +20,10 @@ interface CleanupOptions {
   maxWorkflowAge?: number; // Max time a workflow can run (ms)
   maxJobAge?: number; // Max time a job can run (ms)
   checkInterval?: number; // How often to check for stuck items (ms)
+  /** When false, only workflows are swept — the scheduling worker's lease
+   * sweeper (src/lib/scheduling/sweeper.ts) owns stuck-job handling with
+   * per-job timeouts instead of the blanket maxJobAge. */
+  sweepJobs?: boolean;
 }
 
 export class WorkflowCleanupService {
@@ -30,6 +34,7 @@ export class WorkflowCleanupService {
     this.options = {
       maxWorkflowAge: options.maxWorkflowAge ?? 30 * 60 * 1000, // 30 minutes default
       maxJobAge: options.maxJobAge ?? 15 * 60 * 1000, // 15 minutes default
+      sweepJobs: options.sweepJobs ?? true,
       checkInterval: options.checkInterval ?? 5 * 60 * 1000, // 5 minutes default
     };
   }
@@ -76,7 +81,9 @@ export class WorkflowCleanupService {
       await this.cleanupStuckWorkflows();
 
       // Clean up stuck jobs
-      await this.cleanupStuckJobs();
+      if (this.options.sweepJobs) {
+        await this.cleanupStuckJobs();
+      }
 
       console.log("[WorkflowCleanup] Cleanup cycle completed");
     } catch (error) {

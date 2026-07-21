@@ -21,6 +21,7 @@
     "src/**/*.tsx",
     ".next/types/**/*.ts",
     "server.ts",
+    "worker.ts",
     "drizzle.config.ts"
   ],
   "exclude": [

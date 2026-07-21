@@ -98,7 +98,8 @@ src/
 ```bash
 # Development
 pnpm dev              # Start Next.js dev server on port 5001
-pnpm dev:socket       # Start WebSocket server
+pnpm dev:socket       # Start WebSocket server (terminal + live logs)
+pnpm dev:worker       # Start scheduling worker (REQUIRED for schedules and tool/HTTP jobs)
 
 # Building & Testing
 pnpm build            # Build Next.js application
@@ -137,9 +138,7 @@ const createEvent = trpc.events.create.useMutation({
 // React Hook Form + Zod pattern
 const form = useForm<CreateEventInput>({
   resolver: zodResolver(createEventSchema),
-  defaultValues: {
-    /* ... */
-  },
+  defaultValues: {/* ... */},
 });
 ```
 

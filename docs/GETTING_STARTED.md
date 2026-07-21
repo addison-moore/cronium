@@ -128,6 +128,13 @@ This will start:
 - Orchestrator service on http://localhost:8080
 - Runtime service on http://localhost:8081
 
+Also start the scheduling worker in its own terminal — schedules and
+tool-action/HTTP jobs do not run without it:
+
+```bash
+pnpm dev:worker
+```
+
 #### Option B: Run with Docker
 
 ```bash

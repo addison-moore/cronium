@@ -20,7 +20,9 @@
     "test": "jest --passWithNoTests",
     "clear": "rm -rf .next",
     "clear-logs": "tsx src/scripts/clear-all-logs.ts",
-    "dev:socket": "tsx --env-file=../../env/.env.local server.ts"
+    "dev:socket": "tsx --env-file=../../env/.env.local server.ts",
+    "dev:worker": "tsx --env-file=../../env/.env.local worker.ts",
+    "build:worker": "esbuild worker.ts --bundle --platform=node --format=cjs --packages=external --tsconfig=tsconfig.json --outfile=dist/worker.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
@@ -142,6 +144,7 @@
     "autoprefixer": "^10.5.2",
     "dotenv-cli": "^11.0.0",
     "drizzle-kit": "^0.31.10",
+    "esbuild": "^0.25.12",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
     "postcss": "^8.5.16",

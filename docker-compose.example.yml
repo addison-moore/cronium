@@ -97,6 +97,51 @@ services:
     networks:
       - cronium
 
+  # Scheduling worker: dispatches due schedules into the job queue, executes
+  # tool-action/HTTP jobs, sweeps expired leases, applies retention. Same image
+  # as cronium-app with a different entrypoint. Without it, no scheduled events
+  # run (the app shows a "scheduling is offline" banner).
+  cronium-worker:
+    image: ghcr.io/addison-moore/cronium-app:${CRONIUM_IMAGE_TAG:-latest}
+    command: ["apps/cronium-app/scripts/start-worker.sh"]
+    env_file:
+      - path: .env
+        required: false # missing values fail below with instructions
+    depends_on:
+      # App runs migrations at boot; the worker needs the schema in place.
+      cronium-app:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3000}
+      AUTH_SECRET: ${AUTH_SECRET:?generate with openssl rand -hex 32}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?generate with openssl rand -hex 32 (must be 64 hex chars)}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
+      JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
+      DATABASE_URL: postgres://${POSTGRES_USER:-cronium}:${POSTGRES_PASSWORD:?generate with openssl rand -hex 16}@postgres:5432/${POSTGRES_DB:-cronium}
+      VALKEY_URL: valkey://valkey:6379
+      WORKER_HEALTH_PORT: 5003
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:5003/health', (r) => {if (r.statusCode !== 200) process.exit(1)})",
+        ]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - cronium
+
   cronium-orchestrator:
     image: ghcr.io/addison-moore/cronium-orchestrator:${CRONIUM_IMAGE_TAG:-latest}
     env_file:

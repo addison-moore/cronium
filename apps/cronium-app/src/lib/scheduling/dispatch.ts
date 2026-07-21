@@ -220,13 +220,10 @@ export async function dispatchEventJob(
     }
   }
 
-  // Tool actions and HTTP requests run in-process; the orchestrator never
-  // claims them. Fire-and-forget: the runner finalizes job + log itself.
-  if (runsInProcess) {
-    const { runInProcessJob } =
-      await import("@/lib/scheduler/in-process-executor");
-    void runInProcessJob(job, event, opts.input);
-  }
-
+  // Tool actions and HTTP requests are claimed by the worker's in-process
+  // executor pool (src/lib/scheduling/worker-executor.ts) through the same
+  // lease mechanism as script jobs — no fire-and-forget execution from the
+  // web process. recordJobCreated's pg_notify('job_queued') above wakes the
+  // worker's claim loop for low latency.
   return { job, logId: log.id };
 }
