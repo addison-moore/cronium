@@ -129,7 +129,7 @@ services:
           "CMD",
           "node",
           "-e",
-          "require('http').get('http://localhost:5003/health', (r) => {if (r.statusCode !== 200) process.exit(1)})",
+          "require('http').get('http://localhost:5003/health', (r) => {r.resume(); r.on('end', () => process.exit(r.statusCode === 200 ? 0 : 1))}).on('error', () => process.exit(1))",
         ]
       interval: 30s
       timeout: 10s
