@@ -31,9 +31,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup pnpm
+        # No version pin: pnpm/action-setup reads the `packageManager` field
+        # from the root package.json, keeping CI and local dev on the same
+        # pnpm automatically (a hardcoded pin here fails the action whenever
+        # the two disagree).
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.25.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
