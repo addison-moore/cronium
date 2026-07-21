@@ -2,6 +2,7 @@ package ssh
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -308,7 +309,7 @@ func (m *MultiServerExecutor) executeOnServer(ctx context.Context, job *types.Jo
 			case types.UpdateTypeError:
 				result.Status = types.JobStatusFailed
 				if status, ok := update.Data.(*types.StatusUpdate); ok {
-					result.Error = fmt.Errorf(status.Message)
+					result.Error = errors.New(status.Message)
 				}
 			}
 		}

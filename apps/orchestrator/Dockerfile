@@ -5,7 +5,7 @@
 # Pinned to BUILDPLATFORM so the Go toolchain always runs natively on the
 # builder; cross-compilation to TARGETARCH below is free, whereas letting
 # buildx run this stage under QEMU for a foreign platform is not.
-FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata

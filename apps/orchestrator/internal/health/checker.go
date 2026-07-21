@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/config"
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 	"github.com/sirupsen/logrus"
 )
 
@@ -154,7 +154,7 @@ func (c *Checker) checkDocker(ctx context.Context) ComponentStatus {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	info, err := c.dockerClient.Info(ctx)
+	infoResult, err := c.dockerClient.Info(ctx, client.InfoOptions{})
 	if err != nil {
 		return ComponentStatus{
 			Status:    StatusUnhealthy,
@@ -168,9 +168,9 @@ func (c *Checker) checkDocker(ctx context.Context) ComponentStatus {
 		Status:    StatusHealthy,
 		LastCheck: time.Now(),
 		Details: map[string]interface{}{
-			"version":    info.ServerVersion,
-			"containers": info.Containers,
-			"images":     info.Images,
+			"version":    infoResult.Info.ServerVersion,
+			"containers": infoResult.Info.Containers,
+			"images":     infoResult.Info.Images,
 		},
 	}
 }

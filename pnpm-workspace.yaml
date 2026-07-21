@@ -2,6 +2,17 @@ packages:
   - apps/*
   - packages/*
 
+# Security overrides for vulnerable transitive deps (Dependabot):
+# dompurify pinned exactly by monaco-editor; postcss pinned exactly by next;
+# uuid ^8 wanted by next-auth; esbuild ~0.18 via @esbuild-kit (drizzle-kit),
+# 0.27.x via tsup. Drop when parents update their own ranges.
+overrides:
+  dompurify@<3.4.11: ^3.4.11
+  uuid@<11.1.1: ^11.1.1
+  postcss@<8.5.10: ^8.5.10
+  esbuild@<0.25.0: ^0.25.0
+  "esbuild@>=0.27.3 <0.28.1": ^0.28.1
+
 allowBuilds:
   "@google/genai": false
   "@swc/core": true

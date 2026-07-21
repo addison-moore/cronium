@@ -7,9 +7,7 @@ import (
 	"sync"
 	"time"
 
-	containertypes "github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
-	networktypes "github.com/docker/docker/api/types/network"
+	"github.com/moby/moby/client"
 	"github.com/sirupsen/logrus"
 )
 
@@ -58,17 +56,16 @@ func (cm *CleanupManager) CleanupOrphanedResources(ctx context.Context) error {
 // cleanupOrphanedContainers removes containers that are no longer tracked
 func (cm *CleanupManager) cleanupOrphanedContainers(ctx context.Context) error {
 	// List all containers with cronium-job prefix
-	filters := filters.NewArgs()
-	filters.Add("name", "cronium-job-")
-	filters.Add("name", "cronium-sidecar-")
+	filters := make(client.Filters).Add("name", "cronium-job-", "cronium-sidecar-")
 
-	containers, err := cm.executor.dockerClient.ContainerList(ctx, containertypes.ListOptions{
+	result, err := cm.executor.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 		All:     true,
 		Filters: filters,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list containers: %w", err)
 	}
+	containers := result.Items
 
 	// Get currently tracked containers
 	cm.executor.mu.RLock()
@@ -95,7 +92,7 @@ func (cm *CleanupManager) cleanupOrphanedContainers(ctx context.Context) error {
 				// Stop container if running
 				if container.State == "running" {
 					timeout := 10
-					if err := cm.executor.dockerClient.ContainerStop(ctx, container.ID, containertypes.StopOptions{
+					if _, err := cm.executor.dockerClient.ContainerStop(ctx, container.ID, client.ContainerStopOptions{
 						Timeout: &timeout,
 					}); err != nil {
 						cm.log.WithError(err).Warn("Failed to stop orphaned container")
@@ -103,7 +100,7 @@ func (cm *CleanupManager) cleanupOrphanedContainers(ctx context.Context) error {
 				}
 
 				// Remove container
-				if err := cm.executor.dockerClient.ContainerRemove(ctx, container.ID, containertypes.RemoveOptions{
+				if _, err := cm.executor.dockerClient.ContainerRemove(ctx, container.ID, client.ContainerRemoveOptions{
 					Force: true,
 				}); err != nil {
 					cm.log.WithError(err).Error("Failed to remove orphaned container")
@@ -118,15 +115,15 @@ func (cm *CleanupManager) cleanupOrphanedContainers(ctx context.Context) error {
 // cleanupOrphanedNetworks removes networks that are no longer tracked
 func (cm *CleanupManager) cleanupOrphanedNetworks(ctx context.Context) error {
 	// List all networks with cronium-job prefix
-	filters := filters.NewArgs()
-	filters.Add("name", "cronium-job-")
+	filters := make(client.Filters).Add("name", "cronium-job-")
 
-	networks, err := cm.executor.dockerClient.NetworkList(ctx, networktypes.ListOptions{
+	result, err := cm.executor.dockerClient.NetworkList(ctx, client.NetworkListOptions{
 		Filters: filters,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list networks: %w", err)
 	}
+	networks := result.Items
 
 	// Get currently tracked networks
 	cm.executor.mu.RLock()
@@ -140,11 +137,12 @@ func (cm *CleanupManager) cleanupOrphanedNetworks(ctx context.Context) error {
 	for _, network := range networks {
 		if !trackedNetworks[network.ID] {
 			// Check if network is old enough and not in use
-			networkInfo, err := cm.executor.dockerClient.NetworkInspect(ctx, network.ID, networktypes.InspectOptions{})
+			inspectResult, err := cm.executor.dockerClient.NetworkInspect(ctx, network.ID, client.NetworkInspectOptions{})
 			if err != nil {
 				cm.log.WithError(err).Warn("Failed to inspect network")
 				continue
 			}
+			networkInfo := inspectResult.Network
 
 			// Skip if network has connected containers
 			if len(networkInfo.Containers) > 0 {
@@ -159,7 +157,7 @@ func (cm *CleanupManager) cleanupOrphanedNetworks(ctx context.Context) error {
 					"created":     networkInfo.Created,
 				}).Info("Removing orphaned network")
 
-				if err := cm.executor.dockerClient.NetworkRemove(ctx, network.ID); err != nil {
+				if _, err := cm.executor.dockerClient.NetworkRemove(ctx, network.ID, client.NetworkRemoveOptions{}); err != nil {
 					cm.log.WithError(err).Error("Failed to remove orphaned network")
 				}
 			}
@@ -200,16 +198,16 @@ func (cm *CleanupManager) CleanupJobResources(ctx context.Context, jobID string)
 
 // cleanupContainersByPattern removes containers matching a pattern
 func (cm *CleanupManager) cleanupContainersByPattern(ctx context.Context, pattern string) error {
-	filters := filters.NewArgs()
-	filters.Add("name", pattern)
+	filters := make(client.Filters).Add("name", pattern)
 
-	containers, err := cm.executor.dockerClient.ContainerList(ctx, containertypes.ListOptions{
+	result, err := cm.executor.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 		All:     true,
 		Filters: filters,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list containers: %w", err)
 	}
+	containers := result.Items
 
 	for _, container := range containers {
 		cm.log.WithFields(logrus.Fields{
@@ -220,7 +218,7 @@ func (cm *CleanupManager) cleanupContainersByPattern(ctx context.Context, patter
 		// Stop if running
 		if container.State == "running" {
 			timeout := 10
-			if err := cm.executor.dockerClient.ContainerStop(ctx, container.ID, containertypes.StopOptions{
+			if _, err := cm.executor.dockerClient.ContainerStop(ctx, container.ID, client.ContainerStopOptions{
 				Timeout: &timeout,
 			}); err != nil && !strings.Contains(err.Error(), "not running") {
 				cm.log.WithError(err).Warn("Failed to stop container")
@@ -228,7 +226,7 @@ func (cm *CleanupManager) cleanupContainersByPattern(ctx context.Context, patter
 		}
 
 		// Remove container
-		if err := cm.executor.dockerClient.ContainerRemove(ctx, container.ID, containertypes.RemoveOptions{
+		if _, err := cm.executor.dockerClient.ContainerRemove(ctx, container.ID, client.ContainerRemoveOptions{
 			Force: true,
 		}); err != nil && !strings.Contains(err.Error(), "No such container") {
 			cm.log.WithError(err).Error("Failed to remove container")
@@ -240,15 +238,15 @@ func (cm *CleanupManager) cleanupContainersByPattern(ctx context.Context, patter
 
 // cleanupNetworksByPattern removes networks matching a pattern
 func (cm *CleanupManager) cleanupNetworksByPattern(ctx context.Context, pattern string) error {
-	filters := filters.NewArgs()
-	filters.Add("name", pattern)
+	filters := make(client.Filters).Add("name", pattern)
 
-	networks, err := cm.executor.dockerClient.NetworkList(ctx, networktypes.ListOptions{
+	result, err := cm.executor.dockerClient.NetworkList(ctx, client.NetworkListOptions{
 		Filters: filters,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list networks: %w", err)
 	}
+	networks := result.Items
 
 	for _, network := range networks {
 		cm.log.WithFields(logrus.Fields{
@@ -256,7 +254,7 @@ func (cm *CleanupManager) cleanupNetworksByPattern(ctx context.Context, pattern 
 			"networkName": network.Name,
 		}).Debug("Cleaning up network")
 
-		if err := cm.executor.dockerClient.NetworkRemove(ctx, network.ID); err != nil &&
+		if _, err := cm.executor.dockerClient.NetworkRemove(ctx, network.ID, client.NetworkRemoveOptions{}); err != nil &&
 			!strings.Contains(err.Error(), "No such network") &&
 			!strings.Contains(err.Error(), "has active endpoints") {
 			cm.log.WithError(err).Error("Failed to remove network")

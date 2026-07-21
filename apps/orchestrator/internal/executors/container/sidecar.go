@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/mount"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/go-connections/nat"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/mount"
+	"github.com/moby/moby/api/types/network"
+	"github.com/moby/moby/client"
 	"github.com/sirupsen/logrus"
 )
 
@@ -48,8 +48,8 @@ func (sm *SidecarManager) CreateRuntimeSidecar(ctx context.Context, job *types.J
 			"PORT=8081",
 			"LOG_LEVEL=info",
 		},
-		ExposedPorts: nat.PortSet{
-			"8081/tcp": struct{}{},
+		ExposedPorts: network.PortSet{
+			network.MustParsePort("8081/tcp"): struct{}{},
 		},
 		User: "1000:1000",
 		Labels: map[string]string{
@@ -100,29 +100,27 @@ func (sm *SidecarManager) CreateRuntimeSidecar(ctx context.Context, job *types.J
 	}
 
 	// Create container
-	resp, err := sm.executor.dockerClient.ContainerCreate(
-		ctx,
-		containerConfig,
-		hostConfig,
-		networkConfig,
-		nil,
-		fmt.Sprintf("cronium-runtime-%s", job.ID),
-	)
+	resp, err := sm.executor.dockerClient.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Config:           containerConfig,
+		HostConfig:       hostConfig,
+		NetworkingConfig: networkConfig,
+		Name:             fmt.Sprintf("cronium-runtime-%s", job.ID),
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create runtime sidecar: %w", err)
 	}
 
 	// Start container
-	if err := sm.executor.dockerClient.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+	if _, err := sm.executor.dockerClient.ContainerStart(ctx, resp.ID, client.ContainerStartOptions{}); err != nil {
 		// Clean up on failure
-		_ = sm.executor.dockerClient.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
+		_, _ = sm.executor.dockerClient.ContainerRemove(ctx, resp.ID, client.ContainerRemoveOptions{Force: true})
 		return "", fmt.Errorf("failed to start runtime sidecar: %w", err)
 	}
 
 	// The per-job network is isolated, so the sidecar must also join a shared
 	// network to resolve BackendURL/ValkeyURL by service name.
 	if shared := sm.executor.config.Runtime.SharedNetwork; shared != "" {
-		if err := sm.executor.dockerClient.NetworkConnect(ctx, shared, resp.ID, nil); err != nil {
+		if _, err := sm.executor.dockerClient.NetworkConnect(ctx, shared, client.NetworkConnectOptions{Container: resp.ID}); err != nil {
 			_ = sm.StopSidecar(ctx, resp.ID)
 			return "", fmt.Errorf("failed to connect sidecar to shared network %q: %w", shared, err)
 		}
@@ -132,7 +130,7 @@ func (sm *SidecarManager) CreateRuntimeSidecar(ctx context.Context, job *types.J
 		networks := []string{"docker_cronium-dev-network", "cronium-dev_cronium-dev-network"}
 		connected := false
 		for _, netName := range networks {
-			if err := sm.executor.dockerClient.NetworkConnect(ctx, netName, resp.ID, nil); err == nil {
+			if _, err := sm.executor.dockerClient.NetworkConnect(ctx, netName, client.NetworkConnectOptions{Container: resp.ID}); err == nil {
 				sm.log.WithField("network", netName).Debug("Connected sidecar to development network")
 				connected = true
 				break
@@ -166,14 +164,14 @@ func (sm *SidecarManager) CreateRuntimeSidecar(ctx context.Context, job *types.J
 func (sm *SidecarManager) StopSidecar(ctx context.Context, containerID string) error {
 	// Stop container with timeout
 	timeout := 5
-	if err := sm.executor.dockerClient.ContainerStop(ctx, containerID, container.StopOptions{
+	if _, err := sm.executor.dockerClient.ContainerStop(ctx, containerID, client.ContainerStopOptions{
 		Timeout: &timeout,
 	}); err != nil {
 		sm.log.WithError(err).Warn("Failed to stop sidecar gracefully")
 	}
 
 	// Remove container
-	if err := sm.executor.dockerClient.ContainerRemove(ctx, containerID, container.RemoveOptions{
+	if _, err := sm.executor.dockerClient.ContainerRemove(ctx, containerID, client.ContainerRemoveOptions{
 		Force: true,
 	}); err != nil {
 		return fmt.Errorf("failed to remove sidecar: %w", err)
@@ -190,25 +188,25 @@ func (sm *SidecarManager) waitForHealth(ctx context.Context, containerID string)
 
 	for i := 0; i < maxAttempts; i++ {
 		// Check if container is still running
-		inspect, err := sm.executor.dockerClient.ContainerInspect(ctx, containerID)
+		inspect, err := sm.executor.dockerClient.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to inspect container: %w", err)
 		}
 
-		if !inspect.State.Running {
+		if !inspect.Container.State.Running {
 			return fmt.Errorf("container stopped unexpectedly")
 		}
 
 		// Execute health check inside the container
-		execResp, err := sm.executor.dockerClient.ContainerExecCreate(ctx, containerID, container.ExecOptions{
+		execResp, err := sm.executor.dockerClient.ExecCreate(ctx, containerID, client.ExecCreateOptions{
 			Cmd:          []string{"wget", "-q", "-O-", healthCheckURL},
 			AttachStdout: true,
 			AttachStderr: true,
 		})
 		if err == nil {
-			if err := sm.executor.dockerClient.ContainerExecStart(ctx, execResp.ID, container.ExecStartOptions{}); err == nil {
+			if _, err := sm.executor.dockerClient.ExecStart(ctx, execResp.ID, client.ExecStartOptions{}); err == nil {
 				// Check exit code
-				inspect, err := sm.executor.dockerClient.ContainerExecInspect(ctx, execResp.ID)
+				inspect, err := sm.executor.dockerClient.ExecInspect(ctx, execResp.ID, client.ExecInspectOptions{})
 				if err == nil && inspect.ExitCode == 0 {
 					return nil // Health check passed
 				}
@@ -300,7 +298,7 @@ func (sm *SidecarManager) CreateJobNetwork(ctx context.Context, jobID string) (s
 	networkName := fmt.Sprintf("cronium-job-%s", jobID)
 
 	// Create network with specific configuration
-	resp, err := sm.executor.dockerClient.NetworkCreate(ctx, networkName, network.CreateOptions{
+	resp, err := sm.executor.dockerClient.NetworkCreate(ctx, networkName, client.NetworkCreateOptions{
 		Driver: "bridge",
 		Labels: map[string]string{
 			"cronium.job.id":  jobID,
@@ -320,7 +318,7 @@ func (sm *SidecarManager) CreateJobNetwork(ctx context.Context, jobID string) (s
 
 // RemoveJobNetwork removes the job's network
 func (sm *SidecarManager) RemoveJobNetwork(ctx context.Context, networkID string) error {
-	if err := sm.executor.dockerClient.NetworkRemove(ctx, networkID); err != nil {
+	if _, err := sm.executor.dockerClient.NetworkRemove(ctx, networkID, client.NetworkRemoveOptions{}); err != nil {
 		return fmt.Errorf("failed to remove job network: %w", err)
 	}
 	return nil

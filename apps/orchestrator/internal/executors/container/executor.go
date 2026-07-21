@@ -14,12 +14,11 @@ import (
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/config"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/errors"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
-	"github.com/docker/docker/api/types/container"
-	dockerimage "github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/mount"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/moby/moby/api/pkg/stdcopy"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/mount"
+	"github.com/moby/moby/api/types/network"
+	"github.com/moby/moby/client"
 	"github.com/sirupsen/logrus"
 )
 
@@ -57,7 +56,7 @@ func NewExecutor(cfg config.ContainerConfig, apiClient *api.Client, log *logrus.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if _, err := dockerClient.Ping(ctx); err != nil {
+	if _, err := dockerClient.Ping(ctx, client.PingOptions{}); err != nil {
 		return nil, fmt.Errorf("failed to connect to Docker daemon: %w", err)
 	}
 
@@ -182,7 +181,7 @@ func (e *Executor) Cleanup(ctx context.Context, job *types.Job) error {
 	if hasContainer {
 		// Stop container if still running
 		timeout := 10
-		if err := e.dockerClient.ContainerStop(ctx, containerID, container.StopOptions{
+		if _, err := e.dockerClient.ContainerStop(ctx, containerID, client.ContainerStopOptions{
 			Timeout: &timeout,
 		}); err != nil {
 			e.log.WithError(err).Warn("Failed to stop container")
@@ -287,14 +286,12 @@ func (e *Executor) createContainer(ctx context.Context, job *types.Job, networkI
 	}
 
 	// Create container
-	resp, err := e.dockerClient.ContainerCreate(
-		ctx,
-		containerConfig,
-		hostConfig,
-		networkConfig,
-		nil,
-		fmt.Sprintf("cronium-job-%s", job.ID),
-	)
+	resp, err := e.dockerClient.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Config:           containerConfig,
+		HostConfig:       hostConfig,
+		NetworkingConfig: networkConfig,
+		Name:             fmt.Sprintf("cronium-job-%s", job.ID),
+	})
 	if err != nil {
 		dockerErr := errors.NewDockerError(
 			"CONTAINER_CREATE_FAILED",
@@ -477,7 +474,7 @@ func (e *Executor) buildSecurityOptions() []string {
 
 // streamLogs streams container logs to the updates channel
 func (e *Executor) streamLogs(ctx context.Context, containerID string, updates chan<- types.ExecutionUpdate) {
-	options := container.LogsOptions{
+	options := client.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Follow:     true,
@@ -562,9 +559,10 @@ func (e *Executor) readStream(reader io.Reader, stream string, updates chan<- ty
 
 // removeContainer removes a container
 func (e *Executor) removeContainer(ctx context.Context, containerID string) error {
-	return e.dockerClient.ContainerRemove(ctx, containerID, container.RemoveOptions{
+	_, err := e.dockerClient.ContainerRemove(ctx, containerID, client.ContainerRemoveOptions{
 		Force: true,
 	})
+	return err
 }
 
 // sendUpdate sends an execution update. Fast path is non-blocking; when the
@@ -645,7 +643,7 @@ func parseMemory(mem string) (int64, error) {
 // ensureImage ensures the image is available locally
 func (e *Executor) ensureImage(ctx context.Context, image string) error {
 	// First check if image exists locally
-	_, _, err := e.dockerClient.ImageInspectWithRaw(ctx, image)
+	_, err := e.dockerClient.ImageInspect(ctx, image)
 	if err == nil {
 		// Image exists locally
 		return nil
@@ -654,7 +652,7 @@ func (e *Executor) ensureImage(ctx context.Context, image string) error {
 	// Image doesn't exist, try to pull it
 	e.log.WithField("image", image).Info("Pulling Docker image")
 
-	reader, err := e.dockerClient.ImagePull(ctx, image, dockerimage.PullOptions{})
+	reader, err := e.dockerClient.ImagePull(ctx, image, client.ImagePullOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to pull image: %w", err)
 	}

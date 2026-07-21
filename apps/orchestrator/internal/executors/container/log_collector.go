@@ -7,15 +7,15 @@ import (
 	"time"
 
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/moby/moby/api/pkg/stdcopy"
+	"github.com/moby/moby/client"
 )
 
 // collectFinalLogs collects all logs from a stopped container
 // This is an alternative approach that ensures no logs are lost
 func (e *Executor) collectFinalLogs(ctx context.Context, containerID string, updates chan<- types.ExecutionUpdate) error {
 	// Get all logs from the container (not following)
-	options := container.LogsOptions{
+	options := client.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Follow:     false, // Don't follow, just get what's there

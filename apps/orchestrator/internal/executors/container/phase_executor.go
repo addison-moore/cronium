@@ -9,8 +9,9 @@ import (
 
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/api"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/moby/moby/api/pkg/stdcopy"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
 	"github.com/sirupsen/logrus"
 )
 
@@ -80,7 +81,7 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 	var err error
 	networkID, err = e.sidecar.CreateJobNetwork(setupCtx, job.ID)
 	timing.NetworkCreateEnd = time.Now()
-	
+
 	if err != nil {
 		if setupCtx.Err() == context.DeadlineExceeded {
 			e.sendError(updates, fmt.Errorf("setup timeout exceeded while creating network"), true)
@@ -104,7 +105,7 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 	timing.SidecarCreateStart = time.Now()
 	sidecarID, err = e.sidecar.CreateRuntimeSidecar(setupCtx, job, networkID)
 	timing.SidecarCreateEnd = time.Now()
-	
+
 	if err != nil {
 		if setupCtx.Err() == context.DeadlineExceeded {
 			e.sendError(updates, fmt.Errorf("setup timeout exceeded while creating sidecar"), true)
@@ -128,7 +129,7 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 	timing.ContainerCreateStart = time.Now()
 	containerID, err = e.createContainer(setupCtx, job, networkID, timing)
 	timing.ContainerCreateEnd = time.Now()
-	
+
 	if err != nil {
 		if setupCtx.Err() == context.DeadlineExceeded {
 			e.sendError(updates, fmt.Errorf("setup timeout exceeded while creating container"), true)
@@ -171,7 +172,7 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 // runContainer handles the execution phase of the container
 func (e *Executor) runContainer(ctx context.Context, containerID string, job *types.Job, updates chan types.ExecutionUpdate, executionID string, timing *ExecutionTiming) {
 	// Start the container
-	if err := e.dockerClient.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
+	if _, err := e.dockerClient.ContainerStart(ctx, containerID, client.ContainerStartOptions{}); err != nil {
 		e.sendError(updates, fmt.Errorf("failed to start container: %w", err), true)
 		e.updateExecutionError(ctx, executionID, err)
 		e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
@@ -190,7 +191,10 @@ func (e *Executor) runContainer(ctx context.Context, containerID string, job *ty
 	}()
 
 	// Wait for container to finish with execution timeout
-	statusCh, errCh := e.dockerClient.ContainerWait(ctx, containerID, container.WaitConditionNotRunning)
+	waitResult := e.dockerClient.ContainerWait(ctx, containerID, client.ContainerWaitOptions{
+		Condition: container.WaitConditionNotRunning,
+	})
+	statusCh, errCh := waitResult.Result, waitResult.Error
 	var exitCode int
 	var timedOut bool
 
@@ -201,20 +205,20 @@ func (e *Executor) runContainer(ctx context.Context, containerID string, job *ty
 		if ctx.Err() == context.DeadlineExceeded {
 			e.sendError(updates, fmt.Errorf("script execution timeout exceeded"), true)
 			e.log.WithFields(logrus.Fields{
-				"jobID":     job.ID,
-				"timeout":   job.GetTimeout().String(),
+				"jobID":   job.ID,
+				"timeout": job.GetTimeout().String(),
 			}).Info("Script execution timed out")
-			
+
 			// Try to stop the container gracefully
 			stopTimeout := 10
-			e.dockerClient.ContainerStop(context.Background(), containerID, container.StopOptions{
+			e.dockerClient.ContainerStop(context.Background(), containerID, client.ContainerStopOptions{
 				Timeout: &stopTimeout,
 			})
-			
+
 			// Get container info for exit code
-			if inspect, err := e.dockerClient.ContainerInspect(context.Background(), containerID); err == nil {
-				exitCode = inspect.State.ExitCode
-				if inspect.State.OOMKilled {
+			if inspect, err := e.dockerClient.ContainerInspect(context.Background(), containerID, client.ContainerInspectOptions{}); err == nil {
+				exitCode = inspect.Container.State.ExitCode
+				if inspect.Container.State.OOMKilled {
 					e.sendError(updates, fmt.Errorf("container killed due to out of memory"), true)
 				}
 			} else {
@@ -226,14 +230,14 @@ func (e *Executor) runContainer(ctx context.Context, containerID string, job *ty
 		}
 		// Wait for logs to finish
 		logWg.Wait()
-		
+
 	case err := <-errCh:
 		if err != nil {
 			e.sendError(updates, fmt.Errorf("container wait error: %w", err), true)
 			e.updateExecutionError(ctx, executionID, err)
 		}
 		logWg.Wait()
-		
+
 	case status := <-statusCh:
 		exitCode = int(status.StatusCode)
 		logWg.Wait()
@@ -247,8 +251,8 @@ func (e *Executor) runContainer(ctx context.Context, containerID string, job *ty
 	var errorStr string
 	logsCtx, logsCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer logsCancel()
-	
-	logsReader, err := e.dockerClient.ContainerLogs(logsCtx, containerID, container.LogsOptions{
+
+	logsReader, err := e.dockerClient.ContainerLogs(logsCtx, containerID, client.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Timestamps: false,
@@ -303,7 +307,7 @@ func (e *Executor) runContainer(ctx context.Context, containerID string, job *ty
 			errMsg := statusMessage
 			updateData.Error = &errMsg
 		}
-		
+
 		apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer apiCancel()
 		if err := e.apiClient.UpdateExecution(apiCtx, executionID, finalStatus, updateData); err != nil {
