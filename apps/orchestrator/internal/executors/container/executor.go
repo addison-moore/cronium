@@ -25,13 +25,13 @@ import (
 
 // Executor implements container-based job execution
 type Executor struct {
-	config         config.ContainerConfig
-	timeoutConfig  config.TimeoutConfig
-	dockerClient   *client.Client
-	log            *logrus.Logger
-	apiClient      *api.Client
-	sidecar        *SidecarManager
-	cleanup        *CleanupManager
+	config        config.ContainerConfig
+	timeoutConfig config.TimeoutConfig
+	dockerClient  *client.Client
+	log           *logrus.Logger
+	apiClient     *api.Client
+	sidecar       *SidecarManager
+	cleanup       *CleanupManager
 
 	// Track active containers and resources
 	mu           sync.RWMutex
@@ -567,16 +567,28 @@ func (e *Executor) removeContainer(ctx context.Context, containerID string) erro
 	})
 }
 
-// sendUpdate sends an execution update
+// sendUpdate sends an execution update. Fast path is non-blocking; when the
+// buffer is full it falls back to a bounded blocking send instead of dropping.
+// A drop-on-full here previously meant a lost UpdateTypeComplete turned a
+// failed job into a reported success (scheduling review C6) — terminal updates
+// must never be droppable, and a 30s consumer stall is the only case where
+// anything is dropped now (loudly).
 func (e *Executor) sendUpdate(updates chan<- types.ExecutionUpdate, updateType types.UpdateType, data interface{}) {
-	select {
-	case updates <- types.ExecutionUpdate{
+	update := types.ExecutionUpdate{
 		Type:      updateType,
 		Timestamp: time.Now(),
 		Data:      data,
-	}:
+	}
+	select {
+	case updates <- update:
+		return
 	default:
-		e.log.Warn("Updates channel full, dropping update")
+	}
+	select {
+	case updates <- update:
+	case <-time.After(30 * time.Second):
+		e.log.WithField("updateType", updateType).
+			Error("Updates channel blocked for 30s, dropping update")
 	}
 }
 

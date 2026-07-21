@@ -187,6 +187,11 @@ func runAgent(cmd *cobra.Command, args []string) error {
 	select {
 	case sig := <-sigChan:
 		log.WithField("signal", sig).Info("Received shutdown signal")
+		// Drain BEFORE cancelling the root context: the old order cancelled
+		// first, which killed every in-flight job's completion report on a
+		// clean SIGTERM (scheduling review C5). Shutdown() stops claiming and
+		// waits for active jobs (bounded); cancel() then stops the loops.
+		orch.Shutdown()
 		cancel()
 
 		// Wait for orchestrator to finish

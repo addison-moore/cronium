@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { jobService } from "@/lib/services/job-service";
 import { JobStatus } from "@shared/schema";
+import { verifyInternalKey } from "@/lib/internal-auth";
 
 // Mark job as failed
 export async function POST(
@@ -9,17 +10,14 @@ export async function POST(
   { params }: { params: Promise<{ jobId: string }> },
 ) {
   try {
-    // Verify internal API token
-    const authHeader = request.headers.get("authorization");
-    const token = authHeader?.replace("Bearer ", "");
-
-    if (!token || token !== process.env.INTERNAL_API_KEY) {
+    if (!verifyInternalKey(request)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { jobId } = await params;
     const body = (await request.json()) as {
       error: string;
+      orchestratorId?: string;
       exitCode?: number;
       timestamp: string;
     };
@@ -35,6 +33,20 @@ export async function POST(
       );
     }
 
+    // Ownership precondition (review D6)
+    const reporterId =
+      request.headers.get("x-orchestrator-id") ?? body.orchestratorId;
+    const job = await jobService.getJob(jobId);
+    if (!job) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+    if (job.orchestratorId && reporterId && job.orchestratorId !== reporterId) {
+      return NextResponse.json(
+        { error: `Job is owned by ${job.orchestratorId}` },
+        { status: 409 },
+      );
+    }
+
     const updatedJob = await jobService.updateJobStatus(
       jobId,
       JobStatus.FAILED,
@@ -43,10 +55,20 @@ export async function POST(
         error: body.error,
         exitCode: body.exitCode ?? 1,
       },
+      `orchestrator:${reporterId ?? "unknown"}`,
     );
 
     if (!updatedJob) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+      const current = await jobService.getJob(jobId);
+      if (current?.status === JobStatus.FAILED) {
+        return NextResponse.json({ success: true, job: current, noop: true });
+      }
+      return NextResponse.json(
+        {
+          error: `Fail report rejected (current: ${current?.status ?? "unknown"})`,
+        },
+        { status: 409 },
+      );
     }
 
     return NextResponse.json({ success: true, job: updatedJob });

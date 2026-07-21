@@ -53,7 +53,8 @@ type JobsConfig struct {
 	MaxConcurrent  int           `yaml:"maxConcurrent" envconfig:"MAX_CONCURRENT" default:"5"`
 	DefaultTimeout time.Duration `yaml:"defaultTimeout" envconfig:"DEFAULT_TIMEOUT" default:"3600s"`
 	QueueStrategy  string        `yaml:"queueStrategy" envconfig:"QUEUE_STRATEGY" default:"priority"`
-	LeaseRenewal   time.Duration `yaml:"leaseRenewal" envconfig:"LEASE_RENEWAL" default:"30s"`
+	// Lease renewal cadence; must beat the app's 60s claim lease with margin
+	LeaseRenewal time.Duration `yaml:"leaseRenewal" envconfig:"LEASE_RENEWAL" default:"20s"`
 }
 
 // ContainerConfig defines Docker container settings
@@ -364,10 +365,16 @@ func setDefaults() {
 
 // processConfig processes special configuration values
 func processConfig(config *Config) error {
-	// Generate orchestrator ID if set to auto
+	// Generate a STABLE orchestrator ID if set to auto. The identity must
+	// survive restarts (no boot timestamp): claims and leases in the database
+	// are keyed on it, and the app's ownership preconditions compare against
+	// it (scheduling review C4 — a per-boot ID orphaned every claimed job).
 	if config.Orchestrator.ID == "auto" || config.Orchestrator.ID == "" {
 		hostname, _ := os.Hostname()
-		config.Orchestrator.ID = fmt.Sprintf("orch-%s-%d", hostname, time.Now().Unix())
+		if hostname == "" {
+			hostname = "default"
+		}
+		config.Orchestrator.ID = fmt.Sprintf("orchestrator-%s", hostname)
 	}
 
 	// Set orchestrator ID in API config

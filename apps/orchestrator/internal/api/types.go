@@ -92,20 +92,24 @@ type RetryPolicy struct {
 	BackoffDelay int    `json:"backoffDelay"` // seconds
 }
 
-// AcknowledgeRequest is sent to acknowledge a job
-type AcknowledgeRequest struct {
-	OrchestratorID     string `json:"orchestratorId"`
-	Timestamp          string `json:"timestamp"`
-	EstimatedStartTime string `json:"estimatedStartTime,omitempty"`
+// ClaimJobsRequest atomically claims a batch of due jobs under a lease
+type ClaimJobsRequest struct {
+	OrchestratorID string `json:"orchestratorId"`
+	BatchSize      int    `json:"batchSize"`
+	LeaseSeconds   int    `json:"leaseSeconds,omitempty"`
 }
 
-// AcknowledgeResponse is the response from acknowledging a job
-type AcknowledgeResponse struct {
-	Success bool `json:"success"`
-	Lease   struct {
-		ExpiresAt    string `json:"expiresAt"`
-		RenewalToken string `json:"renewalToken"`
-	} `json:"lease"`
+// JobsHeartbeatRequest renews leases for in-flight jobs
+type JobsHeartbeatRequest struct {
+	OrchestratorID string   `json:"orchestratorId"`
+	JobIDs         []string `json:"jobIds"`
+	LeaseSeconds   int      `json:"leaseSeconds,omitempty"`
+}
+
+// JobsHeartbeatResponse reports renewed leases and requested cancellations
+type JobsHeartbeatResponse struct {
+	Extended        []string `json:"extended"`
+	CancelRequested []string `json:"cancelRequested"`
 }
 
 // UpdateStatusRequest updates job status
@@ -152,6 +156,9 @@ type CompleteJobRequest struct {
 	Artifacts *Artifacts             `json:"artifacts,omitempty"`
 	Metrics   types.ExecutionMetrics `json:"metrics"`
 	Timestamp string                 `json:"timestamp"`
+	// Honest execution stats (PLAN.md §5): what was dropped or truncated
+	DroppedLogLines      int `json:"droppedLogLines,omitempty"`
+	OutputTruncatedBytes int `json:"outputTruncatedBytes,omitempty"`
 }
 
 // Output contains job output

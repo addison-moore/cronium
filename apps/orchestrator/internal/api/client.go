@@ -57,13 +57,17 @@ func NewClient(cfg config.APIConfig, log *logrus.Logger) (*Client, error) {
 	}, nil
 }
 
-// PollJobs retrieves pending jobs from the queue
-func (c *Client) PollJobs(ctx context.Context, limit int) ([]*types.Job, error) {
-	params := url.Values{}
-	params.Set("batchSize", fmt.Sprintf("%d", limit))
+// ClaimJobs atomically claims a batch of due jobs under a lease (PLAN.md
+// §4.2). The claim IS the acknowledgment: there is no separate ack step, and
+// a claimer that dies is recovered by lease expiry, not orphan queries.
+func (c *Client) ClaimJobs(ctx context.Context, limit int) ([]*types.Job, error) {
+	req := ClaimJobsRequest{
+		OrchestratorID: c.config.OrchestratorID,
+		BatchSize:      limit,
+	}
 
 	var response PollJobsResponse
-	if err := c.get(ctx, "/api/internal/jobs/queue", params, &response); err != nil {
+	if err := c.post(ctx, "/api/internal/jobs/claim", req, &response); err != nil {
 		return nil, err
 	}
 
@@ -76,24 +80,21 @@ func (c *Client) PollJobs(ctx context.Context, limit int) ([]*types.Job, error) 
 	return jobs, nil
 }
 
-// AcknowledgeJob confirms receipt of a job
-func (c *Client) AcknowledgeJob(ctx context.Context, jobID string) error {
-	req := AcknowledgeRequest{
-		OrchestratorID:     c.config.OrchestratorID,
-		Timestamp:          time.Now().Format(time.RFC3339),
-		EstimatedStartTime: time.Now().Add(5 * time.Second).Format(time.RFC3339),
+// JobsHeartbeat renews the leases of the given in-flight jobs and returns
+// which of them have cancellation requested. Failing to heartbeat within the
+// lease window hands the jobs to the app's sweeper — callers must self-fence
+// (abort execution) when renewal keeps failing.
+func (c *Client) JobsHeartbeat(ctx context.Context, jobIDs []string) (*JobsHeartbeatResponse, error) {
+	req := JobsHeartbeatRequest{
+		OrchestratorID: c.config.OrchestratorID,
+		JobIDs:         jobIDs,
 	}
 
-	var response AcknowledgeResponse
-	if err := c.post(ctx, fmt.Sprintf("/api/internal/jobs/%s/acknowledge", jobID), req, &response); err != nil {
-		return err
+	var response JobsHeartbeatResponse
+	if err := c.post(ctx, "/api/internal/jobs/heartbeat", req, &response); err != nil {
+		return nil, err
 	}
-
-	if !response.Success {
-		return fmt.Errorf("failed to acknowledge job")
-	}
-
-	return nil
+	return &response, nil
 }
 
 // UpdateJobStatus updates the status of a job
@@ -272,12 +273,7 @@ func (c *Client) get(ctx context.Context, path string, params url.Values, respon
 		u.RawQuery = params.Encode()
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	if err != nil {
-		return err
-	}
-
-	return c.doRequest(req, response)
+	return c.doRequest(ctx, http.MethodGet, u.String(), nil, response)
 }
 
 func (c *Client) post(ctx context.Context, path string, body interface{}, response interface{}) error {
@@ -289,40 +285,28 @@ func (c *Client) put(ctx context.Context, path string, body interface{}, respons
 }
 
 func (c *Client) doJSON(ctx context.Context, method, path string, body interface{}, response interface{}) error {
-	var bodyReader io.Reader
+	var bodyBytes []byte
 	if body != nil {
 		jsonData, err := json.Marshal(body)
 		if err != nil {
 			return fmt.Errorf("failed to marshal request body: %w", err)
 		}
-		bodyReader = bytes.NewReader(jsonData)
+		bodyBytes = jsonData
 	}
 
 	u := c.baseURL.ResolveReference(&url.URL{Path: path})
-	req, err := http.NewRequestWithContext(ctx, method, u.String(), bodyReader)
-	if err != nil {
-		return err
-	}
-
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	return c.doRequest(req, response)
+	return c.doRequest(ctx, method, u.String(), bodyBytes, response)
 }
 
-func (c *Client) doRequest(req *http.Request, response interface{}) error {
-	// Add authentication
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("X-Service-Name", "cronium-orchestrator")
-	req.Header.Set("X-Service-Version", "1.0.0")
-	req.Header.Set("X-Orchestrator-ID", c.config.OrchestratorID)
-	req.Header.Set("Accept", "application/json")
-
+// doRequest executes an HTTP request with retries. A FRESH request is built
+// for every attempt — reusing one *http.Request across attempts consumes its
+// body on the first try and every retried POST/PUT then sends an empty body
+// (the review's C5: the retry layer could never actually retry a write).
+func (c *Client) doRequest(ctx context.Context, method, urlStr string, bodyBytes []byte, response interface{}) error {
 	// Log request
 	logEntry := c.log.WithFields(logrus.Fields{
-		"method": req.Method,
-		"url":    req.URL.String(),
+		"method": method,
+		"url":    urlStr,
 	})
 	logEntry.Debug("API request")
 
@@ -338,8 +322,24 @@ func (c *Client) doRequest(req *http.Request, response interface{}) error {
 	var body []byte
 
 	// Execute request with retry utility
-	err := retry.WithRetry(req.Context(), retryCfg, func() error {
-		var err error
+	err := retry.WithRetry(ctx, retryCfg, func() error {
+		var bodyReader io.Reader
+		if bodyBytes != nil {
+			bodyReader = bytes.NewReader(bodyBytes)
+		}
+		req, err := http.NewRequestWithContext(ctx, method, urlStr, bodyReader)
+		if err != nil {
+			return err
+		}
+		if bodyBytes != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		req.Header.Set("Authorization", "Bearer "+c.token)
+		req.Header.Set("X-Service-Name", "cronium-orchestrator")
+		req.Header.Set("X-Service-Version", "1.0.0")
+		req.Header.Set("X-Orchestrator-ID", c.config.OrchestratorID)
+		req.Header.Set("Accept", "application/json")
+
 		resp, err = c.httpClient.Do(req)
 		if err != nil {
 			// Network errors are retryable
@@ -483,23 +483,4 @@ func convertServerDetails(sd *ServerDetails) *types.ServerDetails {
 		Password:   sd.Password,
 		Passphrase: sd.Passphrase,
 	}
-}
-
-// GetOrphanedJobs gets jobs that were claimed by a specific orchestrator
-func (c *Client) GetOrphanedJobs(ctx context.Context, orchestratorID string) ([]*types.Job, error) {
-	params := url.Values{}
-	params.Set("orchestratorId", orchestratorID)
-
-	var jobs []*types.Job
-	if err := c.get(ctx, "/api/internal/jobs/orphaned", params, &jobs); err != nil {
-		return nil, fmt.Errorf("failed to get orphaned jobs: %w", err)
-	}
-
-	return jobs, nil
-}
-
-// ReleaseJob releases a job back to the queue
-func (c *Client) ReleaseJob(ctx context.Context, jobID string, status *types.StatusUpdate) error {
-	var response interface{}
-	return c.post(ctx, fmt.Sprintf("/api/internal/jobs/%s/release", jobID), status, &response)
 }

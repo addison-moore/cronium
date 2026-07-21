@@ -161,22 +161,25 @@ func (m *MultiServerExecutor) Execute(ctx context.Context, job *types.Job) (<-ch
 					}
 				}
 
-				// Create a copy of the job for this server
+				// Create a copy of the job for this server. The Metadata map
+				// must be DEEP-copied: `serverJob := *job` shares the map, and
+				// N goroutines writing executionId into it is a data race that
+				// also clobbers each other's execution IDs.
 				serverJob := *job
 				serverJob.Execution.Target.ServerDetails = server
-
-				// Pass execution ID in metadata to prevent duplicate creation
-				if serverJob.Metadata == nil {
-					serverJob.Metadata = make(map[string]any)
+				serverJob.Metadata = make(map[string]any, len(job.Metadata)+1)
+				for k, v := range job.Metadata {
+					serverJob.Metadata[k] = v
 				}
 				serverJob.Metadata["executionId"] = executionID
 
 				// Execute on this server
 				serverResult := m.executeOnServer(ctx, &serverJob, idx, len(servers), executionID)
 
-				// Store result
+				// Store result, keyed uniquely per fan-out entry — duplicate
+				// server IDs in a job must not silently overwrite each other
 				resultsMu.Lock()
-				results[server.ID] = serverResult
+				results[fmt.Sprintf("%s#%d", server.ID, idx)] = serverResult
 				resultsMu.Unlock()
 
 				// Forward updates with server prefix
@@ -610,15 +613,24 @@ func (m *MultiServerExecutor) Cleanup(ctx context.Context, job *types.Job) error
 	return m.executor.Cleanup(ctx, job)
 }
 
-// sendUpdate sends an execution update
+// sendUpdate sends an execution update. Non-blocking fast path with a bounded
+// blocking fallback — terminal updates must never be droppable (review C6);
+// see the container executor's sendUpdate for the full rationale.
 func (m *MultiServerExecutor) sendUpdate(updates chan<- types.ExecutionUpdate, updateType types.UpdateType, data interface{}) {
-	select {
-	case updates <- types.ExecutionUpdate{
+	update := types.ExecutionUpdate{
 		Type:      updateType,
 		Timestamp: time.Now(),
 		Data:      data,
-	}:
+	}
+	select {
+	case updates <- update:
+		return
 	default:
-		m.log.Warn("Updates channel full, dropping update")
+	}
+	select {
+	case updates <- update:
+	case <-time.After(30 * time.Second):
+		m.log.WithField("updateType", updateType).
+			Error("Updates channel blocked for 30s, dropping update")
 	}
 }

@@ -62,19 +62,25 @@ The job service (`src/lib/services/job-service.ts`) manages:
 - Payload storage with all execution details
 - Retry configuration
 
-### Step 4: Orchestrator Polling
+### Step 4: Orchestrator Claiming
 
-The orchestrator polls `/api/internal/jobs/queue` endpoint:
+The orchestrator claims jobs via `POST /api/internal/jobs/claim`:
 
 ```
-Orchestrator → API (with auth) → Claim Jobs → Transform → Return
+Orchestrator → API (with auth) → Atomic claim (SKIP LOCKED + lease) → Transform → Return
 ```
 
 Jobs are:
 
-- Claimed by the orchestrator (marked as "claimed")
+- Claimed atomically under a lease (marked as "claimed", `lease_expires_at` stamped)
 - Transformed to orchestrator format
 - Returned for processing
+
+The orchestrator renews leases via `POST /api/internal/jobs/heartbeat`
+(which also carries cancellation requests back to the running executor). A
+job whose lease stops being renewed is re-queued or failed by the scheduling
+worker's sweeper according to its lease-loss policy — there is no separate
+acknowledge/release/orphan-recovery machinery.
 
 ### Step 5: Job Routing
 

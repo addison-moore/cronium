@@ -5,29 +5,38 @@ import { JobStatus, jobs } from "@shared/schema";
 import { db } from "@/server/db";
 import { eq } from "drizzle-orm";
 import { unifiedIoDebug } from "@/lib/unified-io/debug";
+import { verifyInternalKey } from "@/lib/internal-auth";
 
-// Mark job as completed
+/**
+ * Final completion report from an executor. Idempotent: a repeated report for
+ * a job already in the same terminal state returns success; a conflicting
+ * late report is rejected by the CAS state machine (409). Timeout and
+ * cancellation are real statuses now (TIMED_OUT / CANCELLED), not exit-code
+ * folklore (review H8).
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> },
 ) {
   try {
-    // Verify internal API token
-    const authHeader = request.headers.get("authorization");
-    const token = authHeader?.replace("Bearer ", "");
-
-    if (!token || token !== process.env.INTERNAL_API_KEY) {
+    if (!verifyInternalKey(request)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { jobId } = await params;
     const body = (await request.json()) as {
-      status?: string; // Orchestrator sends the status
+      status?: string;
+      orchestratorId?: string;
       output?: string | { stdout: string; stderr: string };
       exitCode?: number;
       metrics?: Record<string, unknown>;
       scriptOutput?: unknown; // Data from cronium.output()
       condition?: boolean; // Condition from cronium.setCondition()
+      // Structured execution stats (PLAN.md §5): honest reporting of what was
+      // dropped/truncated instead of silence.
+      droppedLogLines?: number;
+      outputTruncatedBytes?: number;
+      serverResults?: Array<Record<string, unknown>>;
       timestamp: string;
     };
 
@@ -35,44 +44,51 @@ export async function POST(
       return NextResponse.json({ error: "Job ID required" }, { status: 400 });
     }
 
-    // Determine status based on what orchestrator sends or exit code
-    let jobStatus = JobStatus.COMPLETED;
+    // Ownership precondition (review D6)
+    const reporterId =
+      request.headers.get("x-orchestrator-id") ?? body.orchestratorId;
+    const existingJob = await jobService.getJob(jobId);
+    if (!existingJob) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+    if (
+      existingJob.orchestratorId &&
+      reporterId &&
+      existingJob.orchestratorId !== reporterId
+    ) {
+      return NextResponse.json(
+        { error: `Job is owned by ${existingJob.orchestratorId}` },
+        { status: 409 },
+      );
+    }
+
     const exitCode = body.exitCode ?? 0;
 
-    // If orchestrator explicitly sends status, use it
-    if (body.status) {
-      // Map orchestrator status to our JobStatus enum
-      switch (body.status) {
-        case "completed":
-        case "COMPLETED":
-          jobStatus = JobStatus.COMPLETED;
-          break;
-        case "failed":
-        case "FAILED":
-          jobStatus = JobStatus.FAILED;
-          break;
-        case "timeout":
-        case "TIMEOUT":
-          // Note: JobStatus doesn't have TIMEOUT, so we map to FAILED
-          // The timeout will be detected in log status mapping
-          jobStatus = JobStatus.FAILED;
-          break;
-        case "cancelled":
-        case "CANCELLED":
-          jobStatus = JobStatus.CANCELLED;
-          break;
-        default:
-          // Fallback to exit code check
-          jobStatus = exitCode === 0 ? JobStatus.COMPLETED : JobStatus.FAILED;
-      }
-    } else {
-      // No explicit status, determine from exit code
-      // Check for timeout exit code (-1)
-      if (exitCode === -1) {
-        jobStatus = JobStatus.FAILED; // Will be mapped to TIMEOUT in log status
-      } else {
-        jobStatus = exitCode === 0 ? JobStatus.COMPLETED : JobStatus.FAILED;
-      }
+    // Map the reported status; exit codes are a fallback only.
+    let jobStatus: JobStatus;
+    switch (body.status?.toLowerCase()) {
+      case "completed":
+        jobStatus = JobStatus.COMPLETED;
+        break;
+      case "failed":
+        jobStatus = JobStatus.FAILED;
+        break;
+      case "timeout":
+      case "timed_out":
+        jobStatus = JobStatus.TIMED_OUT;
+        break;
+      case "cancelled":
+        jobStatus = JobStatus.CANCELLED;
+        break;
+      default:
+        jobStatus =
+          exitCode === -1
+            ? JobStatus.TIMED_OUT
+            : exitCode === -2
+              ? JobStatus.CANCELLED
+              : exitCode === 0
+                ? JobStatus.COMPLETED
+                : JobStatus.FAILED;
     }
 
     // Handle both formats: string or {stdout, stderr}
@@ -82,34 +98,22 @@ export async function POST(
       if (typeof body.output === "string") {
         output = body.output;
       } else {
-        // Combine stdout and stderr
         output = body.output.stdout;
         if (body.output.stderr) {
-          // Store stderr separately as error if job failed
-          if (jobStatus === JobStatus.FAILED) {
-            error = body.output.stderr;
-            // Add timeout indication to error if detected
-            if (
-              body.status === "timeout" ||
-              body.status === "TIMEOUT" ||
-              exitCode === -1
-            ) {
-              error = "Job execution timed out\n" + (error || "");
-            }
-          } else {
-            // Otherwise combine with stdout
+          if (jobStatus === JobStatus.COMPLETED) {
             output += "\n--- STDERR ---\n" + body.output.stderr;
+          } else {
+            error = body.output.stderr;
           }
-        } else if (
-          jobStatus === JobStatus.FAILED &&
-          (body.status === "timeout" ||
-            body.status === "TIMEOUT" ||
-            exitCode === -1)
-        ) {
-          // No stderr but we have a timeout
-          error = "Job execution timed out";
         }
       }
+    }
+    if (jobStatus === JobStatus.TIMED_OUT) {
+      error = error
+        ? `Job execution timed out\n${error}`
+        : "Job execution timed out";
+    } else if (jobStatus === JobStatus.CANCELLED && !error) {
+      error = "Job cancelled";
     }
 
     const updateData: Parameters<typeof jobService.updateJobStatus>[2] = {
@@ -132,9 +136,10 @@ export async function POST(
     // Resolve the structured output for workflow chaining. Container scripts
     // publish data via cronium.output() → the runtime /output route, which stores
     // it on job.result.output BEFORE this completion runs. The orchestrator's
-    // completion body does not echo it, and updateJobStatus replaces `result`, so
-    // read the already-stored output here and promote it to scriptOutput (the one
-    // field workflow chaining reads). An explicit body.scriptOutput wins.
+    // completion body does not echo it, so read the already-stored output here
+    // and promote it to scriptOutput (the one field workflow chaining reads).
+    // An explicit body.scriptOutput wins. Since updateJobStatus MERGES the
+    // result jsonb, a concurrent /output write cannot be lost either way.
     let scriptOutput: unknown = body.scriptOutput;
     if (scriptOutput === undefined) {
       const [existing] = await db
@@ -155,34 +160,50 @@ export async function POST(
       );
     }
 
-    // Store scriptOutput and condition in the result field
-    const result: Record<string, unknown> = {};
+    // Structured result fields (merged into jobs.result)
+    const result: Record<string, unknown> = { exitCode };
     if (scriptOutput !== undefined) {
       result.scriptOutput = scriptOutput;
     }
     if (body.condition !== undefined) {
       result.condition = body.condition;
     }
-    if (exitCode !== undefined) {
-      result.exitCode = exitCode;
-    }
     if (body.metrics !== undefined) {
       result.metrics = body.metrics;
     }
-
-    // Only add result if we have data to store
-    if (Object.keys(result).length > 0) {
-      updateData.result = result;
+    if (body.droppedLogLines !== undefined && body.droppedLogLines > 0) {
+      result.droppedLogLines = body.droppedLogLines;
     }
+    if (
+      body.outputTruncatedBytes !== undefined &&
+      body.outputTruncatedBytes > 0
+    ) {
+      result.outputTruncatedBytes = body.outputTruncatedBytes;
+    }
+    if (body.serverResults !== undefined) {
+      result.serverResults = body.serverResults;
+    }
+    updateData.result = result;
 
     const updatedJob = await jobService.updateJobStatus(
       jobId,
       jobStatus,
       updateData,
+      `orchestrator:${reporterId ?? "unknown"}`,
     );
 
     if (!updatedJob) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+      // CAS rejection — idempotent when the terminal state already matches.
+      const current = await jobService.getJob(jobId);
+      if (current?.status === jobStatus) {
+        return NextResponse.json({ success: true, job: current, noop: true });
+      }
+      return NextResponse.json(
+        {
+          error: `Completion to ${jobStatus} rejected (current: ${current?.status ?? "unknown"})`,
+        },
+        { status: 409 },
+      );
     }
 
     return NextResponse.json({ success: true, job: updatedJob });

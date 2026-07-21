@@ -12,7 +12,22 @@ import {
   LogStatus,
 } from "@shared/schema";
 import { transitionJob } from "@/lib/scheduling/job-transition";
-import { eq, ne, desc, and, or, isNull, lte, gte } from "drizzle-orm";
+import {
+  eq,
+  ne,
+  desc,
+  and,
+  or,
+  isNull,
+  lte,
+  gte,
+  inArray,
+  sql,
+} from "drizzle-orm";
+
+/** Claim-lease duration; owners renew via heartbeat well inside this window
+ * (orchestrator heartbeats every ~20s). */
+export const DEFAULT_CLAIM_LEASE_MS = 60_000;
 import { customAlphabet } from "nanoid";
 
 // Use only alphanumeric characters for job IDs to avoid issues with dashes
@@ -257,81 +272,54 @@ export class JobService {
   }
 
   /**
-   * Claim jobs for processing by an orchestrator.
-   *
-   * The guarded batch UPDATE (status = QUEUED AND orchestrator_id IS NULL) is
-   * the claim's atomicity; the audit rows below record each claim on the
-   * transition trail. Lease stamping arrives with the orchestrator rework
-   * (PLAN.md Phase 3) — setting leases before owners heartbeat would hand the
-   * sweeper false positives.
+   * Claim SCRIPT jobs for an orchestrator (PLAN.md §4.2): one transaction,
+   * FOR UPDATE SKIP LOCKED, stamping ownership plus a lease the owner must
+   * keep renewing via heartbeatJobs — an expired lease hands the job to the
+   * sweeper. Tool actions and HTTP requests are claimed by the scheduling
+   * worker's own pool, never by orchestrators.
    */
   async claimJobs(
     orchestratorId: string,
     batchSize = 10,
-    jobTypes?: JobType[],
+    leaseMs: number = DEFAULT_CLAIM_LEASE_MS,
   ): Promise<Job[]> {
-    // Find unclaimed jobs that are scheduled to run. Tool actions and HTTP
-    // requests run in-process (see runInProcessJob); the orchestrator must never
-    // claim one, or it would fail it as a scriptless container job.
-    const conditions = [
-      eq(jobsTable.status, JobStatus.QUEUED),
-      isNull(jobsTable.orchestratorId),
-      lte(jobsTable.scheduledFor, new Date()),
-      ne(jobsTable.type, JobType.TOOL_ACTION),
-      ne(jobsTable.type, JobType.HTTP_REQUEST),
-    ];
+    const now = new Date();
+    return this.db.transaction(async (tx) => {
+      const eligible = await tx
+        .select({ id: jobsTable.id })
+        .from(jobsTable)
+        .where(
+          and(
+            eq(jobsTable.status, JobStatus.QUEUED),
+            isNull(jobsTable.orchestratorId),
+            lte(jobsTable.scheduledFor, now),
+            ne(jobsTable.type, JobType.TOOL_ACTION),
+            ne(jobsTable.type, JobType.HTTP_REQUEST),
+          ),
+        )
+        .orderBy(desc(jobsTable.priority), jobsTable.createdAt)
+        .limit(batchSize)
+        .for("update", { skipLocked: true });
 
-    if (jobTypes && jobTypes.length > 0) {
-      const typeCondition = or(
-        ...jobTypes.map((type) => eq(jobsTable.type, type)),
-      );
-      if (typeCondition) {
-        conditions.push(typeCondition);
-      }
-    }
+      if (eligible.length === 0) return [];
 
-    // Get eligible jobs
-    const eligibleJobs = await this.db
-      .select()
-      .from(jobsTable)
-      .where(and(...conditions))
-      .orderBy(desc(jobsTable.priority), jobsTable.createdAt)
-      .limit(batchSize);
+      const claimed = await tx
+        .update(jobsTable)
+        .set({
+          status: JobStatus.CLAIMED,
+          orchestratorId,
+          leaseExpiresAt: new Date(now.getTime() + leaseMs),
+          updatedAt: now,
+        })
+        .where(
+          inArray(
+            jobsTable.id,
+            eligible.map((row) => row.id),
+          ),
+        )
+        .returning();
 
-    if (eligibleJobs.length === 0) {
-      return [];
-    }
-
-    // Claim the jobs by updating them
-    const jobIds = eligibleJobs.map((j) => j.id);
-    await this.db
-      .update(jobsTable)
-      .set({
-        orchestratorId,
-        status: JobStatus.CLAIMED,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          or(...jobIds.map((id) => eq(jobsTable.id, id))),
-          eq(jobsTable.status, JobStatus.QUEUED),
-          isNull(jobsTable.orchestratorId),
-        ),
-      );
-
-    // Return the claimed jobs
-    const claimed = await this.db
-      .select()
-      .from(jobsTable)
-      .where(
-        and(
-          or(...jobIds.map((id) => eq(jobsTable.id, id))),
-          eq(jobsTable.orchestratorId, orchestratorId),
-        ),
-      );
-
-    if (claimed.length > 0) {
-      await this.db.insert(jobTransitions).values(
+      await tx.insert(jobTransitions).values(
         claimed.map((job) => ({
           jobId: job.id,
           fromStatus: JobStatus.QUEUED,
@@ -339,9 +327,47 @@ export class JobService {
           actor: `orchestrator:${orchestratorId}`,
         })),
       );
-    }
 
-    return claimed;
+      return claimed;
+    });
+  }
+
+  /**
+   * Renew leases for an owner's in-flight jobs and report which of them have
+   * cancellation requested — the return channel that makes UI cancel actually
+   * reach a running container (review D3).
+   */
+  async heartbeatJobs(
+    orchestratorId: string,
+    jobIds: string[],
+    leaseMs: number = DEFAULT_CLAIM_LEASE_MS,
+  ): Promise<{ extended: string[]; cancelRequested: string[] }> {
+    if (jobIds.length === 0) return { extended: [], cancelRequested: [] };
+    const now = new Date();
+    const updated = await this.db
+      .update(jobsTable)
+      .set({
+        leaseExpiresAt: new Date(now.getTime() + leaseMs),
+        updatedAt: now,
+      })
+      .where(
+        and(
+          inArray(jobsTable.id, jobIds),
+          eq(jobsTable.orchestratorId, orchestratorId),
+          inArray(jobsTable.status, [JobStatus.CLAIMED, JobStatus.RUNNING]),
+        ),
+      )
+      .returning({
+        id: jobsTable.id,
+        cancelRequested: jobsTable.cancelRequested,
+      });
+
+    return {
+      extended: updated.map((row) => row.id),
+      cancelRequested: updated
+        .filter((row) => row.cancelRequested)
+        .map((row) => row.id),
+    };
   }
 
   /**
@@ -626,8 +652,11 @@ export class JobService {
     }
     if (data) {
       // If result is provided directly, use it (for scriptOutput, condition, etc.)
+      // Written as a jsonb MERGE, not a replace: a concurrent runtime write
+      // (cronium.output() → result.output) landing between read and report can
+      // no longer be lost (review D7).
       if (data.result !== undefined) {
-        set.result = data.result;
+        set.result = sql`COALESCE(${jobsTable.result}, '{}'::jsonb) || ${JSON.stringify(data.result)}::jsonb`;
       } else {
         // Otherwise build minimal result from exitCode and metrics
         const result: NonNullable<UpdateJobInput["result"]> = {};
@@ -635,7 +664,7 @@ export class JobService {
         if (data.metrics !== undefined) result.metrics = data.metrics;
 
         if (Object.keys(result).length > 0) {
-          set.result = result;
+          set.result = sql`COALESCE(${jobsTable.result}, '{}'::jsonb) || ${JSON.stringify(result)}::jsonb`;
         }
       }
     }
