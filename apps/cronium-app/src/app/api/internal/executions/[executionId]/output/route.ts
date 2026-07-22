@@ -6,17 +6,15 @@ import { eq } from "drizzle-orm";
 import { executionService } from "@/lib/services/execution-service";
 import { unifiedIoDebug } from "@/lib/unified-io/debug";
 import { MAX_UNIFIED_IO_OUTPUT_BYTES } from "@/lib/unified-io/limits";
+import { verifyInternalKey } from "@/lib/internal-auth";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ executionId: string }> },
 ) {
   try {
-    // Verify internal API token
-    const authHeader = request.headers.get("authorization");
-    const token = authHeader?.replace("Bearer ", "");
-
-    if (!token || token !== process.env.INTERNAL_API_KEY) {
+    // Timing-safe internal-key check (HI-10)
+    if (!verifyInternalKey(request)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

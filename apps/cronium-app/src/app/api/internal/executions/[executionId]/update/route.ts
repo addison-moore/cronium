@@ -5,6 +5,7 @@ import { jobService } from "@/lib/services/job-service";
 import { JobStatus } from "@/shared/schema";
 import { unifiedIoDebug } from "@/lib/unified-io/debug";
 import { mergeCompletionResult } from "@/lib/unified-io/merge-completion-result";
+import { verifyInternalKey } from "@/lib/internal-auth";
 
 // Update an execution
 export async function PUT(
@@ -12,11 +13,8 @@ export async function PUT(
   { params }: { params: Promise<{ executionId: string }> },
 ) {
   try {
-    // Verify internal API token
-    const authHeader = request.headers.get("authorization");
-    const token = authHeader?.replace("Bearer ", "");
-
-    if (!token || token !== process.env.INTERNAL_API_KEY) {
+    // Timing-safe internal-key check (HI-10)
+    if (!verifyInternalKey(request)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

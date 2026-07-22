@@ -3,17 +3,15 @@ import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { userVariables } from "@/shared/schema";
 import { and, eq } from "drizzle-orm";
+import { verifyInternalKey } from "@/lib/internal-auth";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string; key: string }> },
 ) {
   try {
-    // Verify internal API token
-    const authHeader = request.headers.get("authorization");
-    const token = authHeader?.replace("Bearer ", "");
-
-    if (!token || token !== process.env.INTERNAL_API_KEY) {
+    // Timing-safe internal-key check (HI-10)
+    if (!verifyInternalKey(request)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -64,11 +62,8 @@ export async function PUT(
   { params }: { params: Promise<{ userId: string; key: string }> },
 ) {
   try {
-    // Verify internal API token
-    const authHeader = request.headers.get("authorization");
-    const token = authHeader?.replace("Bearer ", "");
-
-    if (!token || token !== process.env.INTERNAL_API_KEY) {
+    // Timing-safe internal-key check (HI-10)
+    if (!verifyInternalKey(request)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
