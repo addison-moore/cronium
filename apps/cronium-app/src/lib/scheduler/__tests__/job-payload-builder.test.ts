@@ -64,3 +64,26 @@ describe("buildJobPayload targets", () => {
     expect(payload.target).toEqual({ containerImage: "cronium/bash:latest" });
   });
 });
+
+describe("buildJobPayload environment secrecy (ME-02/ME-11)", () => {
+  // The dispatch load path reads env_vars via a Drizzle relational query that
+  // does NOT decrypt, so envVar.value is the at-rest ciphertext. buildJobPayload
+  // must pass it through verbatim so the persisted jobs.payload never holds a
+  // plaintext secret; decryption happens later, only at the delivery boundary.
+  it("passes env values through verbatim, keeping the plaintext canary out of the payload", () => {
+    const CANARY = "canary-SUPER-SECRET-do-not-persist";
+    const ciphertext = "crn.1.k0.aXY.Y3Q.dGFn"; // stand-in at-rest envelope
+    const payload = buildJobPayload(
+      makeEvent({
+        envVars: [
+          { key: "API_KEY", value: ciphertext },
+        ] as unknown as EventWithRelations["envVars"],
+      }),
+      10,
+    );
+
+    expect(payload.environment).toEqual({ API_KEY: ciphertext });
+    // The canary plaintext must appear nowhere in the serialized persisted job.
+    expect(JSON.stringify(payload)).not.toContain(CANARY);
+  });
+});
