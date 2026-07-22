@@ -25,6 +25,7 @@ import (
 // ConnectionPool manages SSH connections
 type ConnectionPool struct {
 	config   config.ConnectionPoolConfig
+	security config.SSHSecurityConfig
 	log      *logrus.Logger
 	hostKeys *HostKeyVerifier
 
@@ -54,6 +55,7 @@ func NewConnectionPool(cfg config.ConnectionPoolConfig, securityCfg config.SSHSe
 
 	pool := &ConnectionPool{
 		config:      cfg,
+		security:    securityCfg,
 		breakerCfg:  breakerCfg,
 		log:         log,
 		hostKeys:    NewHostKeyVerifier(securityCfg, log),
@@ -214,6 +216,8 @@ func (p *ConnectionPool) createConnection(ctx context.Context, server *types.Ser
 		HostKeyCallback: p.hostKeys.Callback(),
 		Timeout:         p.config.ConnectionTimeout,
 	}
+	// Restrict to modern host-key/KEX/cipher/MAC algorithms (Phase 3.3).
+	applyAlgorithmPolicy(config, p.security)
 
 	// Create connection with context
 	addr := fmt.Sprintf("%s:%d", server.Host, server.Port)

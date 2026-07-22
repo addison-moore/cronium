@@ -235,6 +235,13 @@ type SSHSecurityConfig struct {
 	PayloadSigningKeyFile string   `yaml:"payloadSigningKeyFile" envconfig:"PAYLOAD_SIGNING_KEY_FILE" default:"/app/data/payload_signing.key"`
 	AllowedCiphers        []string `yaml:"allowedCiphers" envconfig:"ALLOWED_CIPHERS"`
 	AllowedKeyExchanges   []string `yaml:"allowedKeyExchanges" envconfig:"ALLOWED_KEY_EXCHANGES"`
+	AllowedMACs           []string `yaml:"allowedMACs" envconfig:"ALLOWED_MACS"`
+	// AllowLegacyAlgorithms disables the hardened SSH algorithm allowlist and
+	// falls back to the Go crypto/ssh defaults (which still exclude the very
+	// weakest algorithms). Off by default (Phase 3.3): connections negotiate
+	// only modern host-key/KEX/cipher/MAC algorithms, rejecting ssh-rsa (SHA-1),
+	// CBC ciphers, and SHA-1 MACs.
+	AllowLegacyAlgorithms bool `yaml:"allowLegacyAlgorithms" envconfig:"ALLOW_LEGACY_ALGORITHMS" default:"false"`
 }
 
 // FileLogConfig defines file logging settings
