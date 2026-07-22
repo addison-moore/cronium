@@ -84,6 +84,31 @@ Marketing/docs site. Direct production deps: `next`, `react`, `react-dom`,
 `@cronium/ui`, `lucide-react`, `clsx`, `prismjs` (docs code highlighting), and
 `nodemailer` (contact form). `@cronium/tailwind-config` supplies styling presets.
 
+## Deprecated-package budget
+
+Direct dependencies must not be deprecated. Transitive deprecated packages are
+tracked here as a **budget** and only shrink as parents update their ranges — a
+PR that grows this list should update a parent, add an override in
+`pnpm-workspace.yaml`, or justify the addition here.
+
+Current budget: **7** deprecated transitive packages (as of 2026-07-22):
+
+| Package                         | Pulled in via                             |
+| ------------------------------- | ----------------------------------------- |
+| `@esbuild-kit/core-utils@3.3.2` | drizzle-kit (`@esbuild-kit/esm-loader`)   |
+| `@esbuild-kit/esm-loader@2.6.5` | drizzle-kit                               |
+| `glob@10.5.0`                   | build/test tooling                        |
+| `glob@7.2.3`                    | legacy transitive (rimraf/inflight chain) |
+| `inflight@1.0.6`                | legacy `glob@7` chain                     |
+| `node-domexception@1.0.0`       | fetch/formdata polyfill chain             |
+| `whatwg-encoding@3.1.1`         | jsdom (test env)                          |
+
+A fully automated gate is not wired: pnpm only emits deprecation warnings on
+fresh resolution (not on a warm store, i.e. most CI runs), and lockfile contents
+do not carry deprecation status — reliable detection would need per-package
+registry introspection. The budget is therefore enforced at review time against
+this list; run `pnpm install --force` locally on a cold store to refresh it.
+
 ## Go services
 
 `apps/orchestrator`, `apps/runner/cronium-runner`, `apps/runtime/cronium-runtime`
