@@ -32,9 +32,7 @@ describe("ME-02 log-redaction canary", () => {
   });
 
   it("never leaks when deeply nested or inside arrays", () => {
-    expect(
-      leaks({ a: { b: { c: [{ d: { token: CANARY } }] } } }),
-    ).toBe(false);
+    expect(leaks({ a: { b: { c: [{ d: { token: CANARY } }] } } })).toBe(false);
     expect(leaks([{ secret: CANARY }, "ok", { nested: [CANARY] }])).toBe(false);
   });
 

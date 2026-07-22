@@ -84,7 +84,53 @@ import {
   encryptionService,
   isSystemSettingSensitive,
 } from "../lib/encryption-service";
+import {
+  encryptServerSecret,
+  decryptServerSecret,
+  encryptEnvVarValue,
+  decryptEnvVarValue,
+  encryptSystemSetting,
+  decryptSystemSetting,
+  encryptMfaSecret,
+  decryptMfaSecret,
+} from "@/lib/security/field-secret";
 import { hashApiToken, isHashedApiToken } from "../lib/api-token-hash";
+
+/**
+ * Record-bound (vault) encryption of a server row's credential columns, with
+ * legacy-passthrough decryption (2.1). Bound to the owning tenant so ciphertext
+ * cannot be moved between tenants' server rows.
+ */
+function encryptServerColumns<
+  T extends {
+    sshKey?: string | null | undefined;
+    password?: string | null | undefined;
+  },
+>(row: T, userId: string): T {
+  const out = { ...row };
+  if (typeof row.sshKey === "string" && row.sshKey) {
+    out.sshKey = encryptServerSecret(row.sshKey, "sshKey", userId);
+  }
+  if (typeof row.password === "string" && row.password) {
+    out.password = encryptServerSecret(row.password, "password", userId);
+  }
+  return out;
+}
+
+function decryptServerRow(server: Server): Server {
+  const out = { ...server };
+  if (typeof server.sshKey === "string" && server.sshKey) {
+    out.sshKey = decryptServerSecret(server.sshKey, "sshKey", server.userId);
+  }
+  if (typeof server.password === "string" && server.password) {
+    out.password = decryptServerSecret(
+      server.password,
+      "password",
+      server.userId,
+    );
+  }
+  return out;
+}
 import {
   assertSocketSecurityStoreAvailable,
   publishAllSocketRevocation,
@@ -695,7 +741,7 @@ class DatabaseStorage implements IStorage {
       .limit(1);
     if (!row?.mfaSecret) return null;
     try {
-      return encryptionService.decrypt(row.mfaSecret);
+      return decryptMfaSecret(row.mfaSecret, userId);
     } catch {
       return null;
     }
@@ -709,7 +755,7 @@ class DatabaseStorage implements IStorage {
     await db
       .update(users)
       .set({
-        mfaSecret: encryptionService.encrypt(secret),
+        mfaSecret: encryptMfaSecret(secret, userId),
         mfaEnabled: false,
         updatedAt: new Date(),
       })
@@ -1582,10 +1628,14 @@ class DatabaseStorage implements IStorage {
       .from(envVars)
       .where(eq(envVars.eventId, eventId));
 
-    // Decrypt sensitive environment variable values
+    // Decrypt env var values (record-bound vault, legacy passthrough — 2.1)
     return vars.map((envVar) => {
       try {
-        return decryptSensitiveData(envVar, "envVars");
+        if (!envVar.value) return envVar;
+        return {
+          ...envVar,
+          value: decryptEnvVarValue(envVar.value, eventId, envVar.key),
+        };
       } catch (error) {
         console.error(`Error decrypting env var for event ${eventId}:`, error);
         // Return env var without decryption rather than failing
@@ -1595,17 +1645,31 @@ class DatabaseStorage implements IStorage {
   }
 
   async createEnvVar(insertEnvVar: InsertEnvVar): Promise<EnvVar> {
-    // Encrypt sensitive environment variable data before storing
-    const encryptedData = encryptSensitiveData(insertEnvVar, "envVars");
+    // Encrypt the value record-bound to (eventId, key) before storing (2.1).
+    const storedValue = insertEnvVar.value
+      ? encryptEnvVarValue(
+          insertEnvVar.value,
+          insertEnvVar.eventId,
+          insertEnvVar.key,
+        )
+      : insertEnvVar.value;
 
-    const [envVar] = await db.insert(envVars).values(encryptedData).returning();
+    const [envVar] = await db
+      .insert(envVars)
+      .values({ ...insertEnvVar, value: storedValue })
+      .returning();
 
     if (!envVar) {
       throw new Error("Failed to create environment variable");
     }
 
     // Return decrypted data for immediate use
-    return decryptSensitiveData<EnvVar>(envVar, "envVars");
+    return {
+      ...envVar,
+      value: envVar.value
+        ? decryptEnvVarValue(envVar.value, envVar.eventId, envVar.key)
+        : envVar.value,
+    };
   }
 
   async deleteEnvVarsByEventId(eventId: number): Promise<void> {
@@ -1957,7 +2021,7 @@ class DatabaseStorage implements IStorage {
         ),
       )
       .limit(1);
-    return server ? decryptSensitiveData<Server>(server, "servers") : undefined;
+    return server ? decryptServerRow(server) : undefined;
   }
 
   async getAllServers(userId: string): Promise<Server[]> {
@@ -2046,8 +2110,11 @@ class DatabaseStorage implements IStorage {
   }
 
   async createServer(insertServer: InsertServer): Promise<Server> {
-    // Encrypt sensitive server data before storing
-    const encryptedData = encryptSensitiveData(insertServer, "servers");
+    // Encrypt credential columns record-bound to the owning tenant (2.1).
+    const encryptedData = encryptServerColumns(
+      insertServer,
+      insertServer.userId,
+    );
 
     const [server] = await db.insert(servers).values(encryptedData).returning();
 
@@ -2055,7 +2122,7 @@ class DatabaseStorage implements IStorage {
       throw new Error("Failed to create server");
     }
     // Return decrypted data for immediate use
-    return decryptSensitiveData<Server>(server, "servers");
+    return decryptServerRow(server);
   }
 
   async updateServer(
@@ -2064,8 +2131,16 @@ class DatabaseStorage implements IStorage {
   ): Promise<Server> {
     const revokeSockets = changesTerminalAuthorization(updateData);
     if (revokeSockets) await assertSocketSecurityStoreAvailable();
-    // Encrypt sensitive data before updating
-    const encryptedData = encryptSensitiveData(updateData, "servers");
+    // Record-bound credential encryption needs the owning tenant (2.1).
+    const [owner] = await db
+      .select({ userId: servers.userId })
+      .from(servers)
+      .where(eq(servers.id, id))
+      .limit(1);
+    if (!owner) {
+      throw new Error(`Server with id ${id} not found`);
+    }
+    const encryptedData = encryptServerColumns(updateData, owner.userId);
 
     const [server] = await db
       .update(servers)
@@ -2085,7 +2160,7 @@ class DatabaseStorage implements IStorage {
     }
 
     // Return decrypted data for immediate use
-    return decryptSensitiveData<Server>(server, "servers");
+    return decryptServerRow(server);
   }
 
   async updateServerStatus(
@@ -2337,7 +2412,7 @@ class DatabaseStorage implements IStorage {
       try {
         return {
           ...setting,
-          value: encryptionService.decrypt(setting.value),
+          value: decryptSystemSetting(setting.value, key),
         };
       } catch (error) {
         console.error(`Error decrypting system setting ${key}:`, error);
@@ -2358,7 +2433,7 @@ class DatabaseStorage implements IStorage {
         try {
           return {
             ...setting,
-            value: encryptionService.decrypt(setting.value),
+            value: decryptSystemSetting(setting.value, setting.key),
           };
         } catch (error) {
           console.error(
@@ -2374,9 +2449,9 @@ class DatabaseStorage implements IStorage {
   }
 
   async upsertSetting(key: string, value: string): Promise<Setting> {
-    // Encrypt sensitive values before storing
+    // Encrypt sensitive values before storing (record-bound to the key; 2.1)
     const valueToStore = isSystemSettingSensitive(key)
-      ? encryptionService.encrypt(value)
+      ? encryptSystemSetting(value, key)
       : value;
 
     // Check if the setting exists (raw from DB, not decrypted)

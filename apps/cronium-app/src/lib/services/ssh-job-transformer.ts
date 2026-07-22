@@ -42,8 +42,9 @@ export async function transformSSHJobForOrchestrator(
     }
 
     // Fetch environment variables and decrypt at this delivery boundary (the
-    // env_vars.value column is encrypted at rest; ME-11).
-    const { decryptSensitiveData } = await import("@/lib/encryption-service");
+    // env_vars.value column is encrypted at rest; ME-11). Record-bound to
+    // (eventId, key) in the vault with legacy passthrough (2.1).
+    const { decryptEnvVarValue } = await import("@/lib/security/field-secret");
     const eventEnvVars = await db
       .select()
       .from(envVars)
@@ -52,11 +53,9 @@ export async function transformSSHJobForOrchestrator(
     // Build environment map (values decrypted for execution)
     const environment: Record<string, string> = {};
     for (const envVar of eventEnvVars) {
-      const decrypted = decryptSensitiveData(
-        { value: envVar.value },
-        "envVars",
-      );
-      environment[envVar.key] = decrypted.value;
+      environment[envVar.key] = envVar.value
+        ? decryptEnvVarValue(envVar.value, eventId, envVar.key)
+        : envVar.value;
     }
 
     // Extract script content from event

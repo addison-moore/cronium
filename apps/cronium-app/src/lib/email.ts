@@ -4,10 +4,8 @@ import { env } from "../env.mjs";
 import { systemSettings } from "@/shared/schema";
 import fs from "fs";
 import path from "path";
-import {
-  encryptionService,
-  isSystemSettingSensitive,
-} from "./encryption-service";
+import { isSystemSettingSensitive } from "./encryption-service";
+import { decryptSystemSetting } from "@/lib/security/field-secret";
 
 // Interface for email message
 interface EmailMessage {
@@ -49,7 +47,7 @@ export async function getSmtpSettings() {
       try {
         return {
           ...setting,
-          value: encryptionService.decrypt(setting.value),
+          value: decryptSystemSetting(setting.value, setting.key),
         };
       } catch (error) {
         console.error(`Error decrypting system setting ${setting.key}:`, error);
