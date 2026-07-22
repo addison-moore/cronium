@@ -60,7 +60,8 @@ services:
       SOCKET_ALLOWED_ORIGINS: ${SOCKET_ALLOWED_ORIGINS:-}
       AUTH_SECRET: ${AUTH_SECRET:?generate with openssl rand -hex 32}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?generate with openssl rand -hex 32 (must be 64 hex chars)}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
+      CRONIUM_ORCHESTRATOR_KEY: ${CRONIUM_ORCHESTRATOR_KEY:?generate with openssl rand -base64 32}
+      SOCKET_BROADCAST_KEY: ${SOCKET_BROADCAST_KEY:?generate with openssl rand -base64 32}
       JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
       ORCHESTRATOR_URL: http://cronium-orchestrator:8080
       VALKEY_URL: valkey://valkey:6379
@@ -113,7 +114,7 @@ services:
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3000}
       AUTH_SECRET: ${AUTH_SECRET:?generate with openssl rand -hex 32}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?generate with openssl rand -hex 32 (must be 64 hex chars)}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
+      SOCKET_BROADCAST_KEY: ${SOCKET_BROADCAST_KEY:?generate with openssl rand -base64 32}
       JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
       VALKEY_URL: valkey://valkey:6379
       SOCKET_INTERNAL_URL: http://cronium-app:5002
@@ -157,7 +158,7 @@ services:
     container_name: cronium-orchestrator
     environment:
       CRONIUM_API_ENDPOINT: http://cronium-app:3000
-      CRONIUM_API_TOKEN: ${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
+      CRONIUM_API_TOKEN: ${CRONIUM_ORCHESTRATOR_KEY:?generate with openssl rand -base64 32}
       CRONIUM_ORCHESTRATOR_ID: ${ORCHESTRATOR_ID:-orchestrator-1}
       CRONIUM_CONTAINER_RUNTIME_JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
       CRONIUM_CONTAINER_RUNTIME_BACKEND_URL: http://cronium-app:3000
@@ -204,7 +205,6 @@ services:
       RUNTIME_PORT: 8081
       RUNTIME_JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
       RUNTIME_BACKEND_URL: http://cronium-app:3000
-      RUNTIME_BACKEND_TOKEN: ${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
       RUNTIME_VALKEY_URL: valkey://valkey:6379
       RUNTIME_LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:

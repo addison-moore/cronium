@@ -40,7 +40,7 @@ fi
 
 if [ ! -f .env ]; then
     echo -e "${YELLOW}⚠️  No .env file found. The compose file expects AUTH_SECRET, ENCRYPTION_KEY,${NC}"
-    echo -e "${YELLOW}   INTERNAL_API_KEY, JWT_SECRET, AUTH_URL and PUBLIC_APP_URL (see docs/DOCKER_DEPLOYMENT.md).${NC}"
+    echo -e "${YELLOW}   CRONIUM_ORCHESTRATOR_KEY, SOCKET_BROADCAST_KEY, JWT_SECRET, AUTH_URL and PUBLIC_APP_URL (see docs/DOCKER_DEPLOYMENT.md).${NC}"
 fi
 
 # Build Docker images from source

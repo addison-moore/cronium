@@ -10,6 +10,12 @@
 const PLACEHOLDER_PATTERN =
   /replace[-_]?with|change[-_]?this|change[-_]?me|your[-_]?(secret|key|32)|<paste|example/i;
 
+// Role of the process being validated. The worker only broadcasts to the
+// socket server and never serves the orchestrator-facing routes, so it does
+// NOT need CRONIUM_ORCHESTRATOR_KEY (least privilege). start-worker.sh passes
+// "worker"; the app passes nothing.
+const role = process.argv[2] === "worker" ? "worker" : "app";
+
 const errors = [];
 
 function fail(name, message, generate) {
@@ -50,7 +56,18 @@ requireSecret("AUTH_SECRET", {
   minLength: 32,
   generate: "openssl rand -hex 32",
 });
-requireSecret("INTERNAL_API_KEY", {
+// Per-service credentials (HI-10) that replaced the former shared
+// INTERNAL_API_KEY: the orchestrator's service identity for the
+// orchestrator-facing routes, and the app<->socket-server broadcast secret.
+// Only the app-web role verifies the orchestrator on its service-identity
+// routes; the worker never does, so it is not required there.
+if (role !== "worker") {
+  requireSecret("CRONIUM_ORCHESTRATOR_KEY", {
+    minLength: 16,
+    generate: "openssl rand -base64 32",
+  });
+}
+requireSecret("SOCKET_BROADCAST_KEY", {
   minLength: 16,
   generate: "openssl rand -base64 32",
 });

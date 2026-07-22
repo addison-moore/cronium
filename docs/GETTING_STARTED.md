@@ -67,8 +67,11 @@ echo "AUTH_SECRET=$(openssl rand -base64 32)" >> env/.env.local
 # Generate ENCRYPTION_KEY
 echo "ENCRYPTION_KEY=$(openssl rand -hex 32)" >> env/.env.local
 
-# Generate INTERNAL_API_KEY
-echo "INTERNAL_API_KEY=$(openssl rand -base64 32)" >> env/.env.local
+# Generate CRONIUM_ORCHESTRATOR_KEY
+echo "CRONIUM_ORCHESTRATOR_KEY=$(openssl rand -base64 32)" >> env/.env.local
+
+# Generate SOCKET_BROADCAST_KEY
+echo "SOCKET_BROADCAST_KEY=$(openssl rand -base64 32)" >> env/.env.local
 
 # Generate JWT_SECRET
 echo "JWT_SECRET=$(openssl rand -base64 32)" >> env/.env.local
@@ -364,7 +367,8 @@ See [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md) for a complete list o
 | `DATABASE_URL`     | PostgreSQL connection string | Yes         |
 | `AUTH_SECRET`      | Session encryption           | Yes         |
 | `ENCRYPTION_KEY`   | Data encryption              | Yes         |
-| `INTERNAL_API_KEY` | Service-to-service auth      | Yes         |
+| `CRONIUM_ORCHESTRATOR_KEY` | Orchestrator service-identity auth | Yes         |
+| `SOCKET_BROADCAST_KEY` | App/worker→socket broadcast auth   | Yes         |
 | `JWT_SECRET`       | JWT token signing            | Yes         |
 | `NODE_ENV`         | Set to "development"         | Yes         |
 | `LOG_LEVEL`        | Set to "debug" for dev       | Recommended |

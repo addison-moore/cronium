@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { jobService } from "@/lib/services/job-service";
 import { enhancedTransformJobsForOrchestrator } from "@/lib/services/enhanced-job-transformer";
-import { verifyInternalKey } from "@/lib/internal-auth";
+import { verifyOrchestratorKey } from "@/lib/internal-auth";
 import { mintJobCapability } from "@/lib/security/job-capability";
 
 /**
@@ -14,7 +14,7 @@ import { mintJobCapability } from "@/lib/security/job-capability";
  */
 export async function POST(request: NextRequest) {
   try {
-    if (!verifyInternalKey(request)) {
+    if (!verifyOrchestratorKey(request)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

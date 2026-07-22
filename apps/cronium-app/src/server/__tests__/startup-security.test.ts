@@ -14,7 +14,8 @@ function validEnvironment(): NodeJS.ProcessEnv {
     ...process.env,
     AUTH_SECRET: "a".repeat(32),
     ENCRYPTION_KEY: "a".repeat(64),
-    INTERNAL_API_KEY: "a".repeat(16),
+    CRONIUM_ORCHESTRATOR_KEY: "a".repeat(16),
+    SOCKET_BROADCAST_KEY: "a".repeat(16),
     JWT_SECRET: "a".repeat(32),
     DATABASE_URL: "postgres://cronium:password@postgres:5432/cronium",
     VALKEY_URL: "valkey://valkey:6379",
@@ -22,11 +23,15 @@ function validEnvironment(): NodeJS.ProcessEnv {
   };
 }
 
-function validate(environment: NodeJS.ProcessEnv) {
-  return spawnSync(process.execPath, [validationScript], {
-    env: environment,
-    encoding: "utf8",
-  });
+function validate(environment: NodeJS.ProcessEnv, role?: string) {
+  return spawnSync(
+    process.execPath,
+    role ? [validationScript, role] : [validationScript],
+    {
+      env: environment,
+      encoding: "utf8",
+    },
+  );
 }
 
 describe("production security preflight", () => {
@@ -47,6 +52,38 @@ describe("production security preflight", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("VALKEY_URL");
     expect(result.stderr).toContain("shared socket replay protection");
+  });
+
+  it("requires the orchestrator key for the app role", () => {
+    const environment = validEnvironment();
+    delete environment.CRONIUM_ORCHESTRATOR_KEY;
+
+    const result = validate(environment);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("CRONIUM_ORCHESTRATOR_KEY");
+  });
+
+  it("does NOT require the orchestrator key for the worker role", () => {
+    // The worker only broadcasts; it never serves the orchestrator routes, so
+    // it must not need the orchestrator service-identity key (least privilege).
+    const environment = validEnvironment();
+    delete environment.CRONIUM_ORCHESTRATOR_KEY;
+
+    const result = validate(environment, "worker");
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Environment validation passed");
+  });
+
+  it("still requires the socket broadcast key for the worker role", () => {
+    const environment = validEnvironment();
+    delete environment.SOCKET_BROADCAST_KEY;
+
+    const result = validate(environment, "worker");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("SOCKET_BROADCAST_KEY");
   });
 
   it("rejects a non-Valkey connection protocol", () => {

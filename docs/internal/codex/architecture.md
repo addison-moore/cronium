@@ -57,7 +57,7 @@ Cronium’s runtime pipeline orchestrates the following sequence:
 ## Security & Access Control
 
 - Credentials for servers and tool integrations are stored in Postgres with optional encryption; server creation validates SSH connectivity before persisting.
-- API tokens are user-scoped, revocable, and surfaced in the dashboard (`settings/api-tokens`). Internal orchestrator endpoints require `INTERNAL_API_KEY` authorization.
+- API tokens are user-scoped, revocable, and surfaced in the dashboard (`settings/api-tokens`). Internal orchestrator-facing endpoints require the orchestrator service-identity key `CRONIUM_ORCHESTRATOR_KEY`; per-job routes additionally require a per-job capability token (`X-Job-Capability`) minted at claim time. (These replace the former single shared `INTERNAL_API_KEY`.)
 - Rate limiting and quota enforcement helpers exist (`src/lib/rate-limiting`) to guard API usage, though several enforcement endpoints still require completion.
 
 ## Observability

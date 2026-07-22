@@ -55,7 +55,8 @@ echo "🎲 Generating secure secrets..."
 AUTH_SECRET=$(generate_secret 32)
 ENCRYPTION_KEY=$(generate_hex 32)
 JWT_SECRET=$(generate_secret 32)
-INTERNAL_API_KEY=$(generate_secret 32)
+CRONIUM_ORCHESTRATOR_KEY=$(generate_secret 32)
+SOCKET_BROADCAST_KEY=$(generate_secret 32)
 POSTGRES_PASSWORD=$(generate_secret 24)
 
 # Update .env file
@@ -78,7 +79,8 @@ update_env() {
 update_env "AUTH_SECRET" "$AUTH_SECRET"
 update_env "ENCRYPTION_KEY" "$ENCRYPTION_KEY"
 update_env "JWT_SECRET" "$JWT_SECRET"
-update_env "INTERNAL_API_KEY" "$INTERNAL_API_KEY"
+update_env "CRONIUM_ORCHESTRATOR_KEY" "$CRONIUM_ORCHESTRATOR_KEY"
+update_env "SOCKET_BROADCAST_KEY" "$SOCKET_BROADCAST_KEY"
 update_env "POSTGRES_PASSWORD" "$POSTGRES_PASSWORD"
 
 # Remove backup files
@@ -93,7 +95,8 @@ mkdir -p secrets
 echo "$AUTH_SECRET" >secrets/AUTH_SECRET
 echo "$ENCRYPTION_KEY" >secrets/encryption_key
 echo "$JWT_SECRET" >secrets/jwt_secret
-echo "$INTERNAL_API_KEY" >secrets/internal_api_key
+echo "$CRONIUM_ORCHESTRATOR_KEY" >secrets/cronium_orchestrator_key
+echo "$SOCKET_BROADCAST_KEY" >secrets/socket_broadcast_key
 echo "$POSTGRES_PASSWORD" >secrets/postgres_password
 
 chmod 600 secrets/*
@@ -107,7 +110,8 @@ echo "=============================="
 echo "AUTH_SECRET: ${#AUTH_SECRET} characters"
 echo "ENCRYPTION_KEY: ${#ENCRYPTION_KEY} characters"
 echo "JWT_SECRET: ${#JWT_SECRET} characters"
-echo "INTERNAL_API_KEY: ${#INTERNAL_API_KEY} characters"
+echo "CRONIUM_ORCHESTRATOR_KEY: ${#CRONIUM_ORCHESTRATOR_KEY} characters"
+echo "SOCKET_BROADCAST_KEY: ${#SOCKET_BROADCAST_KEY} characters"
 echo "POSTGRES_PASSWORD: ${#POSTGRES_PASSWORD} characters"
 echo
 echo -e "${YELLOW}⚠️  Important Security Notes:${NC}"

@@ -84,7 +84,7 @@ These variables are referenced in the codebase but not validated:
 - Database: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`, `POSTGRES_MAX_CONNECTIONS`, `DB_SSL_MODE`
 - Valkey: `VALKEY_PORT`, `VALKEY_MAX_MEMORY`, `VALKEY_URL`
 - Auth: `AUTH_URL`, `AUTH_SECRET`, `JWT_SECRET`
-- Services: `ORCHESTRATOR_URL`, `INTERNAL_API_KEY`
+- Services: `ORCHESTRATOR_URL`, `CRONIUM_ORCHESTRATOR_KEY`, `SOCKET_BROADCAST_KEY`
 - Ports: `APP_PORT`, `SOCKET_PORT`
 - Email: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`
 - Build: `BUILD_VERSION`, `NODE_ENV`, `LOG_LEVEL`
@@ -125,7 +125,7 @@ The Go orchestrator uses the `CRONIUM_` prefix with envconfig:
 
 Critical variables used in code but not validated:
 
-- `INTERNAL_API_KEY` / `INTERNAL_API_TOKEN`
+- `CRONIUM_ORCHESTRATOR_KEY` (orchestrator↔app) / `SOCKET_BROADCAST_KEY` (app/worker↔socket); these replace the former single `INTERNAL_API_KEY`. The runtime no longer holds a shared `RUNTIME_BACKEND_TOKEN` — it uses a per-job capability token from its execution JWT.
 - `JWT_SECRET`
 - `ORCHESTRATOR_URL`
 - `RUNTIME_API_URL`
@@ -160,7 +160,8 @@ The orchestrator expects `CRONIUM_` prefixed variables via envconfig, but docker
 
    ```javascript
    // Add to server section:
-   INTERNAL_API_KEY: z.string(),
+   CRONIUM_ORCHESTRATOR_KEY: z.string(),
+   SOCKET_BROADCAST_KEY: z.string(),
    JWT_SECRET: z.string(),
    ORCHESTRATOR_URL: z.string().url().optional(),
    RUNTIME_API_URL: z.string().url().optional(),

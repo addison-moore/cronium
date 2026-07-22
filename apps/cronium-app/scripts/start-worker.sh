@@ -1,8 +1,10 @@
 #!/bin/sh
 set -euo pipefail
 
-# Same env preflight as the app container (refuse placeholder/invalid secrets)
-node apps/cronium-app/scripts/validate-env.cjs
+# Same env preflight as the app container (refuse placeholder/invalid secrets).
+# "worker" role: the worker broadcasts to the socket server but never serves the
+# orchestrator-facing routes, so CRONIUM_ORCHESTRATOR_KEY is not required here.
+node apps/cronium-app/scripts/validate-env.cjs worker
 
 # Migrations are run by the app container; this service depends_on it being
 # healthy, so the schema is already in place.

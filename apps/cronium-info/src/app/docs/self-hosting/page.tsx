@@ -108,8 +108,10 @@ export default function SelfHostingPage() {
                 </li>
                 <li>
                   Secrets generated for <code>AUTH_SECRET</code>,
-                  <code>ENCRYPTION_KEY</code>, and a shared
-                  <code>INTERNAL_API_KEY</code> between the app and orchestrator
+                  <code>ENCRYPTION_KEY</code>, a{" "}
+                  <code>CRONIUM_ORCHESTRATOR_KEY</code> that the orchestrator
+                  presents to the app, and a <code>SOCKET_BROADCAST_KEY</code>{" "}
+                  for app/worker→socket-server broadcasts
                 </li>
               </ul>
             </CardContent>
@@ -168,7 +170,8 @@ export default function SelfHostingPage() {
                   <SimpleCodeBlock language="bash" className="mt-2">
                     {`# macOS / Linux / WSL
 openssl rand -hex 32     # AUTH_SECRET, ENCRYPTION_KEY, JWT_SECRET
-openssl rand -base64 32  # INTERNAL_API_KEY
+openssl rand -base64 32  # CRONIUM_ORCHESTRATOR_KEY
+openssl rand -base64 32  # SOCKET_BROADCAST_KEY
 openssl rand -hex 16     # POSTGRES_PASSWORD`}
                   </SimpleCodeBlock>
                   <code>ENCRYPTION_KEY</code> must be exactly 64 hex characters
@@ -190,7 +193,8 @@ PUBLIC_APP_URL=https://cronium.example.com
 SOCKET_ALLOWED_ORIGINS=https://cronium.example.com
 AUTH_SECRET=<paste value>
 ENCRYPTION_KEY=<paste value>
-INTERNAL_API_KEY=<paste value>
+CRONIUM_ORCHESTRATOR_KEY=<paste value>
+SOCKET_BROADCAST_KEY=<paste value>
 JWT_SECRET=<paste value>
 POSTGRES_PASSWORD=<paste value>`}
                   </SimpleCodeBlock>
@@ -297,7 +301,7 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                 can use <code>cronium-app:5002</code> on the Cronium network.
                 Never proxy the service-only <code>/broadcast/*</code> routes;
                 they also require
-                <code>Authorization: Bearer $INTERNAL_API_KEY</code>.
+                <code>Authorization: Bearer $SOCKET_BROADCAST_KEY</code>.
               </li>
               <li>
                 Optional features are enabled purely by adding variables to{" "}
@@ -446,13 +450,25 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                   </TableRow>
                   <TableRow>
                     <TableCell>
-                      <code>INTERNAL_API_KEY</code>
+                      <code>CRONIUM_ORCHESTRATOR_KEY</code>
                     </TableCell>
                     <TableCell>Yes</TableCell>
                     <TableCell>
-                      Shared token that internal services (orchestrator,
-                      runtime) must present when calling the app&apos;s internal
-                      APIs and socket broadcast routes; generate with{" "}
+                      Orchestrator service-identity credential — the app
+                      verifies it on the orchestrator-facing routes (claim,
+                      heartbeat, health/metrics); generate with{" "}
+                      <code>openssl rand -base64 32</code>. Never expose it to
+                      browser clients.
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      <code>SOCKET_BROADCAST_KEY</code>
+                    </TableCell>
+                    <TableCell>Yes</TableCell>
+                    <TableCell>
+                      Authenticates internal broadcasts from the app/worker to
+                      the socket server; generate with{" "}
                       <code>openssl rand -base64 32</code>. Never expose it to
                       browser clients.
                     </TableCell>
@@ -542,7 +558,7 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                     </TableCell>
                     <TableCell>Yes</TableCell>
                     <TableCell>
-                      Must match <code>INTERNAL_API_KEY</code> so the
+                      Must match <code>CRONIUM_ORCHESTRATOR_KEY</code> so the
                       orchestrator can authenticate with the app.
                     </TableCell>
                   </TableRow>
@@ -645,12 +661,14 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                   </TableRow>
                   <TableRow>
                     <TableCell>
-                      <code>RUNTIME_BACKEND_TOKEN</code>
+                      <em>(no backend token)</em>
                     </TableCell>
-                    <TableCell>Yes</TableCell>
+                    <TableCell>—</TableCell>
                     <TableCell>
-                      Must match <code>INTERNAL_API_KEY</code> to authenticate
-                      runtime calls.
+                      The runtime no longer holds a shared app credential. It
+                      authenticates each callback with a per-job capability
+                      token extracted from its execution JWT, so there is no{" "}
+                      <code>RUNTIME_BACKEND_TOKEN</code> to configure.
                     </TableCell>
                   </TableRow>
                   <TableRow>

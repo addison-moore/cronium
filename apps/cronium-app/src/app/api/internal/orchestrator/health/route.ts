@@ -3,13 +3,13 @@ import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { sql } from "drizzle-orm";
 import { storage } from "@/server/storage";
-import { verifyInternalKey } from "@/lib/internal-auth";
+import { verifyOrchestratorKey } from "@/lib/internal-auth";
 
 // Health check endpoint
 export async function GET(request: NextRequest) {
   try {
     // Timing-safe internal-key check (HI-10)
-    if (!verifyInternalKey(request)) {
+    if (!verifyOrchestratorKey(request)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Timing-safe internal-key check (HI-10)
-    if (!verifyInternalKey(request)) {
+    if (!verifyOrchestratorKey(request)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

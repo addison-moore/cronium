@@ -10,11 +10,12 @@
 #        SOCKET_ALLOWED_ORIGINS=http://localhost:3000
 #
 #        # Secrets — generate each value:
-#        AUTH_SECRET=          # openssl rand -hex 32
-#        ENCRYPTION_KEY=       # openssl rand -hex 32  (must be exactly 64 hex chars)
-#        INTERNAL_API_KEY=     # openssl rand -base64 32
-#        JWT_SECRET=           # openssl rand -hex 32
-#        POSTGRES_PASSWORD=    # openssl rand -hex 16
+#        AUTH_SECRET=              # openssl rand -hex 32
+#        ENCRYPTION_KEY=           # openssl rand -hex 32  (must be exactly 64 hex chars)
+#        CRONIUM_ORCHESTRATOR_KEY= # openssl rand -base64 32  (orchestrator service identity)
+#        SOCKET_BROADCAST_KEY=     # openssl rand -base64 32  (app<->socket broadcast auth)
+#        JWT_SECRET=               # openssl rand -hex 32
+#        POSTGRES_PASSWORD=        # openssl rand -hex 16
 #
 #   2. docker compose up -d
 #   3. Open http://localhost:3000 — your first visit walks you through
@@ -29,7 +30,7 @@
 # cronium-app:5002 from a proxy on this Docker network). Set
 # NEXT_PUBLIC_SOCKET_URL to the public HTTPS origin. Compose binds host port
 # 5002 to loopback so /broadcast/* is not independently public; those routes
-# are service-only and also require INTERNAL_API_KEY. If trusted frontends use
+# are service-only and also require SOCKET_BROADCAST_KEY. If trusted frontends use
 # multiple origins, list each exact origin (scheme, host, and port) in
 # comma-separated SOCKET_ALLOWED_ORIGINS.
 #
@@ -88,7 +89,10 @@ services:
       SOCKET_ALLOWED_ORIGINS: ${SOCKET_ALLOWED_ORIGINS:-}
       AUTH_SECRET: ${AUTH_SECRET:?generate with openssl rand -hex 32}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?generate with openssl rand -hex 32 (must be 64 hex chars)}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
+      # Orchestrator service identity (verifies the orchestrator on its
+      # claim/heartbeat/health routes) + app<->socket broadcast auth (HI-10).
+      CRONIUM_ORCHESTRATOR_KEY: ${CRONIUM_ORCHESTRATOR_KEY:?generate with openssl rand -base64 32}
+      SOCKET_BROADCAST_KEY: ${SOCKET_BROADCAST_KEY:?generate with openssl rand -base64 32}
       JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
       DATABASE_URL: postgres://${POSTGRES_USER:-cronium}:${POSTGRES_PASSWORD:?generate with openssl rand -hex 16}@postgres:5432/${POSTGRES_DB:-cronium}
       ORCHESTRATOR_URL: http://cronium-orchestrator:8080
@@ -132,7 +136,7 @@ services:
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3000}
       AUTH_SECRET: ${AUTH_SECRET:?generate with openssl rand -hex 32}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?generate with openssl rand -hex 32 (must be 64 hex chars)}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
+      SOCKET_BROADCAST_KEY: ${SOCKET_BROADCAST_KEY:?generate with openssl rand -base64 32}
       JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
       DATABASE_URL: postgres://${POSTGRES_USER:-cronium}:${POSTGRES_PASSWORD:?generate with openssl rand -hex 16}@postgres:5432/${POSTGRES_DB:-cronium}
       VALKEY_URL: valkey://valkey:6379
@@ -168,7 +172,10 @@ services:
         condition: service_healthy
     environment:
       CRONIUM_API_ENDPOINT: http://cronium-app:3000
-      CRONIUM_API_TOKEN: ${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
+      # The orchestrator's service-identity credential (HI-10). The app verifies
+      # it on the orchestrator-facing routes; job/execution access uses per-job
+      # capability tokens instead.
+      CRONIUM_API_TOKEN: ${CRONIUM_ORCHESTRATOR_KEY:?generate with openssl rand -base64 32}
       CRONIUM_ORCHESTRATOR_ID: ${ORCHESTRATOR_ID:-orchestrator-1}
       CRONIUM_CONTAINER_RUNTIME_JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
       CRONIUM_CONTAINER_RUNTIME_BACKEND_URL: http://cronium-app:3000
@@ -213,7 +220,8 @@ services:
       RUNTIME_PORT: 8081
       RUNTIME_JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
       RUNTIME_BACKEND_URL: http://cronium-app:3000
-      RUNTIME_BACKEND_TOKEN: ${INTERNAL_API_KEY:?generate with openssl rand -base64 32}
+      # No shared backend token (HI-10): the runtime authenticates to the app
+      # with the per-job capability it extracts from the execution JWT.
       RUNTIME_VALKEY_URL: valkey://valkey:6379
       RUNTIME_LOG_LEVEL: ${LOG_LEVEL:-info}
     restart: unless-stopped

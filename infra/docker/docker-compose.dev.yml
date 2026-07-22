@@ -33,7 +33,7 @@ services:
 
       # API Configuration (CRONIUM_ prefix required)
       CRONIUM_API_ENDPOINT: http://host.docker.internal:5001
-      CRONIUM_API_TOKEN: ${INTERNAL_API_KEY}
+      CRONIUM_API_TOKEN: ${CRONIUM_ORCHESTRATOR_KEY}
       CRONIUM_API_TIMEOUT: 5m
 
       # Server Configuration
@@ -106,7 +106,8 @@ services:
 
       # Services
       ORCHESTRATOR_URL: http://cronium-orchestrator-dev:8080
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      CRONIUM_ORCHESTRATOR_KEY: ${CRONIUM_ORCHESTRATOR_KEY}
+      SOCKET_BROADCAST_KEY: ${SOCKET_BROADCAST_KEY}
       JWT_SECRET: ${JWT_SECRET}
 
       # WebSocket

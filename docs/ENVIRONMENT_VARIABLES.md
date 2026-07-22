@@ -68,7 +68,8 @@ These environment variables must be set for the application to function correctl
 | `AUTH_SECRET`      | NextAuth encryption secret          | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` | 📱      |
 | `ENCRYPTION_KEY`   | Data encryption key                 | `string` (32 chars)     | Yes      | Generate with `openssl rand -hex 32`    | 📱      |
 | `JWT_SECRET`       | JWT signing secret                  | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` |
-| `INTERNAL_API_KEY` | Internal service authentication key | `string`                | Yes      | Generate with `openssl rand -base64 32` |
+| `CRONIUM_ORCHESTRATOR_KEY` | Orchestrator service-identity credential — the app verifies it on the orchestrator-facing routes (claim, heartbeat, health/metrics) | `string` | Yes      | Generate with `openssl rand -base64 32` |
+| `SOCKET_BROADCAST_KEY` | Authenticates internal broadcasts from the app/worker to the socket server | `string`                | Yes      | Generate with `openssl rand -base64 32` |
 
 **Notes:**
 
@@ -213,7 +214,7 @@ For public deployments, terminate TLS at a reverse proxy and route only
 `/api/socketio` to `127.0.0.1:5002` (or `cronium-app:5002` from a proxy on the
 Docker network). Compose binds host port 5002 to loopback. Never expose
 `/broadcast/*`; internal broadcast producers authenticate those routes with
-`Authorization: Bearer $INTERNAL_API_KEY`. Never place that key in browser
+`Authorization: Bearer $SOCKET_BROADCAST_KEY`. Never place that key in browser
 code or proxy configuration sent to clients.
 
 ### Scheduling Worker (cronium-worker)
@@ -246,7 +247,7 @@ These variables are only used by the orchestrator service and should NOT be incl
 | `JOB_POLL_INTERVAL`   | Job queue polling interval        | `string`            | `5s`                                    | No       |
 | `DOCKER_HOST`         | Docker daemon socket              | `string`            | `unix:///var/run/docker.sock`           | Yes      |
 | `JWT_SECRET`          | JWT secret for container auth     | `string` (32 chars) | -                                       | Yes      |
-| `INTERNAL_API_KEY`    | Internal service auth key         | `string`            | -                                       | Yes      |
+| `CRONIUM_ORCHESTRATOR_KEY` | Orchestrator service-identity credential (app verifies it on claim, heartbeat, health/metrics) | `string` | -                                       | Yes      |
 
 #### Timeout Configuration
 
@@ -381,7 +382,8 @@ AUTH_URL="http://localhost:5001"
 ENCRYPTION_KEY="dev-encryption-key-32-characters"
 ENCRYPTION_MASTER_KEY="dev-master-key-exactly-32-chars!"
 JWT_SECRET="dev-jwt-secret-32-characters-long"
-INTERNAL_API_KEY="dev-internal-api-key-32-chars-ok"
+CRONIUM_ORCHESTRATOR_KEY="dev-orchestrator-key-32-chars-ok"
+SOCKET_BROADCAST_KEY="dev-socket-broadcast-key-32-chrs"
 
 # Database
 DATABASE_URL="postgresql://cronium:cronium@localhost:5432/cronium_dev"
@@ -430,7 +432,8 @@ AUTH_URL="https://cronium.yourdomain.com"
 ENCRYPTION_KEY="<generate-with: openssl rand -hex 16>"
 ENCRYPTION_MASTER_KEY="<generate-with: openssl rand -base64 24 | head -c 32>"
 JWT_SECRET="<generate-with: openssl rand -base64 32>"
-INTERNAL_API_KEY="<generate-with: openssl rand -base64 32>"
+CRONIUM_ORCHESTRATOR_KEY="<generate-with: openssl rand -base64 32>"
+SOCKET_BROADCAST_KEY="<generate-with: openssl rand -base64 32>"
 
 # Database
 DATABASE_URL="postgresql://user:password@db.neon.tech/cronium?sslmode=require"
@@ -476,7 +479,8 @@ openssl rand -base64 32  # For AUTH_SECRET
 openssl rand -hex 16     # For ENCRYPTION_KEY (32 chars)
 openssl rand -base64 24 | head -c 32  # For ENCRYPTION_MASTER_KEY
 openssl rand -base64 32  # For JWT_SECRET
-openssl rand -base64 32  # For INTERNAL_API_KEY
+openssl rand -base64 32  # For CRONIUM_ORCHESTRATOR_KEY
+openssl rand -base64 32  # For SOCKET_BROADCAST_KEY
 ```
 
 ## Notes

@@ -258,7 +258,11 @@ NEXT_PUBLIC_SOCKET_URL=${SOCKET_URL}
 # Secrets — generated for this installation; keep this file safe
 AUTH_SECRET=$(rand_hex 32)
 ENCRYPTION_KEY=$(rand_hex 32)
-INTERNAL_API_KEY=$(rand_base64 32)
+# Per-service internal credentials (HI-10): the orchestrator's service identity
+# and the app<->socket broadcast secret. These replaced the former single shared
+# INTERNAL_API_KEY; job/execution access uses per-job capability tokens.
+CRONIUM_ORCHESTRATOR_KEY=$(rand_base64 32)
+SOCKET_BROADCAST_KEY=$(rand_base64 32)
 JWT_SECRET=$(rand_hex 32)
 POSTGRES_PASSWORD=$(rand_hex 16)
 # Hash of the one-time first-admin bootstrap token (plaintext shown once at the

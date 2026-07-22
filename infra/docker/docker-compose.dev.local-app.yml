@@ -38,7 +38,7 @@ services:
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:5001}
       AUTH_SECRET: ${AUTH_SECRET:-}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
+      SOCKET_BROADCAST_KEY: ${SOCKET_BROADCAST_KEY:-}
       JWT_SECRET: ${JWT_SECRET:-}
       VALKEY_URL: valkey://valkey:6379
       SOCKET_INTERNAL_URL: http://host.docker.internal:5002
@@ -92,7 +92,7 @@ services:
       # API Configuration (CRONIUM_ prefix required)
       # Point to host machine where Next.js app is running
       CRONIUM_API_ENDPOINT: http://host.docker.internal:5001
-      CRONIUM_API_TOKEN: ${INTERNAL_API_KEY}
+      CRONIUM_API_TOKEN: ${CRONIUM_ORCHESTRATOR_KEY}
 
       # Server Configuration
       CRONIUM_SERVER_ID: ${ORCHESTRATOR_ID:-dev-orchestrator-01}
@@ -171,7 +171,6 @@ services:
       RUNTIME_PORT: 8089
       RUNTIME_JWT_SECRET: ${JWT_SECRET}
       RUNTIME_BACKEND_URL: http://host.docker.internal:5001
-      RUNTIME_BACKEND_TOKEN: ${INTERNAL_API_KEY}
       RUNTIME_VALKEY_URL: redis://cronium-valkey-dev:6379
       RUNTIME_LOG_LEVEL: ${LOG_LEVEL:-debug}
     ports:

@@ -28,8 +28,9 @@ ENCRYPTION_KEY=your-32-byte-encryption-key
 # JWT for runtime services
 JWT_SECRET=your-jwt-secret
 
-# Internal API communication
-INTERNAL_API_KEY=your-internal-api-key
+# Internal service credentials
+CRONIUM_ORCHESTRATOR_KEY=your-orchestrator-key
+SOCKET_BROADCAST_KEY=your-socket-broadcast-key
 
 # Orchestrator
 ORCHESTRATOR_ID=dev-orchestrator-01

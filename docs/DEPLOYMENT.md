@@ -62,7 +62,8 @@ The installer automates exactly these steps:
    NEXT_PUBLIC_SOCKET_URL=http://localhost:5002
    AUTH_SECRET=$(openssl rand -hex 32)
    ENCRYPTION_KEY=$(openssl rand -hex 32)
-   INTERNAL_API_KEY=$(openssl rand -base64 32)
+   CRONIUM_ORCHESTRATOR_KEY=$(openssl rand -base64 32)
+   SOCKET_BROADCAST_KEY=$(openssl rand -base64 32)
    JWT_SECRET=$(openssl rand -hex 32)
    POSTGRES_PASSWORD=$(openssl rand -hex 16)
    ENV
@@ -89,7 +90,7 @@ For a domain deployment, set `AUTH_URL`, `PUBLIC_APP_URL`, and
 container on the Cronium network can instead use `http://cronium-app:5002`.
 Compose binds host port 5002 to loopback; never proxy `/broadcast/*`. Those
 routes are intended only for Cronium services and require
-`Authorization: Bearer $INTERNAL_API_KEY`.
+`Authorization: Bearer $SOCKET_BROADCAST_KEY`.
 
 The socket server accepts browser handshakes only from exact trusted origins.
 It uses `PUBLIC_APP_URL` and `AUTH_URL` by default. If more than one frontend

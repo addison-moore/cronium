@@ -1,13 +1,13 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { storage } from "@/server/storage";
-import { verifyInternalKey } from "@/lib/internal-auth";
+import { verifyOrchestratorKey } from "@/lib/internal-auth";
 
 // Report orchestrator metrics
 export async function POST(request: NextRequest) {
   try {
     // Timing-safe internal-key check (HI-10)
-    if (!verifyInternalKey(request)) {
+    if (!verifyOrchestratorKey(request)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

@@ -39,7 +39,8 @@ generate_hex_key() {
 # Generate secure values
 AUTH_SECRET=$(generate_secret)
 ENCRYPTION_KEY=$(generate_hex_key)
-INTERNAL_API_KEY=$(generate_secret)
+CRONIUM_ORCHESTRATOR_KEY=$(generate_secret)
+SOCKET_BROADCAST_KEY=$(generate_secret)
 JWT_SECRET=$(generate_secret)
 POSTGRES_PASSWORD=$(generate_secret)
 
@@ -71,8 +72,9 @@ AUTH_URL=http://localhost:5001
 AUTH_SECRET=${AUTH_SECRET}
 ENCRYPTION_KEY=${ENCRYPTION_KEY}
 
-# Internal Service Authentication
-INTERNAL_API_KEY=${INTERNAL_API_KEY}
+# Internal Service Authentication (HI-10: per-service)
+CRONIUM_ORCHESTRATOR_KEY=${CRONIUM_ORCHESTRATOR_KEY}
+SOCKET_BROADCAST_KEY=${SOCKET_BROADCAST_KEY}
 JWT_SECRET=${JWT_SECRET}
 
 # Application URLs
@@ -124,7 +126,8 @@ echo
 echo -e "${YELLOW}Important: The following secure values have been generated:${NC}"
 echo -e "  AUTH_SECRET: ${AUTH_SECRET:0:10}..."
 echo -e "  ENCRYPTION_KEY: ${ENCRYPTION_KEY:0:10}..."
-echo -e "  INTERNAL_API_KEY: ${INTERNAL_API_KEY:0:10}..."
+echo -e "  CRONIUM_ORCHESTRATOR_KEY: ${CRONIUM_ORCHESTRATOR_KEY:0:10}..."
+echo -e "  SOCKET_BROADCAST_KEY: ${SOCKET_BROADCAST_KEY:0:10}..."
 echo -e "  JWT_SECRET: ${JWT_SECRET:0:10}..."
 echo
 echo -e "${GREEN}Next steps:${NC}"

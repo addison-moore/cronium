@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { jobService } from "@/lib/services/job-service";
-import { verifyInternalKey } from "@/lib/internal-auth";
+import { verifyOrchestratorKey } from "@/lib/internal-auth";
 
 /**
  * Owner heartbeat (PLAN.md §4.2): renews leases for the orchestrator's
@@ -12,7 +12,7 @@ import { verifyInternalKey } from "@/lib/internal-auth";
  */
 export async function POST(request: NextRequest) {
   try {
-    if (!verifyInternalKey(request)) {
+    if (!verifyOrchestratorKey(request)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

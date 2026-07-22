@@ -25,8 +25,9 @@ api:
   # Backend API endpoint (required)
   endpoint: ${CRONIUM_API_URL:-http://localhost:5001/api/internal}
 
-  # Service authentication token (required)
-  token: ${INTERNAL_API_KEY}
+  # Orchestrator service-identity token (HI-10). The app verifies this on the
+  # orchestrator-facing routes; job/execution access uses per-job capabilities.
+  token: ${CRONIUM_ORCHESTRATOR_KEY}
 
   # WebSocket endpoint for real-time communication
   # If not specified, derived from endpoint

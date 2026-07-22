@@ -41,7 +41,7 @@ export function isAllowedSocketOrigin(
 
 export function verifyInternalBroadcastAuthorization(
   authorization: string | undefined,
-  expectedKey = process.env.INTERNAL_API_KEY,
+  expectedKey = process.env.SOCKET_BROADCAST_KEY,
 ): boolean {
   if (!authorization || !expectedKey) return false;
 

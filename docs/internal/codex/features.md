@@ -18,7 +18,7 @@ This guide catalogues the major capabilities exposed across the Cronium platform
 ## Job Queue & Runtime Execution _(Production Ready)_
 
 - Queue managed by `jobService` (`src/lib/services/job-service.ts`) with priority ordering, retries, and state transitions.
-- Internal `/api/internal/jobs/*` routes expose claim/ack/update endpoints for orchestrators, secured by `INTERNAL_API_KEY`.
+- Internal `/api/internal/jobs/*` routes expose claim/ack/update endpoints for orchestrators. Claim (and the other orchestrator-facing routes) authenticate with the orchestrator service-identity key `CRONIUM_ORCHESTRATOR_KEY`; per-job ack/update/execution/variable/server calls require a per-job capability token (`X-Job-Capability` header) minted by the app at claim time. The former single shared `INTERNAL_API_KEY` no longer grants broad internal access.
 - Orchestrator (`apps/orchestrator`) provisions container or SSH jobs, streams logs, gathers metrics, and recovers inflight work on startup.
 - Runner CLI (`apps/runner/cronium-runner`) verifies payload signatures and injects runtime helpers, while the Runtime Service supplies execution-scoped APIs.
 

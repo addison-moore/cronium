@@ -8,7 +8,7 @@ orchestrator:
 
 backend:
   url: "http://cronium-app:5001"
-  apiKey: "${INTERNAL_API_KEY}"
+  apiKey: "${CRONIUM_ORCHESTRATOR_KEY}"
   timeout: 30s
   retryAttempts: 3
   retryDelay: 1s

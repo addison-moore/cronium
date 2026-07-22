@@ -192,9 +192,9 @@ export class WebSocketBroadcaster {
   ): Promise<boolean> {
     const endpoint = this.getEndpointForType(type);
     const url = `${this.config.socketBaseUrl.replace(/\/$/, "")}${endpoint}`;
-    const internalKey = process.env.INTERNAL_API_KEY;
+    const internalKey = process.env.SOCKET_BROADCAST_KEY;
     if (!internalKey) {
-      throw new Error("INTERNAL_API_KEY is required for socket broadcasts");
+      throw new Error("SOCKET_BROADCAST_KEY is required for socket broadcasts");
     }
 
     const response = await fetch(url, {

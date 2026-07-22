@@ -47,7 +47,12 @@ type CacheConfig struct {
 
 // BackendConfig defines backend API settings
 type BackendConfig struct {
-	URL        string        `yaml:"url" envconfig:"BACKEND_URL" default:"http://localhost:5001"`
+	URL string `yaml:"url" envconfig:"BACKEND_URL" default:"http://localhost:5001"`
+	// Token is OPTIONAL (HI-10): the runtime authenticates to the app's
+	// job-scoped internal routes with a per-job capability token (extracted
+	// from the execution JWT and sent as X-Job-Capability), not a shared bearer.
+	// Left empty in normal deployments; when empty the outbound client sends no
+	// Authorization header. Retained only for legacy/compat configs.
 	Token      string        `yaml:"token" envconfig:"BACKEND_TOKEN"`
 	Timeout    time.Duration `yaml:"timeout" envconfig:"BACKEND_TIMEOUT" default:"30s"`
 	MaxRetries int           `yaml:"maxRetries" envconfig:"BACKEND_MAX_RETRIES" default:"3"`
