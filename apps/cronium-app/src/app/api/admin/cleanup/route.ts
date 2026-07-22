@@ -7,6 +7,10 @@ import {
   authenticateRestPrincipal,
   restPrincipalErrorResponse,
 } from "@/lib/api-auth";
+import {
+  guardAdminMutation,
+  auditAdminAction,
+} from "@/lib/security/admin-mutation";
 import { getCleanupService } from "@/lib/services/workflow-cleanup-service";
 
 export async function GET(request: NextRequest) {
@@ -38,6 +42,9 @@ export async function POST(request: NextRequest) {
   if (!auth.ok) {
     return restPrincipalErrorResponse(auth);
   }
+  // State-changing: require same-origin (CSRF) + MFA when enforced, and audit.
+  const denied = await guardAdminMutation(request, auth.userId);
+  if (denied) return denied;
 
   try {
     const body = (await request.json()) as {
@@ -50,12 +57,14 @@ export async function POST(request: NextRequest) {
     if (body.type === "workflow" && body.id) {
       // Clean specific workflow
       await service.cleanupWorkflow(Number(body.id));
+      auditAdminAction(auth.userId, "cleanup.workflow", "ok");
       return NextResponse.json({
         message: `Workflow ${body.id} marked as timed out`,
       });
     } else if (body.type === "job" && body.id) {
       // Clean specific job
       await service.cleanupJob(String(body.id));
+      auditAdminAction(auth.userId, "cleanup.job", "ok");
       return NextResponse.json({
         message: `Job ${body.id} marked as timed out`,
       });
@@ -69,6 +78,7 @@ export async function POST(request: NextRequest) {
 
       const statsAfter = await service.getStuckItemStats();
 
+      auditAdminAction(auth.userId, "cleanup.all", "ok");
       return NextResponse.json({
         message: "Cleanup completed",
         before: statsBefore,
