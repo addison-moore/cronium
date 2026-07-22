@@ -27,6 +27,8 @@ function ContactFormModal({ open, onClose }: ContactFormModalProps) {
   const [subject, setSubject] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
+  // Honeypot: hidden from real users; bots that autofill it are dropped server-side.
+  const [website, setWebsite] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
   const [statusMessage, setStatusMessage] = useState<string>("");
@@ -37,6 +39,7 @@ function ContactFormModal({ open, onClose }: ContactFormModalProps) {
     setSubject("");
     setEmail("");
     setMessage("");
+    setWebsite("");
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -51,7 +54,7 @@ function ContactFormModal({ open, onClose }: ContactFormModalProps) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ subject, email, message }),
+        body: JSON.stringify({ subject, email, message, website }),
       });
 
       const data = (await response.json()) as {
@@ -100,6 +103,18 @@ function ContactFormModal({ open, onClose }: ContactFormModalProps) {
         </CardHeader>
         <CardContent>
           <form className="space-y-5" onSubmit={handleSubmit}>
+            {/* Honeypot: off-screen and hidden from assistive tech; real users
+                never fill it, bots often do. */}
+            <input
+              type="text"
+              name="website"
+              tabIndex={-1}
+              autoComplete="off"
+              aria-hidden="true"
+              value={website}
+              onChange={(event) => setWebsite(event.target.value)}
+              className="absolute left-[-9999px] h-0 w-0 opacity-0"
+            />
             <div className="space-y-2">
               <Label htmlFor="contact-subject">Subject</Label>
               <Input
