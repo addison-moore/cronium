@@ -187,14 +187,16 @@ type ConnectionPoolConfig struct {
 
 // SSHExecutionConfig defines SSH execution settings
 type SSHExecutionConfig struct {
-	IsolationMode          string        `yaml:"isolationMode" envconfig:"ISOLATION_MODE" default:"disabled"`
-	DefaultShell           string        `yaml:"defaultShell" envconfig:"DEFAULT_SHELL" default:"/bin/bash"`
-	TempDir                string        `yaml:"tempDir" envconfig:"TEMP_DIR" default:"/tmp/cronium"`
-	CleanupAfter           bool          `yaml:"cleanupAfter" envconfig:"CLEANUP_AFTER" default:"true"`
-	PTYMode                bool          `yaml:"ptyMode" envconfig:"PTY_MODE" default:"false"`
-	PayloadStorageDir      string        `yaml:"payloadStorageDir" envconfig:"PAYLOAD_STORAGE_DIR" default:"/app/data/payloads"`
-	CleanupPayloads        bool          `yaml:"cleanupPayloads" envconfig:"CLEANUP_PAYLOADS" default:"false"`
-	PayloadRetentionPeriod time.Duration `yaml:"payloadRetentionPeriod" envconfig:"PAYLOAD_RETENTION_PERIOD" default:"24h"`
+	IsolationMode     string `yaml:"isolationMode" envconfig:"ISOLATION_MODE" default:"disabled"`
+	DefaultShell      string `yaml:"defaultShell" envconfig:"DEFAULT_SHELL" default:"/bin/bash"`
+	TempDir           string `yaml:"tempDir" envconfig:"TEMP_DIR" default:"/tmp/cronium"`
+	CleanupAfter      bool   `yaml:"cleanupAfter" envconfig:"CLEANUP_AFTER" default:"true"`
+	PTYMode           bool   `yaml:"ptyMode" envconfig:"PTY_MODE" default:"false"`
+	PayloadStorageDir string `yaml:"payloadStorageDir" envconfig:"PAYLOAD_STORAGE_DIR" default:"/app/data/payloads"`
+	// Secret-bearing payloads are cleaned up by default so they do not persist
+	// on the orchestrator volume (HI-13). Retention is short for the same reason.
+	CleanupPayloads        bool          `yaml:"cleanupPayloads" envconfig:"CLEANUP_PAYLOADS" default:"true"`
+	PayloadRetentionPeriod time.Duration `yaml:"payloadRetentionPeriod" envconfig:"PAYLOAD_RETENTION_PERIOD" default:"1h"`
 	PayloadCleanupInterval time.Duration `yaml:"payloadCleanupInterval" envconfig:"PAYLOAD_CLEANUP_INTERVAL" default:"1h"`
 }
 
@@ -457,11 +459,18 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// Print prints the configuration (with secrets hidden)
+// Print prints the configuration with ALL secret material masked (ME-02).
+// Previously only API.Token was hidden, leaving the runtime JWT secret and
+// other credentials in the printed config.
 func (c *Config) Print(w io.Writer) error {
-	// Create a copy with secrets hidden
+	const masked = "***hidden***"
 	safeCfg := *c
-	safeCfg.API.Token = "***hidden***"
+	if safeCfg.API.Token != "" {
+		safeCfg.API.Token = masked
+	}
+	if safeCfg.Container.Runtime.JWTSecret != "" {
+		safeCfg.Container.Runtime.JWTSecret = masked
+	}
 
 	// Marshal to YAML
 	data, err := yaml.Marshal(&safeCfg)

@@ -49,24 +49,30 @@ func NewService(storageDir string) *Service {
 	}
 }
 
-// CreatePayload creates a new payload tar.gz file
+// CreatePayload creates a new payload tar.gz file.
+//
+// Payload files can carry secrets (script content, environment). They are
+// written with restrictive modes so other users on the orchestrator host
+// cannot read them (HI-13): private directories (0700) and private files
+// (0600). The runner reads (does not exec-bit-invoke) the script, so 0600 is
+// sufficient.
 func (s *Service) CreatePayload(data *PayloadData) (string, error) {
-	// Ensure storage directory exists
-	if err := os.MkdirAll(s.storageDir, 0755); err != nil {
+	// Ensure storage directory exists (private)
+	if err := os.MkdirAll(s.storageDir, 0o700); err != nil {
 		return "", fmt.Errorf("failed to create storage directory: %w", err)
 	}
 
-	// Create temp directory for payload contents
+	// Create temp directory for payload contents (private)
 	tempDir := filepath.Join(s.storageDir, "temp", fmt.Sprintf("job-%s", data.JobID))
-	if err := os.MkdirAll(tempDir, 0755); err != nil {
+	if err := os.MkdirAll(tempDir, 0o700); err != nil {
 		return "", fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	defer os.RemoveAll(tempDir) // Clean up temp dir
 
-	// Write script file
+	// Write script file (private)
 	scriptFilename := s.getScriptFilename(data.ScriptType)
 	scriptPath := filepath.Join(tempDir, scriptFilename)
-	if err := os.WriteFile(scriptPath, []byte(data.ScriptContent), 0755); err != nil {
+	if err := os.WriteFile(scriptPath, []byte(data.ScriptContent), 0o600); err != nil {
 		return "", fmt.Errorf("failed to write script file: %w", err)
 	}
 
@@ -93,7 +99,7 @@ func (s *Service) CreatePayload(data *PayloadData) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal manifest: %w", err)
 	}
-	if err := os.WriteFile(manifestPath, manifestData, 0644); err != nil {
+	if err := os.WriteFile(manifestPath, manifestData, 0o600); err != nil {
 		return "", fmt.Errorf("failed to write manifest: %w", err)
 	}
 
@@ -104,6 +110,10 @@ func (s *Service) CreatePayload(data *PayloadData) (string, error) {
 	if err := s.createTarGz(tempDir, payloadPath); err != nil {
 		return "", fmt.Errorf("failed to create archive: %w", err)
 	}
+	// The archive bundles the (secret-bearing) script + manifest; keep it private.
+	if err := os.Chmod(payloadPath, 0o600); err != nil {
+		return "", fmt.Errorf("failed to restrict payload permissions: %w", err)
+	}
 
 	// Calculate checksum
 	checksum, err := s.calculateChecksum(payloadPath)
@@ -111,10 +121,10 @@ func (s *Service) CreatePayload(data *PayloadData) (string, error) {
 		return "", fmt.Errorf("failed to calculate checksum: %w", err)
 	}
 
-	// Write checksum file
+	// Write checksum file (private)
 	checksumPath := payloadPath + ".sha256"
 	checksumData := fmt.Sprintf("%s  %s\n", checksum, filepath.Base(payloadPath))
-	if err := os.WriteFile(checksumPath, []byte(checksumData), 0644); err != nil {
+	if err := os.WriteFile(checksumPath, []byte(checksumData), 0o600); err != nil {
 		return "", fmt.Errorf("failed to write checksum: %w", err)
 	}
 
@@ -144,10 +154,18 @@ func (s *Service) CleanupOldPayloads(maxAge time.Duration) error {
 			continue
 		}
 
+		// Only sweep payload archives (and their sidecars); skip the .sha256/.sig
+		// sidecars themselves so a payload removed with its sidecars below is not
+		// double-handled.
+		name := entry.Name()
+		if strings.HasSuffix(name, ".sha256") || strings.HasSuffix(name, ".sig") {
+			continue
+		}
 		if info.ModTime().Before(cutoff) {
-			path := filepath.Join(s.storageDir, entry.Name())
+			path := filepath.Join(s.storageDir, name)
 			os.Remove(path)
-			os.Remove(path + ".sha256") // Also remove checksum file
+			os.Remove(path + ".sha256") // checksum sidecar
+			os.Remove(path + ".sig")    // signature sidecar (was orphaned before)
 		}
 	}
 
