@@ -1,0 +1,1 @@
+ALTER TABLE "workflows" ADD COLUMN "webhook_key_hash" varchar(64);

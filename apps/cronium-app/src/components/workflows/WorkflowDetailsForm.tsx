@@ -167,7 +167,9 @@ export default function WorkflowDetailsForm({
           createdAt: updatedWorkflow.createdAt,
           updatedAt: updatedWorkflow.updatedAt,
           userId: updatedWorkflow.userId,
-          webhookKey: updatedWorkflow.webhookKey,
+          // The plaintext key is only present on create/rotate; reads omit it.
+          webhookKey: updatedWorkflow.webhookKey ?? null,
+          webhookKeyHash: null,
           runLocation: updatedWorkflow.runLocation,
           source: updatedWorkflow.source,
         });

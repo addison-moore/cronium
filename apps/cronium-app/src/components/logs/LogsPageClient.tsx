@@ -183,6 +183,7 @@ export default function LogsPageClient() {
         description: null,
         triggerType: WorkflowTriggerType.MANUAL,
         webhookKey: null,
+        webhookKeyHash: null,
         source: null,
         scheduleNumber: null,
         scheduleUnit: null,

@@ -135,6 +135,7 @@ export const ROUTE_CAPABILITIES: Record<string, RouteCapability> = {
   "workflows.delete": "edit",
   "workflows.download": "view",
   "workflows.execute": "execute",
+  "workflows.rotateWebhookKey": "edit",
   "workflows.update": "edit",
 };
 

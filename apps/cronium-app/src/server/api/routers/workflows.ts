@@ -32,16 +32,9 @@ import {
   workflowExecutions,
   workflows,
 } from "@shared/schema";
-import { nanoid } from "nanoid";
 import { db } from "@/server/db";
 import { eq, desc, sql } from "drizzle-orm";
-
-// A workflow webhook key is a bearer credential in the public trigger URL.
-// Generate it server-side with high entropy (nanoid(32) ≈ 190 bits) so it is
-// unguessable and effectively unique — never accept a caller-chosen key.
-function generateWorkflowWebhookKey(): string {
-  return nanoid(32);
-}
+import { newWorkflowWebhookKeyFields as newWebhookKeyFields } from "@/lib/workflow-webhook-key";
 import {
   assertWorkflowCapability,
   assertWorkflowDefinition,
@@ -135,14 +128,18 @@ export const workflowsRouter = createTRPCRouter({
             input.overrideServerIds,
           );
 
-          // Add user ID to workflow data
+          // Add user ID to workflow data. WEBHOOK workflows get a fresh
+          // server-generated key; only its hash is stored, the plaintext is
+          // returned once below.
+          const keyFields =
+            input.triggerType === WorkflowTriggerType.WEBHOOK
+              ? newWebhookKeyFields()
+              : null;
           const workflowToCreate = {
             ...workflowData,
             userId: ctx.session.user.id,
-            webhookKey:
-              input.triggerType === WorkflowTriggerType.WEBHOOK
-                ? generateWorkflowWebhookKey()
-                : null,
+            webhookKey: keyFields?.webhookKey ?? null,
+            webhookKeyHash: keyFields?.webhookKeyHash ?? null,
             // Provenance (e.g. "mcp") for workflows created by an AI agent.
             source: ctx.requestSource ?? null,
           };
@@ -188,10 +185,14 @@ export const workflowsRouter = createTRPCRouter({
             workflow.id,
           );
 
+          const dto = completeWorkflow
+            ? toWorkflowApiDto(completeWorkflow, ctx.session.user.id)
+            : completeWorkflow;
           return mutationResponse(
-            completeWorkflow
-              ? toWorkflowApiDto(completeWorkflow, ctx.session.user.id)
-              : completeWorkflow,
+            // Surface the plaintext key exactly once, on creation.
+            dto && keyFields
+              ? { ...dto, webhookKey: keyFields.plaintext }
+              : dto,
             "Workflow created successfully",
           );
         },
@@ -234,7 +235,7 @@ export const workflowsRouter = createTRPCRouter({
           input.triggerType ?? existingWorkflow.triggerType;
         const ensureWebhookKey =
           effectiveTriggerType === WorkflowTriggerType.WEBHOOK &&
-          !existingWorkflow.webhookKey;
+          !existingWorkflow.webhookKeyHash;
 
         const proposedNodes =
           nodes ??
@@ -256,6 +257,7 @@ export const workflowsRouter = createTRPCRouter({
         );
 
         // Update workflow properties
+        let mintedWebhookKey: string | null = null;
         if (Object.keys(workflowData).length > 0 || ensureWebhookKey) {
           // Filter out null values to match the expected Partial<InsertWorkflow> type
           const filteredWorkflowData = Object.fromEntries(
@@ -263,7 +265,10 @@ export const workflowsRouter = createTRPCRouter({
           ) as Partial<InsertWorkflow>;
 
           if (ensureWebhookKey) {
-            filteredWorkflowData.webhookKey = generateWorkflowWebhookKey();
+            const keyFields = newWebhookKeyFields();
+            filteredWorkflowData.webhookKey = keyFields.webhookKey;
+            filteredWorkflowData.webhookKeyHash = keyFields.webhookKeyHash;
+            mintedWebhookKey = keyFields.plaintext;
           }
 
           await storage.updateWorkflow(id, filteredWorkflowData);
@@ -316,9 +321,13 @@ export const workflowsRouter = createTRPCRouter({
 
         // Get the updated workflow with relations
         const updatedWorkflow = await storage.getWorkflowWithRelations(id);
-        return updatedWorkflow
+        const dto = updatedWorkflow
           ? toWorkflowApiDto(updatedWorkflow, ctx.session.user.id)
           : updatedWorkflow;
+        // Surface a newly-minted key exactly once.
+        return dto && mintedWebhookKey
+          ? { ...dto, webhookKey: mintedWebhookKey }
+          : dto;
       } catch (error: unknown) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -327,6 +336,33 @@ export const workflowsRouter = createTRPCRouter({
           cause: error,
         });
       }
+    }),
+
+  // Rotate the webhook key for a WEBHOOK-triggered workflow. Returns the new
+  // plaintext key exactly once; only its hash is stored.
+  rotateWebhookKey: protectedProcedure
+    .input(workflowIdSchema)
+    .mutation(async ({ ctx, input }) => {
+      const workflow = await storage.getWorkflow(input.id);
+      if (!workflow) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workflow not found",
+        });
+      }
+      await assertWorkflowCapability(input.id, ctx.session.user.id, "edit");
+      if (workflow.triggerType !== WorkflowTriggerType.WEBHOOK) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This workflow is not webhook-triggered.",
+        });
+      }
+      const keyFields = newWebhookKeyFields();
+      await storage.updateWorkflow(input.id, {
+        webhookKey: keyFields.webhookKey,
+        webhookKeyHash: keyFields.webhookKeyHash,
+      });
+      return { webhookKey: keyFields.plaintext };
     }),
 
   // Delete workflow

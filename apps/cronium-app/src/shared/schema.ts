@@ -1049,7 +1049,12 @@ export const workflows = pgTable("workflows", {
     .$type<WorkflowTriggerType>()
     .default(WorkflowTriggerType.MANUAL)
     .notNull(),
+  // The plaintext trigger key is never stored: only its SHA-256 hash is kept.
+  // The key is shown once at creation/rotation and looked up by hashing the
+  // value in the inbound URL (HI-12). `webhookKey` is retained for legacy rows
+  // but no longer written for new/rotated workflows.
   webhookKey: varchar("webhook_key", { length: 255 }),
+  webhookKeyHash: varchar("webhook_key_hash", { length: 64 }),
   // Provenance: how this workflow was created (e.g. "mcp"); null for the UI / normal API.
   source: varchar("source", { length: 50 }),
   scheduleNumber: integer("schedule_number"),

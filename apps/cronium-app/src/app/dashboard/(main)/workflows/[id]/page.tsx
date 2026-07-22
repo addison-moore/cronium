@@ -159,6 +159,14 @@ export default function WorkflowDetailsPage({
   const [executionStats, setExecutionStats] = useState<ExecutionStats | null>(
     null,
   );
+  // The webhook key is shown only once (on creation/rotation); reads never
+  // return it. This holds a freshly-rotated key for one-time display.
+  const [revealedWebhookKey, setRevealedWebhookKey] = useState<string | null>(
+    null,
+  );
+  const rotateWebhookKeyMutation = trpc.workflows.rotateWebhookKey.useMutation({
+    onSuccess: (data) => setRevealedWebhookKey(data.webhookKey),
+  });
   const [isSaving, setIsSaving] = useState(false);
   const [hasInitialData, setHasInitialData] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -994,7 +1002,7 @@ export default function WorkflowDetailsPage({
           )}
 
           {/* Webhook Configuration */}
-          {workflow.webhookKey && (
+          {(workflow as { hasWebhookKey?: boolean }).hasWebhookKey && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -1004,13 +1012,24 @@ export default function WorkflowDetailsPage({
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Link className="text-muted-foreground h-4 w-4" />
-                    <span className="text-sm font-medium">Webhook Key:</span>
-                    <code className="bg-muted rounded-md px-2 py-1 text-sm">
-                      {workflow.webhookKey}
-                    </code>
-                  </div>
+                  {revealedWebhookKey ? (
+                    <div className="border-warning/40 bg-warning/10 space-y-1 rounded-md border p-3">
+                      <p className="text-sm font-medium">
+                        New webhook key (shown once — save it now):
+                      </p>
+                      <code className="text-sm break-all">
+                        {revealedWebhookKey}
+                      </code>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Link className="text-muted-foreground h-4 w-4" />
+                      <span className="text-muted-foreground text-sm">
+                        A webhook key is configured. It is stored hashed and
+                        cannot be shown again — rotate to get a new one.
+                      </span>
+                    </div>
+                  )}
                   <div className="space-y-1">
                     <p className="text-sm font-medium">Webhook URL:</p>
                     <div className="bg-muted rounded-md p-3">
@@ -1018,10 +1037,22 @@ export default function WorkflowDetailsPage({
                         {typeof window !== "undefined"
                           ? window.location.origin
                           : ""}
-                        /api/webhooks/{workflow.webhookKey}
+                        /api/workflows/webhook/
+                        {revealedWebhookKey ?? "<your-key>"}
                       </code>
                     </div>
                   </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={rotateWebhookKeyMutation.isPending}
+                    onClick={() =>
+                      rotateWebhookKeyMutation.mutate({ id: workflow.id })
+                    }
+                  >
+                    Rotate webhook key
+                  </Button>
                 </div>
               </CardContent>
             </Card>

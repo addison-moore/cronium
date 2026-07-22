@@ -57,6 +57,13 @@
       "when": 1784676297757,
       "tag": "0007_user_mfa",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784681040999,
+      "tag": "0008_workflow_webhook_key_hash",
+      "breakpoints": true
     }
   ]
 }

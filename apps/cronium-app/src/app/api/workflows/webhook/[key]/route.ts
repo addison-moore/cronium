@@ -6,6 +6,7 @@ import { workflows } from "@/shared/schema";
 import { WorkflowTriggerType, EventStatus } from "@/shared/schema";
 import { startWorkflowRun } from "@/lib/scheduling/workflow-engine";
 import { RateLimitService } from "@/lib/rate-limit-service";
+import { hashWorkflowWebhookKey } from "@/lib/workflow-webhook-key";
 
 // Cap webhook payloads to keep untrusted input bounded
 const MAX_PAYLOAD_BYTES = 1024 * 1024; // 1 MB
@@ -33,13 +34,14 @@ export async function POST(
         },
       );
     }
-    // Find the workflow associated with this webhook key
+    // Find the workflow by the HASH of the presented key (only the hash is
+    // stored). Constant-work lookup on an indexed hash column (HI-12).
     const [workflow] = await db
       .select()
       .from(workflows)
       .where(
         and(
-          eq(workflows.webhookKey, webhookKey),
+          eq(workflows.webhookKeyHash, hashWorkflowWebhookKey(webhookKey)),
           eq(workflows.triggerType, WorkflowTriggerType.WEBHOOK),
         ),
       )

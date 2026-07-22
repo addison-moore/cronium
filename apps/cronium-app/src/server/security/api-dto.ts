@@ -168,15 +168,17 @@ export function toEventForkSecurityProjection(
 export function toWorkflowListApiDto<T extends Workflow>(
   workflow: T,
   viewerUserId: string,
-): T & { secretFieldsRedacted: boolean } {
-  if (workflow.userId === viewerUserId) {
-    return { ...workflow, secretFieldsRedacted: false };
-  }
+): T & { hasWebhookKey: boolean; secretFieldsRedacted: boolean } {
+  // The webhook key/hash are never returned (only the hash is stored); expose
+  // a boolean so the UI can show "configured" without the credential (HI-12).
+  const owner = workflow.userId === viewerUserId;
   return {
     ...workflow,
     webhookKey: null,
-    overrideServerIds: [],
-    secretFieldsRedacted: true,
+    webhookKeyHash: null,
+    hasWebhookKey: Boolean(workflow.webhookKey ?? workflow.webhookKeyHash),
+    overrideServerIds: owner ? workflow.overrideServerIds : [],
+    secretFieldsRedacted: !owner,
   };
 }
 
@@ -186,6 +188,9 @@ export type WorkflowApiDto = Omit<WorkflowWithRelations, "nodes"> & {
       event?: EventApiDto | undefined;
     }
   >;
+  // On reads `webhookKey` is null and `hasWebhookKey` reports whether one is
+  // configured; create/rotate override `webhookKey` with the plaintext once.
+  hasWebhookKey: boolean;
   secretFieldsRedacted: boolean;
 };
 
@@ -196,7 +201,11 @@ export function toWorkflowApiDto(
   const owner = workflow.userId === viewerUserId;
   return {
     ...workflow,
-    webhookKey: owner ? workflow.webhookKey : null,
+    // Never expose the stored key or its hash on a read.
+    webhookKey: null,
+    webhookKeyHash: null,
+    hasWebhookKey:
+      owner && Boolean(workflow.webhookKey ?? workflow.webhookKeyHash),
     overrideServerIds: owner ? workflow.overrideServerIds : [],
     nodes: workflow.nodes.map((node) => ({
       ...node,

@@ -113,31 +113,50 @@ export class WebhookSecurity {
   }
 
   /**
-   * Comprehensive webhook verification
+   * Comprehensive webhook verification (HI-12).
+   *
+   * The signature covers `timestamp.deliveryId.rawBody`, the timestamp is
+   * required and must be finite and within the tolerance window, and the
+   * delivery ID is atomically consumed so a captured request cannot be
+   * replayed. `rawBody` is the exact received bytes (not a re-serialization),
+   * so senders and this verifier agree byte-for-byte.
    */
   async verifyWebhook(
     request: {
-      body: string;
+      webhookId: number;
+      rawBody: string;
       headers: Record<string, string>;
       ip?: string;
     },
     config: {
       secret: string;
       ipWhitelist?: string[];
-      verifyTimestamp?: boolean;
     },
   ): Promise<SignatureVerificationResult> {
-    // Verify signature
     const signature = request.headers["x-webhook-signature"];
+    const timestamp = request.headers["x-webhook-timestamp"];
+    const deliveryId = request.headers["x-webhook-delivery-id"];
+
     if (!signature) {
-      return {
-        isValid: false,
-        error: "Missing signature header",
-      };
+      return { isValid: false, error: "Missing signature header" };
+    }
+    if (!timestamp) {
+      return { isValid: false, error: "Missing timestamp header" };
+    }
+    if (!deliveryId) {
+      return { isValid: false, error: "Missing delivery id header" };
     }
 
+    // Timestamp must be finite and within the replay window.
+    const timestampResult = this.verifyTimestamp(timestamp);
+    if (!timestampResult.isValid) {
+      return timestampResult;
+    }
+
+    // Signature binds timestamp + delivery id + the exact body bytes.
+    const signedPayload = `${timestamp}.${deliveryId}.${request.rawBody}`;
     const signatureResult = this.verifySignature(
-      request.body,
+      signedPayload,
       signature,
       config.secret,
     );
@@ -145,28 +164,32 @@ export class WebhookSecurity {
       return signatureResult;
     }
 
-    // Verify timestamp
-    if (config.verifyTimestamp) {
-      const timestamp = request.headers["x-webhook-timestamp"];
-      if (!timestamp) {
+    // IP allowlist: when configured, the source IP must be established and
+    // permitted — fail closed if it cannot be determined.
+    if (config.ipWhitelist && config.ipWhitelist.length > 0) {
+      if (!request.ip) {
         return {
           isValid: false,
-          error: "Missing timestamp header",
+          error: "Source IP could not be established",
         };
       }
-
-      const timestampResult = this.verifyTimestamp(timestamp);
-      if (!timestampResult.isValid) {
-        return timestampResult;
-      }
-    }
-
-    // Verify IP whitelist
-    if (config.ipWhitelist && request.ip) {
       const ipResult = this.verifyIPWhitelist(request.ip, config.ipWhitelist);
       if (!ipResult.isValid) {
         return ipResult;
       }
+    }
+
+    // Atomically consume the delivery id — reject replays (and fail closed if
+    // the replay store is unavailable).
+    const { consumeWebhookDeliveryOnce } =
+      await import("./webhook-replay-store");
+    const fresh = await consumeWebhookDeliveryOnce(
+      request.webhookId,
+      deliveryId,
+      Math.ceil(WebhookSecurity.TIMESTAMP_TOLERANCE_MS / 1000) + 60,
+    );
+    if (!fresh) {
+      return { isValid: false, error: "Duplicate or replayed delivery" };
     }
 
     return { isValid: true };

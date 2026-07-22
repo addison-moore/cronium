@@ -76,12 +76,13 @@ export class WebhookRouter {
         );
       }
 
-      // Parse request body (size-capped before parsing)
-      let body: unknown;
+      // Read the raw body once (size-capped). The signature is verified over
+      // these exact bytes; parsing happens only after verification.
+      let rawBody: string;
       try {
-        body = await this.parseRequestBody(request);
-      } catch (parseError) {
-        if (parseError instanceof WebhookBodyTooLargeError) {
+        rawBody = await this.readBoundedText(request);
+      } catch (readError) {
+        if (readError instanceof WebhookBodyTooLargeError) {
           return NextResponse.json(
             { error: "Request body too large" },
             { status: 413 },
@@ -96,11 +97,13 @@ export class WebhookRouter {
       // Get headers
       const headers = this.extractHeaders(request.headers);
 
-      // Verify webhook security
+      // Verify webhook security over the raw body (signature binds
+      // timestamp.deliveryId.rawBody; delivery id is consumed once).
       const clientIp = this.getClientIP(request);
       const verificationResult = await this.webhookSecurity.verifyWebhook(
         {
-          body: JSON.stringify(body),
+          webhookId: webhook.id,
+          rawBody,
           headers,
           ...(clientIp !== undefined && { ip: clientIp }),
         },
@@ -109,7 +112,6 @@ export class WebhookRouter {
           ...(webhook.ipWhitelist
             ? { ipWhitelist: webhook.ipWhitelist as string[] }
             : {}),
-          verifyTimestamp: webhook.verifyTimestamp ?? true,
         },
       );
 
@@ -148,6 +150,17 @@ export class WebhookRouter {
               "X-RateLimit-Reset": rateLimitResult.resetAt.toISOString(),
             },
           },
+        );
+      }
+
+      // Parse the (already-verified) body for processing.
+      let body: unknown;
+      try {
+        body = this.parseBody(rawBody, headers["content-type"] ?? "");
+      } catch {
+        return NextResponse.json(
+          { error: "Invalid request body" },
+          { status: 400 },
         );
       }
 
@@ -236,17 +249,8 @@ export class WebhookRouter {
     this.routes.set(eventType, handler);
   }
 
-  /**
-   * Parse request body based on content type
-   */
-  private async parseRequestBody(request: NextRequest): Promise<unknown> {
-    const contentType = request.headers.get("content-type") ?? "";
-
-    // Enforce a body-size cap BEFORE parsing so an oversized payload can't
-    // exhaust memory (HI-12). Read the raw text once (bounded by the cap) and
-    // parse from it, rather than calling request.json() unbounded.
-    const raw = await this.readBoundedText(request);
-
+  /** Parse an already-read raw body by content type. */
+  private parseBody(raw: string, contentType: string): unknown {
     if (contentType.includes("application/json")) {
       return JSON.parse(raw);
     } else if (contentType.includes("application/x-www-form-urlencoded")) {
@@ -446,8 +450,10 @@ export class WebhookRouter {
         "Content-Type": "application/json",
         "X-Webhook-Signature": "sha256=<signature>",
         "X-Webhook-Timestamp": "<ISO 8601 timestamp>",
+        "X-Webhook-Delivery-Id": "<unique per delivery>",
       },
-      authentication: "HMAC-SHA256 signature verification",
+      authentication:
+        "HMAC-SHA256 over `<timestamp>.<deliveryId>.<rawBody>`; timestamp must be within 5 minutes and each delivery id is accepted once (replay-protected).",
       examples: {
         request: {
           method: "POST",
@@ -455,6 +461,7 @@ export class WebhookRouter {
             "Content-Type": "application/json",
             "X-Webhook-Signature": "sha256=...",
             "X-Webhook-Timestamp": new Date().toISOString(),
+            "X-Webhook-Delivery-Id": "unique-id-per-request",
           },
           body: {
             event: "example.event",
