@@ -140,12 +140,15 @@ type ResourceLimits struct {
 	Pids   int64   `yaml:"pids" envconfig:"PIDS" default:"100"`
 }
 
-// ContainerSecurityConfig defines container security settings
+// ContainerSecurityConfig defines container security settings. The defaults are
+// the hardened posture for untrusted job execution (Phase 3.1): nonroot, all
+// Linux capabilities dropped, read-only root filesystem, and no privilege
+// escalation. Writable space is provided only through explicit tmpfs mounts.
 type ContainerSecurityConfig struct {
 	User             string   `yaml:"user" envconfig:"USER" default:"1000:1000"`
 	NoNewPrivileges  bool     `yaml:"noNewPrivileges" envconfig:"NO_NEW_PRIVILEGES" default:"true"`
-	DropCapabilities []string `yaml:"dropCapabilities" envconfig:"DROP_CAPABILITIES"`
-	ReadOnlyRootfs   bool     `yaml:"readOnlyRootfs" envconfig:"READ_ONLY_ROOTFS" default:"false"`
+	DropCapabilities []string `yaml:"dropCapabilities" envconfig:"DROP_CAPABILITIES" default:"ALL"`
+	ReadOnlyRootfs   bool     `yaml:"readOnlyRootfs" envconfig:"READ_ONLY_ROOTFS" default:"true"`
 	SeccompProfile   string   `yaml:"seccompProfile" envconfig:"SECCOMP_PROFILE" default:"default"`
 }
 

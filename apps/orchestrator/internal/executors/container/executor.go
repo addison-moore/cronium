@@ -267,14 +267,8 @@ func (e *Executor) createContainer(ctx context.Context, job *types.Job, networkI
 		User:         e.config.Security.User,
 	}
 
-	// Build host configuration with resource limits
-	hostConfig := &container.HostConfig{
-		AutoRemove:  false,
-		NetworkMode: container.NetworkMode(networkID),
-		Resources:   e.buildResourceLimits(job),
-		Mounts:      e.buildMounts(job),
-		SecurityOpt: e.buildSecurityOptions(),
-	}
+	// Build host configuration with resource limits + sandbox hardening (3.1).
+	hostConfig := e.buildHostConfig(job, networkID)
 
 	// Network configuration
 	networkConfig := &network.NetworkingConfig{
@@ -426,8 +420,12 @@ func (e *Executor) buildResourceLimits(job *types.Job) container.Resources {
 }
 
 // buildMounts builds container mounts
-func (e *Executor) buildMounts(job *types.Job) []mount.Mount {
-	mounts := []mount.Mount{
+func (e *Executor) buildMounts(_ *types.Job) []mount.Mount {
+	// With a read-only root filesystem (3.1), every writable path a job needs
+	// must be an explicit tmpfs mount. /workspace is the working directory,
+	// /tmp is scratch, and /home gives nonroot tooling (pip/npm caches, etc.) a
+	// writable HOME. Everything else stays read-only.
+	return []mount.Mount{
 		{
 			Type:   mount.TypeTmpfs,
 			Target: "/tmp",
@@ -436,23 +434,45 @@ func (e *Executor) buildMounts(job *types.Job) []mount.Mount {
 				Mode:      0o1777,
 			},
 		},
-	}
-
-	// Add workspace mount if needed
-	if job.Execution.Script.WorkingDirectory != "" {
-		// In production, this would mount from a secure location
-		// For now, we'll just use tmpfs
-		mounts = append(mounts, mount.Mount{
+		{
 			Type:   mount.TypeTmpfs,
 			Target: "/workspace",
 			TmpfsOptions: &mount.TmpfsOptions{
 				SizeBytes: 500 * 1024 * 1024, // 500MB
 				Mode:      0o755,
 			},
-		})
+		},
+		{
+			Type:   mount.TypeTmpfs,
+			Target: "/home",
+			TmpfsOptions: &mount.TmpfsOptions{
+				SizeBytes: 100 * 1024 * 1024, // 100MB
+				Mode:      0o1777,
+			},
+		},
 	}
+}
 
-	return mounts
+// buildHostConfig assembles the hardened Docker HostConfig for a job container
+// (Phase 3.1). CapDrop [ALL] removes every Linux capability, a read-only root
+// filesystem confines writes to the explicit tmpfs work mounts, and the job
+// runs on its own per-job network — so an untrusted job cannot tamper with the
+// image, escalate via a capability, or reach the host/control plane. Fails
+// closed: if capability dropping is unconfigured it still drops ALL.
+func (e *Executor) buildHostConfig(job *types.Job, networkID string) *container.HostConfig {
+	dropCaps := e.config.Security.DropCapabilities
+	if len(dropCaps) == 0 {
+		dropCaps = []string{"ALL"}
+	}
+	return &container.HostConfig{
+		AutoRemove:     false,
+		NetworkMode:    container.NetworkMode(networkID),
+		Resources:      e.buildResourceLimits(job),
+		Mounts:         e.buildMounts(job),
+		SecurityOpt:    e.buildSecurityOptions(),
+		CapDrop:        dropCaps,
+		ReadonlyRootfs: e.config.Security.ReadOnlyRootfs,
+	}
 }
 
 // buildSecurityOptions builds container security options
