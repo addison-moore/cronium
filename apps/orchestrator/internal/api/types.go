@@ -28,6 +28,10 @@ type QueuedJob struct {
 	Attempts     int                    `json:"attempts"`
 	Execution    ExecutionConfig        `json:"execution"`
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	// CapabilityToken is the per-job capability minted by the app at claim
+	// time (HI-10). It is presented in the X-Job-Capability header on this
+	// job's status/complete/fail/logs and execution create/update calls.
+	CapabilityToken string `json:"capabilityToken,omitempty"`
 }
 
 // ExecutionConfig from API

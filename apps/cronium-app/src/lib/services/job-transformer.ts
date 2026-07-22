@@ -32,6 +32,13 @@ export interface OrchestratorJob {
   createdAt: Date | null;
   scheduledFor: Date | null;
   attempts: number;
+  /**
+   * Per-job capability token (HI-10), minted at claim time. The orchestrator
+   * presents it in the `X-Job-Capability` header on this job's status/complete/
+   * fail/logs and execution create/update calls, replacing the shared key for
+   * those routes. Not persisted — attached only to the claim response.
+   */
+  capabilityToken?: string;
   execution: {
     environment: Record<string, string>;
     timeout: number;

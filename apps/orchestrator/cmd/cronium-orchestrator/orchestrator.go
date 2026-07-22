@@ -284,6 +284,13 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 	log := o.log.WithField("jobID", job.ID)
 	log.Info("Starting job execution")
 
+	// Carry the per-job capability token (HI-10) on every context derived from
+	// here — including the detached completion/report contexts, which use
+	// context.WithoutCancel(ctx) precisely so they keep this value while
+	// surviving job cancellation. The job-scoped app routes verify it in place
+	// of the shared internal key.
+	ctx = api.WithJobCapability(ctx, job.CapabilityToken)
+
 	// Remove from active jobs when done
 	defer func() {
 		o.mu.Lock()
@@ -318,8 +325,9 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 
 		// Update job status to failed — and never ignore the outcome (C5):
 		// on failure the job stays claimed until the sweeper handles it, but
-		// we must at least say so loudly.
-		reportCtx, reportCancel := context.WithTimeout(context.Background(), 60*time.Second)
+		// we must at least say so loudly. WithoutCancel keeps the capability
+		// token (HI-10) while detaching from the cancelled job context.
+		reportCtx, reportCancel := context.WithTimeout(context.WithoutCancel(ctx), 60*time.Second)
 		defer reportCancel()
 		if reportErr := o.apiClient.UpdateJobStatus(reportCtx, job.ID, types.JobStatusFailed, &types.StatusUpdate{
 			Status:  types.JobStatusFailed,
@@ -462,16 +470,17 @@ func (o *SimpleOrchestrator) processJob(ctx context.Context, job *types.Job) {
 		o.metrics.RecordJobFailed(string(job.Type), "unknown")
 	}
 
-	// Deliver the completion with a background context (survives job
-	// cancellation and shutdown); if delivery still fails after the client's
+	// Deliver the completion with a detached context (survives job
+	// cancellation and shutdown) that still carries the capability token via
+	// WithoutCancel (HI-10); if delivery still fails after the client's
 	// retries, spool it to disk and keep retrying — a produced result is
 	// never dropped (PLAN.md §5).
-	reportCtx, reportCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	reportCtx, reportCancel := context.WithTimeout(context.WithoutCancel(ctx), 60*time.Second)
 	defer reportCancel()
 	if err := o.apiClient.CompleteJob(reportCtx, job.ID, completeReq); err != nil {
 		log.WithError(err).Error("Failed to deliver completion; spooling for retry")
 		o.metrics.RecordJobFailed(string(job.Type), "complete_api_failed")
-		o.spoolCompletion(job.ID, completeReq)
+		o.spoolCompletion(job.ID, completeReq, job.CapabilityToken)
 	} else {
 		log.WithFields(logrus.Fields{
 			"exitCode": exitCode,
@@ -486,17 +495,23 @@ type spooledCompletion struct {
 	JobID    string                  `json:"jobId"`
 	Complete *api.CompleteJobRequest `json:"complete"`
 	SpooledA string                  `json:"spooledAt"`
+	// CapabilityToken (HI-10) is persisted so a retry — possibly after a
+	// restart — can still authenticate to the job-scoped completion route. If
+	// it has expired by retry time the route returns 403, which the retry loop
+	// treats as superseded (the sweeper will finalize the job).
+	CapabilityToken string `json:"capabilityToken,omitempty"`
 }
 
-func (o *SimpleOrchestrator) spoolCompletion(jobID string, req *api.CompleteJobRequest) {
+func (o *SimpleOrchestrator) spoolCompletion(jobID string, req *api.CompleteJobRequest, capabilityToken string) {
 	if o.spoolDir == "" {
 		o.log.WithField("jobID", jobID).Error("No spool dir; completion lost (sweeper will finalize the job at lease expiry)")
 		return
 	}
 	data, err := json.Marshal(&spooledCompletion{
-		JobID:    jobID,
-		Complete: req,
-		SpooledA: time.Now().Format(time.RFC3339),
+		JobID:           jobID,
+		Complete:        req,
+		SpooledA:        time.Now().Format(time.RFC3339),
+		CapabilityToken: capabilityToken,
 	})
 	if err != nil {
 		o.log.WithError(err).WithField("jobID", jobID).Error("Failed to marshal completion for spool")
@@ -547,7 +562,10 @@ func (o *SimpleOrchestrator) spoolRetryLoop(ctx context.Context) {
 					_ = os.Remove(path)
 					continue
 				}
-				reportCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				reportCtx, cancel := context.WithTimeout(
+					api.WithJobCapability(ctx, spooled.CapabilityToken),
+					30*time.Second,
+				)
 				err = o.apiClient.CompleteJob(reportCtx, spooled.JobID, spooled.Complete)
 				cancel()
 				if err == nil {
@@ -555,10 +573,13 @@ func (o *SimpleOrchestrator) spoolRetryLoop(ctx context.Context) {
 					_ = os.Remove(path)
 					continue
 				}
-				// A conflict means the app has already finalized the job
-				// differently (sweeper); our report is moot.
+				// 409/404 mean the app already finalized the job differently
+				// (sweeper); 403 means the capability token expired before the
+				// retry landed — in every case our report is moot and the job
+				// is (or will be) resolved by the sweeper, so drop the spool.
 				var apiErr *cerrors.APIError
-				if errors.As(err, &apiErr) && (apiErr.StatusCode == 409 || apiErr.StatusCode == 404) {
+				if errors.As(err, &apiErr) &&
+					(apiErr.StatusCode == 409 || apiErr.StatusCode == 404 || apiErr.StatusCode == 403) {
 					o.log.WithFields(logrus.Fields{"jobID": spooled.JobID, "status": apiErr.StatusCode}).
 						Warn("Spooled completion superseded; dropping")
 					_ = os.Remove(path)

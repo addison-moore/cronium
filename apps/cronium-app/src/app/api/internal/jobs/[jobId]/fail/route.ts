@@ -2,7 +2,10 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { jobService } from "@/lib/services/job-service";
 import { JobStatus } from "@shared/schema";
-import { verifyInternalKey } from "@/lib/internal-auth";
+import {
+  authorizeCapability,
+  assertJobScope,
+} from "@/lib/security/internal-route-auth";
 
 // Mark job as failed
 export async function POST(
@@ -10,11 +13,13 @@ export async function POST(
   { params }: { params: Promise<{ jobId: string }> },
 ) {
   try {
-    if (!verifyInternalKey(request)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { jobId } = await params;
+
+    const auth = authorizeCapability(request, "job:fail");
+    if (!auth.ok) return auth.response;
+    const scopeError = assertJobScope(auth.cap, jobId);
+    if (scopeError) return scopeError;
+
     const body = (await request.json()) as {
       error: string;
       orchestratorId?: string;

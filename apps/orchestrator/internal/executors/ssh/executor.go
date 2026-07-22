@@ -224,7 +224,7 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 				updateData.ExitCode = &exitCode
 				updateData.Error = &errorMsg
 
-				apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				apiCtx, apiCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 				defer apiCancel()
 				if err := e.apiClient.UpdateExecution(apiCtx, executionID, types.JobStatusFailed, updateData); err != nil {
 					e.log.WithError(err).Warn("Failed to update execution with connection failure")
@@ -255,7 +255,7 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 				updateData.ExitCode = &exitCode
 				updateData.Error = &errorMsg
 
-				apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				apiCtx, apiCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 				defer apiCancel()
 				if err := e.apiClient.UpdateExecution(apiCtx, executionID, types.JobStatusFailed, updateData); err != nil {
 					e.log.WithError(err).Warn("Failed to update execution with session failure")
@@ -332,7 +332,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 			updateData.ExitCode = &exitCode
 			updateData.Error = &errorMsg
 
-			apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			apiCtx, apiCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 			defer apiCancel()
 			if err := e.apiClient.UpdateExecution(apiCtx, executionID, types.JobStatusFailed, updateData); err != nil {
 				e.log.WithError(err).Warn("Failed to update execution with payload failure")
@@ -365,7 +365,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 			updateData.ExitCode = &exitCode
 			updateData.Error = &errorMsg
 
-			apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			apiCtx, apiCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 			defer apiCancel()
 			if err := e.apiClient.UpdateExecution(apiCtx, executionID, types.JobStatusFailed, updateData); err != nil {
 				e.log.WithError(err).Warn("Failed to update execution with deployment failure")
@@ -623,7 +623,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 			}
 
 			// Use a fresh context for the API call
-			apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			apiCtx, apiCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 			defer apiCancel()
 			if err := e.apiClient.UpdateExecution(apiCtx, executionID, finalStatus, updateData); err != nil {
 				e.log.WithError(err).Warn("Failed to update execution timeout status")
@@ -686,7 +686,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 			}
 
 			// Use a fresh context for the API call in case original timed out
-			apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			apiCtx, apiCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 			defer apiCancel()
 			if err := e.apiClient.UpdateExecution(apiCtx, executionID, status, updateData); err != nil {
 				e.log.WithError(err).Warn("Failed to update execution completion status")

@@ -2,7 +2,10 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { executionService } from "@/lib/services/execution-service";
 import { JobStatus } from "@/shared/schema";
-import { verifyInternalKey } from "@/lib/internal-auth";
+import {
+  authorizeCapability,
+  assertJobScope,
+} from "@/lib/security/internal-route-auth";
 
 // Create a new execution
 export async function POST(
@@ -10,11 +13,6 @@ export async function POST(
   { params }: { params: Promise<{ executionId: string }> },
 ) {
   try {
-    // Timing-safe internal-key check (HI-10)
-    if (!verifyInternalKey(request)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { executionId } = await params;
     const body = (await request.json()) as {
       jobId: string;
@@ -26,6 +24,13 @@ export async function POST(
     if (!body.jobId) {
       return NextResponse.json({ error: "Job ID required" }, { status: 400 });
     }
+
+    // Per-job capability (HI-10): the token must be scoped to the job this
+    // execution belongs to.
+    const auth = authorizeCapability(request, "execution:create");
+    if (!auth.ok) return auth.response;
+    const scopeError = assertJobScope(auth.cap, body.jobId);
+    if (scopeError) return scopeError;
 
     // Create the execution
     const execution = await executionService.createExecution({

@@ -2,7 +2,10 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { jobService } from "@/lib/services/job-service";
 import { JobStatus } from "@shared/schema";
-import { verifyInternalKey } from "@/lib/internal-auth";
+import {
+  authorizeCapability,
+  assertJobScope,
+} from "@/lib/security/internal-route-auth";
 
 // Update job status (orchestrator progress reports)
 export async function PUT(
@@ -10,11 +13,14 @@ export async function PUT(
   { params }: { params: Promise<{ jobId: string }> },
 ) {
   try {
-    if (!verifyInternalKey(request)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { jobId } = await params;
+
+    // Per-job capability (HI-10) replaces the shared internal key here.
+    const auth = authorizeCapability(request, "job:status");
+    if (!auth.ok) return auth.response;
+    const scopeError = assertJobScope(auth.cap, jobId);
+    if (scopeError) return scopeError;
+
     const body = (await request.json()) as {
       status: JobStatus;
       orchestratorId?: string;

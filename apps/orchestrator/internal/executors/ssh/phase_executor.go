@@ -125,7 +125,7 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 			e.log.WithError(err).Warn("Failed to clean up private remote payload directory")
 		}
 		if payloadTransferred {
-			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), e.timeoutConfig.CleanupTimeout)
+			cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), e.timeoutConfig.CleanupTimeout)
 			defer cleanupCancel()
 
 			timing.MarkCleanupComplete()
@@ -390,7 +390,7 @@ func (e *Executor) runScriptWithTimeout(ctx context.Context, session *ssh.Sessio
 				updateData.Error = &errorStr
 			}
 
-			apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			apiCtx, apiCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 			defer apiCancel()
 			if err := e.apiClient.UpdateExecution(apiCtx, executionID, types.JobStatusRunning, updateData); err != nil {
 				e.log.WithError(err).Warn("Failed to update execution output")

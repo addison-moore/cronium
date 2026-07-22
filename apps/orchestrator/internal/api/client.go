@@ -339,6 +339,11 @@ func (c *Client) doRequest(ctx context.Context, method, urlStr string, bodyBytes
 		req.Header.Set("X-Service-Version", "1.0.0")
 		req.Header.Set("X-Orchestrator-ID", c.config.OrchestratorID)
 		req.Header.Set("Accept", "application/json")
+		// Present the per-job capability token (HI-10) when the context carries
+		// one — the job-scoped routes verify this instead of the shared key.
+		if cap := jobCapabilityFromContext(ctx); cap != "" {
+			req.Header.Set("X-Job-Capability", cap)
+		}
 
 		resp, err = c.httpClient.Do(req)
 		if err != nil {
@@ -410,13 +415,14 @@ func (c *Client) doRequest(ctx context.Context, method, urlStr string, bodyBytes
 // convertQueuedJob converts API response to internal job type
 func convertQueuedJob(qj QueuedJob) *types.Job {
 	job := &types.Job{
-		ID:           qj.ID,
-		Type:         types.JobType(qj.Type),
-		Priority:     qj.Priority,
-		CreatedAt:    qj.CreatedAt,
-		ScheduledFor: qj.ScheduledFor,
-		Attempts:     qj.Attempts,
-		Metadata:     qj.Metadata,
+		ID:              qj.ID,
+		Type:            types.JobType(qj.Type),
+		Priority:        qj.Priority,
+		CreatedAt:       qj.CreatedAt,
+		ScheduledFor:    qj.ScheduledFor,
+		Attempts:        qj.Attempts,
+		Metadata:        qj.Metadata,
+		CapabilityToken: qj.CapabilityToken,
 	}
 
 	// Convert execution config

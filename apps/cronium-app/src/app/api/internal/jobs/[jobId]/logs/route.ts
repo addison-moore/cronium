@@ -4,7 +4,10 @@ import { jobService } from "@/lib/services/job-service";
 import { logs, LogStatus } from "@/shared/schema";
 import { db } from "@/server/db";
 import { eq } from "drizzle-orm";
-import { verifyInternalKey } from "@/lib/internal-auth";
+import {
+  authorizeCapability,
+  assertJobScope,
+} from "@/lib/security/internal-route-auth";
 
 // Stream job logs
 export async function POST(
@@ -12,12 +15,14 @@ export async function POST(
   { params }: { params: Promise<{ jobId: string }> },
 ) {
   try {
-    // Timing-safe internal-key check (HI-10)
-    if (!verifyInternalKey(request)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { jobId } = await params;
+
+    // Per-job capability (HI-10) replaces the shared internal key here.
+    const auth = authorizeCapability(request, "job:logs");
+    if (!auth.ok) return auth.response;
+    const scopeError = assertJobScope(auth.cap, jobId);
+    if (scopeError) return scopeError;
+
     const body = (await request.json()) as {
       logs: Array<{
         timestamp: string;
@@ -88,16 +93,18 @@ export async function GET(
   { params }: { params: Promise<{ jobId: string }> },
 ) {
   try {
-    // Timing-safe internal-key check (HI-10)
-    if (!verifyInternalKey(request)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { jobId } = await params;
 
     if (!jobId) {
       return NextResponse.json({ error: "Job ID required" }, { status: 400 });
     }
+
+    // Per-job capability (HI-10): reading a job's logs now requires a token
+    // scoped to that job — closes the previously unauthenticated GET.
+    const auth = authorizeCapability(request, "job:logs");
+    if (!auth.ok) return auth.response;
+    const scopeError = assertJobScope(auth.cap, jobId);
+    if (scopeError) return scopeError;
 
     // Get logs for this job
     const jobLogs = await db

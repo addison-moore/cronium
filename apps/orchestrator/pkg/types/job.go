@@ -37,6 +37,11 @@ type Job struct {
 	Execution    ExecutionConfig `json:"execution"`
 	Metadata     map[string]any  `json:"metadata,omitempty"`
 
+	// CapabilityToken is the per-job capability minted by the app at claim
+	// time (HI-10), presented in the X-Job-Capability header when reporting on
+	// this job. Not persisted or logged.
+	CapabilityToken string `json:"-"`
+
 	// Runtime fields
 	AcknowledgedAt *time.Time    `json:"-"`
 	StartedAt      *time.Time    `json:"-"`

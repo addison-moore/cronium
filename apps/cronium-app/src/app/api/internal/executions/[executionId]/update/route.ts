@@ -5,7 +5,10 @@ import { jobService } from "@/lib/services/job-service";
 import { JobStatus } from "@/shared/schema";
 import { unifiedIoDebug } from "@/lib/unified-io/debug";
 import { mergeCompletionResult } from "@/lib/unified-io/merge-completion-result";
-import { verifyInternalKey } from "@/lib/internal-auth";
+import {
+  authorizeCapability,
+  assertJobScope,
+} from "@/lib/security/internal-route-auth";
 
 // Update an execution
 export async function PUT(
@@ -13,12 +16,23 @@ export async function PUT(
   { params }: { params: Promise<{ executionId: string }> },
 ) {
   try {
-    // Timing-safe internal-key check (HI-10)
-    if (!verifyInternalKey(request)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { executionId } = await params;
+
+    // Per-job capability (HI-10): verify the token grants execution:update,
+    // then bind it to the job that OWNS this execution (looked up before any
+    // mutation) so a token cannot update another job's execution.
+    const auth = authorizeCapability(request, "execution:update");
+    if (!auth.ok) return auth.response;
+    const existing = await executionService.getExecution(executionId);
+    if (!existing) {
+      return NextResponse.json(
+        { error: "Execution not found" },
+        { status: 404 },
+      );
+    }
+    const scopeError = assertJobScope(auth.cap, existing.jobId);
+    if (scopeError) return scopeError;
+
     const body = (await request.json()) as {
       status?: JobStatus;
       startedAt?: string;

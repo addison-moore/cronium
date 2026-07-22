@@ -5,7 +5,10 @@ import { JobStatus, jobs } from "@shared/schema";
 import { db } from "@/server/db";
 import { eq } from "drizzle-orm";
 import { unifiedIoDebug } from "@/lib/unified-io/debug";
-import { verifyInternalKey } from "@/lib/internal-auth";
+import {
+  authorizeCapability,
+  assertJobScope,
+} from "@/lib/security/internal-route-auth";
 
 /**
  * Final completion report from an executor. Idempotent: a repeated report for
@@ -19,11 +22,13 @@ export async function POST(
   { params }: { params: Promise<{ jobId: string }> },
 ) {
   try {
-    if (!verifyInternalKey(request)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { jobId } = await params;
+
+    const auth = authorizeCapability(request, "job:complete");
+    if (!auth.ok) return auth.response;
+    const scopeError = assertJobScope(auth.cap, jobId);
+    if (scopeError) return scopeError;
+
     const body = (await request.json()) as {
       status?: string;
       orchestratorId?: string;

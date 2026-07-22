@@ -26,7 +26,7 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 	// Defer cleanup
 	defer func() {
 		// Cleanup always runs with its own timeout
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), e.timeoutConfig.CleanupTimeout)
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), e.timeoutConfig.CleanupTimeout)
 		defer cleanupCancel()
 
 		timing.MarkCleanupComplete()
@@ -308,7 +308,7 @@ func (e *Executor) runContainer(ctx context.Context, containerID string, job *ty
 			updateData.Error = &errMsg
 		}
 
-		apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		apiCtx, apiCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer apiCancel()
 		if err := e.apiClient.UpdateExecution(apiCtx, executionID, finalStatus, updateData); err != nil {
 			e.log.WithError(err).Warn("Failed to update execution completion status")

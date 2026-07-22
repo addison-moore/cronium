@@ -694,7 +694,7 @@ func (e *Executor) updateExecutionError(ctx context.Context, executionID string,
 	}
 
 	// Use a fresh context for the API call
-	apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	apiCtx, apiCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer apiCancel()
 
 	if e.apiClient != nil {

@@ -117,7 +117,11 @@ class EncryptionService {
       const authTag = combined.subarray(-TAG_LENGTH);
       const encrypted = combined.subarray(IV_LENGTH, -TAG_LENGTH);
 
-      const decipher = crypto.createDecipheriv(ALGORITHM, this.getMasterKey(), iv);
+      const decipher = crypto.createDecipheriv(
+        ALGORITHM,
+        this.getMasterKey(),
+        iv,
+      );
       decipher.setAAD(Buffer.from("cronium-server-encryption"));
       decipher.setAuthTag(authTag);
 

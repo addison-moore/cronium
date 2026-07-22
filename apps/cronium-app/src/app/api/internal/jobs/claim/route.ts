@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { jobService } from "@/lib/services/job-service";
 import { enhancedTransformJobsForOrchestrator } from "@/lib/services/enhanced-job-transformer";
 import { verifyInternalKey } from "@/lib/internal-auth";
+import { mintJobCapability } from "@/lib/security/job-capability";
 
 /**
  * Orchestrator claim endpoint (PLAN.md §4.2): a POST that atomically claims a
@@ -41,6 +42,33 @@ export async function POST(request: NextRequest) {
       leaseMs,
     );
     const transformedJobs = await enhancedTransformJobsForOrchestrator(jobs);
+
+    // Mint a per-job capability token (HI-10) scoped to the job, its owner, and
+    // its target server. The orchestrator carries it and presents it on this
+    // job's status/complete/fail/logs and execution create/update calls instead
+    // of the shared internal key. The transform is 1:1 and order-preserving, so
+    // job[i] pairs with transformedJobs[i].
+    //
+    // The token lifetime tracks the job's OWN timeout (not the lease, which is
+    // short and renewed by heartbeat) plus a reporting buffer, so the token
+    // covers the whole run through the final completion report. The capability
+    // module clamps this to its absolute ceiling.
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const REPORTING_BUFFER_SECONDS = 5 * 60;
+    transformedJobs.forEach((tj, i) => {
+      const source = jobs[i];
+      if (!source) return;
+      const timeoutSeconds = Math.ceil(tj.execution.timeout / 1e9);
+      tj.capabilityToken = mintJobCapability(
+        {
+          jobId: tj.id,
+          userId: source.userId ?? "",
+          serverId: tj.execution.target.serverId,
+          ttlSeconds: timeoutSeconds + REPORTING_BUFFER_SECONDS,
+        },
+        nowSeconds,
+      );
+    });
 
     return NextResponse.json({
       jobs: transformedJobs,

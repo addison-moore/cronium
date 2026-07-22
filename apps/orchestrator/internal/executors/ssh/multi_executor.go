@@ -301,7 +301,7 @@ func (m *MultiServerExecutor) executeOnServer(ctx context.Context, job *types.Jo
 							updateData.Error = &errorStr
 						}
 
-						apiCtx, apiCancel := context.WithTimeout(context.Background(), 10*time.Second)
+						apiCtx, apiCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 						defer apiCancel()
 						m.apiClient.UpdateExecution(apiCtx, executionID, result.Status, updateData)
 					}
