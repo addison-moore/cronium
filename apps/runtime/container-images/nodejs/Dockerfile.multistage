@@ -2,10 +2,11 @@
 # Stage 1: Build stage
 FROM node:20-alpine AS builder
 
-# Install dependencies
-RUN npm install -g --no-save axios@1.6.2
+# No HTTP client is pre-installed: the Cronium SDK uses Node built-ins
+# (http/https) and Node 20 provides a global fetch(). User scripts needing an
+# HTTP library can install it themselves.
 
-# Stage 2: Runtime stage  
+# Stage 2: Runtime stage
 FROM node:20-alpine
 
 # Install only runtime dependencies

@@ -23,13 +23,6 @@ async function main() {
       throw new Error(`Node.js version too old: ${process.version}`);
     }
 
-    // Check if axios is available
-    try {
-      require.resolve("axios");
-    } catch (e) {
-      throw new Error("axios module not found");
-    }
-
     console.log("Health check passed");
     process.exit(0);
   } catch (error) {

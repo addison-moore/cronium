@@ -12,9 +12,10 @@ RUN (addgroup -g 1000 -S cronium || addgroup -S cronium) && \
 RUN mkdir -p /app /tmp/cronium && \
     chown -R cronium:cronium /app /tmp/cronium /home/cronium
 
-# Install global dependencies as root
-RUN npm install -g --no-save axios@1.6.2 && \
-    npm cache clean --force
+# The Cronium SDK uses only Node built-ins (http/https), and Node 20 ships a
+# global fetch(), so no HTTP client is pre-installed. User scripts that need one
+# can `npm install` it themselves or use fetch().
+RUN npm cache clean --force
 
 # Copy Cronium SDK files
 COPY --chown=cronium:cronium cronium.js /usr/local/lib/

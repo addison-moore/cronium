@@ -33,7 +33,7 @@ This directory contains the Docker container images for the Cronium runtime envi
 ### Node.js Image (`cronium/nodejs`)
 
 - Node.js 20 runtime
-- Pre-installed cronium SDK with axios
+- Pre-installed cronium SDK (uses Node built-ins; Node 20 provides a global `fetch()` for HTTP — no `axios` is bundled)
 - TypeScript definitions included
 - Available variants:
   - `cronium/nodejs:latest` - Standard image
