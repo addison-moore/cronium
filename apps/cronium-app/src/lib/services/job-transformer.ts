@@ -1,5 +1,26 @@
 import type { Job } from "@/shared/schema";
 import { JobType, JobPriority } from "@/shared/schema";
+import { encryptionService } from "@/lib/encryption-service";
+
+/**
+ * Environment values are stored encrypted at rest in `jobs.payload` (they are
+ * copied from the encrypted env_vars rows), so the persisted payload never
+ * holds plaintext. They are decrypted here, at the claim/delivery boundary —
+ * the authorized point where the app hands the transient job to the orchestrator
+ * — so scripts receive plaintext without the secret ever being persisted in the
+ * clear (ME-11). Legacy plaintext values pass through unchanged.
+ */
+function decryptEnvironment(
+  environment: Record<string, string> | undefined,
+): Record<string, string> {
+  if (!environment) return {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(environment)) {
+    out[key] =
+      typeof value === "string" ? encryptionService.decrypt(value) : value;
+  }
+  return out;
+}
 
 /**
  * Transform a job from the database format to the format expected by the orchestrator
@@ -108,7 +129,8 @@ export function transformJobForOrchestrator(job: Job): OrchestratorJob {
     : 3600; // Default to 1 hour if no timeout specified
 
   const execution: OrchestratorJob["execution"] = {
-    environment: payload.environment ?? {},
+    // Decrypt env at the delivery boundary; the persisted payload stays encrypted.
+    environment: decryptEnvironment(payload.environment),
     timeout: timeoutSeconds * 1000000000, // Convert seconds to nanoseconds for Go time.Duration
     inputData: payload.input ?? {},
     variables: {},

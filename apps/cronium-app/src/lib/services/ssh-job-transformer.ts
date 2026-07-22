@@ -41,16 +41,22 @@ export async function transformSSHJobForOrchestrator(
       return transformedJob;
     }
 
-    // Fetch environment variables
+    // Fetch environment variables and decrypt at this delivery boundary (the
+    // env_vars.value column is encrypted at rest; ME-11).
+    const { decryptSensitiveData } = await import("@/lib/encryption-service");
     const eventEnvVars = await db
       .select()
       .from(envVars)
       .where(eq(envVars.eventId, eventId));
 
-    // Build environment map
+    // Build environment map (values decrypted for execution)
     const environment: Record<string, string> = {};
     for (const envVar of eventEnvVars) {
-      environment[envVar.key] = envVar.value;
+      const decrypted = decryptSensitiveData(
+        { value: envVar.value },
+        "envVars",
+      );
+      environment[envVar.key] = decrypted.value;
     }
 
     // Extract script content from event
