@@ -101,14 +101,15 @@ func NewExecutor(cfg config.SSHConfig, apiClient *api.Client, runtimeHost string
 	// Create runner cache
 	runnerCache := NewRunnerCache(log)
 
-	// Load or create the payload signing key. Signing is best-effort: when the
-	// key is unavailable (e.g. read-only filesystem) payloads are deployed
-	// unsigned and the runner skips verification.
+	// Load or create the payload signing key. Signing is MANDATORY (HI-15): if
+	// the key cannot be loaded or created we refuse to start SSH execution
+	// rather than deploy unsigned payloads a tampering attacker could exploit.
 	signer, err := payload.LoadOrCreateSigner(cfg.Security.PayloadSigningKeyFile)
 	if err != nil {
-		log.WithError(err).WithField("keyFile", cfg.Security.PayloadSigningKeyFile).
-			Warn("Payload signing disabled: could not load or create signing key")
-		signer = nil
+		return nil, fmt.Errorf(
+			"payload signing key unavailable (%s): refusing to start SSH execution — payload signing is mandatory (HI-15): %w",
+			cfg.Security.PayloadSigningKeyFile, err,
+		)
 	}
 
 	// Create metrics tracker

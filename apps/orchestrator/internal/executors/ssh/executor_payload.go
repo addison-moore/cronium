@@ -14,7 +14,9 @@ func (e *Executor) createPayloadForJob(job *types.Job, executionID string) (stri
 	if existingPath, ok := job.Metadata["payloadPath"].(string); ok && existingPath != "" {
 		// Legacy mode: payload created by cronium-app
 		e.log.WithField("jobID", job.ID).Debug("Using existing payload from cronium-app")
-		e.signPayload(existingPath)
+		if err := e.signPayload(existingPath); err != nil {
+			return "", err
+		}
 		return existingPath, nil
 	}
 
@@ -86,30 +88,41 @@ func (e *Executor) createPayloadForJob(job *types.Job, executionID string) (stri
 		"payloadPath": payloadPath,
 	}).Debug("Created payload for job")
 
-	e.signPayload(payloadPath)
+	if err := e.signPayload(payloadPath); err != nil {
+		return "", err
+	}
 
 	return payloadPath, nil
 }
 
-// signPayload writes a detached signature next to the payload when signing is
-// available. Failures are logged but non-fatal; the runner only enforces
-// verification when it receives a verification key for the payload.
-func (e *Executor) signPayload(payloadPath string) {
+// signPayload writes a detached Ed25519 signature next to the payload. Signing
+// is MANDATORY (HI-15): any failure aborts the job so an unsigned payload is
+// never deployed (the runner would reject it anyway, and refusing here gives a
+// clear, early failure).
+func (e *Executor) signPayload(payloadPath string) error {
 	if e.signer == nil {
-		return
+		// Unreachable: the constructor fails closed when the signer is
+		// unavailable. Guard anyway so a future regression fails closed.
+		return fmt.Errorf("payload signer unavailable: cannot sign %s (signing is mandatory, HI-15)", payloadPath)
 	}
 	if err := e.signer.SignFile(payloadPath); err != nil {
-		e.log.WithError(err).WithField("payloadPath", payloadPath).Warn("Failed to sign payload")
+		return fmt.Errorf("failed to sign payload %s: %w", payloadPath, err)
 	}
+	return nil
 }
 
-// payloadVerifyKey returns the base64 public key the runner should use to
-// verify the payload signature, or "" when the payload is not signed.
+// payloadVerifyKey returns the base64 public key the runner must use to verify
+// the payload signature. The signer is always present (the constructor fails
+// closed) and the payload is always signed before this is called, so the key is
+// always available; it is exported to the runner as CRONIUM_VERIFY_KEY.
 func (e *Executor) payloadVerifyKey(payloadPath string) string {
 	if e.signer == nil {
 		return ""
 	}
+	// The .sig must exist — signPayload ran and fails closed on error.
 	if _, err := os.Stat(payloadPath + ".sig"); err != nil {
+		e.log.WithError(err).WithField("payloadPath", payloadPath).
+			Error("Payload signature missing after mandatory signing (HI-15)")
 		return ""
 	}
 	return e.signer.PublicKeyBase64()

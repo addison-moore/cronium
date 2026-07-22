@@ -3,6 +3,7 @@ package ssh
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -27,6 +28,7 @@ func TestExecutor_DeploymentRetry(t *testing.T) {
 	}
 
 	cfg := config.SSHConfig{
+		Security: config.SSHSecurityConfig{PayloadSigningKeyFile: filepath.Join(t.TempDir(), "signing.key")},
 		ConnectionPool: config.ConnectionPoolConfig{
 			MaxPerServer:        10,
 			MinPerServer:        1,
@@ -95,6 +97,7 @@ func TestExecutor_Timeout(t *testing.T) {
 	}
 
 	cfg := config.SSHConfig{
+		Security: config.SSHSecurityConfig{PayloadSigningKeyFile: filepath.Join(t.TempDir(), "signing.key")},
 		ConnectionPool: config.ConnectionPoolConfig{
 			MaxPerServer:        10,
 			MinPerServer:        1,
@@ -157,6 +160,7 @@ func TestExecutor_Timeout(t *testing.T) {
 
 func TestExecutor_Cleanup(t *testing.T) {
 	cfg := config.SSHConfig{
+		Security: config.SSHSecurityConfig{PayloadSigningKeyFile: filepath.Join(t.TempDir(), "signing.key")},
 		ConnectionPool: config.ConnectionPoolConfig{
 			MaxPerServer:        10,
 			MinPerServer:        1,
@@ -212,6 +216,7 @@ func TestExecutor_Cleanup(t *testing.T) {
 
 func TestExecutor_Metrics(t *testing.T) {
 	cfg := config.SSHConfig{
+		Security: config.SSHSecurityConfig{PayloadSigningKeyFile: filepath.Join(t.TempDir(), "signing.key")},
 		ConnectionPool: config.ConnectionPoolConfig{
 			MaxPerServer:        10,
 			MinPerServer:        1,
@@ -300,6 +305,7 @@ func TestMultiServerExecution(t *testing.T) {
 	// For now, we'll create a basic structure test
 
 	cfg := config.SSHConfig{
+		Security: config.SSHSecurityConfig{PayloadSigningKeyFile: filepath.Join(t.TempDir(), "signing.key")},
 		ConnectionPool: config.ConnectionPoolConfig{
 			MaxPerServer:        10,
 			MinPerServer:        1,

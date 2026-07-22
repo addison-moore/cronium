@@ -45,13 +45,17 @@ func VerifyChecksum(payloadPath string, expectedChecksum string) error {
 
 // VerifySignature verifies the payload's detached Ed25519 signature
 // (<payload>.sig, base64-encoded) against the public key provided via
-// CRONIUM_VERIFY_KEY. When no key is provided (legacy orchestrators or
-// deployments without a signing key), verification is skipped.
+// CRONIUM_VERIFY_KEY.
+//
+// Signature verification is MANDATORY (HI-15): a missing key, missing
+// signature, or mismatch all fail closed. The runner refuses to extract or
+// execute an unsigned/unverifiable payload — an attacker who tampers with the
+// staged payload, or an orchestrator that fails to sign, cannot get code run.
 func VerifySignature(payloadPath string) error {
 	keyB64 := os.Getenv(VerifyKeyEnvVar)
 	if keyB64 == "" {
-		// No verification key provided; run in legacy unverified mode.
-		return nil
+		// Fail CLOSED: refuse to run a payload we cannot verify.
+		return fmt.Errorf("%s is not set: refusing to execute an unsigned payload (signature verification is mandatory)", VerifyKeyEnvVar)
 	}
 
 	keyBytes, err := base64.StdEncoding.DecodeString(keyB64)

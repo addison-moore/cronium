@@ -80,16 +80,14 @@ func TestVerifySignatureWrongKey(t *testing.T) {
 	}
 }
 
-func TestVerifySignatureLegacyModeSkips(t *testing.T) {
+// Signature verification is mandatory (HI-15): a missing CRONIUM_VERIFY_KEY must
+// fail closed, not silently skip verification.
+func TestVerifySignatureRequiresKey(t *testing.T) {
 	payloadPath, _ := writeSignedPayload(t, []byte("payload-bytes"))
 	t.Setenv(VerifyKeyEnvVar, "")
 
-	if err := os.Remove(payloadPath + ".sig"); err != nil {
-		t.Fatalf("failed to remove signature: %v", err)
-	}
-
-	if err := VerifySignature(payloadPath); err != nil {
-		t.Fatalf("expected legacy mode (no key) to skip verification, got: %v", err)
+	if err := VerifySignature(payloadPath); err == nil {
+		t.Fatal("expected a missing verification key to fail closed (mandatory signing), but it was accepted")
 	}
 }
 
