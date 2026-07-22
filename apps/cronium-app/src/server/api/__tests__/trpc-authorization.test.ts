@@ -80,6 +80,7 @@ function dbRow(
     roleId: 2,
     status: UserStatus.ACTIVE,
     sessionVersion: 1,
+    mfaEnabled: false,
     ...overrides,
   };
 }
@@ -227,5 +228,42 @@ describe("Live principal revocation (HI-04)", () => {
     await expect(caller.events.getAll()).rejects.toMatchObject({
       code: "UNAUTHORIZED",
     });
+  });
+});
+
+describe("Admin MFA enforcement (HI-05)", () => {
+  const original = process.env.CRONIUM_ENFORCE_ADMIN_MFA;
+  afterEach(() => {
+    if (original === undefined) delete process.env.CRONIUM_ENFORCE_ADMIN_MFA;
+    else process.env.CRONIUM_ENFORCE_ADMIN_MFA = original;
+  });
+
+  it("blocks an admin without MFA when enforcement is on", async () => {
+    process.env.CRONIUM_ENFORCE_ADMIN_MFA = "true";
+    dbState.rows = [
+      dbRow({ role: UserRole.ADMIN, roleId: 1, mfaEnabled: false }),
+    ];
+    const admin = callerWith(sessionFor({ role: UserRole.ADMIN }));
+    await expect(admin.admin.updateUser()).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+
+  it("allows an admin with MFA when enforcement is on", async () => {
+    process.env.CRONIUM_ENFORCE_ADMIN_MFA = "true";
+    dbState.rows = [
+      dbRow({ role: UserRole.ADMIN, roleId: 1, mfaEnabled: true }),
+    ];
+    const admin = callerWith(sessionFor({ role: UserRole.ADMIN }));
+    await expect(admin.admin.updateUser()).resolves.toBe("admin-ok");
+  });
+
+  it("allows an admin without MFA when enforcement is off", async () => {
+    process.env.CRONIUM_ENFORCE_ADMIN_MFA = "false";
+    dbState.rows = [
+      dbRow({ role: UserRole.ADMIN, roleId: 1, mfaEnabled: false }),
+    ];
+    const admin = callerWith(sessionFor({ role: UserRole.ADMIN }));
+    await expect(admin.admin.updateUser()).resolves.toBe("admin-ok");
   });
 });

@@ -59,6 +59,11 @@ export const env = createEnv({
       .string()
       .regex(/^[0-9a-fA-F]{64}$/)
       .optional(),
+    // Require Admin accounts to have TOTP MFA enabled before performing
+    // admin-privileged operations. Defaults to enforced in production and
+    // relaxed in development (so the dev auto-admin isn't blocked). Set
+    // explicitly to "true"/"false" to override.
+    CRONIUM_ENFORCE_ADMIN_MFA: z.enum(["true", "false"]).optional(),
   },
   client: {
     PUBLIC_APP_URL: z.string().url(),
@@ -89,6 +94,7 @@ export const env = createEnv({
     SOCKET_INTERNAL_URL: process.env.SOCKET_INTERNAL_URL,
     TRUSTED_PROXY_HOPS: process.env.TRUSTED_PROXY_HOPS,
     BOOTSTRAP_TOKEN_HASH: process.env.BOOTSTRAP_TOKEN_HASH,
+    CRONIUM_ENFORCE_ADMIN_MFA: process.env.CRONIUM_ENFORCE_ADMIN_MFA,
   },
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
   emptyStringAsUndefined: true,

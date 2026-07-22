@@ -293,6 +293,7 @@ All CRUD operations (events, workflows, servers, logs) and real-time data (dashb
 | ---------------------- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | -------- |
 | `SKIP_ENV_VALIDATION`  | Skip environment variable validation                                                                     | `string` | -       | No       |
 | `CRONIUM_DEV_AUTO_AUTH` | When `true` **and** `NODE_ENV=development`, auto-authenticates sessionless API requests as the first admin | `bool`   | `false` | No       |
+| `CRONIUM_ENFORCE_ADMIN_MFA` | Require Admin accounts to have TOTP MFA enabled before performing admin operations. Defaults to enforced in production and relaxed in development; set `true`/`false` to override. | `bool` | (prod: `true`, dev: `false`) | No |
 
 **Warning:** Only use `SKIP_ENV_VALIDATION` in development. Any non-empty value will skip validation.
 

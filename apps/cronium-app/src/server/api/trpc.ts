@@ -17,6 +17,8 @@ import { db } from "../db";
 import {
   assertRoleCapability,
   getAuthorizedPrincipal,
+  isAdminMfaEnforced,
+  type AuthorizedPrincipal,
 } from "../security/authorization";
 import { capabilityForRoute } from "../security/route-capabilities";
 
@@ -233,6 +235,9 @@ const enforceLivePrincipal = t.middleware(async ({ ctx, next }) => {
   return next({
     ctx: {
       ...ctx,
+      // Expose the live principal so downstream middleware (e.g. admin-MFA
+      // enforcement) doesn't re-read the database.
+      livePrincipal: principal,
       session: {
         ...ctx.session,
         user: {
@@ -491,11 +496,23 @@ export const protectedProcedure =
 
 /**
  * Admin procedure (require user to be logged in and have admin role). Derives
- * from protectedProcedure so it inherits auth + token-scope enforcement.
+ * from protectedProcedure so it inherits auth + token-scope enforcement. When
+ * admin-MFA enforcement is on, an admin without TOTP MFA is blocked from admin
+ * operations until they enroll (they can still reach Settings → Security, which
+ * is a non-admin route).
  */
 export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.session.user.role !== UserRole.ADMIN) {
     throw new TRPCError({ code: "FORBIDDEN" });
+  }
+  const livePrincipal = (ctx as { livePrincipal?: AuthorizedPrincipal })
+    .livePrincipal;
+  if (isAdminMfaEnforced() && livePrincipal && !livePrincipal.mfaEnabled) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message:
+        "Two-factor authentication is required for administrator accounts. Enable it in Settings → Security to continue.",
+    });
   }
   return next({ ctx });
 });

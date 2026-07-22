@@ -27,6 +27,19 @@ export interface AuthorizedPrincipal {
   roleId: number | null;
   status: UserStatus;
   sessionVersion: number;
+  mfaEnabled: boolean;
+}
+
+/**
+ * Whether Admin accounts must have MFA enabled to perform admin operations.
+ * Enforced by default in production; relaxed in development unless explicitly
+ * set (so the dev auto-admin is not locked out).
+ */
+export function isAdminMfaEnforced(): boolean {
+  const value = process.env.CRONIUM_ENFORCE_ADMIN_MFA;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return process.env.NODE_ENV === "production";
 }
 
 /**
@@ -85,6 +98,7 @@ async function loadPrincipal(
       roleId: users.roleId,
       status: users.status,
       sessionVersion: users.sessionVersion,
+      mfaEnabled: users.mfaEnabled,
     })
     .from(users)
     .where(eq(users.id, userId))
