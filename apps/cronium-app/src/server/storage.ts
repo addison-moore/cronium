@@ -92,6 +92,20 @@ import {
 } from "./socket-security-store";
 import { invalidatePrincipal } from "./security/authorization";
 import {
+  encryptVariableValue,
+  decryptVariableValue,
+} from "@/lib/security/variable-secret";
+
+/** Return a user-variable row with its value decrypted (or legacy plaintext). */
+function decryptVariableRow<
+  T extends { userId: string; key: string; value: string },
+>(row: T): T {
+  return {
+    ...row,
+    value: decryptVariableValue(row.value, row.userId, row.key),
+  };
+}
+import {
   normalizePagination,
   createPaginatedResult,
   buildSearchConditions,
@@ -3434,7 +3448,7 @@ class DatabaseStorage implements IStorage {
       .from(userVariables)
       .where(and(eq(userVariables.userId, userId), eq(userVariables.key, key)));
 
-    return variable ?? undefined;
+    return variable ? decryptVariableRow(variable) : undefined;
   }
 
   async setUserVariable(
@@ -3443,6 +3457,8 @@ class DatabaseStorage implements IStorage {
     value: string,
     description?: string,
   ): Promise<UserVariable> {
+    // Encrypt at rest, bound to this user + key (HI-09).
+    const storedValue = encryptVariableValue(value, userId, key);
     // Try to update existing variable first
     const existingVariable = await this.getUserVariable(userId, key);
 
@@ -3450,7 +3466,7 @@ class DatabaseStorage implements IStorage {
       const [updatedVariable] = await db
         .update(userVariables)
         .set({
-          value,
+          value: storedValue,
           description: description ?? existingVariable.description,
           updatedAt: new Date(),
         })
@@ -3462,7 +3478,7 @@ class DatabaseStorage implements IStorage {
       if (!updatedVariable) {
         throw new Error("Failed to update user variable");
       }
-      return updatedVariable;
+      return decryptVariableRow(updatedVariable);
     } else {
       // Create new variable
       const [newVariable] = await db
@@ -3470,7 +3486,7 @@ class DatabaseStorage implements IStorage {
         .values({
           userId,
           key,
-          value,
+          value: storedValue,
           description,
         })
         .returning();
@@ -3478,7 +3494,7 @@ class DatabaseStorage implements IStorage {
       if (!newVariable) {
         throw new Error("Failed to create user variable");
       }
-      return newVariable;
+      return decryptVariableRow(newVariable);
     }
   }
 
@@ -3489,7 +3505,7 @@ class DatabaseStorage implements IStorage {
       .where(eq(userVariables.userId, userId))
       .orderBy(asc(userVariables.key));
 
-    return variables;
+    return variables.map(decryptVariableRow);
   }
 
   async queryUserVariables(
@@ -3499,10 +3515,10 @@ class DatabaseStorage implements IStorage {
     const pagination = normalizePagination(query);
     const conditions: SQL[] = [eq(userVariables.userId, userId)];
 
+    // Value is encrypted at rest, so it is not searchable (search key/description).
     const searchCondition = buildSearchConditions(query.search, [
       userVariables.key,
       userVariables.description,
-      userVariables.value,
     ]);
 
     if (searchCondition) {
@@ -3539,21 +3555,36 @@ class DatabaseStorage implements IStorage {
       offset: pagination.offset,
     });
 
-    return createPaginatedResult(rows, total, pagination);
+    return createPaginatedResult(
+      rows.map(decryptVariableRow),
+      total,
+      pagination,
+    );
   }
 
   async createUserVariable(
     insertVariable: InsertUserVariable,
   ): Promise<UserVariable> {
+    const encrypted =
+      insertVariable.value !== undefined
+        ? {
+            ...insertVariable,
+            value: encryptVariableValue(
+              insertVariable.value,
+              insertVariable.userId,
+              insertVariable.key,
+            ),
+          }
+        : insertVariable;
     const [variable] = await db
       .insert(userVariables)
-      .values(insertVariable)
+      .values(encrypted)
       .returning();
 
     if (!variable) {
       throw new Error("Failed to create user variable");
     }
-    return variable;
+    return decryptVariableRow(variable);
   }
 
   async updateUserVariable(
@@ -3561,13 +3592,32 @@ class DatabaseStorage implements IStorage {
     userId: string,
     updateData: Partial<InsertUserVariable>,
   ): Promise<UserVariable | null> {
+    // The value is bound to (userId, key); if either the key or the value
+    // changes, re-encrypt under the resulting key so the binding stays valid.
+    const set: Partial<InsertUserVariable> = { ...updateData };
+    const keyChanging =
+      updateData.key !== undefined || updateData.value !== undefined;
+    if (keyChanging) {
+      const [existing] = await db
+        .select()
+        .from(userVariables)
+        .where(and(eq(userVariables.id, id), eq(userVariables.userId, userId)))
+        .limit(1);
+      if (existing) {
+        const newKey = updateData.key ?? existing.key;
+        const plaintext =
+          updateData.value ??
+          decryptVariableValue(existing.value, userId, existing.key);
+        set.value = encryptVariableValue(plaintext, userId, newKey);
+      }
+    }
     const [variable] = await db
       .update(userVariables)
-      .set(updateData)
+      .set(set)
       .where(and(eq(userVariables.id, id), eq(userVariables.userId, userId)))
       .returning();
 
-    return variable ?? null;
+    return variable ? decryptVariableRow(variable) : null;
   }
 
   async deleteUserVariable(id: number, userId: string): Promise<boolean> {

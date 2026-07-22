@@ -816,8 +816,12 @@ export const userVariables = pgTable(
   "user_variables",
   {
     id: serial("id").primaryKey(),
-    userId: varchar("user_id", { length: 255 }).notNull(),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     key: varchar("key", { length: 255 }).notNull(),
+    // Encrypted at rest (secret-vault envelope), decrypted at the owner/read
+    // and per-execution-resolution boundaries only (HI-09).
     value: text("value").notNull(),
     description: text("description"),
     createdAt: timestamp("created_at").defaultNow().notNull(),

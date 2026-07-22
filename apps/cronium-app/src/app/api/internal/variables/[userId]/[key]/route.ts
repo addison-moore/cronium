@@ -4,6 +4,10 @@ import { db } from "@/server/db";
 import { userVariables } from "@/shared/schema";
 import { and, eq } from "drizzle-orm";
 import { verifyInternalKey } from "@/lib/internal-auth";
+import {
+  encryptVariableValue,
+  decryptVariableValue,
+} from "@/lib/security/variable-secret";
 
 export async function GET(
   request: NextRequest,
@@ -43,9 +47,11 @@ export async function GET(
       );
     }
 
+    // Decrypt at the execution-resolution boundary (the runtime needs the
+    // plaintext to satisfy cronium.getVariable()).
     return NextResponse.json({
       key: varData.key,
-      value: varData.value,
+      value: decryptVariableValue(varData.value, userId, varData.key),
       updatedAt: varData.updatedAt,
     });
   } catch (error) {
@@ -70,19 +76,22 @@ export async function PUT(
     const { userId, key } = await params;
     const body = (await request.json()) as { value: string };
 
+    // Encrypt at rest (cronium.setVariable() from a running script).
+    const storedValue = encryptVariableValue(body.value, userId, key);
+
     // Insert or update variable
     await db
       .insert(userVariables)
       .values({
         userId,
         key,
-        value: body.value,
+        value: storedValue,
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
         target: [userVariables.userId, userVariables.key],
         set: {
-          value: body.value,
+          value: storedValue,
           updatedAt: new Date(),
         },
       });
