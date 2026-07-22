@@ -71,37 +71,50 @@ func (t *ExecutionTiming) MarkCleanupComplete() {
 	t.TotalEnd = now
 }
 
-// GetSetupDuration returns the setup phase duration in milliseconds
-func (t *ExecutionTiming) GetSetupDuration() int64 {
-	if t.SetupEnd.IsZero() {
+// phaseDurationMs returns end-start in ms, but 0 when either endpoint is unset
+// (a set end minus a zero start would otherwise be ~9.2e12 ms — 292 years —
+// which overflows the app's int4 duration columns and 500s the executions
+// update). A negative result (clock skew) is also clamped to 0.
+func phaseDurationMs(start, end time.Time) int64 {
+	if start.IsZero() || end.IsZero() {
 		return 0
 	}
-	return t.SetupEnd.Sub(t.SetupStart).Milliseconds()
+	ms := end.Sub(start).Milliseconds()
+	if ms < 0 {
+		return 0
+	}
+	return ms
+}
+
+// GetSetupDuration returns the setup phase duration in milliseconds
+func (t *ExecutionTiming) GetSetupDuration() int64 {
+	return phaseDurationMs(t.SetupStart, t.SetupEnd)
 }
 
 // GetExecutionDuration returns the execution phase duration in milliseconds
 func (t *ExecutionTiming) GetExecutionDuration() int64 {
-	if t.ExecutionEnd.IsZero() {
-		return 0
-	}
-	return t.ExecutionEnd.Sub(t.ExecutionStart).Milliseconds()
+	return phaseDurationMs(t.ExecutionStart, t.ExecutionEnd)
 }
 
 // GetCleanupDuration returns the cleanup phase duration in milliseconds
 func (t *ExecutionTiming) GetCleanupDuration() int64 {
-	if t.CleanupEnd.IsZero() {
-		return 0
-	}
-	return t.CleanupEnd.Sub(t.CleanupStart).Milliseconds()
+	return phaseDurationMs(t.CleanupStart, t.CleanupEnd)
 }
 
 // GetTotalDuration returns the total duration in milliseconds
 func (t *ExecutionTiming) GetTotalDuration() int64 {
+	if t.TotalStart.IsZero() {
+		return 0
+	}
 	if t.TotalEnd.IsZero() {
 		// If not complete, calculate from start to now
-		return time.Since(t.TotalStart).Milliseconds()
+		ms := time.Since(t.TotalStart).Milliseconds()
+		if ms < 0 {
+			return 0
+		}
+		return ms
 	}
-	return t.TotalEnd.Sub(t.TotalStart).Milliseconds()
+	return phaseDurationMs(t.TotalStart, t.TotalEnd)
 }
 
 // GetConnectionTime returns the SSH connection time in milliseconds

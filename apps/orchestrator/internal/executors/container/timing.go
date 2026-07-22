@@ -13,14 +13,14 @@ type ExecutionTiming struct {
 	TotalEnd   time.Time
 
 	// Setup phase (network, sidecar, container creation)
-	SetupStart         time.Time
-	SetupEnd           time.Time
-	NetworkCreateStart time.Time
-	NetworkCreateEnd   time.Time
-	SidecarCreateStart time.Time
-	SidecarCreateEnd   time.Time
-	ContainerPullStart time.Time
-	ContainerPullEnd   time.Time
+	SetupStart           time.Time
+	SetupEnd             time.Time
+	NetworkCreateStart   time.Time
+	NetworkCreateEnd     time.Time
+	SidecarCreateStart   time.Time
+	SidecarCreateEnd     time.Time
+	ContainerPullStart   time.Time
+	ContainerPullEnd     time.Time
 	ContainerCreateStart time.Time
 	ContainerCreateEnd   time.Time
 
@@ -63,37 +63,48 @@ func (t *ExecutionTiming) MarkCleanupComplete() {
 	t.TotalEnd = now
 }
 
-// GetSetupDuration returns the setup phase duration in milliseconds
-func (t *ExecutionTiming) GetSetupDuration() int64 {
-	if t.SetupEnd.IsZero() {
+// phaseDurationMs returns end-start in ms, but 0 when either endpoint is unset
+// (a set end minus a zero start would otherwise be ~9.2e12 ms, overflowing the
+// app's int4 duration columns) or negative (clock skew).
+func phaseDurationMs(start, end time.Time) int64 {
+	if start.IsZero() || end.IsZero() {
 		return 0
 	}
-	return t.SetupEnd.Sub(t.SetupStart).Milliseconds()
+	ms := end.Sub(start).Milliseconds()
+	if ms < 0 {
+		return 0
+	}
+	return ms
+}
+
+// GetSetupDuration returns the setup phase duration in milliseconds
+func (t *ExecutionTiming) GetSetupDuration() int64 {
+	return phaseDurationMs(t.SetupStart, t.SetupEnd)
 }
 
 // GetExecutionDuration returns the execution phase duration in milliseconds
 func (t *ExecutionTiming) GetExecutionDuration() int64 {
-	if t.ExecutionEnd.IsZero() {
-		return 0
-	}
-	return t.ExecutionEnd.Sub(t.ExecutionStart).Milliseconds()
+	return phaseDurationMs(t.ExecutionStart, t.ExecutionEnd)
 }
 
 // GetCleanupDuration returns the cleanup phase duration in milliseconds
 func (t *ExecutionTiming) GetCleanupDuration() int64 {
-	if t.CleanupEnd.IsZero() {
-		return 0
-	}
-	return t.CleanupEnd.Sub(t.CleanupStart).Milliseconds()
+	return phaseDurationMs(t.CleanupStart, t.CleanupEnd)
 }
 
 // GetTotalDuration returns the total duration in milliseconds
 func (t *ExecutionTiming) GetTotalDuration() int64 {
-	if t.TotalEnd.IsZero() {
-		// If not complete, calculate from start to now
-		return time.Since(t.TotalStart).Milliseconds()
+	if t.TotalStart.IsZero() {
+		return 0
 	}
-	return t.TotalEnd.Sub(t.TotalStart).Milliseconds()
+	if t.TotalEnd.IsZero() {
+		ms := time.Since(t.TotalStart).Milliseconds()
+		if ms < 0 {
+			return 0
+		}
+		return ms
+	}
+	return phaseDurationMs(t.TotalStart, t.TotalEnd)
 }
 
 // ToExecutionStatusUpdate converts timing to API update format
@@ -120,9 +131,9 @@ func (t *ExecutionTiming) ToExecutionStatusUpdate() *api.ExecutionStatusUpdate {
 		TotalDuration:     &totalDuration,
 		// Metadata with detailed timing breakdown
 		ExecutionMetadata: map[string]interface{}{
-			"networkCreateTime": t.NetworkCreateEnd.Sub(t.NetworkCreateStart).Milliseconds(),
-			"sidecarCreateTime": t.SidecarCreateEnd.Sub(t.SidecarCreateStart).Milliseconds(),
-			"containerPullTime": t.ContainerPullEnd.Sub(t.ContainerPullStart).Milliseconds(),
+			"networkCreateTime":   t.NetworkCreateEnd.Sub(t.NetworkCreateStart).Milliseconds(),
+			"sidecarCreateTime":   t.SidecarCreateEnd.Sub(t.SidecarCreateStart).Milliseconds(),
+			"containerPullTime":   t.ContainerPullEnd.Sub(t.ContainerPullStart).Milliseconds(),
 			"containerCreateTime": t.ContainerCreateEnd.Sub(t.ContainerCreateStart).Milliseconds(),
 		},
 	}
