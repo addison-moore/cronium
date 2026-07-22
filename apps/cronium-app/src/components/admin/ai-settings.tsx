@@ -311,6 +311,10 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
                     {...field}
                     value={field.value ?? ""}
                   />
+                  <p className="text-muted-foreground text-xs">
+                    For security the current key is never shown. Leave blank to
+                    keep the existing key, or enter a new one to replace it.
+                  </p>
                   {fieldState.error && (
                     <p
                       id={`${PROVIDER_KEY_FIELD[provider]}-error`}

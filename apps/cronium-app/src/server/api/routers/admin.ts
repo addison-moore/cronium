@@ -560,14 +560,26 @@ export const adminRouter = createTRPCRouter({
           aiEnabled: settingsObject.aiEnabled ?? false,
           aiProvider: settingsObject.aiProvider ?? "openai",
           aiModel: settingsObject.aiModel ?? "",
-          openaiApiKey: settingsObject.openaiApiKey ?? "",
-          anthropicApiKey: settingsObject.anthropicApiKey ?? "",
-          geminiApiKey: settingsObject.geminiApiKey ?? "",
-          customAiApiKey: settingsObject.customAiApiKey ?? "",
           customAiBaseUrl: settingsObject.customAiBaseUrl ?? "",
         };
 
-        return resourceResponse(systemSettings);
+        // Write-only secrets: never return SMTP/AI secret values to the client
+        // (HI-09). Report only whether each is configured; the update path keeps
+        // the existing value when a blank is submitted.
+        const secretSettings = {
+          smtpPassword: "",
+          openaiApiKey: "",
+          anthropicApiKey: "",
+          geminiApiKey: "",
+          customAiApiKey: "",
+          hasSmtpPassword: Boolean(settingsObject.smtpPassword),
+          hasOpenaiApiKey: Boolean(settingsObject.openaiApiKey),
+          hasAnthropicApiKey: Boolean(settingsObject.anthropicApiKey),
+          hasGeminiApiKey: Boolean(settingsObject.geminiApiKey),
+          hasCustomAiApiKey: Boolean(settingsObject.customAiApiKey),
+        };
+
+        return resourceResponse({ ...systemSettings, ...secretSettings });
       },
       {
         component: "adminRouter",
@@ -583,18 +595,39 @@ export const adminRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       return withErrorHandling(
         async () => {
+          // Secret settings are write-only: a blank value means "keep the
+          // existing secret" (the read path returns "" for them), so we never
+          // overwrite a configured secret with an empty string (HI-09).
+          const secretKeys = new Set([
+            "smtpPassword",
+            "openaiApiKey",
+            "anthropicApiKey",
+            "geminiApiKey",
+            "customAiApiKey",
+          ]);
+
           // Update each setting in the database
           for (const [key, value] of Object.entries(input)) {
-            if (value !== undefined && value !== null) {
-              // Convert the value to string for storage, handling different types
-              const stringValue =
-                typeof value === "string" ? value : JSON.stringify(value);
-              await storage.upsertSetting(key, stringValue);
+            if (value === undefined || value === null) continue;
+            if (
+              secretKeys.has(key) &&
+              typeof value === "string" &&
+              value.trim() === ""
+            ) {
+              continue; // blank secret → keep the current one
             }
+            const stringValue =
+              typeof value === "string" ? value : JSON.stringify(value);
+            await storage.upsertSetting(key, stringValue);
           }
 
+          // Never echo secret values back in the mutation response.
+          const echoed = { ...input } as Record<string, unknown>;
+          for (const key of secretKeys) {
+            if (key in echoed) echoed[key] = "";
+          }
           return mutationResponse(
-            input,
+            echoed,
             "System settings updated successfully",
           );
         },

@@ -171,6 +171,10 @@ export function SmtpSettings({
                 )}
               </Button>
             </div>
+            <p className="text-muted-foreground text-xs">
+              For security the current password is never shown. Leave this blank
+              to keep the existing password, or enter a new one to replace it.
+            </p>
             {form.formState.errors.smtpPassword && (
               <p id="smtpPassword-error" className="text-destructive text-sm">
                 {form.formState.errors.smtpPassword.message}
