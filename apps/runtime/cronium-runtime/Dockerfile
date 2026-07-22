@@ -1,7 +1,7 @@
 # Build stage.
 # Pinned to BUILDPLATFORM so the Go toolchain runs natively and cross-compiles
 # to TARGETARCH, rather than running under QEMU for a foreign platform.
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.25.12-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git

@@ -2,6 +2,8 @@ module github.com/addison-moore/cronium/apps/orchestrator
 
 go 1.25.0
 
+toolchain go1.25.12
+
 require (
 	github.com/docker/go-connections v0.7.0 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.2

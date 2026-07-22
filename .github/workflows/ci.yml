@@ -18,6 +18,7 @@ concurrency:
 
 env:
   GOLANGCI_LINT_VERSION: "2.12.2"
+  GOVULNCHECK_VERSION: "1.6.0"
 
 jobs:
   node:
@@ -62,6 +63,24 @@ jobs:
       - name: Security regression tests
         run: pnpm test:security
 
+  dependency-review:
+    name: Dependency Review
+    # dependency-review-action only runs on pull_request; it diffs the PR's
+    # dependency manifest changes and fails on newly introduced vulnerable or
+    # disallowed-license dependencies (3.5 supply-chain gate).
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          fail-on-severity: high
+
   sdk-sync:
     name: SDK Sync (container mirror vs canonical)
     runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'self-hosted' }}
@@ -86,7 +105,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: "1.25"
+          go-version: "1.25.12"
           cache-dependency-path: |
             apps/orchestrator/go.sum
             apps/runtime/cronium-runtime/go.sum
@@ -117,6 +136,20 @@ jobs:
         run: |
           go vet ./...
           go test ./...
+
+      # Supply-chain gate (3.4): fail when a known vulnerability is reachable
+      # from our code. Requires the pinned patched toolchain (go 1.25.12) so the
+      # standard-library findings resolve; run per-module so each go.mod's
+      # dependency graph is analyzed.
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v${{ env.GOVULNCHECK_VERSION }}
+
+      - name: govulncheck (Go modules)
+        run: |
+          for m in apps/orchestrator apps/runtime/cronium-runtime apps/runner/cronium-runner; do
+            echo "== govulncheck $m =="
+            (cd "$m" && govulncheck ./...)
+          done
 
       # Advisory for now. golangci-lint never actually ran (its installer was
       # broken and lint-go.sh swallowed the resulting error), so there is a

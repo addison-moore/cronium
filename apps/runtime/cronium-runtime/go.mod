@@ -1,8 +1,8 @@
 module github.com/addison-moore/cronium/apps/runtime
 
-go 1.23.0
+go 1.25.0
 
-toolchain go1.24.5
+toolchain go1.25.12
 
 require (
 	github.com/go-chi/chi/v5 v5.3.1
