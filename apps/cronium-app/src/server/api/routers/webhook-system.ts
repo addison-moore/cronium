@@ -39,6 +39,8 @@ export const webhookSystemRouter = createTRPCRouter({
               id: result.id,
               key: result.key,
               url: `${process.env.PUBLIC_APP_URL ?? ""}/api/webhooks/${result.key}`,
+              // Shown once — the owner configures their sender's HMAC with it.
+              secret: result.secret,
             },
             "Webhook created successfully",
           );
@@ -61,6 +63,10 @@ export const webhookSystemRouter = createTRPCRouter({
 
         const webhooksWithEndpoints = userWebhooks.map((webhook) => ({
           ...webhook,
+          // Never return the HMAC secret on a read (HI-09); report only that
+          // one is configured.
+          secret: "",
+          hasSecret: Boolean(webhook.secret),
           endpoint: `${process.env.PUBLIC_APP_URL ?? ""}/api/webhooks/${webhook.key}`,
         }));
 
@@ -104,6 +110,8 @@ export const webhookSystemRouter = createTRPCRouter({
 
           return resourceResponse({
             ...webhook,
+            secret: "",
+            hasSecret: Boolean(webhook.secret),
             endpoint: `${process.env.PUBLIC_APP_URL ?? ""}/api/webhooks/${webhook.key}`,
           });
         },
@@ -132,9 +140,8 @@ export const webhookSystemRouter = createTRPCRouter({
             ...(input.updates.events !== undefined && {
               events: input.updates.events,
             }),
-            ...(input.updates.secret !== undefined && {
-              secret: input.updates.secret,
-            }),
+            // The HMAC secret is not changed here — use regenerateSecret, which
+            // encrypts and returns the new plaintext once.
             ...(input.updates.headers !== undefined && {
               headers: input.updates.headers,
             }),
@@ -425,15 +432,37 @@ export const webhookSystemRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       return withErrorHandling(
         async () => {
+          // Look up the webhook (owner-scoped) to bind the new secret's
+          // encryption to its key/tenant.
+          const [webhook] = await ctx.db
+            .select({ key: webhooks.key })
+            .from(webhooks)
+            .where(
+              and(
+                eq(webhooks.id, input.webhookId),
+                eq(webhooks.userId, ctx.session.user.id),
+              ),
+            )
+            .limit(1);
+          if (!webhook) {
+            throw notFoundError("Webhook");
+          }
+
           const webhookSecurity = new (
             await import("@/lib/webhooks")
           ).WebhookSecurity();
           const newSecret = webhookSecurity.generateSecret();
+          const { encryptWebhookSecret } =
+            await import("@/lib/webhooks/webhook-secret");
 
           await ctx.db
             .update(webhooks)
             .set({
-              secret: newSecret,
+              secret: encryptWebhookSecret(
+                newSecret,
+                webhook.key,
+                ctx.session.user.id,
+              ),
               updatedAt: new Date(),
             })
             .where(
@@ -443,6 +472,7 @@ export const webhookSystemRouter = createTRPCRouter({
               ),
             );
 
+          // Return the plaintext once so the owner can update their sender.
           return mutationResponse(
             { secret: newSecret },
             "Webhook secret regenerated successfully",

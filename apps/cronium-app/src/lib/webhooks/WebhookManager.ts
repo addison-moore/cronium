@@ -80,9 +80,12 @@ export class WebhookManager extends EventEmitter {
   async registerWebhook(
     userId: string,
     config: WebhookConfig,
-  ): Promise<{ id: number; key: string }> {
+  ): Promise<{ id: number; key: string; secret: string }> {
     const key = nanoid(32);
     const secretKey = config.secret ?? crypto.randomBytes(32).toString("hex");
+    // Encrypt the shared HMAC secret at rest (bound to this webhook).
+    const { encryptWebhookSecret } = await import("./webhook-secret");
+    const storedSecret = encryptWebhookSecret(secretKey, key, userId);
 
     const result = await db
       .insert(webhooks)
@@ -91,7 +94,7 @@ export class WebhookManager extends EventEmitter {
         name: `Webhook ${new Date().toISOString()}`,
         url: config.url,
         events: config.events,
-        secret: secretKey,
+        secret: storedSecret,
         headers: config.headers ?? {},
         active: config.active,
         retryConfig: config.retryConfig ?? {
@@ -109,7 +112,8 @@ export class WebhookManager extends EventEmitter {
       throw new Error("Failed to create webhook");
     }
 
-    return { id: result[0].id, key };
+    // Return the plaintext secret ONCE so the owner can configure their sender.
+    return { id: result[0].id, key, secret: secretKey };
   }
 
   /**
@@ -218,6 +222,7 @@ export class WebhookManager extends EventEmitter {
       ...(metadata !== undefined && { metadata }),
     };
 
+    const { decryptWebhookSecret } = await import("./webhook-secret");
     for (const webhook of subscribedWebhooks) {
       const retryConfig = webhook.retryConfig as
         | {
@@ -231,7 +236,12 @@ export class WebhookManager extends EventEmitter {
         webhookId: webhook.id,
         webhookEventId: webhookEvent.id,
         url: webhook.url,
-        secret: webhook.secret,
+        // Decrypt at the delivery-signing boundary.
+        secret: decryptWebhookSecret(
+          webhook.secret,
+          webhook.key,
+          webhook.userId,
+        ),
         headers: webhook.headers as Record<string, string>,
         payload,
         ...(retryConfig !== undefined && { retryConfig }),

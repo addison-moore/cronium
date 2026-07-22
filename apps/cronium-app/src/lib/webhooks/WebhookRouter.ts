@@ -98,7 +98,9 @@ export class WebhookRouter {
       const headers = this.extractHeaders(request.headers);
 
       // Verify webhook security over the raw body (signature binds
-      // timestamp.deliveryId.rawBody; delivery id is consumed once).
+      // timestamp.deliveryId.rawBody; delivery id is consumed once). Decrypt the
+      // stored HMAC secret at this verification boundary.
+      const { decryptWebhookSecret } = await import("./webhook-secret");
       const clientIp = this.getClientIP(request);
       const verificationResult = await this.webhookSecurity.verifyWebhook(
         {
@@ -108,7 +110,11 @@ export class WebhookRouter {
           ...(clientIp !== undefined && { ip: clientIp }),
         },
         {
-          secret: webhook.secret,
+          secret: decryptWebhookSecret(
+            webhook.secret,
+            webhook.key,
+            webhook.userId,
+          ),
           ...(webhook.ipWhitelist
             ? { ipWhitelist: webhook.ipWhitelist as string[] }
             : {}),
