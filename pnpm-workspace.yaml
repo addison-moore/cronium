@@ -5,13 +5,19 @@ packages:
 # Security overrides for vulnerable transitive deps (Dependabot):
 # dompurify pinned exactly by monaco-editor; postcss pinned exactly by next;
 # uuid ^8 wanted by next-auth; esbuild ~0.18 via @esbuild-kit (drizzle-kit),
-# 0.27.x via tsup. Drop when parents update their own ranges.
+# 0.27.x via tsup; sharp <0.35.0 (libvips CVE-2026-33327/33328/35590/35591)
+# pulled transitively by next. Drop when parents update their own ranges.
 overrides:
   dompurify@<3.4.11: ^3.4.11
   uuid@<11.1.1: ^11.1.1
   postcss@<8.5.10: ^8.5.10
   esbuild@<0.25.0: ^0.25.0
   "esbuild@>=0.27.3 <0.28.1": ^0.28.1
+  sharp@<0.35.0: ^0.35.3
+  # fast-uri (host confusion) and @hono/node-server (path traversal) reach us
+  # transitively through @modelcontextprotocol/sdk (via ajv / @google/genai).
+  fast-uri@<3.1.4: ^3.1.4
+  "@hono/node-server@<2.0.5": ^2.0.5
 
 allowBuilds:
   "@google/genai": false

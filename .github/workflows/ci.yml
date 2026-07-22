@@ -63,6 +63,13 @@ jobs:
       - name: Security regression tests
         run: pnpm test:security
 
+      # Supply-chain gate (3.5): fail on high/critical advisories in the
+      # dependency tree. Transitive fixes are pinned via pnpm-workspace.yaml
+      # overrides; a new high advisory here means a dependency needs a bump or
+      # a new override.
+      - name: Dependency audit (pnpm)
+        run: pnpm audit --audit-level high
+
   dependency-review:
     name: Dependency Review
     # dependency-review-action only runs on pull_request; it diffs the PR's
