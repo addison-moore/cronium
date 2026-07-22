@@ -22,17 +22,27 @@ const SALT_LENGTH = 16; // 128 bits for client-side encryption
  * Server-side encryption service
  */
 class EncryptionService {
-  private masterKey: Buffer;
+  private cachedKey: Buffer | null = null;
 
-  constructor() {
-    // Fail CLOSED: no ephemeral development fallback (Phase 2.1). An absent or
-    // malformed key stops the service rather than silently generating a random
-    // key that makes all existing ciphertext undecryptable.
+  /**
+   * Resolve and validate the master key LAZILY, on first cryptographic use —
+   * not at construction. This keeps the service fail-closed at runtime (any
+   * real encrypt/decrypt without a valid key throws) while allowing tooling
+   * that merely imports the module without ever encrypting — notably
+   * `next build`'s "Collecting page data" pass, which has no ENCRYPTION_KEY in
+   * the builder stage — to load it. There is deliberately no ephemeral
+   * development fallback (Phase 2.1): an absent or malformed key stops the
+   * operation rather than silently generating a random key that would make all
+   * existing ciphertext undecryptable.
+   */
+  private getMasterKey(): Buffer {
+    if (this.cachedKey) return this.cachedKey;
+
     const masterKeyHex = env.ENCRYPTION_KEY;
 
     if (!masterKeyHex) {
       throw new Error(
-        "ENCRYPTION_KEY is required — refusing to start without it.",
+        "ENCRYPTION_KEY is required — refusing to encrypt or decrypt without it.",
       );
     }
 
@@ -42,7 +52,8 @@ class EncryptionService {
       );
     }
 
-    this.masterKey = Buffer.from(masterKeyHex, "hex");
+    this.cachedKey = Buffer.from(masterKeyHex, "hex");
+    return this.cachedKey;
   }
 
   /**
@@ -53,7 +64,7 @@ class EncryptionService {
 
     try {
       const iv = crypto.randomBytes(IV_LENGTH);
-      const cipher = crypto.createCipheriv(ALGORITHM, this.masterKey, iv);
+      const cipher = crypto.createCipheriv(ALGORITHM, this.getMasterKey(), iv);
       cipher.setAAD(Buffer.from("cronium-server-encryption"));
 
       let encrypted = cipher.update(plaintext, "utf8", "hex");
@@ -106,7 +117,7 @@ class EncryptionService {
       const authTag = combined.subarray(-TAG_LENGTH);
       const encrypted = combined.subarray(IV_LENGTH, -TAG_LENGTH);
 
-      const decipher = crypto.createDecipheriv(ALGORITHM, this.masterKey, iv);
+      const decipher = crypto.createDecipheriv(ALGORITHM, this.getMasterKey(), iv);
       decipher.setAAD(Buffer.from("cronium-server-encryption"));
       decipher.setAuthTag(authTag);
 
