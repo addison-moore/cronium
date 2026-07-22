@@ -176,6 +176,7 @@ type RuntimeConfig struct {
 	Image          string `yaml:"image" envconfig:"IMAGE" default:"cronium/runtime-api:latest"`
 	BackendURL     string `yaml:"backendURL" envconfig:"BACKEND_URL"`
 	ValkeyURL      string `yaml:"valkeyURL" envconfig:"VALKEY_URL" default:"valkey://valkey:6379"`
+	ValkeyPassword string `yaml:"valkeyPassword" envconfig:"VALKEY_PASSWORD"`
 	JWTSecret      string `yaml:"jwtSecret" envconfig:"JWT_SECRET"`
 	IsolateNetwork bool   `yaml:"isolateNetwork" envconfig:"ISOLATE_NETWORK" default:"true"`
 	// SharedNetwork is a Docker network the runtime sidecar joins in addition

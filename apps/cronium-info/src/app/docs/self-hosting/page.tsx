@@ -172,7 +172,8 @@ export default function SelfHostingPage() {
 openssl rand -hex 32     # AUTH_SECRET, ENCRYPTION_KEY, JWT_SECRET
 openssl rand -base64 32  # CRONIUM_ORCHESTRATOR_KEY
 openssl rand -base64 32  # SOCKET_BROADCAST_KEY
-openssl rand -hex 16     # POSTGRES_PASSWORD`}
+openssl rand -hex 16     # POSTGRES_PASSWORD
+openssl rand -hex 24     # VALKEY_PASSWORD`}
                   </SimpleCodeBlock>
                   <code>ENCRYPTION_KEY</code> must be exactly 64 hex characters
                   (<code>openssl rand -hex 32</code> produces that).
@@ -196,7 +197,8 @@ ENCRYPTION_KEY=<paste value>
 CRONIUM_ORCHESTRATOR_KEY=<paste value>
 SOCKET_BROADCAST_KEY=<paste value>
 JWT_SECRET=<paste value>
-POSTGRES_PASSWORD=<paste value>`}
+POSTGRES_PASSWORD=<paste value>
+VALKEY_PASSWORD=<paste value>`}
                   </SimpleCodeBlock>
                 </li>
               </ol>

@@ -14,8 +14,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-cronium}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?generate with openssl rand -hex 16}
       POSTGRES_DB: ${POSTGRES_DB:-cronium}
+    # Not published on all interfaces: every consumer reaches Postgres over the
+    # internal cronium-network by service name. The loopback publish is only for
+    # operator tooling (psql/migrations) on the host itself.
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -30,16 +33,30 @@ services:
   valkey:
     image: valkey/valkey:7-alpine
     container_name: cronium-valkey
-    # Never evict socket replay markers before their TTL. Security-sensitive
-    # writes fail closed when the configured memory limit is exhausted.
-    command: valkey-server --appendonly yes --maxmemory ${VALKEY_MAX_MEMORY:-256mb} --maxmemory-policy noeviction
+    environment:
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD:?generate with openssl rand -hex 24}
+    # requirepass gates every command (defense-in-depth against lateral movement
+    # on the shared network). Never evict socket replay markers before their TTL:
+    # security-sensitive writes fail closed when the memory limit is exhausted.
+    command:
+      [
+        "sh",
+        "-c",
+        'exec valkey-server --requirepass "$$VALKEY_PASSWORD" --appendonly yes --maxmemory ${VALKEY_MAX_MEMORY:-256mb} --maxmemory-policy noeviction',
+      ]
+    # Loopback-only publish for operator tooling; consumers use the internal
+    # cronium-network by service name.
     ports:
-      - "${VALKEY_PORT:-6379}:6379"
+      - "127.0.0.1:${VALKEY_PORT:-6379}:6379"
     volumes:
       - valkey_data:/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "valkey-cli", "ping"]
+      test:
+        [
+          "CMD-SHELL",
+          'valkey-cli -a "$$VALKEY_PASSWORD" --no-auth-warning ping | grep -q PONG',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -64,7 +81,7 @@ services:
       SOCKET_BROADCAST_KEY: ${SOCKET_BROADCAST_KEY:?generate with openssl rand -base64 32}
       JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
       ORCHESTRATOR_URL: http://cronium-orchestrator:8080
-      VALKEY_URL: valkey://valkey:6379
+      VALKEY_URL: valkey://:${VALKEY_PASSWORD:?generate with openssl rand -hex 24}@valkey:6379
       NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL:-http://localhost:5002}
       NEXT_PUBLIC_SOCKET_PORT: ${SOCKET_PORT:-5002}
       NODE_ENV: ${NODE_ENV:-production}
@@ -116,7 +133,7 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?generate with openssl rand -hex 32 (must be 64 hex chars)}
       SOCKET_BROADCAST_KEY: ${SOCKET_BROADCAST_KEY:?generate with openssl rand -base64 32}
       JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
-      VALKEY_URL: valkey://valkey:6379
+      VALKEY_URL: valkey://:${VALKEY_PASSWORD:?generate with openssl rand -hex 24}@valkey:6379
       SOCKET_INTERNAL_URL: http://cronium-app:5002
       NODE_ENV: ${NODE_ENV:-production}
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -163,6 +180,9 @@ services:
       CRONIUM_CONTAINER_RUNTIME_JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
       CRONIUM_CONTAINER_RUNTIME_BACKEND_URL: http://cronium-app:3000
       CRONIUM_CONTAINER_RUNTIME_VALKEY_URL: valkey://valkey:6379
+      # Injected into each per-job runtime sidecar so it can authenticate to the
+      # password-protected Valkey (the sidecar reads VALKEY_PASSWORD).
+      CRONIUM_CONTAINER_RUNTIME_VALKEY_PASSWORD: ${VALKEY_PASSWORD:?generate with openssl rand -hex 24}
       # Per-job runtime sidecars join this network to reach the app and Valkey;
       # must match the network name declared at the bottom of this file.
       CRONIUM_CONTAINER_RUNTIME_SHARED_NETWORK: cronium-network
@@ -206,6 +226,7 @@ services:
       RUNTIME_JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
       RUNTIME_BACKEND_URL: http://cronium-app:3000
       RUNTIME_VALKEY_URL: valkey://valkey:6379
+      RUNTIME_VALKEY_PASSWORD: ${VALKEY_PASSWORD:?generate with openssl rand -hex 24}
       RUNTIME_LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
       cronium-app:

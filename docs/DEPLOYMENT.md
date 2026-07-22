@@ -66,6 +66,7 @@ The installer automates exactly these steps:
    SOCKET_BROADCAST_KEY=$(openssl rand -base64 32)
    JWT_SECRET=$(openssl rand -hex 32)
    POSTGRES_PASSWORD=$(openssl rand -hex 16)
+   VALKEY_PASSWORD=$(openssl rand -hex 24)
    ENV
    chmod 600 .env
    ```

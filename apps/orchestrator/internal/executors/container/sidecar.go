@@ -37,17 +37,23 @@ func (sm *SidecarManager) CreateRuntimeSidecar(ctx context.Context, job *types.J
 	}
 
 	// Build container configuration
+	sidecarEnv := []string{
+		"EXECUTION_ID=" + job.ID,
+		"JWT_SECRET=" + sm.executor.config.Runtime.JWTSecret,
+		"BACKEND_URL=" + sm.executor.config.Runtime.BackendURL,
+		"BACKEND_TOKEN=" + os.Getenv("CRONIUM_API_TOKEN"),
+		"VALKEY_URL=" + sm.executor.config.Runtime.ValkeyURL,
+		"PORT=8081",
+		"LOG_LEVEL=info",
+	}
+	// Only inject the Valkey password when configured, so no-auth (dev) Valkey
+	// deployments keep working. The runtime reads VALKEY_PASSWORD.
+	if pw := sm.executor.config.Runtime.ValkeyPassword; pw != "" {
+		sidecarEnv = append(sidecarEnv, "VALKEY_PASSWORD="+pw)
+	}
 	containerConfig := &container.Config{
 		Image: sm.getRuntimeImage(),
-		Env: []string{
-			"EXECUTION_ID=" + job.ID,
-			"JWT_SECRET=" + sm.executor.config.Runtime.JWTSecret,
-			"BACKEND_URL=" + sm.executor.config.Runtime.BackendURL,
-			"BACKEND_TOKEN=" + os.Getenv("CRONIUM_API_TOKEN"),
-			"VALKEY_URL=" + sm.executor.config.Runtime.ValkeyURL,
-			"PORT=8081",
-			"LOG_LEVEL=info",
-		},
+		Env:   sidecarEnv,
 		ExposedPorts: network.PortSet{
 			network.MustParsePort("8081/tcp"): struct{}{},
 		},

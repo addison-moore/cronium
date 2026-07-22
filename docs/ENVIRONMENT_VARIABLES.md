@@ -62,14 +62,14 @@ These environment variables must be set for the application to function correctl
 
 ### Authentication & Security
 
-| Variable           | Description                         | Type                    | Required | Example                                 | Service |
-| ------------------ | ----------------------------------- | ----------------------- | -------- | --------------------------------------- | ------- |
-| `AUTH_URL`         | NextAuth base URL                   | `string` (URL)          | Yes      | `http://localhost:3000`                 | 📱      |
-| `AUTH_SECRET`      | NextAuth encryption secret          | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` | 📱      |
-| `ENCRYPTION_KEY`   | Data encryption key                 | `string` (32 chars)     | Yes      | Generate with `openssl rand -hex 32`    | 📱      |
-| `JWT_SECRET`       | JWT signing secret                  | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` |
-| `CRONIUM_ORCHESTRATOR_KEY` | Orchestrator service-identity credential — the app verifies it on the orchestrator-facing routes (claim, heartbeat, health/metrics) | `string` | Yes      | Generate with `openssl rand -base64 32` |
-| `SOCKET_BROADCAST_KEY` | Authenticates internal broadcasts from the app/worker to the socket server | `string`                | Yes      | Generate with `openssl rand -base64 32` |
+| Variable                   | Description                                                                                                                         | Type                    | Required | Example                                 | Service |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | -------- | --------------------------------------- | ------- |
+| `AUTH_URL`                 | NextAuth base URL                                                                                                                   | `string` (URL)          | Yes      | `http://localhost:3000`                 | 📱      |
+| `AUTH_SECRET`              | NextAuth encryption secret                                                                                                          | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` | 📱      |
+| `ENCRYPTION_KEY`           | Data encryption key                                                                                                                 | `string` (32 chars)     | Yes      | Generate with `openssl rand -hex 32`    | 📱      |
+| `JWT_SECRET`               | JWT signing secret                                                                                                                  | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` |
+| `CRONIUM_ORCHESTRATOR_KEY` | Orchestrator service-identity credential — the app verifies it on the orchestrator-facing routes (claim, heartbeat, health/metrics) | `string`                | Yes      | Generate with `openssl rand -base64 32` |
+| `SOCKET_BROADCAST_KEY`     | Authenticates internal broadcasts from the app/worker to the socket server                                                          | `string`                | Yes      | Generate with `openssl rand -base64 32` |
 
 **Notes:**
 
@@ -103,24 +103,25 @@ postgresql://user:password@localhost:5432/cronium?sslmode=require
 
 ### Service Communication
 
-| Variable           | Description                                                                             | Type           | Default                    | Required | Service |
-| ------------------ | --------------------------------------------------------------------------------------- | -------------- | -------------------------- | -------- | ------- |
-| `ORCHESTRATOR_URL` | Orchestrator service URL                                                                | `string` (URL) | `http://orchestrator:8080` | Yes      | 📱      |
-| `VALKEY_URL`       | Valkey/Redis connection URL (for caching static resources, sessions, and rate limiting) | `string` (URL) | `valkey://valkey:6379`     | Yes      | 📱 🎯   |
-| `BACKEND_URL`      | Backend service URL (for orchestrator)                                                  | `string` (URL) | `http://cronium-app:3000`  | Yes      | 🎯      |
-| `TRUSTED_PROXY_HOPS` | Number of trusted reverse-proxy hops in front of the app. Controls how the client IP is derived from `X-Forwarded-For` for rate limiting and IP checks. `0` (default) ignores forwarding headers; set to `1` behind a single TLS proxy. | `number` | `0` | No | 📱 |
+| Variable             | Description                                                                                                                                                                                                                                                                                                                                       | Type           | Default                    | Required | Service |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | -------------------------- | -------- | ------- |
+| `ORCHESTRATOR_URL`   | Orchestrator service URL                                                                                                                                                                                                                                                                                                                          | `string` (URL) | `http://orchestrator:8080` | Yes      | 📱      |
+| `VALKEY_URL`         | Valkey/Redis connection URL (for caching static resources, sessions, and rate limiting). With a password-protected Valkey, embed it: `valkey://:PASSWORD@valkey:6379`                                                                                                                                                                             | `string` (URL) | `valkey://valkey:6379`     | Yes      | 📱 🎯   |
+| `VALKEY_PASSWORD`    | Valkey `requirepass`. Required by the production compose files (they run `valkey-server --requirepass` and every service authenticates). The orchestrator passes it to per-job runtime sidecars (`CRONIUM_CONTAINER_RUNTIME_VALKEY_PASSWORD`) and the runtime reads it directly (`RUNTIME_VALKEY_PASSWORD`). Generate with `openssl rand -hex 24` | `string`       | _(empty)_                  | Compose  | 🎯 🐳   |
+| `BACKEND_URL`        | Backend service URL (for orchestrator)                                                                                                                                                                                                                                                                                                            | `string` (URL) | `http://cronium-app:3000`  | Yes      | 🎯      |
+| `TRUSTED_PROXY_HOPS` | Number of trusted reverse-proxy hops in front of the app. Controls how the client IP is derived from `X-Forwarded-For` for rate limiting and IP checks. `0` (default) ignores forwarding headers; set to `1` behind a single TLS proxy.                                                                                                           | `number`       | `0`                        | No       | 📱      |
 
 ## Optional Variables
 
 ### Bootstrap Seeding (opt-in)
 
-| Variable          | Description                                                         | Type     | Default             | Required |
-| ----------------- | ------------------------------------------------------------------- | -------- | ------------------- | -------- |
-| `AUTO_SEED_ADMIN` | When `true`, seeds an admin user and default settings on first boot | `bool`   | `false`             | No       |
-| `ADMIN_USERNAME`  | Admin username for bootstrap                                        | `string` | `admin`             | No       |
-| `ADMIN_EMAIL`     | Admin email for bootstrap                                           | `string` | `admin@example.com` | No       |
-| `ADMIN_PASSWORD`  | Admin password for bootstrap                                        | `string` | `admin`             | No       |
-| `BOOTSTRAP_TOKEN_HASH` | SHA-256 hex hash of the one-time first-admin **setup token**. When set, the browser first-admin flow requires the matching plaintext token (shown once by `install.sh`), so a random visitor can't claim the admin account. Generated automatically by the installer; set it manually for hand-rolled production deploys (`printf '%s' "$TOKEN" \| sha256sum`). Absent in dev, where setup needs no token. | `string` (64 hex) | – | No |
+| Variable               | Description                                                                                                                                                                                                                                                                                                                                                                                                | Type              | Default             | Required |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | ------------------- | -------- |
+| `AUTO_SEED_ADMIN`      | When `true`, seeds an admin user and default settings on first boot                                                                                                                                                                                                                                                                                                                                        | `bool`            | `false`             | No       |
+| `ADMIN_USERNAME`       | Admin username for bootstrap                                                                                                                                                                                                                                                                                                                                                                               | `string`          | `admin`             | No       |
+| `ADMIN_EMAIL`          | Admin email for bootstrap                                                                                                                                                                                                                                                                                                                                                                                  | `string`          | `admin@example.com` | No       |
+| `ADMIN_PASSWORD`       | Admin password for bootstrap                                                                                                                                                                                                                                                                                                                                                                               | `string`          | `admin`             | No       |
+| `BOOTSTRAP_TOKEN_HASH` | SHA-256 hex hash of the one-time first-admin **setup token**. When set, the browser first-admin flow requires the matching plaintext token (shown once by `install.sh`), so a random visitor can't claim the admin account. Generated automatically by the installer; set it manually for hand-rolled production deploys (`printf '%s' "$TOKEN" \| sha256sum`). Absent in dev, where setup needs no token. | `string` (64 hex) | –                   | No       |
 
 ### Email Configuration
 
@@ -239,15 +240,15 @@ sweeper, and retention. All values have sensible defaults.
 
 These variables are only used by the orchestrator service and should NOT be included in env.mjs:
 
-| Variable              | Description                       | Type                | Default                                 | Required |
-| --------------------- | --------------------------------- | ------------------- | --------------------------------------- | -------- |
-| `CONFIG_FILE`         | Configuration file path           | `string`            | `/app/config/cronium-orchestrator.yaml` | Yes      |
-| `ORCHESTRATOR_ID`     | Unique orchestrator identifier    | `string`            | `prod-orchestrator-01`                  | Yes      |
-| `MAX_CONCURRENT_JOBS` | Maximum concurrent job executions | `number`            | `10`                                    | No       |
-| `JOB_POLL_INTERVAL`   | Job queue polling interval        | `string`            | `5s`                                    | No       |
-| `DOCKER_HOST`         | Docker daemon socket              | `string`            | `unix:///var/run/docker.sock`           | Yes      |
-| `JWT_SECRET`          | JWT secret for container auth     | `string` (32 chars) | -                                       | Yes      |
-| `CRONIUM_ORCHESTRATOR_KEY` | Orchestrator service-identity credential (app verifies it on claim, heartbeat, health/metrics) | `string` | -                                       | Yes      |
+| Variable                   | Description                                                                                    | Type                | Default                                 | Required |
+| -------------------------- | ---------------------------------------------------------------------------------------------- | ------------------- | --------------------------------------- | -------- |
+| `CONFIG_FILE`              | Configuration file path                                                                        | `string`            | `/app/config/cronium-orchestrator.yaml` | Yes      |
+| `ORCHESTRATOR_ID`          | Unique orchestrator identifier                                                                 | `string`            | `prod-orchestrator-01`                  | Yes      |
+| `MAX_CONCURRENT_JOBS`      | Maximum concurrent job executions                                                              | `number`            | `10`                                    | No       |
+| `JOB_POLL_INTERVAL`        | Job queue polling interval                                                                     | `string`            | `5s`                                    | No       |
+| `DOCKER_HOST`              | Docker daemon socket                                                                           | `string`            | `unix:///var/run/docker.sock`           | Yes      |
+| `JWT_SECRET`               | JWT secret for container auth                                                                  | `string` (32 chars) | -                                       | Yes      |
+| `CRONIUM_ORCHESTRATOR_KEY` | Orchestrator service-identity credential (app verifies it on claim, heartbeat, health/metrics) | `string`            | -                                       | Yes      |
 
 #### Timeout Configuration
 
@@ -290,11 +291,11 @@ All CRUD operations (events, workflows, servers, logs) and real-time data (dashb
 
 ## Development Variables
 
-| Variable               | Description                                                                                             | Type     | Default | Required |
-| ---------------------- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | -------- |
-| `SKIP_ENV_VALIDATION`  | Skip environment variable validation                                                                     | `string` | -       | No       |
-| `CRONIUM_DEV_AUTO_AUTH` | When `true` **and** `NODE_ENV=development`, auto-authenticates sessionless API requests as the first admin | `bool`   | `false` | No       |
-| `CRONIUM_ENFORCE_ADMIN_MFA` | Require Admin accounts to have TOTP MFA enabled before performing admin operations. Defaults to enforced in production and relaxed in development; set `true`/`false` to override. | `bool` | (prod: `true`, dev: `false`) | No |
+| Variable                    | Description                                                                                                                                                                        | Type     | Default                      | Required |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------- | -------- |
+| `SKIP_ENV_VALIDATION`       | Skip environment variable validation                                                                                                                                               | `string` | -                            | No       |
+| `CRONIUM_DEV_AUTO_AUTH`     | When `true` **and** `NODE_ENV=development`, auto-authenticates sessionless API requests as the first admin                                                                         | `bool`   | `false`                      | No       |
+| `CRONIUM_ENFORCE_ADMIN_MFA` | Require Admin accounts to have TOTP MFA enabled before performing admin operations. Defaults to enforced in production and relaxed in development; set `true`/`false` to override. | `bool`   | (prod: `true`, dev: `false`) | No       |
 
 **Warning:** Only use `SKIP_ENV_VALIDATION` in development. Any non-empty value will skip validation.
 

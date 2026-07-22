@@ -69,7 +69,10 @@ jobs:
       - name: Assert security state cannot be evicted
         working-directory: ${{ runner.temp }}/cronium-smoke
         run: |
-          policy=$(docker compose exec -T valkey valkey-cli --raw CONFIG GET maxmemory-policy | tail -n 1)
+          # Valkey requires a password (requirepass); authenticate with the
+          # generated VALKEY_PASSWORD from the install .env.
+          vpw=$(grep -E '^VALKEY_PASSWORD=' .env | cut -d= -f2-)
+          policy=$(docker compose exec -T valkey valkey-cli -a "$vpw" --no-auth-warning --raw CONFIG GET maxmemory-policy | tail -n 1)
           test "$policy" = "noeviction"
 
       - name: Assert fresh instance redirects to first-run setup
