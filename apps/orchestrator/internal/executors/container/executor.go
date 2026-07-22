@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,8 +43,31 @@ type Executor struct {
 	executionIDs map[string]string // jobID -> executionID (must match the JWT claim + CRONIUM_EXECUTION_ID)
 }
 
+// validateDockerEndpoint fails closed on a plaintext remote Docker endpoint
+// (3.6). The client wires no TLS, so a tcp://host:port endpoint would be an
+// unauthenticated, unencrypted Docker API — full RCE on that host to anyone on
+// the path. Only local transports (unix socket / Windows named pipe) are allowed
+// unless an operator explicitly accepts the risk on a trusted network.
+func validateDockerEndpoint(endpoint string) error {
+	if strings.HasPrefix(endpoint, "unix://") || strings.HasPrefix(endpoint, "npipe://") {
+		return nil
+	}
+	if os.Getenv("CRONIUM_ALLOW_INSECURE_DOCKER_ENDPOINT") == "true" {
+		return nil
+	}
+	return fmt.Errorf(
+		"refusing Docker endpoint %q: only a local unix:// or npipe:// socket is allowed. "+
+			"A remote tcp:// endpoint has no mutual TLS wired and would expose an unauthenticated Docker API. "+
+			"Use the local socket, or set CRONIUM_ALLOW_INSECURE_DOCKER_ENDPOINT=true only on a fully trusted network",
+		endpoint,
+	)
+}
+
 // NewExecutor creates a new container executor
 func NewExecutor(cfg config.ContainerConfig, apiClient *api.Client, log *logrus.Logger) (*Executor, error) {
+	if err := validateDockerEndpoint(cfg.Docker.Endpoint); err != nil {
+		return nil, err
+	}
 	// Create Docker client
 	dockerClient, err := client.NewClientWithOpts(
 		client.WithHost(cfg.Docker.Endpoint),
