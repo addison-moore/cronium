@@ -19,7 +19,8 @@
 #                    Prompted for interactively when omitted.
 #   --dir DIR        Install directory (default: ./cronium).
 #   --version TAG    Release tag to install (e.g. v1.2.0). Defaults to the
-#                    latest GitHub release, or main/latest if none exist.
+#                    latest GitHub release. If none is found the installer fails
+#                    closed (no mutable main/latest pull) unless --no-pull.
 #   --no-pull        Skip `docker compose pull` (use images already present).
 #   --uninstall      Stop the stack (data volumes are kept; remove them with
 #                    `docker compose down -v` inside the install directory).
@@ -136,8 +137,9 @@ sha256_hex() {
 }
 
 resolve_version() {
-  # Sets REF (git ref for raw downloads) and IMAGE_TAG (GHCR tag), from
-  # --version, the latest GitHub release, or main/latest as a fallback.
+  # Sets REF (git ref for raw downloads) and IMAGE_TAG (GHCR tag) from --version
+  # or the latest GitHub release. Fails closed rather than pulling a mutable
+  # main/latest tag: a swapped remote tag is a supply-chain risk (3.5).
   if [ -n "$VERSION" ]; then
     REF="$VERSION"
     IMAGE_TAG="${VERSION#v}" # CI publishes v1.2.3 as image tag 1.2.3
@@ -149,10 +151,19 @@ resolve_version() {
   if [ -n "${latest:-}" ]; then
     REF="$latest"
     IMAGE_TAG="${latest#v}"
-  else
+    return
+  fi
+  # No published release discovered. Only proceed with a mutable ref when the
+  # operator is using locally-built images (--no-pull / CRONIUM_INSTALL_NO_PULL),
+  # where "latest" points at just-built local images, not a remote pull. The
+  # install-smoke CI relies on this path.
+  if [ "$NO_PULL" = 1 ]; then
     REF="main"
     IMAGE_TAG="latest"
+    log "No published release; using local images (--no-pull)."
+    return
   fi
+  die "Could not determine a release version to install. Release discovery failed and the installer refuses to pull a mutable main/latest image. Re-run with --version <tag> (e.g. --version v1.2.0), or --no-pull to use images already built locally."
 }
 
 prompt_url() {

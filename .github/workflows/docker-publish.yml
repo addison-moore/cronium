@@ -41,16 +41,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
         with:
           platforms: linux/amd64
 
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -59,12 +59,12 @@ jobs:
       # Install cosign for signing images
       - name: Install cosign
         if: github.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
 
       # Generate metadata for images
       - name: Extract metadata for Cronium App
         id: meta-app
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_APP }}
           tags: |
@@ -79,7 +79,7 @@ jobs:
 
       - name: Extract metadata for Orchestrator
         id: meta-orchestrator
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ORCHESTRATOR }}
           tags: |
@@ -94,7 +94,7 @@ jobs:
 
       - name: Extract metadata for Runtime
         id: meta-runtime
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_RUNTIME }}
           tags: |
@@ -110,7 +110,7 @@ jobs:
       # Build and push Cronium App
       - name: Build and push Cronium App
         id: build-app
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: ./apps/cronium-app/Dockerfile
@@ -127,7 +127,7 @@ jobs:
       # Build and push Orchestrator
       - name: Build and push Orchestrator
         id: build-orchestrator
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: ./apps/orchestrator/Dockerfile
@@ -144,7 +144,7 @@ jobs:
       # Build and push Runtime
       - name: Build and push Runtime
         id: build-runtime
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./apps/runtime/cronium-runtime
           file: ./apps/runtime/cronium-runtime/Dockerfile
@@ -186,7 +186,7 @@ jobs:
       # Scan images for vulnerabilities (only if push was successful)
       - name: Run Trivy vulnerability scanner on Cronium App
         if: github.event_name != 'pull_request' && steps.build-app.outputs.digest != ''
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_APP }}@${{ steps.build-app.outputs.digest }}
           format: "sarif"
@@ -195,7 +195,7 @@ jobs:
 
       - name: Run Trivy vulnerability scanner on Orchestrator
         if: github.event_name != 'pull_request' && steps.build-orchestrator.outputs.digest != ''
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ORCHESTRATOR }}@${{ steps.build-orchestrator.outputs.digest }}
           format: "sarif"
@@ -204,7 +204,7 @@ jobs:
 
       - name: Run Trivy vulnerability scanner on Runtime
         if: github.event_name != 'pull_request' && steps.build-runtime.outputs.digest != ''
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_RUNTIME }}@${{ steps.build-runtime.outputs.digest }}
           format: "sarif"
@@ -222,7 +222,7 @@ jobs:
           fi
 
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@4187e74d05793876e9989daffde9c3e66b4acd07 # v3.37.3
         if: github.event_name != 'pull_request' && steps.check-sarif.outputs.files_exist == 'true'
         with:
           sarif_file: "trivy-*.sarif"
