@@ -11,6 +11,11 @@ const CLIENT_PREFIX = "mcpoauth:client:";
 const CODE_PREFIX = "mcpoauth:code:";
 const REFRESH_PREFIX = "mcpoauth:rt:";
 
+// Registrations expire if unused (Phase 4.1) so open DCR cannot grow the store
+// without bound. The TTL is refreshed whenever a client is looked up during an
+// OAuth flow, so actively-used clients persist while abandoned ones age out.
+const CLIENT_TTL_SEC = 60 * 60 * 24 * 30; // 30 days
+
 export interface OAuthClient {
   client_id: string;
   redirect_uris: string[];
@@ -38,14 +43,22 @@ export interface RefreshData {
 }
 
 export async function registerClient(client: OAuthClient): Promise<void> {
-  // ttl: 0 → persistent (clients are long-lived; re-register via DCR if evicted).
   await cacheService.set(`${CLIENT_PREFIX}${client.client_id}`, client, {
-    ttl: 0,
+    ttl: CLIENT_TTL_SEC,
   });
 }
 
 export async function getClient(clientId: string): Promise<OAuthClient | null> {
-  return cacheService.get<OAuthClient>(`${CLIENT_PREFIX}${clientId}`);
+  const client = await cacheService.get<OAuthClient>(
+    `${CLIENT_PREFIX}${clientId}`,
+  );
+  // Sliding expiry: touch the TTL so an in-use client does not age out.
+  if (client) {
+    await cacheService.set(`${CLIENT_PREFIX}${clientId}`, client, {
+      ttl: CLIENT_TTL_SEC,
+    });
+  }
+  return client;
 }
 
 export async function putAuthCode(
