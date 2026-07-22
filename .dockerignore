@@ -20,6 +20,22 @@ build
 **/env
 env/
 
+# Secret material and generated/runtime artifacts (never ship in a build context)
+*.pem
+*.key
+**/known_hosts
+data/
+**/data/valkey
+**/data/orchestrator
+*.bak
+backups/
+
+# Planning/scratch notes (may contain sensitive design detail)
+_plans
+_plans/**
+_scratch
+_scratch/**
+
 # Git
 .git
 .github
