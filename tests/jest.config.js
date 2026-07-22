@@ -75,6 +75,7 @@ module.exports = {
         "<rootDir>/../apps/cronium-app/src/lib/__tests__/valkey-url.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/mcp-oauth/__tests__/tokens.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/mcp-oauth/__tests__/store-consume.test.ts",
+        "<rootDir>/../apps/cronium-app/src/lib/oauth/__tests__/pkce.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/webhooks/__tests__/webhook-security.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/webhooks/__tests__/webhook-tenant-scope.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/security/__tests__/credential-encryption.test.ts",

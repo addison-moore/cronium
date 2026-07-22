@@ -9,8 +9,10 @@ import {
   toEventApiDto,
   toEventForkSecurityProjection,
   toServerApiDto,
+  toUserApiDto,
   toWorkflowApiDto,
 } from "@/server/security/api-dto";
+import type { User } from "@/shared/schema";
 import { legacyEventPatchSchema } from "@/shared/schemas/events";
 import type { Server } from "@/shared/schema";
 import type {
@@ -238,6 +240,58 @@ describe("secret-free API DTOs", () => {
     expect(dto.overrideServerIds).toEqual([]);
     expect(dto.nodes[0]?.event?.secretFieldsRedacted).toBe(true);
     expect(dto.nodes[0]?.event?.servers).toEqual([]);
+  });
+
+  it("never exposes the workflow webhook key or its hash (HI-12)", () => {
+    const workflow = {
+      id: 5,
+      userId: VICTIM,
+      name: "wf",
+      webhookKey: "PLAINTEXT-KEY-SENTINEL",
+      webhookKeyHash: "HASH-SENTINEL",
+      overrideServerIds: [],
+      nodes: [],
+      connections: [],
+    } as unknown as WorkflowWithRelations;
+
+    const dto = toWorkflowApiDto(workflow, VICTIM);
+    expect(dto.hasWebhookKey).toBe(true);
+    expect(dto.webhookKey).toBeNull();
+    const serialized = JSON.stringify(dto);
+    expect(serialized).not.toContain("PLAINTEXT-KEY-SENTINEL");
+    expect(serialized).not.toContain("HASH-SENTINEL");
+  });
+
+  it("admin user DTO omits password hash and invite token (HI-07)", () => {
+    const user = {
+      id: "u1",
+      email: "a@b.c",
+      username: "admin",
+      firstName: "A",
+      lastName: "B",
+      profileImageUrl: null,
+      role: "ADMIN",
+      roleId: 1,
+      status: "ACTIVE",
+      password: "$2b$12$HASHSENTINEL",
+      inviteToken: "INVITE-TOKEN-SENTINEL",
+      inviteExpiry: new Date(),
+      mfaSecret: "MFA-SECRET-SENTINEL",
+      mfaRecoveryCodes: ["RECOVERY-HASH"],
+      lastLogin: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as unknown as User;
+
+    const dto = toUserApiDto(user);
+    const serialized = JSON.stringify(dto);
+    expect(serialized).not.toContain("HASHSENTINEL");
+    expect(serialized).not.toContain("INVITE-TOKEN-SENTINEL");
+    expect(serialized).not.toContain("MFA-SECRET-SENTINEL");
+    expect(serialized).not.toContain("RECOVERY-HASH");
+    expect(dto).not.toHaveProperty("password");
+    expect(dto).not.toHaveProperty("inviteToken");
+    expect(dto.hasPendingInvite).toBe(true);
   });
 });
 
