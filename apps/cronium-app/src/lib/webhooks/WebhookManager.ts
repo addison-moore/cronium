@@ -83,9 +83,12 @@ export class WebhookManager extends EventEmitter {
   ): Promise<{ id: number; key: string; secret: string }> {
     const key = nanoid(32);
     const secretKey = config.secret ?? crypto.randomBytes(32).toString("hex");
-    // Encrypt the shared HMAC secret at rest (bound to this webhook).
-    const { encryptWebhookSecret } = await import("./webhook-secret");
+    // Encrypt the shared HMAC secret and any credential-bearing custom headers
+    // at rest (bound to this webhook).
+    const { encryptWebhookSecret, encryptWebhookHeaders } =
+      await import("./webhook-secret");
     const storedSecret = encryptWebhookSecret(secretKey, key, userId);
+    const storedHeaders = encryptWebhookHeaders(config.headers, key, userId);
 
     const result = await db
       .insert(webhooks)
@@ -95,7 +98,7 @@ export class WebhookManager extends EventEmitter {
         url: config.url,
         events: config.events,
         secret: storedSecret,
-        headers: config.headers ?? {},
+        headers: storedHeaders,
         active: config.active,
         retryConfig: config.retryConfig ?? {
           maxRetries: 3,
@@ -124,12 +127,26 @@ export class WebhookManager extends EventEmitter {
     userId: string,
     updates: Partial<WebhookConfig>,
   ): Promise<void> {
+    const { headers, secret: _secret, ...rest } = updates;
+    const set: Record<string, unknown> = { ...rest, updatedAt: new Date() };
+
+    // Re-encrypt custom headers under the webhook's binding when they change;
+    // never persist a plaintext credential header. (Secret rotation goes through
+    // the dedicated regenerate path, so a raw `secret` in updates is ignored.)
+    if (headers !== undefined) {
+      const [existing] = await db
+        .select({ key: webhooks.key })
+        .from(webhooks)
+        .where(and(eq(webhooks.id, webhookId), eq(webhooks.userId, userId)))
+        .limit(1);
+      if (!existing) return;
+      const { encryptWebhookHeaders } = await import("./webhook-secret");
+      set.headers = encryptWebhookHeaders(headers, existing.key, userId);
+    }
+
     await db
       .update(webhooks)
-      .set({
-        ...updates,
-        updatedAt: new Date(),
-      })
+      .set(set)
       .where(and(eq(webhooks.id, webhookId), eq(webhooks.userId, userId)));
   }
 
@@ -222,7 +239,8 @@ export class WebhookManager extends EventEmitter {
       ...(metadata !== undefined && { metadata }),
     };
 
-    const { decryptWebhookSecret } = await import("./webhook-secret");
+    const { decryptWebhookSecret, decryptWebhookHeaders } =
+      await import("./webhook-secret");
     for (const webhook of subscribedWebhooks) {
       const retryConfig = webhook.retryConfig as
         | {
@@ -242,7 +260,11 @@ export class WebhookManager extends EventEmitter {
           webhook.key,
           webhook.userId,
         ),
-        headers: webhook.headers as Record<string, string>,
+        headers: decryptWebhookHeaders(
+          webhook.headers,
+          webhook.key,
+          webhook.userId,
+        ),
         payload,
         ...(retryConfig !== undefined && { retryConfig }),
       });
@@ -437,12 +459,20 @@ export class WebhookManager extends EventEmitter {
         }
       | undefined;
 
+    // Decrypt the HMAC secret and custom headers at this delivery-signing
+    // boundary — the stored forms are ciphertext at rest (HI-09).
+    const { decryptWebhookSecret, decryptWebhookHeaders } =
+      await import("./webhook-secret");
     await this.webhookQueue.enqueue({
       webhookId: webhook.id,
       webhookEventId: event.id,
       url: webhook.url,
-      secret: webhook.secret,
-      headers: webhook.headers as Record<string, string>,
+      secret: decryptWebhookSecret(webhook.secret, webhook.key, webhook.userId),
+      headers: decryptWebhookHeaders(
+        webhook.headers,
+        webhook.key,
+        webhook.userId,
+      ),
       payload: event.payload as WebhookPayload,
       ...(retryConfig !== undefined && { retryConfig }),
       isRetry: true,

@@ -21,6 +21,13 @@ import { eq, and, desc } from "drizzle-orm";
 
 const webhookManager = WebhookManager.getInstance();
 
+/** True when a webhook has any custom headers configured, in either the
+ * encrypted (`{ __enc }`) or legacy plaintext (`{ key: value }`) at-rest form. */
+function hasConfiguredHeaders(stored: unknown): boolean {
+  if (!stored || typeof stored !== "object") return false;
+  return Object.keys(stored as Record<string, unknown>).length > 0;
+}
+
 export const webhookSystemRouter = createTRPCRouter({
   // Create a new webhook
   create: protectedProcedure
@@ -63,10 +70,12 @@ export const webhookSystemRouter = createTRPCRouter({
 
         const webhooksWithEndpoints = userWebhooks.map((webhook) => ({
           ...webhook,
-          // Never return the HMAC secret on a read (HI-09); report only that
-          // one is configured.
+          // Never return the HMAC secret or credential-bearing custom headers on
+          // a read (HI-09); report only that they are configured.
           secret: "",
           hasSecret: Boolean(webhook.secret),
+          headers: {},
+          hasHeaders: hasConfiguredHeaders(webhook.headers),
           endpoint: `${process.env.PUBLIC_APP_URL ?? ""}/api/webhooks/${webhook.key}`,
         }));
 
@@ -112,6 +121,8 @@ export const webhookSystemRouter = createTRPCRouter({
             ...webhook,
             secret: "",
             hasSecret: Boolean(webhook.secret),
+            headers: {},
+            hasHeaders: hasConfiguredHeaders(webhook.headers),
             endpoint: `${process.env.PUBLIC_APP_URL ?? ""}/api/webhooks/${webhook.key}`,
           });
         },

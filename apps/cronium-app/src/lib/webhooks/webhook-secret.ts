@@ -46,3 +46,71 @@ export function decryptWebhookSecret(
   if (!isSecretEnvelope(stored)) return stored; // legacy plaintext
   return getSecretVault().decrypt(stored, binding(webhookKey, userId));
 }
+
+/**
+ * Custom delivery headers routinely carry credentials (e.g. an `Authorization:
+ * Bearer …` a subscriber requires). They are stored encrypted at rest bound to
+ * the webhook, and decrypted only when a delivery is signed and sent.
+ *
+ * The `webhooks.headers` column is jsonb. To avoid changing the column type we
+ * store the encrypted form as a small wrapper object `{ __enc: "<envelope>" }`;
+ * legacy plaintext rows remain a plain `{ header: value }` object and pass
+ * through unchanged (re-encrypted the next time the webhook is updated).
+ */
+function headersBinding(webhookKey: string, userId: string): SecretBinding {
+  return {
+    purpose: "webhook-headers",
+    table: "webhooks",
+    column: "headers",
+    recordId: webhookKey,
+    tenantId: userId,
+  };
+}
+
+interface EncryptedHeaders {
+  __enc: string;
+}
+
+function isEncryptedHeaders(value: unknown): value is EncryptedHeaders {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "__enc" in value &&
+    typeof (value as { __enc: unknown }).__enc === "string" &&
+    isSecretEnvelope((value as EncryptedHeaders).__enc)
+  );
+}
+
+export function encryptWebhookHeaders(
+  headers: Record<string, string> | undefined,
+  webhookKey: string,
+  userId: string,
+): Record<string, string> | EncryptedHeaders {
+  const entries = headers ?? {};
+  // Nothing to protect — keep an empty object so reads are trivial.
+  if (Object.keys(entries).length === 0) return {};
+  const envelope = getSecretVault().encrypt(
+    JSON.stringify(entries),
+    headersBinding(webhookKey, userId),
+  );
+  return { __enc: envelope };
+}
+
+export function decryptWebhookHeaders(
+  stored: unknown,
+  webhookKey: string,
+  userId: string,
+): Record<string, string> {
+  if (isEncryptedHeaders(stored)) {
+    const json = getSecretVault().decrypt(
+      stored.__enc,
+      headersBinding(webhookKey, userId),
+    );
+    return JSON.parse(json) as Record<string, string>;
+  }
+  // Legacy plaintext object (or null/empty) — return as-is.
+  if (stored && typeof stored === "object") {
+    return stored as Record<string, string>;
+  }
+  return {};
+}
