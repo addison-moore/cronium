@@ -17,7 +17,16 @@ import {
  * on refresh).
  */
 function encryptSecret(value: string): string {
-  if (!credentialEncryption.isAvailable()) return value;
+  // Fail CLOSED: an OAuth token is never stored in plaintext. If the encryption
+  // service is unavailable the write is refused rather than persisting the
+  // token in the clear (HI-08).
+  if (!credentialEncryption.isAvailable()) {
+    throw new OAuthError(
+      "Credential encryption is unavailable; refusing to store OAuth token",
+      "encryption_unavailable",
+      500,
+    );
+  }
   return JSON.stringify(credentialEncryption.encrypt(value));
 }
 

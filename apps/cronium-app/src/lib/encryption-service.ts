@@ -25,15 +25,15 @@ class EncryptionService {
   private masterKey: Buffer;
 
   constructor() {
-    // Get master key from environment variable or generate a default one for development
-    let masterKeyHex = env.ENCRYPTION_KEY;
+    // Fail CLOSED: no ephemeral development fallback (Phase 2.1). An absent or
+    // malformed key stops the service rather than silently generating a random
+    // key that makes all existing ciphertext undecryptable.
+    const masterKeyHex = env.ENCRYPTION_KEY;
 
     if (!masterKeyHex) {
-      // Generate a default key for development (not secure for production)
-      console.warn(
-        "ENCRYPTION_KEY not set, generating temporary key for development",
+      throw new Error(
+        "ENCRYPTION_KEY is required — refusing to start without it.",
       );
-      masterKeyHex = crypto.randomBytes(KEY_LENGTH).toString("hex");
     }
 
     if (masterKeyHex.length !== KEY_LENGTH * 2) {

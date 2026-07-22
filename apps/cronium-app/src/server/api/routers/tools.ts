@@ -16,6 +16,7 @@ import {
   credentialEncryption,
   type EncryptedData,
 } from "@/lib/security/credential-encryption";
+import { credentialCache } from "@/lib/tools/credential-cache";
 import { auditLog } from "@/lib/security/audit-logger";
 import { rateLimiter } from "@/lib/security/rate-limiter";
 import {
@@ -614,20 +615,23 @@ export const toolsRouter = createTRPCRouter({
           });
         }
 
-        // Encrypt credentials if encryption is available
-        let credentialsData = JSON.stringify(input.credentials);
-        let encrypted = false;
-        let encryptionMetadata = null;
-
-        if (credentialEncryption.isAvailable()) {
-          const encryptedData = credentialEncryption.encrypt(input.credentials);
-          credentialsData = JSON.stringify(encryptedData);
-          encrypted = true;
-          encryptionMetadata = {
-            algorithm: encryptedData.algorithm,
-            keyDerivation: encryptedData.keyDerivation,
-          };
+        // Encrypt credentials — fail CLOSED. A tool credential is never stored
+        // in plaintext: if the encryption service is unavailable the write is
+        // refused rather than silently persisting a secret in the clear (HI-08).
+        if (!credentialEncryption.isAvailable()) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message:
+              "Credential encryption is unavailable; refusing to store the credential.",
+          });
         }
+        const encryptedData = credentialEncryption.encrypt(input.credentials);
+        const credentialsData = JSON.stringify(encryptedData);
+        const encrypted = true;
+        const encryptionMetadata = {
+          algorithm: encryptedData.algorithm,
+          keyDerivation: encryptedData.keyDerivation,
+        };
 
         // Create tool in database
         type ToolInsertValues = {
@@ -698,14 +702,12 @@ export const toolsRouter = createTRPCRouter({
           input.type,
         );
 
-        // Return the created tool with parsed credentials
-        return {
+        // Write-only: return the credential fields with secret values masked,
+        // never the stored ciphertext or plaintext.
+        return redactTool({
           ...newTool,
-          credentials:
-            typeof newTool.credentials === "string"
-              ? (JSON.parse(newTool.credentials) as Record<string, unknown>)
-              : newTool.credentials,
-        };
+          credentials: input.credentials as Record<string, unknown>,
+        });
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -814,24 +816,27 @@ export const toolsRouter = createTRPCRouter({
         if (updateData.isActive !== undefined)
           updateValues.isActive = updateData.isActive;
 
-        // Handle credential encryption
+        // Handle credential encryption — fail CLOSED (no plaintext fallback).
         if (updateData.credentials !== undefined) {
-          if (credentialEncryption.isAvailable()) {
-            const encryptedData = credentialEncryption.encrypt(
-              updateData.credentials,
-            );
-            updateValues.credentials = JSON.stringify(encryptedData);
-            updateValues.encrypted = true;
-            updateValues.encryptionMetadata = {
-              algorithm: encryptedData.algorithm,
-              keyDerivation:
-                typeof encryptedData.keyDerivation === "object"
-                  ? JSON.stringify(encryptedData.keyDerivation)
-                  : encryptedData.keyDerivation,
-            };
-          } else {
-            updateValues.credentials = JSON.stringify(updateData.credentials);
+          if (!credentialEncryption.isAvailable()) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message:
+                "Credential encryption is unavailable; refusing to store the credential.",
+            });
           }
+          const encryptedData = credentialEncryption.encrypt(
+            updateData.credentials,
+          );
+          updateValues.credentials = JSON.stringify(encryptedData);
+          updateValues.encrypted = true;
+          updateValues.encryptionMetadata = {
+            algorithm: encryptedData.algorithm,
+            keyDerivation:
+              typeof encryptedData.keyDerivation === "object"
+                ? JSON.stringify(encryptedData.keyDerivation)
+                : encryptedData.keyDerivation,
+          };
         }
 
         const updateResult = await db
@@ -874,36 +879,20 @@ export const toolsRouter = createTRPCRouter({
           changes,
         );
 
-        // Return the updated tool with decrypted credentials
-        let credentials: Record<string, unknown>;
-        const rawCredentials = updatedTool.credentials;
-        if (typeof rawCredentials === "string") {
-          credentials = JSON.parse(rawCredentials) as Record<string, unknown>;
-        } else {
-          credentials = rawCredentials;
-        }
-        if (updatedTool.encrypted && credentialEncryption.isAvailable()) {
-          try {
-            const decryptedData = credentialEncryption.decrypt(
-              credentials as unknown as EncryptedData,
-            );
-            credentials =
-              typeof decryptedData === "string"
-                ? (JSON.parse(decryptedData) as Record<string, unknown>)
-                : (decryptedData as Record<string, unknown>);
-          } catch (error) {
-            console.error(
-              `Failed to decrypt credentials for tool ${updatedTool.id}:`,
-              error,
-            );
-            credentials = {};
-          }
-        }
+        // Invalidate any cached decrypted credential for this tool so a
+        // subsequent execution does not use the pre-update secret (HI-08).
+        credentialCache.invalidate(id, ctx.session.user.id);
 
-        return {
+        // Write-only: never decrypt-and-return the credential in a mutation
+        // response. Return the submitted fields with secret values masked (or an
+        // empty object when credentials were not part of this update).
+        return redactTool({
           ...updatedTool,
-          credentials,
-        };
+          credentials: (updateData.credentials ?? {}) as Record<
+            string,
+            unknown
+          >,
+        });
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -935,6 +924,9 @@ export const toolsRouter = createTRPCRouter({
               eq(toolCredentials.userId, ctx.session.user.id),
             ),
           );
+
+        // Drop any cached decrypted credential for the deleted tool (HI-08).
+        credentialCache.invalidate(input.id, ctx.session.user.id);
 
         // Audit log
         await auditLog.credentialDeleted(
