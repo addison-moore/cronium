@@ -26,6 +26,10 @@ type Claims struct {
 	ExecutionID string `json:"executionId"`
 	UserID      string `json:"userId"`
 	EventID     string `json:"eventId"`
+	// Capability is the app-minted per-job capability token (HI-10), embedded
+	// by the orchestrator so the runtime can present it on its outbound calls
+	// to the app's job-scoped internal routes. Opaque to the runtime.
+	Capability string `json:"capabilityToken,omitempty"`
 	// OrigIat is the immutable original issuance time; preserved across
 	// refreshes so the absolute lifetime cap cannot be reset.
 	OrigIat *jwt.NumericDate `json:"origIat,omitempty"`
@@ -129,6 +133,7 @@ func (m *JWTManager) ValidateToken(tokenString string) (*types.TokenClaims, erro
 		ExecutionID: claims.ExecutionID,
 		UserID:      claims.UserID,
 		EventID:     claims.EventID,
+		Capability:  claims.Capability,
 		ExpiresAt:   claims.ExpiresAt.Time,
 		IssuedAt:    claims.IssuedAt.Time,
 	}, nil

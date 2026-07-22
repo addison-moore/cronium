@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/addison-moore/cronium/apps/runtime/internal/auth"
+	"github.com/addison-moore/cronium/apps/runtime/internal/authctx"
 	"github.com/addison-moore/cronium/apps/runtime/pkg/types"
 	"github.com/sirupsen/logrus"
 )
@@ -46,14 +47,16 @@ func AuthMiddleware(jwtManager *auth.JWTManager, log *logrus.Logger) func(http.H
 
 			log.WithFields(logrus.Fields{
 				"executionID": claims.ExecutionID,
-				"jobID": claims.JobID,
-				"userID": claims.UserID,
-				"eventID": claims.EventID,
-				"path": r.URL.Path,
+				"jobID":       claims.JobID,
+				"userID":      claims.UserID,
+				"eventID":     claims.EventID,
+				"path":        r.URL.Path,
 			}).Debug("JWT token validated successfully")
 
-			// Add claims to context
+			// Add claims to context, plus the per-job capability token (HI-10)
+			// so the outbound BackendClient presents it on job-scoped calls.
 			ctx := context.WithValue(r.Context(), tokenClaimsKey, claims)
+			ctx = authctx.WithCapability(ctx, claims.Capability)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

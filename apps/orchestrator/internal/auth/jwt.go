@@ -18,6 +18,10 @@ type Claims struct {
 	ExecutionID string `json:"executionId"`
 	UserID      string `json:"userId"`
 	EventID     string `json:"eventId"`
+	// Capability is the app-minted per-job capability token (HI-10), carried to
+	// the remote runner/runtime so it can present it on outbound job-scoped
+	// calls to the app.
+	Capability string `json:"capabilityToken,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -29,7 +33,7 @@ func NewJWTManager(secret string) *JWTManager {
 }
 
 // GenerateJobToken generates a JWT token for a job execution
-func (m *JWTManager) GenerateJobToken(jobID, executionID, userID, eventID string) (string, error) {
+func (m *JWTManager) GenerateJobToken(jobID, executionID, userID, eventID, capability string) (string, error) {
 	now := time.Now()
 	// Token valid for 1 hour (should be enough for most script executions)
 	expiresAt := now.Add(1 * time.Hour)
@@ -39,6 +43,7 @@ func (m *JWTManager) GenerateJobToken(jobID, executionID, userID, eventID string
 		ExecutionID: executionID,
 		UserID:      userID,
 		EventID:     eventID,
+		Capability:  capability,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(now),

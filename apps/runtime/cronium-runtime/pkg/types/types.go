@@ -32,9 +32,9 @@ type ToolActionConfig struct {
 
 // ToolActionResult represents the result of a tool action execution
 type ToolActionResult struct {
-	Success bool                   `json:"success"`
-	Data    interface{}            `json:"data"`
-	Error   string                 `json:"error,omitempty"`
+	Success  bool                   `json:"success"`
+	Data     interface{}            `json:"data"`
+	Error    string                 `json:"error,omitempty"`
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
@@ -75,6 +75,7 @@ type TokenClaims struct {
 	ExecutionID string    `json:"executionId"`
 	UserID      string    `json:"userId"`
 	EventID     string    `json:"eventId"`
+	Capability  string    `json:"capabilityToken,omitempty"`
 	ExpiresAt   time.Time `json:"expiresAt"`
 	IssuedAt    time.Time `json:"issuedAt"`
 }

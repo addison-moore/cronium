@@ -14,6 +14,9 @@ type ExecutionClaims struct {
 	EventID     string `json:"eventId"`     // Added for runtime API compatibility
 	JobID       string `json:"job_id"`      // Keep for backward compatibility
 	Scope       string `json:"scope"`
+	// Capability is the app-minted per-job capability token (HI-10), carried to
+	// the runtime so it can present it on its outbound job-scoped calls.
+	Capability string `json:"capabilityToken,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -21,7 +24,7 @@ type ExecutionClaims struct {
 // same id exported to the container as CRONIUM_EXECUTION_ID and used in the
 // runtime API URL, or the runtime handler rejects calls with "execution ID
 // mismatch" (403).
-func generateJWT(executionID string, jobID string, secret string, userID string, eventID string, lifetime time.Duration) (string, error) {
+func generateJWT(executionID string, jobID string, secret string, userID string, eventID string, capability string, lifetime time.Duration) (string, error) {
 	if secret == "" {
 		return "", fmt.Errorf("JWT secret not configured")
 	}
@@ -39,6 +42,7 @@ func generateJWT(executionID string, jobID string, secret string, userID string,
 		EventID:     eventID,
 		JobID:       jobID,
 		Scope:       "execution",
+		Capability:  capability,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   fmt.Sprintf("job:%s", jobID),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

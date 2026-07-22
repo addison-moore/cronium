@@ -432,7 +432,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 				}
 			}
 
-			token, err := jwtManager.GenerateJobToken(job.ID, executionID, userID, eventID)
+			token, err := jwtManager.GenerateJobToken(job.ID, executionID, userID, eventID, job.CapabilityToken)
 			if err != nil {
 				e.log.WithError(err).Warn("Failed to generate JWT token, falling back to bundled mode")
 				tunnelManager.Stop()
