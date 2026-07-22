@@ -1,13 +1,15 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { verifyInternalKey } from "@/lib/internal-auth";
+import { authorizeCapability } from "@/lib/security/internal-route-auth";
 
 export async function POST(request: NextRequest) {
   try {
-    // Timing-safe internal-key check (HI-10)
-    if (!verifyInternalKey(request)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Per-job capability (HI-10): a runtime-fired audit event must carry a
+    // valid job capability. It's fire-and-forget logging, so a valid token
+    // (any of the execution capabilities) is sufficient — no per-resource
+    // scope beyond a live, correctly-signed token.
+    const auth = authorizeCapability(request, "execution:read");
+    if (!auth.ok) return auth.response;
 
     const body = (await request.json()) as {
       executionId: string;

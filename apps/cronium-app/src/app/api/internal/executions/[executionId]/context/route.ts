@@ -4,19 +4,22 @@ import { db } from "@/server/db";
 import { jobs, events } from "@/shared/schema";
 import { eq } from "drizzle-orm";
 import { executionService } from "@/lib/services/execution-service";
-import { verifyInternalKey } from "@/lib/internal-auth";
+import {
+  authorizeCapability,
+  assertJobScope,
+} from "@/lib/security/internal-route-auth";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ executionId: string }> },
 ) {
   try {
-    // Timing-safe internal-key check (HI-10)
-    if (!verifyInternalKey(request)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { executionId } = await params;
+
+    // Per-job capability (HI-10): verify execution:read, then bind to the job
+    // that owns this execution.
+    const auth = authorizeCapability(request, "execution:read");
+    if (!auth.ok) return auth.response;
 
     // Get execution details
     const execution = await executionService.getExecution(executionId);
@@ -26,6 +29,8 @@ export async function GET(
         { status: 404 },
       );
     }
+    const scopeError = assertJobScope(auth.cap, execution.jobId);
+    if (scopeError) return scopeError;
 
     // Get job details
     const job = await db

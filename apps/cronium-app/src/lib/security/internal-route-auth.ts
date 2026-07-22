@@ -76,3 +76,38 @@ export function assertJobScope(
   }
   return null;
 }
+
+/**
+ * Assert the verified token belongs to `userId` (tenant). Used by the
+ * user-variable routes so a job token can only reach its OWNER's variables.
+ */
+export function assertUserScope(
+  cap: VerifiedCapability,
+  userId: string,
+): NextResponse | null {
+  if (cap.userId !== userId) {
+    return NextResponse.json(
+      { error: "Capability token is not valid for this user" },
+      { status: 403 },
+    );
+  }
+  return null;
+}
+
+/**
+ * Assert the verified token authorizes `serverId` (the job's target server).
+ * Used by the server-details route so a job token can only read the connection
+ * details of the server it was scheduled against.
+ */
+export function assertServerScope(
+  cap: VerifiedCapability,
+  serverId: string,
+): NextResponse | null {
+  if (!cap.serverId || cap.serverId !== serverId) {
+    return NextResponse.json(
+      { error: "Capability token is not valid for this server" },
+      { status: 403 },
+    );
+  }
+  return null;
+}

@@ -4,17 +4,19 @@ import { db } from "@/server/db";
 import { jobs } from "@/shared/schema";
 import { eq } from "drizzle-orm";
 import { executionService } from "@/lib/services/execution-service";
-import { verifyInternalKey } from "@/lib/internal-auth";
+import {
+  authorizeCapability,
+  assertJobScope,
+} from "@/lib/security/internal-route-auth";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ executionId: string }> },
 ) {
   try {
-    // Timing-safe internal-key check (HI-10)
-    if (!verifyInternalKey(request)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Per-job capability (HI-10): setCondition() writes to the job's result.
+    const auth = authorizeCapability(request, "execution:output");
+    if (!auth.ok) return auth.response;
 
     const { executionId } = await params;
     const body = (await request.json()) as {
@@ -29,6 +31,8 @@ export async function POST(
         { status: 404 },
       );
     }
+    const scopeError = assertJobScope(auth.cap, execution.jobId);
+    if (scopeError) return scopeError;
 
     // Store condition in execution metadata
     const updatedMetadata = {

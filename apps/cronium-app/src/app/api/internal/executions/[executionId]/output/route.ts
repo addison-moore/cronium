@@ -6,17 +6,19 @@ import { eq } from "drizzle-orm";
 import { executionService } from "@/lib/services/execution-service";
 import { unifiedIoDebug } from "@/lib/unified-io/debug";
 import { MAX_UNIFIED_IO_OUTPUT_BYTES } from "@/lib/unified-io/limits";
-import { verifyInternalKey } from "@/lib/internal-auth";
+import {
+  authorizeCapability,
+  assertJobScope,
+} from "@/lib/security/internal-route-auth";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ executionId: string }> },
 ) {
   try {
-    // Timing-safe internal-key check (HI-10)
-    if (!verifyInternalKey(request)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Per-job capability (HI-10): a running script writing its own output.
+    const auth = authorizeCapability(request, "execution:output");
+    if (!auth.ok) return auth.response;
 
     // Cap the payload so a runaway cronium.output() can't OOM the app or bloat
     // the jobs JSONB column. Reject early on Content-Length, then re-check the
@@ -52,6 +54,8 @@ export async function POST(
         { status: 404 },
       );
     }
+    const scopeError = assertJobScope(auth.cap, execution.jobId);
+    if (scopeError) return scopeError;
 
     // Store output in execution metadata
     const updatedMetadata = {

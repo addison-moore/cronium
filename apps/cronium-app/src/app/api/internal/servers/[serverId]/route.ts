@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { servers } from "@/shared/schema";
 import { eq } from "drizzle-orm";
-import { verifyInternalKey } from "@/lib/internal-auth";
+import {
+  authorizeCapability,
+  assertServerScope,
+} from "@/lib/security/internal-route-auth";
 
 // Get server details
 export async function GET(
@@ -11,11 +14,6 @@ export async function GET(
   { params }: { params: { serverId: string } },
 ) {
   try {
-    // Timing-safe internal-key check (HI-10)
-    if (!verifyInternalKey(request)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { serverId } = params;
 
     if (!serverId) {
@@ -24,6 +22,14 @@ export async function GET(
         { status: 400 },
       );
     }
+
+    // Per-job capability (HI-10): only a job scheduled against this server may
+    // read its connection details. (No Go service currently calls this route,
+    // so requiring the capability also closes an unused credential-leak path.)
+    const auth = authorizeCapability(request, "server:read");
+    if (!auth.ok) return auth.response;
+    const scopeError = assertServerScope(auth.cap, serverId);
+    if (scopeError) return scopeError;
 
     // Get server details
     const server = await db

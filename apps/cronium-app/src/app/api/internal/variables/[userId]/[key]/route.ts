@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { userVariables } from "@/shared/schema";
 import { and, eq } from "drizzle-orm";
-import { verifyInternalKey } from "@/lib/internal-auth";
+import {
+  authorizeCapability,
+  assertUserScope,
+} from "@/lib/security/internal-route-auth";
 import {
   encryptVariableValue,
   decryptVariableValue,
@@ -14,12 +17,14 @@ export async function GET(
   { params }: { params: Promise<{ userId: string; key: string }> },
 ) {
   try {
-    // Timing-safe internal-key check (HI-10)
-    if (!verifyInternalKey(request)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { userId, key } = await params;
+
+    // Per-job capability (HI-10): the token must belong to this user, so a job
+    // can only read its OWNER's variables — not any user's.
+    const auth = authorizeCapability(request, "variable:read");
+    if (!auth.ok) return auth.response;
+    const scopeError = assertUserScope(auth.cap, userId);
+    if (scopeError) return scopeError;
 
     // Get variable
     const variable = await db
@@ -68,12 +73,13 @@ export async function PUT(
   { params }: { params: Promise<{ userId: string; key: string }> },
 ) {
   try {
-    // Timing-safe internal-key check (HI-10)
-    if (!verifyInternalKey(request)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { userId, key } = await params;
+
+    const auth = authorizeCapability(request, "variable:write");
+    if (!auth.ok) return auth.response;
+    const scopeError = assertUserScope(auth.cap, userId);
+    if (scopeError) return scopeError;
+
     const body = (await request.json()) as { value: string };
 
     // Encrypt at rest (cronium.setVariable() from a running script).
