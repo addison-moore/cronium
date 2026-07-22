@@ -165,8 +165,8 @@ We welcome contributions! Cronium is in active development, and we're excited to
 
 Cronium is dual-licensed under:
 
-- **GNU Affero General Public License v3.0 (AGPL-3.0)** — You are free to use, modify, and redistribute Cronium, provided that any modifications you make and deploy (including over a network) are also released under the AGPL.
-- **Commercial License** — If you wish to use Cronium in a way that does not comply with the AGPL (for example, to offer it as a closed-source SaaS or embed it in a proprietary product), you must obtain a commercial license from us.
+- **GNU Affero General Public License v3.0 (AGPL-3.0)** You are free to use, modify, and redistribute Cronium, provided that any modifications you make and deploy (including over a network) are also released under the AGPL.
+- **Commercial License** If you wish to use Cronium in a way that does not comply with the AGPL (for example, to offer it as a closed-source SaaS or embed it in a proprietary product), you must obtain a commercial license from us.
 
 For commercial licensing inquiries, please contact **[addisondrewmoore@gmail.com](mailto:addisondrewmoore@gmail.com)**.
 
@@ -181,5 +181,5 @@ Special thanks to all the open-source projects that make Cronium possible.
 ---
 
 <div align="center">
-  <strong>Cronium is in active development — self-hosting is ready today: see the Quick Start above.</strong>
+  <strong>Cronium is in active development. Self-hosting is ready today.See the Quick Start above.</strong>
 </div>

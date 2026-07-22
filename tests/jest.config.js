@@ -91,6 +91,7 @@ module.exports = {
         "<rootDir>/../apps/cronium-app/src/lib/security/__tests__/security-headers.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/security/__tests__/totp.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/security/__tests__/mfa-recovery.test.ts",
+        "<rootDir>/../apps/cronium-app/src/lib/security/__tests__/secret-vault.test.ts",
       ],
       setupFiles: ["<rootDir>/security/setup.ts"],
       testTimeout: 60_000,
