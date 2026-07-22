@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -98,11 +97,11 @@ func (e *Executor) Execute(payloadPath string) error {
 
 // executeScript runs the script based on the interpreter
 func (e *Executor) executeScript() error {
-	scriptPath := filepath.Join(e.workDir, e.manifest.Entrypoint)
-
-	// Verify script exists
-	if _, err := os.Stat(scriptPath); err != nil {
-		return fmt.Errorf("script not found: %s", e.manifest.Entrypoint)
+	// Validate the entrypoint is a regular file contained in the work dir
+	// (rejects `../` / absolute manifest entrypoints — HI-15).
+	scriptPath, err := payload.ResolveEntrypoint(e.workDir, e.manifest.Entrypoint)
+	if err != nil {
+		return fmt.Errorf("invalid entrypoint: %w", err)
 	}
 
 	// Prepare command based on interpreter
@@ -142,7 +141,7 @@ exec(open('%s').read())
 
 	// Set environment variables
 	cmd.Env = os.Environ()
-	
+
 	// Debug: Log initial environment
 	e.log.Debug("Initial environment variables from os.Environ():")
 	for _, env := range os.Environ() {
@@ -155,7 +154,7 @@ exec(open('%s').read())
 			}
 		}
 	}
-	
+
 	for key, value := range e.manifest.Environment {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
 	}
@@ -167,14 +166,14 @@ exec(open('%s').read())
 		// Pass through from parent environment if not in manifest
 		cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_JOB_ID=%s", jobID))
 	}
-	
+
 	cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_EVENT_ID=%s", e.manifest.Metadata.EventID))
-	
+
 	// Pass execution ID from parent environment or manifest
 	// Prefer environment variable (from orchestrator) over manifest
 	envExecID := os.Getenv("CRONIUM_EXECUTION_ID")
 	manifestExecID := e.manifest.Metadata.ExecutionID
-	
+
 	if envExecID != "" {
 		// Use execution ID from orchestrator (matches JWT)
 		cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_EXECUTION_ID=%s", envExecID))
@@ -183,9 +182,9 @@ exec(open('%s').read())
 		cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_EXECUTION_ID=%s", manifestExecID))
 		e.log.Warn("Using execution ID from manifest as environment variable not set")
 	}
-	
+
 	cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_WORK_DIR=%s", e.workDir))
-	
+
 	// Pass through helper-related environment variables if they exist
 	if helperMode := os.Getenv("CRONIUM_HELPER_MODE"); helperMode != "" {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_HELPER_MODE=%s", helperMode))
@@ -196,7 +195,6 @@ exec(open('%s').read())
 	if apiToken := os.Getenv("CRONIUM_API_TOKEN"); apiToken != "" {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_API_TOKEN=%s", apiToken))
 	}
-	
 
 	// Get stdout and stderr pipes
 	stdout, err := cmd.StdoutPipe()
@@ -286,4 +284,3 @@ func (e *Executor) Cleanup() error {
 	e.cleaned = true
 	return nil
 }
-

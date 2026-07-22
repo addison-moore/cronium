@@ -78,7 +78,10 @@ func VerifySignature(payloadPath string) error {
 		return fmt.Errorf("invalid payload signature encoding: %w", err)
 	}
 
-	payloadData, err := os.ReadFile(payloadPath)
+	// Bound the read: refuse to buffer an oversized archive into memory for
+	// verification (HI-15 memory-exhaustion guard). The payload is a compressed
+	// script bundle; a signed archive larger than this cap is rejected.
+	payloadData, err := readFileBounded(payloadPath, maxSignedPayloadBytes)
 	if err != nil {
 		return fmt.Errorf("failed to read payload for verification: %w", err)
 	}
@@ -88,6 +91,26 @@ func VerifySignature(payloadPath string) error {
 	}
 
 	return nil
+}
+
+// maxSignedPayloadBytes caps the archive size verification will buffer.
+const maxSignedPayloadBytes = 512 * 1024 * 1024 // 512 MiB
+
+// readFileBounded reads up to max+1 bytes and errors if the file exceeds max.
+func readFileBounded(path string, max int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, max+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > max {
+		return nil, fmt.Errorf("payload exceeds maximum verifiable size (%d bytes)", max)
+	}
+	return data, nil
 }
 
 // GenerateChecksum calculates the SHA256 checksum of a file
@@ -122,4 +145,3 @@ func WriteChecksumFile(payloadPath string) error {
 
 	return nil
 }
-
