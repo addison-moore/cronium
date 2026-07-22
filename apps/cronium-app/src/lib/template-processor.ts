@@ -106,11 +106,23 @@ export class TemplateProcessor {
    * Configure Handlebars settings for security and compatibility
    */
   private configureSettings() {
-    // Disable prototype pollution protection for our controlled environment
+    // SECURITY: `field` is user-controlled (it comes from the template text,
+    // which authors and, via variables, other tenants can influence). This
+    // helper must NEVER index the prototype chain — do not "simplify" it by
+    // removing the dangerous-key guard or the own-property check below, or a
+    // template could read `__proto__`/`constructor`/`prototype` and enable
+    // prototype-pollution/gadget access.
+    const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
     this.handlebars.registerHelper(
       "lookup",
       function (obj: unknown, field: string) {
-        if (obj && typeof obj === "object") {
+        if (
+          obj &&
+          typeof obj === "object" &&
+          typeof field === "string" &&
+          !DANGEROUS_KEYS.has(field) &&
+          Object.prototype.hasOwnProperty.call(obj, field)
+        ) {
           return (obj as Record<string, unknown>)[field];
         }
         return undefined;
