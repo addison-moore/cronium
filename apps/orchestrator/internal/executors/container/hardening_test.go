@@ -27,6 +27,11 @@ func hardenedExecutor() *Executor {
 					Memory: "512MB",
 					Pids:   100,
 				},
+				Limits: config.ResourceLimits{
+					CPU:    2.0,
+					Memory: "2GB",
+					Pids:   512,
+				},
 			},
 		},
 	}
@@ -72,6 +77,54 @@ func TestBuildHostConfig_FailsClosedWhenCapDropUnset(t *testing.T) {
 	hc := e.buildHostConfig(&types.Job{ID: "job-1"}, "net")
 	if len(hc.CapDrop) != 1 || hc.CapDrop[0] != "ALL" {
 		t.Fatalf("expected CapDrop to fall back to [ALL] when unconfigured, got %v", hc.CapDrop)
+	}
+}
+
+func TestBuildResourceLimits_ClampsToMax(t *testing.T) {
+	e := hardenedExecutor()
+	// A job requesting far more than the configured maximum.
+	job := &types.Job{Execution: types.ExecutionConfig{Resources: &types.Resources{
+		CPULimit:    64,
+		MemoryLimit: 64 * 1024 * 1024 * 1024, // 64GB
+		PidsLimit:   100000,
+	}}}
+
+	r := e.buildResourceLimits(job)
+
+	if r.NanoCPUs != int64(2.0*1e9) { // clamped to Limits.CPU=2.0
+		t.Fatalf("CPU not clamped to max: got %d nanoCPUs", r.NanoCPUs)
+	}
+	if r.Memory != 2*1024*1024*1024 { // clamped to Limits.Memory=2GB
+		t.Fatalf("memory not clamped to max: got %d", r.Memory)
+	}
+	if r.PidsLimit == nil || *r.PidsLimit != 512 { // clamped to Limits.Pids=512
+		t.Fatalf("pids not clamped to max: got %v", r.PidsLimit)
+	}
+}
+
+func TestBuildResourceLimits_PartialObjectGetsDefaults(t *testing.T) {
+	e := hardenedExecutor()
+	// Only CPU set — memory and pids must fall back to defaults, never unbounded.
+	job := &types.Job{Execution: types.ExecutionConfig{Resources: &types.Resources{
+		CPULimit: 1,
+	}}}
+
+	r := e.buildResourceLimits(job)
+	if r.Memory != 512*1024*1024 {
+		t.Fatalf("partial resource object left memory unbounded/wrong: got %d", r.Memory)
+	}
+	if r.PidsLimit == nil || *r.PidsLimit != 100 {
+		t.Fatalf("partial resource object left pids unbounded/wrong: got %v", r.PidsLimit)
+	}
+	// A NOFILE ulimit is always set.
+	foundNofile := false
+	for _, u := range r.Ulimits {
+		if u.Name == "nofile" {
+			foundNofile = true
+		}
+	}
+	if !foundNofile {
+		t.Fatal("expected a nofile ulimit")
 	}
 }
 

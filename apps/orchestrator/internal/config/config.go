@@ -150,6 +150,11 @@ type ContainerSecurityConfig struct {
 	DropCapabilities []string `yaml:"dropCapabilities" envconfig:"DROP_CAPABILITIES" default:"ALL"`
 	ReadOnlyRootfs   bool     `yaml:"readOnlyRootfs" envconfig:"READ_ONLY_ROOTFS" default:"true"`
 	SeccompProfile   string   `yaml:"seccompProfile" envconfig:"SECCOMP_PROFILE" default:"default"`
+	// ApparmorProfile applies a named AppArmor profile to job containers when
+	// set (e.g. a custom cronium profile, or "docker-default"). Left empty by
+	// default so hosts without AppArmor (macOS/dev) still run; on Linux Docker
+	// already applies its docker-default profile automatically.
+	ApparmorProfile string `yaml:"apparmorProfile" envconfig:"APPARMOR_PROFILE"`
 }
 
 // VolumeConfig defines volume settings

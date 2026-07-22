@@ -14,6 +14,7 @@ import (
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/config"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/errors"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
+	units "github.com/docker/go-units"
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
@@ -391,32 +392,55 @@ func (e *Executor) buildEnvironment(job *types.Job) []string {
 }
 
 // buildResourceLimits builds container resource limits
+// buildResourceLimits computes the container resource caps (Phase 3.1). It
+// starts from the configured defaults, lets a job LOWER-or-set each field
+// independently (a partial resource object never leaves a field unbounded), and
+// then CLAMPS every field to the configured maximum so an untrusted job cannot
+// request more CPU/memory/PIDs than the operator allows. A NOFILE ulimit caps
+// file descriptors; disk is bounded by the read-only rootfs plus sized tmpfs
+// mounts.
 func (e *Executor) buildResourceLimits(job *types.Job) container.Resources {
-	resources := container.Resources{}
+	d := e.config.Resources.Defaults
+	max := e.config.Resources.Limits
 
-	// Use job-specific limits or defaults
+	cpu := d.CPU
+	memBytes, _ := parseMemory(d.Memory)
+	pids := d.Pids
+
 	if job.Execution.Resources != nil {
 		if job.Execution.Resources.CPULimit > 0 {
-			resources.NanoCPUs = int64(job.Execution.Resources.CPULimit * 1e9)
+			cpu = job.Execution.Resources.CPULimit
 		}
 		if job.Execution.Resources.MemoryLimit > 0 {
-			resources.Memory = job.Execution.Resources.MemoryLimit
+			memBytes = job.Execution.Resources.MemoryLimit
 		}
 		if job.Execution.Resources.PidsLimit > 0 {
-			resources.PidsLimit = &job.Execution.Resources.PidsLimit
+			pids = job.Execution.Resources.PidsLimit
 		}
-	} else {
-		// Use defaults
-		resources.NanoCPUs = int64(e.config.Resources.Defaults.CPU * 1e9)
-		// Parse memory string (e.g., "512MB" -> bytes)
-		if memBytes, err := parseMemory(e.config.Resources.Defaults.Memory); err == nil {
-			resources.Memory = memBytes
-		}
-		pidsLimit := e.config.Resources.Defaults.Pids
-		resources.PidsLimit = &pidsLimit
 	}
 
-	return resources
+	// Clamp to the configured ceiling — never exceed operator-set maximums.
+	if max.CPU > 0 && (cpu <= 0 || cpu > max.CPU) {
+		cpu = max.CPU
+	}
+	if maxMem, err := parseMemory(max.Memory); err == nil && maxMem > 0 {
+		if memBytes <= 0 || memBytes > maxMem {
+			memBytes = maxMem
+		}
+	}
+	if max.Pids > 0 && (pids <= 0 || pids > max.Pids) {
+		pids = max.Pids
+	}
+
+	pidsLimit := pids
+	return container.Resources{
+		NanoCPUs:  int64(cpu * 1e9),
+		Memory:    memBytes,
+		PidsLimit: &pidsLimit,
+		Ulimits: []*units.Ulimit{
+			{Name: "nofile", Soft: 1024, Hard: 4096},
+		},
+	}
 }
 
 // buildMounts builds container mounts
@@ -483,10 +507,19 @@ func (e *Executor) buildSecurityOptions() []string {
 		opts = append(opts, "no-new-privileges")
 	}
 
-	// Add seccomp profile
+	// Seccomp: an empty/"default" profile lets Docker apply its built-in default
+	// seccomp filter (already a strong syscall allowlist); a named profile
+	// overrides it. We never pass "seccomp=unconfined", so the default is always
+	// enforced (Phase 3.1).
 	if e.config.Security.SeccompProfile != "" && e.config.Security.SeccompProfile != "default" {
-		// Only add custom seccomp profiles, let Docker use its default
 		opts = append(opts, fmt.Sprintf("seccomp=%s", e.config.Security.SeccompProfile))
+	}
+
+	// AppArmor: apply a named profile when configured. Empty by default so
+	// AppArmor-less hosts (macOS/dev) are unaffected; on Linux Docker applies
+	// its docker-default profile automatically.
+	if e.config.Security.ApparmorProfile != "" {
+		opts = append(opts, fmt.Sprintf("apparmor=%s", e.config.Security.ApparmorProfile))
 	}
 
 	return opts
@@ -630,24 +663,30 @@ func parseMemory(mem string) (int64, error) {
 		return 0, fmt.Errorf("empty memory string")
 	}
 
-	// Simple parser for common units
+	// Simple parser for common units. Suffixes are checked LONGEST-first: "B" is
+	// a suffix of "MB"/"KB"/"GB", so a map with random iteration order would
+	// sometimes match "512MB" as "512M"+"B" and fail (silently leaving memory
+	// unbounded). This ordered slice makes "512MB" always parse correctly.
 	mem = strings.ToUpper(strings.TrimSpace(mem))
 
-	multipliers := map[string]int64{
-		"B":  1,
-		"KB": 1024,
-		"MB": 1024 * 1024,
-		"GB": 1024 * 1024 * 1024,
+	units := []struct {
+		suffix     string
+		multiplier int64
+	}{
+		{"KB", 1024},
+		{"MB", 1024 * 1024},
+		{"GB", 1024 * 1024 * 1024},
+		{"B", 1},
 	}
 
-	for suffix, multiplier := range multipliers {
-		if strings.HasSuffix(mem, suffix) {
-			valueStr := strings.TrimSuffix(mem, suffix)
+	for _, u := range units {
+		if strings.HasSuffix(mem, u.suffix) {
+			valueStr := strings.TrimSuffix(mem, u.suffix)
 			value, err := strconv.ParseFloat(valueStr, 64)
 			if err != nil {
 				return 0, fmt.Errorf("invalid memory value: %s", mem)
 			}
-			return int64(value * float64(multiplier)), nil
+			return int64(value * float64(u.multiplier)), nil
 		}
 	}
 
