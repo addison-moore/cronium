@@ -6,6 +6,10 @@ import type { OnMount } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { EventType } from "@/shared/schema";
 import { Spinner } from "@cronium/ui";
+import { setupMonaco } from "@/lib/monaco-setup";
+
+// Self-host Monaco so the production CSP (no external scripts) doesn't block it.
+setupMonaco();
 
 export interface CodeEditorProps {
   value: string;
