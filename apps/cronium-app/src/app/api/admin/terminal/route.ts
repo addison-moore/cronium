@@ -6,6 +6,8 @@ import {
   restPrincipalErrorResponse,
 } from "@/lib/api-auth";
 import { hasServerPermission } from "@/server/permissions";
+import { isAdminMfaEnforced } from "@/server/security/authorization";
+import { UserRole } from "@/shared/schema";
 import { storage } from "@/server/storage";
 import { terminalSSHService } from "@/lib/ssh/terminal";
 import { createServerSSHConnectionScope } from "@/lib/ssh/pool-key";
@@ -289,19 +291,54 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       serverId?: number;
     };
 
-    // Local execution (no serverId) additionally requires localServerAccess:
-    // it runs commands directly on the Cronium host
-    if (
-      !serverId &&
-      !(await hasServerPermission(auth.userId, "localServerAccess"))
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Unauthorized: local server access permission required to run commands on the Cronium host",
-        },
-        { status: 403 },
-      );
+    // Local host command execution (no serverId) runs arbitrary commands
+    // DIRECTLY on the Cronium host — full RCE on the control plane. It is
+    // therefore DISABLED by default (Phase 3.2) and, even when an operator
+    // explicitly opts in, is restricted to Admins with MFA and audited on every
+    // command. Remote (serverId) execution over SSH is unaffected.
+    if (!serverId) {
+      if (process.env.CRONIUM_ALLOW_LOCAL_HOST_TERMINAL !== "true") {
+        return NextResponse.json(
+          {
+            error:
+              "Local host terminal execution is disabled. It runs commands directly on the Cronium host; use a remote server, or an operator can enable CRONIUM_ALLOW_LOCAL_HOST_TERMINAL after accepting the RCE risk.",
+          },
+          { status: 403 },
+        );
+      }
+      if (auth.role !== UserRole.ADMIN) {
+        return NextResponse.json(
+          { error: "Unauthorized: local host terminal requires an Admin." },
+          { status: 403 },
+        );
+      }
+      if (isAdminMfaEnforced()) {
+        const actor = await storage.getUser(auth.userId);
+        if (!actor?.mfaEnabled) {
+          return NextResponse.json(
+            {
+              error:
+                "Local host terminal requires the Admin account to have MFA enabled.",
+            },
+            { status: 403 },
+          );
+        }
+      }
+      if (!(await hasServerPermission(auth.userId, "localServerAccess"))) {
+        return NextResponse.json(
+          {
+            error:
+              "Unauthorized: local server access permission required to run commands on the Cronium host",
+          },
+          { status: 403 },
+        );
+      }
+      // Durable audit of every host command (captured by the log pipeline).
+      if (command) {
+        console.warn(
+          `[SECURITY-AUDIT] local-host-command actor=${auth.userId} command=${JSON.stringify(String(command))}`,
+        );
+      }
     }
 
     // Handle remote server execution
