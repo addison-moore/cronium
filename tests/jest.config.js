@@ -95,6 +95,7 @@ module.exports = {
         "<rootDir>/../apps/cronium-app/src/lib/security/__tests__/secret-vault.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/security/__tests__/variable-secret.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/security/__tests__/job-capability.test.ts",
+        "<rootDir>/../apps/cronium-app/src/lib/security/__tests__/execution-token-revocation.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/tools/__tests__/redact.test.ts",
       ],
       setupFiles: ["<rootDir>/security/setup.ts"],

@@ -48,72 +48,91 @@ export type TransitionOutcome =
   | { ok: true; job: Job; noop?: boolean }
   | { ok: false; current?: JobStatus; error: string };
 
+function isTerminalStatus(status: JobStatus): boolean {
+  return !NON_TERMINAL.includes(status);
+}
+
 export async function transitionJob(
   jobId: string,
   to: JobStatus,
   opts: TransitionOptions,
 ): Promise<TransitionOutcome> {
-  return db.transaction(async (tx) => {
-    const [current] = await tx
-      .select()
-      .from(jobs)
-      .where(eq(jobs.id, jobId))
-      .for("update");
+  const outcome = await db.transaction(
+    async (tx): Promise<TransitionOutcome> => {
+      const [current] = await tx
+        .select()
+        .from(jobs)
+        .where(eq(jobs.id, jobId))
+        .for("update");
 
-    if (!current) {
-      return { ok: false, error: `Job ${jobId} not found` };
-    }
-
-    // Same-status update: apply the extra columns (repeated RUNNING progress
-    // reports do this) but record no transition — idempotent by design.
-    if (current.status === to) {
-      if (opts.set && Object.keys(opts.set).length > 0) {
-        const [updated] = await tx
-          .update(jobs)
-          .set({ ...opts.set, updatedAt: new Date() })
-          .where(eq(jobs.id, jobId))
-          .returning();
-        return { ok: true, job: updated ?? current, noop: true };
+      if (!current) {
+        return { ok: false, error: `Job ${jobId} not found` };
       }
-      return { ok: true, job: current, noop: true };
-    }
 
-    const legal = LEGAL_SOURCES[to];
-    const allowed = opts.expectedFrom
-      ? opts.expectedFrom.filter((s) => legal.includes(s))
-      : legal;
-    if (!allowed.includes(current.status)) {
-      console.warn(
-        `[JobTransition] Rejected ${current.status} → ${to} for job ${jobId} (actor: ${opts.actor}${opts.reason ? `, reason: ${opts.reason}` : ""})`,
-      );
-      return {
-        ok: false,
-        current: current.status,
-        error: `Illegal transition ${current.status} → ${to}`,
-      };
-    }
+      // Same-status update: apply the extra columns (repeated RUNNING progress
+      // reports do this) but record no transition — idempotent by design.
+      if (current.status === to) {
+        if (opts.set && Object.keys(opts.set).length > 0) {
+          const [updated] = await tx
+            .update(jobs)
+            .set({ ...opts.set, updatedAt: new Date() })
+            .where(eq(jobs.id, jobId))
+            .returning();
+          return { ok: true, job: updated ?? current, noop: true };
+        }
+        return { ok: true, job: current, noop: true };
+      }
 
-    const [updated] = await tx
-      .update(jobs)
-      .set({ ...opts.set, status: to, updatedAt: new Date() })
-      .where(eq(jobs.id, jobId))
-      .returning();
+      const legal = LEGAL_SOURCES[to];
+      const allowed = opts.expectedFrom
+        ? opts.expectedFrom.filter((s) => legal.includes(s))
+        : legal;
+      if (!allowed.includes(current.status)) {
+        console.warn(
+          `[JobTransition] Rejected ${current.status} → ${to} for job ${jobId} (actor: ${opts.actor}${opts.reason ? `, reason: ${opts.reason}` : ""})`,
+        );
+        return {
+          ok: false,
+          current: current.status,
+          error: `Illegal transition ${current.status} → ${to}`,
+        };
+      }
 
-    await tx.insert(jobTransitions).values({
-      jobId,
-      fromStatus: current.status,
-      toStatus: to,
-      actor: opts.actor,
-      reason: opts.reason ?? null,
-      data: opts.data ?? null,
-    });
+      const [updated] = await tx
+        .update(jobs)
+        .set({ ...opts.set, status: to, updatedAt: new Date() })
+        .where(eq(jobs.id, jobId))
+        .returning();
 
-    // Delivered on commit; consumers treat this as an accelerant only — the
-    // outbox scan is the guarantee (PLAN.md §4.4).
-    await tx.execute(sql`SELECT pg_notify('job_changed', ${jobId})`);
+      await tx.insert(jobTransitions).values({
+        jobId,
+        fromStatus: current.status,
+        toStatus: to,
+        actor: opts.actor,
+        reason: opts.reason ?? null,
+        data: opts.data ?? null,
+      });
 
-    return { ok: true, job: updated ?? current };
-  });
+      // Delivered on commit; consumers treat this as an accelerant only — the
+      // outbox scan is the guarantee (PLAN.md §4.4).
+      await tx.execute(sql`SELECT pg_notify('job_changed', ${jobId})`);
+
+      return { ok: true, job: updated ?? current };
+    },
+  );
+
+  // Revoke the job's execution tokens the instant it becomes terminal (HI-14),
+  // AFTER the state change has committed. A real transition to a terminal state
+  // (not a same-status no-op) means no further runtime calls are legitimate —
+  // the runtime rejects tokens for revoked jobs. Best-effort: the token's
+  // absolute lifetime cap backstops a failed write.
+  if (outcome.ok && !outcome.noop && isTerminalStatus(to)) {
+    const { revokeJobExecutionTokens } =
+      await import("@/lib/security/execution-token-revocation");
+    await revokeJobExecutionTokens(jobId);
+  }
+
+  return outcome;
 }
 
 /** Record a job's birth on the audit trail (fromStatus NULL → QUEUED) and wake

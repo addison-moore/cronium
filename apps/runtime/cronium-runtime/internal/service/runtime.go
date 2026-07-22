@@ -29,6 +29,12 @@ func NewRuntimeService(backend *BackendClient, cache *cache.ValkeyClient, config
 	}
 }
 
+// IsJobRevoked reports whether a job's execution tokens have been revoked
+// (HI-14) — set by the app when the job reaches a terminal state.
+func (s *RuntimeService) IsJobRevoked(ctx context.Context, jobID string) (bool, error) {
+	return s.cache.IsJobRevoked(ctx, jobID)
+}
+
 // GetInput retrieves input data for an execution
 func (s *RuntimeService) GetInput(ctx context.Context, executionID string) (interface{}, error) {
 	// Try cache first
@@ -57,10 +63,10 @@ func (s *RuntimeService) GetInput(ctx context.Context, executionID string) (inte
 		if err := s.cache.SetInput(ctx, executionID, input); err != nil {
 			s.log.WithError(err).Error("Failed to cache input")
 		}
-		
+
 		// Audit log
 		s.backend.AuditLog(ctx, executionID, "get_input", nil)
-		
+
 		return inputData, nil
 	}
 

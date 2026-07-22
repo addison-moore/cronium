@@ -62,6 +62,10 @@ func NewRouter(runtime *service.RuntimeService, cfg *config.Config, log *logrus.
 		jwtManager := auth.NewJWTManager(cfg.Auth)
 		r.Use(middleware.AuthMiddleware(jwtManager, log))
 
+		// Reject tokens for jobs that have reached a terminal state (HI-14).
+		// Runs after AuthMiddleware so the validated jobId is in context.
+		r.Use(middleware.RevocationMiddleware(runtime, log))
+
 		// Rate limiting
 		rateLimiter := middleware.NewRateLimiter(cfg.Security.RateLimitPerMin, log)
 		r.Use(middleware.RateLimitMiddleware(rateLimiter))
@@ -72,7 +76,7 @@ func NewRouter(runtime *service.RuntimeService, cfg *config.Config, log *logrus.
 			r.Post("/output", h.SetOutput)
 			r.Get("/context", h.GetContext)
 			r.Post("/condition", h.SetCondition)
-			
+
 			// Variables
 			r.Route("/variables", func(r chi.Router) {
 				r.Get("/{key}", h.GetVariable)

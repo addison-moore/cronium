@@ -236,7 +236,7 @@ func (c *ValkeyClient) SetContext(ctx context.Context, executionID string, execC
 func (c *ValkeyClient) InvalidateExecution(ctx context.Context, executionID string) error {
 	// Use pattern matching to delete all keys for this execution
 	pattern := "*:" + executionID + "*"
-	
+
 	var cursor uint64
 	for {
 		keys, nextCursor, err := c.client.Scan(ctx, cursor, pattern, 100).Result()
@@ -259,26 +259,41 @@ func (c *ValkeyClient) InvalidateExecution(ctx context.Context, executionID stri
 	return nil
 }
 
+// IsJobRevoked reports whether the app has revoked the execution tokens for a
+// job (HI-14). The app writes this marker the instant a job reaches a terminal
+// state, so a leaked or lingering token stops working once the job ends. The
+// key MUST match the app's execution-token-revocation store exactly.
+func (c *ValkeyClient) IsJobRevoked(ctx context.Context, jobID string) (bool, error) {
+	if jobID == "" {
+		return false, nil
+	}
+	n, err := c.client.Exists(ctx, "cronium:exec-revoked:"+jobID).Result()
+	if err != nil {
+		return false, fmt.Errorf("failed to check job revocation: %w", err)
+	}
+	return n > 0, nil
+}
+
 // Lock acquires a distributed lock for the given key
 func (c *ValkeyClient) Lock(ctx context.Context, key string, ttl time.Duration) (bool, error) {
 	lockKey := "lock:" + key
-	
+
 	// Try to set the lock with NX (only if not exists)
 	ok, err := c.client.SetNX(ctx, lockKey, "1", ttl).Result()
 	if err != nil {
 		return false, fmt.Errorf("failed to acquire lock: %w", err)
 	}
-	
+
 	return ok, nil
 }
 
 // Unlock releases a distributed lock
 func (c *ValkeyClient) Unlock(ctx context.Context, key string) error {
 	lockKey := "lock:" + key
-	
+
 	if err := c.client.Del(ctx, lockKey).Err(); err != nil {
 		return fmt.Errorf("failed to release lock: %w", err)
 	}
-	
+
 	return nil
 }
