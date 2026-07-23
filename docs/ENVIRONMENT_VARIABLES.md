@@ -62,14 +62,15 @@ These environment variables must be set for the application to function correctl
 
 ### Authentication & Security
 
-| Variable                   | Description                                                                                                                         | Type                    | Required | Example                                 | Service |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | -------- | --------------------------------------- | ------- |
-| `AUTH_URL`                 | NextAuth base URL                                                                                                                   | `string` (URL)          | Yes      | `http://localhost:3000`                 | 📱      |
-| `AUTH_SECRET`              | NextAuth encryption secret                                                                                                          | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` | 📱      |
-| `ENCRYPTION_KEY`           | Data encryption key                                                                                                                 | `string` (32 chars)     | Yes      | Generate with `openssl rand -hex 32`    | 📱      |
-| `JWT_SECRET`               | JWT signing secret                                                                                                                  | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` |
-| `CRONIUM_ORCHESTRATOR_KEY` | Orchestrator service-identity credential — the app verifies it on the orchestrator-facing routes (claim, heartbeat, health/metrics) | `string`                | Yes      | Generate with `openssl rand -base64 32` |
-| `SOCKET_BROADCAST_KEY`     | Authenticates internal broadcasts from the app/worker to the socket server                                                          | `string`                | Yes      | Generate with `openssl rand -base64 32` |
+| Variable                   | Description                                                                                                                                                                                                    | Type                    | Required | Example                                 | Service |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | -------- | --------------------------------------- | ------- |
+| `AUTH_URL`                 | NextAuth base URL                                                                                                                                                                                              | `string` (URL)          | Yes      | `http://localhost:3000`                 | 📱      |
+| `AUTH_SECRET`              | NextAuth encryption secret                                                                                                                                                                                     | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` | 📱      |
+| `ENCRYPTION_KEY`           | Data encryption key (active). Encrypts every secret at rest via the versioned vault + tool-credential scheme                                                                                                   | `string` (64 hex)       | Yes      | Generate with `openssl rand -hex 32`    | 📱      |
+| `ENCRYPTION_KEYS_RETIRED`  | JSON array of previous `ENCRYPTION_KEY` values kept in the ring during a key rotation so secrets written under them still decrypt until re-encrypted. Empty/unset outside a rotation. See "Key rotation" below | `string` (JSON array)   | No       | e.g. `["<old-hex-key>"]`                | 📱      |
+| `JWT_SECRET`               | JWT signing secret                                                                                                                                                                                             | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` |
+| `CRONIUM_ORCHESTRATOR_KEY` | Orchestrator service-identity credential — the app verifies it on the orchestrator-facing routes (claim, heartbeat, health/metrics)                                                                            | `string`                | Yes      | Generate with `openssl rand -base64 32` |
+| `SOCKET_BROADCAST_KEY`     | Authenticates internal broadcasts from the app/worker to the socket server                                                                                                                                     | `string`                | Yes      | Generate with `openssl rand -base64 32` |
 
 **Notes:**
 
@@ -491,3 +492,41 @@ openssl rand -base64 32  # For SOCKET_BROADCAST_KEY
 3. **Consolidation**: Some variables serve similar purposes (e.g., `ENCRYPTION_KEY` and `ENCRYPTION_MASTER_KEY`) and should be consolidated
 4. **Containerization**: Container-related variables are prepared for future isolation features
 5. **Service Architecture**: The application uses multiple services (app, websocket, orchestrator) that communicate via internal URLs
+
+## Key rotation (`ENCRYPTION_KEY`)
+
+Rotating the data encryption key re-encrypts every at-rest secret onto a new key
+without downtime. The keyring keeps both keys available during the rotation, so
+the app keeps decrypting throughout.
+
+The driver (`pnpm --filter @cronium/app rotate:secrets`, i.e.
+`src/scripts/rotate-secrets.ts`) is **idempotent and resumable**: it skips values
+already under the active key, so a re-run after an interruption simply finishes
+the remainder, and it updates each row independently. Decryption is
+authenticated, so a wrong key/binding fails safely (recorded as an error, never
+written) rather than corrupting data.
+
+Run it from a source checkout (it needs `tsx`, a devDependency) pointed at the
+target `DATABASE_URL`:
+
+```bash
+# 1. Generate a new key
+NEW=$(openssl rand -hex 32)
+
+# 2. Make the new key active and keep the old one in the ring
+export ENCRYPTION_KEY="$NEW"
+export ENCRYPTION_KEYS_RETIRED='["<old-hex-key>"]'
+
+# 3. Dry-run to preview, then rotate (re-run until "re-encrypted: 0")
+pnpm --filter @cronium/app rotate:secrets --dry-run
+pnpm --filter @cronium/app rotate:secrets
+
+# 4. Once 0 remain, drop the old key from the ring and restart the services
+unset ENCRYPTION_KEYS_RETIRED   # and remove it from .env
+```
+
+To **roll back** mid-rotation, run again with the keys swapped (old active, new
+retired). The driver **warns** about any `legacy` (pre-vault) values still bound
+to the current key: those cannot be rotated and must first be migrated to vault
+envelopes (they re-encrypt automatically the next time their record is saved) —
+rotating the key while legacy values remain would orphan them.

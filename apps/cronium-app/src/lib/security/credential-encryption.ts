@@ -5,6 +5,7 @@
 import {
   createCipheriv,
   createDecipheriv,
+  createHash,
   randomBytes,
   scryptSync,
 } from "crypto";
@@ -48,7 +49,19 @@ export class CredentialEncryption {
   private readonly tagLength = 16; // 128 bits
 
   private masterKey: Buffer | null = null;
+  // Retired master keys (derived from ENCRYPTION_KEYS_RETIRED) that decrypt is
+  // allowed to fall back to during a key rotation, so credentials written under
+  // a previous ENCRYPTION_KEY keep decrypting until the rotation driver has
+  // re-encrypted them under the active key (security plan Phase 2.1).
+  private retiredMasterKeys: Buffer[] = [];
   private keyCache = new Map<string, { key: Buffer; expires: Date }>();
+
+  // Static KDF salt for deriving a master key from ENCRYPTION_KEY. MUST match
+  // the value used at rest — see the note in initialize().
+  private static readonly MASTER_SALT = Buffer.from(
+    "cronium-tool-credentials-v1",
+    "utf8",
+  );
 
   private constructor(private config?: EncryptionConfig) {
     if (config) {
@@ -88,10 +101,37 @@ export class CredentialEncryption {
     // a fixed (non-secret) salt is sufficient. It must NOT change — the derived
     // master key encrypts every stored credential, so changing it would make all
     // existing credentials undecryptable.
-    const salt = Buffer.from("cronium-tool-credentials-v1", "utf8");
-    this.masterKey = scryptSync(masterKey, salt, this.keyLength);
+    this.masterKey = scryptSync(
+      masterKey,
+      CredentialEncryption.MASTER_SALT,
+      this.keyLength,
+    );
 
-    console.log("Credential encryption initialized");
+    // Load any retired keys so decrypt can fall back to them during a rotation.
+    this.retiredMasterKeys = [];
+    const retiredRaw = process.env.ENCRYPTION_KEYS_RETIRED;
+    if (retiredRaw) {
+      try {
+        const retired = JSON.parse(retiredRaw) as unknown;
+        if (Array.isArray(retired)) {
+          for (const k of retired) {
+            if (typeof k === "string" && k.length >= 32) {
+              this.retiredMasterKeys.push(
+                scryptSync(k, CredentialEncryption.MASTER_SALT, this.keyLength),
+              );
+            }
+          }
+        }
+      } catch {
+        console.warn(
+          "[Security] ENCRYPTION_KEYS_RETIRED is not valid JSON; ignoring retired keys",
+        );
+      }
+    }
+
+    console.log(
+      `Credential encryption initialized${this.retiredMasterKeys.length ? ` (+${this.retiredMasterKeys.length} retired key(s) for rotation)` : ""}`,
+    );
   }
 
   /**
@@ -147,14 +187,14 @@ export class CredentialEncryption {
   }
 
   /**
-   * Decrypt credential data
+   * Decrypt credential data. Tries the active master key first, then any retired
+   * keys (rotation fallback), so a credential written under a previous
+   * ENCRYPTION_KEY still decrypts until it is re-encrypted.
    */
   decrypt(encryptedData: EncryptedData): unknown {
     if (!this.isAvailable()) {
       throw new Error("Encryption not initialized");
     }
-
-    // Validate encrypted data
     if (
       !encryptedData.encrypted ||
       !encryptedData.iv ||
@@ -163,59 +203,91 @@ export class CredentialEncryption {
       throw new Error("Invalid encrypted data format");
     }
 
-    // Decode from base64
-    const encrypted = Buffer.from(encryptedData.encrypted, "base64");
-    const iv = Buffer.from(encryptedData.iv, "base64");
-    const authTag = Buffer.from(encryptedData.authTag, "base64");
-    const salt = Buffer.from(encryptedData.keyDerivation.salt, "base64");
+    const active = this.tryDecryptWith(this.masterKey!, encryptedData);
+    if (active.ok) return active.value;
 
-    // Derive decryption key
-    const key = this.deriveKey(salt);
-
-    // Create decipher
-    const decipher = createDecipheriv(this.algorithm, key, iv);
-    decipher.setAuthTag(authTag);
-
-    // Decrypt data
-    const decrypted = Buffer.concat([
-      decipher.update(encrypted),
-      decipher.final(),
-    ]);
-
-    const plaintext = decrypted.toString("utf8");
-
-    // Try to parse as JSON, otherwise return as string
-    try {
-      return JSON.parse(plaintext);
-    } catch {
-      return plaintext;
+    for (const retired of this.retiredMasterKeys) {
+      const attempt = this.tryDecryptWith(retired, encryptedData);
+      if (attempt.ok) return attempt.value;
     }
+
+    throw new Error("Credential failed authenticated decryption");
   }
 
   /**
-   * Derive key from salt
+   * Whether the credential decrypts under the ACTIVE key alone (i.e. it does not
+   * need re-encryption). Used by the rotation driver to skip already-rotated
+   * rows. Never throws.
    */
-  private deriveKey(salt: Buffer): Buffer {
-    const cacheKey = salt.toString("base64");
+  isUnderActiveKey(encryptedData: EncryptedData): boolean {
+    if (
+      !this.isAvailable() ||
+      !encryptedData?.encrypted ||
+      !encryptedData?.iv ||
+      !encryptedData?.authTag
+    ) {
+      return false;
+    }
+    return this.tryDecryptWith(this.masterKey!, encryptedData).ok;
+  }
 
-    // Check cache
+  private tryDecryptWith(
+    masterKey: Buffer,
+    encryptedData: EncryptedData,
+  ): { ok: true; value: unknown } | { ok: false } {
+    try {
+      const encrypted = Buffer.from(encryptedData.encrypted, "base64");
+      const iv = Buffer.from(encryptedData.iv, "base64");
+      const authTag = Buffer.from(encryptedData.authTag, "base64");
+      const salt = Buffer.from(encryptedData.keyDerivation.salt, "base64");
+
+      const key = this.deriveKeyFrom(masterKey, salt);
+      const decipher = createDecipheriv(this.algorithm, key, iv);
+      decipher.setAuthTag(authTag);
+      const decrypted = Buffer.concat([
+        decipher.update(encrypted),
+        decipher.final(),
+      ]);
+      const plaintext = decrypted.toString("utf8");
+      try {
+        return { ok: true, value: JSON.parse(plaintext) };
+      } catch {
+        return { ok: true, value: plaintext };
+      }
+    } catch {
+      // Authentication failure (wrong key) — let the caller try the next key.
+      return { ok: false };
+    }
+  }
+
+  /** Derive the per-value key from the active master key and a salt. */
+  private deriveKey(salt: Buffer): Buffer {
+    return this.deriveKeyFrom(this.masterKey!, salt);
+  }
+
+  /**
+   * Derive the per-value key from a specific master key and salt. Cached by
+   * (master-key fingerprint, salt) so the active and retired keys never collide.
+   */
+  private deriveKeyFrom(masterKey: Buffer, salt: Buffer): Buffer {
+    // A fast non-reversible fingerprint of the (already-derived) master key
+    // namespaces the cache so active/retired keys never collide. It only keys an
+    // in-process cache, so a plain hash is sufficient (and must be fast — scrypt
+    // here would run on every lookup).
+    const fp = createHash("sha256").update(masterKey).digest("base64");
+    const cacheKey = `${fp}:${salt.toString("base64")}`;
+
     const cached = this.keyCache.get(cacheKey);
     if (cached && cached.expires > new Date()) {
       return cached.key;
     }
 
-    // Derive new key
-    const key = scryptSync(this.masterKey!, salt, this.keyLength);
-
-    // Cache for 5 minutes
+    const key = scryptSync(masterKey, salt, this.keyLength);
     this.keyCache.set(cacheKey, {
       key,
       expires: new Date(Date.now() + 5 * 60 * 1000),
     });
-
-    // Clean old cache entries
     this.cleanKeyCache();
-
     return key;
   }
 
