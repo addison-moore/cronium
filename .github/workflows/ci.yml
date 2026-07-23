@@ -115,6 +115,20 @@ jobs:
       - name: Verify SDK copies are in sync
         run: bash scripts/check-sdk-sync.sh
 
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      # Tests the canonical Node runtime-helper SDK. The container-images/
+      # mirror is byte-identical (enforced by the sync check above), so testing
+      # the canonical copy covers both.
+      - name: Runtime helper SDK tests (Node)
+        working-directory: apps/runtime/runtime-helpers/nodejs
+        run: |
+          npm install --no-package-lock --no-audit --no-fund
+          npx jest
+
   go:
     name: Vet & Test (Go)
     runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'self-hosted' }}
