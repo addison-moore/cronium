@@ -1,0 +1,52 @@
+{
+  "route": "POST /api/internal/jobs/claim",
+  "auth": "orchestrator-key",
+  "responses": {
+    "success": {
+      "status": 200,
+      "body": {
+        "jobs": [
+          {
+            "id": "<id>",
+            "type": "container",
+            "priority": 1,
+            "createdAt": "<iso-date>",
+            "scheduledFor": "<iso-date>",
+            "attempts": 1,
+            "capabilityToken": "<token>",
+            "execution": {
+              "environment": { "CRONIUM_EVENT": "demo" },
+              "timeout": 60000000000,
+              "inputData": {},
+              "variables": {},
+              "target": { "type": "local", "serverId": "7" },
+              "script": {
+                "type": "bash",
+                "content": "echo hello",
+                "workingDirectory": "/workspace"
+              }
+            },
+            "metadata": {}
+          }
+        ],
+        "count": 1
+      }
+    },
+    "empty": {
+      "status": 200,
+      "body": { "jobs": [], "count": 0 }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": { "error": "Unauthorized" }
+    },
+    "badRequest": {
+      "status": 400,
+      "body": { "error": "orchestratorId required" }
+    },
+    "serverError": {
+      "status": 500,
+      "body": { "error": "Internal server error" }
+    }
+  }
+}

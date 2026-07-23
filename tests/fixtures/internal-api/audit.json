@@ -1,0 +1,22 @@
+{
+  "route": "POST /api/internal/audit",
+  "auth": "job-capability",
+  "responses": {
+    "success": {
+      "status": 200,
+      "body": { "success": true }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": { "error": "Missing job capability token" }
+    },
+    "forbidden": {
+      "status": 403,
+      "body": { "error": "Forbidden" }
+    },
+    "serverError": {
+      "status": 500,
+      "body": { "error": "Internal server error" }
+    }
+  }
+}

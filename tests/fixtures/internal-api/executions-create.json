@@ -1,0 +1,47 @@
+{
+  "route": "POST /api/internal/executions/[executionId]/create",
+  "auth": "job-capability",
+  "responses": {
+    "success": {
+      "status": 200,
+      "body": {
+        "success": true,
+        "execution": {
+          "id": "<id>",
+          "jobId": "<id>",
+          "serverId": null,
+          "serverName": null,
+          "status": "queued",
+          "metadata": {},
+          "createdAt": "<iso-date>",
+          "updatedAt": "<iso-date>",
+          "startedAt": null,
+          "completedAt": null,
+          "exitCode": null,
+          "output": null,
+          "error": null
+        }
+      }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": { "error": "Missing job capability token" }
+    },
+    "forbidden": {
+      "status": 403,
+      "body": { "error": "Forbidden" }
+    },
+    "forbiddenScope": {
+      "status": 403,
+      "body": { "error": "Capability token is not valid for this job" }
+    },
+    "badRequest": {
+      "status": 400,
+      "body": { "error": "Job ID required" }
+    },
+    "serverError": {
+      "status": 500,
+      "body": { "error": "Internal server error" }
+    }
+  }
+}

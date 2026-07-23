@@ -10,9 +10,17 @@ import { storage } from "@/server/storage";
 import { isSetupRequired } from "@/lib/first-run";
 import { nanoid } from "nanoid";
 import { TokenStatus, UserRole, UserStatus } from "@/shared/schema";
-import { sendPasswordResetEmail } from "@/lib/email";
+import { getSmtpSettings, sendPasswordResetEmail } from "@/lib/email";
 import { encryptionService } from "@/lib/encryption-service";
 import { passwordSchema } from "@/shared/schemas/password";
+
+// A real bcrypt hash (cost 12, matching encryptionService.hashPassword) of an
+// unguessable random value. Login compares against it when the account does
+// not exist or has no password set, so every login attempt costs exactly one
+// bcrypt comparison — otherwise unknown usernames fail measurably faster than
+// wrong passwords, a timing oracle for account enumeration.
+const DUMMY_PASSWORD_HASH =
+  "$2b$12$LI8GlJUh6wRE59.lG3A50u2vA6l0uMsIcw8PcLDOhmbEtDrZove0S";
 
 // Type guard for checking if user email exists in session
 function hasUserEmail(
@@ -177,6 +185,27 @@ export const userAuthRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       try {
         const { email } = input;
+
+        // Surface missing email configuration BEFORE looking up the account,
+        // so the error is identical for registered and unregistered emails.
+        // Previously this error was only raised when the address belonged to
+        // an existing ACTIVE account (via SMTP_CONFIG_MISSING from the send),
+        // which let an attacker enumerate registered emails on any instance
+        // without SMTP configured. Same required-field set as sendEmailDetailed.
+        const smtp = await getSmtpSettings();
+        if (
+          !smtp.host ||
+          !smtp.port ||
+          !smtp.user ||
+          !smtp.password ||
+          !smtp.fromEmail
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Email is not configured. Please contact your administrator.",
+          });
+        }
 
         // Find user by email
         const user = await storage.getUserByEmail(email);
@@ -513,17 +542,15 @@ export const userAuthRouter = createTRPCRouter({
           message: "Invalid username/email or password",
         });
 
-      if (!user) {
-        throw uniformFailure();
-      }
-
-      // Verify password before revealing nothing about status either way
+      // Always perform exactly one bcrypt comparison — including for unknown
+      // accounts and accounts with no password (e.g. still-invited users) —
+      // so response timing does not reveal whether the account exists.
       const isValidPassword = await encryptionService.verifyPassword(
         password,
-        user.password ?? "",
+        user?.password ?? DUMMY_PASSWORD_HASH,
       );
 
-      if (!isValidPassword || user.status !== UserStatus.ACTIVE) {
+      if (!user || !isValidPassword || user.status !== UserStatus.ACTIVE) {
         throw uniformFailure();
       }
 

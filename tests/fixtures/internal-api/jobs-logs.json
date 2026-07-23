@@ -1,0 +1,73 @@
+{
+  "route": "POST+GET /api/internal/jobs/[jobId]/logs",
+  "auth": "job-capability",
+  "responses": {
+    "appendSuccess": {
+      "status": 200,
+      "body": { "success": true, "count": 2 }
+    },
+    "appendEmpty": {
+      "status": 200,
+      "body": { "success": true, "count": 0 }
+    },
+    "getSuccess": {
+      "status": 200,
+      "body": {
+        "logs": [
+          {
+            "id": 1,
+            "eventId": 42,
+            "userId": "<id>",
+            "jobId": "<id>",
+            "output": "line 1",
+            "error": null,
+            "startTime": "<iso-date>",
+            "endTime": null,
+            "status": "running",
+            "successful": true
+          },
+          {
+            "id": 2,
+            "eventId": 42,
+            "userId": "<id>",
+            "jobId": "<id>",
+            "output": "line 2",
+            "error": "line 2",
+            "startTime": "<iso-date>",
+            "endTime": null,
+            "status": "running",
+            "successful": false
+          }
+        ]
+      }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": { "error": "Missing job capability token" }
+    },
+    "forbidden": {
+      "status": 403,
+      "body": { "error": "Forbidden" }
+    },
+    "forbiddenScope": {
+      "status": 403,
+      "body": { "error": "Capability token is not valid for this job" }
+    },
+    "badRequest": {
+      "status": 400,
+      "body": { "error": "Logs array required" }
+    },
+    "notFound": {
+      "status": 404,
+      "body": { "error": "Job not found" }
+    },
+    "notOwner": {
+      "status": 403,
+      "body": { "error": "Job not owned by this orchestrator" }
+    },
+    "serverError": {
+      "status": 500,
+      "body": { "error": "Internal server error" }
+    }
+  }
+}

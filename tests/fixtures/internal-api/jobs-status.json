@@ -1,0 +1,73 @@
+{
+  "route": "PUT /api/internal/jobs/[jobId]/status",
+  "auth": "job-capability",
+  "responses": {
+    "success": {
+      "status": 200,
+      "body": {
+        "success": true,
+        "job": {
+          "id": "<id>",
+          "eventId": 42,
+          "userId": "<id>",
+          "type": "script",
+          "status": "running",
+          "priority": 1,
+          "attempts": 1,
+          "payload": {},
+          "metadata": {},
+          "result": null,
+          "orchestratorId": "<id>",
+          "scheduledFor": "<iso-date>",
+          "createdAt": "<iso-date>",
+          "updatedAt": "<iso-date>",
+          "startedAt": "<iso-date>",
+          "completedAt": null,
+          "leaseExpiresAt": "<iso-date>",
+          "cancelRequested": false,
+          "output": null,
+          "error": null,
+          "exitCode": null
+        }
+      }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": { "error": "Missing job capability token" }
+    },
+    "forbidden": {
+      "status": 403,
+      "body": { "error": "Forbidden" }
+    },
+    "forbiddenScope": {
+      "status": 403,
+      "body": { "error": "Capability token is not valid for this job" }
+    },
+    "badRequestMissingStatus": {
+      "status": 400,
+      "body": { "error": "Status required" }
+    },
+    "badRequestInvalidStatus": {
+      "status": 400,
+      "body": { "error": "Invalid status transition" }
+    },
+    "notFound": {
+      "status": 404,
+      "body": { "error": "Job not found" }
+    },
+    "ownershipConflict": {
+      "status": 409,
+      "body": { "error": "Job is owned by orch-A" }
+    },
+    "casConflict": {
+      "status": 409,
+      "body": {
+        "error": "Status update to running rejected (current: completed)"
+      }
+    },
+    "serverError": {
+      "status": 500,
+      "body": { "error": "Internal server error" }
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "route": "GET /api/internal/executions/[executionId]/context",
+  "auth": "job-capability",
+  "responses": {
+    "success": {
+      "status": 200,
+      "body": {
+        "executionId": "<id>",
+        "jobId": "<id>",
+        "eventId": "42",
+        "userId": "<id>",
+        "metadata": { "foo": "bar", "input": { "a": 1 } },
+        "event": {
+          "id": "42",
+          "name": "Demo Event",
+          "type": "BASH",
+          "content": "echo hello",
+          "runLocation": "LOCAL",
+          "serverId": null
+        }
+      }
+    },
+    "successNoEvent": {
+      "status": 200,
+      "body": {
+        "executionId": "<id>",
+        "jobId": "<id>",
+        "eventId": null,
+        "userId": "<id>",
+        "metadata": {},
+        "event": null
+      }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": { "error": "Missing job capability token" }
+    },
+    "forbidden": {
+      "status": 403,
+      "body": { "error": "Forbidden" }
+    },
+    "forbiddenScope": {
+      "status": 403,
+      "body": { "error": "Capability token is not valid for this job" }
+    },
+    "notFoundExecution": {
+      "status": 404,
+      "body": { "error": "Execution not found" }
+    },
+    "notFoundJob": {
+      "status": 404,
+      "body": { "error": "Job not found" }
+    },
+    "serverError": {
+      "status": 500,
+      "body": { "error": "Internal server error" }
+    }
+  }
+}

@@ -407,6 +407,27 @@ describe("listJobs", () => {
     expect(rowsChain.where).toHaveBeenCalledTimes(1);
   });
 
+  it("honors falsy filter values: priority LOW (0) and eventId 0 still filter", async () => {
+    // Regression: `if (filter.priority)` silently dropped JobPriority.LOW
+    // (= 0) — the query returned jobs of every priority. Explicit
+    // `!== undefined` checks must keep the condition.
+    const rowsChain = chain([]);
+    const countChain = chain([{ value: 0 }]);
+    mockDb.select
+      .mockReturnValueOnce(rowsChain)
+      .mockReturnValueOnce(countChain);
+
+    await service.listJobs({ priority: JobPriority.LOW, eventId: 0 });
+
+    expect(rowsChain.where).toHaveBeenCalledTimes(1);
+    expect(rowsChain.where).toHaveBeenCalledWith(
+      and(eq(jobsTable.eventId, 0), eq(jobsTable.priority, JobPriority.LOW)),
+    );
+    expect(countChain.where).toHaveBeenCalledWith(
+      rowsChain.where.mock.calls[0]![0],
+    );
+  });
+
   it("returns total 0 when the count row is missing", async () => {
     mockDb.select.mockReturnValueOnce(chain([])).mockReturnValueOnce(chain([]));
     const result = await service.listJobs({ userId: "user-1" });

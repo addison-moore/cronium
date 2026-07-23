@@ -1,0 +1,25 @@
+{
+  "route": "POST /api/internal/jobs/heartbeat",
+  "auth": "orchestrator-key",
+  "responses": {
+    "success": {
+      "status": 200,
+      "body": {
+        "extended": ["<id>", "<id>"],
+        "cancelRequested": ["<id>"]
+      }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": { "error": "Unauthorized" }
+    },
+    "badRequest": {
+      "status": 400,
+      "body": { "error": "orchestratorId required" }
+    },
+    "serverError": {
+      "status": 500,
+      "body": { "error": "Internal server error" }
+    }
+  }
+}

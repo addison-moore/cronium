@@ -70,7 +70,9 @@ export async function POST(
     // Read the webhook payload; it becomes the workflow's initial input data
     // (available to the first node via cronium.input()).
     const rawBody = await request.text().catch(() => "");
-    if (rawBody.length > MAX_PAYLOAD_BYTES) {
+    // Measure bytes, not UTF-16 code units — multi-byte characters would
+    // otherwise let payloads up to 4x the cap through.
+    if (Buffer.byteLength(rawBody, "utf8") > MAX_PAYLOAD_BYTES) {
       return NextResponse.json(
         { success: false, message: "Payload too large (max 1 MB)" },
         { status: 413 },
@@ -91,9 +93,9 @@ export async function POST(
         ? (payload as Record<string, unknown>)
         : { body: payload };
 
-    console.log(
-      `Webhook triggered for workflow ${workflow.id} with key ${webhookKey}`,
-    );
+    // Do not log the presented key: it is a bearer credential (only its hash
+    // is stored server-side, HI-12) and must not leak into logs.
+    console.log(`Webhook triggered for workflow ${workflow.id}`);
 
     // Start the run asynchronously; the scheduling worker advances it.
     startWorkflowRun(workflow.id, {
@@ -121,7 +123,8 @@ export async function POST(
       workflowId: workflow.id,
     });
   } catch (error) {
-    console.error(`Failed to process webhook with key ${webhookKey}:`, error);
+    // Key deliberately omitted from the log (bearer credential, HI-12).
+    console.error("Failed to process workflow webhook:", error);
     return NextResponse.json(
       { success: false, message: "Failed to process webhook" },
       { status: 500 },

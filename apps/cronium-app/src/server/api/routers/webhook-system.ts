@@ -17,15 +17,38 @@ import {
   statsResponse,
 } from "@/server/utils/api-patterns";
 import { webhooks, webhookDeliveries, webhookEvents } from "@/shared/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, count } from "drizzle-orm";
 
 const webhookManager = WebhookManager.getInstance();
+
+/**
+ * Partial-update input. `WebhookConfigSchema.partial()` cannot express "only
+ * the provided fields": under zod v4, `.partial()` still fires each field's
+ * `.default()` for absent keys, so `active: z.boolean().default(true)` made
+ * every partial update silently re-enable a disabled webhook. This schema is
+ * the same shape without defaults; `secret` stays accepted-but-ignored
+ * (rotation goes through regenerateSecret).
+ */
+const WebhookUpdateSchema = z.object({
+  url: z.string().url().optional(),
+  events: z.array(z.string()).optional(),
+  secret: z.string().optional(),
+  headers: z.record(z.string(), z.string()).optional(),
+  active: z.boolean().optional(),
+  retryConfig: z
+    .object({
+      maxRetries: z.number().default(3),
+      retryDelay: z.number().default(1000),
+      backoffMultiplier: z.number().default(2),
+    })
+    .optional(),
+});
 
 /** True when a webhook has any custom headers configured, in either the
  * encrypted (`{ __enc }`) or legacy plaintext (`{ key: value }`) at-rest form. */
 function hasConfiguredHeaders(stored: unknown): boolean {
   if (!stored || typeof stored !== "object") return false;
-  return Object.keys(stored as Record<string, unknown>).length > 0;
+  return Object.keys(stored).length > 0;
 }
 
 export const webhookSystemRouter = createTRPCRouter({
@@ -140,7 +163,7 @@ export const webhookSystemRouter = createTRPCRouter({
     .input(
       z.object({
         id: z.number(),
-        updates: WebhookConfigSchema.partial(),
+        updates: WebhookUpdateSchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -281,7 +304,11 @@ export const webhookSystemRouter = createTRPCRouter({
           const deliveries = await ctx.db
             .select({
               status: webhookDeliveries.status,
-              count: ctx.db.$count(webhookDeliveries.id),
+              // count() aggregate, not db.$count(column): $count embeds a
+              // `(select count(*) from <source>)` subquery and treating a
+              // column as the source rendered `from "id"` — invalid SQL that
+              // made this query fail on every call.
+              count: count(webhookDeliveries.id),
             })
             .from(webhookDeliveries)
             .where(eq(webhookDeliveries.webhookId, input.webhookId))

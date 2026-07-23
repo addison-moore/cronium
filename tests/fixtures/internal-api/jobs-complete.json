@@ -1,0 +1,93 @@
+{
+  "route": "POST /api/internal/jobs/[jobId]/complete",
+  "auth": "job-capability",
+  "responses": {
+    "success": {
+      "status": 200,
+      "body": {
+        "success": true,
+        "job": {
+          "id": "<id>",
+          "eventId": 42,
+          "userId": "<id>",
+          "type": "script",
+          "status": "completed",
+          "priority": 1,
+          "attempts": 1,
+          "payload": {},
+          "metadata": {},
+          "result": { "exitCode": 0, "scriptOutput": { "greeting": "hi" } },
+          "orchestratorId": "<id>",
+          "scheduledFor": "<iso-date>",
+          "createdAt": "<iso-date>",
+          "updatedAt": "<iso-date>",
+          "startedAt": "<iso-date>",
+          "completedAt": "<iso-date>",
+          "leaseExpiresAt": "<iso-date>",
+          "cancelRequested": false,
+          "output": "hello world",
+          "error": null,
+          "exitCode": 0
+        }
+      }
+    },
+    "idempotentNoop": {
+      "status": 200,
+      "body": {
+        "success": true,
+        "job": {
+          "id": "<id>",
+          "eventId": 42,
+          "userId": "<id>",
+          "type": "script",
+          "status": "completed",
+          "priority": 1,
+          "attempts": 1,
+          "payload": {},
+          "metadata": {},
+          "result": { "exitCode": 0, "scriptOutput": { "greeting": "hi" } },
+          "orchestratorId": "<id>",
+          "scheduledFor": "<iso-date>",
+          "createdAt": "<iso-date>",
+          "updatedAt": "<iso-date>",
+          "startedAt": "<iso-date>",
+          "completedAt": "<iso-date>",
+          "leaseExpiresAt": "<iso-date>",
+          "cancelRequested": false,
+          "output": "hello world",
+          "error": null,
+          "exitCode": 0
+        },
+        "noop": true
+      }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": { "error": "Missing job capability token" }
+    },
+    "forbidden": {
+      "status": 403,
+      "body": { "error": "Forbidden" }
+    },
+    "forbiddenScope": {
+      "status": 403,
+      "body": { "error": "Capability token is not valid for this job" }
+    },
+    "notFound": {
+      "status": 404,
+      "body": { "error": "Job not found" }
+    },
+    "ownershipConflict": {
+      "status": 409,
+      "body": { "error": "Job is owned by orch-A" }
+    },
+    "casConflict": {
+      "status": 409,
+      "body": { "error": "Completion to completed rejected (current: failed)" }
+    },
+    "serverError": {
+      "status": 500,
+      "body": { "error": "Internal server error" }
+    }
+  }
+}

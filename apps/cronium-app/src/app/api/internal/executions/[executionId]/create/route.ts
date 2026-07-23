@@ -14,6 +14,13 @@ export async function POST(
 ) {
   try {
     const { executionId } = await params;
+
+    // Per-job capability (HI-10): verify the token BEFORE reading the body so
+    // unauthenticated callers get a uniform 401 rather than a body-validation
+    // oracle. The job-scope check follows once the body names the job.
+    const auth = authorizeCapability(request, "execution:create");
+    if (!auth.ok) return auth.response;
+
     const body = (await request.json()) as {
       jobId: string;
       serverId?: number;
@@ -25,10 +32,6 @@ export async function POST(
       return NextResponse.json({ error: "Job ID required" }, { status: 400 });
     }
 
-    // Per-job capability (HI-10): the token must be scoped to the job this
-    // execution belongs to.
-    const auth = authorizeCapability(request, "execution:create");
-    if (!auth.ok) return auth.response;
     const scopeError = assertJobScope(auth.cap, body.jobId);
     if (scopeError) return scopeError;
 
@@ -58,11 +61,9 @@ export async function POST(
     return NextResponse.json({ success: true, execution });
   } catch (error) {
     console.error("Error creating execution:", error);
+    // Do not echo error details — driver/DB messages can leak internals.
     return NextResponse.json(
-      {
-        error: "Internal server error",
-        details: error instanceof Error ? error.message : String(error),
-      },
+      { error: "Internal server error" },
       { status: 500 },
     );
   }

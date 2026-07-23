@@ -176,8 +176,13 @@ export class JobService {
   ): Promise<{ jobs: Job[]; total: number }> {
     const conditions = [];
 
-    // Build filter conditions
-    if (filter.status) {
+    // Build filter conditions. Checks are explicit `!== undefined` so valid
+    // falsy filter values are honored — most importantly
+    // `priority: JobPriority.LOW` (= 0), which a truthiness check silently
+    // dropped, returning ALL priorities instead of only LOW. Same for
+    // `eventId: 0` and empty strings: an explicitly provided filter must
+    // always narrow the result, never be ignored.
+    if (filter.status !== undefined) {
       if (Array.isArray(filter.status)) {
         conditions.push(
           or(...filter.status.map((s) => eq(jobsTable.status, s))),
@@ -187,27 +192,27 @@ export class JobService {
       }
     }
 
-    if (filter.orchestratorId) {
+    if (filter.orchestratorId !== undefined) {
       conditions.push(eq(jobsTable.orchestratorId, filter.orchestratorId));
     }
 
-    if (filter.userId) {
+    if (filter.userId !== undefined) {
       conditions.push(eq(jobsTable.userId, filter.userId));
     }
 
-    if (filter.eventId) {
+    if (filter.eventId !== undefined) {
       conditions.push(eq(jobsTable.eventId, filter.eventId));
     }
 
-    if (filter.priority) {
+    if (filter.priority !== undefined) {
       conditions.push(eq(jobsTable.priority, filter.priority));
     }
 
-    if (filter.scheduledBefore) {
+    if (filter.scheduledBefore !== undefined) {
       conditions.push(lte(jobsTable.scheduledFor, filter.scheduledBefore));
     }
 
-    if (filter.completedAfter) {
+    if (filter.completedAfter !== undefined) {
       conditions.push(gte(jobsTable.completedAt, filter.completedAfter));
     }
 

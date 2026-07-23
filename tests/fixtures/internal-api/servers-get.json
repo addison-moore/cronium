@@ -1,0 +1,43 @@
+{
+  "route": "GET /api/internal/servers/[serverId]",
+  "auth": "job-capability",
+  "responses": {
+    "success": {
+      "status": 200,
+      "body": {
+        "server": {
+          "id": 7,
+          "name": "sandbox-1",
+          "address": "203.0.113.10",
+          "port": 22,
+          "username": "deploy",
+          "online": true,
+          "shared": false,
+          "lastChecked": "<iso-date>",
+          "createdAt": "<iso-date>",
+          "updatedAt": "<iso-date>"
+        }
+      }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": { "error": "Missing job capability token" }
+    },
+    "forbidden": {
+      "status": 403,
+      "body": { "error": "Forbidden" }
+    },
+    "forbiddenScope": {
+      "status": 403,
+      "body": { "error": "Capability token is not valid for this server" }
+    },
+    "notFound": {
+      "status": 404,
+      "body": { "error": "Server not found" }
+    },
+    "serverError": {
+      "status": 500,
+      "body": { "error": "Internal server error" }
+    }
+  }
+}

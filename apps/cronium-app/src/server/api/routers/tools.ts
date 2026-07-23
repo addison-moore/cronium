@@ -527,9 +527,8 @@ export const toolsRouter = createTRPCRouter({
             (tool) =>
               tool.name.toLowerCase().includes(searchLower) ||
               (tool.description?.toLowerCase().includes(searchLower) ??
-                tool.tags.some((tag) =>
-                  tag.toLowerCase().includes(searchLower),
-                )),
+                false) ||
+              tool.tags.some((tag) => tag.toLowerCase().includes(searchLower)),
           );
         }
 
@@ -1267,6 +1266,7 @@ export const toolsRouter = createTRPCRouter({
         };
       } catch (error) {
         console.error("Error executing tool action:", error);
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to execute tool action",
@@ -1437,6 +1437,7 @@ export const toolsRouter = createTRPCRouter({
         return { success: true };
       } catch (error) {
         console.error("Error revoking OAuth tokens:", error);
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to revoke OAuth tokens",

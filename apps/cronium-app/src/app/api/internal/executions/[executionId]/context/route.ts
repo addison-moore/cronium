@@ -120,11 +120,9 @@ export async function GET(
       "Stack trace:",
       error instanceof Error ? error.stack : "No stack trace",
     );
+    // Do not echo error details — driver/DB messages can leak internals.
     return NextResponse.json(
-      {
-        error: "Internal server error",
-        details: error instanceof Error ? error.message : String(error),
-      },
+      { error: "Internal server error" },
       { status: 500 },
     );
   }

@@ -212,11 +212,9 @@ export async function PUT(
     return NextResponse.json({ success: true, execution });
   } catch (error) {
     console.error("Error updating execution:", error);
+    // Do not echo error details — driver/DB messages can leak internals.
     return NextResponse.json(
-      {
-        error: "Internal server error",
-        details: error instanceof Error ? error.message : String(error),
-      },
+      { error: "Internal server error" },
       { status: 500 },
     );
   }

@@ -1,0 +1,26 @@
+{
+  "route": "POST /api/internal/orchestrator/metrics",
+  "auth": "orchestrator-key",
+  "responses": {
+    "success": {
+      "status": 200,
+      "body": { "success": true }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": { "error": "Unauthorized" }
+    },
+    "badRequestMissingId": {
+      "status": 400,
+      "body": { "error": "Orchestrator ID required" }
+    },
+    "badRequestMissingMetrics": {
+      "status": 400,
+      "body": { "error": "Metrics required" }
+    },
+    "serverError": {
+      "status": 500,
+      "body": { "error": "Internal server error" }
+    }
+  }
+}

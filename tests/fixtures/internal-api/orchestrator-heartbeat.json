@@ -1,0 +1,22 @@
+{
+  "route": "POST /api/internal/orchestrator/heartbeat",
+  "auth": "orchestrator-key",
+  "responses": {
+    "success": {
+      "status": 200,
+      "body": { "success": true, "timestamp": "<iso-date>" }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": { "error": "Unauthorized" }
+    },
+    "badRequest": {
+      "status": 400,
+      "body": { "error": "Orchestrator ID required" }
+    },
+    "serverError": {
+      "status": 500,
+      "body": { "error": "Internal server error" }
+    }
+  }
+}

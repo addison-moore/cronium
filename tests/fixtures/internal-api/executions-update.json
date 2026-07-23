@@ -1,0 +1,47 @@
+{
+  "route": "PUT /api/internal/executions/[executionId]/update",
+  "auth": "job-capability",
+  "responses": {
+    "success": {
+      "status": 200,
+      "body": {
+        "success": true,
+        "execution": {
+          "id": "<id>",
+          "jobId": "<id>",
+          "serverId": null,
+          "serverName": null,
+          "status": "running",
+          "metadata": {},
+          "createdAt": "<iso-date>",
+          "updatedAt": "<iso-date>",
+          "startedAt": "<iso-date>",
+          "completedAt": null,
+          "exitCode": null,
+          "output": null,
+          "error": null
+        }
+      }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": { "error": "Missing job capability token" }
+    },
+    "forbidden": {
+      "status": 403,
+      "body": { "error": "Forbidden" }
+    },
+    "forbiddenScope": {
+      "status": 403,
+      "body": { "error": "Capability token is not valid for this job" }
+    },
+    "notFound": {
+      "status": 404,
+      "body": { "error": "Execution not found" }
+    },
+    "serverError": {
+      "status": 500,
+      "body": { "error": "Internal server error" }
+    }
+  }
+}

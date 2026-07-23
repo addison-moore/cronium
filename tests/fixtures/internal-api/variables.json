@@ -1,0 +1,38 @@
+{
+  "route": "GET+PUT /api/internal/variables/[userId]/[key]",
+  "auth": "job-capability",
+  "responses": {
+    "getSuccess": {
+      "status": 200,
+      "body": {
+        "key": "MY_KEY",
+        "value": "hello",
+        "updatedAt": "<iso-date>"
+      }
+    },
+    "putSuccess": {
+      "status": 200,
+      "body": { "success": true }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": { "error": "Missing job capability token" }
+    },
+    "forbidden": {
+      "status": 403,
+      "body": { "error": "Forbidden" }
+    },
+    "forbiddenUserScope": {
+      "status": 403,
+      "body": { "error": "Capability token is not valid for this user" }
+    },
+    "notFound": {
+      "status": 404,
+      "body": { "error": "Variable not found" }
+    },
+    "serverError": {
+      "status": 500,
+      "body": { "error": "Internal server error" }
+    }
+  }
+}

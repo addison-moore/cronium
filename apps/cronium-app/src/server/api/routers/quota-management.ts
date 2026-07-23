@@ -19,6 +19,23 @@ const quotaManager = QuotaManager.getInstance();
 const rateLimiter = RateLimiter.getInstance();
 const usageReporter = UsageReporter.getInstance();
 
+/**
+ * Partial-update input for admin quota edits. `QuotaConfigSchema.partial()`
+ * cannot express "only the provided keys": under zod v4, `.partial()` still
+ * fires each field's `.default()` for absent keys, so a single-field update
+ * arrived fully populated and reset every unspecified quota to its default
+ * (clobbering the user's custom limits). Derive the same keys without
+ * defaults; every quota field is a number.
+ */
+const QuotaUpdateSchema = z.object(
+  Object.fromEntries(
+    Object.keys(QuotaConfigSchema.shape).map((key) => [
+      key,
+      z.number().optional(),
+    ]),
+  ) as { [K in keyof QuotaConfig]: z.ZodOptional<z.ZodNumber> },
+);
+
 export const quotaManagementRouter = createTRPCRouter({
   // Get current quota status
   getStatus: protectedProcedure.query(async ({ ctx }) => {
@@ -93,7 +110,7 @@ export const quotaManagementRouter = createTRPCRouter({
     .input(
       z.object({
         userId: z.string(),
-        quotas: QuotaConfigSchema.partial(),
+        quotas: QuotaUpdateSchema,
       }),
     )
     .mutation(async ({ input }) => {

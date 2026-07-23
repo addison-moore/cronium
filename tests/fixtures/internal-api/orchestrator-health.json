@@ -1,0 +1,38 @@
+{
+  "route": "GET+POST /api/internal/orchestrator/health",
+  "auth": "orchestrator-key",
+  "responses": {
+    "healthy": {
+      "status": 200,
+      "body": {
+        "status": "healthy",
+        "timestamp": "<iso-date>",
+        "database": "connected"
+      }
+    },
+    "unhealthy": {
+      "status": 503,
+      "body": {
+        "status": "unhealthy",
+        "timestamp": "<iso-date>",
+        "error": "Database connection failed"
+      }
+    },
+    "reportSuccess": {
+      "status": 200,
+      "body": { "success": true }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": { "error": "Unauthorized" }
+    },
+    "badRequest": {
+      "status": 400,
+      "body": { "error": "Orchestrator ID required" }
+    },
+    "serverError": {
+      "status": 500,
+      "body": { "error": "Internal server error" }
+    }
+  }
+}

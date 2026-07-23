@@ -11,10 +11,10 @@ import {
 // Get server details
 export async function GET(
   request: NextRequest,
-  { params }: { params: { serverId: string } },
+  { params }: { params: Promise<{ serverId: string }> },
 ) {
   try {
-    const { serverId } = params;
+    const { serverId } = await params;
 
     if (!serverId) {
       return NextResponse.json(

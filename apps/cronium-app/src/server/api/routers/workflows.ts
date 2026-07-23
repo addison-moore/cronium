@@ -170,7 +170,7 @@ export const workflowsRouter = createTRPCRouter({
             const sourceNodeDbId = nodeIdMap.get(edge.source);
             const targetNodeDbId = nodeIdMap.get(edge.target);
 
-            if (sourceNodeDbId && targetNodeDbId) {
+            if (sourceNodeDbId !== undefined && targetNodeDbId !== undefined) {
               await storage.createWorkflowConnection({
                 workflowId: workflow.id,
                 sourceNodeId: sourceNodeDbId,
@@ -274,8 +274,11 @@ export const workflowsRouter = createTRPCRouter({
           await storage.updateWorkflow(id, filteredWorkflowData);
         }
 
-        // If nodes and edges are provided, update the workflow structure
-        if (nodes !== undefined || edges !== undefined) {
+        // If nodes are provided, update the workflow structure. Edges can only
+        // be applied together with the nodes array (edge source/target are
+        // ReactFlow ids that exist only in the submitted nodes), so an
+        // edges-only payload must NOT wipe the persisted graph.
+        if (nodes !== undefined) {
           // Delete existing nodes and connections
           const existingNodes = await storage.getWorkflowNodes(id);
           for (const node of existingNodes) {
@@ -307,7 +310,10 @@ export const workflowsRouter = createTRPCRouter({
               const sourceNodeDbId = nodeIdMap.get(edge.source);
               const targetNodeDbId = nodeIdMap.get(edge.target);
 
-              if (sourceNodeDbId && targetNodeDbId) {
+              if (
+                sourceNodeDbId !== undefined &&
+                targetNodeDbId !== undefined
+              ) {
                 await storage.createWorkflowConnection({
                   workflowId: id,
                   sourceNodeId: sourceNodeDbId,
