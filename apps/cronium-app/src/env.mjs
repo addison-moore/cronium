@@ -1,6 +1,36 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
+// A public-facing URL must not be plaintext http://ws:// over a non-loopback
+// host in production — that exposes sessions/traffic in the clear. Loopback
+// (localhost/127.0.0.1/::1) stays allowed for local/VPN installs behind a TLS
+// proxy; everything else must be https://wss:// (security plan Phase 3.6).
+const isLoopbackHost = (host) =>
+  host === "localhost" ||
+  host === "127.0.0.1" ||
+  host === "::1" ||
+  host === "[::1]";
+const productionPublicUrl = () =>
+  z
+    .string()
+    .url()
+    .refine(
+      (value) => {
+        if (process.env.NODE_ENV !== "production") return true;
+        try {
+          const u = new URL(value);
+          if (u.protocol === "https:" || u.protocol === "wss:") return true;
+          return isLoopbackHost(u.hostname);
+        } catch {
+          return false;
+        }
+      },
+      {
+        message:
+          "In production a public URL must be https://wss:// or a loopback address (e.g. http://localhost). Put the app behind a TLS reverse proxy.",
+      },
+    );
+
 export const env = createEnv({
   server: {
     // Next.js sets NODE_ENV itself (dev/build/start); processes launched
@@ -15,7 +45,7 @@ export const env = createEnv({
         32,
         "AUTH_SECRET must be at least 32 characters (openssl rand -hex 32)",
       ),
-    AUTH_URL: z.string().url(),
+    AUTH_URL: productionPublicUrl(),
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: z.string().optional(),
     SMTP_USER: z.string().optional(),
@@ -31,7 +61,7 @@ export const env = createEnv({
     OAUTH_MICROSOFT_TENANT_ID: z.string().optional(),
     OAUTH_SLACK_CLIENT_ID: z.string().optional(),
     OAUTH_SLACK_CLIENT_SECRET: z.string().optional(),
-    PUBLIC_APP_URL: z.string().url().optional(),
+    PUBLIC_APP_URL: productionPublicUrl().optional(),
     ENCRYPTION_KEY: z
       .string()
       .regex(
@@ -66,7 +96,7 @@ export const env = createEnv({
     CRONIUM_ENFORCE_ADMIN_MFA: z.enum(["true", "false"]).optional(),
   },
   client: {
-    PUBLIC_APP_URL: z.string().url(),
+    PUBLIC_APP_URL: productionPublicUrl(),
   },
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
