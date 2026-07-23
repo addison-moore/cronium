@@ -278,6 +278,9 @@ func (e *Executor) createContainer(ctx context.Context, job *types.Job, networkI
 	}
 	if timing != nil {
 		timing.ContainerPullEnd = time.Now()
+		// Record the exact image identity that will run (Phase 3.4 audit).
+		timing.ImageRef = image
+		timing.ImageDigest = e.imageIdentity(ctx, image)
 	}
 
 	// Build container configuration
@@ -749,6 +752,21 @@ func (e *Executor) ensureImage(ctx context.Context, image string) error {
 
 	e.log.WithField("image", image).Info("Successfully pulled Docker image")
 	return nil
+}
+
+// imageIdentity returns the content-addressable identity of the image that will
+// run: its registry repo-digest when present, otherwise the local image ID.
+// It is recorded on the job audit so the exact bits that executed are
+// attributable (security plan Phase 3.4). Best-effort: "" if inspect fails.
+func (e *Executor) imageIdentity(ctx context.Context, image string) string {
+	inspect, err := e.dockerClient.ImageInspect(ctx, image)
+	if err != nil {
+		return ""
+	}
+	if len(inspect.RepoDigests) > 0 {
+		return inspect.RepoDigests[0]
+	}
+	return inspect.ID
 }
 
 // updateExecutionError updates the execution record with error details

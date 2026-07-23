@@ -31,6 +31,11 @@ type ExecutionTiming struct {
 	// Cleanup phase
 	CleanupStart time.Time
 	CleanupEnd   time.Time
+
+	// Image identity that actually ran (Phase 3.4 audit): the requested ref and
+	// its resolved content-addressable digest (repo-digest, or local image ID).
+	ImageRef    string
+	ImageDigest string
 }
 
 // NewExecutionTiming creates a new timing tracker
@@ -114,6 +119,19 @@ func (t *ExecutionTiming) ToExecutionStatusUpdate() *api.ExecutionStatusUpdate {
 	cleanupDuration := t.GetCleanupDuration()
 	totalDuration := t.GetTotalDuration()
 
+	metadata := map[string]interface{}{
+		"networkCreateTime":   t.NetworkCreateEnd.Sub(t.NetworkCreateStart).Milliseconds(),
+		"sidecarCreateTime":   t.SidecarCreateEnd.Sub(t.SidecarCreateStart).Milliseconds(),
+		"containerPullTime":   t.ContainerPullEnd.Sub(t.ContainerPullStart).Milliseconds(),
+		"containerCreateTime": t.ContainerCreateEnd.Sub(t.ContainerCreateStart).Milliseconds(),
+	}
+	if t.ImageRef != "" {
+		metadata["imageRef"] = t.ImageRef
+	}
+	if t.ImageDigest != "" {
+		metadata["imageDigest"] = t.ImageDigest
+	}
+
 	update := &api.ExecutionStatusUpdate{
 		StartedAt:   &t.TotalStart,
 		CompletedAt: &t.TotalEnd,
@@ -129,13 +147,8 @@ func (t *ExecutionTiming) ToExecutionStatusUpdate() *api.ExecutionStatusUpdate {
 		ExecutionDuration: &executionDuration,
 		CleanupDuration:   &cleanupDuration,
 		TotalDuration:     &totalDuration,
-		// Metadata with detailed timing breakdown
-		ExecutionMetadata: map[string]interface{}{
-			"networkCreateTime":   t.NetworkCreateEnd.Sub(t.NetworkCreateStart).Milliseconds(),
-			"sidecarCreateTime":   t.SidecarCreateEnd.Sub(t.SidecarCreateStart).Milliseconds(),
-			"containerPullTime":   t.ContainerPullEnd.Sub(t.ContainerPullStart).Milliseconds(),
-			"containerCreateTime": t.ContainerCreateEnd.Sub(t.ContainerCreateStart).Milliseconds(),
-		},
+		// Metadata with detailed timing breakdown + image identity audit
+		ExecutionMetadata: metadata,
 	}
 
 	// Only set completed times if they're not zero
