@@ -1,8 +1,10 @@
 package payload
 
 import (
+	"crypto"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha512"
 	"encoding/base64"
 	"os"
 	"path/filepath"
@@ -22,7 +24,12 @@ func writeSignedPayload(t *testing.T, content []byte) (string, string) {
 		t.Fatalf("failed to write payload: %v", err)
 	}
 
-	sig := ed25519.Sign(priv, content)
+	// Ed25519ph: sign the SHA-512 digest, matching the streaming verifier.
+	digest := sha512.Sum512(content)
+	sig, err := priv.Sign(rand.Reader, digest[:], crypto.SHA512)
+	if err != nil {
+		t.Fatalf("failed to sign payload: %v", err)
+	}
 	sigEncoded := base64.StdEncoding.EncodeToString(sig) + "\n"
 	if err := os.WriteFile(payloadPath+".sig", []byte(sigEncoded), 0o644); err != nil {
 		t.Fatalf("failed to write signature: %v", err)

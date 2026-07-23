@@ -1,8 +1,10 @@
 package payload
 
 import (
+	"crypto"
 	"crypto/ed25519"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -82,39 +84,43 @@ func VerifySignature(payloadPath string) error {
 		return fmt.Errorf("invalid payload signature encoding: %w", err)
 	}
 
-	// Bound the read: refuse to buffer an oversized archive into memory for
-	// verification (HI-15 memory-exhaustion guard). The payload is a compressed
-	// script bundle; a signed archive larger than this cap is rejected.
-	payloadData, err := readFileBounded(payloadPath, maxSignedPayloadBytes)
+	// Ed25519ph: stream the payload through SHA-512 (bounded so a tampered,
+	// oversized archive cannot pin CPU forever) and verify the signature over the
+	// 64-byte digest. Nothing but the hash state is held in memory — the whole
+	// archive is never buffered (Phase 2.4).
+	digest, err := streamDigestBounded(payloadPath, maxSignedPayloadBytes)
 	if err != nil {
-		return fmt.Errorf("failed to read payload for verification: %w", err)
+		return fmt.Errorf("failed to hash payload for verification: %w", err)
 	}
 
-	if !ed25519.Verify(publicKey, payloadData, signature) {
-		return fmt.Errorf("payload signature verification failed: payload does not match its signature")
+	if err := ed25519.VerifyWithOptions(publicKey, digest, signature, &ed25519.Options{Hash: crypto.SHA512}); err != nil {
+		return fmt.Errorf("payload signature verification failed: %w", err)
 	}
 
 	return nil
 }
 
-// maxSignedPayloadBytes caps the archive size verification will buffer.
+// maxSignedPayloadBytes caps the archive size verification will hash.
 const maxSignedPayloadBytes = 512 * 1024 * 1024 // 512 MiB
 
-// readFileBounded reads up to max+1 bytes and errors if the file exceeds max.
-func readFileBounded(path string, max int64) ([]byte, error) {
+// streamDigestBounded streams the file at path through SHA-512, returning its
+// digest, and errors if the file exceeds max bytes. Memory use is O(1) in the
+// payload size.
+func streamDigestBounded(path string, max int64) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, max+1))
+	h := sha512.New()
+	n, err := io.Copy(h, io.LimitReader(f, max+1))
 	if err != nil {
 		return nil, err
 	}
-	if int64(len(data)) > max {
+	if n > max {
 		return nil, fmt.Errorf("payload exceeds maximum verifiable size (%d bytes)", max)
 	}
-	return data, nil
+	return h.Sum(nil), nil
 }
 
 // GenerateChecksum calculates the SHA256 checksum of a file

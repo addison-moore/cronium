@@ -1,12 +1,15 @@
 package payload
 
 import (
+	"crypto"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha512"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -67,15 +70,28 @@ func generateSigner(keyPath string) (*Signer, error) {
 	return &Signer{priv: priv}, nil
 }
 
-// SignFile writes a detached base64-encoded Ed25519 signature of the file at
-// path to path+".sig".
+// SignFile writes a detached base64-encoded Ed25519ph signature of the file at
+// path to path+".sig". Ed25519ph (pre-hashed, RFC 8032) signs the streamed
+// SHA-512 digest of the payload, so neither the signer nor the runner's verifier
+// buffers the whole archive in memory. The runner must verify with the same
+// pre-hash option.
 func (s *Signer) SignFile(path string) error {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("failed to read payload for signing: %w", err)
+		return fmt.Errorf("failed to open payload for signing: %w", err)
 	}
+	defer f.Close()
 
-	sig := ed25519.Sign(s.priv, data)
+	h := sha512.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return fmt.Errorf("failed to hash payload for signing: %w", err)
+	}
+	digest := h.Sum(nil)
+
+	sig, err := s.priv.Sign(rand.Reader, digest, crypto.SHA512)
+	if err != nil {
+		return fmt.Errorf("failed to sign payload: %w", err)
+	}
 	encoded := base64.StdEncoding.EncodeToString(sig) + "\n"
 	if err := os.WriteFile(path+".sig", []byte(encoded), 0o644); err != nil {
 		return fmt.Errorf("failed to write payload signature: %w", err)

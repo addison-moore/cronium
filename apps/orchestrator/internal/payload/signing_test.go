@@ -1,7 +1,9 @@
 package payload
 
 import (
+	"crypto"
 	"crypto/ed25519"
+	"crypto/sha512"
 	"encoding/base64"
 	"os"
 	"path/filepath"
@@ -65,10 +67,13 @@ func TestSignFileProducesVerifiableSignature(t *testing.T) {
 		t.Fatalf("public key is not valid base64: %v", err)
 	}
 
-	if !ed25519.Verify(ed25519.PublicKey(publicKey), []byte("payload-bytes"), signature) {
-		t.Fatal("expected signature to verify against payload")
+	// Ed25519ph: verify over the SHA-512 digest of the payload.
+	good := sha512.Sum512([]byte("payload-bytes"))
+	if err := ed25519.VerifyWithOptions(ed25519.PublicKey(publicKey), good[:], signature, &ed25519.Options{Hash: crypto.SHA512}); err != nil {
+		t.Fatalf("expected signature to verify against payload: %v", err)
 	}
-	if ed25519.Verify(ed25519.PublicKey(publicKey), []byte("tampered-bytes"), signature) {
+	tampered := sha512.Sum512([]byte("tampered-bytes"))
+	if err := ed25519.VerifyWithOptions(ed25519.PublicKey(publicKey), tampered[:], signature, &ed25519.Options{Hash: crypto.SHA512}); err == nil {
 		t.Fatal("expected signature verification to fail for tampered payload")
 	}
 }
