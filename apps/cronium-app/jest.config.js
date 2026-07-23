@@ -26,6 +26,18 @@ const customJestConfig = {
     "^superjson$": "<rootDir>/../../tests/superjson-stub.ts",
   },
   transformIgnorePatterns: ["/node_modules/(?!@hookform|next-auth|superjson)"],
+  // Coverage is opt-in (`--coverage`); CI enforces a no-regression ratchet on
+  // the totals via infra/scripts/check-coverage-ratchet.mjs. The excludes keep
+  // the denominator honest: deprecated/migration scripts and type decls are
+  // not test targets.
+  collectCoverageFrom: [
+    "src/**/*.{ts,tsx}",
+    "!src/**/__tests__/**",
+    "!src/**/*.d.ts",
+    "!src/scripts/deprecated/**",
+    "!src/scripts/migrations/**",
+  ],
+  coverageReporters: ["text-summary", "json-summary", "lcov"],
 };
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async

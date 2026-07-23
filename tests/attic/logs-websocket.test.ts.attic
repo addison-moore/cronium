@@ -1,5 +1,7 @@
 /**
  * Unit tests for Logs WebSocket Handler
+ *
+ * @jest-environment node
  */
 
 import { describe, it, expect, beforeEach, jest } from "@jest/globals";

@@ -1,214 +1,42 @@
-# Cronium Test Suite
+# Cronium Cross-Cutting Test Suites
 
-> **Status:** This is an integration/E2E suite that requires a live PostgreSQL
-> (and, for some tests, Valkey/Redis and the runtime service). It is **not** run
-> by the default CI `pnpm test` (which runs the fast, no-DB unit tests). Run it
-> locally with `pnpm test:integration` from the repo root after standing up a
-> test database (see "Environment Setup" below). Some suites here predate recent
-> refactors and may need updating before they pass — treat this as the
-> integration harness, not a green gate.
+This directory holds test suites that span packages and don't belong to a
+single workspace package. Fast, hermetic unit tests do **not** live here —
+they are co-located in `apps/cronium-app/src/**/__tests__/` and run with
+`pnpm test` (which CI runs on every push/PR with coverage; see
+`infra/scripts/check-coverage-ratchet.mjs` for the regression gate).
 
-Integration and performance test suite for the Cronium containerized execution
-system.
+## Layout
 
-## Test Categories
+| Path                | What it is                                                                                                                                                                                                                                                                                                                                            | Runs in CI?                                             |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `security/`         | Hermetic security regression suite (no DB, no Valkey, no network). Includes `route-capability-inventory.test.ts`, a static gate that scans tRPC router source and fails on any mutation missing from `ROUTE_CAPABILITIES`. The jest project also pulls in ~30 co-located security tests from `apps/cronium-app/src` so they all run under one banner. | Yes — `pnpm test:security` on every push/PR (`ci.yml`). |
+| `attic/`            | Retired suites that predate the scheduling overhaul and no longer compile or match current APIs. Not run anywhere (`.attic` suffix). See `attic/README.md` for what supersedes each.                                                                                                                                                                  | No.                                                     |
+| `superjson-stub.ts` | Passthrough stub for the ESM-only `superjson` package, used by the jest config here.                                                                                                                                                                                                                                                                  | —                                                       |
 
-### Unit Tests (`/unit`)
-
-- **job-service.test.ts** - Tests for job queue operations
-- **logs-websocket.test.ts** - Tests for WebSocket log streaming
-
-### Integration Tests (`/integration`)
-
-- **job-execution-flow.test.ts** - End-to-end job execution workflow
-
-### Performance Tests (`/performance`)
-
-- **benchmark.test.ts** - Performance benchmarks and stress tests
-
-### Security Tests (`/security`)
-
-- **security-validation.test.ts** - Security validation and penetration tests
-
-## Running Tests
-
-### All Tests
+## Running
 
 ```bash
-npm test
+# Everything wired into this config (currently: Security Tests)
+pnpm test:integration
+
+# Security suite exactly as CI runs it
+pnpm test:security
+
+# Single file
+pnpm test:integration -- tests/security/security-validation.test.ts
 ```
 
-### Specific Test Category
+No services are required — every suite in this config is hermetic by design.
+Suites that need real infrastructure (Postgres-backed storage tests, the
+end-to-end job pipeline) are planned as separate projects here; see
+`_plans/testing/PLAN.md` (Phases 3 and 5) for what's coming and what each phase
+replaces.
 
-```bash
-# Unit tests only
-npm test -- --selectProjects="Unit Tests"
+## Conventions
 
-# Integration tests only
-npm test -- --selectProjects="Integration Tests"
-
-# Performance tests only
-npm test -- --selectProjects="Performance Tests"
-
-# Security tests only
-npm test -- --selectProjects="Security Tests"
-```
-
-### Individual Test Files
-
-```bash
-# Run specific test file
-npm test -- tests/unit/job-service.test.ts
-
-# Run with coverage
-npm test -- --coverage tests/unit/job-service.test.ts
-
-# Run in watch mode
-npm test -- --watch tests/unit/job-service.test.ts
-```
-
-## Environment Setup
-
-### Test Database
-
-Create a `.env.test` file with test-specific configuration:
-
-```env
-TEST_DATABASE_URL=postgresql://user:password@localhost:5432/cronium_test
-JWT_SECRET=test-jwt-secret
-INTERNAL_API_KEY=test-internal-api-key
-TEST_AUTH_TOKEN=test-auth-token
-```
-
-### Docker Services
-
-Some tests require running services:
-
-```bash
-# Start test dependencies
-docker-compose -f docker-compose.test.yml up -d
-
-# PostgreSQL for database tests
-# Valkey/Redis for caching tests
-# Runtime API service for integration tests
-```
-
-## Writing Tests
-
-### Test Structure
-
-```typescript
-describe("Feature Name", () => {
-  beforeAll(async () => {
-    // Setup test data
-  });
-
-  afterAll(async () => {
-    // Cleanup
-  });
-
-  describe("Specific Functionality", () => {
-    it("should behave correctly", async () => {
-      // Test implementation
-    });
-  });
-});
-```
-
-### Test Utilities
-
-Global utilities are available in all tests:
-
-```typescript
-// Wait for condition
-await testUtils.waitFor(() => job.status === "completed");
-
-// Add delay
-await testUtils.delay(1000);
-
-// Generate unique ID
-const id = testUtils.uniqueId("user");
-```
-
-### Custom Matchers
-
-```typescript
-// Check if value is within range
-expect(responseTime).toBeWithinRange(100, 500);
-```
-
-## Performance Benchmarks
-
-Performance tests output benchmark summaries:
-
-```
-=== Performance Benchmark Summary ===
-
-Operation               Avg Time (ms)  Min Time (ms)  Max Time (ms)  Ops/Second
-Job Creation           15.23          12.45          23.67          65
-Job Claiming (10)      45.78          38.92          67.23          21
-Job Status Update      8.34           6.78           12.45          119
-```
-
-## Security Testing
-
-Security tests validate:
-
-- Authentication and authorization
-- Input validation and sanitization
-- SQL injection prevention
-- XSS protection
-- Rate limiting
-- Data encryption
-- CORS policies
-
-## Coverage Reports
-
-Generate coverage reports:
-
-```bash
-# Generate coverage
-npm test -- --coverage
-
-# View HTML report
-open coverage/lcov-report/index.html
-```
-
-## CI/CD Integration
-
-Tests are automatically run in CI/CD pipeline:
-
-1. Unit tests run on every commit
-2. Integration tests run on pull requests
-3. Performance tests run nightly
-4. Security tests run before releases
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Database Connection Errors**
-   - Ensure PostgreSQL is running
-   - Check TEST_DATABASE_URL is correct
-   - Run migrations: `npm run db:push`
-
-2. **WebSocket Connection Failed**
-   - Check Socket.IO server is running
-   - Verify port 5002 is available
-
-3. **Performance Test Timeouts**
-   - Increase test timeout in jest.config.js
-   - Check system resources
-
-4. **Security Test Failures**
-   - Ensure JWT_SECRET matches app configuration
-   - Verify INTERNAL_API_KEY is set
-
-## Best Practices
-
-1. **Isolation** - Tests should not depend on each other
-2. **Cleanup** - Always clean up test data
-3. **Mocking** - Mock external dependencies
-4. **Assertions** - Use specific assertions
-5. **Performance** - Keep tests fast
-6. **Security** - Never commit real credentials
+- New unit tests go co-located in the owning package, not here.
+- A suite added to this directory must either run in CI or ship with a
+  documented manual runbook in this README — nothing lands here "to run later".
+- Retired suites move to `attic/` with a note in `attic/README.md`, and are
+  deleted once a replacement lands.

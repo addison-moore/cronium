@@ -36,32 +36,17 @@ const sharedProjectConfig = {
   },
 };
 
+// Cross-cutting suites that don't fit a single package. Fast, hermetic unit
+// tests belong co-located in apps/cronium-app/src/**/__tests__ instead (run by
+// `pnpm test`). Suites needing real services get their own project here (a
+// "Storage Tests" project against a disposable Postgres is planned — see
+// _plans/testing/PLAN.md). Retired suites live in tests/attic/, excluded from
+// every testMatch via their .attic suffix.
 module.exports = {
   coverageDirectory: "<rootDir>/coverage",
   coverageReporters: ["text", "lcov", "html"],
   coveragePathIgnorePatterns: ["/node_modules/", "/dist/", "/.next/"],
   projects: [
-    {
-      ...sharedProjectConfig,
-      displayName: "Unit Tests",
-      testMatch: ["<rootDir>/unit/**/*.test.ts"],
-      setupFilesAfterEnv: ["<rootDir>/setup.ts"],
-      testTimeout: 30_000,
-    },
-    {
-      ...sharedProjectConfig,
-      displayName: "Integration Tests",
-      testMatch: ["<rootDir>/integration/**/*.test.ts"],
-      setupFilesAfterEnv: ["<rootDir>/setup.ts"],
-      testTimeout: 60_000,
-    },
-    {
-      ...sharedProjectConfig,
-      displayName: "Performance Tests",
-      testMatch: ["<rootDir>/performance/**/*.test.ts"],
-      setupFilesAfterEnv: ["<rootDir>/setup.ts"],
-      testTimeout: 300_000,
-    },
     {
       ...sharedProjectConfig,
       displayName: "Security Tests",

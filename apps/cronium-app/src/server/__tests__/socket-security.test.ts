@@ -10,7 +10,11 @@ import {
 describe("socket origin policy", () => {
   it("normalizes and deduplicates explicitly configured origins", () => {
     expect(
+      // NODE_ENV is included because next's global.d.ts makes it a required
+      // ProcessEnv key whenever another suite pulls those globals into the
+      // ts-jest program.
       resolveAllowedSocketOrigins({
+        NODE_ENV: "test",
         SOCKET_ALLOWED_ORIGINS:
           "https://cronium.example/path, https://admin.example,https://cronium.example",
       }),
@@ -20,6 +24,7 @@ describe("socket origin policy", () => {
   it("falls back to the canonical app and auth origins", () => {
     expect(
       resolveAllowedSocketOrigins({
+        NODE_ENV: "test",
         PUBLIC_APP_URL: "https://cronium.example",
         AUTH_URL: "https://cronium.example/auth",
       }),

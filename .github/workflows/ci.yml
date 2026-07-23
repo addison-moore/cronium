@@ -57,8 +57,21 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test
-        run: pnpm test
+      - name: Test (with coverage)
+        run: pnpm test -- --coverage
+
+      # Never-regress gate: fails when apps/cronium-app total coverage drops
+      # more than 0.5pt below infra/scripts/coverage-baseline.json. When a PR
+      # improves coverage, raise the baseline in the same PR to lock it in.
+      - name: Coverage ratchet
+        run: node infra/scripts/check-coverage-ratchet.mjs
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-cronium-app
+          path: apps/cronium-app/coverage/lcov.info
+          retention-days: 14
 
       - name: Security regression tests
         run: pnpm test:security
@@ -126,23 +139,29 @@ jobs:
       - name: Install golangci-lint
         run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v${{ env.GOLANGCI_LINT_VERSION }}
 
+      # Coverage is reported per module (last line = total) for visibility;
+      # Go coverage is not ratcheted yet (planned with the Phase 4 test work,
+      # see _plans/testing/PLAN.md).
       - name: Vet & test orchestrator
         working-directory: apps/orchestrator
         run: |
           go vet ./...
-          go test ./...
+          go test -coverprofile=coverage.out -covermode=atomic ./...
+          go tool cover -func=coverage.out | tail -n 1
 
       - name: Vet & test runtime
         working-directory: apps/runtime/cronium-runtime
         run: |
           go vet ./...
-          go test ./...
+          go test -coverprofile=coverage.out -covermode=atomic ./...
+          go tool cover -func=coverage.out | tail -n 1
 
       - name: Vet & test runner
         working-directory: apps/runner/cronium-runner
         run: |
           go vet ./...
-          go test ./...
+          go test -coverprofile=coverage.out -covermode=atomic ./...
+          go tool cover -func=coverage.out | tail -n 1
 
       # Supply-chain gate (3.4): fail when a known vulnerability is reachable
       # from our code. Requires the pinned patched toolchain (go 1.25.12) so the
