@@ -10,10 +10,12 @@
  * result the in-process job runner can finalize.
  *
  * Note (self-hosted threat model): an HTTP_REQUEST event calls a user-configured
- * URL, so this runs from the app process rather than an isolated container. In a
- * single-tenant self-hosted deployment the operator is the author of their own
- * events; we intentionally do not restrict destinations (unlike tool webhooks,
- * which are host-allowlisted) so legitimate internal endpoints keep working.
+ * URL, so this runs from the app process rather than an isolated container.
+ * Destinations are NOT host-allowlisted (unlike tool webhooks), but
+ * executeHttpRequest enforces the SSRF guard: internal/metadata/private-range
+ * targets are rejected pre-flight and re-validated at connect time by the
+ * guarded agents, with redirects disabled (see http-executor.ts and
+ * lib/ssrf-guard). Legitimate PUBLIC endpoints keep working.
  */
 import { storage } from "@/server/storage";
 import {
