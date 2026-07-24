@@ -16,6 +16,13 @@ const sharedProjectConfig = {
     "^.+\\.tsx?$": [
       "ts-jest",
       {
+        // Transpile only — no type diagnostics. This matches how the app's own
+        // jest runs (next/jest uses SWC, which never type-checks), and keeps
+        // ts-jest from failing suites on type quirks that only appear under its
+        // partial tsconfig (e.g. discriminated-union narrowing in job-service.ts
+        // without the app's full strict lib config). `pnpm typecheck` remains
+        // the real type gate.
+        isolatedModules: true,
         tsconfig: {
           target: "ES2022",
           module: "CommonJS",
@@ -29,6 +36,12 @@ const sharedProjectConfig = {
             "@shared/*": ["./src/shared/*"],
             "@server/*": ["./src/server/*"],
             "@lib/*": ["./src/lib/*"],
+            // Cross-cutting suites in tests/ import a few app deps directly
+            // (drizzle-orm operators). Those live under the app's node_modules,
+            // which TS's default resolution from tests/ won't find — map them
+            // explicitly (baseUrl is apps/cronium-app).
+            "drizzle-orm": ["./node_modules/drizzle-orm"],
+            "drizzle-orm/*": ["./node_modules/drizzle-orm/*"],
           },
         },
       },
@@ -87,6 +100,38 @@ module.exports = {
       ],
       setupFiles: ["<rootDir>/security/setup.ts"],
       testTimeout: 60_000,
+    },
+    {
+      // Storage-layer suites against a DISPOSABLE local Postgres (+ Valkey),
+      // launched by infra/scripts/run-storage-tests.sh / `pnpm test:storage`.
+      // setup.ts refuses to run unless DATABASE_URL is a loopback throwaway
+      // instance, so this project never touches the shared dev database.
+      ...sharedProjectConfig,
+      displayName: "Storage Tests",
+      // Stub the two ESM-only specifiers ts-jest can't transform (env.mjs pulls
+      // in @t3-oss/env-nextjs; nanoid v5 is pure ESM). These MUST precede the
+      // generic "^@/(.*)$" mapping, so they're listed before the spread.
+      // env.mjs is imported both aliased (`@/env.mjs`, from db.ts) and relative
+      // (`../env.mjs`, from encryption-service.ts), so match any specifier
+      // ending in `/env.mjs` — otherwise the relative import slips through to
+      // the real ESM file and crashes ts-jest.
+      moduleNameMapper: {
+        "(?:^@/|/)env\\.mjs$": "<rootDir>/storage/helpers/env-stub.ts",
+        "^nanoid$": "<rootDir>/storage/helpers/nanoid-stub.ts",
+        ...sharedProjectConfig.moduleNameMapper,
+      },
+      roots: ["<rootDir>/storage"],
+      testMatch: ["<rootDir>/storage/**/*.test.ts"],
+      // The suites live in tests/ but import app deps (drizzle-orm, pg, …) that
+      // pnpm installs under the app's own node_modules — add it to the
+      // resolution roots so those bare specifiers resolve.
+      moduleDirectories: [
+        "node_modules",
+        path.join(__dirname, "../apps/cronium-app/node_modules"),
+      ],
+      setupFiles: ["<rootDir>/storage/setup.ts"],
+      // Real container boot + schema churn: generous ceiling.
+      testTimeout: 120_000,
     },
   ],
 };

@@ -18,6 +18,7 @@
     "test:app": "turbo test --filter=@cronium/app",
     "test:integration": "pnpm --filter @cronium/app exec jest --config ../../tests/jest.config.js",
     "test:security": "pnpm --filter @cronium/app exec jest --config ../../tests/jest.config.js --selectProjects \"Security Tests\" --runInBand",
+    "test:storage": "bash infra/scripts/run-storage-tests.sh",
     "test:go": "turbo test:go",
     "check:sdk-sync": "bash scripts/check-sdk-sync.sh",
     "lint": "turbo lint",

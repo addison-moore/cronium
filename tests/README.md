@@ -8,11 +8,12 @@ they are co-located in `apps/cronium-app/src/**/__tests__/` and run with
 
 ## Layout
 
-| Path                | What it is                                                                                                                                                                                                                                                                                                                                            | Runs in CI?                                             |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `security/`         | Hermetic security regression suite (no DB, no Valkey, no network). Includes `route-capability-inventory.test.ts`, a static gate that scans tRPC router source and fails on any mutation missing from `ROUTE_CAPABILITIES`. The jest project also pulls in ~30 co-located security tests from `apps/cronium-app/src` so they all run under one banner. | Yes — `pnpm test:security` on every push/PR (`ci.yml`). |
-| `attic/`            | Retired suites that predate the scheduling overhaul and no longer compile or match current APIs. Not run anywhere (`.attic` suffix). See `attic/README.md` for what supersedes each.                                                                                                                                                                  | No.                                                     |
-| `superjson-stub.ts` | Passthrough stub for the ESM-only `superjson` package, used by the jest config here.                                                                                                                                                                                                                                                                  | —                                                       |
+| Path                | What it is                                                                                                                                                                                                                                                                                                                                                                               | Runs in CI?                                             |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `security/`         | Hermetic security regression suite (no DB, no Valkey, no network). Includes `route-capability-inventory.test.ts`, a static gate that scans tRPC router source and fails on any mutation missing from `ROUTE_CAPABILITIES`. The jest project also pulls in ~30 co-located security tests from `apps/cronium-app/src` so they all run under one banner.                                    | Yes — `pnpm test:security` on every push/PR (`ci.yml`). |
+| `storage/`          | Storage-layer suites against a REAL disposable Postgres (FK-ordered deletes, concurrent job claiming, CAS transitions, workflow persistence). `setup.ts` refuses to run unless `DATABASE_URL` is a loopback throwaway instance, so it can never touch the shared dev DB. Launched by `pnpm test:storage`, which boots the container, pushes the schema, runs the suites, and tears down. | Yes — the `storage` job in `ci.yml` (ubuntu-latest).    |
+| `attic/`            | Retired suites that predate the scheduling overhaul and no longer compile or match current APIs. Not run anywhere (`.attic` suffix). See `attic/README.md` for what supersedes each.                                                                                                                                                                                                     | No.                                                     |
+| `superjson-stub.ts` | Passthrough stub for the ESM-only `superjson` package, used by the jest config here.                                                                                                                                                                                                                                                                                                     | —                                                       |
 
 ## Running
 
@@ -25,13 +26,18 @@ pnpm test:security
 
 # Single file
 pnpm test:integration -- tests/security/security-validation.test.ts
+
+# Storage suite against a real disposable Postgres (needs Docker). Boots and
+# tears down its own throwaway Postgres + Valkey — never touches the dev DB.
+pnpm test:storage
+# Pass jest flags through, e.g. one file:
+pnpm test:storage -- tests/storage/fk-deletes.test.ts
 ```
 
-No services are required — every suite in this config is hermetic by design.
-Suites that need real infrastructure (Postgres-backed storage tests, the
-end-to-end job pipeline) are planned as separate projects here; see
-`_plans/testing/PLAN.md` (Phases 3 and 5) for what's coming and what each phase
-replaces.
+The `security`/`integration` suites are hermetic (no services). `test:storage`
+is the exception: it needs Docker and manages its own disposable Postgres.
+The end-to-end job pipeline (Phase 5) is still planned; see
+`_plans/testing/PLAN.md`.
 
 ## Conventions
 

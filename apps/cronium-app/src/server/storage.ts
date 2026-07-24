@@ -13,6 +13,7 @@ import {
   workflowLogs,
   workflowExecutions,
   workflowExecutionEvents,
+  scheduleIncidents,
   eventServers,
   userVariables,
   webhooks,
@@ -20,6 +21,7 @@ import {
   webhookDeliveries,
   serverDeletionNotifications,
   toolActionLogs,
+  toolActionTemplates,
   jobs,
   executions,
   serverGroups,
@@ -928,12 +930,46 @@ class DatabaseStorage implements IStorage {
         .delete(workflowNodes)
         .where(inArray(workflowNodes.eventId, eventIds));
 
+      // Delete schedule incidents recorded against these events (no ON DELETE
+      // cascade on the event_id FK)
+      await db
+        .delete(scheduleIncidents)
+        .where(inArray(scheduleIncidents.eventId, eventIds));
+
       // Delete the events themselves
       await db.delete(events).where(inArray(events.id, eventIds));
     }
 
+    // Delete the user's workflows, each with its own dependents (nodes,
+    // connections, workflow/execution logs, schedule incidents, executions).
+    const userWorkflows = await db
+      .select({ id: workflows.id })
+      .from(workflows)
+      .where(eq(workflows.userId, id));
+    for (const wf of userWorkflows) {
+      await this.deleteWorkflow(wf.id);
+    }
+
+    // Delete webhook events (user_id FK is RESTRICT; deliveries cascade off
+    // them). The webhooks themselves cascade when the user row is removed.
+    await db.delete(webhookEvents).where(eq(webhookEvents.userId, id));
+
+    // Delete tool action templates (RESTRICT on user_id).
+    await db
+      .delete(toolActionTemplates)
+      .where(eq(toolActionTemplates.userId, id));
+
+    // Delete server-deletion notifications (RESTRICT on user_id) before the
+    // servers they may also reference.
+    await db
+      .delete(serverDeletionNotifications)
+      .where(eq(serverDeletionNotifications.userId, id));
+
     // Delete the user's servers
     await db.delete(servers).where(eq(servers.userId, id));
+
+    // Delete the user's server groups (membership rows cascade off the group).
+    await db.delete(serverGroups).where(eq(serverGroups.userId, id));
 
     // Delete the user's API tokens
     const userTokens = await this.getUserApiTokens(id);
@@ -1611,6 +1647,13 @@ class DatabaseStorage implements IStorage {
         // 6. Delete workflow nodes that reference this script
         console.log(`Deleting workflow nodes for script ${id}`);
         await tx.delete(workflowNodes).where(eq(workflowNodes.eventId, id));
+
+        // 6b. Delete schedule incidents recorded against this event (the
+        // event_id FK has no ON DELETE cascade, so these must go first).
+        console.log(`Deleting schedule incidents for script ${id}`);
+        await tx
+          .delete(scheduleIncidents)
+          .where(eq(scheduleIncidents.eventId, id));
 
         // 7. Delete the script itself last
         console.log(`Deleting script ${id}`);
@@ -2856,6 +2899,15 @@ class DatabaseStorage implements IStorage {
 
     // Delete logs
     await db.delete(workflowLogs).where(eq(workflowLogs.workflowId, id));
+
+    // Delete workflow-scoped execution logs and schedule incidents. Both
+    // reference workflows via a workflow_id FK with no ON DELETE cascade, so
+    // they must be removed before the workflow row (workflow_executions and
+    // its children DO cascade and are left to the FK).
+    await db.delete(logs).where(eq(logs.workflowId, id));
+    await db
+      .delete(scheduleIncidents)
+      .where(eq(scheduleIncidents.workflowId, id));
 
     // Delete the workflow itself
     await db.delete(workflows).where(eq(workflows.id, id));

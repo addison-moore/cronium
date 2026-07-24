@@ -83,6 +83,33 @@ jobs:
       - name: Dependency audit (pnpm)
         run: pnpm audit --audit-level high
 
+  storage:
+    name: Storage Tests (Postgres)
+    # Always GitHub-hosted (never self-hosted): the harness needs Docker to spin
+    # up a throwaway Postgres + Valkey, and fork PRs must not run on our own
+    # machines. ubuntu-latest ships Docker, so `pnpm test:storage` works as-is.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      # Spins up a disposable Postgres + Valkey, pushes the Drizzle schema, runs
+      # the Storage Tests Jest project, then tears the containers down.
+      - name: Storage layer tests
+        run: pnpm test:storage
+
   dependency-review:
     name: Dependency Review
     # dependency-review-action only runs on pull_request; it diffs the PR's
