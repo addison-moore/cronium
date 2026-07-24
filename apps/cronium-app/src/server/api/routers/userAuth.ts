@@ -11,6 +11,7 @@ import { isSetupRequired } from "@/lib/first-run";
 import { nanoid } from "nanoid";
 import { TokenStatus, UserRole, UserStatus } from "@/shared/schema";
 import { getSmtpSettings, sendPasswordResetEmail } from "@/lib/email";
+import { hashApiToken } from "@/lib/api-token-hash";
 import { encryptionService } from "@/lib/encryption-service";
 import { passwordSchema } from "@/shared/schemas/password";
 
@@ -228,14 +229,17 @@ export const userAuthRouter = createTRPCRouter({
           };
         }
 
-        // Generate reset token (valid for 1 hour)
+        // Generate reset token (valid for 1 hour). Only its SHA-256 hash is
+        // persisted (same primitive as API tokens — see api-token-hash.ts), so
+        // a database read cannot yield a usable reset link; the raw token
+        // exists only in the emailed URL.
         const resetToken = nanoid(32);
         const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
 
-        // Save reset token to database
+        // Save reset token hash to database
         await storage.createPasswordResetToken({
           userId: user.id,
-          token: resetToken,
+          token: hashApiToken(resetToken),
           expiresAt,
           used: false,
         });
@@ -284,8 +288,11 @@ export const userAuthRouter = createTRPCRouter({
         // Atomically claim the reset token: it is marked used only if currently
         // unused and unexpired, so concurrent requests with the same token
         // cannot both proceed (ME-03). If the claim fails the token is invalid,
-        // already consumed, or expired.
-        const resetToken = await storage.consumePasswordResetToken(token);
+        // already consumed, or expired. Tokens are stored hashed at rest, so
+        // the presented raw token is hashed before the exact-match lookup.
+        const resetToken = await storage.consumePasswordResetToken(
+          hashApiToken(token),
+        );
 
         if (!resetToken) {
           throw new TRPCError({
@@ -349,8 +356,10 @@ export const userAuthRouter = createTRPCRouter({
       try {
         const { token } = input;
 
-        // Validate reset token
-        const resetToken = await storage.getPasswordResetToken(token);
+        // Validate reset token (stored hashed at rest — look up by hash)
+        const resetToken = await storage.getPasswordResetToken(
+          hashApiToken(token),
+        );
 
         if (!resetToken) {
           return {

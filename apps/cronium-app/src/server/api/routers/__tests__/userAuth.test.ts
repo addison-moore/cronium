@@ -13,6 +13,8 @@
  * - register: role/status can never be injected by the caller.
  * - resetPassword: single-use token claim, sessionVersion-bumping password
  *   update, active API tokens revoked.
+ * - reset tokens are stored hashed at rest: storage only ever receives the
+ *   SHA-256 digest; the raw token appears solely in the emailed link.
  * - No procedure ever echoes password / mfaSecret / mfaRecoveryCodes.
  */
 const dbState: {
@@ -124,6 +126,9 @@ import { isSetupRequired } from "@/lib/first-run";
 import { getSmtpSettings, sendPasswordResetEmail } from "@/lib/email";
 import { encryptionService } from "@/lib/encryption-service";
 import { consumeAtomicRateLimit } from "@/lib/security/atomic-rate-limiter";
+// Real (unmocked) hash helper: reset tokens are stored hashed at rest, so the
+// tests assert storage only ever sees hashApiToken(rawToken).
+import { hashApiToken } from "@/lib/api-token-hash";
 import { nanoid } from "nanoid";
 
 // Mount under "userAuth" so route paths match route-capabilities.ts entries
@@ -394,7 +399,7 @@ describe("userAuth.forgotPassword", () => {
       "If an account with that email exists, we've sent a password reset link.",
   };
 
-  it("creates a 1-hour single-use token and emails it for an active account", async () => {
+  it("creates a 1-hour single-use token, stores only its hash, and emails the raw token", async () => {
     s.getUserByEmail.mockResolvedValue(userRow());
     const before = Date.now();
 
@@ -412,11 +417,16 @@ describe("userAuth.forgotPassword", () => {
       used: boolean;
     };
     expect(token.userId).toBe("user-1");
-    expect(token.token).toBe("nanoid-32");
+    // Only the SHA-256 hex digest is persisted; the raw token must never
+    // reach storage (a DB read must not yield a usable reset link).
+    expect(token.token).toBe(hashApiToken("nanoid-32"));
+    expect(token.token).not.toBe("nanoid-32");
+    expect(token.token).toMatch(/^[0-9a-f]{64}$/);
     expect(token.used).toBe(false);
     const ttlMs = token.expiresAt.getTime() - before;
     expect(ttlMs).toBeGreaterThan(59 * 60 * 1000);
     expect(ttlMs).toBeLessThan(61 * 60 * 1000);
+    // The raw token appears only in the emailed link.
     expect(mocked(sendPasswordResetEmail)).toHaveBeenCalledWith(
       "alice@example.com",
       "nanoid-32",
@@ -517,7 +527,11 @@ describe("userAuth.resetPassword", () => {
     const result = await publicCaller().userAuth.resetPassword(input);
 
     expect(result.success).toBe(true);
-    expect(s.consumePasswordResetToken).toHaveBeenCalledWith("reset-token");
+    // The presented raw token is hashed before the lookup — storage only
+    // ever sees the digest (tokens are stored hashed at rest).
+    expect(s.consumePasswordResetToken).toHaveBeenCalledWith(
+      hashApiToken("reset-token"),
+    );
     expect(mocked(encryptionService.hashPassword)).toHaveBeenCalledWith(
       NEW_PASSWORD,
     );
@@ -568,11 +582,12 @@ describe("userAuth.resetPassword", () => {
 });
 
 describe("userAuth.verifyToken", () => {
-  it("reports valid for a live token and invalid otherwise", async () => {
+  it("reports valid for a live token and invalid otherwise (lookup by hash)", async () => {
     s.getPasswordResetToken.mockResolvedValue({ id: 1, userId: "user-1" });
     await expect(
       publicCaller().userAuth.verifyToken({ token: "t" }),
     ).resolves.toMatchObject({ valid: true });
+    expect(s.getPasswordResetToken).toHaveBeenCalledWith(hashApiToken("t"));
 
     s.getPasswordResetToken.mockResolvedValue(undefined);
     await expect(

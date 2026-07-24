@@ -542,10 +542,12 @@ export interface IStorage {
   createPasswordResetToken(
     insertToken: InsertPasswordResetToken,
   ): Promise<PasswordResetToken>;
-  getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
-  markPasswordResetTokenAsUsed(token: string): Promise<void>;
+  getPasswordResetToken(
+    tokenHash: string,
+  ): Promise<PasswordResetToken | undefined>;
+  markPasswordResetTokenAsUsed(tokenHash: string): Promise<void>;
   consumePasswordResetToken(
-    token: string,
+    tokenHash: string,
   ): Promise<PasswordResetToken | undefined>;
   deleteExpiredPasswordResetTokens(): Promise<void>;
 
@@ -3712,6 +3714,13 @@ class DatabaseStorage implements IStorage {
   }
 
   // Password Reset Token methods
+  /**
+   * Persist a password-reset token row. `insertToken.token` must be the
+   * SHA-256 hex digest of the raw token (see api-token-hash.ts) — the raw
+   * token is never stored, only emailed, so a database read cannot yield a
+   * usable reset link. Back-compat note: plaintext tokens minted before this
+   * change no longer match the hashed lookup and simply age out (1h TTL).
+   */
   async createPasswordResetToken(
     insertToken: InsertPasswordResetToken,
   ): Promise<PasswordResetToken> {
@@ -3726,15 +3735,16 @@ class DatabaseStorage implements IStorage {
     return token;
   }
 
+  /** Look up a live (unused, unexpired) token by its SHA-256 hex digest. */
   async getPasswordResetToken(
-    token: string,
+    tokenHash: string,
   ): Promise<PasswordResetToken | undefined> {
     const [resetToken] = await db
       .select()
       .from(passwordResetTokens)
       .where(
         and(
-          eq(passwordResetTokens.token, token),
+          eq(passwordResetTokens.token, tokenHash),
           eq(passwordResetTokens.used, false),
           gte(passwordResetTokens.expiresAt, new Date()),
         ),
@@ -3743,11 +3753,11 @@ class DatabaseStorage implements IStorage {
     return resetToken;
   }
 
-  async markPasswordResetTokenAsUsed(token: string): Promise<void> {
+  async markPasswordResetTokenAsUsed(tokenHash: string): Promise<void> {
     await db
       .update(passwordResetTokens)
       .set({ used: true })
-      .where(eq(passwordResetTokens.token, token));
+      .where(eq(passwordResetTokens.token, tokenHash));
   }
 
   /**
@@ -3755,17 +3765,18 @@ class DatabaseStorage implements IStorage {
    * currently unused and unexpired, returning the row when this call is the one
    * that consumed it. A conditional UPDATE ... RETURNING makes this a single
    * atomic claim, so two concurrent reset requests with the same token cannot
-   * both succeed (closes the check-then-use race — ME-03).
+   * both succeed (closes the check-then-use race — ME-03). Takes the SHA-256
+   * hex digest of the presented token — tokens are stored hashed at rest.
    */
   async consumePasswordResetToken(
-    token: string,
+    tokenHash: string,
   ): Promise<PasswordResetToken | undefined> {
     const [consumed] = await db
       .update(passwordResetTokens)
       .set({ used: true })
       .where(
         and(
-          eq(passwordResetTokens.token, token),
+          eq(passwordResetTokens.token, tokenHash),
           eq(passwordResetTokens.used, false),
           gte(passwordResetTokens.expiresAt, new Date()),
         ),
