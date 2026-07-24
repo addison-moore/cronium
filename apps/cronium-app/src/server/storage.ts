@@ -383,6 +383,7 @@ export interface IStorage {
     online: boolean,
     lastChecked: Date,
   ): Promise<Server>;
+  updateServerSshHostKey(id: number, sshHostKey: string): Promise<void>;
   deleteServer(id: number): Promise<void>;
   permanentlyDeleteServer(id: number): Promise<void>;
   getServersScheduledForDeletion(limit?: number): Promise<Server[]>;
@@ -3863,6 +3864,18 @@ class DatabaseStorage implements IStorage {
       .orderBy(desc(webhooks.createdAt));
 
     return result;
+  }
+
+  /**
+   * Record the Trust-On-First-Use SSH host key fingerprint for a server. The
+   * fingerprint is a public host key (not a credential), so it is stored in
+   * plaintext and does not touch the credential-encryption path.
+   */
+  async updateServerSshHostKey(id: number, sshHostKey: string): Promise<void> {
+    await db
+      .update(servers)
+      .set({ sshHostKey, updatedAt: new Date() })
+      .where(eq(servers.id, id));
   }
 }
 

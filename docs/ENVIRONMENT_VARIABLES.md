@@ -189,9 +189,17 @@ click "Connect" on the tool's credential card to authorize their account.
 
 ### Main Application (cronium-app)
 
-| Variable   | Description           | Type     | Default | Required |
-| ---------- | --------------------- | -------- | ------- | -------- |
-| `APP_PORT` | Application HTTP port | `number` | `5001`  | No       |
+| Variable                      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                   | Type      | Default      | Required |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------ | -------- |
+| `APP_PORT`                    | Application HTTP port                                                                                                                                                                                                                                                                                                                                                                                                                         | `number`  | `5001`       | No       |
+| `CRONIUM_SSH_HOST_KEY_POLICY` | Host-key verification for the app's direct SSH connections (web terminal, server health checks). `accept-new`: record an unknown server's key on first connect (Trust-On-First-Use) and reject a later changed key; `strict`: also reject unknown hosts; `insecure`: skip verification (logs a loud warning). A changed key fails the connection closed. Reset trust by clearing `ssh_host_key` on the server record or re-adding the server. | `string`  | `accept-new` | No       |
+| `CRONIUM_SSH_DEBUG`           | When set, logs ssh2 auth-protocol debug lines for app SSH connections. Off by default (auth-line logging is noisy and can leak protocol detail).                                                                                                                                                                                                                                                                                              | `boolean` | `false`      | No       |
+
+The app records each server's trusted host key fingerprint (`SHA256:…`) on the
+`servers.ssh_host_key` column. This is the app-side counterpart to the
+orchestrator's `CRONIUM_SSH_SECURITY_HOST_KEY_POLICY` (which uses a shared
+`known_hosts` file). First connect to a new server is silent under the default
+`accept-new`; a mismatch on a later connect fails closed as a possible MITM.
 
 ### WebSocket Server
 

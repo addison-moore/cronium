@@ -71,6 +71,13 @@
       "when": 1784685649063,
       "tag": "0009_user_variable_user_fk",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784872748462,
+      "tag": "0010_ssh_host_key",
+      "breakpoints": true
     }
   ]
 }

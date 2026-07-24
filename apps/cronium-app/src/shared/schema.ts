@@ -350,6 +350,10 @@ export const servers = pgTable("servers", {
   password: text("password"),
   username: varchar("username", { length: 255 }).default("root").notNull(),
   port: integer("port").default(22).notNull(),
+  // Trust-On-First-Use SSH host key fingerprint (e.g. "SHA256:<base64>").
+  // Recorded on first connection under the accept-new policy; a later
+  // connection presenting a different key is rejected (MITM protection).
+  sshHostKey: text("ssh_host_key"),
   shared: boolean("shared").default(false).notNull(),
   online: boolean("online"),
   lastChecked: timestamp("last_checked"),

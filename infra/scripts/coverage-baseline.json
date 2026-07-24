@@ -1,7 +1,7 @@
 {
   "note": "Total coverage of apps/cronium-app. CI fails if a PR drops these by more than the tolerance in check-coverage-ratchet.mjs. Raise (never lower) as coverage improves — see _plans/testing/PLAN.md.",
   "croniumApp": {
-    "statements": 24.98,
-    "branches": 21.6
+    "statements": 25.15,
+    "branches": 21.76
   }
 }

@@ -4,8 +4,41 @@ import {
   type SSHAuthType,
   type SSHConnectionScope,
 } from "@/lib/ssh/pool-key";
+import { createHostVerifier } from "@/lib/ssh/host-verifier";
 import { Client } from "ssh2"; // Import Client from ssh2
 import type { ClientChannel } from "ssh2";
+
+/**
+ * SSH connection debug logging is gated behind CRONIUM_SSH_DEBUG because the
+ * ssh2 debug stream includes auth-protocol lines. Off by default.
+ */
+const SSH_DEBUG_ENABLED = Boolean(process.env.CRONIUM_SSH_DEBUG);
+
+/**
+ * Best-effort extraction of the owning server id from an opaque connection
+ * scope so the host-key verifier can look up / persist the trusted key. Scopes
+ * created by createServerSSHConnectionScope are JSON `{kind:"server", serverId}`.
+ */
+function serverIdFromScope(
+  connectionScope: SSHConnectionScope,
+): number | undefined {
+  try {
+    const parsed = JSON.parse(connectionScope) as {
+      kind?: string;
+      serverId?: number;
+    };
+    if (
+      parsed.kind === "server" &&
+      typeof parsed.serverId === "number" &&
+      Number.isInteger(parsed.serverId)
+    ) {
+      return parsed.serverId;
+    }
+  } catch {
+    // Non-JSON / unexpected scope shape: no server context available.
+  }
+  return undefined;
+}
 interface SSHConnection {
   ssh: Client; // Changed from NodeSSH to ssh2 Client
   isConnected: boolean;
@@ -147,6 +180,7 @@ export class SSHService {
       port,
       connectionKey,
       authType,
+      serverIdFromScope(connectionScope),
     );
     this.connectionLocks.set(connectionKey, connectionPromise);
 
@@ -166,6 +200,7 @@ export class SSHService {
     port: number,
     connectionKey: string,
     authType: "privateKey" | "password" = "privateKey",
+    serverId?: number,
   ): Promise<SSHConnection> {
     // Clean up old connections if we're at max capacity
     if (this.connectionPool.size >= this.maxConnections) {
@@ -247,16 +282,23 @@ export class SSHService {
           : { privateKey: authCredential }),
         port,
         readyTimeout: 20000,
-        // Add debugging for authentication issues
-        debug: (info) => {
-          if (
-            info.includes("authentication") ||
-            info.includes("publickey") ||
-            info.includes("password")
-          ) {
-            console.log(`SSH Auth Debug for ${connectionKey}: ${info}`);
-          }
-        },
+        // Verify the server's host key (TOFU) before the credential is sent.
+        hostVerifier: createHostVerifier({ serverId, host }),
+        // Auth-protocol debug logging is opt-in (CRONIUM_SSH_DEBUG) to avoid
+        // routinely logging every SSH auth line.
+        ...(SSH_DEBUG_ENABLED
+          ? {
+              debug: (info) => {
+                if (
+                  info.includes("authentication") ||
+                  info.includes("publickey") ||
+                  info.includes("password")
+                ) {
+                  console.log(`SSH Auth Debug for ${connectionKey}: ${info}`);
+                }
+              },
+            }
+          : {}),
         keepaliveInterval: 10000,
         keepaliveCountMax: 3,
         tryKeyboard: false,
@@ -296,6 +338,7 @@ export class SSHService {
     username = "root",
     port = 22,
     authType: "privateKey" | "password" = "privateKey",
+    serverId?: number,
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const sshClient = new Client();
@@ -324,6 +367,8 @@ export class SSHService {
             : { privateKey: authCredential }),
           port,
           readyTimeout: 60000,
+          // Verify the server's host key (TOFU) before the credential is sent.
+          hostVerifier: createHostVerifier({ serverId, host }),
           keepaliveInterval: 5000,
           keepaliveCountMax: 10,
           tryKeyboard: false,
@@ -351,9 +396,17 @@ export class SSHService {
     username = "root",
     port = 22,
     authType: "privateKey" | "password" = "privateKey",
+    serverId?: number,
   ): Promise<{ success: boolean; message: string }> {
     try {
-      await this.connect(host, authCredential, username, port, authType);
+      await this.connect(
+        host,
+        authCredential,
+        username,
+        port,
+        authType,
+        serverId,
+      );
       await this.disconnect();
       return { success: true, message: "Connection successful" };
     } catch (error) {
@@ -1197,6 +1250,7 @@ module.exports = croniumInstance;`;
         server.username,
         server.port,
         authType,
+        server.id,
       );
 
       // Get system information
