@@ -121,20 +121,31 @@ class Cronium:
                 except json.JSONDecodeError:
                     message = error_body or str(e)
                 
-                if e.code >= 500 and attempt < self.max_retries - 1:
+                # 501 means the endpoint is permanently unsupported in this
+                # execution context (e.g. tool actions with no backing app
+                # route); retrying cannot help, so surface it immediately.
+                if e.code >= 500 and e.code != 501 and attempt < self.max_retries - 1:
                     # Retry on server errors
                     time.sleep(self.retry_delay * (2 ** attempt))  # Exponential backoff
                     continue
-                    
+
                 raise CroniumAPIError(e.code, message)
-                
+
             except URLError as e:
                 if "timed out" in str(e) and attempt < self.max_retries - 1:
                     # Retry on timeout
                     time.sleep(self.retry_delay * (2 ** attempt))
                     continue
                 raise CroniumTimeoutError(f"Request timed out: {e}")
-            
+
+            except CroniumError:
+                # Already-meaningful SDK errors (e.g. a success:false body
+                # detected above) must surface as-is — without this they were
+                # swallowed by the generic handler below, retried pointlessly,
+                # and re-wrapped as a plain CroniumError, which also broke
+                # callers matching on CroniumAPIError.status_code.
+                raise
+
             except Exception as e:
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay * (2 ** attempt))
@@ -317,10 +328,12 @@ class AsyncCronium(Cronium):
         for attempt in range(self.max_retries):
             try:
                 async with self._session.request(method, url, json=data) as response:
-                    if response.status >= 500 and attempt < self.max_retries - 1:
+                    # 501 is permanently unsupported — never retried (see the
+                    # sync client above).
+                    if response.status >= 500 and response.status != 501 and attempt < self.max_retries - 1:
                         await asyncio.sleep(self.retry_delay * (2 ** attempt))
                         continue
-                    
+
                     response_data = await response.json()
                     
                     if response.status >= 400:
@@ -337,7 +350,13 @@ class AsyncCronium(Cronium):
                     await asyncio.sleep(self.retry_delay * (2 ** attempt))
                     continue
                 raise CroniumTimeoutError("Request timed out")
-            
+
+            except CroniumError:
+                # Surface API errors as-is (see the sync client above): the
+                # generic handler below would otherwise retry them and erase
+                # the status code callers match on (e.g. 404 in get_variable).
+                raise
+
             except Exception as e:
                 if attempt < self.max_retries - 1:
                     await asyncio.sleep(self.retry_delay * (2 ** attempt))

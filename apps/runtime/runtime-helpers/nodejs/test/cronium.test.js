@@ -378,6 +378,27 @@ describe("executeToolAction()", () => {
       message: "API Error (200): Unknown error",
     });
   });
+
+  test("wrappers surface the runtime's 501 not-available error cleanly", async () => {
+    // The runtime answers 501 for tool actions (no app route backs the
+    // relay); the convenience wrappers must reject with that message rather
+    // than swallowing it or retrying.
+    responder = jsonResponder(501, {
+      error: "Not Implemented",
+      message:
+        "tool actions are not available from scripts in this execution context",
+    });
+
+    await expect(
+      sdk.sendSlackMessage({ channel: "#general", text: "hi" }),
+    ).rejects.toMatchObject({
+      name: "CroniumAPIError",
+      statusCode: 501,
+      message:
+        "API Error (501): tool actions are not available from scripts in this execution context",
+    });
+    expect(received).toHaveLength(1);
+  });
 });
 
 describe("tool convenience wrappers", () => {
@@ -484,6 +505,26 @@ describe("error handling and retries", () => {
       statusCode: 500,
     });
     expect(received).toHaveLength(client.maxRetries);
+  });
+
+  test("501 is never retried and surfaces the server's message immediately", async () => {
+    responder = jsonResponder(501, {
+      error: "Not Implemented",
+      message:
+        "tool actions are not available from scripts in this execution context",
+    });
+    const client = makeClient();
+
+    await expect(
+      client.executeToolAction("slack", "send_message", { text: "hi" }),
+    ).rejects.toMatchObject({
+      name: "CroniumAPIError",
+      statusCode: 501,
+      message:
+        "API Error (501): tool actions are not available from scripts in this execution context",
+    });
+    // Permanently unsupported — exactly one request, no retry backoff.
+    expect(received).toHaveLength(1);
   });
 
   test("recovers when a 5xx is followed by a success", async () => {

@@ -86,6 +86,10 @@ class Cronium {
         if (
           error instanceof CroniumAPIError &&
           error.statusCode >= 500 &&
+          // 501 means the endpoint is permanently unsupported in this
+          // execution context (e.g. tool actions with no backing app route);
+          // retrying cannot help, so surface the message immediately.
+          error.statusCode !== 501 &&
           attempt < this.maxRetries - 1
         ) {
           // Retry on server errors

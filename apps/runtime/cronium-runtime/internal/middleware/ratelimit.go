@@ -48,7 +48,7 @@ func (rl *RateLimiter) getLimiter(key string) *rate.Limiter {
 func (rl *RateLimiter) cleanup() {
 	for {
 		time.Sleep(10 * time.Minute)
-		
+
 		rl.mu.Lock()
 		// Simple cleanup - in production, track last used time
 		if len(rl.limiters) > 10000 {
@@ -71,7 +71,7 @@ func RateLimitMiddleware(limiter *RateLimiter) func(http.Handler) http.Handler {
 				// If no claims, use IP address
 				key := r.RemoteAddr
 				rl := limiter.getLimiter(key)
-				
+
 				if !rl.Allow() {
 					limiter.log.WithField("ip", key).Warn("Rate limit exceeded")
 					writeError(w, http.StatusTooManyRequests, "rate limit exceeded")
@@ -81,7 +81,7 @@ func RateLimitMiddleware(limiter *RateLimiter) func(http.Handler) http.Handler {
 				// Use execution ID for rate limiting
 				key := claims.ExecutionID
 				rl := limiter.getLimiter(key)
-				
+
 				if !rl.Allow() {
 					limiter.log.WithField("executionId", key).Warn("Rate limit exceeded")
 					writeError(w, http.StatusTooManyRequests, "rate limit exceeded")

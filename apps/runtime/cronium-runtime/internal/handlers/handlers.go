@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/addison-moore/cronium/apps/runtime/internal/middleware"
@@ -10,6 +12,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
 )
+
+// maxOutputBytes caps the request body accepted by POST /executions/{id}/output.
+// It mirrors the app's own limit on the relayed write (the internal
+// executions/{id}/output route rejects larger outputs with 413 "Output exceeds
+// the 5242880-byte limit" — see tests/fixtures/internal-api/executions-output.json),
+// so the runtime fails fast with an honest 413 instead of shipping an
+// over-limit body upstream and mapping the app's 413 to a generic 500.
+const maxOutputBytes = 5242880 // 5 MiB
 
 // Handler implements the HTTP handlers for the runtime API
 type Handler struct {
@@ -28,7 +38,7 @@ func NewHandler(service *service.RuntimeService, log *logrus.Logger) *Handler {
 // GetInput handles GET /executions/{id}/input
 func (h *Handler) GetInput(w http.ResponseWriter, r *http.Request) {
 	executionID := chi.URLParam(r, "id")
-	
+
 	// Verify token matches execution
 	claims, ok := middleware.GetTokenClaims(r.Context())
 	if !ok {
@@ -56,7 +66,7 @@ func (h *Handler) GetInput(w http.ResponseWriter, r *http.Request) {
 // SetOutput handles POST /executions/{id}/output
 func (h *Handler) SetOutput(w http.ResponseWriter, r *http.Request) {
 	executionID := chi.URLParam(r, "id")
-	
+
 	// Verify token matches execution
 	claims, ok := middleware.GetTokenClaims(r.Context())
 	if !ok {
@@ -71,8 +81,15 @@ func (h *Handler) SetOutput(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Data interface{} `json:"data"`
 	}
-	
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxOutputBytes)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			h.writeError(w, http.StatusRequestEntityTooLarge,
+				fmt.Sprintf("output exceeds the %d-byte limit", maxOutputBytes))
+			return
+		}
 		h.writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -92,7 +109,7 @@ func (h *Handler) SetOutput(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetVariable(w http.ResponseWriter, r *http.Request) {
 	executionID := chi.URLParam(r, "id")
 	key := chi.URLParam(r, "key")
-	
+
 	// Verify token matches execution
 	claims, ok := middleware.GetTokenClaims(r.Context())
 	if !ok {
@@ -100,15 +117,15 @@ func (h *Handler) GetVariable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.log.WithFields(logrus.Fields{
-		"urlExecutionID": executionID,
+		"urlExecutionID":    executionID,
 		"claimsExecutionID": claims.ExecutionID,
-		"hasToken": ok,
-		"key": key,
+		"hasToken":          ok,
+		"key":               key,
 	}).Debug("GetVariable request")
-	
+
 	if claims.ExecutionID != executionID {
 		h.log.WithFields(logrus.Fields{
-			"urlExecutionID": executionID,
+			"urlExecutionID":    executionID,
 			"claimsExecutionID": claims.ExecutionID,
 		}).Error("Execution ID mismatch")
 		h.writeError(w, http.StatusForbidden, "execution ID mismatch")
@@ -135,7 +152,7 @@ func (h *Handler) GetVariable(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SetVariable(w http.ResponseWriter, r *http.Request) {
 	executionID := chi.URLParam(r, "id")
 	key := chi.URLParam(r, "key")
-	
+
 	// Verify token matches execution
 	claims, ok := middleware.GetTokenClaims(r.Context())
 	if !ok {
@@ -150,7 +167,7 @@ func (h *Handler) SetVariable(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Value interface{} `json:"value"`
 	}
-	
+
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		h.writeError(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -170,7 +187,7 @@ func (h *Handler) SetVariable(w http.ResponseWriter, r *http.Request) {
 // SetCondition handles POST /executions/{id}/condition
 func (h *Handler) SetCondition(w http.ResponseWriter, r *http.Request) {
 	executionID := chi.URLParam(r, "id")
-	
+
 	// Verify token matches execution
 	claims, ok := middleware.GetTokenClaims(r.Context())
 	if !ok {
@@ -185,7 +202,7 @@ func (h *Handler) SetCondition(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Condition bool `json:"condition"`
 	}
-	
+
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		h.writeError(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -205,7 +222,7 @@ func (h *Handler) SetCondition(w http.ResponseWriter, r *http.Request) {
 // GetContext handles GET /executions/{id}/context
 func (h *Handler) GetContext(w http.ResponseWriter, r *http.Request) {
 	executionID := chi.URLParam(r, "id")
-	
+
 	// Verify token matches execution
 	claims, ok := middleware.GetTokenClaims(r.Context())
 	if !ok {
@@ -230,30 +247,26 @@ func (h *Handler) GetContext(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ExecuteToolAction handles POST /tool-actions/execute
+// ExecuteToolAction handles POST /tool-actions/execute.
+//
+// Tool actions are NOT currently executable from scripts: the backend relay
+// target (POST {app}/api/internal/tools/execute — see
+// service.BackendClient.ExecuteToolAction) has no corresponding route in the
+// app, so relaying would only turn the app's 404 into a misleading generic
+// 500. Until the app grows that route (a product decision), fail loudly and
+// honestly with 501 so scripts see exactly what is unsupported. The relay
+// plumbing (service/backend ExecuteToolAction) is kept so the feature can be
+// re-wired when the route exists.
 func (h *Handler) ExecuteToolAction(w http.ResponseWriter, r *http.Request) {
-	// Get execution ID from token
-	claims, ok := middleware.GetTokenClaims(r.Context())
-	if !ok {
+	// Still require a valid execution token so this endpoint discloses nothing
+	// to unauthenticated callers.
+	if _, ok := middleware.GetTokenClaims(r.Context()); !ok {
 		h.writeError(w, http.StatusUnauthorized, "missing or invalid execution token")
 		return
 	}
-	executionID := claims.ExecutionID
 
-	var config types.ToolActionConfig
-	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
-	result, err := h.service.ExecuteToolAction(r.Context(), executionID, config)
-	if err != nil {
-		h.log.WithError(err).Error("Failed to execute tool action")
-		h.writeError(w, http.StatusInternalServerError, "failed to execute tool action")
-		return
-	}
-
-	h.writeJSON(w, http.StatusOK, result)
+	h.writeError(w, http.StatusNotImplemented,
+		"tool actions are not available from scripts in this execution context")
 }
 
 // Health handles GET /health
@@ -268,7 +281,7 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	
+
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		h.log.WithError(err).Error("Failed to encode response")
 	}

@@ -5,22 +5,37 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/addison-moore/cronium/apps/runtime/internal/cache"
 	"github.com/addison-moore/cronium/apps/runtime/internal/config"
 	"github.com/addison-moore/cronium/apps/runtime/pkg/types"
 	"github.com/sirupsen/logrus"
 )
 
+// Cache is the subset of cache operations the runtime service depends on.
+// *cache.ValkeyClient satisfies it in production; tests substitute an
+// in-memory fake so the service can be exercised without a live Valkey.
+type Cache interface {
+	GetInput(ctx context.Context, executionID string) (*types.InputData, error)
+	SetInput(ctx context.Context, executionID string, input *types.InputData) error
+	SetOutput(ctx context.Context, executionID string, output *types.OutputData) error
+	GetVariable(ctx context.Context, executionID, key string) (*types.Variable, error)
+	SetVariable(ctx context.Context, executionID, key string, variable *types.Variable) error
+	GetContext(ctx context.Context, executionID string) (*types.ExecutionContext, error)
+	SetContext(ctx context.Context, executionID string, execContext *types.ExecutionContext) error
+	IsJobRevoked(ctx context.Context, jobID string) (bool, error)
+	Lock(ctx context.Context, key string, ttl time.Duration) (bool, error)
+	Unlock(ctx context.Context, key string) error
+}
+
 // RuntimeService implements the runtime API logic
 type RuntimeService struct {
 	backend *BackendClient
-	cache   *cache.ValkeyClient
+	cache   Cache
 	config  *config.Config
 	log     *logrus.Logger
 }
 
 // NewRuntimeService creates a new runtime service
-func NewRuntimeService(backend *BackendClient, cache *cache.ValkeyClient, config *config.Config, log *logrus.Logger) *RuntimeService {
+func NewRuntimeService(backend *BackendClient, cache Cache, config *config.Config, log *logrus.Logger) *RuntimeService {
 	return &RuntimeService{
 		backend: backend,
 		cache:   cache,

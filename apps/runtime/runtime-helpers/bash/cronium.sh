@@ -101,8 +101,10 @@ _cronium_request() {
             # Special case for variable not found
             echo '{"data":{"value":null}}'
             return 0
-        elif [ "$status_code" -ge 500 ] && [ $attempt -lt $MAX_RETRIES ]; then
-            # Retry on server errors
+        elif [ "$status_code" -ge 500 ] && [ "$status_code" -ne 501 ] && [ $attempt -lt $MAX_RETRIES ]; then
+            # Retry on server errors. 501 is excluded: it means the endpoint
+            # is permanently unsupported in this execution context (e.g. tool
+            # actions with no backing app route) — surface it immediately.
             sleep $((RETRY_DELAY * attempt))
             ((attempt++))
             continue
