@@ -24,7 +24,6 @@ func main() {
 		os.Exit(1)
 	}
 
-
 	var value interface{}
 
 	switch config.Mode {

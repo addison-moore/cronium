@@ -18,7 +18,7 @@ func (e *Executor) SetupHelpers(manifest *types.Manifest) error {
 	mode := helpers.BundledMode
 	apiEndpoint := os.Getenv("CRONIUM_API_ENDPOINT")
 	apiToken := os.Getenv("CRONIUM_API_TOKEN")
-	
+
 	// Environment variables take precedence over manifest
 	if apiEndpoint == "" {
 		apiEndpoint = manifest.Metadata.APIEndpoint
@@ -26,11 +26,11 @@ func (e *Executor) SetupHelpers(manifest *types.Manifest) error {
 	if apiToken == "" {
 		apiToken = manifest.Metadata.APIToken
 	}
-	
+
 	if apiEndpoint != "" && apiToken != "" {
 		mode = helpers.APIMode
 	}
-	
+
 	// Check if helper mode is explicitly set
 	if envMode := os.Getenv("CRONIUM_HELPER_MODE"); envMode != "" {
 		if envMode == "api" {
@@ -62,7 +62,7 @@ func (e *Executor) SetupHelpers(manifest *types.Manifest) error {
 		APIEndpoint: apiEndpoint,
 		APIToken:    apiToken,
 	}
-	
+
 	// Log configuration for debugging
 	e.log.WithFields(map[string]interface{}{
 		"mode":        mode,
@@ -83,7 +83,6 @@ func (e *Executor) SetupHelpers(manifest *types.Manifest) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
-
 
 	if err := os.WriteFile(configPath, configData, 0644); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
@@ -162,7 +161,7 @@ func (e *Executor) SetupHelpers(manifest *types.Manifest) error {
 // CollectHelperOutput collects any output data from bundled mode helpers
 func (e *Executor) CollectHelperOutput() (interface{}, error) {
 	outputPath := filepath.Join(e.workDir, ".cronium", "output.json")
-	
+
 	// Check if output file exists
 	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
 		// No output file means no output data

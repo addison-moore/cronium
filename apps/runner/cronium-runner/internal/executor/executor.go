@@ -242,15 +242,29 @@ exec(open('%s').read())
 	return nil
 }
 
+// maxLogLineBytes bounds a single logged output line. Lines longer than this
+// abort line-scanning; the remainder of the stream is drained unlogged so the
+// child process can always finish writing.
+const maxLogLineBytes = 1024 * 1024
+
 // streamOutput reads from a reader and logs each line
 func (e *Executor) streamOutput(r io.Reader, stream string) {
 	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 64*1024), maxLogLineBytes)
 	for scanner.Scan() {
 		line := scanner.Text()
 		e.log.WithField("stream", stream).Info(line)
 	}
 	if err := scanner.Err(); err != nil {
 		e.log.WithError(err).Errorf("Error reading %s stream", stream)
+		// BUG FIX: if scanning aborts (e.g. a single line longer than the
+		// buffer), the child keeps writing to the pipe. With no reader the
+		// pipe fills, the child blocks in write(2) forever, and cmd.Wait()
+		// never returns — the runner hung on any script that emitted a line
+		// longer than the scanner limit. Drain the rest of the stream (the
+		// drained bytes are intentionally not logged) so the process can
+		// exit and its status is still reported.
+		_, _ = io.Copy(io.Discard, r)
 	}
 }
 

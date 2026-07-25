@@ -31,4 +31,3 @@ func New(level string) *logrus.Logger {
 
 	return log
 }
-

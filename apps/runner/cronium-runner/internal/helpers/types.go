@@ -69,14 +69,14 @@ func LoadConfig() (*Config, error) {
 			APIEndpoint: os.Getenv("CRONIUM_API_ENDPOINT"),
 			APIToken:    os.Getenv("CRONIUM_API_TOKEN"),
 		}
-		
+
 		if config.WorkDir == "" {
 			config.WorkDir = "."
 		}
-		
+
 		return config, nil
 	}
-	
+
 	// Fall back to config file
 	configPath := filepath.Join(".", ".cronium", "config.json")
 	data, err := os.ReadFile(configPath)
@@ -87,16 +87,16 @@ func LoadConfig() (*Config, error) {
 			WorkDir: ".",
 		}, nil
 	}
-	
+
 	var config Config
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
-	
+
 	if config.WorkDir == "" {
 		config.WorkDir = "."
 	}
-	
+
 	return &config, nil
 }
 
@@ -107,18 +107,18 @@ func WriteJSON(path string, data interface{}) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
-	
+
 	// Marshal data
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal data: %w", err)
 	}
-	
+
 	// Write file
 	if err := os.WriteFile(path, jsonData, 0644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -127,14 +127,20 @@ func ReadJSON(path string, data interface{}) error {
 	jsonData, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("file not found: %s", path)
+			// BUG FIX: return the original *PathError so callers can detect a
+			// missing file with os.IsNotExist / errors.Is(err, fs.ErrNotExist).
+			// The previous rewrap ("file not found: %s", no %w) defeated every
+			// such check: BundledClient.GetInput returned an error instead of
+			// nil when input.json was absent, and BundledClient.SetVariable
+			// could never create variables.json on a fresh work dir.
+			return err
 		}
 		return fmt.Errorf("failed to read file: %w", err)
 	}
-	
+
 	if err := json.Unmarshal(jsonData, data); err != nil {
 		return fmt.Errorf("failed to unmarshal data: %w", err)
 	}
-	
+
 	return nil
 }

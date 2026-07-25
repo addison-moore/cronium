@@ -78,4 +78,3 @@ func FindManifest(dir string) (string, error) {
 	}
 	return manifestPath, nil
 }
-

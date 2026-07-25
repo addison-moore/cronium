@@ -34,4 +34,3 @@ type Metadata struct {
 	InputData    interface{}            `yaml:"inputData,omitempty"`
 	Extra        map[string]interface{} `yaml:"extra,omitempty"`
 }
-
