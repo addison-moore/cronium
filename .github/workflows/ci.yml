@@ -180,9 +180,9 @@ jobs:
       - name: Install golangci-lint
         run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v${{ env.GOLANGCI_LINT_VERSION }}
 
-      # Coverage is reported per module (last line = total) for visibility;
-      # Go coverage is not ratcheted yet (planned with the Phase 4 test work,
-      # see _plans/testing/PLAN.md).
+      # Coverage is reported per module (last line = total) and ratcheted
+      # against the `go` section of infra/scripts/coverage-baseline.json —
+      # same never-regress contract as the TS ratchet.
       - name: Vet & test orchestrator
         working-directory: apps/orchestrator
         run: |
@@ -203,6 +203,9 @@ jobs:
           go vet ./...
           go test -coverprofile=coverage.out -covermode=atomic ./...
           go tool cover -func=coverage.out | tail -n 1
+
+      - name: Go coverage ratchet
+        run: node infra/scripts/check-go-coverage-ratchet.mjs
 
       # Supply-chain gate (3.4): fail when a known vulnerability is reachable
       # from our code. Requires the pinned patched toolchain (go 1.25.12) so the
@@ -232,3 +235,36 @@ jobs:
         working-directory: apps/runtime/cronium-runtime
         run: ../../../infra/scripts/lint-go.sh
         continue-on-error: true
+
+  # The container-hardening integration test creates a REAL container and
+  # inspects it via the Docker API (build tag `integration`); before this job
+  # existed it never ran anywhere. Pinned to ubuntu-latest, which always has a
+  # Docker daemon; alpine is pre-pulled because the test skips (rather than
+  # pulls) when the image is absent.
+  go-container-integration:
+    name: Container hardening (integration, real Docker)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.25.12"
+          cache-dependency-path: apps/orchestrator/go.sum
+
+      - name: Pull alpine (integration test never pulls)
+        run: docker pull alpine:latest
+
+      - name: Integration tests (container executor)
+        working-directory: apps/orchestrator
+        run: |
+          set -o pipefail
+          go test -tags=integration -count=1 -v ./internal/executors/container/ | tee /tmp/itest.out
+          # The test self-skips when Docker/alpine is unavailable; on this
+          # runner that would mean the job silently proved nothing — fail.
+          if grep -q -- "--- SKIP: TestCreatedContainerHasHardenedHostConfig" /tmp/itest.out; then
+            echo "hardening integration test was skipped — Docker/alpine unavailable" >&2
+            exit 1
+          fi
