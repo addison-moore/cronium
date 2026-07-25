@@ -35,6 +35,48 @@ function looksLikeSecretValue(value: string): boolean {
   return false;
 }
 
+/**
+ * Redact secrets embedded in free text (provider error messages, stack traces)
+ * while keeping the surrounding text readable. `redactSecrets` on a string is
+ * all-or-nothing — fine for structured values, but it would erase an entire
+ * error message because one token inside it looks secret. This masks only the
+ * offending spans: JWTs, `Bearer <blob>` sequences, credential-bearing URLs
+ * (userinfo, secret query params, or a high-entropy path segment à la Slack
+ * webhook URLs), and standalone high-entropy blobs.
+ */
+export function redactText(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(new RegExp(JWT_RE.source, "g"), REDACTED)
+    .replace(/\bBearer\s+[A-Za-z0-9._+/=-]{12,}/gi, `Bearer ${REDACTED}`)
+    .replace(/\bhttps?:\/\/[^\s"'<>)\]]+/gi, (url) => {
+      if (/:\/\/[^/@\s]+:[^/@\s]+@/.test(url)) return REDACTED;
+      if (
+        /[?&](token|api[_-]?key|access[_-]?token|signature|sig|secret)=/i.test(
+          url,
+        )
+      ) {
+        return REDACTED;
+      }
+      const path = url.split(/[?#]/)[0] ?? "";
+      const segments = path.split("/").slice(3);
+      if (
+        segments.some(
+          (s) =>
+            /^[A-Za-z0-9+_=-]{20,}$/.test(s) &&
+            /[0-9]/.test(s) &&
+            /[A-Za-z]/.test(s),
+        )
+      ) {
+        return REDACTED;
+      }
+      return url;
+    })
+    .replace(/[A-Za-z0-9+/_=-]{40,}/g, (blob) =>
+      /[0-9]/.test(blob) && /[A-Za-z]/.test(blob) ? REDACTED : blob,
+    );
+}
+
 function redactString(key: string, value: string): string {
   if (value === "") return value;
   if (SECRET_KEY.test(key)) return REDACTED;

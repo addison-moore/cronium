@@ -4,7 +4,7 @@ import { isToolActionsExecutionEnabled } from "@/lib/featureFlags";
 import { toolActionHealthMonitor } from "./tool-action-health-monitor";
 import { db } from "@/server/db";
 import { toolActionLogs } from "@/shared/schema";
-import { redactSecrets } from "@/lib/tools/redact";
+import { redactSecrets, redactText } from "@/lib/tools/redact";
 import { credentialCache } from "@/lib/tools/credential-cache";
 import {
   createRetryExecutor,
@@ -535,9 +535,18 @@ export async function executeToolAction(
   } catch (error) {
     const errorObj = error instanceof Error ? error : new Error(String(error));
     const errorMessage = errorObj.message;
-    console.error(`[ToolAction] Execution failed:`, errorMessage);
-    console.error(`[ToolAction] Error stack:`, errorObj.stack);
-    console.error(`[ToolAction] Config at failure:`, toolActionConfig);
+    // Provider errors can echo credentials (tokens, webhook URLs), so every
+    // sink below gets redacted — free text via redactText, config via
+    // redactSecrets like the rest of this file.
+    console.error(`[ToolAction] Execution failed:`, redactText(errorMessage));
+    console.error(
+      `[ToolAction] Error stack:`,
+      redactText(errorObj.stack ?? ""),
+    );
+    console.error(
+      `[ToolAction] Config at failure:`,
+      redactSecrets(toolActionConfig),
+    );
 
     // Categorize the error
     const parsedConfig: Partial<ToolActionConfig> =
@@ -577,7 +586,7 @@ export async function executeToolAction(
         toolId: parsedConfig.toolId ?? 0,
       },
       parsedConfig.actionId ?? "unknown",
-      errorMessage,
+      redactText(errorMessage),
     );
 
     // Log failure to database
@@ -591,7 +600,7 @@ export async function executeToolAction(
         result: null,
         status: "FAILURE",
         executionTime: Date.now() - startTime,
-        errorMessage: categorizedError.technicalMessage,
+        errorMessage: redactText(categorizedError.technicalMessage),
       });
     } catch (logError) {
       console.warn(
@@ -601,7 +610,9 @@ export async function executeToolAction(
 
     return {
       stdout: "",
-      stderr: `${categorizedError.userMessage}\n\nDetails: ${errorMessage}`,
+      stderr: redactText(
+        `${categorizedError.userMessage}\n\nDetails: ${errorMessage}`,
+      ),
       exitCode: 1,
       data: {
         error: categorizedError,

@@ -1,4 +1,4 @@
-import { redactSecrets } from "../redact";
+import { redactSecrets, redactText } from "../redact";
 
 describe("redactSecrets", () => {
   it("masks secret-keyed fields with a placeholder", () => {
@@ -99,5 +99,56 @@ describe("redactSecrets — deep nesting + cycles", () => {
     const a: Record<string, unknown> = { name: "a" };
     a.self = a;
     expect(JSON.stringify(redactSecrets(a))).toContain("[Circular]");
+  });
+});
+
+describe("redactText — span-level redaction in free text", () => {
+  it("masks a JWT mid-sentence but keeps the surrounding text", () => {
+    const out = redactText(`auth failed for token ${CANARY_JWT}, retrying`);
+    expect(out).not.toContain(CANARY_JWT);
+    expect(out).toContain("auth failed for token");
+    expect(out).toContain("retrying");
+  });
+
+  it("masks a Bearer credential", () => {
+    const out = redactText(
+      "401 from provider: Bearer sk-live-1234567890abcd rejected",
+    );
+    expect(out).not.toContain("sk-live-1234567890abcd");
+    expect(out).toContain("401 from provider");
+  });
+
+  it("masks a Slack-style webhook URL via its high-entropy path segment", () => {
+    const url =
+      "https://hooks.slack.com/services/T0001/B0001/XXXXyyyyZZZZ12345678wwww";
+    const out = redactText(`POST ${url} returned 404`);
+    expect(out).not.toContain("XXXXyyyyZZZZ12345678wwww");
+    expect(out).toContain("returned 404");
+  });
+
+  it("masks URLs carrying secret query params or userinfo credentials", () => {
+    expect(
+      redactText("GET https://api.example.com/v1?api_key=abc123 failed"),
+    ).not.toContain("abc123");
+    expect(
+      redactText("connect to https://user:hunter2@db.example.com failed"),
+    ).not.toContain("hunter2");
+  });
+
+  it("masks a standalone high-entropy blob", () => {
+    const blob = "xoxb1234abcd5678efgh9012ijkl3456mnop7890qrst";
+    const out = redactText(`provider echoed ${blob} in its error`);
+    expect(out).not.toContain(blob);
+    expect(out).toContain("provider echoed");
+  });
+
+  it("leaves an ordinary error message completely intact", () => {
+    const msg =
+      "ECONNREFUSED to slack: connect to https://slack.com/api/chat.postMessage timed out after 30000ms";
+    expect(redactText(msg)).toBe(msg);
+  });
+
+  it("returns empty input unchanged", () => {
+    expect(redactText("")).toBe("");
   });
 });

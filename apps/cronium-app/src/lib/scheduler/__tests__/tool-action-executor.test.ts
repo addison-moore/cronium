@@ -662,6 +662,41 @@ describe("executeToolAction — secret redaction", () => {
     expect(JSON.stringify(logged.parameters)).not.toContain(SECRET_TOKEN);
     expect(JSON.stringify(logged.parameters)).not.toContain("supersecretpath");
   });
+
+  it("redacts provider-echoed credentials from stderr and the failure-log error message", async () => {
+    // A provider error that echoes back a webhook URL with a high-entropy
+    // path and a long token — the shape of real Slack/Discord auth errors.
+    const echoedUrl =
+      "https://hooks.slack.com/services/T0001/B0001/aaaaBBBB1111ccccDDDD2222";
+    const echoedToken = "xoxb1234abcd5678efgh9012ijkl3456mnop7890";
+    action.execute.mockRejectedValue(
+      new Error(
+        `invalid_auth: POST ${echoedUrl} with ${echoedToken} was rejected`,
+      ),
+    );
+    const event = makeEvent({
+      toolActionConfig: {
+        toolType: "slack",
+        actionId: "slack-send-message",
+        toolId: 7,
+        parameters: secretParams,
+      },
+    });
+
+    const result = await executeToolAction(event);
+
+    expect(result.exitCode).toBe(1);
+    // The readable part of the provider error survives...
+    expect(result.stderr).toContain("invalid_auth");
+    // ...but the echoed credentials do not, in any sink.
+    expect(result.stderr).not.toContain("aaaaBBBB1111ccccDDDD2222");
+    expect(result.stderr).not.toContain(echoedToken);
+    const logged = mockValues.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(String(logged.errorMessage)).not.toContain(echoedToken);
+    expect(String(logged.errorMessage)).not.toContain(
+      "aaaaBBBB1111ccccDDDD2222",
+    );
+  });
 });
 
 describe("executeToolAction — action failure paths", () => {
