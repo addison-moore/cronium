@@ -425,10 +425,15 @@ func convertQueuedJob(qj QueuedJob) *types.Job {
 		CapabilityToken: qj.CapabilityToken,
 	}
 
-	// Convert execution config
+	// Convert execution config. The app sends `execution.timeout` in
+	// nanoseconds — a serialized Go time.Duration (see the app's
+	// transformJobForOrchestrator and tests/fixtures/internal-api/
+	// jobs-claim.json) — so the value maps 1:1 onto time.Duration.
+	// Multiplying by time.Second here (the old code) inflated it 1e9x,
+	// overflowing int64 and effectively disabling job timeouts.
 	job.Execution = types.ExecutionConfig{
 		Environment: qj.Execution.Environment,
-		Timeout:     time.Duration(qj.Execution.Timeout) * time.Second,
+		Timeout:     time.Duration(qj.Execution.Timeout),
 		InputData:   qj.Execution.InputData,
 		Variables:   qj.Execution.Variables,
 	}

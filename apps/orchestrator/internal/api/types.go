@@ -40,7 +40,7 @@ type ExecutionConfig struct {
 	Script      *Script                `json:"script,omitempty"`
 	HTTP        *HTTPConfig            `json:"http,omitempty"`
 	Environment map[string]string      `json:"environment"`
-	Timeout     int                    `json:"timeout"` // seconds
+	Timeout     int64                  `json:"timeout"` // nanoseconds (serialized Go time.Duration)
 	Resources   *Resources             `json:"resources,omitempty"`
 	RetryPolicy *RetryPolicy           `json:"retryPolicy,omitempty"`
 	InputData   map[string]interface{} `json:"inputData,omitempty"`

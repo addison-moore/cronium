@@ -14,14 +14,21 @@ import (
 
 // WebSocketClient handles log streaming to the backend via WebSocket
 type WebSocketClient struct {
-	url               string
-	token             string
-	log               *logrus.Logger
-	conn              *websocket.Conn
-	mu                sync.RWMutex
-	connected         bool
-	reconnectDelay    time.Duration
-	maxReconnectDelay time.Duration
+	url       string
+	token     string
+	log       *logrus.Logger
+	conn      *websocket.Conn
+	mu        sync.RWMutex
+	connected bool
+	// initialReconnectDelay is what the backoff resets to after a successful
+	// connection (1s in production; overridable in tests).
+	initialReconnectDelay time.Duration
+	reconnectDelay        time.Duration
+	maxReconnectDelay     time.Duration
+
+	// writerDone is closed when the current connection's write pump exits, so
+	// Disconnect can wait for queued messages to be flushed before returning.
+	writerDone chan struct{}
 
 	// Channels
 	send chan LogMessage
@@ -44,13 +51,14 @@ type LogMessage struct {
 // NewWebSocketClient creates a new WebSocket client
 func NewWebSocketClient(wsURL, token string, log *logrus.Logger) *WebSocketClient {
 	return &WebSocketClient{
-		url:               wsURL,
-		token:             token,
-		log:               log,
-		reconnectDelay:    time.Second,
-		maxReconnectDelay: 30 * time.Second,
-		send:              make(chan LogMessage, 1000),
-		done:              make(chan struct{}),
+		url:                   wsURL,
+		token:                 token,
+		log:                   log,
+		initialReconnectDelay: time.Second,
+		reconnectDelay:        time.Second,
+		maxReconnectDelay:     30 * time.Second,
+		send:                  make(chan LogMessage, 1000),
+		done:                  make(chan struct{}),
 	}
 }
 
@@ -85,16 +93,22 @@ func (c *WebSocketClient) Connect(ctx context.Context) error {
 
 	c.conn = conn
 	c.connected = true
-	c.reconnectDelay = time.Second // Reset delay on successful connection
+	c.reconnectDelay = c.initialReconnectDelay // Reset delay on successful connection
 
 	// Call connect callback
 	if c.onConnect != nil {
 		c.onConnect()
 	}
 
-	// Start read and write pumps
-	go c.readPump()
-	go c.writePump()
+	// Start read and write pumps. Each pump owns this specific connection:
+	// connClosed tears the writer down as soon as the reader observes the
+	// connection dying, so a stale pump can never close a newer connection or
+	// steal messages meant for it.
+	connClosed := make(chan struct{})
+	writerDone := make(chan struct{})
+	c.writerDone = writerDone
+	go c.readPump(conn, connClosed)
+	go c.writePump(conn, connClosed, writerDone)
 
 	c.log.Info("WebSocket connected for log streaming")
 	return nil
@@ -103,19 +117,31 @@ func (c *WebSocketClient) Connect(ctx context.Context) error {
 // Disconnect closes the WebSocket connection
 func (c *WebSocketClient) Disconnect() error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if !c.connected {
+		c.mu.Unlock()
 		return nil
 	}
 
 	c.connected = false
+	conn := c.conn
+	writerDone := c.writerDone
 	close(c.done)
+	c.mu.Unlock()
 
-	// Send close message
-	if c.conn != nil {
-		c.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		c.conn.Close()
+	// Wait for the write pump to flush queued messages and send the close
+	// frame (bounded, so shutdown can never hang on a stuck peer). The write
+	// pump owns all writes to the connection — writing the close frame here
+	// would race its in-flight WriteJSON calls.
+	if writerDone != nil {
+		select {
+		case <-writerDone:
+		case <-time.After(5 * time.Second):
+			c.log.Warn("Timed out waiting for log flush during disconnect")
+		}
+	}
+
+	if conn != nil {
+		conn.Close()
 	}
 
 	c.log.Info("WebSocket disconnected")
@@ -152,27 +178,32 @@ func (c *WebSocketClient) SetCallbacks(onConnect func(), onDisconnect func(error
 	c.onDisconnect = onDisconnect
 }
 
-// readPump handles incoming messages
-func (c *WebSocketClient) readPump() {
-	defer func() {
-		c.mu.Lock()
-		c.connected = false
-		c.mu.Unlock()
-		c.conn.Close()
-	}()
+// readPump handles incoming messages for one connection.
+func (c *WebSocketClient) readPump(conn *websocket.Conn, connClosed chan struct{}) {
+	defer conn.Close()
 
-	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		return nil
 	})
 
 	for {
-		_, message, err := c.conn.ReadMessage()
+		_, message, err := conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				c.log.WithError(err).Error("WebSocket read error")
 			}
+			// Mark this connection dead and stop its writer BEFORE notifying,
+			// so a reconnect triggered by the callback never observes stale
+			// "connected" state, and the old writer cannot consume messages
+			// meant for the next connection.
+			c.mu.Lock()
+			if c.conn == conn {
+				c.connected = false
+			}
+			c.mu.Unlock()
+			close(connClosed)
 			if c.onDisconnect != nil {
 				c.onDisconnect(err)
 			}
@@ -184,25 +215,26 @@ func (c *WebSocketClient) readPump() {
 	}
 }
 
-// writePump handles outgoing messages
-func (c *WebSocketClient) writePump() {
+// writePump handles outgoing messages for one connection.
+func (c *WebSocketClient) writePump(conn *websocket.Conn, connClosed <-chan struct{}, writerDone chan<- struct{}) {
 	ticker := time.NewTicker(54 * time.Second)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		conn.Close()
+		close(writerDone)
 	}()
 
 	for {
 		select {
 		case message, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if !ok {
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
 			// Send as JSON
-			if err := c.conn.WriteJSON(message); err != nil {
+			if err := conn.WriteJSON(message); err != nil {
 				c.log.WithError(err).Error("Failed to send log message")
 				return
 			}
@@ -211,19 +243,46 @@ func (c *WebSocketClient) writePump() {
 			n := len(c.send)
 			for i := 0; i < n; i++ {
 				msg := <-c.send
-				if err := c.conn.WriteJSON(msg); err != nil {
+				if err := conn.WriteJSON(msg); err != nil {
 					c.log.WithError(err).Error("Failed to send buffered log message")
 					return
 				}
 			}
 
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
 
+		case <-connClosed:
+			// The read pump observed this connection dying; a reconnect may
+			// already be under way. Stop consuming from the shared send
+			// channel so queued messages are delivered by the next connection.
+			return
+
 		case <-c.done:
+			// Client shutdown: flush whatever is queued, then close cleanly so
+			// the tail of a job's logs is not dropped.
+			c.drainAndClose(conn)
+			return
+		}
+	}
+}
+
+// drainAndClose writes all queued messages, then a normal close frame.
+func (c *WebSocketClient) drainAndClose(conn *websocket.Conn) {
+	for {
+		select {
+		case msg := <-c.send:
+			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := conn.WriteJSON(msg); err != nil {
+				c.log.WithError(err).Error("Failed to flush log message during shutdown")
+				return
+			}
+		default:
+			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 			return
 		}
 	}
@@ -232,20 +291,26 @@ func (c *WebSocketClient) writePump() {
 // Reconnect attempts to reconnect with exponential backoff
 func (c *WebSocketClient) Reconnect(ctx context.Context) {
 	for {
+		c.mu.RLock()
+		delay := c.reconnectDelay
+		c.mu.RUnlock()
+
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(c.reconnectDelay):
+		case <-time.After(delay):
 			c.log.Info("Attempting to reconnect WebSocket")
 
 			if err := c.Connect(ctx); err != nil {
 				c.log.WithError(err).Warn("Failed to reconnect WebSocket")
 
 				// Exponential backoff
+				c.mu.Lock()
 				c.reconnectDelay *= 2
 				if c.reconnectDelay > c.maxReconnectDelay {
 					c.reconnectDelay = c.maxReconnectDelay
 				}
+				c.mu.Unlock()
 			} else {
 				return // Successfully reconnected
 			}

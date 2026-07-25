@@ -89,8 +89,18 @@ func (s *Streamer) Start(ctx context.Context) error {
 func (s *Streamer) Stop() error {
 	s.cancel()
 
-	// Flush all pending logs
-	s.flushAll()
+	// Force-flush all pending logs. This must not use the interval-gated
+	// flushAll: logs buffered within the last FlushInterval would be silently
+	// dropped on shutdown.
+	s.mu.RLock()
+	jobs := make([]*JobLogger, 0, len(s.activeJobs))
+	for _, jl := range s.activeJobs {
+		jobs = append(jobs, jl)
+	}
+	s.mu.RUnlock()
+	for _, jl := range jobs {
+		jl.Flush()
+	}
 
 	// Disconnect WebSocket
 	if s.wsClient != nil {

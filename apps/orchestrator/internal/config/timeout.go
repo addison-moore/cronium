@@ -10,10 +10,10 @@ import (
 type TimeoutConfig struct {
 	// SetupTimeout is the maximum time allowed for setup phase (container creation, SSH connection, etc.)
 	SetupTimeout time.Duration
-	
+
 	// CleanupTimeout is the maximum time allowed for cleanup phase
 	CleanupTimeout time.Duration
-	
+
 	// MaxExecutionTimeout is the maximum time allowed for script execution (caps user-configured timeout)
 	MaxExecutionTimeout time.Duration
 }
@@ -33,13 +33,13 @@ func getDurationFromEnv(key string, defaultValue time.Duration) time.Duration {
 	if value == "" {
 		return defaultValue
 	}
-	
+
 	// Parse as seconds
 	seconds, err := strconv.Atoi(value)
 	if err != nil {
 		return defaultValue
 	}
-	
+
 	return time.Duration(seconds) * time.Second
 }
 
