@@ -21,7 +21,7 @@
               "variables": {},
               "target": { "type": "local", "serverId": "7" },
               "script": {
-                "type": "bash",
+                "type": "BASH",
                 "content": "echo hello",
                 "workingDirectory": "/workspace"
               }

@@ -245,7 +245,10 @@ const orchJob = () => ({
     variables: {},
     target: { type: "local", serverId: "7" },
     script: {
-      type: "bash",
+      // Uppercase like production: job-payload-builder.ts stores the events
+      // enum value (BASH/PYTHON/NODEJS) and the Go container executor's
+      // Validate() only accepts the uppercase constants.
+      type: "BASH",
       content: "echo hello",
       workingDirectory: "/workspace",
     },
