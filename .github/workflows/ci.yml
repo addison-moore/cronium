@@ -110,6 +110,43 @@ jobs:
       - name: Storage layer tests
         run: pnpm test:storage
 
+  e2e:
+    name: E2E pipeline (full stack, real Docker)
+    # Always GitHub-hosted: the harness needs its own Docker daemon (job
+    # containers + runtime sidecars are real), and fork PRs must not run on
+    # self-hosted machines. Boots a disposable stack — Postgres/Valkey/
+    # orchestrator in containers, app + worker + socket server as host
+    # processes — then a scheduled BASH event executes end-to-end and a
+    # two-step workflow passes data through cronium_output → cronium_input.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # FULL install (no --ignore-scripts): unlike the pure-jest jobs, the app
+      # actually RUNS here and its import graph needs the native modules
+      # (bcrypt via the auth routers, node-pty via the socket server).
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Builds the orchestrator/runtime/bash images, `next build`s the app,
+      # boots everything, runs the E2E Jest project, and always tears down.
+      # No build caching yet (repo pins all actions and doesn't use
+      # actions/cache); if this job's wall-clock becomes a problem, caching
+      # .next/cache and docker layers is the lever.
+      - name: E2E pipeline tests
+        run: pnpm test:e2e
+
   dependency-review:
     name: Dependency Review
     # dependency-review-action only runs on pull_request; it diffs the PR's
