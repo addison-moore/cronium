@@ -12,8 +12,14 @@ type ExecutionClaims struct {
 	ExecutionID string `json:"executionId"` // Changed to camelCase to match runtime API
 	UserID      string `json:"userId"`      // Added for runtime API compatibility
 	EventID     string `json:"eventId"`     // Added for runtime API compatibility
-	JobID       string `json:"job_id"`      // Keep for backward compatibility
-	Scope       string `json:"scope"`
+	// jobId MUST be camelCase: the runtime's auth layer reads `jobId` and its
+	// revocation middleware fails closed (401) when the claim is absent. The
+	// old `job_id` tag silently broke every container job that called a
+	// cronium.* helper once revoke-on-terminal shipped (caught by the Phase 5
+	// e2e pipeline test). The SSH lineage (internal/auth/jwt.go) already
+	// mints `jobId`.
+	JobID string `json:"jobId"`
+	Scope string `json:"scope"`
 	// Capability is the app-minted per-job capability token (HI-10), carried to
 	// the runtime so it can present it on its outbound job-scoped calls.
 	Capability string `json:"capabilityToken,omitempty"`

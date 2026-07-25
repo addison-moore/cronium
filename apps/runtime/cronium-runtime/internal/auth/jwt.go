@@ -22,7 +22,13 @@ type JWTManager struct {
 
 // Claims represents the JWT claims
 type Claims struct {
-	JobID       string `json:"jobId"` // From orchestrator
+	JobID string `json:"jobId"` // From orchestrator
+	// LegacyJobID tolerates tokens minted by orchestrator images from before
+	// the container lineage was aligned to `jobId` (it used `job_id`). The
+	// runtime and orchestrator ship as separate images, so version skew is
+	// real; without this fallback the revocation middleware fails closed
+	// (401 "missing token claims") for every helper call from such a job.
+	LegacyJobID string `json:"job_id,omitempty"`
 	ExecutionID string `json:"executionId"`
 	UserID      string `json:"userId"`
 	EventID     string `json:"eventId"`
@@ -128,8 +134,13 @@ func (m *JWTManager) ValidateToken(tokenString string) (*types.TokenClaims, erro
 		return nil, fmt.Errorf("token exceeded absolute lifetime")
 	}
 
+	jobID := claims.JobID
+	if jobID == "" {
+		jobID = claims.LegacyJobID
+	}
+
 	return &types.TokenClaims{
-		JobID:       claims.JobID,
+		JobID:       jobID,
 		ExecutionID: claims.ExecutionID,
 		UserID:      claims.UserID,
 		EventID:     claims.EventID,

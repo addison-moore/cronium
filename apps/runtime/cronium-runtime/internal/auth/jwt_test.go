@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+
 	"github.com/addison-moore/cronium/apps/runtime/internal/config"
 )
 
@@ -93,5 +95,46 @@ func TestRefreshedTokenCannotExceedOriginalCap(t *testing.T) {
 	// Expiry must not exceed orig + absoluteMaxLifetime (+ small skew).
 	if claims.ExpiresAt.After(orig.Add(absoluteMaxLifetime).Add(time.Second)) {
 		t.Fatalf("refreshed expiry %v exceeds the absolute cap", claims.ExpiresAt)
+	}
+}
+
+// The orchestrator's container lineage historically minted the job id claim
+// as `job_id` while this service reads `jobId`; the revocation middleware
+// fails closed on an empty JobID, which silently 401'd every helper call
+// from a container job (caught by the Phase 5 e2e pipeline test). Tokens
+// from either lineage must yield a populated JobID.
+func TestJobIDClaimAcceptsBothLineages(t *testing.T) {
+	m := newManager()
+
+	mint := func(claims *Claims) string {
+		now := time.Now()
+		claims.RegisteredClaims = jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
+		}
+		tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).
+			SignedString(m.secret)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tok
+	}
+
+	// Current camelCase lineage (SSH + fixed container executor).
+	got, err := m.ValidateToken(mint(&Claims{JobID: "job-camel", ExecutionID: "exec-1"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.JobID != "job-camel" {
+		t.Fatalf("jobId claim: got %q", got.JobID)
+	}
+
+	// Legacy snake_case lineage (older container-executor images).
+	got, err = m.ValidateToken(mint(&Claims{LegacyJobID: "job-snake", ExecutionID: "exec-1"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.JobID != "job-snake" {
+		t.Fatalf("legacy job_id claim not honored: got %q", got.JobID)
 	}
 }

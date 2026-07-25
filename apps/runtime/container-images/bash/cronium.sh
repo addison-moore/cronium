@@ -110,8 +110,11 @@ _cronium_request() {
             continue
         else
             # Client error or final attempt
-            local error_msg=$(echo "$response" | jq -r '.message // "Unknown error"' 2>/dev/null || echo "HTTP $status_code")
-            echo "Error: API request failed - $error_msg" >&2
+            # Runtime error bodies use {"error": "..."}; some proxies use
+            # {"message": "..."}. Always include the status code so failures
+            # are diagnosable from job logs.
+            local error_msg=$(echo "$response" | jq -r '.message // .error // "Unknown error"' 2>/dev/null || echo "no body")
+            echo "Error: API request failed - HTTP $status_code - $error_msg" >&2
             return 1
         fi
     done
