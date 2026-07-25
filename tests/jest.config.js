@@ -133,5 +133,26 @@ module.exports = {
       // Real container boot + schema churn: generous ceiling.
       testTimeout: 120_000,
     },
+    {
+      // End-to-end pipeline suites against the full disposable stack
+      // (app + worker + socket on the host, orchestrator/Postgres/Valkey in
+      // Docker), launched by infra/scripts/run-e2e-tests.sh / `pnpm test:e2e`.
+      // Deliberately import-free of app source: raw SQL (pg) + fetch only, so
+      // no env.mjs/nanoid stubs are needed. setup.ts refuses non-loopback
+      // DATABASE_URLs so this can never touch the shared dev database.
+      ...sharedProjectConfig,
+      displayName: "E2E Tests",
+      roots: ["<rootDir>/e2e"],
+      testMatch: ["<rootDir>/e2e/**/*.test.ts"],
+      // `pg` lives under the app's node_modules.
+      moduleDirectories: [
+        "node_modules",
+        path.join(__dirname, "../apps/cronium-app/node_modules"),
+      ],
+      setupFilesAfterEnv: ["<rootDir>/e2e/setup.ts"],
+      // Real scheduler ticks + container execution; per-test ceiling is set in
+      // e2e/setup.ts (jest.setTimeout).
+      testTimeout: 240_000,
+    },
   ],
 };

@@ -1,0 +1,135 @@
+# DISPOSABLE end-to-end test stack (testing PLAN.md Phase 5), driven by
+# infra/scripts/run-e2e-tests.sh (`pnpm test:e2e`). Never used for dev or
+# production. The Next.js app, socket server, and scheduling worker run on the
+# HOST (started by the script); this compose provides everything else:
+# Postgres, Valkey, the orchestrator (with the host Docker socket, so job
+# containers and runtime sidecars are real), and the images the orchestrator
+# launches (runtime sidecar + bash execution image).
+#
+# Networking: sidecars join `cronium-e2e-net` (CRONIUM_CONTAINER_RUNTIME_
+# SHARED_NETWORK) to reach Valkey by container name and the host-run app by
+# E2E_BACKEND_HOST. On macOS that's host.docker.internal; on Linux, where
+# containers created via the raw Docker API don't get host-gateway DNS, the
+# script passes this network's fixed gateway IP (172.30.99.1) instead — which
+# is why the subnet is pinned below.
+#
+# Ports bind to 127.0.0.1 and are chosen to avoid the dev stack (6379/8080/
+# 8089) and the storage harness (55433/56379).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cronium-e2e-postgres
+    environment:
+      POSTGRES_PASSWORD: e2e_test
+      POSTGRES_DB: cronium_e2e
+    command:
+      [
+        "postgres",
+        "-c",
+        "fsync=off",
+        "-c",
+        "full_page_writes=off",
+        "-c",
+        "synchronous_commit=off",
+      ]
+    ports:
+      - "127.0.0.1:${E2E_PG_PORT:-55434}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cronium_e2e"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks:
+      - e2e
+
+  valkey:
+    image: valkey/valkey:7-alpine
+    container_name: cronium-e2e-valkey
+    ports:
+      - "127.0.0.1:${E2E_VALKEY_PORT:-56380}:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks:
+      - e2e
+
+  # Built (not run): the per-job runtime sidecar image the orchestrator
+  # launches. Tagged :e2e so it never clobbers a dev :latest.
+  runtime-image:
+    build:
+      context: ../../apps/runtime/cronium-runtime
+      dockerfile: Dockerfile
+    image: cronium/runtime-api:e2e
+    command: /bin/true
+    profiles:
+      - build-only
+
+  # Built (not run): the bash execution image. The tag must be the executor's
+  # default image name for BASH (internal/executors/container/executor.go).
+  bash-executor:
+    build:
+      context: ../../apps/runtime/container-images/bash
+      dockerfile: Dockerfile
+    image: cronium/runner:bash-alpine
+    command: /bin/true
+    profiles:
+      - build-only
+
+  orchestrator:
+    build:
+      context: ../..
+      dockerfile: apps/orchestrator/Dockerfile
+    image: cronium/orchestrator:e2e
+    container_name: cronium-e2e-orchestrator
+    environment:
+      CRONIUM_API_ENDPOINT: http://${E2E_BACKEND_HOST:-host.docker.internal}:${E2E_APP_PORT:-55001}
+      CRONIUM_API_TOKEN: ${E2E_ORCH_KEY:?set by run-e2e-tests.sh}
+      CRONIUM_ORCHESTRATOR_ID: e2e-orchestrator
+      CRONIUM_JOBS_POLL_INTERVAL: 1s
+      CRONIUM_JOBS_MAX_CONCURRENT: 4
+      CRONIUM_JOBS_HEARTBEAT_INTERVAL: 10s
+      CRONIUM_CONTAINER_DOCKER_ENDPOINT: unix:///var/run/docker.sock
+      CRONIUM_CONTAINER_RUNTIME_JWT_SECRET: ${E2E_JWT_SECRET:?set by run-e2e-tests.sh}
+      CRONIUM_CONTAINER_RUNTIME_BACKEND_URL: http://${E2E_BACKEND_HOST:-host.docker.internal}:${E2E_APP_PORT:-55001}
+      CRONIUM_CONTAINER_RUNTIME_VALKEY_URL: redis://cronium-e2e-valkey:6379
+      CRONIUM_CONTAINER_RUNTIME_SHARED_NETWORK: cronium-e2e-net
+      CRONIUM_CONTAINER_RUNTIME_IMAGE: cronium/runtime-api:e2e
+      CRONIUM_SSH_EXECUTION_ISOLATION_MODE: disabled
+      CRONIUM_LOGGING_LEVEL: debug
+      CRONIUM_LOGGING_FORMAT: text
+      CRONIUM_LOGGING_WEBSOCKET_ENABLED: "false"
+      DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - e2e-orchestrator-data:/app/data
+    ports:
+      - "127.0.0.1:${E2E_ORCH_PORT:-58080}:8080"
+    user: "0:0"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "/app/orchestrator", "healthcheck"]
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 12
+    depends_on:
+      valkey:
+        condition: service_healthy
+    networks:
+      - e2e
+
+networks:
+  e2e:
+    name: cronium-e2e-net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.99.0/24
+          gateway: 172.30.99.1
+
+volumes:
+  e2e-orchestrator-data:
