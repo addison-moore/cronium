@@ -70,11 +70,22 @@ export function JobExecutionLogs({ jobId }: JobExecutionLogsProps) {
     };
   }, [socket, jobId]);
 
-  // Auto-scroll to bottom when new logs arrive
+  // Reset the buffer when switching jobs. The App Router reuses the page
+  // instance across dynamic-param navigations, so without this, lines from
+  // the previous job would stay on screen and interleave with the new job's.
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    setLogs([]);
+  }, [jobId]);
+
+  // Auto-scroll to bottom when new logs arrive. The ref points at the Radix
+  // ScrollArea Root, which only clips (overflow-hidden) — the element that
+  // actually scrolls is the Viewport child, so target that.
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const viewport =
+      root.querySelector("[data-radix-scroll-area-viewport]") ?? root;
+    viewport.scrollTop = viewport.scrollHeight;
   }, [logs]);
 
   const handleDownload = () => {

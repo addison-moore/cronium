@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
 import { useAuth } from "@/hooks/useAuth";
 import { terminalSocketManager } from "@/lib/terminal-socket-manager";
+import { canInitializeTerminal } from "./terminal-gating";
 
 // Define interfaces for XTerm types
 interface Terminal {
@@ -55,7 +56,14 @@ export default function Terminal({ serverId, serverName }: TerminalProps) {
   }, [serverName]);
 
   useEffect(() => {
-    if (!isClient || !terminalRef.current || isUserLoading || !user) {
+    if (
+      !canInitializeTerminal({
+        isClient,
+        hasContainer: terminalRef.current !== null,
+        isUserLoading,
+        hasUser: user !== null,
+      })
+    ) {
       return;
     }
 
@@ -293,8 +301,18 @@ export default function Terminal({ serverId, serverName }: TerminalProps) {
         termRef.current = null;
       }
 
-      // Note: We don't clean up the socket here as it's managed by the singleton
-      // The socket will be reused by the next mount if it's the same server
+      // Note: We don't disconnect the socket here as it's managed by the
+      // singleton — it will be reused by the next mount if it's the same
+      // server. But this component's event handlers close over the (now
+      // disposed) terminal instance, so they must come off the long-lived
+      // socket or they leak until the next Terminal mount replaces them.
+      if (socketRef.current) {
+        socketRef.current.removeAllListeners("terminal-created");
+        socketRef.current.removeAllListeners("terminal-output");
+        socketRef.current.removeAllListeners("terminal-exit");
+        socketRef.current.removeAllListeners("terminal-error");
+        socketRef.current = null;
+      }
 
       hasInitializedRef.current = false;
     };
