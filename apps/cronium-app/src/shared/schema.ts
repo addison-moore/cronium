@@ -726,6 +726,8 @@ export const toolCredentials = pgTable("tool_credentials", {
   name: varchar("name", { length: 255 }).notNull(),
   type: varchar("type", { length: 50 }).notNull(), // Now accepts any string value
   credentials: text("credentials").notNull(), // Encrypted JSON
+  description: text("description"),
+  tags: jsonb("tags").$type<string[]>().default([]).notNull(), // Array of strings for tags
   isActive: boolean("is_active").default(true).notNull(),
   encrypted: boolean("encrypted").default(false).notNull(),
   encryptionMetadata: jsonb("encryption_metadata"),

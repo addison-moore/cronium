@@ -9,7 +9,7 @@ import {
   toolIdSchema,
   toolStatsSchema,
 } from "@shared/schemas/tools";
-import { toolCredentials, EventType } from "@/shared/schema";
+import { toolCredentials, toolActionLogs, EventType } from "@/shared/schema";
 import { db } from "@/server/db";
 import { eq, and, desc, ne } from "drizzle-orm";
 import {
@@ -23,6 +23,7 @@ import {
   redactCredentialValues,
   mergeCredentials,
 } from "@/lib/tools/credential-redaction";
+import { redactSecrets, redactText } from "@/lib/tools/redact";
 
 /** Blank secret-bearing credential fields before returning a tool to a client. */
 function redactTool<T extends { credentials: Record<string, unknown> }>(
@@ -35,7 +36,8 @@ import { slackRouter } from "./tools/slack-routes";
 
 // Use centralized authentication from trpc.ts
 
-// Type for tool with parsed credentials
+// Type for tool with parsed credentials. description/tags come straight from
+// the row now that tool_credentials has real columns for them.
 type ToolWithParsedCredentials = Omit<
   typeof toolCredentials.$inferSelect,
   "credentials"
@@ -52,8 +54,6 @@ type ToolWithParsedCredentials = Omit<
           iterations: number;
         };
   } | null;
-  description?: string;
-  tags: string[];
 };
 
 // Helper function to get user tools from database
@@ -109,7 +109,6 @@ async function getUserTools(
                   credentials,
                   encrypted: tool.encrypted ?? false,
                   encryptionMetadata: encMetadata,
-                  tags: [],
                 };
                 return result;
               }
@@ -257,19 +256,8 @@ async function getUserTools(
         // Add default values for new columns if they don't exist
         encrypted: toolWithDefaults.encrypted ?? false,
         encryptionMetadata: parsedEncryptionMetadata ?? null,
-        tags: ("tags" in tool && Array.isArray(tool.tags)
-          ? tool.tags
-          : []) as string[],
+        tags: Array.isArray(tool.tags) ? tool.tags : [],
       };
-
-      // Only add description if it exists
-      if (
-        "description" in tool &&
-        tool.description !== undefined &&
-        tool.description !== null
-      ) {
-        result.description = tool.description as string;
-      }
 
       return result;
     });
@@ -299,6 +287,41 @@ async function validateCredentialsForType(
         `Failed to validate credentials: ${error instanceof Error ? error.message : "Unknown error"}`,
       ],
     };
+  }
+}
+
+/**
+ * Write the same `tool_action_logs` audit row the scheduler path writes
+ * (see tool-action-executor.ts). `eventId` is null for manual/test runs —
+ * there is no event behind them. Log-write failures are swallowed so
+ * auditing can never mask the execution result itself.
+ */
+async function logManualToolAction(entry: {
+  toolType: string;
+  actionType: string;
+  actionId: string;
+  parameters: unknown;
+  result: unknown;
+  status: "SUCCESS" | "FAILURE";
+  executionTime: number;
+  errorMessage: string | null;
+}): Promise<void> {
+  try {
+    await db.insert(toolActionLogs).values({
+      eventId: null,
+      toolType: entry.toolType,
+      actionType: entry.actionType,
+      actionId: entry.actionId,
+      parameters: entry.parameters,
+      result: entry.result,
+      status: entry.status,
+      executionTime: entry.executionTime,
+      errorMessage: entry.errorMessage,
+    });
+  } catch (logError) {
+    console.warn(
+      `Failed to log manual tool action execution: ${logError instanceof Error ? logError.message : "Unknown error"}`,
+    );
   }
 }
 
@@ -1244,17 +1267,46 @@ export const toolsRouter = createTRPCRouter({
 
         // Execute the action
         const startTime = Date.now();
-        const result = (await action.execute(
-          credentials,
-          input.parameters,
-          context,
-        )) as unknown;
+        let result: unknown;
+        try {
+          result = (await action.execute(
+            credentials,
+            input.parameters,
+            context,
+          )) as unknown;
+        } catch (executionError) {
+          // Audit the failed execution like the scheduler path does:
+          // redacted parameters, redacted error message, null eventId.
+          const errorMessage =
+            executionError instanceof Error
+              ? executionError.message
+              : String(executionError);
+          await logManualToolAction({
+            toolType: tool.type,
+            actionType: action.actionType,
+            actionId: action.id,
+            parameters: redactSecrets(input.parameters),
+            result: null,
+            status: "FAILURE",
+            executionTime: Date.now() - startTime,
+            errorMessage: redactText(errorMessage),
+          });
+          throw executionError;
+        }
         const executionTime = Date.now() - startTime;
 
-        // Log the execution (this would go to the tool_action_logs table in a real implementation)
-        console.log(
-          `Tool action executed: ${action.name} (${executionTime}ms)`,
-        );
+        // Audit the successful execution to tool_action_logs, mirroring the
+        // scheduler path (tool-action-executor.ts).
+        await logManualToolAction({
+          toolType: tool.type,
+          actionType: action.actionType,
+          actionId: action.id,
+          parameters: redactSecrets(input.parameters),
+          result: redactSecrets(result),
+          status: "SUCCESS",
+          executionTime,
+          errorMessage: null,
+        });
 
         return {
           success: true,

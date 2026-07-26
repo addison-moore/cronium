@@ -748,6 +748,47 @@ describe("create", () => {
     });
     expect(dbState.insertCalls).toHaveLength(0);
   });
+
+  it("persists description and tags and returns them from getAll (regression: columns were silently dropped)", async () => {
+    dbState.insertReturning = [
+      toolRow({
+        id: 10,
+        name: "New Slack",
+        credentials: JSON.stringify(ENC),
+        encrypted: true,
+        description: "team tool",
+        tags: ["team"],
+      }),
+    ];
+
+    const created = await userCaller().tools.create(input);
+
+    // The INSERT actually carries the metadata columns...
+    expect(dbState.insertCalls[0]).toMatchObject({
+      description: "team tool",
+      tags: ["team"],
+    });
+    // ...and the create response echoes the persisted row.
+    expect(created).toMatchObject({
+      description: "team tool",
+      tags: ["team"],
+    });
+
+    // Round-trip: a subsequent getAll returns the stored metadata.
+    dbState.toolRows = [
+      toolRow({
+        id: 10,
+        name: "New Slack",
+        description: "team tool",
+        tags: ["team"],
+      }),
+    ];
+    const listed = await userCaller().tools.getAll({});
+    expect(listed.tools[0]).toMatchObject({
+      description: "team tool",
+      tags: ["team"],
+    });
+  });
 });
 
 describe("update", () => {
@@ -801,11 +842,21 @@ describe("update", () => {
     dbState.plainToolSelects = [[toolRow()], []]; // ownership, rename-conflict
     dbState.updateReturning = [toolRow({ name: "Renamed" })];
 
-    const result = await userCaller().tools.update({ id: 5, name: "Renamed" });
+    const result = await userCaller().tools.update({
+      id: 5,
+      name: "Renamed",
+      description: "new desc",
+      tags: ["a", "b"],
+    });
 
     expect(mockEncrypt).not.toHaveBeenCalled();
     expect(dbState.updateCalls[0]).not.toHaveProperty("credentials");
     expect(dbState.updateCalls[0]!.name).toBe("Renamed");
+    // description/tags reach the UPDATE (regression: columns were dropped).
+    expect(dbState.updateCalls[0]).toMatchObject({
+      description: "new desc",
+      tags: ["a", "b"],
+    });
     expect(result.credentials).toEqual({});
   });
 
@@ -1187,6 +1238,87 @@ describe("executeAction", () => {
         parameters: { channel: "#general" },
       }),
     ).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
+  });
+
+  it("writes a redacted SUCCESS audit row to tool_action_logs with a null eventId (regression: manual runs skipped auditing)", async () => {
+    dbState.toolRows = [toolRow()];
+    const action = slackAction({ actionType: "messaging" });
+    mockGetServerAction.mockReturnValue(action);
+
+    await userCaller().tools.executeAction({
+      toolId: 5,
+      actionId: "slack-send-message",
+      // extra secret-bearing parameter: must be redacted in the audit row
+      parameters: { channel: "#general", token: PLAINTEXT_SECRET },
+    });
+
+    expect(dbState.insertCalls).toHaveLength(1);
+    const logged = dbState.insertCalls[0]!;
+    expect(logged).toMatchObject({
+      eventId: null,
+      toolType: "SLACK",
+      actionType: "messaging",
+      actionId: "slack-send-message",
+      status: "SUCCESS",
+      result: { delivered: true },
+      errorMessage: null,
+    });
+    expect(logged.executionTime).toEqual(expect.any(Number));
+    expect(logged.parameters).toEqual({
+      channel: "#general",
+      token: "[REDACTED]",
+    });
+    expect(JSON.stringify(logged)).not.toContain(PLAINTEXT_SECRET);
+  });
+
+  it("writes a redacted FAILURE audit row when the action execution throws", async () => {
+    dbState.toolRows = [toolRow()];
+    const action = slackAction({
+      actionType: "messaging",
+      execute: jest.fn().mockRejectedValue(new Error("slack down")),
+    });
+    mockGetServerAction.mockReturnValue(action);
+
+    await expect(
+      userCaller().tools.executeAction({
+        toolId: 5,
+        actionId: "slack-send-message",
+        parameters: { channel: "#general", token: PLAINTEXT_SECRET },
+      }),
+    ).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
+
+    expect(dbState.insertCalls).toHaveLength(1);
+    const logged = dbState.insertCalls[0]!;
+    expect(logged).toMatchObject({
+      eventId: null,
+      toolType: "SLACK",
+      actionType: "messaging",
+      actionId: "slack-send-message",
+      status: "FAILURE",
+      result: null,
+      errorMessage: "slack down",
+    });
+    expect(logged.parameters).toEqual({
+      channel: "#general",
+      token: "[REDACTED]",
+    });
+    expect(JSON.stringify(logged)).not.toContain(PLAINTEXT_SECRET);
+  });
+
+  it("writes no audit row when the run is refused before execution (rate limit)", async () => {
+    dbState.toolRows = [toolRow()];
+    const action = slackAction();
+    mockGetServerAction.mockReturnValue(action);
+    mockCheckRateLimit.mockResolvedValue({ allowed: false, retryAfter: 45 });
+
+    await expect(
+      userCaller().tools.executeAction({
+        toolId: 5,
+        actionId: "slack-send-message",
+        parameters: { channel: "#general" },
+      }),
+    ).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+    expect(dbState.insertCalls).toHaveLength(0);
   });
 });
 
