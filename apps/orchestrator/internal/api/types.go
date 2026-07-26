@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
@@ -8,14 +9,13 @@ import (
 
 // API Request/Response types
 
-// PollJobsResponse is the response from polling jobs
+// PollJobsResponse is the response from claiming jobs. The canonical claim
+// body (tests/fixtures/internal-api/jobs-claim.json) carries `jobs` plus a
+// `count`; an earlier revision declared a `metadata` object the app never
+// sends (FINDINGS #35).
 type PollJobsResponse struct {
-	Jobs     []QueuedJob `json:"jobs"`
-	Metadata struct {
-		Timestamp     string `json:"timestamp"`
-		NextPollAfter string `json:"nextPollAfter,omitempty"`
-		QueueSize     int    `json:"queueSize"`
-	} `json:"metadata"`
+	Jobs  []QueuedJob `json:"jobs"`
+	Count int         `json:"count"`
 }
 
 // QueuedJob represents a job from the API
@@ -242,15 +242,43 @@ type ComponentHealth struct {
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
-// ErrorResponse is the standard error response
+// ErrorResponse is the app's error response. The CANONICAL shape is
+// {"error": "<string>"} (see the error scenarios throughout
+// tests/fixtures/internal-api/); a structured {"error": {code, message, ...}}
+// body is also accepted. ErrorBody's custom unmarshaller handles both
+// (FINDINGS #35: the old struct only matched the structured form, so every
+// canonical error surfaced as code UNKNOWN with the message dropped).
 type ErrorResponse struct {
-	Error struct {
-		Code      string                 `json:"code"`
-		Message   string                 `json:"message"`
-		Details   map[string]interface{} `json:"details,omitempty"`
-		Timestamp string                 `json:"timestamp"`
-		TraceID   string                 `json:"traceId,omitempty"`
-	} `json:"error"`
+	Error ErrorBody `json:"error"`
+}
+
+// ErrorBody is the decoded `error` member of an ErrorResponse. For the
+// canonical string shape only Message is populated (Code stays empty).
+type ErrorBody struct {
+	Code      string                 `json:"code"`
+	Message   string                 `json:"message"`
+	Details   map[string]interface{} `json:"details,omitempty"`
+	Timestamp string                 `json:"timestamp"`
+	TraceID   string                 `json:"traceId,omitempty"`
+}
+
+// UnmarshalJSON accepts both the canonical `"error": "<string>"` shape and
+// the structured `"error": {code, message, ...}` shape.
+func (e *ErrorBody) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*e = ErrorBody{Message: s}
+		return nil
+	}
+
+	// Alias strips the method set so the structured decode does not recurse.
+	type errorBodyAlias ErrorBody
+	var a errorBodyAlias
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	*e = ErrorBody(a)
+	return nil
 }
 
 // WebSocket Message Types

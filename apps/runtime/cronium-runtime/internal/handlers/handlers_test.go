@@ -450,6 +450,19 @@ func TestGetContext_RoundTripAndCaching(t *testing.T) {
 	if data["executionId"] != testExecutionID || data["userId"] != testUserID {
 		t.Errorf("data = %#v, want the fixture context's executionId/userId", data)
 	}
+	// Regression end-to-end (FINDINGS #36): the app nests the event's
+	// name/type under "event"; the runtime must flatten them into the
+	// eventName/eventType fields the SDKs' cronium.event() reads — they used
+	// to come back empty on every call.
+	if data["eventName"] != "Demo Event" {
+		t.Errorf("eventName = %#v, want the fixture literal \"Demo Event\"", data["eventName"])
+	}
+	if data["eventType"] != "BASH" {
+		t.Errorf("eventType = %#v, want the fixture literal \"BASH\"", data["eventType"])
+	}
+	if data["eventId"] != testEventID {
+		t.Errorf("eventId = %#v, want %q", data["eventId"], testEventID)
+	}
 
 	if _, _ = e.call(t, http.MethodGet, path, tok, nil); e.app.hitCount(contextKey) != 1 {
 		t.Errorf("backend context fetches across two reads = %d, want 1", e.app.hitCount(contextKey))

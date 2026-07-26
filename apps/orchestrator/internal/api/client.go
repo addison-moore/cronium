@@ -242,9 +242,13 @@ func (c *Client) ReportHealth(ctx context.Context, report *HealthReport) error {
 	return c.post(ctx, "/api/internal/orchestrator/health", report, &response)
 }
 
-// SendHeartbeat reports orchestrator liveness and capacity
+// SendHeartbeat reports orchestrator liveness and capacity. The caller's
+// timestamp (heartbeatLoop stamps it — FINDINGS #38) is honored; stamping
+// here is only a fallback for requests that arrive without one.
 func (c *Client) SendHeartbeat(ctx context.Context, req *HeartbeatRequest) error {
-	req.Timestamp = time.Now().Format(time.RFC3339)
+	if req.Timestamp == "" {
+		req.Timestamp = time.Now().Format(time.RFC3339)
+	}
 	var response interface{}
 	return c.post(ctx, "/api/internal/orchestrator/heartbeat", req, &response)
 }
@@ -365,10 +369,18 @@ func (c *Client) doRequest(ctx context.Context, method, urlStr string, bodyBytes
 
 		// Check status code
 		if resp.StatusCode >= 400 {
-			// Parse error response
+			// Parse error response. The canonical app body is
+			// {"error": "<string>"} (message only, no code — see the fixtures);
+			// the structured {"error": {code, message}} form is also accepted.
+			// Retry classification stays status-based either way.
 			var errorResp ErrorResponse
-			if err := json.Unmarshal(body, &errorResp); err == nil && errorResp.Error.Code != "" {
-				apiErr := errors.NewAPIError(resp.StatusCode, errorResp.Error.Code, errorResp.Error.Message)
+			if err := json.Unmarshal(body, &errorResp); err == nil &&
+				(errorResp.Error.Code != "" || errorResp.Error.Message != "") {
+				code := errorResp.Error.Code
+				if code == "" {
+					code = "UNKNOWN"
+				}
+				apiErr := errors.NewAPIError(resp.StatusCode, code, errorResp.Error.Message)
 				apiErr.Endpoint = req.URL.String()
 				apiErr.Method = req.Method
 

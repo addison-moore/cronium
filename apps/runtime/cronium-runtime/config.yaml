@@ -27,7 +27,12 @@ backend:
   retryDelay: 1s
 
 auth:
-  jwtSecret: ${JWT_SECRET}
+  # jwtSecret is deliberately NOT set here. The yaml loader performs no env
+  # expansion, so a "${JWT_SECRET}" placeholder used to be read as a LITERAL
+  # secret that silently satisfied validation (FINDINGS #39 latent hazard).
+  # The secret MUST come from the environment — RUNTIME_JWT_SECRET (canonical,
+  # set by both compose files and the orchestrator's sidecar env) or the
+  # legacy bare JWT_SECRET — and startup fails loudly when it is missing.
   tokenExpiration: 1h
   refreshExpiration: 24h
 

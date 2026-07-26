@@ -186,11 +186,53 @@ func TestBackendClient_ClientErrorsAreNotRetried(t *testing.T) {
 	if !strings.Contains(err.Error(), "backend error: Forbidden") {
 		t.Errorf("error = %q, want it to carry the backend's pinned error string", err)
 	}
+	// Regression (FINDINGS #38): the canonical {"error":"<string>"} body has
+	// no message field — the error must not end in a dangling " - ".
+	if strings.Contains(err.Error(), "Forbidden - ") || strings.HasSuffix(err.Error(), " - ") {
+		t.Errorf("error = %q, must not carry a dangling \" - \" when the body has no message", err)
+	}
 
 	mu.Lock()
 	defer mu.Unlock()
 	if hits != 1 {
 		t.Errorf("hits = %d, want 1 (4xx must not be retried)", hits)
+	}
+}
+
+// Synthetic (not a canonical fixture shape): when a body carries BOTH error
+// and message, the two are joined with " - "; message-only bodies surface the
+// message alone.
+func TestBackendClient_ErrorBodyVariants(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{"error and message", `{"error":"Forbidden","message":"capability expired"}`, "backend error: Forbidden - capability expired"},
+		{"message only", `{"message":"capability expired"}`, "backend error: capability expired"},
+		{"neither", `{}`, "backend error: 403 Forbidden"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer srv.Close()
+
+			c := service.NewBackendClient(backendConfig(srv.URL, 0), quietLogger())
+			err := c.SaveOutput(capCtx(), testExecutionID, "data")
+			if err == nil {
+				t.Fatal("expected an error for a 403 backend response")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %q, want it to contain %q", err, tc.want)
+			}
+			if strings.HasSuffix(err.Error(), " - ") {
+				t.Errorf("error = %q, must never end in a dangling \" - \"", err)
+			}
+		})
 	}
 }
 
@@ -301,13 +343,49 @@ func TestBackendClient_GetExecutionContext_ParsesPinnedFixtureShape(t *testing.T
 	if !ok || input["a"] != float64(1) {
 		t.Errorf("Metadata[input] = %#v, want the fixture literal {a:1}", ec.Metadata["input"])
 	}
-	// Contract drift, pinned deliberately: the app's context route (per the
-	// fixture) carries the event's name/type only inside the nested "event"
-	// object, which types.ExecutionContext does not model — so these fields
-	// are always empty on the Go side. See the final report.
-	if ec.EventName != "" || ec.EventType != "" {
-		t.Errorf("EventName/EventType unexpectedly populated (%q/%q): the wire contract has no top-level fields for them",
-			ec.EventName, ec.EventType)
+	// Regression (FINDINGS #36): the app's context route carries the event's
+	// name/type only inside the nested "event" object; the client must model
+	// that shape and flatten it, so cronium.event() sees real values instead
+	// of always-empty strings.
+	if ec.Event == nil {
+		t.Fatal("Event = nil, want the fixture's nested event object decoded")
+	}
+	if ec.Event.Name != "Demo Event" || ec.Event.Type != "BASH" {
+		t.Errorf("Event = %#v, want the fixture literals name=Demo Event type=BASH", ec.Event)
+	}
+	if ec.EventName != "Demo Event" {
+		t.Errorf("EventName = %q, want the flattened fixture literal \"Demo Event\"", ec.EventName)
+	}
+	if ec.EventType != "BASH" {
+		t.Errorf("EventType = %q, want the flattened fixture literal \"BASH\"", ec.EventType)
+	}
+}
+
+// The "successNoEvent" scenario (execution without an associated event) must
+// decode cleanly with the flat event fields left empty.
+func TestBackendClient_GetExecutionContext_NoEventScenario(t *testing.T) {
+	noEvent := testsupport.LoadFixture(t, "executions-context.json", "successNoEvent", map[string]interface{}{
+		"executionId": testExecutionID,
+		"jobId":       "job-7",
+		"userId":      testUserID,
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		noEvent.Write(w)
+	}))
+	defer srv.Close()
+
+	c := service.NewBackendClient(backendConfig(srv.URL, 0), quietLogger())
+	ec, err := c.GetExecutionContext(capCtx(), testExecutionID)
+	if err != nil {
+		t.Fatalf("GetExecutionContext: %v", err)
+	}
+	if ec.Event != nil {
+		t.Errorf("Event = %#v, want nil for the null fixture event", ec.Event)
+	}
+	if ec.EventName != "" || ec.EventType != "" || ec.EventID != "" {
+		t.Errorf("event fields = %q/%q/%q, want all empty when the wire event is null",
+			ec.EventName, ec.EventType, ec.EventID)
 	}
 }
 

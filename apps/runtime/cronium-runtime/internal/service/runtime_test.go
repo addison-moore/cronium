@@ -317,6 +317,40 @@ func TestRuntimeService_ContextCache_NotInvalidatedByWrites(t *testing.T) {
 	}
 }
 
+// Regression (FINDINGS #36): the event name/type from the app's nested
+// "event" object must reach GetEventContext's flat fields — this is what the
+// SDKs' cronium.event() ultimately returns.
+func TestRuntimeService_GetEventContext_FlattensNestedEvent(t *testing.T) {
+	stub := newAppStub(t)
+	svc, _ := newServiceUnderTest(t, stub)
+
+	ec, err := svc.GetEventContext(capCtx(), testExecutionID)
+	if err != nil {
+		t.Fatalf("GetEventContext: %v", err)
+	}
+	if ec.EventName != "Demo Event" {
+		t.Errorf("EventName = %q, want the fixture literal \"Demo Event\"", ec.EventName)
+	}
+	if ec.EventType != "BASH" {
+		t.Errorf("EventType = %q, want the fixture literal \"BASH\"", ec.EventType)
+	}
+	if ec.EventID != "42" {
+		t.Errorf("EventID = %q, want the fixture literal \"42\"", ec.EventID)
+	}
+
+	// The flattened fields survive the cache round-trip too.
+	ec2, err := svc.GetEventContext(capCtx(), testExecutionID)
+	if err != nil {
+		t.Fatalf("GetEventContext (cached): %v", err)
+	}
+	if got := stub.hitCount(contextKey()); got != 1 {
+		t.Fatalf("context fetches = %d, want 1 (second read must be cache-served)", got)
+	}
+	if ec2.EventName != "Demo Event" || ec2.EventType != "BASH" {
+		t.Errorf("cached context event fields = %q/%q, want Demo Event/BASH", ec2.EventName, ec2.EventType)
+	}
+}
+
 func TestRuntimeService_IsJobRevoked_PassesThrough(t *testing.T) {
 	stub := newAppStub(t)
 	svc, fake := newServiceUnderTest(t, stub)

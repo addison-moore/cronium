@@ -2,6 +2,7 @@ package retry
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/errors"
@@ -29,8 +30,15 @@ func DefaultConfig() Config {
 // Operation is a function that can be retried
 type Operation func() error
 
-// WithRetry executes an operation with retry logic
+// WithRetry executes an operation with retry logic. A non-positive
+// MaxAttempts is a configuration error and fails loudly (FINDINGS #38: it
+// used to skip the loop entirely and return nil — the operation "succeeded"
+// without ever running).
 func WithRetry(ctx context.Context, cfg Config, operation Operation, log *logrus.Entry) error {
+	if cfg.MaxAttempts <= 0 {
+		return fmt.Errorf("retry: MaxAttempts must be >= 1, got %d (operation not attempted)", cfg.MaxAttempts)
+	}
+
 	var lastErr error
 	delay := cfg.InitialDelay
 

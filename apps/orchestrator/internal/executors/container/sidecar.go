@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/addison-moore/cronium/apps/orchestrator/internal/config"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
@@ -28,6 +29,45 @@ func NewSidecarManager(executor *Executor, log *logrus.Logger) *SidecarManager {
 	}
 }
 
+// buildSidecarEnv builds the environment for the runtime sidecar container.
+//
+// Every config value is passed under BOTH its canonical RUNTIME_-prefixed
+// name (the runtime's documented compose contract, consumed by its config
+// loader's explicit RUNTIME_* overrides) and the legacy bare name. The bare
+// names only ever worked through envconfig v1.4's alt-name fallback, and the
+// runtime image's baked config.yaml no longer papers over a missing secret
+// (FINDINGS #39 latent hazard) — the canonical names make the contract
+// explicit for current images while the bare ones keep older runtime images
+// working across an image-skew window.
+func buildSidecarEnv(jobID string, rt config.RuntimeConfig, backendToken string) []string {
+	env := []string{
+		"EXECUTION_ID=" + jobID,
+		// Canonical RUNTIME_-prefixed contract.
+		"RUNTIME_JWT_SECRET=" + rt.JWTSecret,
+		"RUNTIME_BACKEND_URL=" + rt.BackendURL,
+		"RUNTIME_BACKEND_TOKEN=" + backendToken,
+		"RUNTIME_VALKEY_URL=" + rt.ValkeyURL,
+		"RUNTIME_PORT=8081",
+		"RUNTIME_LOG_LEVEL=info",
+		// Legacy bare names (image-skew compatibility with older runtimes).
+		"JWT_SECRET=" + rt.JWTSecret,
+		"BACKEND_URL=" + rt.BackendURL,
+		"BACKEND_TOKEN=" + backendToken,
+		"VALKEY_URL=" + rt.ValkeyURL,
+		"PORT=8081",
+		"LOG_LEVEL=info",
+	}
+	// Only inject the Valkey password when configured, so no-auth (dev) Valkey
+	// deployments keep working.
+	if rt.ValkeyPassword != "" {
+		env = append(env,
+			"RUNTIME_VALKEY_PASSWORD="+rt.ValkeyPassword,
+			"VALKEY_PASSWORD="+rt.ValkeyPassword,
+		)
+	}
+	return env
+}
+
 // CreateRuntimeSidecar creates and starts a runtime API sidecar container
 func (sm *SidecarManager) CreateRuntimeSidecar(ctx context.Context, job *types.Job, networkID string) (string, error) {
 	// Generate JWT token for this execution
@@ -37,20 +77,7 @@ func (sm *SidecarManager) CreateRuntimeSidecar(ctx context.Context, job *types.J
 	}
 
 	// Build container configuration
-	sidecarEnv := []string{
-		"EXECUTION_ID=" + job.ID,
-		"JWT_SECRET=" + sm.executor.config.Runtime.JWTSecret,
-		"BACKEND_URL=" + sm.executor.config.Runtime.BackendURL,
-		"BACKEND_TOKEN=" + os.Getenv("CRONIUM_API_TOKEN"),
-		"VALKEY_URL=" + sm.executor.config.Runtime.ValkeyURL,
-		"PORT=8081",
-		"LOG_LEVEL=info",
-	}
-	// Only inject the Valkey password when configured, so no-auth (dev) Valkey
-	// deployments keep working. The runtime reads VALKEY_PASSWORD.
-	if pw := sm.executor.config.Runtime.ValkeyPassword; pw != "" {
-		sidecarEnv = append(sidecarEnv, "VALKEY_PASSWORD="+pw)
-	}
+	sidecarEnv := buildSidecarEnv(job.ID, sm.executor.config.Runtime, os.Getenv("CRONIUM_API_TOKEN"))
 	containerConfig := &container.Config{
 		Image: sm.getRuntimeImage(),
 		Env:   sidecarEnv,

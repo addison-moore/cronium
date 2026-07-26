@@ -119,6 +119,10 @@ type daemonCore struct {
 	// Per-stream in-memory output cap (see cappedCapture).
 	outputCapBytes int
 
+	// now is the clock used for wall-time stamps (heartbeat timestamps);
+	// injectable so tests can pin the emitted value.
+	now func() time.Time
+
 	// withCapability decorates a context with the per-job capability token
 	// (api.WithJobCapability); injectable so tests can observe which token a
 	// reporting call carries.
@@ -170,6 +174,7 @@ func newDaemonCore(deps daemonDeps, cfg daemonConfig) *daemonCore {
 		shutdownTick:        1 * time.Second,
 
 		outputCapBytes: outputStreamCapBytes,
+		now:            time.Now,
 		withCapability: api.WithJobCapability,
 
 		shutdown:      make(chan struct{}),
@@ -558,7 +563,10 @@ func (c *daemonCore) heartbeatLoop(ctx context.Context) {
 		maxJobs := c.maxConcurrent
 		req := &api.HeartbeatRequest{
 			OrchestratorID: c.orchestratorID,
-			RunningJobs:    running,
+			// Stamp the heartbeat here (FINDINGS #38): the request must carry a
+			// timestamp regardless of which jobAPI implementation sends it.
+			Timestamp:   c.now().UTC().Format(time.RFC3339),
+			RunningJobs: running,
 			Capacity: &api.HeartbeatCapacity{
 				MaxJobs:        maxJobs,
 				CurrentJobs:    current,

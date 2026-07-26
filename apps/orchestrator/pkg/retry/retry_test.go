@@ -157,18 +157,22 @@ func TestWithRetryBackoffGrowthAndCap(t *testing.T) {
 	assert.Less(t, elapsed, 500*time.Millisecond, "backoff must stay bounded")
 }
 
-// TestWithRetryZeroMaxAttemptsRunsNothing pins current behavior: a
-// zero/negative MaxAttempts config never runs the operation and returns nil.
-// All in-tree callers pass >= 1 (the API client adds 1 to the configured
-// retry count), but this is a footgun for a zero-value Config.
-func TestWithRetryZeroMaxAttemptsRunsNothing(t *testing.T) {
-	calls := 0
-	err := WithRetry(context.Background(), Config{}, func() error {
-		calls++
-		return nil
-	}, testLog())
-	assert.NoError(t, err)
-	assert.Equal(t, 0, calls)
+// TestWithRetryZeroMaxAttemptsReturnsError: a zero/negative MaxAttempts
+// config is rejected loudly without running the operation (FINDINGS #38 fix —
+// previously it silently ran nothing and returned nil, so a zero-value Config
+// made every operation a fake success). All in-tree callers pass >= 1 (the
+// API client adds 1 to the configured retry count).
+func TestWithRetryZeroMaxAttemptsReturnsError(t *testing.T) {
+	for _, maxAttempts := range []int{0, -1} {
+		calls := 0
+		err := WithRetry(context.Background(), Config{MaxAttempts: maxAttempts}, func() error {
+			calls++
+			return nil
+		}, testLog())
+		require.Error(t, err, "MaxAttempts=%d", maxAttempts)
+		assert.Contains(t, err.Error(), "MaxAttempts must be >= 1")
+		assert.Equal(t, 0, calls, "operation must not run with MaxAttempts=%d", maxAttempts)
+	}
 }
 
 func TestIsRetryable(t *testing.T) {

@@ -76,6 +76,32 @@ func assertJobCapabilityHeaders(t *testing.T, req capturedRequest, token string)
 	assert.Equal(t, token, req.Header.Get("X-Job-Capability"))
 }
 
+// canonicalErrorMessage returns the pinned message of a fixture scenario's
+// canonical {"error": "<string>"} body.
+func canonicalErrorMessage(t *testing.T, fx fixture, scenario string) string {
+	t.Helper()
+	_, body := resolvedBody(t, fx, scenario)
+	msg, ok := body["error"].(string)
+	require.True(t, ok, "scenario %q must pin a canonical string error body", scenario)
+	return msg
+}
+
+// assertCanonicalAPIError asserts that a client call against a canonical
+// error scenario surfaced the pinned status AND the pinned message (FINDINGS
+// #35: the old parser only understood {"error":{code,message}} and dropped
+// every canonical message). The canonical shape carries no code, so the
+// client keeps the UNKNOWN placeholder; classification stays status-based.
+func assertCanonicalAPIError(t *testing.T, err error, fx fixture, scenario string, wantStatus int) *croniumerrors.APIError {
+	t.Helper()
+	var apiErr *croniumerrors.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, wantStatus, apiErr.StatusCode)
+	assert.Equal(t, "UNKNOWN", apiErr.Code, "canonical bodies carry no code")
+	assert.Equal(t, canonicalErrorMessage(t, fx, scenario), apiErr.Message,
+		"the canonical {\"error\":\"<string>\"} message must be preserved")
+	return apiErr
+}
+
 // ---------------------------------------------------------------------------
 // POST /api/internal/jobs/claim
 // ---------------------------------------------------------------------------
@@ -143,6 +169,26 @@ func TestClaimJobsEmptyFixture(t *testing.T) {
 	assert.Empty(t, jobs)
 }
 
+// TestPollJobsResponseDecodesCanonicalCount pins the claim body's `count`
+// field (FINDINGS #35: the type used to declare a `metadata` object the app
+// never sends, so the actual `count` was silently dropped).
+func TestPollJobsResponseDecodesCanonicalCount(t *testing.T) {
+	fx := loadFixture(t, "jobs-claim")
+
+	for scenario, wantCount := range map[string]int{
+		"success": 1,
+		"empty":   0,
+	} {
+		t.Run(scenario, func(t *testing.T) {
+			raw, _ := resolvedBody(t, fx, scenario)
+			var response PollJobsResponse
+			require.NoError(t, json.Unmarshal(raw, &response))
+			assert.Equal(t, wantCount, response.Count)
+			assert.Len(t, response.Jobs, wantCount)
+		})
+	}
+}
+
 func TestClaimJobsErrorScenarios(t *testing.T) {
 	fx := loadFixture(t, "jobs-claim")
 
@@ -162,13 +208,7 @@ func TestClaimJobsErrorScenarios(t *testing.T) {
 			_, err := client.ClaimJobs(context.Background(), 5)
 			require.Error(t, err)
 
-			var apiErr *croniumerrors.APIError
-			require.ErrorAs(t, err, &apiErr)
-			assert.Equal(t, tc.wantStatus, apiErr.StatusCode)
-			// The app's canonical error body is {"error": "<string>"} which
-			// does not match the client's structured ErrorResponse shape, so
-			// the client falls back to the generic UNKNOWN code.
-			assert.Equal(t, "UNKNOWN", apiErr.Code)
+			apiErr := assertCanonicalAPIError(t, err, fx, tc.scenario, tc.wantStatus)
 			assert.Equal(t, tc.wantStatus == 500, apiErr.Retryable)
 		})
 	}
@@ -215,11 +255,10 @@ func TestClaimJobsDoesNotRetryNonRetryable401(t *testing.T) {
 }
 
 func TestClaimJobsStructuredErrorBody(t *testing.T) {
-	// Synthetic, NOT from the fixtures: the client also understands a
-	// structured {"error":{"code","message"}} body. Note the app's canonical
-	// error shape is a plain {"error":"<string>"} (see the fixtures), which
-	// never matches this branch — canonical errors always surface as code
-	// UNKNOWN (asserted in TestClaimJobsErrorScenarios).
+	// Synthetic, NOT from the fixtures: besides the canonical plain
+	// {"error":"<string>"} shape (asserted in TestClaimJobsErrorScenarios),
+	// the client also understands a structured {"error":{"code","message"}}
+	// body, preserving its code.
 	server := newFixtureServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)
 		_, _ = w.Write([]byte(`{"error":{"code":"CAS_CONFLICT","message":"transition rejected"}}`))
@@ -234,6 +273,24 @@ func TestClaimJobsStructuredErrorBody(t *testing.T) {
 	assert.Equal(t, "CAS_CONFLICT", apiErr.Code)
 	assert.Contains(t, apiErr.Message, "transition rejected")
 	assert.False(t, apiErr.Retryable)
+}
+
+func TestClaimJobsUnrecognizedErrorBodyFallsBack(t *testing.T) {
+	// An error body matching NEITHER shape (string nor object) still surfaces
+	// as the generic UNKNOWN error carrying the raw body.
+	server := newFixtureServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":42}`))
+	})
+	client := newTestClient(t, server.URL, 0)
+
+	_, err := client.ClaimJobs(context.Background(), 5)
+	require.Error(t, err)
+	var apiErr *croniumerrors.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, 400, apiErr.StatusCode)
+	assert.Equal(t, "UNKNOWN", apiErr.Code)
+	assert.Contains(t, apiErr.Message, `{"error":42}`)
 }
 
 func TestClaimJobsMalformedJSONBody(t *testing.T) {
@@ -314,9 +371,7 @@ func TestJobsHeartbeatErrorScenarios(t *testing.T) {
 
 			_, err := client.JobsHeartbeat(context.Background(), []string{"job-a"})
 			require.Error(t, err)
-			var apiErr *croniumerrors.APIError
-			require.ErrorAs(t, err, &apiErr)
-			assert.Equal(t, wantStatus, apiErr.StatusCode)
+			assertCanonicalAPIError(t, err, fx, scenario, wantStatus)
 		})
 	}
 }
@@ -386,9 +441,7 @@ func TestUpdateJobStatusErrorScenarios(t *testing.T) {
 			ctx := WithJobCapability(context.Background(), fixtureToken)
 			err := client.UpdateJobStatus(ctx, "job-123", types.JobStatusRunning, nil)
 			require.Error(t, err)
-			var apiErr *croniumerrors.APIError
-			require.ErrorAs(t, err, &apiErr)
-			assert.Equal(t, wantStatus, apiErr.StatusCode)
+			assertCanonicalAPIError(t, err, fx, scenario, wantStatus)
 			assert.Len(t, server.captured(), 1, "4xx must not be retried")
 		})
 	}
@@ -469,9 +522,7 @@ func TestCompleteJobErrorScenarios(t *testing.T) {
 			ctx := WithJobCapability(context.Background(), fixtureToken)
 			err := client.CompleteJob(ctx, "job-123", &CompleteJobRequest{Status: types.JobStatusCompleted})
 			require.Error(t, err)
-			var apiErr *croniumerrors.APIError
-			require.ErrorAs(t, err, &apiErr)
-			assert.Equal(t, wantStatus, apiErr.StatusCode)
+			assertCanonicalAPIError(t, err, fx, scenario, wantStatus)
 		})
 	}
 }
@@ -531,9 +582,7 @@ func TestCreateExecutionErrorScenarios(t *testing.T) {
 
 			err := client.CreateExecution(context.Background(), "exec-1", "job-123", nil, nil)
 			require.Error(t, err)
-			var apiErr *croniumerrors.APIError
-			require.ErrorAs(t, err, &apiErr)
-			assert.Equal(t, wantStatus, apiErr.StatusCode)
+			assertCanonicalAPIError(t, err, fx, scenario, wantStatus)
 		})
 	}
 }
@@ -677,6 +726,24 @@ func TestSendHeartbeatFixture(t *testing.T) {
 	assert.Equal(t, float64(4), capacity["availableSlots"])
 }
 
+// A caller-provided heartbeat timestamp (heartbeatLoop stamps it — FINDINGS
+// #38) must reach the wire unmodified; the client only stamps as a fallback.
+func TestSendHeartbeatPreservesCallerTimestamp(t *testing.T) {
+	fx := loadFixture(t, "orchestrator-heartbeat")
+	server := newFixtureServer(t, serveScenario(t, fx, "success"))
+	client := newTestClient(t, server.URL, 0)
+
+	hb := &HeartbeatRequest{
+		OrchestratorID: testOrchID,
+		Timestamp:      fixtureISODate,
+		RunningJobs:    []string{},
+	}
+	require.NoError(t, client.SendHeartbeat(context.Background(), hb))
+
+	body := server.lastRequest(t).jsonBody(t)
+	assert.Equal(t, fixtureISODate, body["timestamp"])
+}
+
 func TestSendMetricsFixture(t *testing.T) {
 	fx := loadFixture(t, "orchestrator-metrics")
 	server := newFixtureServer(t, serveScenario(t, fx, "success"))
@@ -708,9 +775,7 @@ func TestSendMetricsBadRequestFixture(t *testing.T) {
 
 	err := client.SendMetrics(context.Background(), &MetricsRequest{OrchestratorID: testOrchID})
 	require.Error(t, err)
-	var apiErr *croniumerrors.APIError
-	require.ErrorAs(t, err, &apiErr)
-	assert.Equal(t, 400, apiErr.StatusCode)
+	assertCanonicalAPIError(t, err, fx, "badRequestMissingMetrics", 400)
 }
 
 func TestHealthCheckFixture(t *testing.T) {
@@ -733,9 +798,7 @@ func TestHealthCheckFixture(t *testing.T) {
 
 		err := client.HealthCheck(context.Background())
 		require.Error(t, err)
-		var apiErr *croniumerrors.APIError
-		require.ErrorAs(t, err, &apiErr)
-		assert.Equal(t, 503, apiErr.StatusCode)
+		apiErr := assertCanonicalAPIError(t, err, fx, "unhealthy", 503)
 		assert.True(t, apiErr.Retryable, "5xx must be marked retryable")
 	})
 }

@@ -254,9 +254,15 @@ type FileLogConfig struct {
 	MaxAge     int    `yaml:"maxAge" envconfig:"MAX_AGE" default:"30"`
 }
 
-// WSLogConfig defines WebSocket logging settings
+// WSLogConfig defines WebSocket logging settings.
+//
+// Enabled defaults to FALSE: the raw-WS log-shipping channel is vestigial
+// end-to-end (FINDINGS #34 — the socket server speaks only Socket.IO plus
+// HTTP /broadcast/*, so nothing consumes these frames; live log lines flow
+// via /broadcast/log-line). The client code is kept so a real consumer can be
+// wired later; opt back in with CRONIUM_LOGGING_WEBSOCKET_ENABLED=true.
 type WSLogConfig struct {
-	Enabled       bool          `yaml:"enabled" envconfig:"ENABLED" default:"true"`
+	Enabled       bool          `yaml:"enabled" envconfig:"ENABLED" default:"false"`
 	BufferSize    int           `yaml:"bufferSize" envconfig:"BUFFER_SIZE" default:"1000"`
 	FlushInterval time.Duration `yaml:"flushInterval" envconfig:"FLUSH_INTERVAL" default:"100ms"`
 	BatchSize     int           `yaml:"batchSize" envconfig:"BATCH_SIZE" default:"50"`

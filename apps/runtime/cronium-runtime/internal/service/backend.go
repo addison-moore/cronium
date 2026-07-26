@@ -88,6 +88,22 @@ func (c *BackendClient) GetExecutionContext(ctx context.Context, executionID str
 		return nil, fmt.Errorf("failed to get execution context: %w", err)
 	}
 
+	// The wire carries the event's name/type only inside the nested "event"
+	// object (FINDINGS #36 — there are no top-level eventName/eventType
+	// fields). Flatten them so cronium.event() and every consumer of the flat
+	// contract sees real values.
+	if context.Event != nil {
+		if context.EventName == "" {
+			context.EventName = context.Event.Name
+		}
+		if context.EventType == "" {
+			context.EventType = context.Event.Type
+		}
+		if context.EventID == "" {
+			context.EventID = context.Event.ID
+		}
+	}
+
 	return &context, nil
 }
 
@@ -266,9 +282,19 @@ func (c *BackendClient) doRequest(req *http.Request, result interface{}) error {
 
 		// Check status code
 		if resp.StatusCode >= 400 {
+			// The app's canonical error body is {"error": "<string>"} with no
+			// message field; join the parts only when both exist so the error
+			// never ends in a dangling " - " (FINDINGS #38).
 			var errResp types.ErrorResponse
-			if err := json.Unmarshal(body, &errResp); err == nil {
-				lastErr = fmt.Errorf("backend error: %s - %s", errResp.Error, errResp.Message)
+			if err := json.Unmarshal(body, &errResp); err == nil && (errResp.Error != "" || errResp.Message != "") {
+				detail := errResp.Error
+				switch {
+				case detail == "":
+					detail = errResp.Message
+				case errResp.Message != "":
+					detail = detail + " - " + errResp.Message
+				}
+				lastErr = fmt.Errorf("backend error: %s", detail)
 			} else {
 				lastErr = fmt.Errorf("backend error: %s", resp.Status)
 			}

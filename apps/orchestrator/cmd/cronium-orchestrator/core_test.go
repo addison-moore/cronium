@@ -504,6 +504,10 @@ func TestHeartbeatLoopReportsCapacityImmediately(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Injectable clock: pin the exact timestamp the heartbeat must carry.
+	fixedNow := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	fx.core.now = func() time.Time { return fixedNow }
+
 	fx.core.mu.Lock()
 	fx.core.activeJobs["busy"] = testJob("busy")
 	fx.core.mu.Unlock()
@@ -517,6 +521,9 @@ func TestHeartbeatLoopReportsCapacityImmediately(t *testing.T) {
 		require.Equal(t, 4, req.Capacity.MaxJobs)
 		require.Equal(t, 1, req.Capacity.CurrentJobs)
 		require.Equal(t, 3, req.Capacity.AvailableSlots)
+		// Regression (FINDINGS #38): heartbeatLoop must stamp the request
+		// itself — RFC3339, from the injected clock.
+		require.Equal(t, fixedNow.Format(time.RFC3339), req.Timestamp)
 	case <-time.After(2 * time.Second):
 		t.Fatal("heartbeat never sent")
 	}

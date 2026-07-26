@@ -255,8 +255,12 @@ logging:
 
   # WebSocket log streaming
   websocket:
-    # Enable WebSocket streaming
-    enabled: true
+    # Disabled by default: the raw-WS log-shipping channel has no consumer
+    # (FINDINGS #34 — the socket server speaks Socket.IO + HTTP /broadcast/*
+    # only; live logs flow via /broadcast/log-line). To re-enable, set
+    # CRONIUM_LOGGING_WEBSOCKET_ENABLED=true (the env default overrides this
+    # file's value when the variable is unset).
+    enabled: false
 
     # Log buffer size
     bufferSize: 1000

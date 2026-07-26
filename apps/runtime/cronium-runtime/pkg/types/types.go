@@ -4,7 +4,14 @@ import (
 	"time"
 )
 
-// ExecutionContext represents the context for a running execution
+// ExecutionContext represents the context for a running execution.
+//
+// The app's context route (canonical shape:
+// tests/fixtures/internal-api/executions-context.json) carries the event's
+// name/type only inside a nested "event" object — there are no top-level
+// eventName/eventType fields on the wire (FINDINGS #36). Event models that
+// nested object; the backend client flattens it into EventName/EventType so
+// the script-facing handlers and SDKs keep their flat contract.
 type ExecutionContext struct {
 	ExecutionID string                 `json:"executionId"`
 	EventID     string                 `json:"eventId"`
@@ -13,6 +20,17 @@ type ExecutionContext struct {
 	UserID      string                 `json:"userId"`
 	StartTime   time.Time              `json:"startTime"`
 	Metadata    map[string]interface{} `json:"metadata"`
+	Event       *ExecutionEvent        `json:"event,omitempty"`
+}
+
+// ExecutionEvent is the nested "event" object on the app's context route.
+// Null when the execution has no associated event (fixture scenario
+// "successNoEvent").
+type ExecutionEvent struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	RunLocation string `json:"runLocation,omitempty"`
 }
 
 // Variable represents a user-defined variable
