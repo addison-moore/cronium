@@ -59,6 +59,15 @@ describe("eventFormSchema validation", () => {
     );
   });
 
+  it("caps the name at the server's 100-char limit (regression, FINDINGS #45)", () => {
+    expect(
+      issuesAt({ ...minimalScript, name: "n".repeat(101) }, "name"),
+    ).toContain("Event name must be less than 100 characters");
+    expect(
+      issuesAt({ ...minimalScript, name: "n".repeat(100) }, "name"),
+    ).toEqual([]);
+  });
+
   it("requires content for every script type", () => {
     for (const type of [EventType.PYTHON, EventType.BASH, EventType.NODEJS]) {
       expect(
@@ -177,5 +186,78 @@ describe("eventFormSchema validation", () => {
     expect(
       eventFormSchema.safeParse({ ...minimalScript, timeoutValue: 0 }).success,
     ).toBe(false);
+  });
+
+  describe("interval floor (mirror of the server's 10s minimum — FINDINGS #45)", () => {
+    const scheduled = {
+      ...minimalScript,
+      triggerType: EventTriggerType.SCHEDULE,
+    };
+
+    it("rejects sub-10s intervals for SCHEDULE-trigger events", () => {
+      expect(
+        issuesAt(
+          { ...scheduled, scheduleNumber: 9, scheduleUnit: TimeUnit.SECONDS },
+          "scheduleNumber",
+        ),
+      ).toContain("Intervals below 10 seconds are not supported");
+    });
+
+    it("accepts the 10s boundary and one of every larger unit", () => {
+      for (const [n, unit] of [
+        [10, TimeUnit.SECONDS],
+        [1, TimeUnit.MINUTES],
+        [1, TimeUnit.HOURS],
+        [1, TimeUnit.DAYS],
+      ] as const) {
+        expect(
+          issuesAt(
+            { ...scheduled, scheduleNumber: n, scheduleUnit: unit },
+            "scheduleNumber",
+          ),
+        ).toEqual([]);
+      }
+    });
+
+    it("bypasses the floor in cron mode and for manual triggers, like the server", () => {
+      expect(
+        issuesAt(
+          {
+            ...scheduled,
+            useCronScheduling: true,
+            customSchedule: "*/5 * * * *",
+            scheduleNumber: 5,
+            scheduleUnit: TimeUnit.SECONDS,
+          },
+          "scheduleNumber",
+        ),
+      ).toEqual([]);
+      // minimalScript is MANUAL-triggered
+      expect(
+        issuesAt(
+          {
+            ...minimalScript,
+            scheduleNumber: 5,
+            scheduleUnit: TimeUnit.SECONDS,
+          },
+          "scheduleNumber",
+        ),
+      ).toEqual([]);
+    });
+
+    it("leftover cron text in interval mode does not bypass the floor (the payload drops it)", () => {
+      expect(
+        issuesAt(
+          {
+            ...scheduled,
+            useCronScheduling: false,
+            customSchedule: "*/5 * * * *",
+            scheduleNumber: 5,
+            scheduleUnit: TimeUnit.SECONDS,
+          },
+          "scheduleNumber",
+        ),
+      ).toContain("Intervals below 10 seconds are not supported");
+    });
   });
 });

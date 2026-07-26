@@ -297,7 +297,7 @@ describe("buildEventPayload vs server createEventSchema (mirror tests)", () => {
     }
   });
 
-  describe("interval minimum (10s floor, enforced server-side only)", () => {
+  describe("interval minimum (10s floor, mirrored client-side)", () => {
     const scheduled = (n: number, unit: TimeUnit) =>
       buildEventPayload(
         makeFormData({
@@ -339,52 +339,98 @@ describe("buildEventPayload vs server createEventSchema (mirror tests)", () => {
       ).toBe(true);
     });
 
-    it("skips the interval floor in cron mode (cron takes precedence)", () => {
-      const payload = buildEventPayload(
-        makeFormData({
-          useCronScheduling: true,
-          customSchedule: "*/5 * * * *",
-          scheduleNumber: 5,
-          scheduleUnit: TimeUnit.SECONDS,
-        }),
-      );
-      expect(createEventSchema.safeParse(payload).success).toBe(true);
+    it("skips the interval floor in cron mode (cron takes precedence) — client and server agree", () => {
+      const formData = makeFormData({
+        useCronScheduling: true,
+        customSchedule: "*/5 * * * *",
+        scheduleNumber: 5,
+        scheduleUnit: TimeUnit.SECONDS,
+      });
+      expect(eventFormSchema.safeParse(formData).success).toBe(true);
+      expect(
+        createEventSchema.safeParse(buildEventPayload(formData)).success,
+      ).toBe(true);
     });
 
-    it("skips the interval floor for manual events", () => {
-      const payload = buildEventPayload(
-        makeFormData({
-          triggerType: EventTriggerType.MANUAL,
-          scheduleNumber: 5,
-          scheduleUnit: TimeUnit.SECONDS,
-        }),
-      );
-      expect(createEventSchema.safeParse(payload).success).toBe(true);
+    it("skips the interval floor for manual events — client and server agree", () => {
+      const formData = makeFormData({
+        triggerType: EventTriggerType.MANUAL,
+        scheduleNumber: 5,
+        scheduleUnit: TimeUnit.SECONDS,
+      });
+      expect(eventFormSchema.safeParse(formData).success).toBe(true);
+      expect(
+        createEventSchema.safeParse(buildEventPayload(formData)).success,
+      ).toBe(true);
     });
 
-    it("documents the client/server gap: the form schema itself allows a sub-10s interval", () => {
-      // The client-side eventFormSchema only enforces scheduleNumber >= 1;
-      // the 10s floor surfaces as a server error toast, not inline.
-      const formResult = eventFormSchema.safeParse(
-        makeFormData({
-          scheduleNumber: 5,
-          scheduleUnit: TimeUnit.SECONDS,
-        }),
-      );
-      expect(formResult.success).toBe(true);
+    it("the form schema now mirrors the floor: sub-10s intervals fail inline with the server's message (regression, FINDINGS #45)", () => {
+      for (const n of [1, 5, 9]) {
+        const formResult = eventFormSchema.safeParse(
+          makeFormData({
+            scheduleNumber: n,
+            scheduleUnit: TimeUnit.SECONDS,
+          }),
+        );
+        expect(formResult.success).toBe(false);
+        if (!formResult.success) {
+          const issue = formResult.error.issues.find(
+            (i) => i.path[0] === "scheduleNumber",
+          );
+          expect(issue?.message).toBe(
+            "Intervals below 10 seconds are not supported",
+          );
+        }
+      }
+    });
+
+    it("client and server agree at the boundary: 10s and 1 of every larger unit pass both", () => {
+      for (const [n, unit] of [
+        [10, TimeUnit.SECONDS],
+        [1, TimeUnit.MINUTES],
+        [1, TimeUnit.HOURS],
+        [1, TimeUnit.DAYS],
+      ] as const) {
+        const formData = makeFormData({
+          scheduleNumber: n,
+          scheduleUnit: unit,
+        });
+        expect(eventFormSchema.safeParse(formData).success).toBe(true);
+        expect(
+          createEventSchema.safeParse(buildEventPayload(formData)).success,
+        ).toBe(true);
+      }
     });
   });
 
-  it("documents the client/server gap: the form allows names longer than the server's 100-char cap", () => {
+  it("the form now mirrors the server's 100-char name cap (regression, FINDINGS #45)", () => {
     const longName = "n".repeat(101);
-    expect(
-      eventFormSchema.safeParse(makeFormData({ name: longName })).success,
-    ).toBe(true);
+    const formResult = eventFormSchema.safeParse(
+      makeFormData({ name: longName }),
+    );
+    expect(formResult.success).toBe(false);
+    if (!formResult.success) {
+      const issue = formResult.error.issues.find((i) => i.path[0] === "name");
+      expect(issue?.message).toBe(
+        "Event name must be less than 100 characters",
+      );
+    }
     expect(
       createEventSchema.safeParse(
         buildEventPayload(makeFormData({ name: longName })),
       ).success,
     ).toBe(false);
+
+    // Client and server agree at the boundary: exactly 100 chars passes both
+    const boundaryName = "n".repeat(100);
+    expect(
+      eventFormSchema.safeParse(makeFormData({ name: boundaryName })).success,
+    ).toBe(true);
+    expect(
+      createEventSchema.safeParse(
+        buildEventPayload(makeFormData({ name: boundaryName })),
+      ).success,
+    ).toBe(true);
   });
 
   it("a tool-action payload parses server-side (config as JSON string)", () => {

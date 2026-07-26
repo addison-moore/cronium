@@ -43,21 +43,36 @@ import { AiIcon } from "./ai-icon";
 import { aiActions } from "./actions";
 import { aiCredentialsSchema, type AiCredentials } from "./schemas";
 
-// Form schema: apiKey is optional here so editing an existing connection (whose
-// key is blanked in API responses) doesn't force re-entry — the server restores
-// the stored secret before validating aiCredentialsSchema on save.
-const aiFormSchema = z
-  .object({
-    name: z.string().min(1, "Name is required"),
-    provider: z.enum(AI_PROVIDER_IDS),
-    apiKey: z.string().optional(),
-    baseUrl: z.string().optional(),
-    defaultModel: z.string().optional(),
-  })
-  .refine((data) => data.provider !== "custom" || !!data.baseUrl?.trim(), {
-    message: "Base URL is required for an OpenAI-compatible provider",
-    path: ["baseUrl"],
-  });
+// Form schema: create mode requires an API key. The edit-mode schema allows
+// blank because the key is blanked in API responses and a blank submit means
+// "keep the current value" — the server restores the stored secret before
+// validating aiCredentialsSchema on save
+// (see lib/tools/credential-redaction.ts).
+const aiFormFields = z.object({
+  name: z.string().min(1, "Name is required"),
+  provider: z.enum(AI_PROVIDER_IDS),
+  apiKey: z.string(),
+  baseUrl: z.string().optional(),
+  defaultModel: z.string().optional(),
+});
+
+function withCustomBaseUrlRule<Schema extends typeof aiFormFields>(
+  schema: Schema,
+) {
+  return schema.refine(
+    (data) => data.provider !== "custom" || !!data.baseUrl?.trim(),
+    {
+      message: "Base URL is required for an OpenAI-compatible provider",
+      path: ["baseUrl"],
+    },
+  );
+}
+
+const aiFormSchema = withCustomBaseUrlRule(
+  aiFormFields.extend({ apiKey: z.string().min(1, "API key is required") }),
+);
+const aiEditFormSchema = withCustomBaseUrlRule(aiFormFields);
+
 type AiFormData = z.infer<typeof aiFormSchema>;
 
 const PROVIDER_KEY_PLACEHOLDER: Record<AiProviderId, string> = {
@@ -81,7 +96,7 @@ function parseCreds(raw: unknown): Partial<AiCredentials> {
 function AiCredentialForm({ tool, onSubmit, onCancel }: CredentialFormProps) {
   const existing = tool ? parseCreds(tool.credentials) : {};
   const form = useForm<AiFormData>({
-    resolver: zodResolver(aiFormSchema),
+    resolver: zodResolver(tool ? aiEditFormSchema : aiFormSchema),
     defaultValues: tool
       ? {
           name: tool.name,
@@ -236,6 +251,11 @@ function AiCredentialForm({ tool, onSubmit, onCancel }: CredentialFormProps) {
           }
           {...form.register("apiKey")}
         />
+        {form.formState.errors.apiKey && (
+          <p className="text-destructive mt-1 text-sm">
+            {form.formState.errors.apiKey.message}
+          </p>
+        )}
       </div>
 
       <div>

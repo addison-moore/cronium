@@ -32,6 +32,14 @@ const notionFormSchema = notionCredentialsSchema.extend({
   name: z.string().min(1, "Name is required"),
 });
 
+// When editing an existing tool the server redacts apiKey to "" in read
+// responses and treats a blank secret on update as "keep the current value"
+// (see lib/tools/credential-redaction.ts). Requiring min(1) here would force
+// re-typing the token on every edit, so the edit-mode schema allows blank.
+const notionEditFormSchema = notionFormSchema.extend({
+  apiKey: z.string(),
+});
+
 type NotionFormData = z.infer<typeof notionFormSchema>;
 
 function NotionCredentialForm({
@@ -40,7 +48,7 @@ function NotionCredentialForm({
   onCancel,
 }: CredentialFormProps) {
   const form = useForm<NotionFormData>({
-    resolver: zodResolver(notionFormSchema),
+    resolver: zodResolver(tool ? notionEditFormSchema : notionFormSchema),
     defaultValues: tool
       ? {
           name: tool.name,

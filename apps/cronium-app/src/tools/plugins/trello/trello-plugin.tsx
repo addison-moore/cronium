@@ -32,6 +32,16 @@ const trelloFormSchema = trelloCredentialsSchema.extend({
   name: z.string().min(1, "Name is required"),
 });
 
+// When editing an existing tool the server redacts both apiKey and apiToken
+// (secret-keyed fields) to "" in read responses and treats a blank secret on
+// update as "keep the current value" (see lib/tools/credential-redaction.ts).
+// Requiring min(1) here would force re-typing them on every edit, so the
+// edit-mode schema allows blank.
+const trelloEditFormSchema = trelloFormSchema.extend({
+  apiKey: z.string(),
+  apiToken: z.string(),
+});
+
 type TrelloFormData = z.infer<typeof trelloFormSchema>;
 
 function TrelloCredentialForm({
@@ -40,7 +50,7 @@ function TrelloCredentialForm({
   onCancel,
 }: CredentialFormProps) {
   const form = useForm<TrelloFormData>({
-    resolver: zodResolver(trelloFormSchema),
+    resolver: zodResolver(tool ? trelloEditFormSchema : trelloFormSchema),
     defaultValues: tool
       ? {
           name: tool.name,

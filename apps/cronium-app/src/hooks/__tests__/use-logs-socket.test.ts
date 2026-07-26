@@ -4,8 +4,9 @@
  * Pins the hook's contract with a scripted socket.io-client mock:
  *   - no connection until an authenticated user is present
  *   - connects to the /logs namespace with a "logs"-audience ticket provider
- *   - subscribe calls made before the socket connects are silently dropped
- *     (they are NOT queued — pinned behavior)
+ *   - subscribe calls made before the socket connects are queued and flushed
+ *     on connect (REGRESSION for FINDINGS #46: they used to be silently
+ *     dropped, so a component that mounted before connect never got live logs)
  *   - successful subscriptions are re-established after a reconnect
  *   - log:update fan-out and its cleanup function
  *   - full teardown on unmount (unsubscribe every log, disconnect)
@@ -139,7 +140,7 @@ describe("useLogsSocket", () => {
     expect(result.current.isConnected).toBe(true);
   });
 
-  it("drops subscribe calls made before the socket has connected (pinned: not queued)", () => {
+  it("queues subscribe calls made before the socket connects and flushes them on connect (regression, FINDINGS #46)", () => {
     setUser("user-1");
     const { result } = renderHook(() => useLogsSocket());
     const socket = sockets[0]!;
@@ -147,10 +148,27 @@ describe("useLogsSocket", () => {
     act(() => {
       result.current.subscribeToLog(7);
     });
+    // Nothing goes over the wire while disconnected
     expect(socket.emit).not.toHaveBeenCalled();
 
-    // Not queued either: connecting later does not replay the dropped call.
+    // The connect handler replays the queued intent
     connect(socket);
+    expect(socket.emit).toHaveBeenCalledWith("subscribe", { logId: 7 });
+  });
+
+  it("unsubscribing a queued id before connect cancels the intent", () => {
+    setUser("user-1");
+    const { result } = renderHook(() => useLogsSocket());
+    const socket = sockets[0]!;
+
+    act(() => {
+      result.current.subscribeToLog(7);
+      result.current.subscribeToLog(8);
+      result.current.unsubscribeFromLog(7);
+    });
+
+    connect(socket);
+    expect(socket.emit).toHaveBeenCalledWith("subscribe", { logId: 8 });
     expect(socket.emit).not.toHaveBeenCalledWith("subscribe", { logId: 7 });
   });
 

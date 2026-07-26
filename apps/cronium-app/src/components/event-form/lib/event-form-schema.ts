@@ -8,13 +8,20 @@ import {
   CatchupPolicy,
   OverlapPolicy,
 } from "@/shared/schema";
+import {
+  intervalSecondsFor,
+  validateIntervalSeconds,
+} from "@/lib/scheduling/schedule-math";
 import type { ToolActionConfig } from "../ToolActionSection";
 
 // Form schema using Zod (client-side mirror of the server's createEventSchema;
 // pure module — no React/tRPC imports so it can be unit-tested directly).
 export const eventFormSchema = z
   .object({
-    name: z.string().min(1, "Event name is required"),
+    name: z
+      .string()
+      .min(1, "Event name is required")
+      .max(100, "Event name must be less than 100 characters"),
     description: z.string().optional(),
     shared: z.boolean().default(false),
     type: z.nativeEnum(EventType),
@@ -111,6 +118,30 @@ export const eventFormSchema = z
     {
       message: "Select at least one execution location",
       path: ["selectedServerIds"],
+    },
+  )
+  .refine(
+    (data) => {
+      // Mirror of the server's 10s interval floor (shared/schemas/events.ts):
+      // it only applies to SCHEDULE-trigger events in interval mode. The
+      // payload only carries customSchedule when cron mode is on, so the
+      // bypass keys off the effective cron expression, not leftover text.
+      const effectiveCron = data.useCronScheduling
+        ? data.customSchedule
+        : undefined;
+      if (effectiveCron || data.triggerType !== EventTriggerType.SCHEDULE) {
+        return true;
+      }
+      if (!data.scheduleNumber) return true;
+      return (
+        validateIntervalSeconds(
+          intervalSecondsFor(data.scheduleNumber, data.scheduleUnit),
+        ) === null
+      );
+    },
+    {
+      message: "Intervals below 10 seconds are not supported",
+      path: ["scheduleNumber"],
     },
   );
 

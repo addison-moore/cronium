@@ -24,6 +24,15 @@ const discordFormSchema = discordCredentialsSchema.extend({
   name: z.string().min(1, "Name is required"),
 });
 
+// When editing an existing tool the server redacts webhookUrl to "" in read
+// responses and treats a blank secret on update as "keep the current value"
+// (see lib/tools/credential-redaction.ts). Requiring a valid URL here would
+// force re-pasting the webhook on every edit, so the edit-mode schema also
+// accepts blank.
+const discordEditFormSchema = discordFormSchema.extend({
+  webhookUrl: discordCredentialsSchema.shape.webhookUrl.or(z.literal("")),
+});
+
 type DiscordFormData = z.infer<typeof discordFormSchema>;
 
 function DiscordCredentialForm({
@@ -32,7 +41,7 @@ function DiscordCredentialForm({
   onCancel,
 }: CredentialFormProps) {
   const form = useForm<DiscordFormData>({
-    resolver: zodResolver(discordFormSchema),
+    resolver: zodResolver(tool ? discordEditFormSchema : discordFormSchema),
     defaultValues: tool
       ? {
           name: tool.name,

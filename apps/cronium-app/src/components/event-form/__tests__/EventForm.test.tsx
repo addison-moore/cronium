@@ -90,7 +90,7 @@ jest.mock("@/components/dashboard/AIScriptAssistant-lazy", () => ({
 }));
 
 import EventForm from "../EventForm";
-import { EventType, EventTriggerType } from "@/shared/schema";
+import { EventType, EventTriggerType, TimeUnit } from "@/shared/schema";
 
 const scheduledBashEvent = {
   type: EventType.BASH,
@@ -159,6 +159,57 @@ describe("EventForm", () => {
         await screen.findByText("Event name is required"),
       ).toBeInTheDocument();
       expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("surfaces the 100-char name cap inline instead of a server error (regression, FINDINGS #45)", async () => {
+      const user = userEvent.setup();
+      render(<EventForm initialData={scheduledBashEvent} />);
+
+      fireEvent.change(screen.getByLabelText("Event Name"), {
+        target: { value: "n".repeat(101) },
+      });
+      await user.click(screen.getByRole("button", { name: "Create Event" }));
+
+      expect(
+        await screen.findByText("Event name must be less than 100 characters"),
+      ).toBeInTheDocument();
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("surfaces the 10s interval floor inline instead of a server error (regression, FINDINGS #45)", async () => {
+      const user = userEvent.setup();
+      render(
+        <EventForm
+          initialData={{
+            ...scheduledBashEvent,
+            scheduleUnit: TimeUnit.SECONDS,
+          }}
+        />,
+      );
+
+      await user.type(screen.getByLabelText("Event Name"), "Too Fast");
+      fireEvent.change(screen.getByLabelText("Interval"), {
+        target: { value: "9" },
+      });
+      await user.click(screen.getByRole("button", { name: "Create Event" }));
+
+      expect(
+        await screen.findByText("Intervals below 10 seconds are not supported"),
+      ).toBeInTheDocument();
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+
+      // Raising it to the 10s boundary clears the error and submits
+      fireEvent.change(screen.getByLabelText("Interval"), {
+        target: { value: "10" },
+      });
+      await user.click(screen.getByRole("button", { name: "Create Event" }));
+      await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalled());
+      expect(mockCreateMutateAsync.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({
+          scheduleNumber: 10,
+          scheduleUnit: "SECONDS",
+        }),
+      );
     });
   });
 

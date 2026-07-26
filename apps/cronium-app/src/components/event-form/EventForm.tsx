@@ -998,12 +998,18 @@ export default function EventForm({
                         id="scheduleNumber"
                         type="number"
                         min={1}
+                        aria-invalid={!!errors.scheduleNumber}
                         onChange={(e) =>
                           field.onChange(parseInt(e.target.value) || 1)
                         }
                       />
                     )}
                   />
+                  {errors.scheduleNumber && (
+                    <p className="text-destructive text-sm">
+                      {errors.scheduleNumber.message}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="scheduleUnit">

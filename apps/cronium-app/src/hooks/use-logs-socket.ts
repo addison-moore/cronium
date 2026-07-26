@@ -48,7 +48,8 @@ export function useLogsSocket(): {
       console.log("Logs socket connected");
       setIsConnected(true);
 
-      // Re-subscribe to all previously subscribed logs
+      // Replay every subscription intent: this restores subscriptions after
+      // a reconnect and flushes ones requested before the socket connected.
       subscribedLogsRef.current.forEach((logId) => {
         logsSocket.emit("subscribe", { logId });
       });
@@ -78,23 +79,27 @@ export function useLogsSocket(): {
 
   const subscribeToLog = useCallback(
     (logId: number) => {
-      if (!socket || !isConnected) return;
+      // Record the intent even while disconnected: the connect handler
+      // replays the whole set, so a subscription made before the socket
+      // connects is flushed on connect instead of being silently dropped.
+      subscribedLogsRef.current.add(logId);
+      if (!socket?.connected) return;
 
       // Subscribe to this specific log
       socket.emit("subscribe", { logId });
-      subscribedLogsRef.current.add(logId);
       console.log(`Subscribed to log ${logId}`);
     },
-    [socket, isConnected],
+    [socket],
   );
 
   const unsubscribeFromLog = useCallback(
     (logId: number) => {
+      // Always cancel the intent so a queued id is not replayed on connect
+      subscribedLogsRef.current.delete(logId);
       if (!socket) return;
 
       // Unsubscribe from this specific log
       socket.emit("unsubscribe", { logId });
-      subscribedLogsRef.current.delete(logId);
       console.log(`Unsubscribed from log ${logId}`);
     },
     [socket],

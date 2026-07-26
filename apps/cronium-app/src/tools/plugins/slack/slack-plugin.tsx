@@ -33,6 +33,15 @@ const slackFormSchema = slackCredentialsSchema.extend({
   name: z.string().min(1, "Name is required"),
 });
 
+// When editing an existing tool the server redacts webhookUrl to "" in read
+// responses and treats a blank secret on update as "keep the current value"
+// (see lib/tools/credential-redaction.ts). Requiring a valid URL here would
+// force re-pasting the webhook on every edit, so the edit-mode schema also
+// accepts blank.
+const slackEditFormSchema = slackFormSchema.extend({
+  webhookUrl: slackCredentialsSchema.shape.webhookUrl.or(z.literal("")),
+});
+
 type SlackFormData = z.infer<typeof slackFormSchema>;
 
 // Slack credential form component
@@ -42,7 +51,7 @@ function SlackCredentialForm({
   onCancel,
 }: CredentialFormProps) {
   const form = useForm<SlackFormData>({
-    resolver: zodResolver(slackFormSchema),
+    resolver: zodResolver(tool ? slackEditFormSchema : slackFormSchema),
     defaultValues: tool
       ? {
           name: tool.name,
