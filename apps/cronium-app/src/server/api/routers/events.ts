@@ -412,7 +412,7 @@ export const eventsRouter = createTRPCRouter({
         const { dispatchEventJob } = await import("@/lib/scheduling/dispatch");
         const result = await dispatchEventJob(event, {
           triggeredBy: "manual",
-          input: (input as { input?: Record<string, unknown> }).input,
+          input: input.input,
           authorizedUserId: String(userId),
           actor: `user:${String(userId)}`,
         });

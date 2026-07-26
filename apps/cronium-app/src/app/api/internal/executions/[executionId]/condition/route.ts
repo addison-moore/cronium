@@ -20,8 +20,19 @@ export async function POST(
 
     const { executionId } = await params;
     const body = (await request.json()) as {
-      condition: boolean;
+      condition?: unknown;
     };
+
+    // The condition feeds workflow ON_CONDITION edges, which compare it with
+    // `=== true` — anything but a real boolean would be silently falsy there,
+    // so reject it at the boundary (FINDINGS #18).
+    if (typeof body.condition !== "boolean") {
+      return NextResponse.json(
+        { error: "Condition must be a boolean" },
+        { status: 400 },
+      );
+    }
+    const condition: boolean = body.condition;
 
     // Get execution
     const execution = await executionService.getExecution(executionId);
@@ -37,7 +48,7 @@ export async function POST(
     // Store condition in execution metadata
     const updatedMetadata = {
       ...(execution.metadata as Record<string, unknown>),
-      condition: body.condition,
+      condition,
       conditionTimestamp: new Date().toISOString(),
     };
 
@@ -71,7 +82,7 @@ export async function POST(
         .set({
           result: {
             ...jobResult,
-            condition: body.condition,
+            condition,
             conditionTimestamp: new Date().toISOString(),
           },
           updatedAt: new Date(),

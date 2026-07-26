@@ -18,6 +18,10 @@
       "status": 403,
       "body": { "error": "Capability token is not valid for this job" }
     },
+    "badRequest": {
+      "status": 400,
+      "body": { "error": "Condition must be a boolean" }
+    },
     "notFound": {
       "status": 404,
       "body": { "error": "Execution not found" }

@@ -13,6 +13,7 @@ import {
   type QuotaConfig,
   type RateLimitConfig,
 } from "@/lib/rate-limiting";
+import { UserRole } from "@/shared/schema";
 import { TRPCError } from "@trpc/server";
 
 const quotaManager = QuotaManager.getInstance();
@@ -34,6 +35,18 @@ const QuotaUpdateSchema = z.object(
       z.number().optional(),
     ]),
   ) as { [K in keyof QuotaConfig]: z.ZodOptional<z.ZodNumber> },
+);
+
+/**
+ * The quota keys a caller may check, derived from QuotaConfigSchema so the
+ * enum can never drift from QuotaConfig. Replaces an unvalidated
+ * `input.resource as keyof QuotaConfig` cast (FINDINGS #17).
+ */
+const QuotaResourceSchema = z.enum(
+  Object.keys(QuotaConfigSchema.shape) as [
+    keyof QuotaConfig,
+    ...Array<keyof QuotaConfig>,
+  ],
 );
 
 export const quotaManagementRouter = createTRPCRouter({
@@ -92,14 +105,14 @@ export const quotaManagementRouter = createTRPCRouter({
   checkQuota: protectedProcedure
     .input(
       z.object({
-        resource: z.string(),
+        resource: QuotaResourceSchema,
         amount: z.number().default(1),
       }),
     )
     .query(async ({ ctx, input }) => {
       const result = await quotaManager.checkQuota(
         ctx.session.user.id,
-        input.resource as keyof QuotaConfig,
+        input.resource,
         input.amount,
       );
       return result;
@@ -168,14 +181,24 @@ export const quotaManagementRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      // Verify user can only check their own limits
-      if (
-        input.key.type === "user" &&
-        input.key.identifier !== ctx.session.user.id
-      ) {
+      // Tenant scoping (FINDINGS #16): a plain user may only inspect their
+      // own user-key counters. Every other identifier type (tool/webhook/
+      // ip/api_key/custom) is cross-tenant state, so it is admin-only —
+      // protectedProcedure has already refreshed the role from the live
+      // principal row.
+      const isAdmin = ctx.session.user.role === UserRole.ADMIN;
+      if (input.key.type === "user") {
+        if (input.key.identifier !== ctx.session.user.id && !isAdmin) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Cannot check rate limits for other users",
+          });
+        }
+      } else if (!isAdmin) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "Cannot check rate limits for other users",
+          message:
+            "Administrator role required to inspect non-user rate limits",
         });
       }
 

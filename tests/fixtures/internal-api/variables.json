@@ -26,6 +26,10 @@
       "status": 403,
       "body": { "error": "Capability token is not valid for this user" }
     },
+    "badRequest": {
+      "status": 400,
+      "body": { "error": "Value must be a string" }
+    },
     "notFound": {
       "status": 404,
       "body": { "error": "Variable not found" }

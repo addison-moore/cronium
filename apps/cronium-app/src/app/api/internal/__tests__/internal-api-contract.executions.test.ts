@@ -744,6 +744,19 @@ describe("POST /api/internal/executions/[executionId]/condition", () => {
     );
   });
 
+  it("400s when condition is missing or not a boolean (fixture: badRequest)", async () => {
+    for (const bad of [{}, { condition: "true" }, { condition: 1 }]) {
+      await expectContract(
+        await conditionPOST(req(url, "POST", bad, capHeader()), execParams),
+        fx.responses.badRequest!,
+      );
+    }
+    // Rejected at the boundary — nothing is looked up or written.
+    expect(mockExecService.getExecution).not.toHaveBeenCalled();
+    expect(mockExecService.updateExecution).not.toHaveBeenCalled();
+    expect(mockDb.transaction).not.toHaveBeenCalled();
+  });
+
   it("404s for an unknown execution", async () => {
     mockExecService.getExecution!.mockResolvedValue(null);
     const res = await conditionPOST(
@@ -841,6 +854,50 @@ describe("POST /api/internal/audit", () => {
       "[audit]",
       expect.stringContaining("variable:read"),
     );
+    infoSpy.mockRestore();
+  });
+
+  it("accepts the exact runtime wire shape (timestamp, null metadata)", async () => {
+    // BackendClient.AuditLog sends executionId/action/metadata/timestamp;
+    // metadata JSON-marshals to null when the action carries none (get_input).
+    const infoSpy = jest
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+    const res = await auditPOST(
+      req(
+        url,
+        "POST",
+        {
+          executionId: EXEC_ID,
+          action: "get_input",
+          metadata: null,
+          timestamp: "2026-07-25T12:00:00.123456789Z",
+        },
+        capHeader(),
+      ),
+    );
+    await expectContract(res, fx.responses.success!);
+    infoSpy.mockRestore();
+  });
+
+  it("400s on garbage bodies instead of accepting anything (fixture: badRequest)", async () => {
+    const infoSpy = jest
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+    const garbage = [
+      {},
+      { executionId: EXEC_ID }, // missing action
+      { executionId: 42, action: "variable:read" }, // wrong type
+      { executionId: EXEC_ID, action: "x", metadata: "not-an-object" },
+      "just-a-string",
+    ];
+    for (const bad of garbage) {
+      await expectContract(
+        await auditPOST(req(url, "POST", bad, capHeader())),
+        fx.responses.badRequest!,
+      );
+    }
+    expect(infoSpy).not.toHaveBeenCalled();
     infoSpy.mockRestore();
   });
 

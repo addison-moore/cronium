@@ -252,6 +252,18 @@ export const updateWorkflowSchema = z
     edges: z.array(workflowEdgeSchema).optional(),
   })
   .refine(
+    // Nodes and edges must travel together (FINDINGS #19): edge source/target
+    // are ReactFlow ids that exist only in the submitted nodes array (they are
+    // not persisted), so a nodes-only update would silently drop every
+    // connection and an edges-only update could never be applied.
+    (data) => (data.nodes === undefined) === (data.edges === undefined),
+    {
+      message:
+        "nodes and edges must be provided together (send both to update the graph, or neither to leave it unchanged)",
+      path: ["edges"],
+    },
+  )
+  .refine(
     (data) => {
       // Single-predecessor: no fan-in (see createWorkflowSchema). Only checked
       // when edges are being updated.

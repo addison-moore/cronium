@@ -14,6 +14,10 @@
       "status": 403,
       "body": { "error": "Forbidden" }
     },
+    "badRequest": {
+      "status": 400,
+      "body": { "error": "Invalid audit event" }
+    },
     "serverError": {
       "status": 500,
       "body": { "error": "Internal server error" }

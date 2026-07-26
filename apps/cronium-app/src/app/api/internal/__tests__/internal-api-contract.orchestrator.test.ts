@@ -658,6 +658,17 @@ describe("GET+PUT /api/internal/variables/[userId]/[key]", () => {
     );
   });
 
+  it("PUT 400s on a missing or non-string value instead of 500ing at the vault (fixture: badRequest)", async () => {
+    for (const bad of [{}, { value: 5 }, { value: { nested: true } }]) {
+      await expectContract(
+        await variablePUT(req(url, "PUT", bad, capHeader()), varParams),
+        fx.responses.badRequest!,
+      );
+    }
+    expect(mockEncrypt).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
   it("GET/PUT 500 without leaking internals when the db fails", async () => {
     mockDb.select!.mockImplementation(() => {
       throw new Error("pg: relation user_variables");

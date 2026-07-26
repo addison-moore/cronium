@@ -80,7 +80,16 @@ export async function PUT(
     const scopeError = assertUserScope(auth.cap, userId);
     if (scopeError) return scopeError;
 
-    const body = (await request.json()) as { value: string };
+    const body = (await request.json()) as { value?: unknown };
+
+    // Variables are stored (and returned by GET) as strings; a missing or
+    // non-string value used to reach the vault and 500 there (FINDINGS #18).
+    if (typeof body.value !== "string") {
+      return NextResponse.json(
+        { error: "Value must be a string" },
+        { status: 400 },
+      );
+    }
 
     // Encrypt at rest (cronium.setVariable() from a running script).
     const storedValue = encryptVariableValue(body.value, userId, key);

@@ -668,15 +668,24 @@ describe("workflows.update", () => {
     );
   });
 
-  it("does NOT wipe the persisted graph on an edges-only payload (destructive-update fix)", async () => {
+  it("rejects a partial graph payload — nodes and edges must travel together (FINDINGS #19)", async () => {
     const caller = callerFor();
     mockedStorage.getWorkflowNodes!.mockResolvedValue([
       { id: 201, eventId: 21 },
     ]);
     mockedStorage.getWorkflowConnections!.mockResolvedValue([{ id: 301 }]);
 
-    await caller.workflows.update({ id: 5, edges: [] });
+    // nodes-only would silently drop every connection (ReactFlow edge
+    // source/target ids are not persisted, so edges cannot be carried over);
+    // edges-only can never be applied. Both now fail at validation.
+    await expect(
+      caller.workflows.update({ id: 5, nodes: [nodeInput("x", 31)] }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      caller.workflows.update({ id: 5, edges: [] }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 
+    expect(mockedStorage.updateWorkflow).not.toHaveBeenCalled();
     expect(mockedStorage.deleteWorkflowNode).not.toHaveBeenCalled();
     expect(mockedStorage.deleteWorkflowConnection).not.toHaveBeenCalled();
     expect(mockedStorage.createWorkflowConnection).not.toHaveBeenCalled();

@@ -304,8 +304,21 @@ describe("quotaManagement.checkQuota", () => {
 
   it("rejects a missing resource with BAD_REQUEST", async () => {
     await expect(
-      userCaller().quotaManagement.checkQuota({} as { resource: string }),
+      userCaller().quotaManagement.checkQuota(
+        {} as { resource: "toolActionsPerMonth" },
+      ),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("rejects a resource outside QuotaConfig with BAD_REQUEST (FINDINGS #17: no unvalidated cast)", async () => {
+    for (const resource of ["not-a-quota", "__proto__", "constructor"]) {
+      await expect(
+        userCaller().quotaManagement.checkQuota({
+          resource: resource as "toolActionsPerMonth",
+        }),
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    }
+    expect(quotaManagerMock.checkQuota).not.toHaveBeenCalled();
   });
 });
 
@@ -568,6 +581,59 @@ describe("quotaManagement.getRateLimitStatus", () => {
         key: { type: "tenant" as unknown as "user", identifier: "x" },
       }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it.each(["ip", "api_key", "tool", "webhook", "custom"] as const)(
+    "FORBIDs a plain user from reading %s-type counters (FINDINGS #16: cross-tenant state)",
+    async (type) => {
+      await expect(
+        userCaller().quotaManagement.getRateLimitStatus({
+          key: { type, identifier: "some-identifier" },
+        }),
+      ).rejects.toMatchObject({
+        code: "FORBIDDEN",
+        message: "Administrator role required to inspect non-user rate limits",
+      });
+      expect(rateLimiterMock.getStatus).not.toHaveBeenCalled();
+    },
+  );
+
+  it("lets an admin read non-user counters and other users' user counters", async () => {
+    const status = { remaining: 3 };
+    rateLimiterMock.getStatus.mockResolvedValue(status);
+
+    await expect(
+      adminCaller().quotaManagement.getRateLimitStatus({
+        key: { type: "tool", identifier: "slack" },
+      }),
+    ).resolves.toBe(status);
+    expect(rateLimiterMock.getStatus).toHaveBeenCalledWith(
+      { type: "tool", identifier: "slack" },
+      undefined,
+    );
+
+    await expect(
+      adminCaller().quotaManagement.getRateLimitStatus({
+        key: { type: "user", identifier: "someone-else" },
+      }),
+    ).resolves.toBe(status);
+    expect(rateLimiterMock.getStatus).toHaveBeenLastCalledWith(
+      { type: "user", identifier: "someone-else" },
+      undefined,
+    );
+  });
+
+  it("still FORBIDs a stale-JWT admin (live role is USER) from non-user counters", async () => {
+    // Session claims ADMIN but the principal row says USER —
+    // protectedProcedure refreshes the role, so the gate uses the live one.
+    mockDbState.rows = [principalRow({ role: UserRole.USER })];
+    const caller = callerWith(sessionFor({ role: UserRole.ADMIN }));
+    await expect(
+      caller.quotaManagement.getRateLimitStatus({
+        key: { type: "webhook", identifier: "wh-1" },
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(rateLimiterMock.getStatus).not.toHaveBeenCalled();
   });
 });
 

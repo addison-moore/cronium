@@ -278,6 +278,10 @@ export const executeEventSchema = z.object({
   id: z.number().int().positive("Event ID must be a positive integer"),
   serverId: z.number().int().positive().optional(),
   manual: z.boolean().default(true),
+  // Manual-run input payload, forwarded to dispatch and readable by the
+  // script via cronium.input(). Must be declared here: zod strips undeclared
+  // keys, which silently dropped every manual-run input (FINDINGS #13).
+  input: z.record(z.string(), z.any()).optional(),
 });
 
 // Event logs query schema

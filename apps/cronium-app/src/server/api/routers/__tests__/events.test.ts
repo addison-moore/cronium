@@ -932,6 +932,21 @@ describe("execute", () => {
     );
   });
 
+  it("forwards manual-run input to dispatch (FINDINGS #13: schema used to strip it)", async () => {
+    const caller = callerWith(sessionFor());
+    await caller.events.execute({
+      id: 1,
+      input: { orderId: 123, dryRun: true },
+    });
+    expect(dispatchMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1 }),
+      expect.objectContaining({
+        triggeredBy: "manual",
+        input: { orderId: 123, dryRun: true },
+      }),
+    );
+  });
+
   it("maps an overlap skip to CONFLICT", async () => {
     dispatchMock.mockResolvedValue({
       job: null,
