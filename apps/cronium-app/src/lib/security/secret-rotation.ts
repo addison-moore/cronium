@@ -355,7 +355,7 @@ async function rotateWebhooks(dryRun: boolean): Promise<SurfaceResult> {
     // secret (vault envelope string)
     r.scanned++;
     let secretNext: string | undefined;
-    let headersNext: unknown | undefined;
+    let headersNext: unknown;
     if (isLegacyValue(row.secret)) {
       r.legacy++;
     } else if (vaultNeedsReencrypt(row.secret)) {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
 import type { Capability } from "@/server/security/authorization";
-import { TokenStatus } from "@/shared/schema";
+import { TokenStatus, type UserRole } from "@/shared/schema";
 
 /** Extract a bearer token from an `Authorization` header, if present. */
 export function getBearerToken(headers: Headers): string | null {
@@ -87,7 +87,8 @@ export function createApiAuthErrorResponse(error: string): NextResponse {
 }
 
 export type RestPrincipal =
-  { ok: true; userId: string; role: string } | { ok: false; status: 401 | 403 };
+  | { ok: true; userId: string; role: UserRole }
+  | { ok: false; status: 401 | 403 };
 
 /**
  * Single REST authentication + authorization choke point (security plan Phase

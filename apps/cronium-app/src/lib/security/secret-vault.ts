@@ -161,13 +161,13 @@ export class SecretVault {
     const [, version, keyId, ivB64, ctB64, tagB64] = parts;
     if (version !== VERSION) {
       throw new SecretDecryptionError(
-        `Unsupported envelope version ${version}`,
+        `Unsupported envelope version ${String(version)}`,
       );
     }
     const key = this.keys.get(keyId!);
     if (!key) {
       throw new SecretDecryptionError(
-        `No key ${keyId} in keyring for this envelope`,
+        `No key ${String(keyId)} in keyring for this envelope`,
       );
     }
     try {
