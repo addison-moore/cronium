@@ -5,7 +5,7 @@
     "branches": 26.15
   },
   "go": {
-    "orchestrator": 36.08,
+    "orchestrator": 32.8,
     "runtime": 43.87,
     "runner": 58.85
   }

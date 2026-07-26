@@ -97,7 +97,6 @@ The Go orchestrator uses the `CRONIUM_` prefix with envconfig:
 
 - `CRONIUM_API_ENDPOINT` / `CRONIUM_API_URL` - Backend API URL
 - `CRONIUM_API_TOKEN` / `CRONIUM_SERVICE_TOKEN` - API authentication
-- `CRONIUM_WS_URL` - WebSocket URL
 - `CRONIUM_JOBS_MAX_CONCURRENT` - Max concurrent jobs
 - `CRONIUM_LOGGING_LEVEL` - Log level
 - `CRONIUM_CONTAINER_RUNTIME_*` - Runtime configuration

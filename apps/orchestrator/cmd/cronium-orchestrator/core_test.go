@@ -236,12 +236,6 @@ func TestProcessJobForwardsLogsAndIntermediateStatus(t *testing.T) {
 	require.Equal(t, "err-line\n", rec.req.Output.Stderr)
 	require.Equal(t, 0, rec.req.OutputTruncatedBytes)
 
-	// Log entries were streamed to the per-job sink, and the sink was stopped.
-	sink := fx.stream.sink("logs")
-	require.NotNil(t, sink)
-	require.Equal(t, []string{"out-line", "err-line"}, sink.lines())
-	require.Equal(t, []string{"logs"}, fx.stream.stoppedJobs())
-
 	// The UpdateTypeError branch logged the execution error.
 	require.True(t, fx.hasLogEntry("Execution error"))
 }

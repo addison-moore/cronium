@@ -250,67 +250,6 @@ func completeUpdate(status types.JobStatus, exitCode int) types.ExecutionUpdate 
 	}
 }
 
-// ---------- fake log streamer ----------
-
-type fakeSink struct {
-	mu      sync.Mutex
-	entries []*types.LogEntry
-}
-
-func (s *fakeSink) AddLog(logEntry *types.LogEntry) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.entries = append(s.entries, logEntry)
-}
-
-func (s *fakeSink) lines() []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]string, 0, len(s.entries))
-	for _, e := range s.entries {
-		out = append(out, e.Line)
-	}
-	return out
-}
-
-type fakeStreamer struct {
-	mu      sync.Mutex
-	sinks   map[string]*fakeSink
-	stopped []string
-}
-
-func newFakeStreamer() *fakeStreamer {
-	return &fakeStreamer{sinks: make(map[string]*fakeSink)}
-}
-
-func (f *fakeStreamer) StartJob(jobID string) jobLogSink {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	s := &fakeSink{}
-	f.sinks[jobID] = s
-	return s
-}
-
-func (f *fakeStreamer) StopJob(jobID string) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.stopped = append(f.stopped, jobID)
-}
-
-func (f *fakeStreamer) sink(jobID string) *fakeSink {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.sinks[jobID]
-}
-
-func (f *fakeStreamer) stoppedJobs() []string {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	out := make([]string, len(f.stopped))
-	copy(out, f.stopped)
-	return out
-}
-
 // ---------- fake metrics ----------
 
 type fakeMetrics struct {
@@ -371,7 +310,6 @@ type coreFixture struct {
 	core    *daemonCore
 	api     *fakeAPI
 	exec    *fakeExecutor
-	stream  *fakeStreamer
 	metrics *fakeMetrics
 	hook    *logtest.Hook
 }
@@ -381,7 +319,6 @@ func newCoreFixture(t *testing.T, mutate func(cfg *daemonConfig)) *coreFixture {
 
 	fapi := newFakeAPI()
 	exec := newFakeExecutor()
-	stream := newFakeStreamer()
 	met := &fakeMetrics{}
 
 	logg, hook := logtest.NewNullLogger()
@@ -403,7 +340,6 @@ func newCoreFixture(t *testing.T, mutate func(cfg *daemonConfig)) *coreFixture {
 		log:      logg,
 		api:      fapi,
 		executor: exec,
-		streamer: stream,
 		metrics:  met,
 	}, cfg)
 
@@ -420,7 +356,7 @@ func newCoreFixture(t *testing.T, mutate func(cfg *daemonConfig)) *coreFixture {
 	c.shutdownWait = 500 * time.Millisecond
 	c.shutdownTick = 5 * time.Millisecond
 
-	return &coreFixture{core: c, api: fapi, exec: exec, stream: stream, metrics: met, hook: hook}
+	return &coreFixture{core: c, api: fapi, exec: exec, metrics: met, hook: hook}
 }
 
 func testJob(id string) *types.Job {

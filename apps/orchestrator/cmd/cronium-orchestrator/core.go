@@ -9,7 +9,6 @@ import (
 
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/api"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/executors"
-	"github.com/addison-moore/cronium/apps/orchestrator/internal/logger"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/metrics"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
 	"github.com/sirupsen/logrus"
@@ -17,8 +16,8 @@ import (
 
 // Narrow, locally-defined collaborator interfaces so the daemon core can be
 // exercised with fakes. The concrete types from internal/api, internal/
-// executors, internal/logger and internal/metrics satisfy them as-is (see the
-// compile-time assertions below); nothing in internal/ needed to change.
+// executors and internal/metrics satisfy them as-is (see the compile-time
+// assertions below); nothing in internal/ needed to change.
 
 // jobAPI is the subset of *api.Client the daemon core uses.
 type jobAPI interface {
@@ -36,19 +35,6 @@ type jobExecutor interface {
 	Execute(ctx context.Context, job *types.Job) (<-chan types.ExecutionUpdate, error)
 }
 
-// jobLogSink receives log entries for a single job (*logger.JobLogger as-is).
-type jobLogSink interface {
-	AddLog(logEntry *types.LogEntry)
-}
-
-// logStream is the per-job log streaming surface the daemon core uses.
-// (*logger.Streamer is adapted by streamerLogAdapter in orchestrator.go
-// because Go interfaces have no covariant returns.)
-type logStream interface {
-	StartJob(jobID string) jobLogSink
-	StopJob(jobID string)
-}
-
 // jobMetrics is the subset of *metrics.Collector the daemon core uses.
 type jobMetrics interface {
 	RecordJobReceived(jobType string)
@@ -62,7 +48,6 @@ type jobMetrics interface {
 var (
 	_ jobAPI      = (*api.Client)(nil)
 	_ jobExecutor = (*executors.Manager)(nil)
-	_ jobLogSink  = (*logger.JobLogger)(nil)
 	_ jobMetrics  = (*metrics.Collector)(nil)
 )
 
@@ -71,7 +56,6 @@ type daemonDeps struct {
 	log      *logrus.Logger
 	api      jobAPI
 	executor jobExecutor
-	streamer logStream
 	metrics  jobMetrics
 }
 
@@ -93,7 +77,6 @@ type daemonCore struct {
 	log      *logrus.Logger
 	api      jobAPI
 	executor jobExecutor
-	streamer logStream
 	metrics  jobMetrics
 
 	orchestratorID string
@@ -152,7 +135,6 @@ func newDaemonCore(deps daemonDeps, cfg daemonConfig) *daemonCore {
 		log:      deps.log,
 		api:      deps.api,
 		executor: deps.executor,
-		streamer: deps.streamer,
 		metrics:  deps.metrics,
 
 		orchestratorID: cfg.orchestratorID,
@@ -376,10 +358,6 @@ func (c *daemonCore) processJob(ctx context.Context, job *types.Job) {
 		return
 	}
 
-	// Start job logging
-	jobLogger := c.streamer.StartJob(job.ID)
-	defer c.streamer.StopJob(job.ID)
-
 	// Process execution updates. Output capture is bounded per stream
 	// (head + tail, omitted bytes counted) — see outputStreamCapBytes.
 	var exitCode int
@@ -398,8 +376,6 @@ func (c *daemonCore) processJob(ctx context.Context, job *types.Job) {
 				} else {
 					stderr.WriteLine(logEntry.Line)
 				}
-				// Stream logs via WebSocket
-				jobLogger.AddLog(logEntry)
 			}
 
 		case types.UpdateTypeStatus:

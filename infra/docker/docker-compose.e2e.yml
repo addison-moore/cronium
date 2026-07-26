@@ -100,7 +100,6 @@ services:
       CRONIUM_SSH_EXECUTION_ISOLATION_MODE: disabled
       CRONIUM_LOGGING_LEVEL: debug
       CRONIUM_LOGGING_FORMAT: text
-      CRONIUM_LOGGING_WEBSOCKET_ENABLED: "false"
       DOCKER_HOST: unix:///var/run/docker.sock
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

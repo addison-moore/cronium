@@ -29,10 +29,6 @@ api:
   # orchestrator-facing routes; job/execution access uses per-job capabilities.
   token: ${CRONIUM_ORCHESTRATOR_KEY}
 
-  # WebSocket endpoint for real-time communication
-  # If not specified, derived from endpoint
-  wsEndpoint: ${CRONIUM_WS_URL:-ws://localhost:5001/api/socket}
-
   # Request timeout
   timeout: 30s
 
@@ -252,27 +248,6 @@ logging:
 
     # Maximum age of log files (days)
     maxAge: 30
-
-  # WebSocket log streaming
-  websocket:
-    # Disabled by default: the raw-WS log-shipping channel has no consumer
-    # (FINDINGS #34 — the socket server speaks Socket.IO + HTTP /broadcast/*
-    # only; live logs flow via /broadcast/log-line). To re-enable, set
-    # CRONIUM_LOGGING_WEBSOCKET_ENABLED=true (the env default overrides this
-    # file's value when the variable is unset).
-    enabled: false
-
-    # Log buffer size
-    bufferSize: 1000
-
-    # Flush interval
-    flushInterval: 100ms
-
-    # Batch size for sending
-    batchSize: 50
-
-    # Enable compression
-    compression: true
 
 # Monitoring configuration
 monitoring:

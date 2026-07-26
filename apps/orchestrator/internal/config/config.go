@@ -39,7 +39,6 @@ type OrchestratorConfig struct {
 type APIConfig struct {
 	Endpoint       string        `yaml:"endpoint" envconfig:"ENDPOINT" required:"true"`
 	Token          string        `yaml:"token" envconfig:"TOKEN" required:"true"`
-	WSEndpoint     string        `yaml:"wsEndpoint" envconfig:"WS_ENDPOINT"`
 	Timeout        time.Duration `yaml:"timeout" envconfig:"TIMEOUT" default:"5m"`
 	RetryConfig    RetryConfig   `yaml:"retry" envconfig:"RETRY"`
 	OrchestratorID string        `yaml:"-"` // Set from OrchestratorConfig.ID
@@ -77,11 +76,10 @@ type SSHConfig struct {
 
 // LoggingConfig defines logging settings
 type LoggingConfig struct {
-	Level     string        `yaml:"level" envconfig:"LEVEL" default:"info"`
-	Format    string        `yaml:"format" envconfig:"FORMAT" default:"json"`
-	Output    string        `yaml:"output" envconfig:"OUTPUT" default:"stdout"`
-	File      FileLogConfig `yaml:"file" envconfig:"FILE"`
-	WebSocket WSLogConfig   `yaml:"websocket" envconfig:"WEBSOCKET"`
+	Level  string        `yaml:"level" envconfig:"LEVEL" default:"info"`
+	Format string        `yaml:"format" envconfig:"FORMAT" default:"json"`
+	Output string        `yaml:"output" envconfig:"OUTPUT" default:"stdout"`
+	File   FileLogConfig `yaml:"file" envconfig:"FILE"`
 }
 
 // MonitoringConfig defines monitoring settings
@@ -254,21 +252,6 @@ type FileLogConfig struct {
 	MaxAge     int    `yaml:"maxAge" envconfig:"MAX_AGE" default:"30"`
 }
 
-// WSLogConfig defines WebSocket logging settings.
-//
-// Enabled defaults to FALSE: the raw-WS log-shipping channel is vestigial
-// end-to-end (FINDINGS #34 — the socket server speaks only Socket.IO plus
-// HTTP /broadcast/*, so nothing consumes these frames; live log lines flow
-// via /broadcast/log-line). The client code is kept so a real consumer can be
-// wired later; opt back in with CRONIUM_LOGGING_WEBSOCKET_ENABLED=true.
-type WSLogConfig struct {
-	Enabled       bool          `yaml:"enabled" envconfig:"ENABLED" default:"false"`
-	BufferSize    int           `yaml:"bufferSize" envconfig:"BUFFER_SIZE" default:"1000"`
-	FlushInterval time.Duration `yaml:"flushInterval" envconfig:"FLUSH_INTERVAL" default:"100ms"`
-	BatchSize     int           `yaml:"batchSize" envconfig:"BATCH_SIZE" default:"50"`
-	Compression   bool          `yaml:"compression" envconfig:"COMPRESSION" default:"true"`
-}
-
 // TracingConfig defines tracing settings
 type TracingConfig struct {
 	Enabled      bool    `yaml:"enabled" envconfig:"ENABLED" default:"false"`
@@ -410,13 +393,6 @@ func processConfig(config *Config) error {
 
 	// Set orchestrator ID in API config
 	config.API.OrchestratorID = config.Orchestrator.ID
-
-	// Set WebSocket endpoint if not specified
-	if config.API.WSEndpoint == "" && config.API.Endpoint != "" {
-		wsEndpoint := strings.Replace(config.API.Endpoint, "http://", "ws://", 1)
-		wsEndpoint = strings.Replace(wsEndpoint, "https://", "wss://", 1)
-		config.API.WSEndpoint = wsEndpoint + "/socket"
-	}
 
 	// Set default drop capabilities if empty
 	if len(config.Container.Security.DropCapabilities) == 0 {

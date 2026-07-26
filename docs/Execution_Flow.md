@@ -99,7 +99,7 @@ The orchestrator determines execution type based on:
 2. **Environment Setup**: Variables, volumes, working directory
 3. **Runtime Helper Injection**: Cronium runtime helpers made available
 4. **Script Execution**: Run the script with timeout monitoring
-5. **Log Streaming**: Real-time output via WebSocket
+5. **Output Capture**: stdout/stderr collected and delivered with the job completion report; live log lines reach the UI through the app's socket-server broadcasts (`POST /broadcast/log-line`)
 6. **Result Collection**: Exit code, final output, runtime data, duration
 
 #### Remote/SSH Execution
@@ -238,12 +238,12 @@ becomes the next step's `cronium.input()`. See [WORKFLOWS.md](./WORKFLOWS.md).
                     ┌───────┴────────┐
                     ▼                ▼
             ┌──────────────┐  ┌──────────────┐
-            │ Internal API │  │  WebSocket   │
+            │ Internal API │─▶│  WebSocket   │
             └──────────────┘  └──────────────┘
-                    │                ▲
-                    ▼                │
-            ┌──────────────┐         │
-            │ Orchestrator │─────────┘
+                    │
+                    ▼
+            ┌──────────────┐
+            │ Orchestrator │
             └──────────────┘
                     │
         ┌───────────┴───────────┐

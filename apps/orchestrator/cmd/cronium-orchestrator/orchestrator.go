@@ -13,29 +13,18 @@ import (
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/executors"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/executors/container"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/executors/ssh"
-	"github.com/addison-moore/cronium/apps/orchestrator/internal/logger"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/metrics"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/payload"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
 	"github.com/sirupsen/logrus"
 )
 
-// streamerLogAdapter adapts *logger.Streamer to the local logStream interface
-// (Go has no covariant returns, so Streamer.StartJob's concrete *JobLogger
-// return type cannot satisfy logStream directly). Pure forwarding — the
-// JobLogger itself satisfies jobLogSink as-is.
-type streamerLogAdapter struct{ s *logger.Streamer }
-
-func (a streamerLogAdapter) StartJob(jobID string) jobLogSink { return a.s.StartJob(jobID) }
-func (a streamerLogAdapter) StopJob(jobID string)             { a.s.StopJob(jobID) }
-
 // SimpleOrchestrator wires the concrete collaborators (API client, executor
-// manager, log streamer, metrics collector) into the daemon core, which owns
-// the actual control loops (see core.go).
+// manager, metrics collector) into the daemon core, which owns the actual
+// control loops (see core.go).
 type SimpleOrchestrator struct {
 	config        *config.Config
 	log           *logrus.Logger
-	logStreamer   *logger.Streamer
 	containerExec *container.Executor
 	core          *daemonCore
 }
@@ -98,9 +87,6 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 		log.Warn("SSH execution disabled: remote jobs require operator-enforced per-job OS identity or container isolation")
 	}
 
-	// Create log streamer
-	logStreamer := logger.NewStreamer(cfg.Logging.WebSocket, cfg.API.WSEndpoint, cfg.API.Token, log)
-
 	// Create metrics collector
 	metricsCollector := metrics.NewCollector(cfg.Monitoring, log)
 
@@ -120,7 +106,6 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 		log:      log,
 		api:      apiClient,
 		executor: executorMgr,
-		streamer: streamerLogAdapter{s: logStreamer},
 		metrics:  metricsCollector,
 	}, daemonConfig{
 		orchestratorID: orchestratorID,
@@ -134,7 +119,6 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 	return &SimpleOrchestrator{
 		config:        cfg,
 		log:           log,
-		logStreamer:   logStreamer,
 		containerExec: containerExec,
 		core:          core,
 	}, nil
@@ -161,12 +145,6 @@ func (o *SimpleOrchestrator) Run(ctx context.Context) error {
 	if o.config.SSH.Execution.CleanupPayloads {
 		go o.payloadCleanupLoop(ctx)
 	}
-
-	// Start log streamer
-	if err := o.logStreamer.Start(ctx); err != nil {
-		o.log.WithError(err).Warn("Failed to start log streamer")
-	}
-	defer o.logStreamer.Stop()
 
 	// The daemon core owns everything from here: health check, telemetry,
 	// lease renewal/self-fencing, spool retry, and the job polling loop.

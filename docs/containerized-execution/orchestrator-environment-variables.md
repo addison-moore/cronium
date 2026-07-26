@@ -36,7 +36,6 @@ The mapping follows this pattern:
 
 - `CRONIUM_API_ENDPOINT` - Backend API URL (required)
 - `CRONIUM_API_TOKEN` - Service authentication token (required)
-- `CRONIUM_API_WS_ENDPOINT` - WebSocket endpoint
 - `CRONIUM_API_TIMEOUT` - Request timeout (default: "30s")
 - `CRONIUM_API_RETRY_MAX_ATTEMPTS` - Max retry attempts
 - `CRONIUM_API_RETRY_BACKOFF_TYPE` - Retry backoff type
@@ -117,11 +116,6 @@ The mapping follows this pattern:
 - `CRONIUM_LOGGING_FILE_MAX_SIZE` - Max file size
 - `CRONIUM_LOGGING_FILE_MAX_BACKUPS` - Max backup files
 - `CRONIUM_LOGGING_FILE_MAX_AGE` - Max file age
-- `CRONIUM_LOGGING_WEBSOCKET_ENABLED` - Enable WebSocket logging
-- `CRONIUM_LOGGING_WEBSOCKET_BUFFER_SIZE` - Log buffer size
-- `CRONIUM_LOGGING_WEBSOCKET_FLUSH_INTERVAL` - Flush interval
-- `CRONIUM_LOGGING_WEBSOCKET_BATCH_SIZE` - Batch size
-- `CRONIUM_LOGGING_WEBSOCKET_COMPRESSION` - Enable compression
 
 #### Monitoring Configuration
 

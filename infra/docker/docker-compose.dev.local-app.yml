@@ -117,13 +117,9 @@ services:
       RUNTIME_HOST: runtime-api
       RUNTIME_PORT: 8089
 
-      # WebSocket Configuration
-      CRONIUM_API_WS_ENDPOINT: ws://host.docker.internal:5002/socket.io/
-
       # Logging
       CRONIUM_LOGGING_LEVEL: debug
       CRONIUM_LOGGING_FORMAT: text
-      CRONIUM_LOGGING_WEBSOCKET_ENABLED: "false"
 
       # Direct environment variables (no prefix)
       DOCKER_HOST: unix:///var/run/docker.sock
