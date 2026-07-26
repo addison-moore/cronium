@@ -42,6 +42,12 @@ class CroniumTimeoutError extends CroniumError {
 }
 
 /**
+ * Socket-level error codes that indicate a transient connection failure.
+ * These are retried with the same bounded backoff as timeouts.
+ */
+const RETRYABLE_NETWORK_ERROR_CODES = new Set(["ECONNREFUSED", "ECONNRESET"]);
+
+/**
  * Main Cronium client class
  */
 class Cronium {
@@ -83,24 +89,22 @@ class Cronium {
         const result = await this._doRequest(method, url, data);
         return result;
       } catch (error) {
-        if (
+        const retryableStatus =
           error instanceof CroniumAPIError &&
           error.statusCode >= 500 &&
           // 501 means the endpoint is permanently unsupported in this
           // execution context (e.g. tool actions with no backing app route);
           // retrying cannot help, so surface the message immediately.
-          error.statusCode !== 501 &&
-          attempt < this.maxRetries - 1
-        ) {
-          // Retry on server errors
-          await this._sleep(this.retryDelay * Math.pow(2, attempt));
-          continue;
-        }
+          error.statusCode !== 501;
+        // Timeouts and transient connection failures (refused/reset) are
+        // equally retryable — the service may just be restarting.
+        const retryableNetwork =
+          error instanceof CroniumTimeoutError ||
+          RETRYABLE_NETWORK_ERROR_CODES.has(error.code);
         if (
-          error instanceof CroniumTimeoutError &&
+          (retryableStatus || retryableNetwork) &&
           attempt < this.maxRetries - 1
         ) {
-          // Retry on timeout
           await this._sleep(this.retryDelay * Math.pow(2, attempt));
           continue;
         }
@@ -138,34 +142,52 @@ class Cronium {
         });
 
         res.on("end", () => {
+          let parsed = null;
+          let parseError = null;
           try {
-            const parsed = responseData ? JSON.parse(responseData) : null;
-
-            if (res.statusCode >= 400) {
-              const message = parsed?.message || `HTTP ${res.statusCode}`;
-              reject(new CroniumAPIError(res.statusCode, message));
-              return;
-            }
-
-            if (parsed && parsed.success === false) {
-              reject(
-                new CroniumAPIError(
-                  res.statusCode,
-                  parsed.message || "Unknown error",
-                ),
-              );
-              return;
-            }
-
-            resolve(parsed);
+            parsed = responseData ? JSON.parse(responseData) : null;
           } catch (e) {
-            reject(new CroniumError(`Failed to parse response: ${e.message}`));
+            parseError = e;
           }
+
+          // HTTP errors are classified by status code even when the body is
+          // not JSON (e.g. an HTML error page from a proxy) — a parse failure
+          // must never mask the status or bypass 5xx retry logic.
+          if (res.statusCode >= 400) {
+            const message = parsed?.message || `HTTP ${res.statusCode}`;
+            reject(new CroniumAPIError(res.statusCode, message));
+            return;
+          }
+
+          if (parseError) {
+            reject(
+              new CroniumError(
+                `Failed to parse response: ${parseError.message}`,
+              ),
+            );
+            return;
+          }
+
+          if (parsed && parsed.success === false) {
+            reject(
+              new CroniumAPIError(
+                res.statusCode,
+                parsed.message || "Unknown error",
+              ),
+            );
+            return;
+          }
+
+          resolve(parsed);
         });
       });
 
       req.on("error", (error) => {
-        reject(new CroniumError(`Request failed: ${error.message}`));
+        const wrapped = new CroniumError(`Request failed: ${error.message}`);
+        // Preserve the socket error code so the retry logic can classify
+        // transient connection failures (ECONNREFUSED/ECONNRESET).
+        wrapped.code = error.code;
+        reject(wrapped);
       });
 
       req.on("timeout", () => {
@@ -198,7 +220,9 @@ class Cronium {
       "GET",
       `/executions/${this.executionId}/input`,
     );
-    return result?.data || null;
+    // `??` (not `||`): falsy-but-present values (0, false, "") are
+    // legitimate data and must round-trip; only true absence becomes null.
+    return result?.data ?? null;
   }
 
   /**
@@ -223,7 +247,8 @@ class Cronium {
         "GET",
         `/executions/${this.executionId}/variables/${encodeURIComponent(key)}`,
       );
-      return result?.data?.value || null;
+      // `??` (not `||`): preserve falsy-but-present values (0, false, "").
+      return result?.data?.value ?? null;
     } catch (error) {
       if (error instanceof CroniumAPIError && error.statusCode === 404) {
         return null;
@@ -268,7 +293,7 @@ class Cronium {
       "GET",
       `/executions/${this.executionId}/context`,
     );
-    return result?.data || {};
+    return result?.data ?? {};
   }
 
   /**
@@ -284,7 +309,8 @@ class Cronium {
       action,
       config,
     });
-    return result?.data || null;
+    // `??` (not `||`): preserve falsy-but-present results (0, false, "").
+    return result?.data ?? null;
   }
 
   /**

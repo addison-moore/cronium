@@ -55,6 +55,7 @@ _cronium_request() {
     local attempt=1
     local response
     local status_code
+    local curl_exit
     local temp_file=$(mktemp)
     
     while [ $attempt -le $MAX_RETRIES ]; do
@@ -74,11 +75,16 @@ _cronium_request() {
             curl_args+=(-d "$data")
         fi
         
-        # Make request and capture status code
-        status_code=$(curl "${curl_args[@]}" "${CRONIUM_API}${path}" | tail -n1)
-        
-        # Check if curl succeeded
-        if [ $? -ne 0 ]; then
+        # Make request and capture status code. curl's exit status must be
+        # propagated out of the substitution explicitly — the pipeline runs
+        # in a subshell, so a bare `$?` afterwards only ever saw tail's
+        # (always zero) exit status and network failures were never retried.
+        status_code=$(curl "${curl_args[@]}" "${CRONIUM_API}${path}" | tail -n1; exit "${PIPESTATUS[0]}")
+        curl_exit=$?
+
+        # Retry on network failures (connection refused/reset, timeout, DNS):
+        # curl exits non-zero and/or reports an http_code of 000.
+        if [ "$curl_exit" -ne 0 ] || [ "$status_code" = "000" ]; then
             if [ $attempt -lt $MAX_RETRIES ]; then
                 sleep $((RETRY_DELAY * attempt))
                 ((attempt++))
@@ -128,7 +134,9 @@ cronium_input() {
     local response
     response=$(_cronium_request "GET" "/executions/${CRONIUM_EXEC_ID}/input")
     if [ $? -eq 0 ]; then
-        echo "$response" | jq -r '.data // empty'
+        # `== null` (not `//`): jq's `//` also swallows a legitimate `false`
+        # value; only absent/null data may collapse to empty.
+        echo "$response" | jq -r 'if .data == null then empty else .data end'
     else
         return 1
     fi
@@ -156,7 +164,8 @@ cronium_get_variable() {
     
     response=$(_cronium_request "GET" "/executions/${CRONIUM_EXEC_ID}/variables/${encoded_key}")
     if [ $? -eq 0 ]; then
-        echo "$response" | jq -r '.data.value // empty'
+        # `== null` (not `//`): preserve a legitimate `false` variable value.
+        echo "$response" | jq -r 'if .data.value == null then empty else .data.value end'
     else
         return 1
     fi
@@ -201,7 +210,7 @@ cronium_event() {
     local response
     response=$(_cronium_request "GET" "/executions/${CRONIUM_EXEC_ID}/context")
     if [ $? -eq 0 ]; then
-        echo "$response" | jq '.data // {}'
+        echo "$response" | jq 'if .data == null then {} else .data end'
     else
         return 1
     fi
@@ -210,7 +219,8 @@ cronium_event() {
 # Get specific event field
 cronium_event_field() {
     local field="$1"
-    cronium_event | jq -r ".$field // empty"
+    # `== null` (not `//`): a field whose value is `false` must print.
+    cronium_event | jq -r "if .$field == null then empty else .$field end"
 }
 
 # Execute a tool action
@@ -234,7 +244,8 @@ cronium_execute_tool_action() {
     local response
     response=$(_cronium_request "POST" "/tool-actions/execute" "$payload")
     if [ $? -eq 0 ]; then
-        echo "$response" | jq '.data // empty'
+        # `== null` (not `//`): preserve a legitimate `false` result.
+        echo "$response" | jq 'if .data == null then empty else .data end'
     else
         return 1
     fi

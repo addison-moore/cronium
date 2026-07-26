@@ -6,6 +6,11 @@
  * Base error class for Cronium SDK errors
  */
 export declare class CroniumError extends Error {
+  /**
+   * Underlying socket error code (e.g. "ECONNREFUSED", "ECONNRESET") when
+   * the error wraps a network failure; undefined otherwise.
+   */
+  code?: string;
   constructor(message: string);
 }
 

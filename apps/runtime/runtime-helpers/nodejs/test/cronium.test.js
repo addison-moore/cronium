@@ -191,9 +191,17 @@ describe("input()", () => {
     expect(received[0].url).toBe(`/executions/${EXECUTION_ID}/input`);
   });
 
-  test("current behavior: falsy input data (0, false, '') is coerced to null", async () => {
-    // Documents `result?.data || null` — falsy-but-present values are lost.
-    responder = jsonResponder(200, { success: true, data: 0 });
+  test.each([
+    ["zero", 0],
+    ["false", false],
+    ["empty string", ""],
+  ])("falsy-but-present input data round-trips: %s", async (_label, value) => {
+    responder = jsonResponder(200, { success: true, data: value });
+    await expect(sdk.cronium.input()).resolves.toBe(value);
+  });
+
+  test("explicit null input data resolves to null", async () => {
+    responder = jsonResponder(200, { success: true, data: null });
     await expect(sdk.cronium.input()).resolves.toBeNull();
   });
 });
@@ -262,13 +270,27 @@ describe("getVariable()", () => {
     });
   });
 
-  test("current behavior: falsy variable values (0, false, '') are coerced to null", async () => {
-    // Documents `result?.data?.value || null`.
+  test.each([
+    ["zero", 0],
+    ["false", false],
+    ["empty string", ""],
+  ])(
+    "falsy-but-present variable values round-trip: %s",
+    async (_label, value) => {
+      responder = jsonResponder(200, {
+        success: true,
+        data: { key: "k", value },
+      });
+      await expect(sdk.cronium.getVariable("k")).resolves.toBe(value);
+    },
+  );
+
+  test("an explicit null variable value resolves to null", async () => {
     responder = jsonResponder(200, {
       success: true,
-      data: { key: "count", value: 0 },
+      data: { key: "k", value: null },
     });
-    await expect(sdk.cronium.getVariable("count")).resolves.toBeNull();
+    await expect(sdk.cronium.getVariable("k")).resolves.toBeNull();
   });
 });
 
@@ -354,6 +376,13 @@ describe("executeToolAction()", () => {
       config: { channel: "#general", text: "hi" },
     });
     expect(result).toEqual({ messageId: "m-1" });
+  });
+
+  test("falsy-but-present tool action result data round-trips", async () => {
+    responder = jsonResponder(200, { success: true, data: false });
+    await expect(
+      sdk.executeToolAction("slack", "send_message", {}),
+    ).resolves.toBe(false);
   });
 
   test("rejects with CroniumAPIError when the body reports success: false", async () => {
@@ -558,6 +587,66 @@ describe("error handling and retries", () => {
     expect(received).toHaveLength(1);
   });
 
+  test("a non-JSON 5xx body (proxy HTML 502) is retried and surfaces the HTTP status", async () => {
+    responder = (record, res) => {
+      res.writeHead(502, { "Content-Type": "text/html" });
+      res.end("<html><body><h1>502 Bad Gateway</h1></body></html>");
+    };
+    const client = makeClient();
+
+    await expect(client.input()).rejects.toMatchObject({
+      name: "CroniumAPIError",
+      statusCode: 502,
+      message: "API Error (502): HTTP 502",
+    });
+    // Retried like any other 5xx despite the unparseable body.
+    expect(received).toHaveLength(client.maxRetries);
+  });
+
+  test("recovers when a non-JSON 502 is followed by a success", async () => {
+    let calls = 0;
+    responder = (record, res) => {
+      calls += 1;
+      if (calls === 1) {
+        res.writeHead(502, { "Content-Type": "text/html" });
+        res.end("<html>Bad Gateway</html>");
+      } else {
+        jsonResponder(200, { success: true, data: "recovered" })(record, res);
+      }
+    };
+
+    await expect(makeClient().input()).resolves.toBe("recovered");
+    expect(received).toHaveLength(2);
+  });
+
+  test("a non-JSON 4xx body rejects with CroniumAPIError and is not retried", async () => {
+    responder = (record, res) => {
+      res.writeHead(400, { "Content-Type": "text/html" });
+      res.end("<html>Bad Request</html>");
+    };
+
+    await expect(makeClient().input()).rejects.toMatchObject({
+      name: "CroniumAPIError",
+      statusCode: 400,
+      message: "API Error (400): HTTP 400",
+    });
+    expect(received).toHaveLength(1);
+  });
+
+  test("a non-JSON 501 body is never retried and carries the status", async () => {
+    responder = (record, res) => {
+      res.writeHead(501, { "Content-Type": "text/html" });
+      res.end("<html>Not Implemented</html>");
+    };
+
+    await expect(makeClient().input()).rejects.toMatchObject({
+      name: "CroniumAPIError",
+      statusCode: 501,
+      message: "API Error (501): HTTP 501",
+    });
+    expect(received).toHaveLength(1);
+  });
+
   test("an empty response body resolves to null", async () => {
     responder = (record, res) => {
       res.writeHead(200);
@@ -582,7 +671,7 @@ describe("error handling and retries", () => {
     sockets.forEach((res) => res.destroy());
   }, 15000);
 
-  test("connection failures reject with CroniumError and are not retried", async () => {
+  test("ECONNREFUSED is retried maxRetries times, then rejects with CroniumError", async () => {
     // Find a port with nothing listening on it.
     const probe = http.createServer();
     await new Promise((resolve) => probe.listen(0, "127.0.0.1", resolve));
@@ -592,11 +681,55 @@ describe("error handling and retries", () => {
     const client = makeClient();
     client.apiUrl = `http://127.0.0.1:${deadPort}`;
 
+    // Count real connection attempts (nothing reaches the test server).
+    let attempts = 0;
+    const originalDoRequest = client._doRequest.bind(client);
+    client._doRequest = (...args) => {
+      attempts += 1;
+      return originalDoRequest(...args);
+    };
+
+    await expect(client.input()).rejects.toMatchObject({
+      name: "CroniumError",
+      code: "ECONNREFUSED",
+      message: expect.stringMatching(/^Request failed:/),
+    });
+    expect(attempts).toBe(client.maxRetries);
+    expect(received).toHaveLength(0);
+  });
+
+  test("recovers when a connection reset is followed by a success", async () => {
+    let calls = 0;
+    responder = (record, res) => {
+      calls += 1;
+      if (calls === 1) {
+        // Kill the socket without a response — the client sees ECONNRESET.
+        res.socket.destroy();
+      } else {
+        jsonResponder(200, { success: true, data: "recovered" })(record, res);
+      }
+    };
+
+    await expect(makeClient().input()).resolves.toBe("recovered");
+    expect(received).toHaveLength(2);
+  });
+
+  test("non-retryable network errors (e.g. DNS failure) reject without retry", async () => {
+    const client = makeClient();
+    client.apiUrl = "http://cronium-nonexistent-host.invalid";
+
+    let attempts = 0;
+    const originalDoRequest = client._doRequest.bind(client);
+    client._doRequest = (...args) => {
+      attempts += 1;
+      return originalDoRequest(...args);
+    };
+
     await expect(client.input()).rejects.toMatchObject({
       name: "CroniumError",
       message: expect.stringMatching(/^Request failed:/),
     });
-    expect(received).toHaveLength(0);
+    expect(attempts).toBe(1);
   });
 
   test("maxRetries of 0 rejects with 'Max retries exceeded'", async () => {

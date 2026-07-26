@@ -132,10 +132,18 @@ class Cronium:
                 raise CroniumAPIError(e.code, message)
 
             except URLError as e:
-                if "timed out" in str(e) and attempt < self.max_retries - 1:
-                    # Retry on timeout
+                # Transient connection failures (refused/reset) are as
+                # retryable as timeouts — the service may just be restarting.
+                reason = getattr(e, "reason", None)
+                is_connection_failure = isinstance(
+                    reason, (ConnectionRefusedError, ConnectionResetError)
+                )
+                is_timeout = "timed out" in str(e)
+                if (is_timeout or is_connection_failure) and attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay * (2 ** attempt))
                     continue
+                if is_connection_failure:
+                    raise CroniumError(f"Request failed: {e}")
                 raise CroniumTimeoutError(f"Request timed out: {e}")
 
             except CroniumError:
@@ -334,15 +342,25 @@ class AsyncCronium(Cronium):
                         await asyncio.sleep(self.retry_delay * (2 ** attempt))
                         continue
 
-                    response_data = await response.json()
-                    
                     if response.status >= 400:
-                        message = response_data.get("message", "Unknown error")
+                        # The error body may not be JSON (e.g. an HTML page
+                        # from a proxy) — a parse failure must never mask the
+                        # HTTP status or turn a 4xx into a retried error.
+                        try:
+                            error_data = await response.json(content_type=None)
+                        except Exception:
+                            error_data = None
+                        if isinstance(error_data, dict):
+                            message = error_data.get("message", "Unknown error")
+                        else:
+                            message = f"HTTP {response.status}"
                         raise CroniumAPIError(response.status, message)
-                    
+
+                    response_data = await response.json()
+
                     if isinstance(response_data, dict) and response_data.get("success") is False:
                         raise CroniumAPIError(response.status, response_data.get("message", "Unknown error"))
-                    
+
                     return response_data
                     
             except asyncio.TimeoutError:
@@ -421,7 +439,9 @@ class AsyncCronium(Cronium):
         """
         # TODO: Implement streaming support when backend supports it
         data = await self.input()
-        if data:
+        # `is not None` (not truthiness): falsy-but-present input (0, False,
+        # "") is legitimate data and must be yielded.
+        if data is not None:
             yield data
     
     async def stream_output(self, data_iterator: AsyncIterator[Any]) -> None:
