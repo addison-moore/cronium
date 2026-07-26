@@ -8,12 +8,13 @@ import {
   addEdge,
 } from "@xyflow/react";
 import { create } from "zustand";
+import type { ActionNode, ActionConnection, NodeType } from "./types";
 import {
-  type ActionNode,
-  type ActionConnection,
-  NodeType,
-  NODE_TEMPLATES,
-} from "./types";
+  buildActionEdge,
+  buildActionNode,
+  getExecutionOrder,
+  validateFlow,
+} from "./lib/flow-graph";
 
 interface ActionBuilderState {
   nodes: ActionNode[];
@@ -62,34 +63,14 @@ export const useActionBuilderStore = create<ActionBuilderState>((set, get) => ({
   },
 
   onConnect: (connection) => {
-    const newEdge: ActionConnection = {
-      ...connection,
-      id: `edge-${Date.now()}`,
-      type: "action",
-      data: {
-        connectionType: "always" as const,
-      },
-    };
+    const newEdge: ActionConnection = buildActionEdge(connection);
     set({
       edges: addEdge(newEdge, get().edges),
     });
   },
 
   addNode: (type, position, data) => {
-    const template = NODE_TEMPLATES[type];
-    const id = `${type}-${Date.now()}`;
-    const newNode: ActionNode = {
-      id,
-      type: "action", // ReactFlow node type for custom component
-      position,
-      data: {
-        label: template.label ?? type,
-        ...template,
-        ...(data as Record<string, unknown>),
-        nodeType: type, // Store our NodeType in data
-        id,
-      },
-    };
+    const newNode: ActionNode = buildActionNode(type, position, data);
     set({
       nodes: [...get().nodes, newNode],
     });
@@ -140,107 +121,12 @@ export const useActionBuilderStore = create<ActionBuilderState>((set, get) => ({
 
   getExecutionOrder: () => {
     const { nodes, edges } = get();
-    const order: string[] = [];
-    const visited = new Set<string>();
-    const visiting = new Set<string>();
-
-    // Find trigger nodes (nodes with no incoming edges)
-    const triggerNodes = nodes.filter(
-      (node) =>
-        node.data.nodeType === NodeType.TRIGGER ||
-        !edges.some((edge) => edge.target === node.id),
-    );
-
-    // Depth-first traversal
-    const visit = (nodeId: string) => {
-      if (visited.has(nodeId)) return;
-      if (visiting.has(nodeId)) {
-        console.warn("Cycle detected in flow");
-        return;
-      }
-
-      visiting.add(nodeId);
-
-      // Visit all dependencies first
-      const incomingEdges = edges.filter((edge) => edge.target === nodeId);
-      for (const edge of incomingEdges) {
-        visit(edge.source);
-      }
-
-      visiting.delete(nodeId);
-      visited.add(nodeId);
-      order.push(nodeId);
-    };
-
-    // Start from trigger nodes
-    for (const node of triggerNodes) {
-      visit(node.id);
-    }
-
-    // Visit any remaining unvisited nodes
-    for (const node of nodes) {
-      if (!visited.has(node.id)) {
-        visit(node.id);
-      }
-    }
-
-    return order;
+    return getExecutionOrder(nodes, edges);
   },
 
   validateFlow: () => {
     const { nodes, edges } = get();
-    const errors: string[] = [];
-
-    // Check for trigger node
-    const triggerNodes = nodes.filter(
-      (n) => n.data.nodeType === NodeType.TRIGGER,
-    );
-    if (triggerNodes.length === 0) {
-      errors.push("Flow must have at least one trigger node");
-    }
-
-    // Check for output node
-    const outputNodes = nodes.filter(
-      (n) => n.data.nodeType === NodeType.OUTPUT,
-    );
-    if (outputNodes.length === 0) {
-      errors.push("Flow must have at least one output node");
-    }
-
-    // Check for disconnected nodes
-    const connectedNodes = new Set<string>();
-    edges.forEach((edge) => {
-      connectedNodes.add(edge.source);
-      connectedNodes.add(edge.target);
-    });
-
-    const disconnectedNodes = nodes.filter(
-      (node) => !connectedNodes.has(node.id) && nodes.length > 1,
-    );
-    if (disconnectedNodes.length > 0) {
-      errors.push(
-        `Disconnected nodes found: ${disconnectedNodes.map((n) => n.data.label).join(", ")}`,
-      );
-    }
-
-    // Check for unconfigured nodes
-    const unconfiguredNodes = nodes.filter((n) => !n.data.isConfigured);
-    if (unconfiguredNodes.length > 0) {
-      errors.push(
-        `Unconfigured nodes: ${unconfiguredNodes.map((n) => n.data.label).join(", ")}`,
-      );
-    }
-
-    // Check for cycles
-    const executionOrder = get().getExecutionOrder();
-    if (executionOrder.length !== nodes.length) {
-      errors.push("Flow contains cycles or unreachable nodes");
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors,
-    };
+    return validateFlow(nodes, edges);
   },
 
   clearFlow: () => {

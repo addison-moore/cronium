@@ -12,6 +12,10 @@ import { TemplatePreview } from "./TemplatePreview";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cronium/ui";
 import { ToolPluginRegistry } from "@/tools/plugins";
 import { TemplateActionParameterForm } from "./TemplateActionParameterForm";
+import {
+  TEMPLATE_VARIABLES,
+  appendTemplateVariable,
+} from "./lib/template-form";
 import { Variable } from "lucide-react";
 import {
   DropdownMenu,
@@ -31,44 +35,6 @@ interface ToolActionTemplateFormProps {
   onSuccess: () => void;
   onCancel: () => void;
 }
-
-// Template variables available in cronium context
-const TEMPLATE_VARIABLES = [
-  {
-    group: "Event",
-    variables: [
-      { name: "cronium.event.id", description: "Event ID" },
-      { name: "cronium.event.name", description: "Event name" },
-      { name: "cronium.event.status", description: "Execution status" },
-      {
-        name: "cronium.event.duration",
-        description: "Runtime in milliseconds",
-      },
-      { name: "cronium.event.executionTime", description: "Start timestamp" },
-      { name: "cronium.event.server", description: "Execution server name" },
-      { name: "cronium.event.output", description: "Script output" },
-      { name: "cronium.event.error", description: "Error message if any" },
-    ],
-  },
-  {
-    group: "Variables",
-    variables: [
-      { name: "cronium.getVariables.*", description: "User-defined variables" },
-    ],
-  },
-  {
-    group: "Input",
-    variables: [
-      { name: "cronium.input.*", description: "Workflow input data" },
-    ],
-  },
-  {
-    group: "Conditions",
-    variables: [
-      { name: "cronium.getCondition.*", description: "Conditional flags" },
-    ],
-  },
-];
 
 export function ToolActionTemplateForm({
   toolType,
@@ -173,16 +139,9 @@ export function ToolActionTemplateForm({
   const insertVariable = (variableName: string) => {
     if (!currentFieldForVariable) return;
 
-    // Get current value of the field
-    const currentValue = (parameters[currentFieldForVariable] as string) ?? "";
-
-    // Insert the variable wrapped in handlebars syntax
-    const newValue = currentValue + `{{${variableName}}}`;
-
-    setParameters({
-      ...parameters,
-      [currentFieldForVariable]: newValue,
-    });
+    setParameters(
+      appendTemplateVariable(parameters, currentFieldForVariable, variableName),
+    );
 
     toast({
       title: "Variable inserted",

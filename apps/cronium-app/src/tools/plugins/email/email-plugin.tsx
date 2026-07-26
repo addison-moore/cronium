@@ -38,6 +38,14 @@ const emailFormSchema = z.object({
   enableSSL: z.boolean(),
 });
 
+// When editing an existing tool the server redacts smtpPassword to "" in read
+// responses and treats a blank secret on update as "keep the current value"
+// (see lib/tools/credential-redaction.ts). Requiring min(1) here would force
+// re-typing the password on every edit, so the edit-mode schema allows blank.
+const emailEditFormSchema = emailFormSchema.extend({
+  smtpPassword: z.string(),
+});
+
 type EmailFormData = z.infer<typeof emailFormSchema>;
 
 // Email credential form component
@@ -47,7 +55,7 @@ function EmailCredentialForm({
   onCancel,
 }: CredentialFormProps) {
   const form = useForm<EmailFormData>({
-    resolver: zodResolver(emailFormSchema),
+    resolver: zodResolver(tool ? emailEditFormSchema : emailFormSchema),
     defaultValues: tool
       ? {
           name: tool.name,

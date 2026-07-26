@@ -19,6 +19,21 @@ import { type ToolAction } from "@/tools/types/tool-plugin";
 import { MonacoEditor } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
+import {
+  collectParameterErrors,
+  formatEnumValue,
+  formatFieldName,
+  formatFieldValueForEditor,
+  getEnumOptions,
+  getMonacoLanguage,
+  getSchemaShape,
+  isEmailField,
+  isMultilineField,
+  parseLooseFieldValue,
+  parseMonacoFieldValue,
+  shouldUseMonaco,
+  unwrapOptionalSchema,
+} from "./lib/parameter-fields";
 
 interface TemplateActionParameterFormProps {
   action: ToolAction;
@@ -49,34 +64,9 @@ export function TemplateActionParameterForm({
   );
 
   // Get schema shape from Zod schema
-  const getSchemaShape = () => {
-    let schema: z.ZodTypeAny = action.inputSchema;
-
-    // Unwrap effects and pipelines to get the base schema
-    // In Zod v4, we need to check _def.typeName
-    while (schema._def) {
-      const def = schema._def as {
-        typeName?: string;
-        schema?: z.ZodTypeAny;
-        in?: z.ZodTypeAny;
-      };
-      const typeName = def.typeName;
-      if (typeName === "ZodEffects" && "schema" in def) {
-        schema = def.schema!;
-      } else if (typeName === "ZodPipeline" && "in" in def) {
-        schema = def.in!;
-      } else {
-        break;
-      }
-    }
-
-    if (schema instanceof z.ZodObject) {
-      return schema.shape as Record<string, z.ZodTypeAny>;
-    }
-    return {};
-  };
-
-  const schemaShape: Record<string, z.ZodTypeAny> = getSchemaShape();
+  const schemaShape: Record<string, z.ZodTypeAny> = getSchemaShape(
+    action.inputSchema,
+  );
 
   // Handle field change
   const handleFieldChange = (key: string, fieldValue: unknown) => {
@@ -107,68 +97,9 @@ export function TemplateActionParameterForm({
   // Validate all fields
   React.useEffect(() => {
     if (action.inputSchema) {
-      const result = action.inputSchema.safeParse(value);
-      if (!result.success) {
-        const newErrors: Record<string, string> = {};
-        // In Zod v4, use 'issues' instead of 'errors'
-        result.error.issues.forEach((error) => {
-          const path = error.path.join(".");
-          newErrors[path] = error.message;
-        });
-        setErrors(newErrors);
-      } else {
-        setErrors({});
-      }
+      setErrors(collectParameterErrors(action.inputSchema, value));
     }
   }, [value, action.inputSchema]);
-
-  // Check if field should use Monaco editor
-  const shouldUseMonaco = (key: string, schema: z.ZodTypeAny): boolean => {
-    // Check for explicit format hints
-    const description =
-      (schema as { description?: string }).description?.toLowerCase() ?? "";
-    if (description.includes("json") || description.includes("html")) {
-      return true;
-    }
-
-    // Check field names
-    const lowerKey = key.toLowerCase();
-    if (
-      lowerKey.includes("json") ||
-      lowerKey.includes("html") ||
-      lowerKey.includes("blocks") || // Slack blocks
-      lowerKey.includes("embeds") || // Discord embeds
-      (lowerKey.includes("body") && description.includes("html"))
-    ) {
-      return true;
-    }
-
-    // Check if it's an object or array type
-    if (schema instanceof z.ZodObject || schema instanceof z.ZodArray) {
-      return true;
-    }
-
-    return false;
-  };
-
-  // Determine language for Monaco
-  const getMonacoLanguage = (
-    key: string,
-    schema: z.ZodTypeAny,
-  ): "html" | "json" => {
-    const description =
-      (schema as { description?: string }).description?.toLowerCase() ?? "";
-    const lowerKey = key.toLowerCase();
-
-    if (
-      lowerKey.includes("html") ||
-      (lowerKey.includes("body") && description.includes("html"))
-    ) {
-      return "html";
-    }
-
-    return "json";
-  };
 
   // Render field based on Zod type
   const renderField = (key: string, schema: z.ZodTypeAny) => {
@@ -176,13 +107,7 @@ export function TemplateActionParameterForm({
     const error = touchedFields.has(key) ? errors[key] : undefined;
 
     // Get the base type and check if optional
-    let baseSchema = schema;
-    let isOptional = false;
-
-    if (schema instanceof z.ZodOptional) {
-      isOptional = true;
-      baseSchema = schema._def.innerType as z.ZodTypeAny;
-    }
+    const { baseSchema, isOptional } = unwrapOptionalSchema(schema);
 
     // Get description from schema
     const description = (baseSchema as { description?: string }).description;
@@ -203,30 +128,12 @@ export function TemplateActionParameterForm({
             onBlur={() => handleFieldBlur(key)}
           >
             <MonacoEditor
-              value={
-                typeof fieldValue === "object" && fieldValue !== null
-                  ? JSON.stringify(fieldValue, null, 2)
-                  : typeof fieldValue === "string"
-                    ? fieldValue
-                    : fieldValue != null
-                      ? // eslint-disable-next-line @typescript-eslint/no-base-to-string
-                        String(fieldValue)
-                      : ""
-              }
+              value={formatFieldValueForEditor(fieldValue)}
               onChange={(newValue) => {
-                if (language === "json") {
-                  try {
-                    const parsed = JSON.parse(newValue || "{}") as Record<
-                      string,
-                      unknown
-                    >;
-                    handleFieldChange(key, parsed);
-                  } catch {
-                    handleFieldChange(key, newValue);
-                  }
-                } else {
-                  handleFieldChange(key, newValue);
-                }
+                handleFieldChange(
+                  key,
+                  parseMonacoFieldValue(language, newValue),
+                );
               }}
               language={language}
               height="200px"
@@ -255,14 +162,7 @@ export function TemplateActionParameterForm({
     // Render based on type
     if (baseSchema instanceof z.ZodString) {
       // Check if it's an email field
-      const isEmailField =
-        key.toLowerCase().includes("email") ||
-        (baseSchema instanceof z.ZodString &&
-          baseSchema._def.checks?.some(
-            (check) => "kind" in check && check.kind === "email",
-          ));
-
-      if (isEmailField) {
+      if (isEmailField(key, baseSchema)) {
         return (
           <div key={key} className="space-y-2">
             <Label htmlFor={key}>
@@ -287,13 +187,7 @@ export function TemplateActionParameterForm({
       }
 
       // Check if it's a multiline field
-      if (
-        key.toLowerCase().includes("body") ||
-        key.toLowerCase().includes("content") ||
-        key.toLowerCase().includes("message") ||
-        key.toLowerCase().includes("description") ||
-        key.toLowerCase().includes("text")
-      ) {
+      if (isMultilineField(key)) {
         return (
           <div key={key} className="space-y-2">
             <Label htmlFor={key}>
@@ -384,10 +278,7 @@ export function TemplateActionParameterForm({
     }
 
     if (baseSchema instanceof z.ZodEnum) {
-      // In Zod v4, enum values are in _def.entries
-      const options = baseSchema._def.entries
-        ? Object.values(baseSchema._def.entries as Record<string, string>)
-        : [];
+      const options = getEnumOptions(baseSchema);
       return (
         <div key={key} className="space-y-2">
           <Label htmlFor={key}>
@@ -430,23 +321,9 @@ export function TemplateActionParameterForm({
         </Label>
         <Textarea
           id={key}
-          value={
-            typeof fieldValue === "object" && fieldValue !== null
-              ? JSON.stringify(fieldValue, null, 2)
-              : typeof fieldValue === "string"
-                ? fieldValue
-                : fieldValue != null
-                  ? // eslint-disable-next-line @typescript-eslint/no-base-to-string
-                    String(fieldValue)
-                  : ""
-          }
+          value={formatFieldValueForEditor(fieldValue)}
           onChange={(e) => {
-            try {
-              const parsed = JSON.parse(e.target.value) as unknown;
-              handleFieldChange(key, parsed);
-            } catch {
-              handleFieldChange(key, e.target.value);
-            }
+            handleFieldChange(key, parseLooseFieldValue(e.target.value));
           }}
           onFocus={() => handleFieldFocus(key)}
           onBlur={() => handleFieldBlur(key)}
@@ -492,26 +369,4 @@ export function TemplateActionParameterForm({
       })()}
     </div>
   );
-}
-
-// Helper functions
-function formatFieldName(key: string): string {
-  // Convert snake_case or camelCase to Title Case
-  return key
-    .replace(/_/g, " ")
-    .replace(/([A-Z])/g, " $1")
-    .trim()
-    .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
-}
-
-function formatEnumValue(value: string): string {
-  // Format enum values for display
-  return value
-    .replace(/_/g, " ")
-    .replace(/-/g, " ")
-    .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
 }

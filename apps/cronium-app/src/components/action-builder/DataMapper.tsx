@@ -16,6 +16,13 @@ import { Button } from "@cronium/ui";
 import { Badge } from "@cronium/ui";
 import { Plus, Trash2, ArrowRight, Code, FileText, Hash } from "lucide-react";
 import { type DataMapping } from "./types";
+import {
+  createEmptyMapping,
+  deriveSourceFields,
+  deriveTargetFields,
+  removeMappingAt,
+  updateMappingAt,
+} from "./lib/data-mapping";
 
 interface DataMapperProps {
   sourceName: string;
@@ -38,41 +45,27 @@ export function DataMapper({
     null,
   );
 
-  const sourceFields = React.useMemo(() => {
-    return Object.keys(sourceSchema).map((key) => ({
-      name: key,
-      type: typeof sourceSchema[key],
-    }));
-  }, [sourceSchema]);
+  const sourceFields = React.useMemo(
+    () => deriveSourceFields(sourceSchema),
+    [sourceSchema],
+  );
 
-  const targetFields = React.useMemo(() => {
-    return Object.keys(targetSchema).map((key) => ({
-      name: key,
-      type: typeof targetSchema[key],
-      required:
-        (targetSchema[key] as { required?: boolean })?.required ?? false,
-    }));
-  }, [targetSchema]);
+  const targetFields = React.useMemo(
+    () => deriveTargetFields(targetSchema),
+    [targetSchema],
+  );
 
   const addMapping = () => {
-    const newMapping: DataMapping = {
-      sourceField: "",
-      targetField: "",
-      transformer: "direct",
-    };
-    onMappingsChange([...mappings, newMapping]);
+    onMappingsChange([...mappings, createEmptyMapping()]);
     setSelectedMapping(mappings.length);
   };
 
   const updateMapping = (index: number, updates: Partial<DataMapping>) => {
-    const newMappings = [...mappings];
-    newMappings[index] = { ...newMappings[index], ...updates } as DataMapping;
-    onMappingsChange(newMappings);
+    onMappingsChange(updateMappingAt(mappings, index, updates));
   };
 
   const deleteMapping = (index: number) => {
-    const newMappings = mappings.filter((_, i) => i !== index);
-    onMappingsChange(newMappings);
+    onMappingsChange(removeMappingAt(mappings, index));
     if (selectedMapping === index) {
       setSelectedMapping(null);
     }

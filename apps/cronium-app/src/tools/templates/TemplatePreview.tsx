@@ -15,6 +15,10 @@ import {
 } from "@/lib/tool-action-template-processor";
 import { type TemplateContext } from "@/lib/template-processor";
 import { createTemplateContext } from "@/lib/template-processor";
+import {
+  deriveParameterPreview,
+  resolvePreviewContext,
+} from "./lib/template-preview";
 import { useToast } from "@cronium/ui";
 
 interface TemplatePreviewProps {
@@ -79,21 +83,14 @@ export function TemplatePreview({
   const [useCustomContext, setUseCustomContext] = useState(false);
 
   // Get the current context
-  const getCurrentContext = () => {
-    if (useCustomContext && customContext) {
-      try {
-        return JSON.parse(customContext) as Record<string, unknown>;
-      } catch (error) {
-        console.error("Invalid custom context:", error);
-        return selectedContext === "success"
-          ? SAMPLE_CONTEXT
-          : SAMPLE_CONTEXT_FAILURE;
-      }
-    }
-    return selectedContext === "success"
-      ? SAMPLE_CONTEXT
-      : SAMPLE_CONTEXT_FAILURE;
-  };
+  const getCurrentContext = () =>
+    resolvePreviewContext({
+      useCustomContext,
+      customContext,
+      selectedContext,
+      successContext: SAMPLE_CONTEXT,
+      failureContext: SAMPLE_CONTEXT_FAILURE,
+    });
 
   // Process the template with sample data
   const processedTemplate = processToolActionTemplate(
@@ -127,14 +124,10 @@ export function TemplatePreview({
     value: unknown,
     processedValue: unknown,
   ) => {
-    const originalStr =
-      typeof value === "string" ? value : JSON.stringify(value, null, 2);
-    const processedStr =
-      typeof processedValue === "string"
-        ? processedValue
-        : JSON.stringify(processedValue, null, 2);
-
-    const hasChanged = originalStr !== processedStr;
+    const { originalStr, processedStr, hasChanged } = deriveParameterPreview(
+      value,
+      processedValue,
+    );
 
     return (
       <div key={key} className="space-y-2">
