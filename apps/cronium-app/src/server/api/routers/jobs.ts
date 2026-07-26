@@ -19,7 +19,7 @@ import {
 import { jobService } from "@/lib/services/job-service";
 import { JobStatus, logs } from "@/shared/schema";
 import { db } from "@/server/db";
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 
 // Use standardized procedure with timing
 const jobProcedure = protectedProcedure.use(withTiming);
@@ -229,13 +229,14 @@ export const jobsRouter = createTRPCRouter({
           .limit(pagination.limit)
           .offset(pagination.offset);
 
-        // Get total count for pagination
-        const countResult = await db
-          .select({ count: logs.id })
+        // Get total count for pagination — a real SQL aggregate, not a fetch
+        // of every row just to take .length
+        const [countRow] = await db
+          .select({ count: count() })
           .from(logs)
           .where(eq(logs.jobId, input.jobId));
 
-        const total = countResult.length;
+        const total = countRow?.count ?? 0;
 
         const result = createPaginatedResult(jobLogs, total, pagination);
         return listResponse(result);

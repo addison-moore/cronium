@@ -268,7 +268,26 @@ export async function runDispatchTick(
         // Fresh row with relations each tick: dispatch needs envVars/servers,
         // and maxExecutions bookkeeping must not act on a stale count.
         const event = await storage.getEventWithRelations(eventId);
-        if (!event || event.status !== EventStatus.ACTIVE) break;
+        if (!event || event.status !== EventStatus.ACTIVE) {
+          // Every other drop path records an incident; going quiet here
+          // would make "paused/deleted mid-tick" invisible. One incident
+          // covers this tick and the rest of the batch it drops.
+          await db
+            .insert(scheduleIncidents)
+            .values({
+              eventId,
+              kind: ScheduleIncidentKind.MISSED,
+              details: {
+                scheduledFor: tick.at.toISOString(),
+                reason: event
+                  ? `event no longer ACTIVE (${event.status}) at dispatch time; remaining ticks dropped`
+                  : "event deleted mid-tick; remaining ticks dropped",
+              },
+            })
+            .catch(() => undefined);
+          incidents++;
+          break;
+        }
 
         if (overlapPolicy === OverlapPolicy.QUEUE) {
           if (await hasQueuedJob(eventId)) {

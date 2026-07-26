@@ -578,6 +578,12 @@ describe("startWorkflowRun", () => {
     expect(stepA.jobId).not.toBeNull();
     expect(stepB.status).toBe(WorkflowStepStatus.PENDING);
 
+    // A start node is triggered by the run itself, not a connection: its
+    // telemetry row records no connection type.
+    expect(mockCreateExecEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ nodeId: 1, connectionType: null }),
+    );
+
     expect(mockDispatch).toHaveBeenCalledTimes(1);
     const [event, opts] = mockDispatch.mock.calls[0]!;
     expect(event.id).toBe(101);
@@ -685,6 +691,14 @@ describe("advanceWorkflowRun", () => {
     expect(b.status).toBe(WorkflowStepStatus.DISPATCHED);
     expect(b.jobId).not.toBeNull();
     expect(b.executionEventId).not.toBeNull(); // telemetry row recorded
+    // The telemetry row records the REAL triggering edge, not a hardcoded
+    // ALWAYS
+    expect(mockCreateExecEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nodeId: 2,
+        connectionType: ConnectionType.ON_SUCCESS,
+      }),
+    );
 
     expect(mockDispatch).toHaveBeenCalledTimes(1);
     const [event, opts] = mockDispatch.mock.calls[0]!;
@@ -822,7 +836,7 @@ describe("advanceWorkflowRun", () => {
     expect(mockDispatch).toHaveBeenCalledTimes(1);
   });
 
-  it("marks conflicting incoming edges UNSATISFIABLE and still finishes the run as SUCCESS", async () => {
+  it("marks conflicting incoming edges UNSATISFIABLE and finalizes the run as FAILURE", async () => {
     // Node 2 requires node 1 to both succeed and fail — impossible.
     setGraph(
       [
@@ -864,14 +878,18 @@ describe("advanceWorkflowRun", () => {
     expect(stepRow(step2.id).error).toBe(
       "Prerequisite connections can never all be satisfied",
     );
-    // Unsatisfiable is terminal but not a failure: the run completes SUCCESS
+    // UNSATISFIABLE = conflicting edges = graph misconfiguration: the run
+    // did NOT fully succeed, so it finalizes as FAILURE (a mere SKIPPED
+    // branch would still be SUCCESS).
     const finalRun = runRow(run.id);
-    expect(finalRun.status).toBe(LogStatus.SUCCESS);
+    expect(finalRun.status).toBe(LogStatus.FAILURE);
     expect(finalRun.successfulEvents).toBe(1);
     expect(finalRun.failedEvents).toBe(0);
     expect(mockCreateLog).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining("1 succeeded, 0 failed, 1 skipped"),
+        message: expect.stringContaining(
+          "1 succeeded, 0 failed, 0 skipped, 1 unsatisfiable",
+        ),
       }),
     );
   });
@@ -1266,7 +1284,17 @@ describe("advanceWorkflowRun — dispatch failure paths", () => {
     expect(stepRow(step.id).status).toBe(WorkflowStepStatus.FAILED);
     expect(stepRow(step.id).error).toBe("Run skipped (overlap)");
     // The telemetry row id created before dispatch is preserved on the step
-    expect(stepRow(step.id).executionEventId).not.toBeNull();
+    // AND the row itself is finalized — no step may render RUNNING forever.
+    const skipTelemetryId = stepRow(step.id).executionEventId;
+    expect(skipTelemetryId).not.toBeNull();
+    expect(mockUpdateExecEvent).toHaveBeenCalledWith(
+      skipTelemetryId,
+      expect.objectContaining({
+        status: LogStatus.FAILURE,
+        errorMessage: "Run skipped (overlap)",
+        completedAt: expect.any(Date),
+      }),
+    );
     expect(runRow(run.id).status).toBe(LogStatus.FAILURE);
   });
 
@@ -1279,6 +1307,18 @@ describe("advanceWorkflowRun — dispatch failure paths", () => {
     expect(stepRow(step.id).status).toBe(WorkflowStepStatus.FAILED);
     expect(stepRow(step.id).error).toBe("Dispatch failed: db down");
     expect(runRow(run.id).status).toBe(LogStatus.FAILURE);
+    // The telemetry row created before the dispatch attempt is finalized too
+    // (it used to be orphaned RUNNING when dispatch threw).
+    const throwTelemetryId = stepRow(step.id).executionEventId;
+    expect(throwTelemetryId).not.toBeNull();
+    expect(mockUpdateExecEvent).toHaveBeenCalledWith(
+      throwTelemetryId,
+      expect.objectContaining({
+        status: LogStatus.FAILURE,
+        errorMessage: "Dispatch failed: db down",
+        completedAt: expect.any(Date),
+      }),
+    );
   });
 
   it("still dispatches when the telemetry insert fails (telemetry is best-effort)", async () => {

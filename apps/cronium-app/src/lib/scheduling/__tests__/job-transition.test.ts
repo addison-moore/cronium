@@ -210,7 +210,10 @@ describe("transitionJob — legal edges", () => {
     });
   });
 
-  it("falls back to the pre-update row when RETURNING yields nothing", async () => {
+  it("fails the CAS (no audit row, no notify) when RETURNING yields no row", async () => {
+    // "Can't happen" under FOR UPDATE — but if it ever does (row deleted
+    // mid-transaction, driver fault), returning ok with the stale pre-update
+    // row would violate the CAS contract. It must fail like any lost race.
     const current = jobRow(JobStatus.QUEUED);
     state.currentRow = current;
     state.updateReturning = [];
@@ -219,9 +222,26 @@ describe("transitionJob — legal edges", () => {
       actor: "worker:w-1",
     });
 
-    expect(outcome.ok).toBe(true);
-    if (!outcome.ok) return;
-    expect(outcome.job).toBe(current);
+    expect(outcome).toEqual({
+      ok: false,
+      current: JobStatus.QUEUED,
+      error: `Job job-1 was modified concurrently; transition ${JobStatus.QUEUED} → ${JobStatus.RUNNING} updated no row`,
+    });
+    expect(transitionInserts()).toHaveLength(0);
+    expect(state.txExecutes).toBe(0);
+    expect(mockRevoke).not.toHaveBeenCalled();
+  });
+
+  it("does not revoke tokens when a terminal transition loses the row", async () => {
+    state.currentRow = jobRow(JobStatus.RUNNING);
+    state.updateReturning = [];
+
+    const outcome = await transitionJob("job-1", JobStatus.COMPLETED, {
+      actor: "worker:w-1",
+    });
+
+    expect(outcome.ok).toBe(false);
+    expect(mockRevoke).not.toHaveBeenCalled();
   });
 });
 

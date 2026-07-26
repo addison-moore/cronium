@@ -85,18 +85,14 @@ export async function executeHttpRequest(
             config.data = new URLSearchParams(
               body as Record<string, string>,
             ).toString();
+          } else if (typeof body === "string") {
+            config.data = body;
+          } else if (typeof body === "number") {
+            config.data = body.toString();
+          } else if (typeof body === "boolean") {
+            config.data = body.toString();
           } else {
-            if (typeof body === "object" && body !== null) {
-              config.data = JSON.stringify(body);
-            } else if (typeof body === "string") {
-              config.data = body;
-            } else if (typeof body === "number") {
-              config.data = body.toString();
-            } else if (typeof body === "boolean") {
-              config.data = body.toString();
-            } else {
-              config.data = "";
-            }
+            config.data = "";
           }
         } else if (contentType?.includes("multipart/form-data")) {
           // Handle form data

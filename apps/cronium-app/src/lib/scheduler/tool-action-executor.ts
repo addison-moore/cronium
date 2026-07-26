@@ -101,25 +101,19 @@ export async function executeToolAction(
   }
 
   try {
-    // Parse tool action configuration
-    try {
-      console.log(
-        `[ToolAction] Raw config:`,
-        redactSecrets(event.toolActionConfig),
-      );
-      toolActionConfig = parseToolActionConfig(
-        event.toolActionConfig,
-      ) as ToolActionConfig | null;
-      console.log(
-        `[ToolAction] Parsed config:`,
-        JSON.stringify(redactSecrets(toolActionConfig), null, 2),
-      );
-    } catch (error) {
-      console.error(`[ToolAction] Failed to parse config:`, error);
-      throw new Error(
-        `Invalid tool action configuration: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
-    }
+    // Parse tool action configuration (parseToolActionConfig never throws —
+    // it returns null for every malformed shape, caught just below)
+    console.log(
+      `[ToolAction] Raw config:`,
+      redactSecrets(event.toolActionConfig),
+    );
+    toolActionConfig = parseToolActionConfig(
+      event.toolActionConfig,
+    ) as ToolActionConfig | null;
+    console.log(
+      `[ToolAction] Parsed config:`,
+      JSON.stringify(redactSecrets(toolActionConfig), null, 2),
+    );
 
     if (
       !toolActionConfig?.toolType ||
@@ -398,19 +392,9 @@ export async function executeToolAction(
         }),
     };
 
-    const retryExecutor = createRetryExecutor(
-      "exponential",
-      retryConfig,
-      (retryContext) => {
-        context.logger.warn(
-          `Retry attempt ${retryContext.attempt} for action ${action.id} after ${retryContext.lastDelay}ms`,
-        );
-        context.onProgress?.({
-          step: `Retrying action (attempt ${retryContext.attempt})`,
-          percentage: 10 + retryContext.attempt * 20,
-        });
-      },
-    );
+    // No onRetry callback: with maxAttempts hardcoded to 1 above it could
+    // never fire.
+    const retryExecutor = createRetryExecutor("exponential", retryConfig);
 
     // Get circuit breaker for this tool
     const circuitBreaker = circuitBreakerManager.getBreaker(

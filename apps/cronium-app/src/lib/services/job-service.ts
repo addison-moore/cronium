@@ -396,7 +396,14 @@ export class JobService {
     result: UpdateJobInput["result"],
     actor = "app",
   ): Promise<Job | null> {
-    const isSuccess = !result?.error && result?.exitCode === 0;
+    // Calling completeJob is itself the "work finished" signal: a completion
+    // that reports no exitCode at all (e.g. `{ metrics }` only) counts as
+    // success. Only an explicit error or a non-zero exit code marks failure —
+    // failures are reported through failJob/updateJobStatus(FAILED), which
+    // always carry an error.
+    const isSuccess =
+      !result?.error &&
+      (result?.exitCode === undefined || result.exitCode === 0);
 
     // Only store minimal data in result (exit code, metrics)
     // Output is now stored in execution records
@@ -757,7 +764,6 @@ export class JobService {
     data?: {
       error?: string;
       exitCode?: number;
-      serverResults?: Array<{ status: string }>;
     },
   ): LogStatus {
     // Check for timeout (either by error message or exit code -1)
@@ -783,15 +789,9 @@ export class JobService {
       if (data?.exitCode && data.exitCode >= 100) {
         return LogStatus.PARTIAL;
       }
-      if (data?.serverResults) {
-        const hasFailures = data.serverResults.some(
-          (r) => r.status !== "SUCCESS",
-        );
-        if (hasFailures) return LogStatus.PARTIAL;
-      }
     }
 
-    // Map job status to log status
+    // Map job status to log status (exhaustive over JobStatus)
     switch (jobStatus) {
       case JobStatus.QUEUED:
       case JobStatus.CLAIMED:
@@ -806,8 +806,6 @@ export class JobService {
         return LogStatus.TIMEOUT;
       case JobStatus.CANCELLED:
         return LogStatus.FAILURE;
-      default:
-        return LogStatus.RUNNING;
     }
   }
 }

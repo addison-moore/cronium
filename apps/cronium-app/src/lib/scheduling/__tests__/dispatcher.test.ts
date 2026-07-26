@@ -328,7 +328,7 @@ describe("runDispatchTick — due events", () => {
     expect(result.dispatched).toBe(0);
   });
 
-  it("drops remaining ticks when the event vanished or was paused after claiming", async () => {
+  it("drops remaining ticks with a MISSED incident when the event was paused after claiming", async () => {
     enqueueSelect(events, []);
     enqueueSelect(events, [dueEventRow()]);
     mockPlanTicks.mockReturnValue(
@@ -347,6 +347,45 @@ describe("runDispatchTick — due events", () => {
     expect(result.dispatched).toBe(0);
     // break: the second tick never re-fetched the event.
     expect(mockGetEvent).toHaveBeenCalledTimes(1);
+    // The drop is not silent: one MISSED incident covers the dropped batch.
+    expect(result.incidents).toBe(1);
+    const incidents = incidentInserts();
+    expect(incidents).toHaveLength(1);
+    expect(incidents[0]!.values).toEqual({
+      eventId: 7,
+      kind: ScheduleIncidentKind.MISSED,
+      details: {
+        scheduledFor: DUE_AT.toISOString(),
+        reason: `event no longer ACTIVE (${EventStatus.PAUSED}) at dispatch time; remaining ticks dropped`,
+      },
+    });
+  });
+
+  it("drops remaining ticks with a MISSED incident when the event was deleted mid-tick", async () => {
+    enqueueSelect(events, []);
+    enqueueSelect(events, [dueEventRow()]);
+    mockPlanTicks.mockReturnValue(
+      singleTickPlan({
+        ticks: [
+          { at: DUE_AT, miss: false },
+          { at: NOW, miss: false },
+        ],
+      }),
+    );
+    mockGetEvent.mockResolvedValue(undefined);
+
+    const result = await runDispatchTick(NOW);
+
+    expect(mockDispatch).not.toHaveBeenCalled();
+    expect(result.incidents).toBe(1);
+    expect(incidentInserts()[0]!.values).toEqual({
+      eventId: 7,
+      kind: ScheduleIncidentKind.MISSED,
+      details: {
+        scheduledFor: DUE_AT.toISOString(),
+        reason: "event deleted mid-tick; remaining ticks dropped",
+      },
+    });
   });
 
   it("stops dispatching after a max_executions auto-pause", async () => {

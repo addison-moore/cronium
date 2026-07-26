@@ -104,6 +104,19 @@ export async function transitionJob(
         .where(eq(jobs.id, jobId))
         .returning();
 
+      // The row is locked FOR UPDATE above, so an empty RETURNING "can't
+      // happen" — but if it ever does (row deleted mid-transaction, driver
+      // fault), claiming success with the stale pre-update row would violate
+      // the CAS contract. Fail like any other lost race: no audit row, no
+      // notify.
+      if (!updated) {
+        return {
+          ok: false,
+          current: current.status,
+          error: `Job ${jobId} was modified concurrently; transition ${current.status} → ${to} updated no row`,
+        };
+      }
+
       await tx.insert(jobTransitions).values({
         jobId,
         fromStatus: current.status,
@@ -117,7 +130,7 @@ export async function transitionJob(
       // outbox scan is the guarantee (PLAN.md §4.4).
       await tx.execute(sql`SELECT pg_notify('job_changed', ${jobId})`);
 
-      return { ok: true, job: updated ?? current };
+      return { ok: true, job: updated };
     },
   );
 

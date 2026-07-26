@@ -412,8 +412,16 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
       const succeeded = steps.filter(
         (s) => s.status === WorkflowStepStatus.SUCCEEDED,
       ).length;
+      const unsatisfiable = steps.filter(
+        (s) => s.status === WorkflowStepStatus.UNSATISFIABLE,
+      ).length;
+      const skipped = steps.length - succeeded - failed - unsatisfiable;
       const now = new Date();
-      const finalStatus = failed > 0 ? LogStatus.FAILURE : LogStatus.SUCCESS;
+      // UNSATISFIABLE means conflicting edges — a graph misconfiguration, not
+      // a branch legitimately not taken. A run containing one did not fully
+      // succeed, so it finalizes as FAILURE (SKIPPED alone stays SUCCESS).
+      const finalStatus =
+        failed > 0 || unsatisfiable > 0 ? LogStatus.FAILURE : LogStatus.SUCCESS;
       await tx
         .update(workflowExecutions)
         .set({
@@ -435,7 +443,7 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
               ? WorkflowLogLevel.INFO
               : WorkflowLogLevel.ERROR,
           status: finalStatus,
-          message: `Workflow execution ${runId} finished: ${succeeded} succeeded, ${failed} failed, ${steps.length - succeeded - failed} skipped`,
+          message: `Workflow execution ${runId} finished: ${succeeded} succeeded, ${failed} failed, ${skipped} skipped${unsatisfiable > 0 ? `, ${unsatisfiable} unsatisfiable` : ""}`,
           timestamp: now,
           startTime: run.startedAt,
           endTime: now,
@@ -488,6 +496,21 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
   }
 }
 
+/** Closest honest LogStatus for a settled step's telemetry row. The enum has
+ * no SKIPPED; the UI graph renders PENDING as "never ran", which is exactly
+ * what SKIPPED means, so that is the mapping. UNSATISFIABLE (conflicting
+ * edges) is a graph misconfiguration and honestly reads as FAILURE. */
+function logStatusForStep(status: WorkflowStepStatus): LogStatus {
+  switch (status) {
+    case WorkflowStepStatus.SUCCEEDED:
+      return LogStatus.SUCCESS;
+    case WorkflowStepStatus.SKIPPED:
+      return LogStatus.PENDING;
+    default:
+      return LogStatus.FAILURE;
+  }
+}
+
 async function settleStep(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   step: WorkflowStepRun,
@@ -515,10 +538,7 @@ async function settleStep(
   if (step.executionEventId) {
     await storage
       .updateWorkflowExecutionEvent(step.executionEventId, {
-        status:
-          data.status === WorkflowStepStatus.SUCCEEDED
-            ? LogStatus.SUCCESS
-            : LogStatus.FAILURE,
+        status: logStatusForStep(data.status),
         completedAt: now,
         duration: step.startedAt
           ? now.getTime() - step.startedAt.getTime()
@@ -538,6 +558,10 @@ async function dispatchClaimedStep(
   steps: WorkflowStepRun[],
   initialInput: Record<string, unknown>,
 ): Promise<void> {
+  // Hoisted out of the try so the catch can finalize the telemetry row when
+  // dispatch throws after the row was created (otherwise the UI graph would
+  // render this step RUNNING forever).
+  let executionEventId: number | undefined;
   try {
     const event = await storage.getEventWithRelations(step.eventId);
     if (!event) {
@@ -564,7 +588,6 @@ async function dispatchClaimedStep(
     );
 
     // Telemetry row for the UI graph (best-effort)
-    let executionEventId: number | undefined;
     try {
       const telemetry = await storage.createWorkflowExecutionEvent({
         workflowExecutionId: step.workflowExecutionId,
@@ -573,7 +596,11 @@ async function dispatchClaimedStep(
         sequenceOrder: step.id,
         status: LogStatus.RUNNING,
         startedAt: step.startedAt ?? new Date(),
-        connectionType: ConnectionType.ALWAYS,
+        // Every incoming edge had to be satisfied for this step to be
+        // claimed, so any of them describes how it was triggered; record the
+        // first. Start nodes have no incoming edge — they are triggered by
+        // the run itself, not a connection, so they record null.
+        connectionType: incoming[0]?.connectionType ?? null,
       });
       executionEventId = telemetry.id;
     } catch {
@@ -613,7 +640,11 @@ async function dispatchClaimedStep(
       `[WorkflowEngine] Failed to dispatch step ${step.id}:`,
       message,
     );
-    await failClaimedStep(step, `Dispatch failed: ${message}`);
+    await failClaimedStep(
+      step,
+      `Dispatch failed: ${message}`,
+      executionEventId,
+    );
   }
 }
 
@@ -623,16 +654,32 @@ async function failClaimedStep(
   executionEventId?: number,
 ): Promise<void> {
   const now = new Date();
+  const telemetryId = executionEventId ?? step.executionEventId;
   await db
     .update(workflowStepRuns)
     .set({
       status: WorkflowStepStatus.FAILED,
       error,
       completedAt: now,
-      executionEventId: executionEventId ?? step.executionEventId,
+      executionEventId: telemetryId,
       updatedAt: now,
     })
     .where(eq(workflowStepRuns.id, step.id));
+  // Finalize the telemetry row too: it was created RUNNING before dispatch,
+  // and a step that fails without a job outcome never passes through
+  // settleStep — without this the UI graph shows it RUNNING forever.
+  if (telemetryId) {
+    await storage
+      .updateWorkflowExecutionEvent(telemetryId, {
+        status: LogStatus.FAILURE,
+        completedAt: now,
+        duration: step.startedAt
+          ? now.getTime() - step.startedAt.getTime()
+          : null,
+        errorMessage: error,
+      })
+      .catch(() => undefined);
+  }
   // The run needs another advance to observe this terminal step
   await advanceWorkflowRun(step.workflowExecutionId).catch(() => undefined);
 }

@@ -29,6 +29,13 @@ const DEFAULT_THRESHOLDS: HealthThresholds = {
   minExecutionsForHealth: 5, // Need at least 5 executions to determine health
 };
 
+/**
+ * Known design limitation (accepted for now): this monitor is process-local
+ * and in-memory only — metrics are lost on restart, never persisted to or
+ * hydrated from the database, and each process (app, worker) sees only its
+ * own executions. Making it durable is a larger piece of work tracked in
+ * _plans/testing/FINDINGS.md (#11).
+ */
 export class ToolActionHealthMonitor {
   private static instance: ToolActionHealthMonitor;
   private metricsCache = new Map<string, HealthMetrics>();
@@ -45,6 +52,13 @@ export class ToolActionHealthMonitor {
     if (!ToolActionHealthMonitor.instance) {
       ToolActionHealthMonitor.instance = new ToolActionHealthMonitor(
         thresholds,
+      );
+    } else if (thresholds) {
+      // The singleton is constructed once (module-level export below runs at
+      // import time), so thresholds passed later cannot apply. Warn loudly
+      // instead of silently ignoring them.
+      console.warn(
+        "[ToolActionHealthMonitor] getInstance() called with thresholds after the singleton was created; keeping the original thresholds",
       );
     }
     return ToolActionHealthMonitor.instance;
@@ -97,15 +111,17 @@ export class ToolActionHealthMonitor {
       metrics.consecutiveFailures = 0;
     }
 
-    // Update latency metrics
-    if (healthStatus.latency > 0) {
+    // Update latency metrics. A 0ms execution is a legitimate measurement
+    // (only negative clock anomalies are rejected), so minLatency uses -1 as
+    // its "no samples yet" sentinel instead of 0.
+    if (healthStatus.latency >= 0) {
       const totalLatency =
         metrics.averageLatency * (metrics.totalExecutions - 1) +
         healthStatus.latency;
       metrics.averageLatency = totalLatency / metrics.totalExecutions;
       metrics.maxLatency = Math.max(metrics.maxLatency, healthStatus.latency);
       metrics.minLatency =
-        metrics.minLatency === 0
+        metrics.minLatency < 0
           ? healthStatus.latency
           : Math.min(metrics.minLatency, healthStatus.latency);
     }
@@ -232,10 +248,13 @@ export class ToolActionHealthMonitor {
    * Clear metrics for a specific tool or all tools
    */
   clearMetrics(toolId?: number, actionId?: string): void {
-    if (toolId && actionId) {
+    // Explicit undefined checks: toolId 0 is a real key (the executor records
+    // failures for unparseable configs under `toolId ?? 0`), so a truthiness
+    // check would silently escalate clearMetrics(0, ...) to "clear all".
+    if (toolId !== undefined && actionId !== undefined) {
       const key = `${toolId}-${actionId}`;
       this.metricsCache.delete(key);
-    } else if (toolId) {
+    } else if (toolId !== undefined) {
       // Clear all metrics for a specific tool
       Array.from(this.metricsCache.keys())
         .filter((key) => key.startsWith(`${toolId}-`))
@@ -255,7 +274,9 @@ export class ToolActionHealthMonitor {
       totalExecutions: 0,
       averageLatency: 0,
       maxLatency: 0,
-      minLatency: 0,
+      // -1 = no latency samples yet; a genuine 0ms sample must be able to
+      // become the minimum, so 0 cannot double as the sentinel.
+      minLatency: -1,
       lastExecutionTime: new Date(),
       consecutiveFailures: 0,
       healthScore: 100,

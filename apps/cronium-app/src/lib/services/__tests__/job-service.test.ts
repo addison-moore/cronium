@@ -714,11 +714,41 @@ describe("completeJob", () => {
     expect(mockTransition.mock.calls[0]![1]).toBe(JobStatus.FAILED);
   });
 
-  it("treats a missing result as failure and returns null on CAS rejection", async () => {
+  it("counts a metrics-only completion (no exitCode, no error) as COMPLETED", async () => {
+    // Calling completeJob is itself the "work finished" signal: a caller
+    // reporting only metrics must not get a FAILED job.
+    const done = makeJob({ status: JobStatus.COMPLETED });
+    mockTransition.mockResolvedValueOnce({ ok: true, job: done });
+
+    const result = await service.completeJob("job_1", {
+      metrics: { durationMs: 12 },
+    });
+
+    expect(result).toBe(done);
+    expect(mockTransition).toHaveBeenCalledWith("job_1", JobStatus.COMPLETED, {
+      actor: "app",
+      set: {
+        completedAt: NOW,
+        result: { metrics: { durationMs: 12 } },
+        activeKey: null,
+      },
+    });
+  });
+
+  it("marks an error-only completion (no exitCode) as FAILED", async () => {
+    mockTransition.mockResolvedValueOnce({
+      ok: true,
+      job: makeJob({ status: JobStatus.FAILED }),
+    });
+    await service.completeJob("job_1", { error: "boom" });
+    expect(mockTransition.mock.calls[0]![1]).toBe(JobStatus.FAILED);
+  });
+
+  it("treats a missing result as success and returns null on CAS rejection", async () => {
     mockTransition.mockResolvedValueOnce({ ok: false, error: "terminal" });
     const result = await service.completeJob("job_1", undefined, "worker:w1");
     expect(result).toBeNull();
-    expect(mockTransition).toHaveBeenCalledWith("job_1", JobStatus.FAILED, {
+    expect(mockTransition).toHaveBeenCalledWith("job_1", JobStatus.COMPLETED, {
       actor: "worker:w1",
       set: { completedAt: NOW, result: {}, activeKey: null },
     });

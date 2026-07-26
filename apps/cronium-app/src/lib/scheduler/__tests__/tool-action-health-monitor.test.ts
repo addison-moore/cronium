@@ -71,15 +71,28 @@ describe("getInstance", () => {
     expect(toolActionHealthMonitor).toBeInstanceOf(ToolActionHealthMonitor);
   });
 
-  it("applies custom thresholds only on first construction", async () => {
+  it("applies custom thresholds only on first construction and warns when late thresholds are ignored", async () => {
     resetSingleton();
     const custom = ToolActionHealthMonitor.getInstance({
       minExecutionsForHealth: 2,
     });
-    // A second call with different thresholds must not replace the instance.
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    // A second call with different thresholds must not replace the instance —
+    // and must warn instead of silently ignoring them.
     expect(
       ToolActionHealthMonitor.getInstance({ minExecutionsForHealth: 99 }),
     ).toBe(custom);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "thresholds after the singleton was created; keeping the original thresholds",
+      ),
+    );
+
+    // A thresholds-free call stays quiet.
+    warnSpy.mockClear();
+    expect(ToolActionHealthMonitor.getInstance()).toBe(custom);
+    expect(warnSpy).not.toHaveBeenCalled();
 
     await record(custom, 2);
     // With the default threshold (5) two executions would still be "unknown".
@@ -136,16 +149,27 @@ describe("recordExecution — metric accumulation", () => {
     expect(metrics?.minLatency).toBe(100);
   });
 
-  it("ignores non-positive latencies for latency metrics", async () => {
+  it("counts a 0ms execution as a real latency sample (it can be the minimum)", async () => {
     await monitor.recordExecution(makeStatus({ latency: 0 }));
     await monitor.recordExecution(makeStatus({ latency: 400 }));
 
     const metrics = monitor.getHealthMetrics(1, "slack-send-message");
-    // The zero-latency execution counts toward totals but not latency stats.
     expect(metrics?.totalExecutions).toBe(2);
-    expect(metrics?.averageLatency).toBe(200); // 400 spread over 2 executions
-    expect(metrics?.minLatency).toBe(400);
+    expect(metrics?.averageLatency).toBe(200);
+    expect(metrics?.minLatency).toBe(0);
     expect(metrics?.maxLatency).toBe(400);
+  });
+
+  it("still ignores negative (clock-anomaly) latencies", async () => {
+    await monitor.recordExecution(makeStatus({ latency: -5 }));
+    await monitor.recordExecution(makeStatus({ latency: 300 }));
+
+    const metrics = monitor.getHealthMetrics(1, "slack-send-message");
+    expect(metrics?.totalExecutions).toBe(2);
+    // The rejected sample still dilutes the average (pre-existing behavior).
+    expect(metrics?.averageLatency).toBe(150);
+    expect(metrics?.minLatency).toBe(300);
+    expect(metrics?.maxLatency).toBe(300);
   });
 
   it("logs an error at exactly 3 consecutive failures once status is failing", async () => {
@@ -381,6 +405,30 @@ describe("clearMetrics", () => {
   it("clears everything when called without arguments", () => {
     monitor.clearMetrics();
     expect(monitor.getHealthSummary().total).toBe(0);
+  });
+
+  it("clearMetrics(0) clears only tool 0 (the unknown-config bucket), not everything", async () => {
+    // The executor records failures for unparseable configs under toolId 0,
+    // so 0 is a real key — it must not fall through to "clear all".
+    await record(monitor, 1, { toolId: 0, actionId: "unknown" });
+
+    monitor.clearMetrics(0);
+
+    expect(monitor.getHealthMetrics(0, "unknown")).toBeNull();
+    expect(monitor.getHealthMetrics(1, "a")).not.toBeNull();
+    expect(monitor.getHealthMetrics(1, "b")).not.toBeNull();
+    expect(monitor.getHealthMetrics(2, "a")).not.toBeNull();
+  });
+
+  it("clearMetrics(0, actionId) clears exactly that pair", async () => {
+    await record(monitor, 1, { toolId: 0, actionId: "unknown" });
+    await record(monitor, 1, { toolId: 0, actionId: "other" });
+
+    monitor.clearMetrics(0, "unknown");
+
+    expect(monitor.getHealthMetrics(0, "unknown")).toBeNull();
+    expect(monitor.getHealthMetrics(0, "other")).not.toBeNull();
+    expect(monitor.getHealthMetrics(1, "a")).not.toBeNull();
   });
 });
 

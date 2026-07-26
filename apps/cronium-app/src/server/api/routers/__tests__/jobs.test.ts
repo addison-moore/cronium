@@ -461,8 +461,9 @@ describe("jobs.logs", () => {
       { id: 1, output: "line 1", error: null, timestamp: new Date() },
       { id: 2, output: null, error: "boom", timestamp: new Date() },
     ];
-    // First logs-table select: the page of rows; second: the count query.
-    dbState.logsResults = [logRows, [{ count: 1 }, { count: 2 }]];
+    // First logs-table select: the page of rows; second: the SQL count()
+    // aggregate (one row carrying the total, not one row per log).
+    dbState.logsResults = [logRows, [{ count: 2 }]];
 
     const result = await userCaller().jobs.logs({ jobId: "job_abc" });
 
