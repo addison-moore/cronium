@@ -247,26 +247,63 @@ func (h *Handler) GetContext(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ExecuteToolAction handles POST /tool-actions/execute.
+// ExecuteToolAction handles POST /tool-actions/execute — a script invoking a
+// tool action via cronium.toolAction() (and the slack/discord/email wrappers).
 //
-// Tool actions are NOT currently executable from scripts: the backend relay
-// target (POST {app}/api/internal/tools/execute — see
-// service.BackendClient.ExecuteToolAction) has no corresponding route in the
-// app, so relaying would only turn the app's 404 into a misleading generic
-// 500. Until the app grows that route (a product decision), fail loudly and
-// honestly with 501 so scripts see exactly what is unsupported. The relay
-// plumbing (service/backend ExecuteToolAction) is kept so the feature can be
-// re-wired when the route exists.
+// The script sends {tool, action, config}; we relay to the app's
+// POST /api/internal/tools/execute (see service.BackendClient.ExecuteToolAction),
+// which resolves the caller's tool credential, runs the action through the
+// scheduler's hardened engine, and returns a ToolActionResult. The app-minted
+// per-job capability is carried on the outbound request by the backend client
+// (X-Job-Capability), so the app authorizes this against the running job.
 func (h *Handler) ExecuteToolAction(w http.ResponseWriter, r *http.Request) {
-	// Still require a valid execution token so this endpoint discloses nothing
-	// to unauthenticated callers.
-	if _, ok := middleware.GetTokenClaims(r.Context()); !ok {
+	claims, ok := middleware.GetTokenClaims(r.Context())
+	if !ok {
 		h.writeError(w, http.StatusUnauthorized, "missing or invalid execution token")
 		return
 	}
 
-	h.writeError(w, http.StatusNotImplemented,
-		"tool actions are not available from scripts in this execution context")
+	// The script sends the action config under `config`; map it to the Params
+	// field the app route expects (the wire key is `params`).
+	var body struct {
+		Tool   string                 `json:"tool"`
+		Action string                 `json:"action"`
+		Config map[string]interface{} `json:"config"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if body.Tool == "" || body.Action == "" {
+		h.writeError(w, http.StatusBadRequest, "tool and action are required")
+		return
+	}
+
+	result, err := h.service.ExecuteToolAction(r.Context(), claims.ExecutionID, types.ToolActionConfig{
+		Tool:   body.Tool,
+		Action: body.Action,
+		Params: body.Config,
+	})
+	if err != nil {
+		h.log.WithError(err).Error("Tool action failed")
+		h.writeError(w, http.StatusBadGateway, "tool action failed: "+err.Error())
+		return
+	}
+	// The action reached the tool but reported failure — surface it as an error
+	// so the script's cronium.toolAction() rejects rather than returning null.
+	if !result.Success {
+		msg := result.Error
+		if msg == "" {
+			msg = "tool action failed"
+		}
+		h.writeError(w, http.StatusBadGateway, msg)
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, types.SuccessResponse{
+		Success: true,
+		Data:    result.Data,
+	})
 }
 
 // Health handles GET /health

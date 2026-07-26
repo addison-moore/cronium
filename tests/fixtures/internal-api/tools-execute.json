@@ -1,0 +1,45 @@
+{
+  "route": "POST /api/internal/tools/execute",
+  "auth": "job-capability",
+  "responses": {
+    "success": {
+      "status": 200,
+      "body": { "success": true, "data": { "ts": "1700000000.000100" } }
+    },
+    "actionFailure": {
+      "status": 200,
+      "body": {
+        "success": false,
+        "data": null,
+        "error": "channel_not_found"
+      }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": { "error": "Missing job capability token" }
+    },
+    "forbidden": {
+      "status": 403,
+      "body": { "error": "Forbidden" }
+    },
+    "forbiddenScope": {
+      "status": 403,
+      "body": { "error": "Capability token is not valid for this job" }
+    },
+    "badRequest": {
+      "status": 400,
+      "body": { "success": false, "error": "Invalid tool-action request" }
+    },
+    "noConnection": {
+      "status": 404,
+      "body": {
+        "success": false,
+        "error": "No active \"slack\" connection found for this user"
+      }
+    },
+    "serverError": {
+      "status": 500,
+      "body": { "success": false, "error": "Internal server error" }
+    }
+  }
+}

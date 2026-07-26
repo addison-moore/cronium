@@ -40,7 +40,8 @@ export type JobCapability =
   | "execution:read" // read execution context/condition
   | "variable:read" // read the owning user's variables
   | "variable:write" // write the owning user's variables
-  | "server:read"; // read the job's target server connection details
+  | "server:read" // read the job's target server connection details
+  | "tool:execute"; // run a tool action as the owning user (cronium.toolAction)
 
 /** The full capability set granted to a normal executing job. */
 export const DEFAULT_JOB_CAPABILITIES: JobCapability[] = [
@@ -55,6 +56,7 @@ export const DEFAULT_JOB_CAPABILITIES: JobCapability[] = [
   "variable:read",
   "variable:write",
   "server:read",
+  "tool:execute",
 ];
 
 interface CapabilityClaims {

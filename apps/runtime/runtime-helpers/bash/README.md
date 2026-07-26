@@ -57,10 +57,9 @@ cronium_send_email "admin@example.com" "Task Complete" "Processed $result items"
 
 ### Tool Functions
 
-> **Note:** the tool functions below are not currently available from running
-> scripts — the platform does not yet expose a tool-execution endpoint to the
-> script runtime, and these calls fail with a clear "not available in this
-> execution context" error. Use a Tool Action event or workflow step instead.
+> **Note:** the tool functions below run against the tool connection of the
+> given type belonging to the event's owner. If you have more than one
+> connection of a type, the most recently created one is used.
 
 - `cronium_execute_tool_action <tool> <action> <config_json>` - Execute any tool action
 - `cronium_send_email <to> <subject> <body> [options]` - Send email

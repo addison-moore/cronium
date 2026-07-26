@@ -55,7 +55,8 @@ type fakeApp struct {
 	bodies       map[string][]map[string]interface{}
 	capabilities map[string]string
 
-	failContext bool // serve the pinned 500 for the context route
+	failContext    bool // serve the pinned 500 for the context route
+	failToolAction bool // serve the pinned actionFailure for tools/execute
 }
 
 func newFakeApp(t *testing.T) *fakeApp {
@@ -77,6 +78,8 @@ func newFakeApp(t *testing.T) *fakeApp {
 	varGetOK := testsupport.LoadFixture(t, "variables.json", "getSuccess", nil)
 	varPutOK := testsupport.LoadFixture(t, "variables.json", "putSuccess", nil)
 	auditOK := testsupport.LoadFixture(t, "audit.json", "success", nil)
+	toolOK := testsupport.LoadFixture(t, "tools-execute.json", "success", nil)
+	toolFail := testsupport.LoadFixture(t, "tools-execute.json", "actionFailure", nil)
 
 	a.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		key := r.Method + " " + r.URL.Path
@@ -94,10 +97,17 @@ func newFakeApp(t *testing.T) *fakeApp {
 		}
 		a.capabilities[key] = r.Header.Get("X-Job-Capability")
 		failContext := a.failContext
+		failToolAction := a.failToolAction
 		a.mu.Unlock()
 
 		path := r.URL.Path
 		switch {
+		case r.Method == http.MethodPost && path == "/api/internal/tools/execute":
+			if failToolAction {
+				toolFail.Write(w)
+				return
+			}
+			toolOK.Write(w)
 		case r.Method == http.MethodGet && strings.HasSuffix(path, "/context"):
 			if failContext {
 				contextErr.Write(w)
@@ -627,23 +637,56 @@ func TestSetOutput_BodyOverLimit413(t *testing.T) {
 	}
 }
 
-// --- Tool actions (FINDINGS #1: no app route exists) -----------------------
+// --- Tool actions (FINDINGS #28: app route now exists) ---------------------
 
-// POST /tool-actions/execute must fail loudly: there is no app route behind
-// the relay (/api/internal/tools/execute does not exist), so the runtime
-// answers 501 with an honest message instead of relaying into a 404.
-func TestToolActions_NotImplemented501(t *testing.T) {
+// POST /tool-actions/execute relays a script's cronium.toolAction() to the
+// app's /api/internal/tools/execute and returns the tool result's data. The
+// script sends the config under `config`; the runtime maps it to `params`.
+func TestToolActions_RelaysAndReturnsData(t *testing.T) {
 	e := newEnv(t)
 	status, body := e.call(t, http.MethodPost, "/tool-actions/execute", bearer(token(t)),
 		[]byte(`{"tool":"slack","action":"send_message","config":{"channel":"#general","text":"hi"}}`))
-	if status != http.StatusNotImplemented {
-		t.Fatalf("status = %d, want 501", status)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
 	}
-	if body["message"] != "tool actions are not available from scripts in this execution context" {
-		t.Errorf("body = %#v, want the explicit not-available message", body)
+	if body["success"] != true {
+		t.Errorf("success = %#v, want true", body["success"])
 	}
-	if got := e.app.nonAuditHits(); got != 0 {
-		t.Errorf("backend hits for a tool action = %d, want 0 (nothing to relay to)", got)
+	// The pinned success fixture returns data.ts — the SDK reads result.data.
+	data, ok := body["data"].(map[string]interface{})
+	if !ok || data["ts"] != "1700000000.000100" {
+		t.Errorf("data = %#v, want the tool result payload", body["data"])
+	}
+
+	// The relay carried the config as `params` (FINDINGS #1 field mapping) and
+	// the per-job capability to the app route.
+	key := "POST /api/internal/tools/execute"
+	sent := e.app.lastBody(key)
+	if sent["tool"] != "slack" || sent["action"] != "send_message" {
+		t.Errorf("relayed body = %#v, want tool/action forwarded", sent)
+	}
+	params, ok := sent["params"].(map[string]interface{})
+	if !ok || params["channel"] != "#general" {
+		t.Errorf("relayed params = %#v, want the script's config under `params`", sent["params"])
+	}
+	if e.app.capability(key) == "" {
+		t.Error("relay to tools/execute carried no X-Job-Capability")
+	}
+}
+
+// An action that reached the tool but FAILED must surface as a script-visible
+// error (502), not a 200 that the SDK would turn into a silent null.
+func TestToolActions_ActionFailureIsError(t *testing.T) {
+	e := newEnv(t)
+	e.app.failToolAction = true
+	status, body := e.call(t, http.MethodPost, "/tool-actions/execute", bearer(token(t)),
+		[]byte(`{"tool":"slack","action":"send_message","config":{"channel":"#nope"}}`))
+	if status != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502", status)
+	}
+	// writeError puts the detail in `message` (Error is the status text).
+	if msg, _ := body["message"].(string); !strings.Contains(msg, "channel_not_found") {
+		t.Errorf("message = %#v, want the tool's failure message surfaced", body["message"])
 	}
 }
 

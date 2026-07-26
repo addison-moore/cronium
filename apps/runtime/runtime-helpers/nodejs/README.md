@@ -73,8 +73,6 @@ All methods return Promises and should be used with async/await or `.then()`.
 - `sendDiscordMessage(options)` - Send Discord message
 
 > **Note:** the tool-action methods (`executeToolAction` and the
-> `sendEmail`/`sendSlackMessage`/`sendDiscordMessage` wrappers) are not
-> currently available from running scripts — the platform does not yet expose
-> a tool-execution endpoint to the script runtime, and these calls fail with a
-> clear "not available in this execution context" error. Use a Tool Action
-> event or workflow step instead.
+> `sendEmail`/`sendSlackMessage`/`sendDiscordMessage` wrappers) run against the
+> tool connection of the given type belonging to the event's owner. If you have
+> more than one connection of a type, the most recently created one is used.

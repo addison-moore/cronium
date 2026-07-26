@@ -434,20 +434,16 @@ func TestBackendClient_AuditLog_SurvivesCanceledCallerContext(t *testing.T) {
 	}
 }
 
-// FINDINGS #1 documentation: the SDKs POST {tool, action, config} but the Go
-// type's field is tagged json:"params", so an SDK payload decodes with
-// Params == nil and the relay forwards "params": null. There is currently NO
-// app route at /api/internal/tools/execute at all (the handler now 501s
-// before relaying — see the handlers tests); this test pins the relay's wire
-// shape for whoever revives the feature.
-func TestBackendClient_ExecuteToolAction_SDKConfigFieldIsDropped(t *testing.T) {
-	sdkPayload := []byte(`{"tool":"slack","action":"send_message","config":{"channel":"#general","text":"hi"}}`)
-	var cfg types.ToolActionConfig
-	if err := json.Unmarshal(sdkPayload, &cfg); err != nil {
-		t.Fatalf("decoding SDK payload: %v", err)
-	}
-	if cfg.Params != nil {
-		t.Fatalf("Params = %#v; expected nil — the SDK sends \"config\", the Go tag is \"params\"", cfg.Params)
+// FINDINGS #1/#28: the SDKs POST {tool, action, config}; the runtime handler
+// maps `config` onto ToolActionConfig.Params (see ExecuteToolAction handler)
+// so the relay to /api/internal/tools/execute carries the real params under
+// the `params` key the app route reads. This pins the BackendClient's relay
+// wire shape given a populated cfg (as the handler now builds it).
+func TestBackendClient_ExecuteToolAction_ForwardsParams(t *testing.T) {
+	cfg := types.ToolActionConfig{
+		Tool:   "slack",
+		Action: "send_message",
+		Params: map[string]interface{}{"channel": "#general", "text": "hi"},
 	}
 
 	var mu sync.Mutex
@@ -476,8 +472,9 @@ func TestBackendClient_ExecuteToolAction_SDKConfigFieldIsDropped(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	if v, present := relayed["params"]; !present || v != nil {
-		t.Errorf("relayed params = %#v, want present-and-null (SDK config discarded)", v)
+	params, ok := relayed["params"].(map[string]interface{})
+	if !ok || params["channel"] != "#general" || params["text"] != "hi" {
+		t.Errorf("relayed params = %#v, want the cfg params forwarded", relayed["params"])
 	}
 	if _, present := relayed["config"]; present {
 		t.Error("relay unexpectedly forwarded a config field")
