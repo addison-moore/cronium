@@ -12,42 +12,11 @@ import { ConnectionType } from "@/shared/schema";
 import { Badge } from "@cronium/ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@cronium/ui";
 import { Button } from "@cronium/ui";
-// Style definitions for different connection types — CSS variables so the
-// edges follow the semantic tokens in both light and dark themes.
-const connectionStyles = {
-  [ConnectionType.ALWAYS]: {
-    color: "var(--foreground-color)",
-    label: "Always",
-  },
-  [ConnectionType.ON_SUCCESS]: {
-    color: "var(--success-color)",
-    label: "On Success",
-  },
-  [ConnectionType.ON_FAILURE]: {
-    color: "var(--destructive-color)",
-    label: "On Failure",
-  },
-  [ConnectionType.ON_CONDITION]: {
-    color: "var(--primary-color)",
-    label: "On Condition",
-  },
-};
-
-// Helper function to get class name based on connection type
-const getConnectionClasses = (type: ConnectionType): string => {
-  switch (type) {
-    case ConnectionType.ALWAYS:
-      return "border-foreground";
-    case ConnectionType.ON_SUCCESS:
-      return "border-success";
-    case ConnectionType.ON_FAILURE:
-      return "border-destructive";
-    case ConnectionType.ON_CONDITION:
-      return "border-primary";
-    default:
-      return "border-foreground";
-  }
-};
+import {
+  connectionStyles,
+  getConnectionClasses,
+  setEdgeConnectionType,
+} from "../lib/connection-edge-style";
 
 function ConnectionEdge({
   id,
@@ -90,19 +59,7 @@ function ConnectionEdge({
   // Handler for updating the connection type
   const updateConnectionType = useCallback(
     (newType: ConnectionType) => {
-      const currentEdges = getEdges();
-      const updatedEdges = currentEdges.map((edge) => {
-        if (edge.id === id) {
-          return {
-            ...edge,
-            data: {
-              ...edge.data,
-              connectionType: newType,
-            },
-          };
-        }
-        return edge;
-      });
+      const updatedEdges = setEdgeConnectionType(getEdges(), id, newType);
 
       setEdges(updatedEdges);
       setOpen(false);

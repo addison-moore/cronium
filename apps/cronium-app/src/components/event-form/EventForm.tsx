@@ -2,7 +2,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { useToast } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
@@ -38,17 +37,20 @@ import {
   EventTriggerType,
   CatchupPolicy,
   OverlapPolicy,
-  type Event,
   type Tool,
 } from "@/shared/schema";
 import type { ToolActionConfig } from "./ToolActionSection";
 import type { ServerData } from "@/components/event-list/types";
-
-// Extended Event type that includes relation properties
-interface EventFormInitialData extends Partial<Event> {
-  environmentVariables?: Array<{ key: string; value: string }>;
-  servers?: Array<{ id: number; name: string }>;
-}
+import { eventFormSchema, type EventFormData } from "./lib/event-form-schema";
+import {
+  buildEventFormDefaults,
+  buildTimezoneOptions,
+  extractServerIds,
+  parseInitialEnvVars,
+  parseInitialTags,
+  type EventFormInitialData,
+} from "./lib/event-form-defaults";
+import { buildEventPayload, isScriptEventType } from "./lib/event-payload";
 
 const eventsCopy = {
   basicInformation: "Basic Information",
@@ -129,111 +131,6 @@ const eventsCopy = {
   CreateEvent: "Create Event",
 } as const;
 
-// Form schema using Zod
-const eventFormSchema = z
-  .object({
-    name: z.string().min(1, "Event name is required"),
-    description: z.string().optional(),
-    shared: z.boolean().default(false),
-    type: z.nativeEnum(EventType),
-    content: z.string().optional(),
-    status: z.nativeEnum(EventStatus),
-    triggerType: z.nativeEnum(EventTriggerType),
-    scheduleNumber: z.number().min(1).default(5),
-    scheduleUnit: z.nativeEnum(TimeUnit).default(TimeUnit.MINUTES),
-    startTime: z.string().optional().nullable(),
-    useCronScheduling: z.boolean().default(false),
-    customSchedule: z.string().optional(),
-    timezone: z.string().default("UTC"),
-    catchupPolicy: z.nativeEnum(CatchupPolicy).default(CatchupPolicy.SKIP),
-    overlapPolicy: z.nativeEnum(OverlapPolicy).default(OverlapPolicy.ALLOW),
-    priority: z.number().int().min(0).max(3).default(1),
-    timeoutValue: z.number().min(1).default(30),
-    timeoutUnit: z.nativeEnum(TimeUnit).default(TimeUnit.SECONDS),
-    runLocation: z.nativeEnum(RunLocation).default(RunLocation.LOCAL),
-    runOnLocal: z.boolean().default(true),
-    selectedServerIds: z.array(z.number()).default([]),
-    retries: z.number().min(0).max(10).default(0),
-    maxExecutions: z.number().min(0).default(0),
-    resetCounterOnActive: z.boolean().default(false),
-    envVars: z
-      .array(
-        z.object({
-          key: z.string(),
-          value: z.string(),
-        }),
-      )
-      .default([]),
-    tags: z.array(z.string()).default([]),
-    // HTTP Request specific fields
-    httpMethod: z.string().optional(),
-    httpUrl: z.string().optional(),
-    httpHeaders: z
-      .array(
-        z.object({
-          key: z.string(),
-          value: z.string(),
-        }),
-      )
-      .optional(),
-    httpBody: z.string().optional(),
-    // Tool Action specific field
-    toolActionConfig: z.custom<ToolActionConfig>().optional().nullable(),
-  })
-  .refine(
-    (data) => {
-      // Validate content is provided for script types
-      if (
-        [EventType.PYTHON, EventType.BASH, EventType.NODEJS].includes(data.type)
-      ) {
-        return data.content && data.content.trim().length > 0;
-      }
-      return true;
-    },
-    {
-      message: "Script content is required",
-      path: ["content"],
-    },
-  )
-  .refine(
-    (data) => {
-      // Validate HTTP request fields
-      if (data.type === EventType.HTTP_REQUEST) {
-        return data.httpMethod && data.httpUrl;
-      }
-      return true;
-    },
-    {
-      message: "HTTP method and URL are required",
-      path: ["httpUrl"],
-    },
-  )
-  .refine(
-    (data) => {
-      // Validate Tool Action config
-      if (data.type === EventType.TOOL_ACTION) {
-        return data.toolActionConfig?.toolId && data.toolActionConfig.actionId;
-      }
-      return true;
-    },
-    {
-      message: "Tool and action selection is required",
-      path: ["toolActionConfig"],
-    },
-  )
-  .refine(
-    (data) => {
-      // At least one execution location: local and/or a remote server
-      return data.runOnLocal || data.selectedServerIds.length > 0;
-    },
-    {
-      message: "Select at least one execution location",
-      path: ["selectedServerIds"],
-    },
-  );
-
-type EventFormData = z.infer<typeof eventFormSchema>;
-
 // Layout types for different contexts
 type EventFormLayout = "page" | "modal" | "embedded";
 
@@ -281,39 +178,7 @@ export default function EventForm({
   const form = useForm<EventFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
     resolver: zodResolver(eventFormSchema) as any,
-    defaultValues: {
-      name: initialData?.name ?? "",
-      description: initialData?.description ?? "",
-      shared: initialData?.shared ?? false,
-      type: initialData?.type ?? EventType.PYTHON,
-      content:
-        initialData?.content ?? getDefaultScriptContent(EventType.PYTHON),
-      status: initialData?.status ?? EventStatus.DRAFT,
-      triggerType: initialData?.triggerType ?? EventTriggerType.MANUAL,
-      scheduleNumber: initialData?.scheduleNumber ?? 5,
-      scheduleUnit: initialData?.scheduleUnit ?? TimeUnit.MINUTES,
-      startTime: initialData?.startTime
-        ? new Date(initialData.startTime).toISOString().slice(0, 16)
-        : null,
-      useCronScheduling: !!initialData?.customSchedule,
-      customSchedule: initialData?.customSchedule ?? "",
-      timezone: initialData?.timezone ?? "UTC",
-      catchupPolicy: initialData?.catchupPolicy ?? CatchupPolicy.SKIP,
-      overlapPolicy: initialData?.overlapPolicy ?? OverlapPolicy.ALLOW,
-      priority: initialData?.priority ?? 1,
-      timeoutValue: initialData?.timeoutValue ?? 30,
-      timeoutUnit: initialData?.timeoutUnit ?? TimeUnit.SECONDS,
-      runLocation: initialData?.runLocation ?? RunLocation.LOCAL,
-      // Local unless the event is remote-only
-      runOnLocal: initialData?.runLocation !== RunLocation.REMOTE,
-      selectedServerIds: [],
-      retries: initialData?.retries ?? 0,
-      maxExecutions: initialData?.maxExecutions ?? 0,
-      resetCounterOnActive: initialData?.resetCounterOnActive ?? false,
-      envVars: [],
-      tags: [],
-      toolActionConfig: null,
-    },
+    defaultValues: buildEventFormDefaults(initialData),
   });
 
   const {
@@ -337,35 +202,10 @@ export default function EventForm({
     { enabled: useCronScheduling && !!watchedCron, retry: false },
   );
 
-  const timezoneOptions = (() => {
-    const curated = [
-      "UTC",
-      Intl.DateTimeFormat().resolvedOptions().timeZone,
-      "America/New_York",
-      "America/Chicago",
-      "America/Denver",
-      "America/Los_Angeles",
-      "Europe/London",
-      "Europe/Berlin",
-      "Europe/Paris",
-      "Asia/Tokyo",
-      "Asia/Shanghai",
-      "Asia/Kolkata",
-      "Australia/Sydney",
-    ];
-    const all =
-      typeof Intl.supportedValuesOf === "function"
-        ? Intl.supportedValuesOf("timeZone")
-        : curated;
-    return [...new Set([...curated, ...all])];
-  })();
+  const timezoneOptions = buildTimezoneOptions();
 
   // Derived state
-  const isScriptType = [
-    EventType.PYTHON,
-    EventType.BASH,
-    EventType.NODEJS,
-  ].includes(type);
+  const isScriptType = isScriptEventType(type);
   const isHttpRequest = type === EventType.HTTP_REQUEST;
   const isToolAction = type === EventType.TOOL_ACTION;
   const isScheduled = triggerType === EventTriggerType.SCHEDULE;
@@ -447,36 +287,15 @@ export default function EventForm({
       }
 
       // Parse and set tags
-      if (initialData.tags) {
-        if (typeof initialData.tags === "string") {
-          try {
-            const tags = JSON.parse(initialData.tags) as string[];
-            setValue("tags", tags);
-          } catch {
-            setValue("tags", []);
-          }
-        } else if (Array.isArray(initialData.tags)) {
-          setValue("tags", initialData.tags as string[]);
-        }
+      const tags = parseInitialTags(initialData.tags);
+      if (tags) {
+        setValue("tags", tags);
       }
 
       // Parse and set env vars
-      if (initialData.environmentVariables) {
-        if (typeof initialData.environmentVariables === "string") {
-          try {
-            const envVars = JSON.parse(
-              initialData.environmentVariables,
-            ) as Array<{
-              key: string;
-              value: string;
-            }>;
-            setValue("envVars", envVars);
-          } catch {
-            setValue("envVars", []);
-          }
-        } else if (Array.isArray(initialData.environmentVariables)) {
-          setValue("envVars", initialData.environmentVariables);
-        }
+      const envVars = parseInitialEnvVars(initialData.environmentVariables);
+      if (envVars) {
+        setValue("envVars", envVars);
       }
 
       // Parse HTTP request data
@@ -493,10 +312,7 @@ export default function EventForm({
 
       // Set server IDs
       if (initialData.servers && Array.isArray(initialData.servers)) {
-        const serverIds = initialData.servers
-          .map((server) => server.id)
-          .filter((id): id is number => typeof id === "number");
-        setValue("selectedServerIds", serverIds);
+        setValue("selectedServerIds", extractServerIds(initialData.servers));
       }
     }
   }, [initialData, setValue, isHttpRequest]);
@@ -531,51 +347,10 @@ export default function EventForm({
   const onSubmit = useCallback(
     async (data: EventFormData) => {
       try {
-        // Prepare form data for submission
-        // Remove form-only fields and prepare for API
-        const {
-          useCronScheduling: _useCronScheduling,
-          httpHeaders: _httpHeaders,
-          runOnLocal,
-          ...baseData
-        } = data;
-
-        // Derive the run location from the selected locations: local only,
-        // servers only, or both
-        const derivedRunLocation =
-          data.selectedServerIds.length === 0
-            ? RunLocation.LOCAL
-            : runOnLocal
-              ? RunLocation.LOCAL_AND_REMOTE
-              : RunLocation.REMOTE;
-
-        const formData = {
-          ...baseData,
-          runLocation: derivedRunLocation,
-          content: isScriptType ? data.content : undefined,
-          startTime: data.startTime
-            ? new Date(data.startTime).toISOString()
-            : null,
-          customSchedule: data.useCronScheduling
-            ? data.customSchedule
-            : undefined,
-          timezone: data.timezone,
-          catchupPolicy: data.catchupPolicy,
-          overlapPolicy: data.overlapPolicy,
-          priority: data.priority,
-          serverId: null, // Deprecated, using selectedServerIds
-          toolActionConfig:
-            isToolAction && data.toolActionConfig
-              ? JSON.stringify(data.toolActionConfig)
-              : undefined,
-          envVars: data.envVars, // Already an array
-          tags: data.tags, // Already an array
-          // Include httpHeaders as array if it's HTTP request
-          ...(isHttpRequest &&
-            data.httpHeaders && {
-              httpHeaders: data.httpHeaders, // Already an array
-            }),
-        };
+        // Prepare form data for submission (pure construction in
+        // lib/event-payload.ts: strips form-only fields, derives run
+        // location, and normalizes schedule/content fields).
+        const formData = buildEventPayload(data);
 
         let resultId: number | undefined;
 
@@ -623,10 +398,6 @@ export default function EventForm({
       updateEventMutation,
       toast,
       onSuccess,
-      type,
-      isScriptType,
-      isHttpRequest,
-      isToolAction,
     ],
   );
 

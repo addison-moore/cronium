@@ -41,6 +41,11 @@ import type {
 } from "@/shared/schema";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@cronium/ui";
+import {
+  filterExecutions,
+  formatDuration,
+  sortExecutions,
+} from "./lib/execution-history";
 
 interface WorkflowExecutionHistoryProps {
   workflowId?: number; // Optional - if not provided, shows all workflows
@@ -205,69 +210,20 @@ export default function WorkflowExecutionHistory({
   ];
 
   // Apply filters to executions
-  const filteredExecutions = executions.filter((execution) => {
-    const workflowDisplayName =
-      execution.workflowName ?? `Workflow ${String(execution.workflowId)}`;
-    const matchesSearch =
-      workflowDisplayName?.toLowerCase().includes(searchTerm.toLowerCase()) ??
-      true;
-
-    const matchesStatus =
-      statusFilter === "all" ||
-      String(execution.status) === String(statusFilter);
-
-    // Tags filtering disabled until workflows have tags in schema
-    const matchesTag = tagFilter === "all";
-
-    return matchesSearch && matchesStatus && matchesTag;
-  });
+  const filteredExecutions = filterExecutions(
+    executions,
+    searchTerm,
+    statusFilter,
+    tagFilter,
+  );
 
   // Apply sorting to filtered executions
-  const sortedExecutions = [...filteredExecutions].sort((a, b) => {
-    let comparison = 0;
-
-    switch (sortBy) {
-      case "name":
-        comparison = a.workflowId - b.workflowId;
-        break;
-      case "startedAt":
-        comparison =
-          new Date(a.startedAt ?? 0).getTime() -
-          new Date(b.startedAt ?? 0).getTime();
-        break;
-      case "completedAt":
-        // If we're on a workflow detail page (workflowId exists), sort by duration
-        // Otherwise, sort by completion date
-        if (workflowId) {
-          // Sort by duration (completed - started)
-          const aDuration =
-            a.completedAt && a.startedAt
-              ? new Date(a.completedAt).getTime() -
-                new Date(a.startedAt).getTime()
-              : 0;
-          const bDuration =
-            b.completedAt && b.startedAt
-              ? new Date(b.completedAt).getTime() -
-                new Date(b.startedAt).getTime()
-              : 0;
-          comparison = aDuration - bDuration;
-        } else {
-          // Sort by completion date
-          const aCompleted = a.completedAt
-            ? new Date(a.completedAt).getTime()
-            : 0;
-          const bCompleted = b.completedAt
-            ? new Date(b.completedAt).getTime()
-            : 0;
-          comparison = aCompleted - bCompleted;
-        }
-        break;
-      default:
-        comparison = 0;
-    }
-
-    return sortOrder === "asc" ? comparison : -comparison;
-  });
+  const sortedExecutions = sortExecutions(
+    filteredExecutions,
+    sortBy,
+    sortOrder,
+    workflowId,
+  );
 
   // Clear filters function
   const handleClearFilters = () => {
@@ -288,25 +244,6 @@ export default function WorkflowExecutionHistory({
 
   const getStatusBadge = (status: LogStatus) => {
     return <StatusBadge status={status} size="sm" />;
-  };
-
-  const formatDuration = (duration: number | null) => {
-    if (!duration) return "N/A";
-
-    const totalSeconds = duration / 1000;
-    const minutes = Math.floor(totalSeconds / 60);
-    const hours = Math.floor(minutes / 60);
-
-    if (hours > 0) {
-      const remainingMinutes = minutes % 60;
-      const remainingSeconds = totalSeconds % 60;
-      return `${hours}h ${remainingMinutes}m ${remainingSeconds.toFixed(2)}s`;
-    } else if (minutes > 0) {
-      const remainingSeconds = totalSeconds % 60;
-      return `${minutes}m ${remainingSeconds.toFixed(2)}s`;
-    } else {
-      return `${totalSeconds.toFixed(2)}s`;
-    }
   };
 
   if (isLoading) {

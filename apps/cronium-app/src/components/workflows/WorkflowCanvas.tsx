@@ -46,7 +46,6 @@ import {
   TooltipTrigger,
 } from "@cronium/ui";
 import { toast } from "@cronium/ui";
-import { ConnectionType } from "@/shared/schema";
 import { EventTypeIcon } from "@/components/ui/event-type-icon";
 import { EventDetailsPopover } from "@/components/ui/event-details-popover";
 
@@ -61,110 +60,25 @@ const copy = {
   createEventsFirst: "Create an event before building a workflow.",
 } as const;
 
-// Validation functions for workflow integrity
-const validateWorkflowStructure = (
-  nodes: Node[],
-  edges: Edge[],
-  newConnection?: Connection,
-) => {
-  const allEdges = newConnection
-    ? [
-        ...edges,
-        {
-          ...newConnection,
-          id: `temp-${newConnection.source}-${newConnection.target}`,
-        },
-      ]
-    : edges;
-
-  // Check for multiple inputs to a single node (merge prevention)
-  const targetNodes = new Map<string, string[]>();
-  allEdges.forEach((edge) => {
-    const target = edge.target;
-    if (!targetNodes.has(target)) {
-      targetNodes.set(target, []);
-    }
-    targetNodes.get(target)!.push(edge.source);
-  });
-
-  // Find nodes with multiple inputs
-  const mergeViolations = Array.from(targetNodes.entries()).filter(
-    ([_target, sources]) => sources.length > 1,
-  );
-  if (mergeViolations.length > 0) {
-    return {
-      isValid: false,
-      error:
-        "Workflow branching violation: Multiple nodes cannot connect to the same downstream node. Each node can only have one input connection.",
-      type: "merge",
-    };
-  }
-
-  // Check for cycles using DFS
-  const visited = new Set<string>();
-  const recursionStack = new Set<string>();
-
-  const hasCycle = (nodeId: string): boolean => {
-    if (recursionStack.has(nodeId)) {
-      return true; // Back edge found - cycle detected
-    }
-    if (visited.has(nodeId)) {
-      return false; // Already processed
-    }
-
-    visited.add(nodeId);
-    recursionStack.add(nodeId);
-
-    // Check all outgoing edges
-    const outgoingEdges = allEdges.filter((edge) => edge.source === nodeId);
-    for (const edge of outgoingEdges) {
-      if (hasCycle(edge.target)) {
-        return true;
-      }
-    }
-
-    recursionStack.delete(nodeId);
-    return false;
-  };
-
-  // Check for cycles starting from all nodes
-  for (const node of nodes) {
-    if (!visited.has(node.id) && hasCycle(node.id)) {
-      return {
-        isValid: false,
-        error:
-          "Workflow cycle detected: Workflows cannot be cyclical as this would create infinite loops. Please remove connections that create circular dependencies.",
-        type: "cycle",
-      };
-    }
-  }
-
-  return { isValid: true };
-};
-
 // Import custom nodes
 import EventNode from "./nodes/EventNode";
 import ConnectionEdge from "./edges/ConnectionEdge";
 import { Spinner } from "@cronium/ui";
-import type { EventType } from "@/shared/schema";
+import { validateWorkflowStructure } from "./lib/workflow-structure";
+import {
+  type AvailableEvent,
+  buildConnectionEdge,
+  buildEventNode,
+  ensureEdgeConnectionType,
+  filterAvailableEvents,
+  normalizeEdges,
+} from "./lib/canvas-transforms";
 
 // Event type icon mapping - now using consistent icons
 
 // Type definitions for custom nodes and edges
 const eventNodeType: NodeTypes = { eventNode: EventNode };
 const connectionEdgeType: EdgeTypes = { connectionEdge: ConnectionEdge };
-
-interface AvailableEvent {
-  id: number;
-  name: string;
-  type: EventType;
-  description?: string;
-  tags?: string[];
-  serverId?: number;
-  serverName?: string;
-  createdAt?: Date | string;
-  updatedAt?: Date | string;
-}
 
 export interface WorkflowCanvasProps {
   availableEvents?: AvailableEvent[];
@@ -209,16 +123,7 @@ export default function WorkflowCanvas({
   const [searchQuery, setSearchQuery] = useState("");
 
   // Filter events based on search query
-  const filteredEvents = availableEvents.filter(
-    (event) =>
-      event.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (event.description?.toLowerCase().includes(searchQuery.toLowerCase()) ??
-        false) ||
-      (event.tags?.some((tag: string) =>
-        tag.toLowerCase().includes(searchQuery.toLowerCase()),
-      ) ??
-        false),
-  );
+  const filteredEvents = filterAvailableEvents(availableEvents, searchQuery);
 
   // Track if we're in initial loading phase
   const [isInitializing, setIsInitializing] = useState(true);
@@ -334,14 +239,7 @@ export default function WorkflowCanvas({
     // Only set edges if they've actually changed and we have data
     if (initialEdges.length > 0 && !initialEdgesLoaded) {
       // Normalize edges to ensure all required properties are present
-      const normalizedEdges = initialEdges.map((edge) => ({
-        ...edge,
-        type: edge.type ?? "connectionEdge",
-        data: edge.data ?? { connectionType: ConnectionType.ALWAYS },
-        animated: edge.animated ?? true,
-        sourceHandle: edge.sourceHandle ?? null,
-        targetHandle: edge.targetHandle ?? null,
-      })) as Edge[];
+      const normalizedEdges = normalizeEdges(initialEdges);
       setEdges(normalizedEdges);
       setInitialEdgesLoaded(true);
 
@@ -391,14 +289,7 @@ export default function WorkflowCanvas({
 
       setNodes(previousState.nodes);
       // Normalize edges from history
-      const normalizedEdges = previousState.edges.map((edge) => ({
-        ...edge,
-        type: edge.type ?? "connectionEdge",
-        data: edge.data ?? { connectionType: ConnectionType.ALWAYS },
-        animated: edge.animated ?? true,
-        sourceHandle: edge.sourceHandle ?? null,
-        targetHandle: edge.targetHandle ?? null,
-      })) as Edge[];
+      const normalizedEdges = normalizeEdges(previousState.edges);
       setEdges(normalizedEdges);
       setCurrentHistoryIndex(previousIndex);
 
@@ -425,14 +316,7 @@ export default function WorkflowCanvas({
 
     setNodes(lastSavedState.nodes);
     // Normalize edges from saved state
-    const normalizedEdges = lastSavedState.edges.map((edge) => ({
-      ...edge,
-      type: edge.type ?? "connectionEdge",
-      data: edge.data ?? { connectionType: ConnectionType.ALWAYS },
-      animated: edge.animated ?? true,
-      sourceHandle: edge.sourceHandle ?? null,
-      targetHandle: edge.targetHandle ?? null,
-    })) as Edge[];
+    const normalizedEdges = normalizeEdges(lastSavedState.edges);
     setEdges(normalizedEdges);
 
     // Reset history to last saved state
@@ -596,46 +480,14 @@ export default function WorkflowCanvas({
       }
 
       // Create edge with appropriate type and ensure all required properties are defined
-      const newEdge = {
-        ...connection,
-        id: `e-${connection.source}-${connection.target}`,
-        type: "connectionEdge", // Ensure type is always defined as a string
-        data: { connectionType: ConnectionType.ALWAYS },
-        animated: true,
-        source: connection.source,
-        target: connection.target,
-        sourceHandle: connection.sourceHandle ?? null,
-        targetHandle: connection.targetHandle ?? null,
-      };
+      const newEdge = buildConnectionEdge(connection);
 
       // Add the edge and ensure all edges have required properties
       // Normalize existing edges to match addEdge's expected type
-      const normalizedExistingEdges = edges.map((edge) => ({
-        ...edge,
-        id: edge.id,
-        source: edge.source,
-        target: edge.target,
-        type: edge.type ?? "connectionEdge",
-        data: {
-          ...edge.data,
-          connectionType:
-            (edge.data?.connectionType as ConnectionType) ??
-            ConnectionType.ALWAYS,
-        },
-        animated: edge.animated ?? true,
-        sourceHandle: edge.sourceHandle ?? null,
-        targetHandle: edge.targetHandle ?? null,
-      }));
+      const normalizedExistingEdges = edges.map(ensureEdgeConnectionType);
 
       const edgesWithNewEdge = addEdge(newEdge, normalizedExistingEdges);
-      const updatedEdges = edgesWithNewEdge.map((edge) => ({
-        ...edge,
-        type: edge.type ?? "connectionEdge",
-        data: edge.data ?? { connectionType: ConnectionType.ALWAYS },
-        animated: edge.animated ?? true,
-        sourceHandle: edge.sourceHandle ?? null,
-        targetHandle: edge.targetHandle ?? null,
-      })) as Edge[];
+      const updatedEdges = normalizeEdges(edgesWithNewEdge);
       setEdges(updatedEdges);
 
       // Track connection in history
@@ -678,26 +530,11 @@ export default function WorkflowCanvas({
           y: event.clientY,
         });
 
-        // Center the node on cursor (node is ~192px wide, ~60px tall)
-        position.x -= 96;
-        position.y -= 30;
-
         // Calculate new node ID
         const nodeId = `event-${eventId}-${Date.now()}`;
 
-        const newNode = {
-          id: nodeId,
-          type: "eventNode",
-          position,
-          data: {
-            eventId: eventId,
-            label: eventData.name,
-            type: eventData.type,
-            eventTypeIcon: eventData.type,
-            description: "",
-            tags: [],
-          },
-        };
+        // Centers the node on the cursor (see buildEventNode)
+        const newNode = buildEventNode(eventData, position, nodeId);
 
         const updatedNodes = nodes.concat(newNode);
         setNodes(updatedNodes);

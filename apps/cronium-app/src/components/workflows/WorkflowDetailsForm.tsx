@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
@@ -33,24 +32,18 @@ import {
   WorkflowTriggerType,
   EventStatus,
   TimeUnit,
-  ConnectionType,
 } from "@/shared/schema";
 import { trpc } from "@/lib/trpc";
-
-interface WorkflowNode {
-  id: string;
-  type: string;
-  position: { x: number; y: number };
-  data: Record<string, unknown>;
-}
-
-interface WorkflowEdge {
-  id: string;
-  source: string;
-  target: string;
-  type?: string;
-  data?: Record<string, unknown>;
-}
+import {
+  type WorkflowDetailsFormData,
+  type WorkflowEdge,
+  type WorkflowNode,
+  applyCronSchedulingToggle,
+  applyServerOverrideToggle,
+  buildWorkflowUpdatePayload,
+  workflowDetailsSchema,
+  workflowToFormValues,
+} from "./lib/workflow-details";
 
 interface WorkflowDetailsFormProps {
   workflow: Workflow;
@@ -58,51 +51,6 @@ interface WorkflowDetailsFormProps {
   workflowEdges: WorkflowEdge[];
   onUpdate: (workflow: Workflow) => void;
 }
-
-// Define the form schema with proper validation
-const workflowDetailsSchema = z
-  .object({
-    name: z.string().min(1, "Name is required").max(100, "Name is too long"),
-    description: z.string().max(500, "Description is too long").optional(),
-    triggerType: z.nativeEnum(WorkflowTriggerType),
-    status: z.nativeEnum(EventStatus),
-    tags: z.array(z.string()),
-    customSchedule: z.string().optional(),
-    // Use z.any() for fields causing type issues, then refine them with superRefine
-    scheduleNumber: z.any(),
-    scheduleUnit: z.any(),
-    useCronScheduling: z.boolean(),
-    overrideEventServers: z.boolean(),
-    overrideServerIds: z.array(z.number()),
-    shared: z.boolean(),
-  })
-  .superRefine((data, ctx) => {
-    // Validate scheduleNumber if it's not null or undefined
-    if (data.scheduleNumber !== null && data.scheduleNumber !== undefined) {
-      const num = Number(data.scheduleNumber);
-      if (isNaN(num) || num < 1) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Schedule number must be at least 1",
-          path: ["scheduleNumber"],
-        });
-      }
-    }
-
-    // Validate scheduleUnit if it's not null or undefined
-    if (data.scheduleUnit !== null && data.scheduleUnit !== undefined) {
-      const validUnits = Object.values(TimeUnit);
-      if (!validUnits.includes(data.scheduleUnit as TimeUnit)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Invalid time unit",
-          path: ["scheduleUnit"],
-        });
-      }
-    }
-  });
-
-type WorkflowDetailsFormData = z.infer<typeof workflowDetailsSchema>;
 
 export default function WorkflowDetailsForm({
   workflow,
@@ -112,38 +60,31 @@ export default function WorkflowDetailsForm({
 }: WorkflowDetailsFormProps) {
   const { toast } = useToast();
   const [tagInput, setTagInput] = useState("");
-  const [formData, setFormData] = useState<WorkflowDetailsFormData>({
-    name: "",
-    description: "",
-    triggerType: WorkflowTriggerType.MANUAL,
-    status: EventStatus.DRAFT,
-    tags: [],
-    customSchedule: "",
-    scheduleNumber: null,
-    scheduleUnit: null,
-    useCronScheduling: false,
-    overrideEventServers: false,
-    overrideServerIds: [],
-    shared: false,
-  });
 
+  // Single source of truth: react-hook-form, seeded from the workflow so the
+  // first paint already shows the stored trigger/schedule (a parallel local
+  // state mirror previously rendered every workflow as "Manual" until a field
+  // changed, and silently dropped trigger/schedule edits on save).
   const form = useForm<WorkflowDetailsFormData>({
     resolver: zodResolver(workflowDetailsSchema),
-    defaultValues: {
-      name: "",
-      description: "",
-      triggerType: WorkflowTriggerType.MANUAL,
-      status: EventStatus.DRAFT,
-      tags: [],
-      customSchedule: "",
-      scheduleNumber: null,
-      scheduleUnit: null,
-      useCronScheduling: false,
-      overrideEventServers: false,
-      overrideServerIds: [],
-      shared: false,
-    },
+    defaultValues: workflowToFormValues(workflow),
   });
+
+  // Re-render on any change so the conditional sections (schedule, override)
+  // track the live form values.
+  const formValues = form.watch();
+
+  /** Write a helper-computed partial back into the form (dirty-tracked). */
+  const applyValues = (next: WorkflowDetailsFormData) => {
+    for (const [key, value] of Object.entries(next) as [
+      keyof WorkflowDetailsFormData,
+      WorkflowDetailsFormData[keyof WorkflowDetailsFormData],
+    ][]) {
+      if (form.getValues(key) !== value) {
+        form.setValue(key, value, { shouldDirty: true });
+      }
+    }
+  };
 
   // tRPC mutation for updating workflow
   const updateWorkflowMutation = trpc.workflows.update.useMutation({
@@ -189,66 +130,20 @@ export default function WorkflowDetailsForm({
     },
   });
 
-  // Initialize form data from workflow
+  // Re-seed when the workflow prop changes (e.g. after a successful save the
+  // parent passes the updated workflow back down).
   useEffect(() => {
-    form.reset({
-      name: workflow.name ?? "",
-      description: workflow.description ?? "",
-      triggerType: workflow.triggerType ?? WorkflowTriggerType.MANUAL,
-      status: workflow.status ?? EventStatus.DRAFT,
-      tags: Array.isArray(workflow.tags) ? workflow.tags : [],
-      customSchedule: workflow.customSchedule ?? "",
-      scheduleNumber: workflow.scheduleNumber ?? null,
-      scheduleUnit: workflow.scheduleUnit ?? null,
-      useCronScheduling: !!workflow.customSchedule,
-      overrideEventServers: workflow.overrideEventServers ?? false,
-      overrideServerIds: Array.isArray(workflow.overrideServerIds)
-        ? workflow.overrideServerIds
-        : [],
-      shared: workflow.shared ?? false,
-    });
+    form.reset(workflowToFormValues(workflow));
   }, [workflow, form]);
-
-  // Keep formData in sync with form values
-  useEffect(() => {
-    const subscription = form.watch((value) => {
-      setFormData(value as WorkflowDetailsFormData);
-    });
-    return () => subscription.unsubscribe();
-  }, [form]);
 
   const onSubmit = async (data: WorkflowDetailsFormData) => {
     try {
-      const updateData = {
-        id: workflow.id,
-        ...data,
-        nodes: workflowNodes.map((node) => ({
-          ...node,
-          type: "eventNode" as const,
-          data: {
-            eventId: node.data.eventId as number,
-            label: node.data.label as string,
-            type: node.data.type as string,
-            eventTypeIcon: node.data.eventTypeIcon as string,
-            description: node.data.description as string | undefined,
-            tags: (node.data.tags as string[]) || [],
-            serverId: node.data.serverId as number | undefined,
-            serverName: node.data.serverName as string | undefined,
-            createdAt: node.data.createdAt as string | undefined,
-            updatedAt: node.data.updatedAt as string | undefined,
-          },
-        })),
-        edges: workflowEdges.map((edge) => ({
-          ...edge,
-          type: "connectionEdge" as const,
-          animated: true,
-          data: {
-            connectionType:
-              (edge.data?.connectionType as ConnectionType | undefined) ??
-              ConnectionType.ALWAYS,
-          },
-        })),
-      };
+      const updateData = buildWorkflowUpdatePayload(
+        workflow.id,
+        data,
+        workflowNodes,
+        workflowEdges,
+      );
 
       await updateWorkflowMutation.mutateAsync(updateData);
     } catch {
@@ -365,9 +260,9 @@ export default function WorkflowDetailsForm({
             <div className="space-y-2">
               <Label htmlFor="triggerType">Trigger Type</Label>
               <Select
-                value={formData.triggerType}
+                value={formValues.triggerType}
                 onValueChange={(value: WorkflowTriggerType) =>
-                  setFormData((prev) => ({ ...prev, triggerType: value }))
+                  form.setValue("triggerType", value, { shouldDirty: true })
                 }
               >
                 <SelectTrigger>
@@ -397,25 +292,17 @@ export default function WorkflowDetailsForm({
             </div>
 
             {/* Schedule Settings */}
-            {formData.triggerType === WorkflowTriggerType.SCHEDULE && (
+            {formValues.triggerType === WorkflowTriggerType.SCHEDULE && (
               <Card className="bg-muted p-4">
                 <div className="space-y-4">
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       id="useCronScheduling"
-                      checked={formData.useCronScheduling}
+                      checked={formValues.useCronScheduling}
                       onCheckedChange={(checked) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          useCronScheduling: !!checked,
-                          customSchedule: checked ? prev.customSchedule : "",
-                          scheduleNumber: checked
-                            ? null
-                            : (prev.scheduleNumber as number | null),
-                          scheduleUnit: checked
-                            ? null
-                            : (prev.scheduleUnit as TimeUnit | null),
-                        }))
+                        applyValues(
+                          applyCronSchedulingToggle(form.getValues(), checked),
+                        )
                       }
                     />
                     <Label htmlFor="useCronScheduling">
@@ -423,18 +310,17 @@ export default function WorkflowDetailsForm({
                     </Label>
                   </div>
 
-                  {formData.useCronScheduling ? (
+                  {formValues.useCronScheduling ? (
                     <div className="space-y-2">
                       <Label htmlFor="customSchedule">Cron Expression</Label>
                       <Input
                         id="customSchedule"
                         placeholder="0 0 * * *"
-                        value={formData.customSchedule}
+                        value={formValues.customSchedule}
                         onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            customSchedule: e.target.value,
-                          }))
+                          form.setValue("customSchedule", e.target.value, {
+                            shouldDirty: true,
+                          })
                         }
                       />
                     </div>
@@ -447,26 +333,24 @@ export default function WorkflowDetailsForm({
                           type="number"
                           min="1"
                           placeholder="1"
-                          value={String(formData.scheduleNumber ?? "")}
+                          value={String(formValues.scheduleNumber ?? "")}
                           onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              scheduleNumber: e.target.value
-                                ? parseInt(e.target.value)
-                                : null,
-                            }))
+                            form.setValue(
+                              "scheduleNumber",
+                              e.target.value ? parseInt(e.target.value) : null,
+                              { shouldDirty: true },
+                            )
                           }
                         />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="scheduleUnit">Unit</Label>
                         <Select
-                          value={String(formData.scheduleUnit ?? "")}
+                          value={String(formValues.scheduleUnit ?? "")}
                           onValueChange={(value) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              scheduleUnit: value as TimeUnit,
-                            }))
+                            form.setValue("scheduleUnit", value, {
+                              shouldDirty: true,
+                            })
                           }
                         >
                           <SelectTrigger>
@@ -505,9 +389,9 @@ export default function WorkflowDetailsForm({
                   Add
                 </Button>
               </div>
-              {formData.tags.length > 0 && (
+              {formValues.tags.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {formData.tags.map((tag, index) => (
+                  {formValues.tags.map((tag, index) => (
                     <span
                       key={index}
                       className="bg-secondary text-secondary-foreground inline-flex items-center rounded-full px-2 py-1 text-xs"
@@ -531,20 +415,18 @@ export default function WorkflowDetailsForm({
               <div className="flex items-center space-x-2">
                 <Switch
                   id="overrideEventServers"
-                  checked={formData.overrideEventServers}
+                  checked={formValues.overrideEventServers}
                   onCheckedChange={(checked) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      overrideEventServers: checked,
-                      overrideServerIds: checked ? prev.overrideServerIds : [],
-                    }))
+                    applyValues(
+                      applyServerOverrideToggle(form.getValues(), checked),
+                    )
                   }
                 />
                 <Label htmlFor="overrideEventServers">
                   Override Event Server Settings
                 </Label>
               </div>
-              {formData.overrideEventServers && (
+              {formValues.overrideEventServers && (
                 <div className="space-y-2">
                   <Label>Server Override Settings</Label>
                   <p className="text-muted-foreground text-sm">
