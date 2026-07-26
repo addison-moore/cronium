@@ -133,13 +133,32 @@ func TestSetOutputPostsDataEnvelope(t *testing.T) {
 	}
 }
 
-// Pin actual behavior: SetOutput only checks the HTTP status; a 200 response
-// with {"success":false} is still treated as success (the envelope is not
-// inspected on write paths).
-func TestSetOutputIgnoresEnvelopeOn200(t *testing.T) {
-	client, _ := newRecordingServer(t, http.StatusOK, `{"success":false,"error":"ignored"}`)
-	if err := client.SetOutput("exec-9", "x"); err != nil {
-		t.Fatalf("expected nil error (status-only check), got: %v", err)
+// Regression (FINDINGS #37): a 200 response with {"success":false} is a
+// FAILED write — the envelope is inspected on write paths too, and the
+// envelope's error message is surfaced. (This flips the old
+// TestSetOutputIgnoresEnvelopeOn200 pin of the status-only check.)
+func TestSetOutputEnvelopeFailureOn200IsError(t *testing.T) {
+	client, _ := newRecordingServer(t, http.StatusOK, `{"success":false,"error":"backend rejected output"}`)
+	err := client.SetOutput("exec-9", "x")
+	if err == nil || !strings.Contains(err.Error(), "API error: backend rejected output") {
+		t.Fatalf("expected the envelope's error to surface, got: %v", err)
+	}
+}
+
+// SetVariable shares the same envelope check (the sibling write path).
+func TestSetVariableEnvelopeFailureOn200IsError(t *testing.T) {
+	client, _ := newRecordingServer(t, http.StatusOK, `{"success":false,"error":"variable is locked by another process"}`)
+	err := client.SetVariable("exec-9", "MY_KEY", "v")
+	if err == nil || !strings.Contains(err.Error(), "API error: variable is locked by another process") {
+		t.Fatalf("expected the envelope's error to surface, got: %v", err)
+	}
+}
+
+func TestSetOutputMalformedResponse(t *testing.T) {
+	client, _ := newRecordingServer(t, http.StatusOK, "not-json")
+	err := client.SetOutput("exec-9", "x")
+	if err == nil || !strings.Contains(err.Error(), "failed to parse response") {
+		t.Fatalf("expected parse error, got: %v", err)
 	}
 }
 

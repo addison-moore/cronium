@@ -61,8 +61,12 @@ func (c *APIClient) SetOutput(executionID string, data interface{}) error {
 		"data": data,
 	}
 
-	_, err := c.doRequest("POST", url, body)
-	return err
+	resp, err := c.doRequest("POST", url, body)
+	if err != nil {
+		return err
+	}
+
+	return checkEnvelope(resp)
 }
 
 // GetVariable retrieves a variable value from the API
@@ -102,8 +106,33 @@ func (c *APIClient) SetVariable(executionID, key string, value interface{}) erro
 		"value": value,
 	}
 
-	_, err := c.doRequest("PUT", url, body)
-	return err
+	resp, err := c.doRequest("PUT", url, body)
+	if err != nil {
+		return err
+	}
+
+	return checkEnvelope(resp)
+}
+
+// checkEnvelope inspects the runtime's {"success":bool,...} response envelope
+// on write paths. A 200 with {"success":false} is a FAILED write (FINDINGS
+// #37: it used to be treated as success because only the HTTP status was
+// checked) and surfaces the envelope's error message.
+func checkEnvelope(resp []byte) error {
+	var result struct {
+		Success bool   `json:"success"`
+		Error   string `json:"error,omitempty"`
+	}
+
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if !result.Success {
+		return fmt.Errorf("API error: %s", result.Error)
+	}
+
+	return nil
 }
 
 // GetContext retrieves the event execution context
