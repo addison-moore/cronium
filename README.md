@@ -42,29 +42,29 @@ or https://cronium.app/docs/self-hosting. For local development, see
 route only `/api/socketio` through your TLS proxy to the loopback-bound port 5002. Cronium applies exact origin checks, shared one-time tickets, and active
 authorization revocation to live logs and terminals.
 
-## 🚀 Key Features
+## Key Features
 
-### 📅 **Event Scheduling**
+### **Event Scheduling**
 
 - Schedule scripts (Bash, Node.js, Python) and HTTP requests
 - Flexible cron expressions with visual editor
 - One-time and recurring schedules
 - Timezone support
 
-### 🔄 **Workflow Automation**
+### **Workflow Automation**
 
 - Chain multiple events into complex workflows
 - Conditional logic and branching
 - Data passing between workflow steps
 - Visual workflow builder
 
-### 🖥️ **Execution Environments**
+### **Execution Environments**
 
 - **Local Execution**: Isolated Docker containers for security
 - **Remote Execution**: SSH execution gated on operator-enforced per-job isolation
 - **Server Management**: Organize and manage multiple execution targets
 
-### 🔧 **Developer Tools**
+### **Developer Tools**
 
 - **Runtime Helpers**: Built-in functions for data management
   - `cronium.input()` / `cronium.output()` - Pass data between events
@@ -80,12 +80,12 @@ authorization revocation to live logs and terminals.
 - Performance metrics and analytics
 - Error notifications and alerts
 
-### 🔌 **Integrations**
+### **Integrations**
 
 - **Communication**: Slack, Discord, Teams, Email notifications
 - **Tools**: Extensible plugin system for custom integrations
 
-### 🔐 **Security & Access Control**
+### **Security & Access Control**
 
 - Role-based permissions (Admin, User, Viewer)
 - Encrypted storage for sensitive data
@@ -114,7 +114,7 @@ authorization revocation to live logs and terminals.
 - **Docker Compose** for local development
 - Self-hosted deployment options
 
-## 📦 Project Structure
+## Project Structure
 
 ```
 cronium/
@@ -130,7 +130,7 @@ cronium/
 └── docs/                 # Documentation
 ```
 
-## 🎯 Use Cases
+## Use Cases
 
 - **DevOps Automation**: Scheduled backups, deployments, and maintenance tasks
 - **Data Processing**: ETL pipelines, report generation, data synchronization
@@ -139,7 +139,7 @@ cronium/
 - **Testing**: Automated test runs, smoke tests, regression testing
 - **Notifications**: Scheduled reminders, status updates, digest emails
 
-## 🌟 Why Cronium?
+## Why Cronium?
 
 - **Self-Hosted**: Complete control over your data and infrastructure
 - **Modern Stack**: Built with the latest technologies for performance and reliability
@@ -147,13 +147,13 @@ cronium/
 - **Extensible**: Plugin system for custom integrations
 - **Open Source**: Community-driven development and transparency
 
-## 🔮 Roadmap
+## Roadmap
 
 - [ ] Advanced workflow templates
 - [ ] Kubernetes support for execution
 - [ ] Advanced monitoring dashboards
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Cronium is in active development, and we're excited to work with the community to make it even better.
 
@@ -161,7 +161,7 @@ We welcome contributions! Cronium is in active development, and we're excited to
 - Join our [Discord community](https://discord.gg/cronium) for discussions
 - Check our [Contributing Guide](CONTRIBUTING.md) (coming soon)
 
-## 📄 License
+## License
 
 Cronium is dual-licensed under:
 
@@ -171,12 +171,6 @@ Cronium is dual-licensed under:
 For commercial licensing inquiries, please contact **[addisondrewmoore@gmail.com](mailto:addisondrewmoore@gmail.com)**.
 
 See [LICENSE-AGPL.md](LICENSE-AGPL.md) for the full AGPL text and [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) for commercial terms.
-
-## 🙏 Acknowledgments
-
-Built with ❤️ by the Cronium team and contributors.
-
-Special thanks to all the open-source projects that make Cronium possible.
 
 ---
 
