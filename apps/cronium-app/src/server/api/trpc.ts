@@ -92,7 +92,7 @@ export const sessionFromApiToken = async (
   const user = await storage.getUser(auth.userId);
   // Bearer principals must be live: a disabled/pending owner's tokens stop
   // working immediately, not at token expiry.
-  if (!user || user.status !== UserStatus.ACTIVE) return null;
+  if (user?.status !== UserStatus.ACTIVE) return null;
 
   const name =
     user.firstName || user.lastName
@@ -463,7 +463,7 @@ const devAutoAuth = t.middleware(async ({ ctx, next }) => {
                 image: null,
               },
               expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-            } as Session,
+            },
           },
         });
       }

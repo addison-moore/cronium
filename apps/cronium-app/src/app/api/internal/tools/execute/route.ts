@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
     const runningEvent =
       job.eventId != null ? await storage.getEvent(job.eventId) : undefined;
     const eventForExecution = {
-      ...(runningEvent as Event | undefined),
+      ...runningEvent,
       id: job.eventId ?? undefined,
       userId: ownerId,
       toolActionConfig: {

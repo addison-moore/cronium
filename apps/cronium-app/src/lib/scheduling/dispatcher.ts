@@ -268,7 +268,7 @@ export async function runDispatchTick(
         // Fresh row with relations each tick: dispatch needs envVars/servers,
         // and maxExecutions bookkeeping must not act on a stale count.
         const event = await storage.getEventWithRelations(eventId);
-        if (!event || event.status !== EventStatus.ACTIVE) {
+        if (event?.status !== EventStatus.ACTIVE) {
           // Every other drop path records an incident; going quiet here
           // would make "paused/deleted mid-tick" invisible. One incident
           // covers this tick and the rest of the batch it drops.

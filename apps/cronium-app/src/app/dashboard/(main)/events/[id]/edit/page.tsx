@@ -4,7 +4,6 @@ import { useCallback } from "react";
 import { Lock } from "lucide-react";
 import EventForm from "@/components/event-form/EventForm-lazy";
 import { PageHeader, DetailPageSkeleton } from "@cronium/ui";
-import { Spinner } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/lib/trpc";

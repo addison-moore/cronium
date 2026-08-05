@@ -21,7 +21,7 @@ export async function sessionFromOAuthToken(
   const user = await storage.getUser(payload.sub);
   // Bearer principals must be live: a disabled owner's OAuth tokens stop
   // working immediately, not at token expiry.
-  if (!user || user.status !== UserStatus.ACTIVE) return null;
+  if (user?.status !== UserStatus.ACTIVE) return null;
 
   const name =
     user.firstName || user.lastName

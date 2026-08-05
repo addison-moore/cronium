@@ -22,7 +22,6 @@ import {
 } from "./index";
 import { EventStatus, type Log } from "@/shared/schema";
 import type { Event } from "./types";
-import { Spinner } from "@cronium/ui";
 
 const copy = {
   loading: "Loading event details...",

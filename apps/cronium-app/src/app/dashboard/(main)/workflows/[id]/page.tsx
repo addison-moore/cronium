@@ -25,7 +25,6 @@ import WorkflowCanvas from "@/components/workflows/WorkflowCanvas-lazy";
 import WorkflowDetailsForm from "@/components/workflows/WorkflowDetailsForm";
 import { formatDate } from "@/lib/utils";
 import {
-  ArrowLeft,
   Share2,
   Clock,
   User,

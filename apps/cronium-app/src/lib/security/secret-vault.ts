@@ -30,7 +30,6 @@ const SCHEME = "crn";
 const VERSION = "1";
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // GCM standard nonce
-const KEY_LENGTH = 32; // AES-256
 
 export interface SecretBinding {
   /** Semantic purpose, e.g. "tool-credential", "server-ssh-key". */

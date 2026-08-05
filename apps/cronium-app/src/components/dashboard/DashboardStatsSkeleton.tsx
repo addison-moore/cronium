@@ -1,4 +1,4 @@
-import { PageShell, Skeleton } from "@cronium/ui";
+import { Skeleton } from "@cronium/ui";
 import { Card, CardContent, CardHeader } from "@cronium/ui";
 
 export function DashboardStatsSkeleton() {

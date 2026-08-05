@@ -33,7 +33,7 @@ const INLINE_RULES: Segment[] = [
 function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
   for (const rule of INLINE_RULES) {
     const match = rule.pattern.exec(text);
-    if (!match || match.index === undefined) continue;
+    if (match?.index === undefined) continue;
 
     const before = text.slice(0, match.index);
     const inner = match[1] ?? "";

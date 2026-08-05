@@ -7,7 +7,6 @@ import { ArrowLeft, AlertCircle } from "lucide-react";
 import { Button, PageShell, DetailPageSkeleton } from "@cronium/ui";
 import { Card, CardContent } from "@cronium/ui";
 import ServerForm from "@/components/dashboard/ServerForm";
-import { Spinner } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@cronium/ui";
 

@@ -19,7 +19,6 @@ import WorkflowForm, {
   type WorkflowFormValues,
 } from "@/components/workflows/WorkflowForm";
 import type { Node, Edge } from "@xyflow/react";
-import { Spinner } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
 import type { WorkflowNode, WorkflowEdge } from "@/shared/schemas/workflows";
 

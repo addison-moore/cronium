@@ -89,7 +89,7 @@ async function loadPrincipal(
   const cached = await cacheService
     .get<AuthorizedPrincipal>(principalCacheKey(userId))
     .catch(() => null);
-  if (cached && cached.id === userId) return cached;
+  if (cached?.id === userId) return cached;
 
   const [row] = await db
     .select({

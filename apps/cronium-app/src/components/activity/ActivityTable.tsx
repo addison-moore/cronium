@@ -42,7 +42,6 @@ import {
 import { ScrollArea } from "@cronium/ui";
 import { ActionMenu } from "@cronium/ui";
 import { type LogStatus } from "@/shared/schema";
-import { Spinner } from "@cronium/ui";
 import { format } from "date-fns";
 import {
   Tooltip,

@@ -82,7 +82,6 @@ import {
 import type { SQL } from "drizzle-orm";
 import {
   encryptSensitiveData,
-  decryptSensitiveData,
   encryptionService,
   isSystemSettingSensitive,
 } from "../lib/encryption-service";

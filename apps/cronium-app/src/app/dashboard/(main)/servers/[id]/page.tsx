@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   Edit,
   RefreshCw,
-  AlertCircle,
   Code,
   Eye,
   Terminal as TerminalIcon,
@@ -43,7 +42,6 @@ import { ServerDetailsHeader } from "@/components/server-details/ServerDetailsHe
 import { NotFoundCard } from "@/components/error/not-found-card";
 import { trpc } from "@/lib/trpc";
 import { QUERY_OPTIONS } from "@/trpc/shared";
-import { type UpdateServerInput } from "@shared/schemas/servers";
 
 interface ServerDetailsPageProps {
   params: Promise<{ id: string }>;
@@ -358,7 +356,7 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
         <TabsContent value="edit" className="space-y-4">
           <div className="bg-card border-input rounded-lg border p-6">
             <ServerForm
-              initialServer={server as Partial<UpdateServerInput>}
+              initialServer={server}
               isEditing={true}
               onSuccess={handleServerUpdate}
             />

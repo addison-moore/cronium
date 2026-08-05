@@ -23,11 +23,10 @@ import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatDistanceToNow } from "date-fns";
 import { ModularToolsManager } from "@/tools/modular-tools-manager";
-import { usePathname } from "next/navigation";
 import type { ToolAction, ToolPlugin } from "@/tools/types/tool-plugin";
 
 // Tool action browser component
-function ActionBrowser({ locale }: { locale: string }) {
+function ActionBrowser() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
@@ -335,8 +334,6 @@ function HealthOverview() {
 
 export default function ToolsDashboard() {
   const [activeTab, setActiveTab] = useState("management");
-  const pathname = usePathname();
-  const locale = pathname.split("/")[1] ?? "";
 
   return (
     <div className="space-y-6">
@@ -366,7 +363,7 @@ export default function ToolsDashboard() {
         </TabsContent>
 
         <TabsContent value="browse" className="space-y-4">
-          <ActionBrowser locale={locale} />
+          <ActionBrowser />
         </TabsContent>
 
         <TabsContent value="history" className="space-y-4">

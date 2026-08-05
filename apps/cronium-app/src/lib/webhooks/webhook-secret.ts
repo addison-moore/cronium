@@ -76,7 +76,7 @@ function isEncryptedHeaders(value: unknown): value is EncryptedHeaders {
     typeof value === "object" &&
     value !== null &&
     "__enc" in value &&
-    typeof (value as { __enc: unknown }).__enc === "string" &&
+    typeof value.__enc === "string" &&
     isSecretEnvelope((value as EncryptedHeaders).__enc)
   );
 }
