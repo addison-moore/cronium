@@ -279,7 +279,7 @@ export class ClientEncryptionUtils {
     return crypto.subtle.deriveKey(
       {
         name: "PBKDF2",
-        salt: saltBuffer as BufferSource,
+        salt: saltBuffer,
         iterations: 100000,
         hash: "SHA-256",
       },

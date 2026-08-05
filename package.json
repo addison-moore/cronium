@@ -50,10 +50,10 @@
     "@cronium/tailwind-config": "workspace:*",
     "@cronium/typescript-config": "workspace:*",
     "husky": "^9.1.7",
-    "lint-staged": "^17.0.8",
-    "prettier": "^3.9.5",
+    "lint-staged": "^17.3.0",
+    "prettier": "^3.9.6",
     "prettier-plugin-tailwindcss": "^0.8.1",
-    "turbo": "^2.10.5"
+    "turbo": "^2.10.8"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,json,md,yml,yaml}": [

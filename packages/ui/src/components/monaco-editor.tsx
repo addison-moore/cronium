@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, type MouseEventHandler } from "react";
-import Editor, { type Monaco } from "@monaco-editor/react";
+import Editor from "@monaco-editor/react";
 import { Button } from "./button";
 import { Badge } from "./badge";
 import { Maximize2, Minimize2, X } from "lucide-react";
@@ -27,6 +27,37 @@ export type EditorLanguage =
   | "markdown"
   | "html"
   | "text";
+
+/**
+ * Minimal shape of Monaco's TypeScript language service that we configure.
+ *
+ * Monaco 0.55 moved this service off `monaco.languages.typescript` onto a
+ * top-level `monaco.typescript` namespace, leaving the old path undefined
+ * rather than shimmed. We resolve either location at runtime, so the editor
+ * works against both the self-hosted bundle and the loader's CDN fallback.
+ *
+ * These are declared locally because `@monaco-editor/react`'s exported
+ * `Monaco` type aliases a deep subpath import that monaco 0.56's `exports`
+ * map no longer resolves, which silently degrades it to `any`.
+ */
+interface MonacoTypeScriptDefaults {
+  setCompilerOptions: (options: Record<string, unknown>) => void;
+  setDiagnosticsOptions: (options: Record<string, boolean>) => void;
+  addExtraLib: (content: string, filePath?: string) => void;
+}
+
+interface MonacoTypeScriptNamespace {
+  javascriptDefaults: MonacoTypeScriptDefaults;
+  typescriptDefaults: MonacoTypeScriptDefaults;
+  ScriptTarget: Record<string, number>;
+  ModuleKind: Record<string, number>;
+  ModuleResolutionKind: Record<string, number>;
+}
+
+interface MonacoWithTypeScript {
+  typescript?: MonacoTypeScriptNamespace;
+  languages?: { typescript?: MonacoTypeScriptNamespace };
+}
 
 export interface MonacoEditorProps {
   defaultValue?: string;
@@ -82,26 +113,31 @@ export function MonacoEditor({
     };
   }, [isExpanded]);
 
-  const handleEditorWillMount = (monacoInstance: Monaco) => {
+  const handleEditorWillMount = (monacoInstance: MonacoWithTypeScript) => {
+    // See MonacoTypeScriptNamespace: 0.55+ exposes this top level, older
+    // builds under `languages`. Bail out rather than throw if neither exists,
+    // so the editor still mounts without the extra intellisense config.
+    const ts =
+      monacoInstance.typescript ?? monacoInstance.languages?.typescript;
+    if (!ts) return;
+
     // Configure TypeScript/JavaScript compiler options for better linting
-    monacoInstance.languages.typescript.javascriptDefaults.setCompilerOptions({
-      target: monacoInstance.languages.typescript.ScriptTarget.ES2020,
+    ts.javascriptDefaults.setCompilerOptions({
+      target: ts.ScriptTarget.ES2020,
       allowNonTsExtensions: true,
-      moduleResolution:
-        monacoInstance.languages.typescript.ModuleResolutionKind.NodeJs,
-      module: monacoInstance.languages.typescript.ModuleKind.CommonJS,
+      moduleResolution: ts.ModuleResolutionKind.NodeJs,
+      module: ts.ModuleKind.CommonJS,
       noEmit: true,
       esModuleInterop: true,
       allowJs: true,
       allowSyntheticDefaultImports: true,
     });
 
-    monacoInstance.languages.typescript.typescriptDefaults.setCompilerOptions({
-      target: monacoInstance.languages.typescript.ScriptTarget.ES2020,
+    ts.typescriptDefaults.setCompilerOptions({
+      target: ts.ScriptTarget.ES2020,
       allowNonTsExtensions: true,
-      moduleResolution:
-        monacoInstance.languages.typescript.ModuleResolutionKind.NodeJs,
-      module: monacoInstance.languages.typescript.ModuleKind.CommonJS,
+      moduleResolution: ts.ModuleResolutionKind.NodeJs,
+      module: ts.ModuleKind.CommonJS,
       noEmit: true,
       esModuleInterop: true,
       allowJs: true,
@@ -110,21 +146,17 @@ export function MonacoEditor({
     });
 
     // Configure diagnostics options
-    monacoInstance.languages.typescript.javascriptDefaults.setDiagnosticsOptions(
-      {
-        noSemanticValidation: false,
-        noSyntaxValidation: false,
-        noSuggestionDiagnostics: false,
-      },
-    );
+    ts.javascriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: false,
+      noSyntaxValidation: false,
+      noSuggestionDiagnostics: false,
+    });
 
-    monacoInstance.languages.typescript.typescriptDefaults.setDiagnosticsOptions(
-      {
-        noSemanticValidation: false,
-        noSyntaxValidation: false,
-        noSuggestionDiagnostics: false,
-      },
-    );
+    ts.typescriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: false,
+      noSyntaxValidation: false,
+      noSuggestionDiagnostics: false,
+    });
 
     // Add common Node.js and browser globals for better intellisense
     const globalLibSource = [
@@ -207,15 +239,9 @@ export function MonacoEditor({
       "declare const cronium: CroniumAPI;",
     ].join("\n");
 
-    monacoInstance.languages.typescript.javascriptDefaults.addExtraLib(
-      globalLibSource,
-      "ts:globals.d.ts",
-    );
+    ts.javascriptDefaults.addExtraLib(globalLibSource, "ts:globals.d.ts");
 
-    monacoInstance.languages.typescript.javascriptDefaults.addExtraLib(
-      croniumLibSource,
-      "ts:cronium.d.ts",
-    );
+    ts.javascriptDefaults.addExtraLib(croniumLibSource, "ts:cronium.d.ts");
   };
 
   if (!mounted) {
@@ -274,7 +300,7 @@ export function MonacoEditor({
         formatOnPaste: true,
         formatOnType: true,
         hover: {
-          enabled: true,
+          enabled: "on",
         },
         links: true,
         mouseWheelZoom: true,
