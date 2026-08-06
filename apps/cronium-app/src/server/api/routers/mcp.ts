@@ -130,6 +130,28 @@ export const mcpRouter = createTRPCRouter({
           "drives the chain.",
       },
 
+      guidance: {
+        iterateLoop:
+          "Typical flow: get_capabilities → validate_plan → create_workflow_bundle " +
+          "(events land as DRAFT) → run_workflow or run_event to verify (works on " +
+          "DRAFT) → get_execution / get_event_logs to inspect results → update_event " +
+          "/ update_workflow to fix → re-run → activate once green.",
+        verification:
+          "run_event returns {jobId, logId}: poll get_event_logs until the newest " +
+          "log leaves RUNNING. run_workflow returns {executionId}: poll " +
+          "get_execution until it completes. Runs execute the real event " +
+          "code/action — get the user's approval before running.",
+        updating:
+          "update_event patches only the fields you pass (schedule changes " +
+          "re-materialize automatically). update_workflow's `graph` REPLACES the " +
+          "entire node/edge set — pass the complete desired graph; get_workflow " +
+          "shows the current one. Deletes are irreversible; confirm with the user.",
+        reading:
+          "List tools return summaries (no script bodies) with limit/offset " +
+          "pagination. Log/step output is tail-truncated — raise maxOutputChars " +
+          "(up to 20000) when you need more. Env-var VALUES are never returned.",
+      },
+
       toolTypes,
 
       credentials: creds.map((c) => ({

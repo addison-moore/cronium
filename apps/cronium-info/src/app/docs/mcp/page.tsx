@@ -38,9 +38,10 @@ export default function McpPage() {
             </h1>
           </div>
           <p className="text-muted-foreground text-xl">
-            Connect an AI assistant to your Cronium instance and create events
-            and workflows from plain language — it drafts them, you approve,
-            Cronium creates them.
+            Connect an AI assistant to your Cronium instance and build
+            automations from plain language — it drafts events and workflows,
+            creates them on your approval, runs them to verify, reads the
+            results, fixes what&apos;s broken, and activates them.
           </p>
         </div>
 
@@ -61,7 +62,11 @@ export default function McpPage() {
               you. You describe what you want; the assistant reads your
               Cronium&apos;s capabilities (tool types, your saved credentials,
               scheduling rules), drafts the events and workflow — filling in
-              sensible defaults — and, once you approve, creates them.
+              sensible defaults — and, once you approve, creates them. It can
+              then <strong>run</strong> the automation, inspect the execution
+              and logs, <strong>fix</strong> anything that failed, and{" "}
+              <strong>activate</strong> it once it works — the whole loop
+              without leaving the conversation.
             </p>
             <p>For example, you can say:</p>
             <blockquote>
@@ -116,14 +121,14 @@ export default function McpPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <ShieldCheck className="text-primary h-5 w-5" />
-                  Create as drafts
+                  Run, fix, activate
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground text-sm">
-                  On your approval it creates the events and workflow — as
-                  drafts, so nothing runs until you review and activate them in
-                  Cronium.
+                  Everything is created as a draft. With your approval the
+                  assistant can run it once, read the logs, fix failures, and
+                  activate the schedule when it&apos;s green.
                 </p>
               </CardContent>
             </Card>
@@ -169,13 +174,15 @@ export default function McpPage() {
           </h2>
           <div className="prose prose-gray dark:prose-invert mb-4 max-w-none">
             <p>
-              For local clients, run the bundled stdio server (
+              For local clients, run the bundled stdio bridge (
               <code>apps/cronium-mcp</code> in the Cronium repo) and point it at
-              your instance with an API token. Set <code>CRONIUM_BASE_URL</code>{" "}
-              to where your instance runs — a production deployment is{" "}
-              <code>http://localhost:3000</code> (or your domain); the examples
-              below use the local development server's port <code>5001</code>.
-              Claude Desktop — <code>claude_desktop_config.json</code>:
+              your instance with an API token — it forwards every request to
+              your instance&apos;s <code>/api/mcp</code> endpoint. Set{" "}
+              <code>CRONIUM_BASE_URL</code> to where your instance runs — a
+              production deployment is <code>http://localhost:3000</code> (or
+              your domain); the examples below use the local development
+              server&apos;s port <code>5001</code>. Claude Desktop —{" "}
+              <code>claude_desktop_config.json</code>:
             </p>
           </div>
           <SimpleCodeBlock language="json">
@@ -209,26 +216,37 @@ export default function McpPage() {
           <div className="prose prose-gray dark:prose-invert max-w-none">
             <ul>
               <li>
-                <strong>get_capabilities</strong> — the enums, defaults,
-                scheduling guidance, available tool actions, and your real
-                credential/server ids.
+                <strong>Discover &amp; validate:</strong>{" "}
+                <code>get_capabilities</code> (enums, defaults, scheduling
+                guidance, available tool actions, and your real
+                credential/server ids) and <code>validate_plan</code> (dry-run a
+                draft without creating anything).
               </li>
               <li>
-                <strong>validate_plan</strong> — dry-run a draft (events +
-                optional workflow) without creating anything.
+                <strong>Read:</strong> <code>list_events</code>,{" "}
+                <code>get_event</code>, <code>get_event_logs</code>,{" "}
+                <code>list_workflows</code>, <code>get_workflow</code>,{" "}
+                <code>get_executions</code>, <code>get_execution</code> —
+                paginated summaries; env-var values and credential secrets are
+                never returned.
               </li>
               <li>
-                <strong>create_event</strong> / <strong>activate_event</strong>{" "}
-                — create a single event (as a draft) and, for scheduled events,
-                start it.
+                <strong>Write:</strong> <code>create_event</code>,{" "}
+                <code>update_event</code>, <code>create_workflow</code>,{" "}
+                <code>update_workflow</code>, and{" "}
+                <code>create_workflow_bundle</code> (several events <em>and</em>{" "}
+                a workflow chaining them, in one step).
               </li>
               <li>
-                <strong>create_workflow</strong> — wire existing events into a
-                workflow.
+                <strong>Lifecycle:</strong> <code>activate_event</code>,{" "}
+                <code>deactivate_event</code>, <code>delete_event</code>,{" "}
+                <code>delete_workflow</code>.
               </li>
               <li>
-                <strong>create_workflow_bundle</strong> — create several events{" "}
-                <em>and</em> a workflow chaining them, in one step.
+                <strong>Run &amp; verify:</strong> <code>run_event</code> and{" "}
+                <code>run_workflow</code> trigger a real run (works on drafts),
+                then <code>get_event_logs</code> / <code>get_execution</code>{" "}
+                show what happened.
               </li>
             </ul>
           </div>
@@ -242,12 +260,14 @@ export default function McpPage() {
           <div className="prose prose-gray dark:prose-invert max-w-none">
             <p>
               The remote connector can use OAuth (recommended) or a bearer API
-              token; the local server uses an API token. Create a token under{" "}
-              <strong>Settings → API Tokens</strong>. When you create one, turn
-              on <strong>&ldquo;Limit to MCP&rdquo;</strong> to make it
+              token; the local bridge uses an API token. Create a token under{" "}
+              <strong>Settings → API Tokens</strong> — every token needs an
+              explicit scope and an expiry. Turn on{" "}
+              <strong>&ldquo;Limit to MCP&rdquo;</strong> to make it
               least-privilege: such a token (and any OAuth connection) can only
-              create and manage events and workflows — it can&apos;t touch the
-              rest of your account, so a leaked connector token is contained.
+              build, run, and manage events and workflows — it can&apos;t touch
+              the rest of your account, so a leaked connector token is
+              contained.
             </p>
           </div>
         </section>
@@ -261,12 +281,20 @@ export default function McpPage() {
             <ul>
               <li>
                 <strong>Everything is created as a draft.</strong> Nothing runs
-                until you review it and activate it in Cronium.
+                on a schedule until you review it and activate it.
               </li>
               <li>
                 <strong>Approval is in your hands.</strong> The assistant shows
-                you the plan first; it only creates after you say so, and local
-                clients also prompt before each action.
+                you the plan first; it only creates after you say so, and MCP
+                clients prompt before each action. Every tool is annotated
+                (read-only vs. destructive) so clients can gate approvals
+                appropriately.
+              </li>
+              <li>
+                <strong>Runs are explicit.</strong> <code>run_event</code> /{" "}
+                <code>run_workflow</code> execute your real scripts and tool
+                actions — the assistant asks before triggering one, and deletes
+                require confirmation too.
               </li>
               <li>
                 <strong>Provenance.</strong> Events and workflows created via
@@ -290,8 +318,8 @@ export default function McpPage() {
               MCP-capable clients (e.g. ChatGPT&apos;s custom connectors on
               Business/Enterprise plans, and developer tools like Cursor and VS
               Code). Remote clients use the <code>/api/mcp</code> endpoint;
-              clients that support local servers can run the bundled stdio
-              server.
+              clients that only support local servers can run the bundled stdio
+              bridge, which forwards to the same endpoint.
             </p>
           </div>
         </section>

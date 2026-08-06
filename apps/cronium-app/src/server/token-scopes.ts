@@ -1,12 +1,14 @@
 /**
  * Per-token scopes for least-privilege API / OAuth tokens.
  *
- * A token (or OAuth access token) may carry a scope list. `null`/absent scopes
- * mean full user rights (the default, and every pre-existing token). A non-null
- * list restricts the token to the tRPC procedure paths its scopes permit —
- * enforced centrally in `enforceTokenScopes` (src/server/api/trpc.ts).
+ * Every API/OAuth bearer token carries an explicit scope list; the paths its
+ * scopes permit are enforced centrally in `enforceTokenScopes`
+ * (src/server/api/trpc.ts). There is no implicit default: a token without a
+ * recognized scope is deny-all (legacy unscoped tokens fail closed), and broad
+ * access requires the explicit `full` scope (security plan Phase 1.5).
  *
- * Cookie-session (browser) users are never scope-limited.
+ * `null` scopes exist only for cookie-session (browser) users, who are never
+ * scope-limited.
  */
 
 /**
@@ -24,9 +26,11 @@ export function isApiTokenScope(value: string): value is ApiTokenScope {
 
 /**
  * Procedure paths each scope permits. The `mcp` scope covers exactly what the
- * MCP tools need — create/activate/read events & workflows, discovery, and the
- * credential/server lookups — and nothing else (no admin, no secrets, no other
- * routers), so an MCP connector token can't act beyond its purpose if leaked.
+ * MCP tools need — the full build→run→inspect→fix→activate loop over events &
+ * workflows, discovery, and the credential/server lookups — and nothing else
+ * (no admin, no secret reads, no other routers), so an MCP connector token
+ * can't act beyond its purpose if leaked. Env-var values, credential secrets,
+ * and webhook keys are not readable through any of these paths.
  * `full` is handled specially in `isPathAllowedForScopes` (any path).
  */
 const SCOPE_PATHS: Record<
@@ -37,13 +41,21 @@ const SCOPE_PATHS: Record<
     "mcp.getCapabilities",
     "mcp.validatePlan",
     "events.create",
+    "events.update",
     "events.activate",
+    "events.deactivate",
+    "events.execute",
     "events.getById",
     "events.getAll",
+    "events.getLogs",
     "events.delete",
     "workflows.create",
+    "workflows.update",
+    "workflows.execute",
     "workflows.getById",
     "workflows.getAll",
+    "workflows.getExecutions",
+    "workflows.getExecution",
     "workflows.delete",
     "tools.getAll",
     "servers.getAll",

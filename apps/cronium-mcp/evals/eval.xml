@@ -1,0 +1,49 @@
+<evaluation>
+  <!--
+    Cronium MCP evaluations (mcp-builder methodology): 10 independent,
+    read-only, multi-tool questions against the deterministic EVAL-* fixture
+    set. Seed (or restore) the fixtures first: see README.md / seed.mjs.
+    Every answer below was verified by driving the MCP tools against a live
+    instance after seeding.
+  -->
+  <qa_pair>
+    <question>Across all Cronium events whose names start with "EVAL-", how many are tagged "etl"?</question>
+    <answer>3</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>One EVAL- event is configured to run at 7am on weekdays via a cron expression. What is that event's name?</question>
+    <answer>EVAL-Daily-Digest</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>In the workflow named "EVAL-Orders-Pipeline", which event runs immediately after EVAL-Extract-Orders?</question>
+    <answer>EVAL-Transform-Orders</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What error message did the most recent run of the event "EVAL-Broken-Report" produce (the message the script printed before failing)?</question>
+    <answer>report generation failed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>In the most recent execution of the workflow "EVAL-Orders-Pipeline", how many steps completed successfully?</question>
+    <answer>3</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>In the workflow "EVAL-Failure-Handler", what connection type links EVAL-Broken-Report to EVAL-Fallback-Notice?</question>
+    <answer>ON_FAILURE</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>According to the log of its last successful run, how many orders did the event "EVAL-Extract-Orders" report extracting?</question>
+    <answer>42</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What is the overall status of the most recent execution of the workflow "EVAL-Failure-Handler"?</question>
+    <answer>FAILURE</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many Cronium events in total have names starting with "EVAL-"?</question>
+    <answer>8</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>The event "EVAL-Cleanup-Temp" runs on an interval schedule. Every how many hours is it configured to run?</question>
+    <answer>6</answer>
+  </qa_pair>
+</evaluation>

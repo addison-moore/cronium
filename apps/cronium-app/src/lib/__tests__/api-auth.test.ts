@@ -152,11 +152,11 @@ describe("authenticateRestPrincipal — bearer token scope enforcement (HI-25)",
       expiresAt: null,
       scopes: ["mcp"],
     });
-    // events.update is NOT in the mcp scope set.
+    // events.fork is NOT in the mcp scope set.
     const res = await authenticateRestPrincipal(
       bearerRequest("t"),
       "edit",
-      "events.update",
+      "events.fork",
     );
     expect(res).toEqual({ ok: false, status: 403 });
   });

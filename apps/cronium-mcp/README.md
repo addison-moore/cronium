@@ -1,38 +1,39 @@
 # @cronium/mcp-server
 
-A local **stdio MCP server** that lets an AI app (Claude Desktop, Claude Code, or any
-MCP client that runs local servers) create Cronium events and workflows on your behalf.
+A local **stdio MCP bridge** that lets an AI app (Claude Desktop, Claude Code, or any
+MCP client that runs local servers) build automations in your Cronium instance:
+draft, create, **run, inspect, fix, and activate** events and workflows.
 
-It authenticates to your Cronium instance with an **API token** — no OAuth, nothing exposed
-to the internet. This is the Phase-2 (local) path from `_plans/mcp/PLAN.md`; a remote
-OAuth-secured server for the claude.ai web app is a later phase.
+It is a thin bridge: every JSON-RPC message from the client is forwarded to your
+instance's **`/api/mcp`** endpoint with your API token, and the response is streamed
+back. The tools themselves are defined once, inside the app
+(`apps/cronium-app/src/app/api/mcp/tools.ts`), so local and remote clients always see
+the identical tool surface. No runtime dependencies (Node 18+).
 
-## What it can do
+## The tool surface
 
-Tools exposed to the model:
+| Group               | Tools                                                                                                             |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Discover & validate | `get_capabilities` (call first), `validate_plan` (dry-run, creates nothing)                                       |
+| Read                | `list_events`, `get_event`, `get_event_logs`, `list_workflows`, `get_workflow`, `get_executions`, `get_execution` |
+| Write               | `create_event`, `update_event`, `create_workflow`, `update_workflow`, `create_workflow_bundle`                    |
+| Lifecycle           | `activate_event`, `deactivate_event`, `delete_event`, `delete_workflow`                                           |
+| Run & verify        | `run_event`, `run_workflow` (execute real code — the client asks for approval)                                    |
 
-| Tool                     | Purpose                                                                                                                 |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `get_capabilities`       | **Call first.** Enums, defaults, scheduling guidance, tool types + actions, and your real tool-credential / server ids. |
-| `validate_plan`          | Dry-run: check a draft (events + optional workflow) **without creating anything**.                                      |
-| `create_event`           | Create one event (DRAFT by default).                                                                                    |
-| `activate_event`         | Set a scheduled event ACTIVE (registers the live scheduler).                                                            |
-| `create_workflow`        | Wire existing events into a workflow (DAG).                                                                             |
-| `create_workflow_bundle` | Create several events **and** a workflow chaining them, in one call.                                                    |
-
-Everything is created as **DRAFT** unless you say otherwise, so nothing runs until you review
-and activate it in Cronium — the built-in approval gate. Records created through MCP are tagged
-`source="mcp"` for provenance/audit.
+The intended loop: **discover → validate → create (DRAFT) → run → read logs/executions
+→ fix with update → activate.** Everything is created as DRAFT unless you say
+otherwise. Records created through MCP are tagged `source="mcp"` for provenance, and
+every tool carries MCP annotations (`readOnlyHint`/`destructiveHint`/…) so clients can
+gate approvals. Env-var **values**, credential secrets, and stored webhook keys are
+never returned; a newly minted webhook key is shown exactly once.
 
 ## Setup
 
-### 1. Mint a Cronium API token
+### 1. Mint an MCP-scoped Cronium API token
 
-In Cronium: **Settings → API Tokens → Create**. Copy the token (shown once). It acts as your
-full user identity, so treat it like a password.
-
-> Requires a Cronium build where tRPC accepts API-token bearer auth (the `sessionFromApiToken`
-> change in `createTRPCContext`). Older builds only accept browser sessions.
+In Cronium: **Settings → API Tokens → Create**, and enable **"Limit to MCP"**. Scopes
+are required and tokens expire (≤90 days) — the `mcp` scope permits exactly the tool
+surface above and nothing else. Copy the token (shown once).
 
 ### 2. Build
 
@@ -61,7 +62,8 @@ Add to `claude_desktop_config.json`
 }
 ```
 
-Restart Claude Desktop. Claude will ask permission before each tool call.
+Restart Claude Desktop. Claude asks permission before each tool call. A bad URL or
+token fails at connect time (the bridge probes `/api/mcp` on startup).
 
 ### 3b. Claude Code
 
@@ -72,40 +74,47 @@ claude mcp add cronium \
   -- node /absolute/path/to/apps/cronium-mcp/dist/index.js
 ```
 
+> Claude Code (and other clients with remote-server support) can also skip the bridge
+> entirely and connect straight to `https://<your-instance>/api/mcp` with an
+> `Authorization: Bearer <token>` header — the bridge exists for stdio-only clients
+> and localhost instances.
+
 ## Example
 
-> "Create a workflow in Cronium: a SQL event that counts users in the `users` database, then a
-> Slack event that posts the count to #general at 8am every day."
+> "Create a workflow in Cronium: a SQL event that counts users in the `users` database,
+> then a Slack event that posts the count to #general at 8am every day. Run it once to
+> make sure it works."
 
-Claude will `get_capabilities` (to find your SQL + Slack credential ids and the action params),
-draft the two events + workflow with defaults filled (Local execution, 30s timeout,
-`customSchedule: "0 8 * * *"`), show you the draft, and — once you approve — call
-`create_workflow_bundle`. The events land as DRAFT; review and activate them in Cronium.
+Claude will `get_capabilities` (your SQL + Slack credential ids and action params),
+`validate_plan`, show you the draft, `create_workflow_bundle` on your approval,
+`run_workflow`, poll `get_execution` for the step results, fix anything broken via
+`update_event`, and activate once green — all without leaving the conversation.
 
 ## Configuration
 
 | Env var             | Required | Notes                                             |
 | ------------------- | -------- | ------------------------------------------------- |
 | `CRONIUM_BASE_URL`  | ✅       | e.g. `http://localhost:5001` or your instance URL |
-| `CRONIUM_API_TOKEN` | ✅       | a Cronium API token                               |
+| `CRONIUM_API_TOKEN` | ✅       | an MCP-scoped Cronium API token                   |
 
 ## Remote endpoint (claude.ai web app & other HTTP MCP clients)
 
-Cronium also serves the **same tools over HTTP** at **`/api/mcp`** (in the app itself — no
-separate process). Use this for the claude.ai **web** app, ChatGPT (Business+ dev mode), or any
-MCP client that connects to a remote server.
+Cronium serves the **same tools over HTTP** at **`/api/mcp`** (in the app itself — no
+separate process). Use this for the claude.ai **web** app, ChatGPT (Business+ dev
+mode), or any MCP client that connects to a remote server.
 
 - **URL:** `https://<your-cronium-host>/api/mcp` (must be HTTPS and reachable by the client).
 - **Auth — two options:**
-  - **OAuth 2.1 (recommended for claude.ai):** Cronium is a full OAuth 2.1 authorization server
-    for this resource (PKCE, dynamic client registration, discovery). Just add the connector URL
-    in claude.ai and click **Connect** — you'll be sent to Cronium to sign in and approve; no
-    token to paste. Discovery lives at `/.well-known/oauth-authorization-server` and
-    `/.well-known/oauth-protected-resource`; the `/api/mcp` `401` advertises them.
-  - **Static bearer:** send a Cronium API token — `Authorization: Bearer <token>` (claude.ai
-    "custom header" auth, or any client). Unauthenticated/invalid tokens get `401`.
-- **Transport:** stateless JSON-RPC over `POST` (Streamable HTTP, JSON-response mode). `GET`
-  returns `405` (no server-initiated stream needed).
+  - **OAuth 2.1 (recommended for claude.ai):** Cronium is a full OAuth 2.1 authorization
+    server for this resource (PKCE, dynamic client registration, discovery). Add the
+    connector URL in claude.ai and click **Connect** — you sign in to Cronium and
+    approve; no token to paste. OAuth access tokens carry the `mcp` scope, so a
+    connector is inherently limited to MCP operations. Discovery lives at
+    `/.well-known/oauth-authorization-server` and `/.well-known/oauth-protected-resource`.
+  - **Static bearer:** send a Cronium API token — `Authorization: Bearer <token>`
+    (claude.ai "custom header" auth, or any client). Unauthenticated/invalid tokens get `401`.
+- **Transport:** stateless JSON-RPC over `POST` (Streamable HTTP, JSON-response mode).
+  `GET` returns `405` (no server-initiated stream needed).
 
 Quick check with curl:
 
@@ -115,15 +124,16 @@ curl -s https://<host>/api/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
-> **Security:** `/api/mcp` is internet-facing when your instance is. Serve it over HTTPS. Both an
-> OAuth access token and a raw Cronium API token currently grant full user rights (per-token
-> scopes are a planned follow-up, `_plans/mcp/PLAN.md` Phase 4).
+> **Security:** `/api/mcp` is internet-facing when your instance is. Serve it over
+> HTTPS. Tokens require an explicit scope and expiry; prefer **"Limit to MCP"** over
+> `full` so a leaked connector token can't act beyond automation building.
 
 ## Notes & limits
 
-- The stdio server (this package) is local-only; the remote `/api/mcp` endpoint covers the
-  claude.ai web app.
-- The token has full user rights (no per-token scopes yet — Phase 4).
-- Neither server validates beyond shape; Cronium performs authoritative validation and returns
-  errors the model can correct. In particular `toolId` is checked at execution, not creation —
-  the model should use real ids from `get_capabilities`.
+- Tests: `pnpm --filter @cronium/mcp-server test` (round-trip against a mock endpoint).
+- The bridge only validates configuration; Cronium performs authoritative validation
+  and returns errors the model can read and correct. `toolId` is checked at
+  execution/validation, not creation — the model should use real ids from
+  `get_capabilities` and check drafts with `validate_plan`.
+- Active plan for this surface: `_plans/mcp/PLAN.md` (npm publishing of this package
+  is the planned next distribution step).

@@ -1,8 +1,8 @@
 {
   "name": "@cronium/mcp-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Local (stdio) MCP server for creating Cronium events and workflows from an AI app.",
+  "description": "Local (stdio) MCP bridge to a Cronium instance's /api/mcp endpoint — build Cronium events and workflows from an AI app.",
   "type": "module",
   "bin": {
     "cronium-mcp": "./dist/index.js"
@@ -14,12 +14,11 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
+    "test": "tsc -p tsconfig.json && node --test \"test/*.test.mjs\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.17.0",
-    "superjson": "^2.2.1",
-    "zod": "^4.4.3"
+  "engines": {
+    "node": ">=18"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
