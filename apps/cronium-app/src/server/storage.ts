@@ -23,6 +23,7 @@ import {
   toolActionLogs,
   toolActionTemplates,
   jobs,
+  jobTransitions,
   executions,
   serverGroups,
   serverGroupMembers,
@@ -901,13 +902,25 @@ class DatabaseStorage implements IStorage {
         .delete(toolActionLogs)
         .where(inArray(toolActionLogs.eventId, eventIds));
 
-      // Delete executions of these events' jobs, then the jobs themselves
-      // (logs reference jobs, executions reference jobs)
+      // Delete dependents of these events' jobs, then the jobs themselves
+      // (logs, executions, and job_transitions all reference jobs; none has
+      // an ON DELETE cascade)
       await db
         .delete(executions)
         .where(
           inArray(
             executions.jobId,
+            db
+              .select({ id: jobs.id })
+              .from(jobs)
+              .where(inArray(jobs.eventId, eventIds)),
+          ),
+        );
+      await db
+        .delete(jobTransitions)
+        .where(
+          inArray(
+            jobTransitions.jobId,
             db
               .select({ id: jobs.id })
               .from(jobs)
@@ -1620,14 +1633,23 @@ class DatabaseStorage implements IStorage {
         console.log(`Deleting tool action logs for script ${id}`);
         await tx.delete(toolActionLogs).where(eq(toolActionLogs.eventId, id));
 
-        // 3c. Delete executions of this event's jobs, then the jobs
-        // themselves (logs reference jobs, executions reference jobs)
+        // 3c. Delete dependents of this event's jobs, then the jobs
+        // themselves (logs, executions, and job_transitions all reference
+        // jobs; none has an ON DELETE cascade — mirror retention.ts).
         console.log(`Deleting executions and jobs for script ${id}`);
         await tx
           .delete(executions)
           .where(
             inArray(
               executions.jobId,
+              tx.select({ id: jobs.id }).from(jobs).where(eq(jobs.eventId, id)),
+            ),
+          );
+        await tx
+          .delete(jobTransitions)
+          .where(
+            inArray(
+              jobTransitions.jobId,
               tx.select({ id: jobs.id }).from(jobs).where(eq(jobs.eventId, id)),
             ),
           );

@@ -21,6 +21,7 @@ import {
   serverGroupMembers,
   logs,
   jobs,
+  jobTransitions,
   executions,
   eventServers,
   serverDeletionNotifications,
@@ -192,6 +193,16 @@ export async function seedFullGraph(userId?: string): Promise<SeededGraph> {
 
   const jobId = await seedJob(eventId, uid, { status: JobStatus.COMPLETED });
   const executionId = await seedExecution(jobId);
+
+  // Every real job has transition audit rows (written by transitionJob); the
+  // FK has no cascade, so deleteScript must clear them (the live bug this
+  // guards was a 23503 on exactly this table).
+  await db.insert(jobTransitions).values({
+    jobId,
+    fromStatus: null,
+    toStatus: JobStatus.QUEUED,
+    actor: "app",
+  });
 
   await db.insert(logs).values({
     eventId,

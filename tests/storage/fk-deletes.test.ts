@@ -26,6 +26,7 @@ import {
   logs,
   scheduleIncidents,
   jobs,
+  jobTransitions,
   executions,
   eventServers,
   serverDeletionNotifications,
@@ -73,6 +74,9 @@ describe("deleteScript (event) — FK-ordered teardown", () => {
     expect(await countWhere(logs, eq(logs.eventId, g.eventId))).toBe(0);
     expect(await countWhere(jobs, eq(jobs.eventId, g.eventId))).toBe(0);
     expect(await countWhere(executions, eq(executions.jobId, g.jobId))).toBe(0);
+    expect(
+      await countWhere(jobTransitions, eq(jobTransitions.jobId, g.jobId)),
+    ).toBe(0);
     expect(
       await countWhere(eventServers, eq(eventServers.eventId, g.eventId)),
     ).toBe(0);
