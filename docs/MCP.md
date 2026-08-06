@@ -13,10 +13,10 @@ User-facing docs: <https://cronium.app/docs/mcp>.
 The tools are defined once, in
 `apps/cronium-app/src/app/api/mcp/tools.ts`, and served two ways:
 
-| Transport                                                                       | Where                               | Auth                           | Use                                                           |
-| ------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------ | ------------------------------------------------------------- |
-| **Remote** `/api/mcp` (in-process Next route, Streamable HTTP / stateless JSON) | `apps/cronium-app/src/app/api/mcp/` | OAuth 2.1, or bearer API token | claude.ai web app, ChatGPT (Business+), any remote MCP client |
-| **Local stdio bridge** `@cronium/mcp-server`                                    | `apps/cronium-mcp/`                 | bearer API token (env)         | Claude Desktop / Claude Code and other stdio-only clients     |
+| Transport                                                                        | Where                               | Auth                           | Use                                                           |
+| -------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------ | ------------------------------------------------------------- |
+| **Remote** `/api/mcp` (in-process Next route, Streamable HTTP / stateless JSON)  | `apps/cronium-app/src/app/api/mcp/` | OAuth 2.1, or bearer API token | claude.ai web app, ChatGPT (Business+), any remote MCP client |
+| **Local stdio bridge** `@cronium/mcp-server` (npm, `npx -y @cronium/mcp-server`) | `apps/cronium-mcp/`                 | bearer API token (env)         | Claude Desktop / Claude Code and other stdio-only clients     |
 
 The bridge is ~180 dependency-free lines: it forwards each stdin JSON-RPC
 message to `POST <CRONIUM_BASE_URL>/api/mcp` with the token and writes the
@@ -104,5 +104,8 @@ by the `/api/mcp` route; only the value `"mcp"` is honored.
 - `src/server/api/trpc.ts` — token auth, `tokenScopes`, `requestSource`, `enforceTokenScopes`.
 - `apps/cronium-mcp/` — the local stdio bridge package.
 
-Active plan: `_plans/mcp/PLAN.md` (evals + npm distribution are the open
-phases).
+Releases: tag `mcp-server-v<version>` → `.github/workflows/npm-publish.yml`
+publishes to npm with provenance (OIDC trusted publishing; see the package
+README's "Releasing" section for the one-time npmjs.com setup).
+
+Active plan: `_plans/mcp/PLAN.md`.

@@ -1,0 +1,63 @@
+# Publish @cronium/mcp-server to npm with provenance.
+#
+# Trigger: push a tag `mcp-server-v<version>` matching apps/cronium-mcp's
+# package.json version (guarded below), or run manually via workflow_dispatch.
+#
+# Auth: npm OIDC "trusted publishing" — no NPM_TOKEN secret. One-time setup on
+# npmjs.com (after the package exists): @cronium/mcp-server → Settings →
+# Trusted Publisher → GitHub Actions → repository `addison-moore/cronium`,
+# workflow `npm-publish.yml`. With OIDC, npm attaches provenance automatically
+# (matching the cosign-signed posture of the Docker images).
+
+name: Publish MCP Server to npm
+
+on:
+  push:
+    tags:
+      - "mcp-server-v*"
+  workflow_dispatch:
+
+concurrency:
+  group: npm-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC for npm trusted publishing + provenance
+    defaults:
+      run:
+        working-directory: apps/cronium-mcp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install workspace deps (mcp-server only)
+        run: pnpm install --frozen-lockfile --filter @cronium/mcp-server
+        working-directory: .
+
+      - name: Tag matches package version
+        if: github.ref_type == 'tag'
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          TAG_VERSION="${GITHUB_REF_NAME#mcp-server-v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Build & test
+        run: pnpm test
+
+      - name: Publish (provenance via OIDC)
+        run: npm publish

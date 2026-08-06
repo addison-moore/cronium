@@ -174,14 +174,21 @@ export default function McpPage() {
           </h2>
           <div className="prose prose-gray dark:prose-invert mb-4 max-w-none">
             <p>
-              For local clients, run the bundled stdio bridge (
-              <code>apps/cronium-mcp</code> in the Cronium repo) and point it at
-              your instance with an API token — it forwards every request to
-              your instance&apos;s <code>/api/mcp</code> endpoint. Set{" "}
-              <code>CRONIUM_BASE_URL</code> to where your instance runs — a
-              production deployment is <code>http://localhost:3000</code> (or
-              your domain); the examples below use the local development
-              server&apos;s port <code>5001</code>. Claude Desktop —{" "}
+              For local clients, use the published stdio bridge{" "}
+              <a
+                href="https://www.npmjs.com/package/@cronium/mcp-server"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <code>@cronium/mcp-server</code>
+              </a>{" "}
+              — no install or clone needed, it runs via <code>npx</code> and
+              forwards every request to your instance&apos;s{" "}
+              <code>/api/mcp</code> endpoint. Set <code>CRONIUM_BASE_URL</code>{" "}
+              to where your instance runs — a production deployment is{" "}
+              <code>http://localhost:3000</code> (or your domain); the examples
+              below use the local development server&apos;s port{" "}
+              <code>5001</code>. Claude Desktop —{" "}
               <code>claude_desktop_config.json</code>:
             </p>
           </div>
@@ -189,8 +196,8 @@ export default function McpPage() {
             {`{
   "mcpServers": {
     "cronium": {
-      "command": "node",
-      "args": ["/path/to/apps/cronium-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@cronium/mcp-server"],
       "env": {
         "CRONIUM_BASE_URL": "http://localhost:5001",
         "CRONIUM_API_TOKEN": "<your-token>"
@@ -206,7 +213,7 @@ export default function McpPage() {
             {`claude mcp add cronium \\
   --env CRONIUM_BASE_URL=http://localhost:5001 \\
   --env CRONIUM_API_TOKEN=<your-token> \\
-  -- node /path/to/apps/cronium-mcp/dist/index.js`}
+  -- npx -y @cronium/mcp-server`}
           </SimpleCodeBlock>
         </section>
 

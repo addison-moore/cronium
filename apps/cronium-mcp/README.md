@@ -35,24 +35,17 @@ In Cronium: **Settings → API Tokens → Create**, and enable **"Limit to MCP"*
 are required and tokens expire (≤90 days) — the `mcp` scope permits exactly the tool
 surface above and nothing else. Copy the token (shown once).
 
-### 2. Build
+### 2a. Claude Desktop
 
-```bash
-pnpm install
-pnpm --filter @cronium/mcp-server build
-```
-
-### 3a. Claude Desktop
-
-Add to `claude_desktop_config.json`
+No install needed — the bridge runs via `npx`. Add to `claude_desktop_config.json`
 (`~/Library/Application Support/Claude/` on macOS):
 
 ```json
 {
   "mcpServers": {
     "cronium": {
-      "command": "node",
-      "args": ["/absolute/path/to/apps/cronium-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@cronium/mcp-server"],
       "env": {
         "CRONIUM_BASE_URL": "http://localhost:5001",
         "CRONIUM_API_TOKEN": "<your-token>"
@@ -65,19 +58,27 @@ Add to `claude_desktop_config.json`
 Restart Claude Desktop. Claude asks permission before each tool call. A bad URL or
 token fails at connect time (the bridge probes `/api/mcp` on startup).
 
-### 3b. Claude Code
+### 2b. Claude Code
 
 ```bash
 claude mcp add cronium \
   --env CRONIUM_BASE_URL=http://localhost:5001 \
   --env CRONIUM_API_TOKEN=<your-token> \
-  -- node /absolute/path/to/apps/cronium-mcp/dist/index.js
+  -- npx -y @cronium/mcp-server
 ```
 
 > Claude Code (and other clients with remote-server support) can also skip the bridge
 > entirely and connect straight to `https://<your-instance>/api/mcp` with an
 > `Authorization: Bearer <token>` header — the bridge exists for stdio-only clients
 > and localhost instances.
+
+### From source (fallback)
+
+```bash
+pnpm install
+pnpm --filter @cronium/mcp-server build
+# then use: node /absolute/path/to/apps/cronium-mcp/dist/index.js as the command
+```
 
 ## Example
 
@@ -135,5 +136,12 @@ curl -s https://<host>/api/mcp \
   and returns errors the model can read and correct. `toolId` is checked at
   execution/validation, not creation — the model should use real ids from
   `get_capabilities` and check drafts with `validate_plan`.
-- Active plan for this surface: `_plans/mcp/PLAN.md` (npm publishing of this package
-  is the planned next distribution step).
+
+## Releasing (maintainers)
+
+Tag `mcp-server-v<version>` (matching `package.json`) and push — the
+`npm-publish` workflow tests and publishes with npm provenance via OIDC
+trusted publishing (one-time setup: npmjs.com → `@cronium/mcp-server` →
+Settings → Trusted Publisher → GitHub Actions, repo `addison-moore/cronium`,
+workflow `npm-publish.yml`). Manual fallback: `npm publish` from this
+directory (runs the test suite via `prepublishOnly`).

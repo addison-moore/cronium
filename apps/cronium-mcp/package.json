@@ -1,8 +1,8 @@
 {
   "name": "@cronium/mcp-server",
   "version": "0.2.0",
-  "private": true,
-  "description": "Local (stdio) MCP bridge to a Cronium instance's /api/mcp endpoint — build Cronium events and workflows from an AI app.",
+  "description": "Local (stdio) MCP bridge to a Cronium instance's /api/mcp endpoint — build, run, and fix Cronium events and workflows from an AI app.",
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "bin": {
     "cronium-mcp": "./dist/index.js"
@@ -10,10 +10,33 @@
   "files": [
     "dist"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/addison-moore/cronium.git",
+    "directory": "apps/cronium-mcp"
+  },
+  "homepage": "https://cronium.app/docs/mcp",
+  "bugs": {
+    "url": "https://github.com/addison-moore/cronium/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "cronium",
+    "automation",
+    "workflows",
+    "scheduling",
+    "ai-agent",
+    "claude"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
+    "prepublishOnly": "npm run test",
     "test": "tsc -p tsconfig.json && node --test \"test/*.test.mjs\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
