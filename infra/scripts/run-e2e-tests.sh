@@ -161,9 +161,12 @@ if [ ! -f "${REPO_ROOT}/apps/cronium-app/.next/BUILD_ID" ] || [ "${E2E_REBUILD_A
   log "Building @cronium/ui…"
   (cd "${REPO_ROOT}" && pnpm --filter @cronium/ui build >"${RUN_DIR}/ui-build.log" 2>&1) ||
     { tail -20 "${RUN_DIR}/ui-build.log"; exit 1; }
+  # --webpack: Next 16 defaults to Turbopack and hard-fails the build when a
+  # webpack config is present (next.config.mjs carries the server externals and
+  # client resolve.fallback). Mirrors the app's build script and Dockerfile.
   log "Building the app (next build — first run takes a few minutes)…"
   (cd "${REPO_ROOT}/apps/cronium-app" && env "${HOST_ENV[@]}" SKIP_ENV_VALIDATION=1 \
-    pnpm exec next build >"${RUN_DIR}/next-build.log" 2>&1) ||
+    pnpm exec next build --webpack >"${RUN_DIR}/next-build.log" 2>&1) ||
     { tail -40 "${RUN_DIR}/next-build.log"; exit 1; }
 else
   log "Reusing existing production build (apps/cronium-app/.next). E2E_REBUILD_APP=1 forces a rebuild."

@@ -45,9 +45,13 @@ ENV SKIP_ENV_VALIDATION=true
 # Build the application
 # First build dependencies, then the app
 RUN pnpm --filter @cronium/ui build
-# Use next build directly to avoid dotenv dependency on missing .env.local file
+# Use next build directly to avoid dotenv dependency on missing .env.local file.
+# --webpack: Next 16 defaults to Turbopack and hard-fails a build when a webpack
+# config is present (next.config.mjs carries server externals + client
+# resolve.fallback). Keep this flag and the one in package.json's build script
+# in sync until that config is migrated to Turbopack options.
 WORKDIR /app/apps/cronium-app
-RUN pnpm exec next build
+RUN pnpm exec next build --webpack
 # Bundle the scheduling worker (own compose service, same image)
 RUN pnpm run build:worker
 # Bundle the authenticated terminal/log Socket.IO bridge.
