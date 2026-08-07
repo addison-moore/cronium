@@ -91,7 +91,12 @@ _cronium_request() {
                 continue
             fi
             rm -f "$temp_file"
-            echo "Error: Request failed after $MAX_RETRIES attempts" >&2
+            # Include curl's exit code and the target: "after N attempts" alone
+            # can't distinguish DNS failure (6) from connection refused (7) or
+            # timeout (28), which are very different operator problems.
+            echo "Error: Request failed after $MAX_RETRIES attempts" \
+                "(curl exit $curl_exit, http_code ${status_code:-none}," \
+                "url ${CRONIUM_API}${path})" >&2
             return 1
         fi
         

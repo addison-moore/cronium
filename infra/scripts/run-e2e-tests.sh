@@ -101,6 +101,28 @@ cleanup() {
     tail -20 "${RUN_DIR}/socket.log" 2>/dev/null || true
     log "----- orchestrator (tail) -----"
     docker logs --tail 60 cronium-e2e-orchestrator 2>&1 | tail -60 || true
+
+    # The job's own stdout/stderr is the only place a script-side failure
+    # (e.g. a cronium_* helper that can't reach its runtime sidecar) is
+    # visible — the service logs above never carry it. Read it from the DB
+    # while Postgres is still up.
+    log "----- job logs (DB: status/exit/output/error) -----"
+    docker exec -e PGPASSWORD=e2e_test cronium-e2e-postgres \
+      psql -U postgres -d cronium_e2e -x -c \
+      "SELECT id, event_name, status, exit_code,
+              left(coalesce(output, ''), 2000) AS output,
+              left(coalesce(error, ''), 2000)  AS error
+         FROM logs ORDER BY id DESC LIMIT 5" 2>&1 | tail -60 || true
+
+    # Per-job sidecars/containers are removed as each job finishes, so list
+    # whatever survives plus any sidecar logs still reachable.
+    log "----- cronium-managed containers (survivors) -----"
+    docker ps -a --filter "label=cronium.managed=true" \
+      --format '{{.Names}}\t{{.Status}}\t{{.Networks}}' 2>&1 | head -20 || true
+    for c in $(docker ps -aq --filter "label=cronium.service=runtime-api" 2>/dev/null | head -3); do
+      log "----- sidecar ${c} (tail) -----"
+      docker logs --tail 30 "${c}" 2>&1 | tail -30 || true
+    done
   fi
   "${COMPOSE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
   # Belt and braces: remove any leaked per-job containers/networks.
