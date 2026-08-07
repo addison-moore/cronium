@@ -51,7 +51,10 @@ Every tool carries MCP `annotations` (`readOnlyHint`, `destructiveHint`,
 `createTRPCContext` (`src/server/api/trpc.ts`) accepts, in order: a NextAuth
 cookie session, then an `Authorization: Bearer <api-token>`; the `/api/mcp`
 route additionally accepts an OAuth 2.1 access token. API tokens are the
-encrypted-at-rest `api_tokens` rows; mint one under **Settings → API Tokens**.
+encrypted-at-rest `api_tokens` rows; mint one under **Settings → API Tokens**,
+or use **Settings → Connect AI** (`McpConnectManager`) — the onboarding tab
+that shows the endpoint URL, mints an `mcp`-scoped token in one click, and
+emits ready-to-paste client snippets.
 
 **OAuth 2.1** (for the claude.ai connector) — Cronium is the authorization server:
 `src/lib/mcp-oauth/` + `src/app/api/mcp/oauth/*` (PKCE, RFC 7591 dynamic client

@@ -12,6 +12,7 @@ import {
   Key,
   Variable,
   ShieldCheck,
+  Bot,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -34,6 +35,7 @@ import {
   AlertDialogTitle,
 } from "@cronium/ui";
 import ApiTokensManager from "@/components/dashboard/ApiTokensManager";
+import McpConnectManager from "@/components/dashboard/McpConnectManager";
 import MfaManager from "@/components/dashboard/MfaManager";
 import { UserVariablesManager } from "@/components/dashboard/UserVariablesManager";
 
@@ -140,7 +142,14 @@ export default function SettingsPage() {
   // Hash-based tab navigation
   const { activeTab, changeTab } = useHashTabNavigation({
     defaultTab: "profile",
-    validTabs: ["profile", "appearance", "security", "api-tokens", "variables"],
+    validTabs: [
+      "profile",
+      "appearance",
+      "security",
+      "api-tokens",
+      "variables",
+      "connect-ai",
+    ],
   });
 
   // User settings form
@@ -272,6 +281,7 @@ export default function SettingsPage() {
             <Tab value="security" icon={ShieldCheck} label="Security" />
             <Tab value="api-tokens" icon={Key} label={copy.apiTokensTab} />
             <Tab value="variables" icon={Variable} label="Variables" />
+            <Tab value="connect-ai" icon={Bot} label="Connect AI" />
           </TabsList>
         </div>
 
@@ -408,6 +418,10 @@ export default function SettingsPage() {
 
         <TabsContent value="variables">
           <UserVariablesManager />
+        </TabsContent>
+
+        <TabsContent value="connect-ai">
+          <McpConnectManager />
         </TabsContent>
       </Tabs>
 

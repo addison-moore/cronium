@@ -31,9 +31,11 @@ never returned; a newly minted webhook key is shown exactly once.
 
 ### 1. Mint an MCP-scoped Cronium API token
 
-In Cronium: **Settings → API Tokens → Create**, and enable **"Limit to MCP"**. Scopes
-are required and tokens expire (≤90 days) — the `mcp` scope permits exactly the tool
-surface above and nothing else. Copy the token (shown once).
+In Cronium: **Settings → Connect AI → Create MCP token** (it also fills the token
+into ready-to-paste snippets), or **Settings → API Tokens → Create** with
+**"Limit to MCP"** enabled. Scopes are required and tokens expire (≤90 days) — the
+`mcp` scope permits exactly the tool surface above and nothing else. Copy the token
+(shown once).
 
 ### 2a. Claude Desktop
 

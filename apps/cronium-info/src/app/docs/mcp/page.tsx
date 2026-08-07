@@ -266,10 +266,16 @@ export default function McpPage() {
           </h2>
           <div className="prose prose-gray dark:prose-invert max-w-none">
             <p>
+              The easiest path is <strong>Settings → Connect AI</strong> in your
+              instance: it shows your endpoint URL, mints an MCP-scoped token in
+              one click, and fills both into ready-to-paste snippets for each
+              client.
+            </p>
+            <p>
               The remote connector can use OAuth (recommended) or a bearer API
-              token; the local bridge uses an API token. Create a token under{" "}
-              <strong>Settings → API Tokens</strong> — every token needs an
-              explicit scope and an expiry. Turn on{" "}
+              token; the local bridge uses an API token. You can also create
+              tokens under <strong>Settings → API Tokens</strong> — every token
+              needs an explicit scope and an expiry. Turn on{" "}
               <strong>&ldquo;Limit to MCP&rdquo;</strong> to make it
               least-privilege: such a token (and any OAuth connection) can only
               build, run, and manage events and workflows — it can&apos;t touch
