@@ -354,6 +354,9 @@ importers:
       esbuild:
         specifier: ^0.28.1
         version: 0.28.1
+      eslint:
+        specifier: ^9.39.5
+        version: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.2)(esbuild-register@3.6.0(esbuild@0.28.1)(supports-color@8.1.1))(supports-color@8.1.1)

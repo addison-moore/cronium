@@ -19,6 +19,16 @@ export default [
       "**/__tests__/**",
       "**/*.test.ts",
       "**/*.test.tsx",
+      // Root-level files. `next lint` (removed in Next 16) only ever linted
+      // src/app/components/lib, so these have never been linted; `eslint .`
+      // reaches them. Keeping the gate identical to pre-upgrade rather than
+      // folding a backlog into a framework bump — tailwind.config.ts and
+      // instrumentation.ts additionally aren't in the tsconfig project, so
+      // typed linting can't parse them at all. Tracked for a follow-up.
+      "tailwind.config.ts",
+      "instrumentation.ts",
+      "drizzle.config.ts",
+      "server.ts",
     ],
   },
 ];

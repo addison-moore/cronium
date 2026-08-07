@@ -1,17 +1,13 @@
-const { fixupConfigRules } = require("@eslint/compat");
-const { FlatCompat } = require("@eslint/eslintrc");
-const js = require("@eslint/js");
+const nextPlugin = require("@next/eslint-plugin-next");
 const baseConfig = require("./index.js");
 
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-  recommendedConfig: js.configs.recommended,
-  allConfig: js.configs.all,
-});
-
+// @next/eslint-plugin-next 16 ships native flat configs (`recommended` /
+// `core-web-vitals`); the legacy `plugin:@next/next/recommended` shape is only
+// reachable through the `*-legacy` keys. Use the flat config directly instead
+// of bridging the legacy one through FlatCompat.
 module.exports = [
   ...baseConfig,
-  ...fixupConfigRules(compat.extends("plugin:@next/next/recommended")),
+  nextPlugin.configs.recommended,
   {
     ignores: ["**/.next/", "**/out/"],
   },

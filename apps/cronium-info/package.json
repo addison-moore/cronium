@@ -9,7 +9,7 @@
     "clear": "rm -rf .next",
     "start": "next start",
     "format": "prettier --write . --ignore-path ../../.prettierignore",
-    "lint": "next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "lint:log": "SKIP_ENV_VALIDATION=1 next lint > ../../logs/info-lint.log 2>&1",
     "tsc:log": "tsc --noEmit > ../../logs/info-tsc.log 2>&1"
