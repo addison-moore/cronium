@@ -133,6 +133,12 @@ log "Pushing Drizzle schema…"
 # 3. Production build of the app (reused across runs unless E2E_REBUILD_APP=1).
 # ---------------------------------------------------------------------------
 if [ ! -f "${REPO_ROOT}/apps/cronium-app/.next/BUILD_ID" ] || [ "${E2E_REBUILD_APP:-0}" = "1" ]; then
+  # @cronium/ui is a BUILT workspace package (main → dist/); `next build` is
+  # invoked directly (not through turbo), so nothing orders the ui build
+  # before the app on a fresh checkout. Build it explicitly.
+  log "Building @cronium/ui…"
+  (cd "${REPO_ROOT}" && pnpm --filter @cronium/ui build >"${RUN_DIR}/ui-build.log" 2>&1) ||
+    { tail -20 "${RUN_DIR}/ui-build.log"; exit 1; }
   log "Building the app (next build — first run takes a few minutes)…"
   (cd "${REPO_ROOT}/apps/cronium-app" && env "${HOST_ENV[@]}" SKIP_ENV_VALIDATION=1 \
     pnpm exec next build >"${RUN_DIR}/next-build.log" 2>&1) ||

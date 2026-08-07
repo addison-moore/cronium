@@ -1,8 +1,9 @@
 name: CodeQL
 
-# Static analysis (SAST) for the TypeScript and Go sources (Phase 3.5). Uses
-# build-mode: none so no application build is required — the analysis runs
-# directly on source and is not coupled to the multi-module go.work build.
+# Static analysis (SAST) for the TypeScript and Go sources (Phase 3.5).
+# JS/TS analyzes source directly (build-mode: none). Go must build: CodeQL
+# CLI ≥2.26 removed build-mode none for Go, so it autobuilds against the
+# go.work workspace (setup-go provides the pinned toolchain).
 
 on:
   push:
@@ -30,18 +31,32 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [javascript-typescript, go]
+        include:
+          - language: javascript-typescript
+            build-mode: none
+          - language: go
+            build-mode: autobuild
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - name: Setup Go
+        if: matrix.language == 'go'
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.25.12"
+          cache-dependency-path: |
+            apps/orchestrator/go.sum
+            apps/runtime/cronium-runtime/go.sum
+            apps/runner/cronium-runner/go.sum
+
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@4187e74d05793876e9989daffde9c3e66b4acd07 # v3.37.3
+        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
         with:
           languages: ${{ matrix.language }}
-          build-mode: none
+          build-mode: ${{ matrix.build-mode }}
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@4187e74d05793876e9989daffde9c3e66b4acd07 # v3.37.3
+        uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
         with:
           category: "/language:${{ matrix.language }}"

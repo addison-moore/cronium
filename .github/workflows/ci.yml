@@ -241,6 +241,14 @@ jobs:
           go test -coverprofile=coverage.out -covermode=atomic ./...
           go tool cover -func=coverage.out | tail -n 1
 
+      # The ratchet script needs node. GitHub-hosted runners have it on PATH,
+      # the self-hosted runner (used for pushes) does not — set it up
+      # explicitly so the job is hermetic on both.
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
       - name: Go coverage ratchet
         run: node infra/scripts/check-go-coverage-ratchet.mjs
 

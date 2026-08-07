@@ -16,8 +16,19 @@ overrides:
   sharp@<0.35.0: ^0.35.3
   # fast-uri (host confusion) and @hono/node-server (path traversal) reach us
   # transitively through @modelcontextprotocol/sdk (via ajv / @google/genai).
-  fast-uri@<3.1.4: ^3.1.4
+  fast-uri@<3.1.5: ^3.1.5
   "@hono/node-server@<2.0.5": ^2.0.5
+  # 2026-08 advisory batch (all transitive, per-major bumps only):
+  # brace-expansion OOM DoS (GHSA-mh99-v99m-4gvg + GHSA-rgw5-rvv9-x895) via
+  # minimatch under jest/glob (2.x) and eslint tooling (5.x); js-yaml !!omap
+  # quadratic CPU (GHSA-5p4m-2wfm-xmqj) via istanbul (3.x) and eslintrc (4.x);
+  # ip-address octal-octet SSRF (GHSA-mwp4-54f8-5fhr) via
+  # @modelcontextprotocol/sdk>express-rate-limit.
+  "brace-expansion@>=2.0.0 <2.1.4": ^2.1.4
+  "brace-expansion@>=4.0.0 <5.0.9": ^5.0.9
+  "js-yaml@>=3.0.0 <3.15.1": ^3.15.1
+  "js-yaml@>=4.0.0 <4.3.1": ^4.3.1
+  ip-address@<=10.3.0: ^10.3.1
 
 allowBuilds:
   "@google/genai": false
