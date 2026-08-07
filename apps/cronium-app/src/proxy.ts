@@ -1,3 +1,10 @@
+/**
+ * Next 16 renamed the `middleware` convention to `proxy`. Beyond the rename the
+ * runtime changed: `proxy` always runs on the Node.js runtime (edge is not
+ * supported here and cannot be configured), where this previously ran on edge.
+ * Everything below is runtime-agnostic — `crypto.getRandomValues` and `btoa`
+ * are Node globals — and the security headers this applies are unchanged.
+ */
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import {
@@ -13,7 +20,7 @@ function generateNonce(): string {
   return btoa(binary);
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isProduction = process.env.NODE_ENV === "production";
   // Strict nonce CSP is production-only; dev needs unsafe-eval/inline for HMR.
