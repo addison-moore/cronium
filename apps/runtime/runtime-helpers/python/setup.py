@@ -33,7 +33,10 @@ setup(
     python_requires=">=3.7",
     install_requires=[],
     extras_require={
-        "async": ["aiohttp>=3.8.0"],
+        # Floor raised to the GHSA-cq5v-8q36-5273 fix (out-of-bounds heap read
+        # in the C HTTP response parser); everything at or below 3.14.2 is
+        # affected, so a permissive floor could resolve to a vulnerable build.
+        "async": ["aiohttp>=3.14.3"],
         "dev": [
             "pytest>=7.0.0",
             "pytest-asyncio>=0.21.0",

@@ -18,6 +18,10 @@ overrides:
   # transitively through @modelcontextprotocol/sdk (via ajv / @google/genai).
   fast-uri@<3.1.5: ^3.1.5
   "@hono/node-server@<2.0.5": ^2.0.5
+  # hono itself arrives the same way (@modelcontextprotocol/sdk directly, and
+  # again under @hono/node-server). 4.12.34 fixes GHSA-8j4g-w8fx-2239: ReDoS in
+  # the CORS middleware via Access-Control-Request-Headers.
+  hono@<4.12.34: ^4.12.34
   # 2026-08 advisory batch (all transitive, per-major bumps only):
   # brace-expansion OOM DoS (GHSA-mh99-v99m-4gvg + GHSA-rgw5-rvv9-x895) via
   # minimatch under jest/glob (2.x) and eslint tooling (5.x); js-yaml !!omap
