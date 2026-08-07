@@ -41,6 +41,14 @@ type Executor struct {
 	networks     map[string]string // jobID -> networkID
 	tokens       map[string]string // jobID -> execution JWT token
 	executionIDs map[string]string // jobID -> executionID (must match the JWT claim + CRONIUM_EXECUTION_ID)
+	// jobID -> the sidecar's address on the per-job network ("ip:port"), read
+	// back from Docker after the sidecar starts. The job container reaches the
+	// runtime through this rather than the "runtime-api" DNS alias: alias
+	// registration depends on EndpointsConfig being keyed exactly as the daemon
+	// expects, and that has varied across Engine versions (a job whose alias
+	// silently failed to register saw every cronium_* helper die with curl
+	// exit 6 / "couldn't resolve host"). An IP needs no name resolution.
+	runtimeAddrs map[string]string
 }
 
 // validateDockerEndpoint fails closed on a plaintext remote Docker endpoint
@@ -96,6 +104,7 @@ func NewExecutor(cfg config.ContainerConfig, apiClient *api.Client, log *logrus.
 		networks:      make(map[string]string),
 		tokens:        make(map[string]string),
 		executionIDs:  make(map[string]string),
+		runtimeAddrs:  make(map[string]string),
 	}
 
 	// Create sidecar manager
@@ -248,6 +257,7 @@ func (e *Executor) Cleanup(ctx context.Context, job *types.Job) error {
 	e.mu.Lock()
 	delete(e.tokens, job.ID)
 	delete(e.executionIDs, job.ID)
+	delete(e.runtimeAddrs, job.ID)
 	e.mu.Unlock()
 
 	// Return combined error if any
@@ -405,6 +415,16 @@ func (e *Executor) buildEnvironment(job *types.Job) []string {
 		executionID = fmt.Sprintf("exec_%s_%d", job.ID, time.Now().Unix())
 	}
 
+	// Prefer the sidecar's actual address on the per-job network; fall back to
+	// the DNS alias only if the inspect failed (see runtimeAddrs).
+	e.mu.RLock()
+	runtimeAddr := e.runtimeAddrs[job.ID]
+	e.mu.RUnlock()
+	runtimeAPI := "http://runtime-api:8081"
+	if runtimeAddr != "" {
+		runtimeAPI = fmt.Sprintf("http://%s", runtimeAddr)
+	}
+
 	// Add Cronium-specific variables
 	env = append(env,
 		fmt.Sprintf("CRONIUM_JOB_ID=%s", job.ID),
@@ -412,7 +432,7 @@ func (e *Executor) buildEnvironment(job *types.Job) []string {
 		"CRONIUM_EXECUTION_MODE=container",
 		fmt.Sprintf("CRONIUM_EXECUTION_ID=%s", executionID),
 		fmt.Sprintf("CRONIUM_EXECUTION_TOKEN=%s", token),
-		"CRONIUM_RUNTIME_API=http://runtime-api:8081",
+		fmt.Sprintf("CRONIUM_RUNTIME_API=%s", runtimeAPI),
 	)
 
 	return env

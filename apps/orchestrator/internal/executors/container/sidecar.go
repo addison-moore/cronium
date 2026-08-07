@@ -3,6 +3,7 @@ package container
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"time"
 
@@ -123,10 +124,14 @@ func (sm *SidecarManager) CreateRuntimeSidecar(ctx context.Context, job *types.J
 		},
 	}
 
-	// Network configuration
+	// Network configuration. Keyed by network NAME: that is the documented
+	// contract for EndpointsConfig, and keying it by ID has not registered the
+	// aliases on every Engine version (where it doesn't, the job's helpers get
+	// NXDOMAIN for "runtime-api"). The job container is additionally given the
+	// sidecar's IP after start, so it no longer depends on this resolving.
 	networkConfig := &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{
-			networkID: {
+			jobNetworkName(job.ID): {
 				Aliases: []string{"runtime-api", "runtime"},
 			},
 		},
@@ -181,16 +186,53 @@ func (sm *SidecarManager) CreateRuntimeSidecar(ctx context.Context, job *types.J
 		return "", fmt.Errorf("runtime sidecar health check failed: %w", err)
 	}
 
+	// Resolve the sidecar's address on the per-job network and hand it to the
+	// job container instead of the "runtime-api" alias. The alias is registered
+	// through NetworkingConfig.EndpointsConfig, whose key the daemon has not
+	// always matched the same way; where it doesn't register, DNS returns
+	// NXDOMAIN and every cronium_* helper in the job fails with curl exit 6.
+	// An IP removes that dependency. Non-fatal: the alias remains the fallback.
+	runtimeAddr := ""
+	if info, err := sm.executor.dockerClient.ContainerInspect(ctx, resp.ID, client.ContainerInspectOptions{}); err != nil {
+		sm.log.WithError(err).Warn("Could not inspect runtime sidecar; job will use the runtime-api DNS alias")
+	} else if ip := sidecarIPOnNetwork(info.Container, networkID, jobNetworkName(job.ID)); ip != "" {
+		runtimeAddr = net.JoinHostPort(ip, "8081")
+		sm.executor.mu.Lock()
+		if sm.executor.runtimeAddrs == nil {
+			sm.executor.runtimeAddrs = make(map[string]string)
+		}
+		sm.executor.runtimeAddrs[job.ID] = runtimeAddr
+		sm.executor.mu.Unlock()
+	} else {
+		sm.log.Warn("Runtime sidecar has no IP on the per-job network; job will use the runtime-api DNS alias")
+	}
+
 	sm.log.WithFields(logrus.Fields{
 		"containerID": resp.ID,
 		"jobID":       job.ID,
 		"network":     networkID,
+		"runtimeAddr": runtimeAddr,
 	}).Info("Runtime sidecar started successfully")
 
 	// Store the token for the main container
 	sm.storeExecutionToken(job.ID, token)
 
 	return resp.ID, nil
+}
+
+// sidecarIPOnNetwork returns the sidecar's IPv4 address on the per-job network.
+// The endpoint map is keyed by network name on some daemons and by ID on
+// others, so try both before giving up.
+func sidecarIPOnNetwork(info container.InspectResponse, networkID, networkName string) string {
+	if info.NetworkSettings == nil {
+		return ""
+	}
+	for _, key := range []string{networkName, networkID} {
+		if ep, ok := info.NetworkSettings.Networks[key]; ok && ep != nil && ep.IPAddress.IsValid() {
+			return ep.IPAddress.String()
+		}
+	}
+	return ""
 }
 
 // StopSidecar stops and removes a sidecar container
@@ -326,9 +368,15 @@ func (sm *SidecarManager) getRuntimeImage() string {
 	return "cronium/runtime-api:latest"
 }
 
+// jobNetworkName is the deterministic name of a job's isolated network. It is
+// also the key EndpointsConfig must use to register network-scoped aliases.
+func jobNetworkName(jobID string) string {
+	return fmt.Sprintf("cronium-job-%s", jobID)
+}
+
 // CreateJobNetwork creates an isolated network for a job
 func (sm *SidecarManager) CreateJobNetwork(ctx context.Context, jobID string) (string, error) {
-	networkName := fmt.Sprintf("cronium-job-%s", jobID)
+	networkName := jobNetworkName(jobID)
 
 	// Create network with specific configuration
 	resp, err := sm.executor.dockerClient.NetworkCreate(ctx, networkName, client.NetworkCreateOptions{
