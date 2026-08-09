@@ -76,12 +76,17 @@ jobs:
       - name: Security regression tests
         run: pnpm test:security
 
-      # Supply-chain gate (3.5): fail on high/critical advisories in the
-      # dependency tree. Transitive fixes are pinned via pnpm-workspace.yaml
-      # overrides; a new high advisory here means a dependency needs a bump or
-      # a new override.
+      # Supply-chain gate (3.5): fail on moderate/high/critical advisories in
+      # the dependency tree. Transitive fixes are pinned via pnpm-workspace.yaml
+      # overrides; a new advisory here means a dependency needs a bump or a new
+      # override.
+      #
+      # Threshold is `moderate`, not `high`, so this matches what Dependabot
+      # reports: the hono CORS ReDoS (GHSA-8j4g-w8fx-2239, moderate) was raised
+      # by Dependabot but sailed through this gate. Two supply-chain checks with
+      # different thresholds means the stricter one is the only one that counts.
       - name: Dependency audit (pnpm)
-        run: pnpm audit --audit-level high
+        run: pnpm audit --audit-level moderate
 
   storage:
     name: Storage Tests (Postgres)
