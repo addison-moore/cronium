@@ -75,6 +75,70 @@ describe("WebhookSecurity.verifyTimestamp (replay window)", () => {
   });
 });
 
+describe("WebhookSecurity.verifyIPWhitelist", () => {
+  const allow = (ip: string, list: string[]) =>
+    sec.verifyIPWhitelist(ip, list).isValid;
+
+  it("permits everything when no allowlist is configured", () => {
+    expect(allow("203.0.113.9", [])).toBe(true);
+  });
+
+  it("matches exact addresses and rejects others", () => {
+    expect(allow("203.0.113.9", ["203.0.113.9"])).toBe(true);
+    expect(allow("203.0.113.10", ["203.0.113.9"])).toBe(false);
+  });
+
+  it("matches CIDR ranges at the boundaries", () => {
+    expect(allow("10.0.0.1", ["10.0.0.0/8"])).toBe(true);
+    expect(allow("10.255.255.255", ["10.0.0.0/8"])).toBe(true);
+    expect(allow("11.0.0.1", ["10.0.0.0/8"])).toBe(false);
+
+    expect(allow("192.168.1.0", ["192.168.1.0/24"])).toBe(true);
+    expect(allow("192.168.1.255", ["192.168.1.0/24"])).toBe(true);
+    expect(allow("192.168.2.0", ["192.168.1.0/24"])).toBe(false);
+
+    // /32 is a single host; /0 is everything.
+    expect(allow("8.8.8.8", ["8.8.8.8/32"])).toBe(true);
+    expect(allow("8.8.8.9", ["8.8.8.8/32"])).toBe(false);
+    expect(allow("1.2.3.4", ["0.0.0.0/0"])).toBe(true);
+  });
+
+  it("matches high octets, where a signed 32-bit shift goes negative", () => {
+    expect(allow("192.168.1.5", ["192.168.0.0/16"])).toBe(true);
+    expect(allow("172.16.0.1", ["172.16.0.0/12"])).toBe(true);
+    expect(allow("172.32.0.1", ["172.16.0.0/12"])).toBe(false);
+    expect(allow("255.255.255.255", ["255.255.255.255/32"])).toBe(true);
+  });
+
+  // The allowlist must fail closed on anything it cannot parse. Each of these
+  // previously reduced to 0 and matched a 0.0.0.0/x rule.
+  it.each([
+    ["non-numeric octets", "abc.def.ghi.jkl"],
+    ["an IPv6 address", "::1"],
+    ["an IPv6-mapped address", "::ffff:10.0.0.1"],
+    ["too few octets", "10.0.1"],
+    ["too many octets", "10.0.0.1.5"],
+    ["an out-of-range octet", "10.0.0.256"],
+    ["an empty octet", "10.0..1"],
+    ["an empty string", ""],
+    ["a zero-padded (octal-looking) octet", "010.0.0.1"],
+  ])("rejects %s against a permissive rule", (_label, ip) => {
+    expect(allow(ip, ["0.0.0.0/8"])).toBe(false);
+  });
+
+  it("rejects a malformed CIDR rule rather than matching everything", () => {
+    expect(allow("10.0.0.1", ["10.0.0.0/33"])).toBe(false);
+    expect(allow("10.0.0.1", ["10.0.0.0/abc"])).toBe(false);
+    expect(allow("10.0.0.1", ["not-an-ip/8"])).toBe(false);
+    expect(allow("10.0.0.1", ["10.0.0.0/"])).toBe(false);
+  });
+
+  it("does not let extra octets wrap around onto the first", () => {
+    // "10.0.0.1.5" folded index 4 back onto index 0 via a mod-32 shift.
+    expect(allow("10.0.0.1.5", ["10.0.0.0/24"])).toBe(false);
+  });
+});
+
 describe("WebhookSecurity.verifyWebhook (HI-12)", () => {
   it("accepts a correctly signed, fresh delivery", async () => {
     const res = await sec.verifyWebhook(request({}), { secret: SECRET });

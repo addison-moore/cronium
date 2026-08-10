@@ -62,20 +62,27 @@ export class InProcessWorkerPool {
 
       if (rows.length === 0) return rows;
 
-      const ids = rows.map((row) => row.id);
-      await tx
-        .update(jobs)
-        .set({
-          status: JobStatus.CLAIMED,
-          orchestratorId: this.workerId,
-          leaseExpiresAt: new Date(
-            now.getTime() +
-              Math.max(...rows.map((r) => r.timeoutMs ?? FALLBACK_TIMEOUT_MS)) +
-              LEASE_SLACK_MS,
-          ),
-          updatedAt: now,
-        })
-        .where(inArray(jobs.id, ids));
+      // Each job is leased against its OWN timeout. A single lease for the
+      // whole batch (the max across it) meant a 30s HTTP request claimed
+      // alongside an hour-long tool action inherited the hour: if this worker
+      // died before its first heartbeat, the sweeper could not recover that
+      // job until the inflated lease expired. The batch is bounded by
+      // maxConcurrent, so per-row updates are cheap.
+      for (const row of rows) {
+        await tx
+          .update(jobs)
+          .set({
+            status: JobStatus.CLAIMED,
+            orchestratorId: this.workerId,
+            leaseExpiresAt: new Date(
+              now.getTime() +
+                (row.timeoutMs ?? FALLBACK_TIMEOUT_MS) +
+                LEASE_SLACK_MS,
+            ),
+            updatedAt: now,
+          })
+          .where(eq(jobs.id, row.id));
+      }
       await tx.insert(jobTransitions).values(
         rows.map((row) => ({
           jobId: row.id,

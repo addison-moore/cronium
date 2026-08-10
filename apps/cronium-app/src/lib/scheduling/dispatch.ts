@@ -227,10 +227,11 @@ export async function dispatchEventJob(
   // against maxExecutions, mirroring checkMaxExecutions above.
   if (opts.triggeredBy !== "manual") {
     try {
-      await storage.updateScript(event.id, {
-        executionCount: Number(event.executionCount ?? 0) + 1,
-        lastRunAt: new Date(),
-      });
+      // Incremented in SQL, not from the count read at the top of this
+      // function: concurrent dispatches (schedule + webhook, or two workers)
+      // would otherwise both write the same value and lose one, letting an
+      // event with maxExecutions run past its cap.
+      await storage.recordEventDispatch(event.id);
     } catch (error) {
       console.error(
         `[Dispatch] Failed to update execution bookkeeping for event ${event.id}:`,

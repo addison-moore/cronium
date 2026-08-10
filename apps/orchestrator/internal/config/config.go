@@ -185,6 +185,12 @@ type RuntimeConfig struct {
 
 // ConnectionPoolConfig defines connection pool settings
 type ConnectionPoolConfig struct {
+	// MaxPerServer and MinPerServer are NOT enforced. The pool keeps at most
+	// one connection per identity (see ssh.ConnectionPool), so there is no
+	// per-server pool to size; a concurrent request for a busy identity dials
+	// its own connection and closes it on release. These knobs are retained
+	// only so existing configs and CRONIUM_*_PER_SERVER env vars keep loading
+	// — setting them changes nothing today.
 	MaxPerServer        int           `yaml:"maxPerServer" envconfig:"MAX_PER_SERVER" default:"5"`
 	MinPerServer        int           `yaml:"minPerServer" envconfig:"MIN_PER_SERVER" default:"1"`
 	IdleTimeout         time.Duration `yaml:"idleTimeout" envconfig:"IDLE_TIMEOUT" default:"5m"`

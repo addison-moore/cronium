@@ -29,6 +29,7 @@ jest.mock("@/server/storage", () => ({
     createLog: jest.fn(),
     updateLog: jest.fn(),
     updateScript: jest.fn(),
+    recordEventDispatch: jest.fn(),
   },
 }));
 
@@ -89,6 +90,7 @@ import {
 const mockCreateLog = storage.createLog as jest.Mock;
 const mockUpdateLog = storage.updateLog as jest.Mock;
 const mockUpdateScript = storage.updateScript as jest.Mock;
+const mockRecordDispatch = storage.recordEventDispatch as jest.Mock;
 const mockCreateJob = jobService.createJob as jest.Mock;
 const mockBuildPayload = buildJobPayload as jest.Mock;
 const mockRecordCreated = recordJobCreated as jest.Mock;
@@ -125,6 +127,7 @@ beforeEach(() => {
   mockCreateLog.mockReset().mockResolvedValue({ id: 42 });
   mockUpdateLog.mockReset().mockResolvedValue(undefined);
   mockUpdateScript.mockReset().mockResolvedValue(undefined);
+  mockRecordDispatch.mockReset().mockResolvedValue(undefined);
   mockCreateJob.mockReset().mockResolvedValue(createdJob);
   mockBuildPayload.mockReset().mockReturnValue({ executionLogId: 42 });
   mockRecordCreated.mockReset().mockResolvedValue(undefined);
@@ -191,10 +194,7 @@ describe("dispatchEventJob — happy path", () => {
     });
 
     // Scheduled dispatches count against maxExecutions and stamp lastRunAt.
-    expect(mockUpdateScript).toHaveBeenCalledWith(7, {
-      executionCount: 1,
-      lastRunAt: expect.any(Date),
-    });
+    expect(mockRecordDispatch).toHaveBeenCalledWith(7);
 
     expect(incidentInserts()).toHaveLength(0);
   });
@@ -377,7 +377,7 @@ describe("dispatchEventJob — overlap policy", () => {
 
     // The skip is not a dispatch: no birth row, no bookkeeping.
     expect(mockRecordCreated).not.toHaveBeenCalled();
-    expect(mockUpdateScript).not.toHaveBeenCalled();
+    expect(mockRecordDispatch).not.toHaveBeenCalled();
   });
 
   it("rethrows non-unique-violation errors from job creation", async () => {
@@ -496,22 +496,44 @@ describe("dispatchEventJob — execution bookkeeping", () => {
   it("does not count manual runs", async () => {
     await dispatchEventJob(makeEvent(), { triggeredBy: "manual" });
 
-    expect(mockUpdateScript).not.toHaveBeenCalled();
+    expect(mockRecordDispatch).not.toHaveBeenCalled();
   });
 
-  it("increments from the event's current count", async () => {
+  it("delegates the increment to the database rather than computing it", async () => {
     await dispatchEventJob(makeEvent({ executionCount: 41 }), {
       triggeredBy: "webhook",
     });
 
-    expect(mockUpdateScript).toHaveBeenCalledWith(
+    // Only the event id is passed: the new count is `execution_count + 1`
+    // evaluated by Postgres. Passing a caller-computed number here would
+    // reintroduce the lost-update race below.
+    expect(mockRecordDispatch).toHaveBeenCalledWith(7);
+    expect(mockUpdateScript).not.toHaveBeenCalledWith(
       7,
-      expect.objectContaining({ executionCount: 42 }),
+      expect.objectContaining({ executionCount: expect.anything() }),
     );
   });
 
+  it("does not lose increments when dispatches race on the same event", async () => {
+    // Both dispatches see the same pre-read count, as they would when a
+    // schedule tick and a webhook land together.
+    const stale = makeEvent({ executionCount: 41 });
+
+    await Promise.all([
+      dispatchEventJob(stale, { triggeredBy: "schedule" }),
+      dispatchEventJob(stale, { triggeredBy: "webhook" }),
+    ]);
+
+    // Two dispatches must produce two increments. A read-modify-write would
+    // have written executionCount: 42 twice and lost one.
+    expect(mockRecordDispatch).toHaveBeenCalledTimes(2);
+    for (const call of mockRecordDispatch.mock.calls) {
+      expect(call).toEqual([7]);
+    }
+  });
+
   it("swallows bookkeeping failures — the job is already enqueued", async () => {
-    mockUpdateScript.mockRejectedValue(new Error("db down"));
+    mockRecordDispatch.mockRejectedValue(new Error("db down"));
 
     const result = await dispatchEventJob(makeEvent(), {
       triggeredBy: "schedule",

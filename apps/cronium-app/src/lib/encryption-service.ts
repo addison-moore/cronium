@@ -1,11 +1,8 @@
 /**
- * Encryption/Decryption Service for Cronium Platform
+ * Server-side encryption service for Cronium.
  *
- * This service provides both client-side and server-side encryption capabilities
- * to secure sensitive data like SSH keys, passwords, environment variables, and API tokens.
- *
- * Client-side encryption ensures data is encrypted before transmission,
- * while server-side encryption provides additional security for data at rest.
+ * Protects sensitive data at rest — SSH keys, passwords, environment variables,
+ * API tokens — under a single AES-256-GCM master key.
  */
 
 import crypto from "crypto";
@@ -16,7 +13,6 @@ const ALGORITHM = "aes-256-gcm";
 const KEY_LENGTH = 32; // 256 bits
 const IV_LENGTH = 16; // 128 bits
 const TAG_LENGTH = 16; // 128 bits
-const SALT_LENGTH = 16; // 128 bits for client-side encryption
 
 /**
  * Server-side encryption service
@@ -91,15 +87,10 @@ class EncryptionService {
   decrypt(encryptedData: string): string {
     if (!encryptedData) return encryptedData;
 
-    // Check if data is actually encrypted (should be base64)
-    try {
-      Buffer.from(encryptedData, "base64");
-    } catch {
-      // If it's not valid base64, it's probably unencrypted legacy data
-      return encryptedData;
-    }
-
-    // If it doesn't look like encrypted data, return as-is
+    // If it doesn't look like our ciphertext, treat it as unencrypted legacy
+    // data and pass it through. (There is no base64 well-formedness check here:
+    // Buffer.from(_, "base64") never throws — it silently skips invalid
+    // characters — so a try/catch around it could only ever be dead code.)
     if (encryptedData.length < 50 || !/^[A-Za-z0-9+/=]+$/.exec(encryptedData)) {
       return encryptedData;
     }
@@ -135,13 +126,6 @@ class EncryptionService {
     } catch (error: unknown) {
       throw new Error(`Decryption failed: ${String(error)}`);
     }
-  }
-
-  /**
-   * Generate a secure random key for client-side encryption
-   */
-  generateClientKey(): string {
-    return crypto.randomBytes(KEY_LENGTH).toString("hex");
   }
 
   /**
@@ -229,181 +213,3 @@ export function encryptSensitiveData<T extends Record<string, unknown>>(
 
   return result;
 }
-
-/**
- * Decrypt sensitive fields in data object
- */
-export function decryptSensitiveData<T extends Record<string, unknown>>(
-  data: T,
-  tableName: string,
-): T {
-  const result = { ...data };
-
-  Object.keys(data).forEach((key) => {
-    const value = data[key as keyof T];
-    if (shouldEncrypt(tableName, key) && typeof value === "string" && value) {
-      (result as Record<string, unknown>)[key] =
-        encryptionService.decrypt(value);
-    }
-  });
-
-  return result;
-}
-
-/**
- * Client-side encryption utilities
- * These functions can be used in the browser for client-side encryption
- */
-export class ClientEncryptionUtils {
-  /**
-   * Generate a key from password using PBKDF2
-   */
-  static async deriveKey(
-    password: string,
-    salt: Uint8Array,
-  ): Promise<crypto.webcrypto.CryptoKey> {
-    const encoder = new TextEncoder();
-    const keyMaterial = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(password),
-      "PBKDF2",
-      false,
-      ["deriveKey"],
-    );
-
-    // Ensure salt is a Uint8Array with ArrayBuffer (not ArrayBufferLike)
-    // Create a new Uint8Array from the salt to ensure compatibility
-    const saltBuffer = new Uint8Array(salt.length);
-    saltBuffer.set(salt);
-
-    return crypto.subtle.deriveKey(
-      {
-        name: "PBKDF2",
-        salt: saltBuffer,
-        iterations: 100000,
-        hash: "SHA-256",
-      },
-      keyMaterial,
-      { name: "AES-GCM", length: 256 },
-      false,
-      ["encrypt", "decrypt"],
-    );
-  }
-
-  /**
-   * Encrypt data on the client side
-   */
-  static async encrypt(plaintext: string, password: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
-    const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
-
-    const key = await this.deriveKey(password, salt);
-
-    const encrypted = await crypto.subtle.encrypt(
-      { name: "AES-GCM", iv: iv },
-      key,
-      encoder.encode(plaintext),
-    );
-
-    // Combine salt + iv + encrypted data
-    const combined = new Uint8Array(
-      salt.length + iv.length + encrypted.byteLength,
-    );
-    combined.set(salt, 0);
-    combined.set(iv, salt.length);
-    combined.set(new Uint8Array(encrypted), salt.length + iv.length);
-
-    return btoa(
-      Array.from(combined)
-        .map((byte) => String.fromCharCode(byte))
-        .join(""),
-    );
-  }
-
-  /**
-   * Decrypt data on the client side
-   */
-  static async decrypt(
-    encryptedData: string,
-    password: string,
-  ): Promise<string> {
-    const combined = new Uint8Array(
-      atob(encryptedData)
-        .split("")
-        .map((char) => char.charCodeAt(0)),
-    );
-
-    // Extract components
-    const salt = combined.slice(0, SALT_LENGTH);
-    const iv = combined.slice(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
-    const encrypted = combined.slice(SALT_LENGTH + IV_LENGTH);
-
-    const key = await this.deriveKey(password, salt);
-
-    const decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: iv },
-      key,
-      encrypted,
-    );
-
-    const decoder = new TextDecoder();
-    return decoder.decode(decrypted);
-  }
-
-  /**
-   * Generate a secure random password/key
-   */
-  static generateSecureKey(length = 32): string {
-    const chars =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
-    let result = "";
-    const randomArray = crypto.getRandomValues(new Uint8Array(length));
-
-    for (let i = 0; i < length; i++) {
-      const randomValue = randomArray[i];
-      if (randomValue !== undefined) {
-        result += chars.charAt(randomValue % chars.length);
-      }
-    }
-
-    return result;
-  }
-}
-
-/**
- * Field encryption markers for compatibility
- */
-export const ENCRYPTED_FIELDS = SENSITIVE_FIELDS;
-
-/**
- * Utility to check if a field should be encrypted (alternative function name)
- */
-export function shouldEncryptField(table: string, field: string): boolean {
-  return shouldEncrypt(table, field);
-}
-
-/**
- * Encrypt multiple fields in an object (alternative function name)
- */
-export function encryptFields<T extends Record<string, unknown>>(
-  data: T,
-  table: string,
-): T {
-  return encryptSensitiveData(data, table);
-}
-
-/**
- * Decrypt multiple fields in an object (alternative function name)
- */
-export function decryptFields<T extends Record<string, unknown>>(
-  data: T,
-  table: string,
-): T {
-  return decryptSensitiveData(data, table);
-}
-
-/**
- * Create server encryption instance for compatibility
- */
-export const serverEncryption = encryptionService;

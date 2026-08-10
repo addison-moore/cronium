@@ -108,20 +108,35 @@ func (p *ConnectionPool) Get(ctx context.Context, server *types.ServerDetails) (
 
 // Put returns a connection to the pool using the opaque identity returned by
 // Get. It must never be reconstructed from only an endpoint.
+//
+// Put is total: every connection handed out by Get is either parked back in the
+// pool or closed here. That matters because the pool keeps at most one entry per
+// identity while Get will happily dial a second connection when the pooled one
+// is already in use (two jobs against the same server overlap). The later
+// addConnection overwrites the map entry, so the earlier client is no longer
+// reachable from p.connections — and cleanupIdleConnections only walks that map.
+// Without the else branch below, that client would leak its socket and its
+// goroutines for the lifetime of the process.
 func (p *ConnectionPool) Put(connectionID string, conn *ssh.Client, healthy bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if entry, exists := p.connections[connectionID]; exists && entry.conn == conn {
-		entry.inUse = false
-		entry.lastUsed = time.Now()
-		entry.healthy = healthy
+	entry, exists := p.connections[connectionID]
+	if !exists || entry.conn != conn {
+		// Not the pooled client for this identity (displaced by a concurrent
+		// Get, or already evicted). Nothing owns it any more, so close it.
+		conn.Close()
+		return
+	}
 
-		// If unhealthy, close and remove
-		if !healthy {
-			conn.Close()
-			delete(p.connections, connectionID)
-		}
+	entry.inUse = false
+	entry.lastUsed = time.Now()
+	entry.healthy = healthy
+
+	// If unhealthy, close and remove
+	if !healthy {
+		conn.Close()
+		delete(p.connections, connectionID)
 	}
 }
 

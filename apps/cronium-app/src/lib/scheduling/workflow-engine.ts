@@ -216,6 +216,24 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
   let connections: WorkflowConnection[] = [];
   let stepsSnapshot: WorkflowStepRun[] = [];
   let runUserId = "";
+  const pendingTelemetry: PendingTelemetry[] = [];
+
+  // The workflow graph is read BEFORE the transaction opens. storage.* runs on
+  // the global pool, so reading it inside would mean holding one pool
+  // connection (the transaction) while waiting for a second — with pool
+  // max 5 in dev / 20 in prod, enough concurrent advances deadlock each other
+  // until connectionTimeoutMillis fires. The graph is immutable for the
+  // duration of a run's advance; a mid-flight edit is already handled by the
+  // dangling-edge and missing-node branches below.
+  const [runHeader] = await db
+    .select({ workflowId: workflowExecutions.workflowId })
+    .from(workflowExecutions)
+    .where(eq(workflowExecutions.id, runId));
+  if (!runHeader) return;
+  const nodes = await storage.getWorkflowNodes(runHeader.workflowId);
+  const graphConnections = await storage.getWorkflowConnections(
+    runHeader.workflowId,
+  );
 
   const advanced = await db.transaction(async (tx) => {
     const [run] = await tx
@@ -232,8 +250,7 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
     } | null;
     initialInput = executionData?.inputData ?? {};
 
-    const nodes = await storage.getWorkflowNodes(run.workflowId);
-    connections = await storage.getWorkflowConnections(run.workflowId);
+    connections = graphConnections;
     const nodeById = new Map(nodes.map((n) => [n.id, n]));
 
     let steps = await tx
@@ -260,10 +277,15 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
         const job = step.jobId ? jobById.get(step.jobId) : undefined;
         if (!job) {
           // Retention or manual deletion removed the job mid-run
-          await settleStep(tx, step, {
-            status: WorkflowStepStatus.FAILED,
-            error: "Job record disappeared",
-          });
+          await settleStep(
+            tx,
+            step,
+            {
+              status: WorkflowStepStatus.FAILED,
+              error: "Job record disappeared",
+            },
+            pendingTelemetry,
+          );
           continue;
         }
         const result = job.result as {
@@ -272,26 +294,36 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
         } | null;
         switch (job.status) {
           case JobStatus.COMPLETED:
-            await settleStep(tx, step, {
-              status: WorkflowStepStatus.SUCCEEDED,
-              output: result?.scriptOutput,
-              condition: result?.condition,
-            });
+            await settleStep(
+              tx,
+              step,
+              {
+                status: WorkflowStepStatus.SUCCEEDED,
+                output: result?.scriptOutput,
+                condition: result?.condition,
+              },
+              pendingTelemetry,
+            );
             break;
           case JobStatus.FAILED:
           case JobStatus.TIMED_OUT:
           case JobStatus.CANCELLED:
-            await settleStep(tx, step, {
-              status: WorkflowStepStatus.FAILED,
-              condition: result?.condition,
-              error:
-                job.lastError ??
-                (job.status === JobStatus.TIMED_OUT
-                  ? "Job timed out"
-                  : job.status === JobStatus.CANCELLED
-                    ? "Job cancelled"
-                    : "Job failed"),
-            });
+            await settleStep(
+              tx,
+              step,
+              {
+                status: WorkflowStepStatus.FAILED,
+                condition: result?.condition,
+                error:
+                  job.lastError ??
+                  (job.status === JobStatus.TIMED_OUT
+                    ? "Job timed out"
+                    : job.status === JobStatus.CANCELLED
+                      ? "Job cancelled"
+                      : "Job failed"),
+              },
+              pendingTelemetry,
+            );
             break;
           default:
             break; // still in flight
@@ -328,10 +360,15 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
           .set({ jobId: orphanJob.id, updatedAt: new Date() })
           .where(eq(workflowStepRuns.id, step.id));
       } else {
-        await settleStep(tx, step, {
-          status: WorkflowStepStatus.FAILED,
-          error: "Dispatch was interrupted before a job was created",
-        });
+        await settleStep(
+          tx,
+          step,
+          {
+            status: WorkflowStepStatus.FAILED,
+            error: "Dispatch was interrupted before a job was created",
+          },
+          pendingTelemetry,
+        );
       }
     }
     if (stalled.length > 0) {
@@ -362,13 +399,18 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
             readiness === "skipped"
               ? WorkflowStepStatus.SKIPPED
               : WorkflowStepStatus.UNSATISFIABLE;
-          await settleStep(tx, step, {
-            status,
-            error:
-              readiness === "skipped"
-                ? "Branch not taken (no incoming connection satisfied)"
-                : "Prerequisite connections can never all be satisfied",
-          });
+          await settleStep(
+            tx,
+            step,
+            {
+              status,
+              error:
+                readiness === "skipped"
+                  ? "Branch not taken (no incoming connection satisfied)"
+                  : "Prerequisite connections can never all be satisfied",
+            },
+            pendingTelemetry,
+          );
           step.status = status;
           changed = true;
         } else if (readiness === "ready") {
@@ -389,10 +431,15 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
           if (node) {
             claimed.push({ step, node });
           } else {
-            await settleStep(tx, step, {
-              status: WorkflowStepStatus.FAILED,
-              error: `Node ${step.nodeId} no longer exists in the workflow`,
-            });
+            await settleStep(
+              tx,
+              step,
+              {
+                status: WorkflowStepStatus.FAILED,
+                error: `Node ${step.nodeId} no longer exists in the workflow`,
+              },
+              pendingTelemetry,
+            );
             step.status = WorkflowStepStatus.FAILED;
           }
           changed = true;
@@ -434,25 +481,38 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
           updatedAt: now,
         })
         .where(eq(workflowExecutions.id, runId));
-      await storage
-        .createWorkflowLog({
-          workflowId: run.workflowId,
-          userId: run.userId,
-          level:
-            finalStatus === LogStatus.SUCCESS
-              ? WorkflowLogLevel.INFO
-              : WorkflowLogLevel.ERROR,
-          status: finalStatus,
-          message: `Workflow execution ${runId} finished: ${succeeded} succeeded, ${failed} failed, ${skipped} skipped${unsatisfiable > 0 ? `, ${unsatisfiable} unsatisfiable` : ""}`,
-          timestamp: now,
-          startTime: run.startedAt,
-          endTime: now,
-        })
-        .catch(() => undefined);
+      // Deferred for the same reason as the telemetry writes: no second pool
+      // connection while this transaction holds one.
+      const summary = `Workflow execution ${runId} finished: ${succeeded} succeeded, ${failed} failed, ${skipped} skipped${unsatisfiable > 0 ? `, ${unsatisfiable} unsatisfiable` : ""}`;
+      const { workflowId, userId, startedAt } = run;
+      pendingTelemetry.push(() =>
+        storage
+          .createWorkflowLog({
+            workflowId,
+            userId,
+            level:
+              finalStatus === LogStatus.SUCCESS
+                ? WorkflowLogLevel.INFO
+                : WorkflowLogLevel.ERROR,
+            status: finalStatus,
+            message: summary,
+            timestamp: now,
+            startTime: startedAt,
+            endTime: now,
+          })
+          .then(() => undefined)
+          .catch(() => undefined),
+      );
     }
 
     return true;
   });
+
+  // Flush the writes deferred out of the transaction. All best-effort; a
+  // failure here never changes run state.
+  for (const write of pendingTelemetry) {
+    await write().catch(() => undefined);
+  }
 
   if (!advanced) return;
 
@@ -511,6 +571,10 @@ function logStatusForStep(status: WorkflowStepStatus): LogStatus {
   }
 }
 
+/** A telemetry row update queued during the transaction and flushed after it
+ * commits (see settleStep). */
+type PendingTelemetry = () => Promise<void>;
+
 async function settleStep(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   step: WorkflowStepRun,
@@ -520,6 +584,7 @@ async function settleStep(
     condition?: boolean | undefined;
     error?: string;
   },
+  pendingTelemetry: PendingTelemetry[],
 ): Promise<void> {
   const now = new Date();
   await tx
@@ -534,19 +599,28 @@ async function settleStep(
     })
     .where(eq(workflowStepRuns.id, step.id));
 
-  // Telemetry dual-write for the UI execution graph
-  if (step.executionEventId) {
-    await storage
-      .updateWorkflowExecutionEvent(step.executionEventId, {
-        status: logStatusForStep(data.status),
-        completedAt: now,
-        duration: step.startedAt
-          ? now.getTime() - step.startedAt.getTime()
-          : null,
-        output: data.output !== undefined ? JSON.stringify(data.output) : null,
-        errorMessage: data.error ?? null,
-      })
-      .catch(() => undefined);
+  // Telemetry dual-write for the UI execution graph. Queued rather than awaited
+  // here: storage.* runs on the global pool, and issuing it while this
+  // transaction holds a connection makes every advance need two connections at
+  // once — the pool-starvation deadlock described in advanceWorkflowRun. It is
+  // best-effort either way, so running it after commit costs nothing.
+  const executionEventId = step.executionEventId;
+  if (executionEventId) {
+    pendingTelemetry.push(() =>
+      storage
+        .updateWorkflowExecutionEvent(executionEventId, {
+          status: logStatusForStep(data.status),
+          completedAt: now,
+          duration: step.startedAt
+            ? now.getTime() - step.startedAt.getTime()
+            : null,
+          output:
+            data.output !== undefined ? JSON.stringify(data.output) : null,
+          errorMessage: data.error ?? null,
+        })
+        .then(() => undefined)
+        .catch(() => undefined),
+    );
   }
 }
 

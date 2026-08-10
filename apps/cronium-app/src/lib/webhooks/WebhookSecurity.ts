@@ -248,30 +248,61 @@ export class WebhookSecurity {
   }
 
   /**
-   * Check if IP is in CIDR range
+   * Check whether an IPv4 address falls inside a CIDR range.
+   *
+   * Every input is validated before any arithmetic. The previous version
+   * reduced over `ip.split(".")` with no checks, which made this allowlist
+   * fail *open* on malformed input: `parseInt("abc")` is NaN and `NaN << 24`
+   * is 0, so any non-numeric address — including every IPv6 address, which has
+   * no dots to split on — collapsed to 0.0.0.0 and matched a 0.0.0.0/x rule.
+   * More than four octets was worse: at index 4 the shift is -8, and JS shift
+   * counts are taken mod 32, so `<< -8` is `<< 24` and the extra octets folded
+   * back onto the first, letting distinct addresses collide.
+   *
+   * Anything this function cannot parse with certainty is not a match.
    */
   private isIPInCIDR(ip: string, cidr: string): boolean {
-    // Simple implementation - in production, use a proper IP library
-    const [network, bits = "32"] = cidr.split("/");
-    if (!network) {
-      return false;
-    }
-    const mask = ~(2 ** (32 - parseInt(bits)) - 1);
+    const slash = cidr.indexOf("/");
+    const network = slash === -1 ? cidr : cidr.slice(0, slash);
+    const bitsPart = slash === -1 ? "32" : cidr.slice(slash + 1);
+
+    if (!/^\d{1,2}$/.test(bitsPart)) return false;
+    const bits = Number(bitsPart);
+    if (bits > 32) return false;
 
     const ipNum = this.ipToNumber(ip);
     const networkNum = this.ipToNumber(network);
+    if (ipNum === null || networkNum === null) return false;
 
-    return (ipNum & mask) === (networkNum & mask);
+    // A /0 matches everything; shifting by 32 is undefined in JS (count is
+    // mod 32, so `-1 << 32` would be -1), so special-case it.
+    if (bits === 0) return true;
+    const mask = (-1 << (32 - bits)) >>> 0;
+
+    return (ipNum & mask) >>> 0 === (networkNum & mask) >>> 0;
   }
 
   /**
-   * Convert IP address to number
+   * Convert a dotted-quad IPv4 address to an unsigned 32-bit number, or null
+   * if it is not exactly four octets of 0-255.
    */
-  private ipToNumber(ip: string): number {
-    const parts = ip.split(".");
-    return parts.reduce((acc, part, index) => {
-      return acc + (parseInt(part) << ((3 - index) * 8));
-    }, 0);
+  private ipToNumber(ip: string): number | null {
+    const parts = ip.trim().split(".");
+    if (parts.length !== 4) return null;
+
+    let result = 0;
+    for (const part of parts) {
+      // Exactly one canonical spelling per octet. This rejects "", "+1", " 1"
+      // and non-numeric text (which parseInt would have salvaged a prefix
+      // from), and also zero-padded forms like "0177" — those are a real
+      // bypass vector, since some resolvers read a leading zero as octal and
+      // would disagree with this function about which host was named.
+      if (!/^(0|[1-9]\d{0,2})$/.test(part)) return null;
+      const octet = Number(part);
+      if (octet > 255) return null;
+      result = (result << 8) | octet;
+    }
+    return result >>> 0;
   }
 
   /**

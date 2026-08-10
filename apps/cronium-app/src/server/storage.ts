@@ -316,6 +316,7 @@ export interface IStorage {
   canEditEvent(eventId: number, userId: string): Promise<boolean>;
   createScript(insertScript: InsertEvent): Promise<Event>;
   updateScript(id: number, updateData: Partial<InsertEvent>): Promise<Event>;
+  recordEventDispatch(id: number, at?: Date): Promise<void>;
   deleteScript(id: number): Promise<void>;
 
   // Environment variable methods
@@ -1612,6 +1613,26 @@ class DatabaseStorage implements IStorage {
       }
       return script;
     });
+  }
+
+  /**
+   * Execution bookkeeping for a dispatched run: bump the counter and stamp
+   * lastRunAt in a single statement.
+   *
+   * The increment is computed by the database (`execution_count + 1`) rather
+   * than from a value the caller read earlier. maxExecutions is enforced off
+   * this counter, and dispatches genuinely race — a schedule tick and a webhook,
+   * or two workers — so a read-modify-write would drop increments and let a
+   * capped event run past its cap.
+   */
+  async recordEventDispatch(id: number, at: Date = new Date()): Promise<void> {
+    await db
+      .update(events)
+      .set({
+        executionCount: sql`COALESCE(${events.executionCount}, 0) + 1`,
+        lastRunAt: at,
+      })
+      .where(eq(events.id, id));
   }
 
   async deleteScript(id: number): Promise<void> {
