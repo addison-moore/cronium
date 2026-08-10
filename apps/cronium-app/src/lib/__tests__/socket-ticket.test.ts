@@ -61,8 +61,39 @@ describe("socket tickets", () => {
 
   it("rejects tampered and expired tickets", () => {
     const { ticket } = mintSocketTicket("user-1", "terminal");
-    const tampered = `${ticket.slice(0, -2)}zz`;
+    const dot = ticket.indexOf(".");
+    const body = ticket.slice(0, dot);
+    const mac = ticket.slice(dot + 1);
+
+    // Tamper by flipping a bit in the DECODED signature, then re-encoding.
+    //
+    // Rewriting the ticket's trailing base64url characters does not reliably
+    // change what the signature decodes to: a 32-byte HMAC encodes to 43
+    // base64url characters, and the last one carries only the digest's final
+    // 4 bits — its low 2 bits are padding the decoder discards. So the old
+    // `${ticket.slice(0, -2)}zz` produced a byte-identical signature whenever
+    // the ticket happened to end in "z" followed by one of w/x/y/z, and the
+    // assertion failed roughly once every 1024 runs.
+    const signature = Buffer.from(mac, "base64url");
+    signature[0]! ^= 0xff;
+    const tampered = `${body}.${signature.toString("base64url")}`;
+
+    expect(tampered).not.toBe(ticket);
     expect(verifySocketTicket(tampered, "terminal")).toBeNull();
+
+    // A tampered payload must fail too — the MAC covers the body.
+    const forgedClaims = Buffer.from(
+      JSON.stringify({
+        typ: "cronium-socket",
+        v: 1,
+        sub: "attacker",
+        aud: "terminal",
+        jti: "forged",
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 30,
+      }),
+    ).toString("base64url");
+    expect(verifySocketTicket(`${forgedClaims}.${mac}`, "terminal")).toBeNull();
 
     const old = Math.floor(Date.now() / 1000) - 31;
     const { ticket: expired } = mintSocketTicket("user-1", "terminal", old);

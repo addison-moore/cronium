@@ -33,7 +33,18 @@ describe("job capability tokens (HI-10)", () => {
 
   it("rejects a token whose signature was tampered with", () => {
     const token = mintJobCapability({ jobId: "job-1", userId: "user-1" }, NOW);
-    const tampered = token.slice(0, -2) + (token.endsWith("aa") ? "bb" : "aa");
+
+    // Flip a bit in the DECODED signature rather than rewriting its trailing
+    // base64url characters. The final character of a 32-byte HMAC carries only
+    // 4 significant bits, so a character-level rewrite can decode to the exact
+    // same signature — the old form did so about once in 1365 runs and the
+    // test then failed because the "tampered" token was genuinely valid.
+    const cut = token.lastIndexOf(".");
+    const signature = Buffer.from(token.slice(cut + 1), "base64url");
+    signature[0]! ^= 0xff;
+    const tampered = `${token.slice(0, cut + 1)}${signature.toString("base64url")}`;
+
+    expect(tampered).not.toBe(token);
     expect(() => verifyJobCapability(tampered, NOW + 10)).toThrow(
       CapabilityError,
     );

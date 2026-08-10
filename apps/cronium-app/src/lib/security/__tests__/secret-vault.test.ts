@@ -64,7 +64,16 @@ describe("SecretVault round-trip + record binding", () => {
   it("rejects tampering with the tag/ciphertext", () => {
     const env = vault.encrypt("s3cret", binding);
     const parts = env.split(".");
-    parts[4] = parts[4]!.slice(0, -2) + "AA";
+
+    // Flip a bit in the decoded ciphertext instead of rewriting its trailing
+    // base64url characters: depending on length, those characters can carry
+    // padding bits the decoder discards, so a character-level rewrite may
+    // decode to identical bytes and leave the envelope perfectly valid.
+    const ciphertext = Buffer.from(parts[4]!, "base64url");
+    ciphertext[0]! ^= 0xff;
+    parts[4] = ciphertext.toString("base64url");
+
+    expect(parts.join(".")).not.toBe(env);
     expect(() => vault.decrypt(parts.join("."), binding)).toThrow(
       SecretDecryptionError,
     );

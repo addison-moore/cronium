@@ -19,6 +19,24 @@ function challengeFor(verifier: string): string {
   return createHash("sha256").update(verifier).digest("base64url");
 }
 
+/**
+ * Flip a bit in the last dot-separated segment (the MAC), by decoding it,
+ * mutating a byte, and re-encoding.
+ *
+ * Rewriting the trailing base64url *characters* does not reliably change what
+ * the segment decodes to: a 32-byte HMAC encodes to 43 base64url characters
+ * and the last one carries only the digest's final 4 bits, so its low 2 bits
+ * are padding the decoder throws away. Character-level tampering therefore
+ * produced a byte-identical MAC about once in 1024 runs, and the assertion
+ * that it must be rejected failed.
+ */
+function tamperSignature(token: string): string {
+  const cut = token.lastIndexOf(".");
+  const signature = Buffer.from(token.slice(cut + 1), "base64url");
+  signature[0]! ^= 0xff;
+  return `${token.slice(0, cut + 1)}${signature.toString("base64url")}`;
+}
+
 describe("pkceMatches (S256)", () => {
   it("accepts the matching verifier", () => {
     const verifier = randomId(32);
@@ -54,7 +72,11 @@ describe("access / refresh tokens", () => {
 
   it("rejects a tampered access token", () => {
     const { token } = mintAccessToken(input);
-    const tampered = token.slice(0, -2) + (token.endsWith("a") ? "b" : "a");
+    const tampered = tamperSignature(token);
+    // Same length as the original: this exercises the MAC comparison, not the
+    // length check that a truncating tamper would have tripped first.
+    expect(tampered).toHaveLength(token.length);
+    expect(tampered).not.toBe(token);
     expect(verifyAccessToken(tampered)).toBeNull();
     expect(verifyAccessToken("garbage")).toBeNull();
   });
@@ -77,7 +99,7 @@ describe("consent tickets", () => {
   it("round-trips and rejects tampering", () => {
     const t = signTicket({ sub: "u1", cid: "c1", exp: now + 300 });
     expect(verifyTicket(t)).toMatchObject({ sub: "u1", cid: "c1" });
-    expect(verifyTicket(t.slice(0, -2) + "zz")).toBeNull();
+    expect(verifyTicket(tamperSignature(t))).toBeNull();
   });
 
   it("rejects an expired ticket", () => {
