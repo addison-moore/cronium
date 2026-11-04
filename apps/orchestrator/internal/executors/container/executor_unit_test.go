@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -208,6 +209,60 @@ func TestBuildSecurityOptions(t *testing.T) {
 	assert.Equal(t,
 		[]string{"no-new-privileges", "seccomp=custom-seccomp.json", "apparmor=docker-cronium"},
 		e.buildSecurityOptions())
+}
+
+// splitReader returns its input in fixed-size pieces, the way a pipe does.
+type splitReader struct {
+	data string
+	size int
+}
+
+func (r *splitReader) Read(p []byte) (int, error) {
+	if r.data == "" {
+		return 0, io.EOF
+	}
+	n := r.size
+	if n > len(r.data) {
+		n = len(r.data)
+	}
+	n = copy(p, r.data[:n])
+	r.data = r.data[n:]
+	return n, nil
+}
+
+func readLines(t *testing.T, e *Executor, reader io.Reader) []string {
+	t.Helper()
+	updates := make(chan types.ExecutionUpdate, 1000)
+	e.readStream(reader, "stdout", updates)
+	close(updates)
+	var lines []string
+	for u := range updates {
+		entry, ok := u.Data.(*types.LogEntry)
+		require.True(t, ok)
+		lines = append(lines, entry.Line)
+	}
+	return lines
+}
+
+func TestReadStream_KeepsLinesWholeAcrossReads(t *testing.T) {
+	e := newUnitExecutor()
+	// A multi-byte character and a line break both land on read boundaries.
+	lines := readLines(t, e, &splitReader{data: "héllo wörld\nsecond line\n", size: 3})
+	assert.Equal(t, []string{"héllo wörld", "second line"}, lines)
+}
+
+func TestReadStream_StripsCarriageReturns(t *testing.T) {
+	e := newUnitExecutor()
+	assert.Equal(t, []string{"a", "b"}, readLines(t, e, strings.NewReader("a\r\nb\r\n")))
+}
+
+func TestReadStream_BoundsAnEndlessLine(t *testing.T) {
+	e := newUnitExecutor()
+	long := strings.Repeat("x", maxLogLineBytes*2+10)
+	lines := readLines(t, e, strings.NewReader(long))
+	require.Len(t, lines, 3)
+	assert.Len(t, lines[0], maxLogLineBytes)
+	assert.Equal(t, long, strings.Join(lines, ""))
 }
 
 func TestReadStream_SplitsLinesAndAssignsSequence(t *testing.T) {

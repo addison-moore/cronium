@@ -74,11 +74,24 @@ describe("job capability tokens (HI-10)", () => {
 
   it("clamps an over-long TTL to the ceiling", () => {
     const token = mintJobCapability(
-      { jobId: "job-1", userId: "user-1", ttlSeconds: 999_999 },
+      { jobId: "job-1", userId: "user-1", ttlSeconds: 99_999_999 },
       NOW,
     );
     const v = verifyJobCapability(token, NOW + 10);
-    expect(v.expiresAt - NOW).toBeLessThanOrEqual(6 * 60 * 60);
+    expect(v.expiresAt - NOW).toBe(7 * 24 * 60 * 60);
+  });
+
+  it("lasts as long as a long-running job needs", () => {
+    // CRONIUM_MAX_EXECUTION_TIMEOUT defaults to 24h, and a job has to be able to
+    // report completion at the end of it.
+    const dayPlusBuffer = 24 * 60 * 60 + 5 * 60;
+    const token = mintJobCapability(
+      { jobId: "job-1", userId: "user-1", ttlSeconds: dayPlusBuffer },
+      NOW,
+    );
+    expect(verifyJobCapability(token, NOW + dayPlusBuffer - 1).jobId).toBe(
+      "job-1",
+    );
   });
 
   it("rejects tokens signed under a different master key", () => {

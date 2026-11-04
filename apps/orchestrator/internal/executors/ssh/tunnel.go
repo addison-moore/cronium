@@ -13,38 +13,38 @@ import (
 
 // TunnelManager manages SSH reverse tunnels for runtime API access
 type TunnelManager struct {
-	log        *logrus.Logger
-	localHost  string
-	localPort  int
-	remotePort int
-	listener   net.Listener
-	wg         sync.WaitGroup
-	stopCh     chan struct{}
+	log       *logrus.Logger
+	localHost string
+	localPort int
+	listener  net.Listener
+	wg        sync.WaitGroup
+	stopCh    chan struct{}
 }
 
 // NewTunnelManager creates a new tunnel manager
-func NewTunnelManager(localHost string, localPort, remotePort int, log *logrus.Logger) *TunnelManager {
+func NewTunnelManager(localHost string, localPort int, log *logrus.Logger) *TunnelManager {
 	return &TunnelManager{
-		log:        log,
-		localHost:  localHost,
-		localPort:  localPort,
-		remotePort: remotePort,
-		stopCh:     make(chan struct{}),
+		log:       log,
+		localHost: localHost,
+		localPort: localPort,
+		stopCh:    make(chan struct{}),
 	}
 }
 
-// Start starts the reverse tunnel
+// Start starts the reverse tunnel. The remote port is chosen by sshd (port 0):
+// every job on a server needs its own, and a fixed one meant that a second
+// concurrent job, or anything else already on that port, quietly fell back to
+// bundled mode and lost the runtime API.
 func (tm *TunnelManager) Start(sshClient *ssh.Client) error {
-	// Listen on remote port
-	listener, err := sshClient.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", tm.remotePort))
+	listener, err := sshClient.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return fmt.Errorf("failed to listen on remote port %d: %w", tm.remotePort, err)
+		return fmt.Errorf("failed to open a remote listener: %w", err)
 	}
 	tm.listener = listener
 
 	tm.log.WithFields(logrus.Fields{
 		"localPort":  tm.localPort,
-		"remotePort": tm.remotePort,
+		"remoteAddr": listener.Addr().String(),
 	}).Info("SSH reverse tunnel established")
 
 	// Start accepting connections
@@ -143,5 +143,5 @@ func (tm *TunnelManager) handleConnection(remoteConn net.Conn) {
 
 // GetRemoteEndpoint returns the endpoint URL for the remote side
 func (tm *TunnelManager) GetRemoteEndpoint() string {
-	return fmt.Sprintf("http://127.0.0.1:%d", tm.remotePort)
+	return fmt.Sprintf("http://%s", tm.listener.Addr().String())
 }

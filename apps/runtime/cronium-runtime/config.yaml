@@ -33,8 +33,6 @@ auth:
   # The secret MUST come from the environment — RUNTIME_JWT_SECRET (canonical,
   # set by both compose files and the orchestrator's sidecar env) or the
   # legacy bare JWT_SECRET — and startup fails loudly when it is missing.
-  tokenExpiration: 1h
-  refreshExpiration: 24h
 
 logging:
   level: info

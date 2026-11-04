@@ -183,7 +183,6 @@ func newEnv(t *testing.T) *env {
 
 	cfg := &config.Config{}
 	cfg.Auth.JWTSecret = testSecret
-	cfg.Auth.TokenExpiration = time.Hour
 	cfg.Security.EnableCORS = false
 	cfg.Security.RateLimitPerMin = 100000
 	cfg.Backend = config.BackendConfig{

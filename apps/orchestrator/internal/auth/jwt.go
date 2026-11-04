@@ -32,11 +32,13 @@ func NewJWTManager(secret string) *JWTManager {
 	}
 }
 
-// GenerateJobToken generates a JWT token for a job execution
-func (m *JWTManager) GenerateJobToken(jobID, executionID, userID, eventID, capability string) (string, error) {
+// GenerateJobToken generates a JWT token for a job execution. The lifetime has to
+// outlast the job: a fixed hour left any longer run unable to reach the runtime
+// API, so its final cronium.output() failed with a 401 and the output was lost.
+// The token is also revoked as soon as the job reaches a terminal state (HI-14).
+func (m *JWTManager) GenerateJobToken(jobID, executionID, userID, eventID, capability string, lifetime time.Duration) (string, error) {
 	now := time.Now()
-	// Token valid for 1 hour (should be enough for most script executions)
-	expiresAt := now.Add(1 * time.Hour)
+	expiresAt := now.Add(lifetime)
 
 	claims := &Claims{
 		JobID:       jobID,

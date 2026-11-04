@@ -23,7 +23,6 @@ func NewRouter(runtime *service.RuntimeService, cfg *config.Config, log *logrus.
 
 	// Basic middleware
 	r.Use(chimiddleware.RequestID)
-	r.Use(chimiddleware.RealIP)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(middleware.LoggingMiddleware(log))
 
@@ -69,6 +68,11 @@ func NewRouter(runtime *service.RuntimeService, cfg *config.Config, log *logrus.
 		// Rate limiting
 		rateLimiter := middleware.NewRateLimiter(cfg.Security.RateLimitPerMin, log)
 		r.Use(middleware.RateLimitMiddleware(rateLimiter))
+
+		// Scripts share this service, and most handlers decode the whole body, so
+		// one job must not be able to exhaust its memory. SetOutput applies the
+		// tighter limit it reports errors against.
+		r.Use(middleware.MaxBodySize(handlers.MaxRequestBytes))
 
 		// Execution endpoints
 		r.Route("/executions/{id}", func(r chi.Router) {

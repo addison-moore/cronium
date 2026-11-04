@@ -21,6 +21,10 @@ import (
 // over-limit body upstream and mapping the app's 413 to a generic 500.
 const maxOutputBytes = 5242880 // 5 MiB
 
+// MaxRequestBytes caps every other request body on the runtime API. Slightly above
+// maxOutputBytes so an over-limit output still gets SetOutput's specific 413.
+const MaxRequestBytes = maxOutputBytes + 1024*1024
+
 // Handler implements the HTTP handlers for the runtime API
 type Handler struct {
 	service *service.RuntimeService

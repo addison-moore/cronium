@@ -11,18 +11,35 @@ import (
 
 func newManager() *JWTManager {
 	return NewJWTManager(config.AuthConfig{
-		JWTSecret:       "test-secret-at-least-32-characters-long!!",
-		TokenExpiration: time.Hour,
+		JWTSecret: "test-secret-at-least-32-characters-long!!",
 	})
+}
+
+// sign mints a token the way the orchestrator does.
+func sign(t *testing.T, m *JWTManager, claims *Claims) string {
+	t.Helper()
+	tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(m.secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tok
+}
+
+func registered(issued, expires time.Time) jwt.RegisteredClaims {
+	return jwt.RegisteredClaims{
+		IssuedAt:  jwt.NewNumericDate(issued),
+		ExpiresAt: jwt.NewNumericDate(expires),
+	}
 }
 
 func TestValidateFreshToken(t *testing.T) {
 	m := newManager()
-	tok, err := m.GenerateToken("exec-1", "user-1", "event-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	claims, err := m.ValidateToken(tok)
+	now := time.Now()
+	claims, err := m.ValidateToken(sign(t, m, &Claims{
+		JobID:            "job-1",
+		ExecutionID:      "exec-1",
+		RegisteredClaims: registered(now, now.Add(time.Hour)),
+	}))
 	if err != nil {
 		t.Fatalf("fresh token should validate: %v", err)
 	}
@@ -31,70 +48,74 @@ func TestValidateFreshToken(t *testing.T) {
 	}
 }
 
-func TestTokenExpirationCappedAtAbsoluteMax(t *testing.T) {
-	// Even if config asks for more than the absolute max, the manager clamps it.
-	m := NewJWTManager(config.AuthConfig{
-		JWTSecret:       "test-secret-at-least-32-characters-long!!",
-		TokenExpiration: 24 * time.Hour,
-	})
-	if m.tokenExpiration != absoluteMaxLifetime {
-		t.Fatalf("expected clamp to %v, got %v", absoluteMaxLifetime, m.tokenExpiration)
+// A job can legitimately run for hours, and its token has to stay good for the
+// whole run. The ceiling used to be 2h, which cut the runtime API off mid-job.
+func TestLongRunningJobTokenStaysValid(t *testing.T) {
+	m := newManager()
+	now := time.Now()
+	issued := now.Add(-10 * time.Hour)
+	if _, err := m.ValidateToken(sign(t, m, &Claims{
+		JobID:            "job-1",
+		RegisteredClaims: registered(issued, now.Add(15*time.Hour)),
+	})); err != nil {
+		t.Fatalf("a 25h job token still inside its expiry must validate: %v", err)
 	}
 }
 
-func TestAbsoluteLifetimeRejectsOldToken(t *testing.T) {
+func TestExpiredTokenRejected(t *testing.T) {
 	m := newManager()
-	// Mint a token whose original issuance is 3h in the past (beyond the 2h cap),
-	// with a still-future ExpiresAt via the current-now.
-	past := time.Now().Add(-3 * time.Hour)
-	tok, err := m.generate("exec-1", "user-1", "event-1", time.Now(), past)
+	now := time.Now()
+	if _, err := m.ValidateToken(sign(t, m, &Claims{
+		JobID:            "job-1",
+		RegisteredClaims: registered(now.Add(-2*time.Hour), now.Add(-time.Hour)),
+	})); err == nil {
+		t.Fatal("an expired token must be rejected")
+	}
+}
+
+func TestAbsoluteLifetimeRejectsMisissuedToken(t *testing.T) {
+	m := newManager()
+	now := time.Now()
+	// Issued beyond the ceiling but with a still-future expiry.
+	if _, err := m.ValidateToken(sign(t, m, &Claims{
+		JobID:            "job-1",
+		RegisteredClaims: registered(now.Add(-absoluteMaxLifetime-time.Hour), now.Add(time.Hour)),
+	})); err == nil {
+		t.Fatal("a token past the absolute lifetime must be rejected")
+	}
+}
+
+func TestTokenWithoutExpiryOrIssueTimeRejected(t *testing.T) {
+	m := newManager()
+	now := time.Now()
+	for name, claims := range map[string]*Claims{
+		"no exp": {JobID: "job-1", RegisteredClaims: jwt.RegisteredClaims{IssuedAt: jwt.NewNumericDate(now)}},
+		"no iat": {JobID: "job-1", RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour))}},
+	} {
+		if _, err := m.ValidateToken(sign(t, m, claims)); err == nil {
+			t.Fatalf("%s: must be rejected rather than panic or live forever", name)
+		}
+	}
+}
+
+func TestWrongSecretAndAlgorithmRejected(t *testing.T) {
+	m := newManager()
+	now := time.Now()
+	other := NewJWTManager(config.AuthConfig{JWTSecret: "a-different-secret-at-least-32-characters"})
+	if _, err := m.ValidateToken(sign(t, other, &Claims{
+		RegisteredClaims: registered(now, now.Add(time.Hour)),
+	})); err == nil {
+		t.Fatal("a token signed with another secret must be rejected")
+	}
+
+	none, err := jwt.NewWithClaims(jwt.SigningMethodNone, &Claims{
+		RegisteredClaims: registered(now, now.Add(time.Hour)),
+	}).SignedString(jwt.UnsafeAllowNoneSignatureType)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.ValidateToken(tok); err == nil {
-		t.Fatal("token past the absolute lifetime must be rejected")
-	}
-}
-
-func TestRefreshPreservesOriginalLifetimeAndRefusesPastCap(t *testing.T) {
-	m := newManager()
-
-	// A fresh token refreshes fine and stays within the cap.
-	fresh, _ := m.GenerateToken("exec-1", "user-1", "event-1")
-	refreshed, err := m.RefreshToken(fresh)
-	if err != nil {
-		t.Fatalf("fresh token should refresh: %v", err)
-	}
-	if _, err := m.ValidateToken(refreshed); err != nil {
-		t.Fatalf("refreshed token should validate: %v", err)
-	}
-
-	// A token whose original issuance is beyond the cap cannot be refreshed,
-	// even though its ExpiresAt is still in the future.
-	past := time.Now().Add(-(absoluteMaxLifetime + time.Minute))
-	old, _ := m.generate("exec-1", "user-1", "event-1", time.Now(), past)
-	if _, err := m.RefreshToken(old); err == nil {
-		t.Fatal("refresh past the absolute lifetime must be refused")
-	}
-}
-
-func TestRefreshedTokenCannotExceedOriginalCap(t *testing.T) {
-	m := newManager()
-	// Original issuance 90 minutes ago; a refresh now should cap the new expiry
-	// at origIat + 2h ≈ 30 minutes from now, not now + 1h.
-	orig := time.Now().Add(-90 * time.Minute)
-	tok, _ := m.generate("exec-1", "user-1", "event-1", time.Now(), orig)
-	refreshed, err := m.RefreshToken(tok)
-	if err != nil {
-		t.Fatalf("should refresh within cap: %v", err)
-	}
-	claims, err := m.ValidateToken(refreshed)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Expiry must not exceed orig + absoluteMaxLifetime (+ small skew).
-	if claims.ExpiresAt.After(orig.Add(absoluteMaxLifetime).Add(time.Second)) {
-		t.Fatalf("refreshed expiry %v exceeds the absolute cap", claims.ExpiresAt)
+	if _, err := m.ValidateToken(none); err == nil {
+		t.Fatal("an alg=none token must be rejected")
 	}
 }
 

@@ -85,10 +85,13 @@ export interface CapabilityScope {
 
 export class CapabilityError extends Error {}
 
-// Absolute ceiling on token lifetime. A job may run long, but the orchestrator
-// re-claims/renews leases; a capability token is refreshed with the lease, so
-// it never needs to outlive a single lease window by much.
-const MAX_TTL_SECONDS = 6 * 60 * 60; // 6h
+// Absolute ceiling on token lifetime. The real bound is set at claim time: the
+// job's own timeout plus a reporting buffer. Tokens are not renewed with the lease,
+// so this has to clear any timeout a deployment would configure. At 6h, a longer job
+// could not report completion: the 403 made the orchestrator drop the report, and the
+// sweeper then failed or re-ran a job that had finished. Keep in step with
+// absoluteMaxLifetime in cronium-runtime/internal/auth/jwt.go.
+const MAX_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 const DEFAULT_TTL_SECONDS = 60 * 60; // 1h
 
 let cachedKey: Buffer | null = null;

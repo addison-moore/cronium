@@ -23,6 +23,10 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// executionTokenBuffer is how long a runtime API token outlives the job's own
+// timeout, so a helper call at the very end of a run does not race its expiry.
+const executionTokenBuffer = time.Hour
+
 // RunnerInfo contains information about the runner binary
 type RunnerInfo struct {
 	Version  string
@@ -275,10 +279,19 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 		var execCtx context.Context
 		var cancel context.CancelFunc
 
-		// Apply timeout if specified (default to 1 hour if not set)
+		// Apply timeout if specified (default to 1 hour if not set), capped by the
+		// operator's CRONIUM_MAX_EXECUTION_TIMEOUT like container jobs.
 		timeout := job.Execution.Timeout
 		if timeout <= 0 {
 			timeout = time.Hour
+		}
+		if limit := e.timeoutConfig.MaxExecutionTimeout; limit > 0 && timeout > limit {
+			e.log.WithFields(logrus.Fields{
+				"jobID":      job.ID,
+				"requested":  timeout.String(),
+				"maxTimeout": limit.String(),
+			}).Warn("Job timeout exceeds the configured maximum; capping it")
+			timeout = limit
 		}
 
 		execCtx, cancel = context.WithTimeout(ctx, timeout)
@@ -409,9 +422,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 		timing.TunnelSetupStart = time.Now()
 		e.log.Info("Setting up SSH reverse tunnel for API mode")
 
-		// Find an available remote port (starting from 9090)
-		remotePort := 9090
-		tunnelManager = NewTunnelManager(e.runtimeHost, e.runtimePort, remotePort, e.log)
+		tunnelManager = NewTunnelManager(e.runtimeHost, e.runtimePort, e.log)
 
 		if err := tunnelManager.Start(sess.conn); err != nil {
 			timing.TunnelSetupEnd = time.Now()
@@ -433,7 +444,7 @@ func (e *Executor) executeWithRunner(ctx context.Context, sess *Session, job *ty
 				}
 			}
 
-			token, err := jwtManager.GenerateJobToken(job.ID, executionID, userID, eventID, job.CapabilityToken)
+			token, err := jwtManager.GenerateJobToken(job.ID, executionID, userID, eventID, job.CapabilityToken, timeout+executionTokenBuffer)
 			if err != nil {
 				e.log.WithError(err).Warn("Failed to generate JWT token, falling back to bundled mode")
 				tunnelManager.Stop()
@@ -950,43 +961,6 @@ func (e *Executor) streamOutputWithContextAndCollect(ctx context.Context, reader
 	if err := scanner.Err(); err != nil && !stderrors.Is(err, context.Canceled) {
 		e.log.WithError(err).Errorf("Error reading %s stream", stream)
 	}
-}
-
-// streamOutputWithContext reads from a reader and sends log updates until context is cancelled
-func (e *Executor) streamOutputWithContext(ctx context.Context, reader io.Reader, stream string, updates chan<- types.ExecutionUpdate, sequence *int64, sequenceMu *sync.Mutex) {
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		// Check if context is cancelled
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		line := scanner.Text()
-
-		// Send log entry
-		sequenceMu.Lock()
-		*sequence++
-		seq := *sequence
-		sequenceMu.Unlock()
-
-		e.sendUpdate(updates, types.UpdateTypeLog, &types.LogEntry{
-			Stream:    stream,
-			Line:      line,
-			Timestamp: time.Now(),
-			Sequence:  seq,
-		})
-	}
-
-	if err := scanner.Err(); err != nil && !stderrors.Is(err, context.Canceled) {
-		e.log.WithError(err).Errorf("Error reading %s stream", stream)
-	}
-}
-
-// streamOutput reads from a reader and sends log updates
-func (e *Executor) streamOutput(reader io.Reader, stream string, updates chan<- types.ExecutionUpdate, sequence *int64, sequenceMu *sync.Mutex) {
-	e.streamOutputWithContext(context.Background(), reader, stream, updates, sequence, sequenceMu)
 }
 
 // Cleanup performs cleanup after execution
