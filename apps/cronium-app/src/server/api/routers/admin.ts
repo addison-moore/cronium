@@ -693,6 +693,7 @@ export const adminRouter = createTRPCRouter({
             input.provider,
             input.apiKey?.trim() ? input.apiKey.trim() : undefined,
             input.baseUrl?.trim() ? input.baseUrl.trim() : undefined,
+            { trustedBaseUrl: true },
           );
           return resourceResponse(result);
         },

@@ -167,9 +167,11 @@ export default function ToolsPage() {
                 Qwen, and Llama), then the Prompt action sends a prompt —
                 template-able with {"{{cronium.input.*}}"} — and passes the
                 reply to the next step; a JSON mode returns structured fields
-                for downstream steps to branch on. (Separately, administrators
-                can enable AI-assisted script generation in the Admin
-                page&apos;s AI Assistant tab.)
+                for downstream steps to branch on. An endpoint on a private
+                address, such as a local Ollama, needs the instance to set{" "}
+                <code>CRONIUM_AI_ALLOW_PRIVATE_URLS=true</code>. (Separately,
+                administrators can enable AI-assisted script generation in the
+                Admin page&apos;s AI Assistant tab.)
               </li>
             </ul>
             <p>

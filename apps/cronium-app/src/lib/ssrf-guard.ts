@@ -15,6 +15,7 @@ import http from "http";
 import https from "https";
 import { lookup as dnsLookup } from "dns/promises";
 import net from "net";
+import axios from "axios";
 import { isDisallowedIp, SsrfBlockedError } from "@/lib/tools/safe-fetch";
 
 /**
@@ -112,3 +113,61 @@ export function assertRequestUrlIsPublic(rawUrl: string): URL {
   }
   return parsed;
 }
+
+/**
+ * assertRequestUrlIsPublic plus a DNS check, for callers that want to refuse a host
+ * with a clear error before handing the URL to a library that would report the
+ * connect-time refusal as a generic connection failure. A host that does not resolve
+ * passes: the request itself will fail, with a more useful message.
+ */
+export async function assertUrlResolvesPublic(rawUrl: string): Promise<void> {
+  const { hostname } = assertRequestUrlIsPublic(rawUrl);
+  const host = hostname.replace(/^\[|\]$/g, "");
+  if (net.isIP(host)) return;
+
+  const addresses = await dnsLookup(host, { all: true }).catch(() => []);
+  const internal = addresses.find(({ address }) => isDisallowedIp(address));
+  if (internal) {
+    throw new SsrfBlockedError(
+      `Host "${hostname}" resolves to a disallowed address (${internal.address})`,
+    );
+  }
+}
+
+// Bound what is buffered for a response from a host the user chose.
+const MAX_GUARDED_FETCH_RESPONSE_BYTES = 20 * 1024 * 1024;
+
+/**
+ * A `fetch` for SDKs that accept one. It goes through the guarded agents, so the
+ * address is validated at connect time, and does not follow redirects. Responses are
+ * buffered, so it does not suit a streaming API.
+ */
+export const ssrfGuardedFetch: typeof fetch = async (input, init) => {
+  const url = input instanceof Request ? input.url : input.toString();
+  assertRequestUrlIsPublic(url);
+
+  const response = await axios.request<ArrayBuffer>({
+    url,
+    method: init?.method ?? "GET",
+    headers: Object.fromEntries(new Headers(init?.headers).entries()),
+    data: init?.body,
+    ...(init?.signal ? { signal: init.signal } : {}),
+    httpAgent: ssrfHttpAgent,
+    httpsAgent: ssrfHttpsAgent,
+    maxRedirects: 0,
+    maxContentLength: MAX_GUARDED_FETCH_RESPONSE_BYTES,
+    responseType: "arraybuffer",
+    validateStatus: () => true,
+  });
+
+  const headers = new Headers();
+  for (const [key, value] of Object.entries(response.headers)) {
+    if (value !== undefined && value !== null) headers.set(key, String(value));
+  }
+  const hasBody = ![204, 205, 304].includes(response.status);
+  return new Response(hasBody ? response.data : null, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+};

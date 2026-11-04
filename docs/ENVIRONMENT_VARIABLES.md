@@ -143,9 +143,10 @@ postgresql://user:password@localhost:5432/cronium?sslmode=require
 
 ### AI Integration
 
-| Variable         | Description                    | Type     | Default | Required |
-| ---------------- | ------------------------------ | -------- | ------- | -------- |
-| `OPENAI_API_KEY` | OpenAI API key for AI features | `string` | -       | No       |
+| Variable                        | Description                                                                                                                                                                                                                                | Type     | Default | Required |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ------- | -------- |
+| `OPENAI_API_KEY`                | OpenAI API key for AI features                                                                                                                                                                                                             | `string` | -       | No       |
+| `CRONIUM_AI_ALLOW_PRIVATE_URLS` | Let users' AI connections point at private addresses, such as a LAN Ollama or vLLM. Off by default, because any user with an AI connection can then reach the server's internal network. Endpoints an administrator configures are exempt. | `bool`   | `false` | No       |
 
 ### Marketing Site (`apps/cronium-info`)
 

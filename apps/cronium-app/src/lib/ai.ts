@@ -2,6 +2,8 @@ import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
 import { storage } from "@/server/storage";
+import { assertUrlResolvesPublic, ssrfGuardedFetch } from "@/lib/ssrf-guard";
+import { SsrfBlockedError } from "@/lib/tools/safe-fetch";
 import { env } from "../env.mjs";
 import {
   AI_PROVIDER_IDS,
@@ -21,6 +23,9 @@ export interface AiConfig {
   model: string;
   apiKey: string | undefined;
   baseUrl: string | undefined;
+  // Set only for a base URL an administrator configured. Anything else is held to
+  // the SSRF guard (see openAiEndpointOptions).
+  trustedBaseUrl?: boolean;
 }
 
 // Options shared by every provider dispatcher and by the public generateText().
@@ -99,7 +104,35 @@ export async function getAiConfig(): Promise<AiConfig> {
     baseUrl = baseUrlSetting?.value ?? undefined;
   }
 
-  return { provider, model, apiKey, baseUrl };
+  return { provider, model, apiKey, baseUrl, trustedBaseUrl: true };
+}
+
+/**
+ * Client options for an OpenAI-compatible endpoint. A user's own AI connection names
+ * its base URL, so without a guard any user could make the server send requests to
+ * cloud metadata or anything else on its network, the same exposure HTTP request
+ * events are guarded against. An administrator's endpoint may be on the LAN, and an
+ * instance whose users run models there (Ollama, vLLM) can opt in.
+ */
+async function openAiEndpointOptions(
+  baseUrl: string | undefined,
+  trusted = false,
+): Promise<{ baseURL?: string; fetch?: typeof fetch }> {
+  if (!baseUrl) return {};
+  if (trusted || env.CRONIUM_AI_ALLOW_PRIVATE_URLS === "true") {
+    return { baseURL: baseUrl };
+  }
+  try {
+    await assertUrlResolvesPublic(baseUrl);
+  } catch (error) {
+    if (error instanceof SsrfBlockedError) {
+      throw new Error(
+        `${error.message}. An administrator can allow internal AI endpoints by setting CRONIUM_AI_ALLOW_PRIVATE_URLS=true.`,
+      );
+    }
+    throw error;
+  }
+  return { baseURL: baseUrl, fetch: ssrfGuardedFetch };
 }
 
 // Whether the configured provider has everything it needs to serve requests.
@@ -193,7 +226,7 @@ async function generateWithOpenAI(
 ): Promise<GenerateTextResult> {
   const openai = new OpenAI({
     apiKey: config.apiKey,
-    ...(config.baseUrl ? { baseURL: config.baseUrl } : {}),
+    ...(await openAiEndpointOptions(config.baseUrl, config.trustedBaseUrl)),
   });
 
   const systemPrompt = withJsonInstruction(
@@ -386,10 +419,11 @@ async function listOpenAIModels(
   apiKey: string,
   baseUrl?: string,
   filterChatModels = true,
+  trustedBaseUrl = false,
 ): Promise<AiModelOption[]> {
   const openai = new OpenAI({
     apiKey,
-    ...(baseUrl ? { baseURL: baseUrl } : {}),
+    ...(await openAiEndpointOptions(baseUrl, trustedBaseUrl)),
   });
 
   const models: AiModelOption[] = [];
@@ -447,6 +481,8 @@ export async function listAvailableModels(
   provider: AiProviderId,
   apiKey?: string,
   baseUrl?: string,
+  // True when an administrator is the one naming the base URL.
+  options: { trustedBaseUrl?: boolean } = {},
 ): Promise<ListModelsResult> {
   // A caller-supplied base URL is an attacker-controllable origin. The platform
   // provider key must NEVER be sent there (HI-02): if the caller points the
@@ -495,7 +531,13 @@ export async function listAvailableModels(
           models = await listOpenAIModels(resolvedKey);
           break;
         case "custom":
-          models = await listOpenAIModels(resolvedKey, resolvedBaseUrl, false);
+          models = await listOpenAIModels(
+            resolvedKey,
+            resolvedBaseUrl,
+            false,
+            // Without a caller's URL this is the administrator's saved endpoint.
+            options.trustedBaseUrl === true || !callerSuppliedBaseUrl,
+          );
           break;
       }
       if (models.length > 0) {
