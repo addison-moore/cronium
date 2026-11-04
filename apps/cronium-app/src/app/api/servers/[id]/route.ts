@@ -113,11 +113,18 @@ export async function PUT(
     // If SSH key is provided, test the connection
     if (parsedBody.data.sshKey) {
       try {
+        const address = parsedBody.data.address ?? existingServer.address;
+        const port = parsedBody.data.port ?? existingServer.port;
         const connectionResult = await sshService.testConnection(
-          parsedBody.data.address ?? existingServer.address,
+          address,
           parsedBody.data.sshKey,
           parsedBody.data.username ?? existingServer.username,
-          parsedBody.data.port ?? existingServer.port,
+          port,
+          undefined,
+          // The pinned key applies while the target is the same host.
+          address === existingServer.address && port === existingServer.port
+            ? existingServer.id
+            : undefined,
         );
 
         if (!connectionResult.success) {

@@ -33,6 +33,11 @@ const languageMap: Record<string, string> = {
   // Add more mappings as needed
 };
 
+// highlightedCode is rendered as HTML, and this viewer shows script output. Prism
+// escapes what it highlights, so anything that skips Prism has to be escaped here.
+const escapeHtml = (value: string): string =>
+  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
 export function CodeViewer({
   code,
   language,
@@ -86,11 +91,11 @@ export function CodeViewer({
           setHighlightedCode(highlighted);
         } else {
           // Fallback to plain text if language not supported
-          setHighlightedCode(code);
+          setHighlightedCode(escapeHtml(code));
         }
       } catch (error) {
         console.error("Error loading Prism:", error);
-        setHighlightedCode(code);
+        setHighlightedCode(escapeHtml(code));
       } finally {
         setIsLoading(false);
       }

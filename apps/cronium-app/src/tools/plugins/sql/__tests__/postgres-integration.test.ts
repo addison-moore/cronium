@@ -60,6 +60,26 @@ describeIf("postgres adapter (integration)", () => {
     timeoutMs: 15_000,
   };
 
+  it("refuses a write smuggled past the keyword check", async () => {
+    // Matches no rows and would change nothing, but the database refuses the plan.
+    await expect(
+      postgresDriver.query(
+        creds,
+        "WITH d AS (DELETE FROM pg_catalog.pg_description WHERE false RETURNING 1) SELECT * FROM d",
+        {},
+        opts,
+      ),
+    ).rejects.toThrow(/read-only transaction/);
+    await expect(
+      postgresDriver.query(
+        creds,
+        "EXPLAIN ANALYZE DELETE FROM pg_catalog.pg_description WHERE false",
+        {},
+        opts,
+      ),
+    ).rejects.toThrow(/read-only transaction/);
+  });
+
   it("binds :named params and returns them", async () => {
     const res = await postgresDriver.query(
       creds,

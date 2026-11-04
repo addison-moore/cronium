@@ -20,9 +20,11 @@ jest.mock("@/lib/ssh", () => ({
 
 import { NextRequest } from "next/server";
 import { PUT } from "../[id]/route";
+import { sshService } from "@/lib/ssh";
 import { storage } from "@/server/storage";
 
 const s = storage as unknown as Record<string, jest.Mock>;
+const testConnection = sshService.testConnection as unknown as jest.Mock;
 
 const put = (body: unknown) =>
   PUT(
@@ -60,4 +62,24 @@ describe("PUT /api/servers/[id]", () => {
     await put({ sshKey: "NEW-KEY" });
     expect(s.updateServer).toHaveBeenCalledWith(1, { sshKey: "NEW-KEY" });
   });
+
+  it("checks a new key against the pinned host key while the target is unchanged", async () => {
+    await put({ sshKey: "NEW-KEY" });
+    expect(testConnection).toHaveBeenCalledWith(
+      "10.0.0.1",
+      "NEW-KEY",
+      "root",
+      22,
+      undefined,
+      1,
+    );
+  });
+
+  it.each([{ address: "10.0.0.2" }, { port: 2222 }])(
+    "does not apply the old pin to a new target (%j)",
+    async (target) => {
+      await put({ sshKey: "NEW-KEY", ...target });
+      expect(testConnection.mock.calls[0]?.[5]).toBeUndefined();
+    },
+  );
 });

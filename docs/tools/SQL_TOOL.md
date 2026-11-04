@@ -34,8 +34,11 @@ Use **Test Connection** to verify before saving; it runs a lightweight
 ### Run Query
 
 Runs a **read-only** statement (`SELECT` / `WITH` / `EXPLAIN` / `SHOW`) and
-returns the rows. This action **produces output**: its result becomes the next
-workflow step's `cronium.input()`.
+returns the rows. It runs inside a read-only transaction, so the database rejects a
+write even from a statement that starts with an allowed keyword. Use **Execute
+Statement** for anything that writes, including a `WITH ... DELETE` or `nextval()`.
+This action **produces output**: its result becomes the next workflow step's
+`cronium.input()`.
 
 Result shape:
 

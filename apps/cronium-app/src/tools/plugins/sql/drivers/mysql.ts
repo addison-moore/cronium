@@ -89,6 +89,14 @@ export const mysqlDriver: SqlDriver = {
       await new Promise<void>((resolve, reject) => {
         conn.connect((err) => (err ? reject(err) : resolve()));
       });
+      // The action's keyword check is only a first pass, so have the database
+      // refuse any write. Nothing here commits, and destroying the connection
+      // discards the transaction.
+      await new Promise<void>((resolve, reject) => {
+        conn.query("START TRANSACTION READ ONLY", (err) =>
+          err ? reject(err) : resolve(),
+        );
+      });
 
       const acc = createRowAccumulator(opts.maxRows, opts.maxBytes);
       let columns: string[] = [];
