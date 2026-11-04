@@ -136,7 +136,7 @@ func (c *Checker) checkDocker(ctx context.Context) ComponentStatus {
 	if c.dockerClient == nil {
 		// Try to create client
 		var err error
-		c.dockerClient, err = client.NewClientWithOpts(client.FromEnv)
+		c.dockerClient, err = client.New(client.FromEnv)
 		if err != nil {
 			return ComponentStatus{
 				Status:    StatusUnhealthy,

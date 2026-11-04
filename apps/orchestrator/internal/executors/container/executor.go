@@ -76,11 +76,15 @@ func NewExecutor(cfg config.ContainerConfig, apiClient *api.Client, log *logrus.
 	if err := validateDockerEndpoint(cfg.Docker.Endpoint); err != nil {
 		return nil, err
 	}
-	// Create Docker client
-	dockerClient, err := client.NewClientWithOpts(
-		client.WithHost(cfg.Docker.Endpoint),
-		client.WithVersion(cfg.Docker.Version),
-	)
+	// Create Docker client. The API version is negotiated with the daemon unless
+	// an operator pins one: a fixed default goes stale in both directions (stock
+	// Linux Docker Engine 29+ refuses anything below API 1.44, so the old 1.41
+	// default turned every ContainerCreate into a 400).
+	opts := []client.Opt{client.WithHost(cfg.Docker.Endpoint)}
+	if cfg.Docker.Version != "" {
+		opts = append(opts, client.WithAPIVersion(cfg.Docker.Version))
+	}
+	dockerClient, err := client.New(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}

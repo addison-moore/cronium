@@ -1,5 +1,5 @@
 # Python dependencies for Cronium runtime
 requests==2.34.2
-# 3.14.3 fixes GHSA-cq5v-8q36-5273 (high): out-of-bounds heap read in the C
-# HTTP response parser's error path on a malformed chunked response.
-aiohttp==3.14.3
+# 3.14.5 fixes the parser, cookie, multipart and connector advisories open against
+# 3.14.3 (GHSA-pqxq-w44r-73xw, GHSA-2g87-pp6c-29x5, GHSA-9xw5-w5jj-pvcg and others).
+aiohttp==3.14.5

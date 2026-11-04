@@ -112,6 +112,6 @@ this list; run `pnpm install --force` locally on a cold store to refresh it.
 ## Go services
 
 `apps/orchestrator`, `apps/runner/cronium-runner`, `apps/runtime/cronium-runtime`
-pin their modules in `go.mod`; the Go toolchain is pinned to `go 1.25.12` across
-`go.work`, every `go.mod`, CI, and the Docker builders, and CI runs `govulncheck`
+pin their modules in `go.mod`; the Go toolchain is pinned to `go 1.27.3` across
+`go.work`, CI, and the Docker builders (`go.mod` carries the minimum `go 1.26.0`), and CI runs `govulncheck`
 per module.
