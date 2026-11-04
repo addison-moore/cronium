@@ -20,9 +20,15 @@ cronium.input() {
     "${CRONIUM_HELPERS_DIR}/cronium.input" "$@"
 }
 
-# cronium.output() - Set output data
+# cronium.output() - Set output data, from its arguments or else from stdin. The
+# binary reads only stdin, so without this an argument was dropped and the output
+# stored as null, which the container SDK's identical call does not do.
 cronium.output() {
-    "${CRONIUM_HELPERS_DIR}/cronium.output" "$@"
+    if [ "$#" -gt 0 ]; then
+        printf '%%s' "$*" | "${CRONIUM_HELPERS_DIR}/cronium.output"
+    else
+        "${CRONIUM_HELPERS_DIR}/cronium.output"
+    fi
 }
 
 # cronium.getVariable() - Get a variable value
@@ -45,7 +51,7 @@ cronium.event() {
 # interface runs unchanged whether it executes locally (container) or remotely
 # (runner).
 cronium_input()        { "${CRONIUM_HELPERS_DIR}/cronium.input" "$@"; }
-cronium_output()       { "${CRONIUM_HELPERS_DIR}/cronium.output" "$@"; }
+cronium_output()       { cronium.output "$@"; }
 cronium_get_variable() { "${CRONIUM_HELPERS_DIR}/cronium.getVariable" "$@"; }
 cronium_set_variable() { "${CRONIUM_HELPERS_DIR}/cronium.setVariable" "$@"; }
 cronium_event()        { "${CRONIUM_HELPERS_DIR}/cronium.event" "$@"; }
