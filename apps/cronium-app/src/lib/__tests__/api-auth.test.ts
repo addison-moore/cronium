@@ -177,6 +177,37 @@ describe("authenticateRestPrincipal — bearer token scope enforcement (HI-25)",
     expect(res).toEqual({ ok: false, status: 403 });
   });
 
+  describe("a route that declares no scope path", () => {
+    // /api/admin/*, /api/logs*, ... call authenticateRestPrincipal without a
+    // path. That used to skip scope enforcement entirely.
+    const token = (scopes: string[] | null) => ({
+      id: 1,
+      userId: "user-1",
+      status: TokenStatus.ACTIVE,
+      expiresAt: null,
+      scopes,
+    });
+
+    it.each([
+      ["mcp-scoped", ["mcp"]],
+      ["unknown-scoped", ["nonsense"]],
+      ["empty-scoped", []],
+      ["legacy unscoped", null],
+    ])("denies a %s token", async (_label, scopes) => {
+      mockGet.mockResolvedValue(token(scopes));
+      await expect(
+        authenticateRestPrincipal(bearerRequest("t"), "view"),
+      ).resolves.toEqual({ ok: false, status: 403 });
+    });
+
+    it("allows a full token", async () => {
+      mockGet.mockResolvedValue(token(["full"]));
+      await expect(
+        authenticateRestPrincipal(bearerRequest("t"), "view"),
+      ).resolves.toMatchObject({ ok: true, scopes: ["full"] });
+    });
+  });
+
   it("allows a full-scope token on any path", async () => {
     mockGet.mockResolvedValue({
       id: 1,

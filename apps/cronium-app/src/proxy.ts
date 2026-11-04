@@ -27,13 +27,10 @@ export async function proxy(request: NextRequest) {
   const applyCsp = isProduction;
   const nonce = generateNonce();
 
-  const isProtectedRoute =
-    pathname.startsWith("/dashboard") ||
-    pathname.startsWith("/api/dashboard") ||
-    pathname.startsWith("/api/events") ||
-    pathname.startsWith("/api/logs");
-
-  if (isProtectedRoute) {
+  // Pages only. API routes authenticate themselves and answer with JSON; sending
+  // them through this cookie check redirected every bearer-token request to the
+  // HTML sign-in page before its handler ever ran.
+  if (pathname.startsWith("/dashboard")) {
     const sessionCookie =
       request.cookies.get("next-auth.session-token") ??
       request.cookies.get("__Secure-next-auth.session-token");

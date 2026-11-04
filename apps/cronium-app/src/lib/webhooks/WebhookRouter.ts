@@ -4,7 +4,7 @@ import { WebhookManager } from "./WebhookManager";
 import { WebhookSecurity } from "./WebhookSecurity";
 import { db } from "@/server/db";
 import { webhookEvents, webhookLogs } from "@/shared/schema";
-import { resolveClientIp } from "@/lib/security/client-ip";
+import { clientIpFromHeaders } from "@/lib/security/client-ip";
 
 export interface WebhookRequest {
   method: string;
@@ -305,12 +305,7 @@ export class WebhookRouter {
    * rate limiting) by prepending X-Forwarded-For entries.
    */
   private getClientIP(request: NextRequest): string | undefined {
-    return (
-      resolveClientIp(
-        request.headers.get("x-forwarded-for"),
-        request.headers.get("x-real-ip"),
-      ) ?? undefined
-    );
+    return clientIpFromHeaders(request.headers) ?? undefined;
   }
 
   /**

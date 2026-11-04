@@ -75,6 +75,7 @@ jest.mock("@/lib/security/client-ip", () => ({
 jest.mock("@/server/storage", () => ({
   storage: {
     getUser: jest.fn(),
+    getAllUsers: jest.fn(),
     getUserByUsername: jest.fn(),
     getUserByEmail: jest.fn(),
     getUserByInviteToken: jest.fn(),
@@ -141,6 +142,7 @@ const mocked = <T>(fn: T): AnyMock => fn as unknown as AnyMock;
 
 const s = storage as unknown as Record<
   | "getUser"
+  | "getAllUsers"
   | "getUserByUsername"
   | "getUserByEmail"
   | "getUserByInviteToken"
@@ -254,6 +256,7 @@ beforeEach(() => {
   mocked(encryptionService.verifyPassword).mockResolvedValue(false);
 
   s.getUser.mockResolvedValue(undefined);
+  s.getAllUsers.mockResolvedValue([]);
   s.getUserByUsername.mockResolvedValue(undefined);
   s.getUserByEmail.mockResolvedValue(undefined);
   s.getUserByInviteToken.mockResolvedValue(undefined);
@@ -485,14 +488,37 @@ describe("userAuth.forgotPassword", () => {
     expect(s.createPasswordResetToken).not.toHaveBeenCalled();
   });
 
-  it("still maps a mid-flight SMTP_CONFIG_MISSING send failure to BAD_REQUEST", async () => {
+  it("does not wait for the mail server, so timing cannot reveal the account exists", async () => {
     s.getUserByEmail.mockResolvedValue(userRow());
-    mocked(sendPasswordResetEmail).mockRejectedValue(
-      new Error("SMTP_CONFIG_MISSING"),
+    // A send that never finishes: awaiting it would hang this test.
+    mocked(sendPasswordResetEmail).mockReturnValue(
+      new Promise(() => undefined),
     );
+
     await expect(
       publicCaller().userAuth.forgotPassword({ email: "alice@example.com" }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    ).resolves.toMatchObject({ success: true });
+    expect(mocked(sendPasswordResetEmail)).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives the same answer when the send fails, logging instead of surfacing it", async () => {
+    const consoleError = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    s.getUserByEmail.mockResolvedValue(userRow());
+    mocked(sendPasswordResetEmail).mockRejectedValue(
+      new Error("connection refused"),
+    );
+
+    await expect(
+      publicCaller().userAuth.forgotPassword({ email: "alice@example.com" }),
+    ).resolves.toMatchObject({ success: true });
+    await new Promise(setImmediate);
+    expect(consoleError).toHaveBeenCalledWith(
+      "Failed to send password reset email:",
+      "connection refused",
+    );
+    consoleError.mockRestore();
   });
 
   it("rejects malformed email (zod) and rate-limited callers", async () => {
@@ -749,7 +775,7 @@ describe("userAuth.login", () => {
 
 describe("userAuth.getCurrentUser", () => {
   it("returns the caller's profile without credential material", async () => {
-    s.getUserByEmail.mockResolvedValue(userRow());
+    s.getUser.mockResolvedValue(userRow());
     const result = await callerWith(sessionFor()).userAuth.getCurrentUser();
     expect(result.id).toBe("user-1");
     expectNoSecrets(result as Record<string, unknown>);
@@ -761,10 +787,24 @@ describe("userAuth.getCurrentUser", () => {
     ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 
-  it("rejects a session without a usable email", async () => {
+  it("resolves the account by session id, never the email frozen in the JWT", async () => {
+    // Alice changed her email, then someone registered her old one. Her session
+    // still says the old address, which now belongs to that other account.
+    s.getUser.mockResolvedValue(userRow());
+    s.getUserByEmail.mockResolvedValue(userRow({ id: "someone-else" }));
+
+    const result = await callerWith(sessionFor()).userAuth.getCurrentUser();
+
+    expect(result.id).toBe("user-1");
+    expect(s.getUser).toHaveBeenCalledWith("user-1");
+    expect(s.getUserByEmail).not.toHaveBeenCalled();
+  });
+
+  it("works for an account with no email on file", async () => {
+    s.getUser.mockResolvedValue(userRow({ email: null }));
     await expect(
       callerWith(sessionFor({ email: "" })).userAuth.getCurrentUser(),
-    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    ).resolves.toMatchObject({ id: "user-1" });
   });
 
   it("returns NOT_FOUND when the account row is gone", async () => {
@@ -775,7 +815,7 @@ describe("userAuth.getCurrentUser", () => {
 
   it("is readable by a Viewer (view capability)", async () => {
     dbState.rows = [principalRow({ role: UserRole.VIEWER, roleId: 3 })];
-    s.getUserByEmail.mockResolvedValue(userRow({ role: UserRole.VIEWER }));
+    s.getUser.mockResolvedValue(userRow({ role: UserRole.VIEWER }));
     await expect(
       callerWith(
         sessionFor({ role: UserRole.VIEWER }),
@@ -784,7 +824,7 @@ describe("userAuth.getCurrentUser", () => {
   });
 
   it("wraps storage failures as INTERNAL_SERVER_ERROR", async () => {
-    s.getUserByEmail.mockRejectedValue(new Error("db down"));
+    s.getUser.mockRejectedValue(new Error("db down"));
     await expect(
       callerWith(sessionFor()).userAuth.getCurrentUser(),
     ).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
@@ -793,7 +833,7 @@ describe("userAuth.getCurrentUser", () => {
 
 describe("userAuth.updateProfile", () => {
   it("updates only the caller's own row, resolved from the session", async () => {
-    s.getUserByEmail.mockResolvedValue(userRow());
+    s.getUser.mockResolvedValue(userRow());
     s.getUserByUsername.mockResolvedValue(undefined);
 
     const result = await callerWith(sessionFor()).userAuth.updateProfile({
@@ -814,7 +854,7 @@ describe("userAuth.updateProfile", () => {
   });
 
   it("strips smuggled fields so user A cannot retarget or escalate (zod strips unknown keys)", async () => {
-    s.getUserByEmail.mockResolvedValue(userRow());
+    s.getUser.mockResolvedValue(userRow());
     await callerWith(sessionFor()).userAuth.updateProfile({
       username: "newalice",
       id: "victim-user",
@@ -833,11 +873,8 @@ describe("userAuth.updateProfile", () => {
   });
 
   it("rejects a taken username or email with CONFLICT", async () => {
-    s.getUserByEmail.mockImplementation((email: string) =>
-      Promise.resolve(
-        email === "alice@example.com" ? userRow() : userRow({ id: "user-2" }),
-      ),
-    );
+    s.getUser.mockResolvedValue(userRow());
+    s.getUserByEmail.mockResolvedValue(userRow({ id: "user-2" }));
     s.getUserByUsername.mockResolvedValue(userRow({ id: "user-2" }));
 
     await expect(
@@ -852,14 +889,13 @@ describe("userAuth.updateProfile", () => {
   });
 
   it("skips the conflict check when the values are unchanged", async () => {
-    s.getUserByEmail.mockResolvedValue(userRow());
+    s.getUser.mockResolvedValue(userRow());
     await callerWith(sessionFor()).userAuth.updateProfile({
       username: "alice",
       email: "alice@example.com",
     });
     expect(s.getUserByUsername).not.toHaveBeenCalled();
-    // Only the self-lookup; no second conflict lookup for the same email.
-    expect(s.getUserByEmail).toHaveBeenCalledTimes(1);
+    expect(s.getUserByEmail).not.toHaveBeenCalled();
     expect(s.updateUser).toHaveBeenCalled();
   });
 
@@ -886,14 +922,18 @@ describe("userAuth.updateProfile", () => {
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
-  it("rejects a session without a usable email, and a vanished account row", async () => {
-    await expect(
-      callerWith(sessionFor({ email: "" })).userAuth.updateProfile({
-        username: "newalice",
-      }),
-    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  it("updates the session's own row even when its email now names someone else", async () => {
+    s.getUser.mockResolvedValue(userRow());
+    s.getUserByEmail.mockResolvedValue(userRow({ id: "someone-else" }));
 
-    // Session email no longer maps to an account.
+    await callerWith(sessionFor()).userAuth.updateProfile({
+      username: "newalice",
+    });
+
+    expect(s.updateUser.mock.calls[0]?.[0]).toBe("user-1");
+  });
+
+  it("rejects a vanished account row", async () => {
     await expect(
       callerWith(sessionFor()).userAuth.updateProfile({ username: "newalice" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -903,7 +943,7 @@ describe("userAuth.updateProfile", () => {
 
 describe("userAuth.deleteAccount", () => {
   it("deletes only the caller's own account", async () => {
-    s.getUserByEmail.mockResolvedValue(userRow());
+    s.getUser.mockResolvedValue(userRow());
     await expect(
       callerWith(sessionFor()).userAuth.deleteAccount(),
     ).resolves.toEqual({ success: true });
@@ -931,11 +971,44 @@ describe("userAuth.deleteAccount", () => {
     expect(s.deleteUser).not.toHaveBeenCalled();
   });
 
-  it("rejects a session without a usable email", async () => {
-    await expect(
-      callerWith(sessionFor({ email: "" })).userAuth.deleteAccount(),
-    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
-    expect(s.deleteUser).not.toHaveBeenCalled();
+  it("deletes the session's own account even when its email now names someone else", async () => {
+    s.getUser.mockResolvedValue(userRow());
+    s.getUserByEmail.mockResolvedValue(userRow({ id: "someone-else" }));
+
+    await callerWith(sessionFor()).userAuth.deleteAccount();
+
+    expect(s.deleteUser).toHaveBeenCalledWith("user-1");
+    expect(s.deleteUser).not.toHaveBeenCalledWith("someone-else");
+  });
+
+  describe("last administrator", () => {
+    const admin = (overrides: Record<string, unknown> = {}) =>
+      userRow({ role: UserRole.ADMIN, ...overrides });
+
+    it("refuses to delete the only active admin", async () => {
+      s.getUser.mockResolvedValue(admin());
+      s.getAllUsers.mockResolvedValue([
+        admin(),
+        userRow({ id: "user-2" }),
+        // Another admin who is disabled cannot take over.
+        admin({ id: "user-3", status: UserStatus.DISABLED }),
+      ]);
+
+      await expect(
+        callerWith(sessionFor()).userAuth.deleteAccount(),
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      expect(s.deleteUser).not.toHaveBeenCalled();
+    });
+
+    it("allows it when another active admin remains", async () => {
+      s.getUser.mockResolvedValue(admin());
+      s.getAllUsers.mockResolvedValue([admin(), admin({ id: "user-2" })]);
+
+      await expect(
+        callerWith(sessionFor()).userAuth.deleteAccount(),
+      ).resolves.toEqual({ success: true });
+      expect(s.deleteUser).toHaveBeenCalledWith("user-1");
+    });
   });
 });
 
@@ -948,6 +1021,17 @@ describe("userAuth.activateAccount", () => {
       inviteToken: "invite-token",
       inviteExpiry: new Date(Date.now() + 60 * 60 * 1000),
     });
+
+  it("looks the invite up by hash, so a database read cannot yield a usable link", async () => {
+    s.getUserByInviteToken.mockResolvedValue(invitedUser());
+
+    await publicCaller().userAuth.activateAccount(input);
+
+    expect(s.getUserByInviteToken).toHaveBeenCalledWith(
+      hashApiToken("invite-token"),
+    );
+    expect(s.getUserByInviteToken).not.toHaveBeenCalledWith("invite-token");
+  });
 
   it("activates an invited account, storing only the password hash and clearing the token", async () => {
     s.getUserByInviteToken.mockResolvedValue(invitedUser());
@@ -1077,11 +1161,8 @@ describe("unexpected-failure wrapping (INTERNAL_SERVER_ERROR, no detail leak)", 
     ).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
   });
 
-  it("forgotPassword: non-config email transport error", async () => {
-    s.getUserByEmail.mockResolvedValue(userRow());
-    mocked(sendPasswordResetEmail).mockRejectedValue(
-      new Error("connection refused"),
-    );
+  it("forgotPassword: account lookup failure", async () => {
+    s.getUserByEmail.mockRejectedValue(new Error("db down"));
     await expect(
       publicCaller().userAuth.forgotPassword({ email: "alice@example.com" }),
     ).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
@@ -1099,7 +1180,7 @@ describe("unexpected-failure wrapping (INTERNAL_SERVER_ERROR, no detail leak)", 
   });
 
   it("updateProfile / deleteAccount: storage write failures", async () => {
-    s.getUserByEmail.mockResolvedValue(userRow());
+    s.getUser.mockResolvedValue(userRow());
     s.updateUser.mockRejectedValue(new Error("db down"));
     await expect(
       callerWith(sessionFor()).userAuth.updateProfile({ username: "newalice" }),

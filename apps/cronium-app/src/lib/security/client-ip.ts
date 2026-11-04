@@ -79,10 +79,27 @@ export function resolveClientIp(
   return candidate ? normalizeIp(candidate) : null;
 }
 
-/** Convenience wrapper for the Web `Headers` request path. */
-export function clientIpFromHeaders(
-  headers: Headers,
-  directPeer?: string | null,
+/**
+ * Client IP for a request whose only evidence is its headers, i.e. a route
+ * handler, which gets no socket.
+ *
+ * `X-Real-IP` is not a "direct peer" here. A proxy may set it, but with no trusted
+ * proxy configured it is exactly as client-controlled as `X-Forwarded-For`, and
+ * honoring it let a caller pick a fresh login rate-limit bucket on every attempt
+ * and claim an address on a webhook's IP allowlist. Behind `TRUSTED_PROXY_HOPS`
+ * it is only a fallback for a proxy that sets nothing else.
+ */
+export function resolveRequestClientIp(
+  forwardedFor: string | null | undefined,
+  realIp: string | null | undefined,
 ): string | null {
-  return resolveClientIp(headers.get("x-forwarded-for"), directPeer);
+  return resolveClientIp(forwardedFor, proxyHops() > 0 ? realIp : null);
+}
+
+/** Convenience wrapper for the Web `Headers` request path. */
+export function clientIpFromHeaders(headers: Headers): string | null {
+  return resolveRequestClientIp(
+    headers.get("x-forwarded-for"),
+    headers.get("x-real-ip"),
+  );
 }

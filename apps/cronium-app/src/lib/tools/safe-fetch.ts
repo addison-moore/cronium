@@ -83,7 +83,7 @@ function ipv6ToGroups(ip: string): number[] | null {
   if (dottedTail) {
     const v4 = ipv4ToInt(dottedTail[2]!);
     if (v4 === null) return null;
-    addr = `${dottedTail[1]}${(v4 >>> 16).toString(16)}:${(v4 & 0xffff).toString(16)}`;
+    addr = `${dottedTail[1]!}${(v4 >>> 16).toString(16)}:${(v4 & 0xffff).toString(16)}`;
   }
 
   const sides = addr.split("::");

@@ -97,7 +97,7 @@ import {
   encryptMfaSecret,
   decryptMfaSecret,
 } from "@/lib/security/field-secret";
-import { hashApiToken, isHashedApiToken } from "../lib/api-token-hash";
+import { hashApiToken } from "../lib/api-token-hash";
 
 /**
  * Record-bound (vault) encryption of a server row's credential columns, with
@@ -804,27 +804,24 @@ class DatabaseStorage implements IStorage {
 
   /**
    * Atomically consume one recovery code: succeeds only if `codeHash` is still
-   * present, removing it in the same UPDATE so it cannot be reused.
+   * present, removing it in the same UPDATE so it cannot be reused. The removal
+   * is computed by the database rather than written back from an earlier read,
+   * which would let two concurrent consumptions restore each other's code.
    */
   async consumeMfaRecoveryCode(
     userId: string,
     codeHash: string,
   ): Promise<boolean> {
-    const [user] = await db
-      .select({ codes: users.mfaRecoveryCodes })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
-    const codes = user?.codes ?? [];
-    if (!codes.includes(codeHash)) return false;
-    const remaining = codes.filter((c) => c !== codeHash);
     const result = await db
       .update(users)
-      .set({ mfaRecoveryCodes: remaining, updatedAt: new Date() })
+      .set({
+        mfaRecoveryCodes: sql`${users.mfaRecoveryCodes} - ${codeHash}::text`,
+        updatedAt: new Date(),
+      })
       .where(
         and(
           eq(users.id, userId),
-          sql`${users.mfaRecoveryCodes}::jsonb @> ${JSON.stringify([codeHash])}::jsonb`,
+          sql`${users.mfaRecoveryCodes} @> ${JSON.stringify([codeHash])}::jsonb`,
         ),
       )
       .returning({ id: users.id });
@@ -876,6 +873,14 @@ class DatabaseStorage implements IStorage {
     if (!user) {
       throw new Error("Failed to revoke sessions - user not found");
     }
+    // API tokens carry no session version (the live check compares against the
+    // row itself), so "every bearer principal" has to be revoked explicitly.
+    await db
+      .update(apiTokens)
+      .set({ status: TokenStatus.REVOKED, updatedAt: new Date() })
+      .where(
+        and(eq(apiTokens.userId, id), eq(apiTokens.status, TokenStatus.ACTIVE)),
+      );
     await invalidatePrincipal(id);
     await publishUserSocketRevocation(id, "sessions revoked");
     return user;
@@ -3494,19 +3499,20 @@ class DatabaseStorage implements IStorage {
 
     // Legacy fallback: tokens created before hashing are stored encrypted.
     // Decrypt-compare ONLY those rows that aren't already hashes, and migrate a
-    // match to a hash on use so this scan shrinks to nothing over time.
+    // match to a hash on use so this scan shrinks to nothing over time. Filtered
+    // in SQL because this runs for any unrecognized bearer token, unauthenticated:
+    // loading every active token per bad request is a cheap amplification.
     const legacyTokens = await db
       .select()
       .from(apiTokens)
-      .where(eq(apiTokens.status, TokenStatus.ACTIVE));
+      .where(
+        and(
+          eq(apiTokens.status, TokenStatus.ACTIVE),
+          sql`${apiTokens.token} !~ '^[0-9a-f]{64}$'`,
+        ),
+      );
 
     for (const apiToken of legacyTokens) {
-      if (
-        typeof apiToken.token !== "string" ||
-        isHashedApiToken(apiToken.token)
-      ) {
-        continue;
-      }
       try {
         if (encryptionService.decrypt(apiToken.token) === token) {
           const [migrated] = await db

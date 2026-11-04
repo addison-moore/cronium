@@ -23,18 +23,6 @@ import { passwordSchema } from "@/shared/schemas/password";
 const DUMMY_PASSWORD_HASH =
   "$2b$12$LI8GlJUh6wRE59.lG3A50u2vA6l0uMsIcw8PcLDOhmbEtDrZove0S";
 
-// Type guard for checking if user email exists in session
-function hasUserEmail(
-  session: { user?: { email?: string | null } } | null,
-): session is { user: { email: string } } {
-  return (
-    session?.user?.email !== null &&
-    session?.user?.email !== undefined &&
-    typeof session?.user?.email === "string" &&
-    session.user.email.length > 0
-  );
-}
-
 // Schemas
 // Public registration never accepts a role/status from the caller — it always
 // creates a regular USER (privileged accounts come from admin.createUser or
@@ -244,22 +232,18 @@ export const userAuthRouter = createTRPCRouter({
           used: false,
         });
 
-        // Send password reset email
-        try {
-          await sendPasswordResetEmail(email, resetToken);
-        } catch (error) {
-          if (
-            error instanceof Error &&
-            error.message === "SMTP_CONFIG_MISSING"
-          ) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message:
-                "Email is not configured. Please contact your administrator.",
-            });
-          }
-          throw error;
-        }
+        // Not awaited: an SMTP round trip only happens for real accounts, so
+        // waiting for it would hand back the same answer measurably later and
+        // undo the "same response either way" above. A missing SMTP configuration
+        // was already reported before the account lookup.
+        void sendPasswordResetEmail(email, resetToken).catch(
+          (error: unknown) => {
+            console.error(
+              "Failed to send password reset email:",
+              error instanceof Error ? error.message : String(error),
+            );
+          },
+        );
 
         return {
           success: true,
@@ -384,15 +368,9 @@ export const userAuthRouter = createTRPCRouter({
   // Get current user profile (protected)
   getCurrentUser: protectedProcedure.query(async ({ ctx }) => {
     try {
-      // Type-safe access to user email
-      if (!hasUserEmail(ctx.session)) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "User email not found in session",
-        });
-      }
-
-      const user = await storage.getUserByEmail(ctx.session.user.email);
+      // By id, never by the email in the session: that value is frozen into the
+      // JWT at sign-in, so after an email change it can name someone else.
+      const user = await storage.getUser(ctx.session.user.id);
 
       if (!user) {
         throw new TRPCError({
@@ -432,15 +410,7 @@ export const userAuthRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        // Type-safe access to user email
-        if (!hasUserEmail(ctx.session)) {
-          throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: "User email not found in session",
-          });
-        }
-
-        const user = await storage.getUserByEmail(ctx.session.user.email);
+        const user = await storage.getUser(ctx.session.user.id);
 
         if (!user) {
           throw new TRPCError({
@@ -501,21 +471,33 @@ export const userAuthRouter = createTRPCRouter({
   // Delete user account
   deleteAccount: protectedProcedure.mutation(async ({ ctx }) => {
     try {
-      // Type-safe access to user email
-      if (!hasUserEmail(ctx.session)) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "User email not found in session",
-        });
-      }
-
-      const user = await storage.getUserByEmail(ctx.session.user.email);
+      // By id, never by the email in the session: that value is frozen into the
+      // JWT at sign-in, so after an email change it can name someone else.
+      const user = await storage.getUser(ctx.session.user.id);
 
       if (!user) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "User not found",
         });
+      }
+
+      // The instance must keep an administrator: nobody else could reach Admin
+      // settings, and first-run setup only reopens with zero users.
+      if (user.role === UserRole.ADMIN) {
+        const otherAdmins = (await storage.getAllUsers()).filter(
+          (candidate) =>
+            candidate.id !== user.id &&
+            candidate.role === UserRole.ADMIN &&
+            candidate.status === UserStatus.ACTIVE,
+        );
+        if (otherAdmins.length === 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "You are the only active administrator. Promote someone else before deleting your account.",
+          });
+        }
       }
 
       // Delete user account
@@ -604,8 +586,8 @@ export const userAuthRouter = createTRPCRouter({
       try {
         const { token, password } = input;
 
-        // Find user with this invite token
-        const user = await storage.getUserByInviteToken(token);
+        // Find user with this invite token (stored hashed at rest)
+        const user = await storage.getUserByInviteToken(hashApiToken(token));
 
         if (!user) {
           throw new TRPCError({
@@ -665,8 +647,8 @@ export const userAuthRouter = createTRPCRouter({
       try {
         const { token } = input;
 
-        // Find user with this invite token
-        const user = await storage.getUserByInviteToken(token);
+        // Find user with this invite token (stored hashed at rest)
+        const user = await storage.getUserByInviteToken(hashApiToken(token));
 
         if (!user) {
           throw new TRPCError({

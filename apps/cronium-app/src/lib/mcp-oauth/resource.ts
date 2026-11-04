@@ -2,6 +2,7 @@ import type { Session } from "next-auth";
 import { getBearerToken } from "@/lib/api-auth";
 import { storage } from "@/server/storage";
 import { UserStatus } from "@/shared/schema";
+import { supportedScopes } from "./metadata";
 import { verifyAccessToken } from "./tokens";
 
 /**
@@ -20,8 +21,15 @@ export async function sessionFromOAuthToken(
 
   const user = await storage.getUser(payload.sub);
   // Bearer principals must be live: a disabled owner's OAuth tokens stop
-  // working immediately, not at token expiry.
-  if (user?.status !== UserStatus.ACTIVE) return null;
+  // working immediately, not at token expiry. The version check extends that to
+  // everything else that bumps sessionVersion (password reset, role change,
+  // "revoke sessions"), which is the only way to withdraw a self-contained token.
+  if (
+    user?.status !== UserStatus.ACTIVE ||
+    user.sessionVersion !== payload.sv
+  ) {
+    return null;
+  }
 
   const name =
     user.firstName || user.lastName
@@ -41,7 +49,7 @@ export async function sessionFromOAuthToken(
     expires: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
   } as Session;
 
-  // OAuth access tokens are always scoped to what the grant approved.
-  const scopes = payload.scope ? payload.scope.split(" ").filter(Boolean) : [];
-  return { session, scopes };
+  // OAuth access tokens are always scoped to what the grant approved, and never
+  // beyond what this server can grant, whatever a token issued earlier says.
+  return { session, scopes: supportedScopes(payload.scope ?? "") };
 }

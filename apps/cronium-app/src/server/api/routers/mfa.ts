@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { storage } from "@/server/storage";
 import { encryptionService } from "@/lib/encryption-service";
+import { consumeAtomicRateLimit } from "@/lib/security/atomic-rate-limiter";
 import {
   buildOtpAuthUri,
   generateTotpSecret,
@@ -28,6 +29,28 @@ async function requireReauth(userId: string, password: string): Promise<void> {
     });
   }
 }
+
+/**
+ * These mutations each verify a password and/or a 6-digit code, so without a limit
+ * a stolen session can guess at both. Keyed by account, so changing IP does not
+ * help, and fails closed like the login limiter.
+ */
+const mfaVerificationProcedure = protectedProcedure.use(
+  async ({ ctx, path, next }) => {
+    const { allowed, resetAt } = await consumeAtomicRateLimit(
+      ctx.session.user.id,
+      `mfa:${path}`,
+      { maxRequests: 10, windowMs: 60_000 },
+    );
+    if (!allowed) {
+      throw new TRPCError({
+        code: "TOO_MANY_REQUESTS",
+        message: `Too many attempts. Please try again after ${resetAt.toISOString()}`,
+      });
+    }
+    return next();
+  },
+);
 
 const reauthInput = z.object({
   password: z.string().min(1, "Your current password is required"),
@@ -61,7 +84,7 @@ export const mfaRouter = createTRPCRouter({
 
   // Confirm enrollment: reauthenticate, verify a live TOTP code against the
   // pending secret, then enable MFA and return one-time recovery codes.
-  confirmEnrollment: protectedProcedure
+  confirmEnrollment: mfaVerificationProcedure
     .input(reauthInput.merge(codeInput))
     .mutation(async ({ ctx, input }) => {
       await requireReauth(ctx.session.user.id, input.password);
@@ -84,7 +107,7 @@ export const mfaRouter = createTRPCRouter({
     }),
 
   // Disable MFA: reauthenticate and verify a current TOTP or recovery code.
-  disable: protectedProcedure
+  disable: mfaVerificationProcedure
     .input(reauthInput.merge(codeInput))
     .mutation(async ({ ctx, input }) => {
       await requireReauth(ctx.session.user.id, input.password);
@@ -112,7 +135,7 @@ export const mfaRouter = createTRPCRouter({
 
   // Regenerate recovery codes (invalidates the old set). Requires reauth and
   // that MFA is currently enabled.
-  regenerateRecoveryCodes: protectedProcedure
+  regenerateRecoveryCodes: mfaVerificationProcedure
     .input(reauthInput)
     .mutation(async ({ ctx, input }) => {
       await requireReauth(ctx.session.user.id, input.password);

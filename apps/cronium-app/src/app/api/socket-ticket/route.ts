@@ -33,8 +33,13 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   // Re-check the database instead of trusting a potentially stale JWT session.
+  // The version comparison is what makes a revoked session stop here: the JWT
+  // stays valid until it expires, and a ticket opens a terminal.
   const user = await storage.getUser(userId);
-  if (user?.status !== UserStatus.ACTIVE) {
+  if (
+    user?.status !== UserStatus.ACTIVE ||
+    user.sessionVersion !== session?.user?.sessionVersion
+  ) {
     return noStoreJson({ error: "Authentication required" }, { status: 401 });
   }
 

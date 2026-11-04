@@ -6,6 +6,19 @@
 export const SCOPES_SUPPORTED = ["mcp"];
 export const DEFAULT_SCOPE = "mcp";
 
+/** The scopes in a space-delimited request that this server can actually grant. */
+export function supportedScopes(scope: string): string[] {
+  return scope.split(" ").filter((s) => SCOPES_SUPPORTED.includes(s));
+}
+
+/** Whether every scope in a non-empty space-delimited request is supported. */
+export function isSupportedScopeRequest(scope: string): boolean {
+  const requested = scope.split(" ").filter(Boolean);
+  return (
+    requested.length > 0 && requested.every((s) => SCOPES_SUPPORTED.includes(s))
+  );
+}
+
 /** Absolute origin of this instance — env override, else the request origin. */
 export function getBaseUrl(req: Request): string {
   const env = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL;

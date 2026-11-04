@@ -21,8 +21,10 @@ import {
 } from "@/shared/schemas/admin";
 import { storage } from "@/server/storage";
 import { toUserApiDto } from "@/server/security/api-dto";
-import { UserRole, UserStatus } from "@/shared/schema";
+import { events, UserRole, UserStatus } from "@/shared/schema";
+import { count } from "drizzle-orm";
 import { sendInvitationEmail, sendEmailDetailed } from "@/lib/email";
+import { hashApiToken } from "@/lib/api-token-hash";
 import { listAvailableModels } from "@/lib/ai";
 import { AI_PROVIDER_IDS } from "@/shared/ai-providers";
 
@@ -102,7 +104,8 @@ export const adminRouter = createTRPCRouter({
             email: input.email,
             role: input.role,
             status: UserStatus.INVITED,
-            inviteToken,
+            // Only the hash is stored; the raw token exists in the email alone.
+            inviteToken: hashApiToken(inviteToken),
             inviteExpiry,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -119,7 +122,10 @@ export const adminRouter = createTRPCRouter({
             // The admin can resend the invitation if needed
           }
 
-          return mutationResponse(newUser, "Invitation sent successfully");
+          return mutationResponse(
+            toUserApiDto(newUser),
+            "Invitation sent successfully",
+          );
         },
         {
           component: "adminRouter",
@@ -142,12 +148,31 @@ export const adminRouter = createTRPCRouter({
             throw notFoundError("User");
           }
 
+          // Same rule as toggleUserStatus and disableUser. This path allowed it,
+          // and an admin demoting or disabling themselves can leave the instance
+          // with no administrator at all.
+          if (
+            id === ctx.session.user.id &&
+            ((updateData.role !== undefined &&
+              updateData.role !== UserRole.ADMIN) ||
+              (updateData.status !== undefined &&
+                updateData.status !== UserStatus.ACTIVE))
+          ) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "You cannot demote or disable your own account",
+            });
+          }
+
           const updatedUser = await storage.updateUser(id, {
             ...updateData,
             updatedAt: new Date(),
           });
 
-          return mutationResponse(updatedUser, "User updated successfully");
+          return mutationResponse(
+            toUserApiDto(updatedUser),
+            "User updated successfully",
+          );
         },
         {
           component: "adminRouter",
@@ -185,7 +210,7 @@ export const adminRouter = createTRPCRouter({
           });
 
           return mutationResponse(
-            updatedUser,
+            toUserApiDto(updatedUser),
             `User status changed to ${input.status}`,
           );
         },
@@ -255,7 +280,7 @@ export const adminRouter = createTRPCRouter({
                     newInviteExpiry.setHours(newInviteExpiry.getHours() + 48);
 
                     await storage.updateUser(userId, {
-                      inviteToken: newInviteToken,
+                      inviteToken: hashApiToken(newInviteToken),
                       inviteExpiry: newInviteExpiry,
                       updatedAt: new Date(),
                     });
@@ -333,7 +358,10 @@ export const adminRouter = createTRPCRouter({
             updatedAt: new Date(),
           });
 
-          return mutationResponse(updatedUser, "User approved successfully");
+          return mutationResponse(
+            toUserApiDto(updatedUser),
+            "User approved successfully",
+          );
         },
         {
           component: "adminRouter",
@@ -369,7 +397,10 @@ export const adminRouter = createTRPCRouter({
             updatedAt: new Date(),
           });
 
-          return mutationResponse(updatedUser, "User denied successfully");
+          return mutationResponse(
+            toUserApiDto(updatedUser),
+            "User denied successfully",
+          );
         },
         {
           component: "adminRouter",
@@ -397,7 +428,10 @@ export const adminRouter = createTRPCRouter({
             updatedAt: new Date(),
           });
 
-          return mutationResponse(updatedUser, "User enabled successfully");
+          return mutationResponse(
+            toUserApiDto(updatedUser),
+            "User enabled successfully",
+          );
         },
         {
           component: "adminRouter",
@@ -433,7 +467,10 @@ export const adminRouter = createTRPCRouter({
             updatedAt: new Date(),
           });
 
-          return mutationResponse(updatedUser, "User disabled successfully");
+          return mutationResponse(
+            toUserApiDto(updatedUser),
+            "User disabled successfully",
+          );
         },
         {
           component: "adminRouter",
@@ -498,7 +535,7 @@ export const adminRouter = createTRPCRouter({
           });
 
           return mutationResponse(
-            updatedUser,
+            toUserApiDto(updatedUser),
             "User promoted to admin successfully",
           );
         },
@@ -715,15 +752,10 @@ export const adminRouter = createTRPCRouter({
       return withErrorHandling(
         async () => {
           const allUsers = await storage.getAllUsers();
-
-          // For now, get events from the first admin user to approximate total events
-          const adminUsers = allUsers.filter((u) => u.role === UserRole.ADMIN);
-          let totalEvents = 0;
-          const firstAdmin = adminUsers[0];
-          if (firstAdmin) {
-            const adminEvents = await storage.getAllEvents(firstAdmin.id);
-            totalEvents = adminEvents.length;
-          }
+          const [eventCount] = await ctx.db
+            .select({ value: count() })
+            .from(events);
+          const totalEvents = eventCount?.value ?? 0;
 
           const stats = {
             totalUsers: allUsers.length,
@@ -880,7 +912,7 @@ export const adminRouter = createTRPCRouter({
           inviteExpiry.setHours(inviteExpiry.getHours() + 48);
 
           await storage.updateUser(user.id, {
-            inviteToken,
+            inviteToken: hashApiToken(inviteToken),
             inviteExpiry,
             updatedAt: new Date(),
           });
