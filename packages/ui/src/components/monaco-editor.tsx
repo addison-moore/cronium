@@ -34,7 +34,7 @@ export type EditorLanguage =
  * Monaco 0.55 moved this service off `monaco.languages.typescript` onto a
  * top-level `monaco.typescript` namespace, leaving the old path undefined
  * rather than shimmed. We resolve either location at runtime, so the editor
- * works against both the self-hosted bundle and the loader's CDN fallback.
+ * keeps working if the bundled Monaco moves across that change.
  *
  * These are declared locally because `@monaco-editor/react`'s exported
  * `Monaco` type aliases a deep subpath import that monaco 0.56's `exports`
