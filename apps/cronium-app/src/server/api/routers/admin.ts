@@ -590,7 +590,9 @@ export const adminRouter = createTRPCRouter({
           smtpPassword: settingsObject.smtpPassword ?? "",
           smtpFromEmail: settingsObject.smtpFromEmail ?? "",
           smtpFromName: settingsObject.smtpFromName ?? "Cronium",
-          allowRegistration: settingsObject.allowRegistration ?? false,
+          // Signup treats a missing setting as open, so showing it as off here
+          // told an administrator registration was closed when it was not.
+          allowRegistration: settingsObject.allowRegistration ?? true,
           requireAdminApproval: settingsObject.requireAdminApproval ?? false,
 
           // AI settings

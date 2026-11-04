@@ -4,6 +4,7 @@
  */
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
+import { encryptionService } from "@/lib/encryption-service";
 import { storage } from "@/server/storage";
 import { apiTokens, users } from "@/shared/schema";
 import { resetDatabase, closePool } from "./helpers/db-reset";
@@ -36,6 +37,41 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await closePool();
+});
+
+describe("createUser", () => {
+  it("stores a password that sign-in can verify", async () => {
+    const user = await storage.createUser({
+      id: USER,
+      email: "user@example.test",
+      username: "user",
+      password: "a-long-valid-password",
+      role: "USER",
+      status: "ACTIVE",
+    } as never);
+
+    expect(user.password).toMatch(/^\$2b\$/);
+    await expect(
+      encryptionService.verifyPassword(
+        "a-long-valid-password",
+        user.password ?? "",
+      ),
+    ).resolves.toBe(true);
+    await expect(
+      encryptionService.verifyPassword("wrong-password", user.password ?? ""),
+    ).resolves.toBe(false);
+  });
+
+  it("creates an invited user with no password", async () => {
+    const user = await storage.createUser({
+      id: USER,
+      email: "user@example.test",
+      role: "USER",
+      status: "INVITED",
+    } as never);
+
+    expect(user.password).toBeNull();
+  });
 });
 
 describe("consumeMfaRecoveryCode", () => {

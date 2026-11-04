@@ -82,7 +82,6 @@ import {
 } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import {
-  encryptSensitiveData,
   encryptionService,
   isSystemSettingSensitive,
 } from "../lib/encryption-service";
@@ -275,9 +274,7 @@ export interface IStorage {
   getUserByInviteToken(token: string): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
   queryUsers(query: AdminQueryInput): Promise<PaginatedResult<User>>;
-  createUser(
-    userData: InsertUser & { skipPasswordHashing?: boolean },
-  ): Promise<User>;
+  createUser(userData: InsertUser): Promise<User>;
   updateUser(id: string, updateData: Partial<InsertUser>): Promise<User>;
   disableUser(id: string): Promise<User>;
   revokeUserSessions(id: string): Promise<User>;
@@ -602,38 +599,17 @@ class DatabaseStorage implements IStorage {
     return createPaginatedResult(rows, total, pagination);
   }
 
-  async createUser(
-    userData: InsertUser & { skipPasswordHashing?: boolean },
-  ): Promise<User> {
-    // If we're skipping password hashing, it means the password is already hashed
-    // and we shouldn't encrypt it further
-    let encryptedData;
-    if (userData.skipPasswordHashing) {
-      // Skip encryption for password field when it's already hashed
-      const { password, ...otherData } = userData;
-      encryptedData = {
-        ...encryptSensitiveData(otherData, "users"),
-        password, // Keep the already-hashed password as-is
-      };
-    } else {
-      // Normal flow: encrypt sensitive data first
-      encryptedData = encryptSensitiveData(userData, "users");
-
-      // Hash password if provided and not already hashed
-      if (encryptedData.password) {
-        // Check if password is already a bcrypt hash
-        const isBcryptHash =
-          encryptedData.password.startsWith("$2b$") ||
-          encryptedData.password.startsWith("$2a$");
-        if (!isBcryptHash) {
-          encryptedData.password = await encryptionService.hashPassword(
-            encryptedData.password,
-          );
+  async createUser(userData: InsertUser): Promise<User> {
+    // Hash the password as given. Encrypting it first, as this used to, hashed the
+    // ciphertext, so sign-in could never match and the account was unusable.
+    const values = userData.password
+      ? {
+          ...userData,
+          password: await encryptionService.hashPassword(userData.password),
         }
-      }
-    }
+      : userData;
 
-    const [user] = await db.insert(users).values(encryptedData).returning();
+    const [user] = await db.insert(users).values(values).returning();
     if (!user) {
       throw new Error("Failed to create user");
     }

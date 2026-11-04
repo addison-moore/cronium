@@ -71,8 +71,7 @@ export async function executeHttpEvent(
         output: "",
       },
       // Input stays under cronium.input: letting it shadow a variable meant a webhook
-      // caller could repoint `{{cronium.getVariables.apiBase}}` at their own host and
-      // collect the Authorization header sent with it.
+      // caller could swap their own value in for anything the author read from one.
       variablesMap,
       input,
       {},

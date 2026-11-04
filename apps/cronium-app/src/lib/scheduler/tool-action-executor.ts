@@ -321,8 +321,8 @@ export async function executeToolAction(
         output: "", // Will be populated during execution
       },
       // Input stays under cronium.input. Letting it shadow a variable meant a webhook
-      // caller could repoint `{{cronium.getVariables.apiBase}}` at their own host and
-      // collect whatever else the request carried.
+      // caller could swap their own value in for anything the author read from one,
+      // such as `{{cronium.getVariables.ADMIN_EMAIL}}` in a recipient field.
       variablesMap,
       input, // Pass input data for cronium.input.* access
       {}, // Empty conditions object (can be populated from workflow context later)
