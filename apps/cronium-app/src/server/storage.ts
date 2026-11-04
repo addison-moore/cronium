@@ -1169,129 +1169,30 @@ class DatabaseStorage implements IStorage {
   async getEventWithRelations(
     id: number,
   ): Promise<EventWithRelations | undefined> {
-    // Direct call without caching
-    // Optimized implementation with parallel queries
-    return this.getEventWithRelationsOptimized(id);
-  }
-
-  private async getEventWithRelationsOptimized(
-    id: number,
-  ): Promise<EventWithRelations | undefined> {
-    try {
-      // Step 1: Fetch base event with simple relations
-      const eventPromise = db.query.events.findFirst({
-        where: eq(events.id, id),
-        with: {
-          envVars: true,
-          server: true,
-          eventServers: {
-            with: {
-              server: true,
-            },
-          },
-        },
-      });
-
-      const event = await eventPromise;
-
-      if (!event) {
-        return undefined;
-      }
-
-      // Transform the data to match the expected EventWithRelations structure
-      const servers =
-        event.eventServers
-          ?.map((es) => es.server)
-          .filter((s): s is Server => s !== null) || [];
-      const { eventServers: _eventServers, ...baseEvent } = event;
-      void _eventServers;
-
-      const result: EventWithRelations = {
-        ...baseEvent,
-        servers,
-      };
-
-      return result;
-    } catch (error) {
-      console.error(
-        `Error in getEventWithRelationsOptimized for event ${id}:`,
-        error,
-      );
-
-      // Fallback to simple version on error
-      return this.getEventWithRelationsSimple(id);
-    }
-  }
-
-  private async getEventWithRelationsSimple(
-    id: number,
-  ): Promise<EventWithRelations | undefined> {
-    try {
-      // First get the base event
-      const event = await db.query.events.findFirst({
-        where: eq(events.id, id),
-      });
-
-      if (!event) {
-        return undefined;
-      }
-
-      // Fetch only essential related data in parallel
-      const [envVarsData, eventServersData] = await Promise.all([
-        // Get env vars
-        db.query.envVars.findMany({
-          where: eq(envVars.eventId, id),
-        }),
-        // Get event servers with server data
-        db.query.eventServers.findMany({
-          where: eq(eventServers.eventId, id),
+    const event = await db.query.events.findFirst({
+      where: eq(events.id, id),
+      with: {
+        envVars: true,
+        server: true,
+        eventServers: {
           with: {
             server: true,
           },
-        }),
-      ]);
+        },
+      },
+    });
 
-      // Get the server if serverId exists
-      const serverData = event.serverId
-        ? await db.query.servers.findFirst({
-            where: eq(servers.id, event.serverId),
-          })
-        : null;
-
-      // Return simplified structure
-      const result: EventWithRelations = {
-        ...event,
-        envVars: envVarsData ?? [],
-        servers: eventServersData?.map((es) => es.server).filter(Boolean) ?? [],
-      };
-
-      // Only add server property if we have a server (optional property)
-      if (serverData !== undefined) {
-        result.server = serverData;
-      }
-
-      return result;
-    } catch (error) {
-      console.error(
-        `Error in getEventWithRelationsSimple for event ${id}:`,
-        error,
-      );
-      // Return minimal event data on error
-      const event = await db.query.events.findFirst({
-        where: eq(events.id, id),
-      });
-
-      if (!event) {
-        return undefined;
-      }
-
-      return {
-        ...event,
-        envVars: [],
-        server: null,
-        servers: [],
-      };
+    if (!event) {
+      return undefined;
     }
+
+    const { eventServers: relatedServers, ...baseEvent } = event;
+    return {
+      ...baseEvent,
+      servers: relatedServers
+        .map((es) => es.server)
+        .filter((server): server is Server => server !== null),
+    };
   }
 
   async getActiveEventsWithRelations(): Promise<EventWithRelations[]> {
@@ -1832,8 +1733,8 @@ class DatabaseStorage implements IStorage {
       conditions.push(eq(logs.status, filters.status));
     }
 
-    if (filters.date) {
-      const date = new Date(filters.date);
+    const date = filters.date ? new Date(filters.date) : null;
+    if (date && !Number.isNaN(date.getTime())) {
       const startOfDay = new Date(date);
       startOfDay.setHours(0, 0, 0, 0);
 
@@ -1884,65 +1785,25 @@ class DatabaseStorage implements IStorage {
       }
     }
 
-    // Handle user access filtering - allow logs from user's own events OR shared events
+    // Only the event's owner sees its logs. They hold script output and anything
+    // derived from the owner's secrets, and sharing an event grants view/fork of
+    // its template, not its execution history (same rule as events.getLogs and
+    // logs.getById). So "shared events only" has nothing to return.
+    if (filters.sharedOnly) {
+      return { logs: [], total: 0 };
+    }
     if (filters.userId) {
-      if (filters.ownEventsOnly) {
-        // Show only logs from user's own events (exclude shared events)
-        conditions.push(eq(logs.userId, filters.userId));
-      } else if (filters.sharedOnly) {
-        // Show only logs from shared events (exclude own events)
-        // This requires joining with events table to check sharing status
-        // We'll handle this in the query join logic below
-      } else {
-        // Show logs from user's own events AND shared events
-        // This requires joining with events table to check sharing status
-        // We'll handle this in the query join logic below
-      }
+      conditions.push(eq(events.userId, filters.userId));
     }
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    // Apply conditions to count query with events join for user access
-    let countQuery;
-    if (filters.userId && !filters.ownEventsOnly) {
-      // Need to join with events table to check sharing permissions
-      let userAccessCondition;
+    const [countResult] = await db
+      .select({ count: count() })
+      .from(logs)
+      .innerJoin(events, eq(logs.eventId, events.id))
+      .where(whereClause);
+    const total = countResult?.count ?? 0;
 
-      if (filters.sharedOnly) {
-        // Show only shared events (exclude own events)
-        userAccessCondition = sql`(${events.userId} != ${filters.userId} AND ${events.shared} = true)`;
-      } else {
-        // Show own events AND shared events
-        userAccessCondition = sql`(${events.userId} = ${filters.userId} OR ${events.shared} = true)`;
-      }
-
-      if (conditions.length > 0) {
-        countQuery = db
-          .select({ count: count() })
-          .from(logs)
-          .innerJoin(events, eq(logs.eventId, events.id))
-          .where(and(...conditions, userAccessCondition));
-      } else {
-        countQuery = db
-          .select({ count: count() })
-          .from(logs)
-          .innerJoin(events, eq(logs.eventId, events.id))
-          .where(userAccessCondition);
-      }
-    } else {
-      if (conditions.length > 0) {
-        countQuery = db
-          .select({ count: count() })
-          .from(logs)
-          .where(and(...conditions));
-      } else {
-        countQuery = db.select({ count: count() }).from(logs);
-      }
-    }
-
-    const [countResult] = await countQuery;
-    const total = Number(countResult?.count) ?? 0;
-
-    // Apply conditions to main query with workflow and events joins
-    let query;
     const selectFields = {
       id: logs.id,
       eventId: logs.eventId,
@@ -1968,50 +1829,12 @@ class DatabaseStorage implements IStorage {
       workflowName: workflows.name,
     };
 
-    if (filters.userId && !filters.ownEventsOnly) {
-      // Need to join with events table to check sharing permissions
-      let userAccessCondition;
-
-      if (filters.sharedOnly) {
-        // Show only shared events (exclude own events)
-        userAccessCondition = sql`(${events.userId} != ${filters.userId} AND ${events.shared} = true)`;
-      } else {
-        // Show own events AND shared events
-        userAccessCondition = sql`(${events.userId} = ${filters.userId} OR ${events.shared} = true)`;
-      }
-
-      if (conditions.length > 0) {
-        query = db
-          .select(selectFields)
-          .from(logs)
-          .innerJoin(events, eq(logs.eventId, events.id))
-          .leftJoin(workflows, eq(logs.workflowId, workflows.id))
-          .where(and(...conditions, userAccessCondition));
-      } else {
-        query = db
-          .select(selectFields)
-          .from(logs)
-          .innerJoin(events, eq(logs.eventId, events.id))
-          .leftJoin(workflows, eq(logs.workflowId, workflows.id))
-          .where(userAccessCondition);
-      }
-    } else {
-      if (conditions.length > 0) {
-        query = db
-          .select(selectFields)
-          .from(logs)
-          .leftJoin(workflows, eq(logs.workflowId, workflows.id))
-          .where(and(...conditions));
-      } else {
-        query = db
-          .select(selectFields)
-          .from(logs)
-          .leftJoin(workflows, eq(logs.workflowId, workflows.id));
-      }
-    }
-
-    // Add pagination and sorting
-    const logsResult = await query
+    const logsResult = await db
+      .select(selectFields)
+      .from(logs)
+      .innerJoin(events, eq(logs.eventId, events.id))
+      .leftJoin(workflows, eq(logs.workflowId, workflows.id))
+      .where(whereClause)
       .orderBy(desc(logs.startTime))
       .limit(limit)
       .offset(offset);
@@ -2022,7 +1845,7 @@ class DatabaseStorage implements IStorage {
   async getDistinctWorkflowsFromLogs(
     userId: string,
   ): Promise<{ id: number; name: string }[]> {
-    // Get distinct workflows from logs where user has access (own events or shared events)
+    // Distinct workflows in the logs this user can read, i.e. their own events'.
     const distinctWorkflows = await db
       .selectDistinct({
         id: workflows.id,
@@ -2032,10 +1855,7 @@ class DatabaseStorage implements IStorage {
       .innerJoin(events, eq(logs.eventId, events.id))
       .innerJoin(workflows, eq(logs.workflowId, workflows.id))
       .where(
-        and(
-          sql`${logs.workflowId} IS NOT NULL`,
-          sql`(${events.userId} = ${userId} OR ${events.shared} = true)`,
-        ),
+        and(sql`${logs.workflowId} IS NOT NULL`, eq(events.userId, userId)),
       )
       .orderBy(workflows.name);
 
@@ -2235,7 +2055,11 @@ class DatabaseStorage implements IStorage {
     if (revokeSockets) await assertSocketSecurityStoreAvailable();
     // Record-bound credential encryption needs the owning tenant (2.1).
     const [owner] = await db
-      .select({ userId: servers.userId })
+      .select({
+        userId: servers.userId,
+        address: servers.address,
+        port: servers.port,
+      })
       .from(servers)
       .where(eq(servers.id, id))
       .limit(1);
@@ -2244,9 +2068,18 @@ class DatabaseStorage implements IStorage {
     }
     const encryptedData = encryptServerColumns(updateData, owner.userId);
 
+    // Pointing the row at another machine: the pinned key belongs to the old one.
+    // Keeping it fails closed with a host key mismatch, and nothing else can clear
+    // it, so the server could never be reached again. The new machine goes back
+    // through first-contact policy (accept-new, or refused under strict).
+    const movesHost =
+      (updateData.address !== undefined &&
+        updateData.address !== owner.address) ||
+      (updateData.port !== undefined && updateData.port !== owner.port);
+
     const [server] = await db
       .update(servers)
-      .set(encryptedData)
+      .set(movesHost ? { ...encryptedData, sshHostKey: null } : encryptedData)
       .where(eq(servers.id, id))
       .returning();
 
@@ -3646,43 +3479,25 @@ class DatabaseStorage implements IStorage {
   ): Promise<UserVariable> {
     // Encrypt at rest, bound to this user + key (HI-09).
     const storedValue = encryptVariableValue(value, userId, key);
-    // Try to update existing variable first
-    const existingVariable = await this.getUserVariable(userId, key);
-
-    if (existingVariable) {
-      const [updatedVariable] = await db
-        .update(userVariables)
-        .set({
+    // A single upsert: read-then-insert lost the race when two steps set the same
+    // new variable at once, and the loser failed on the unique constraint.
+    const [variable] = await db
+      .insert(userVariables)
+      .values({ userId, key, value: storedValue, description })
+      .onConflictDoUpdate({
+        target: [userVariables.userId, userVariables.key],
+        set: {
           value: storedValue,
-          description: description ?? existingVariable.description,
+          ...(description !== undefined && { description }),
           updatedAt: new Date(),
-        })
-        .where(
-          and(eq(userVariables.userId, userId), eq(userVariables.key, key)),
-        )
-        .returning();
+        },
+      })
+      .returning();
 
-      if (!updatedVariable) {
-        throw new Error("Failed to update user variable");
-      }
-      return decryptVariableRow(updatedVariable);
-    } else {
-      // Create new variable
-      const [newVariable] = await db
-        .insert(userVariables)
-        .values({
-          userId,
-          key,
-          value: storedValue,
-          description,
-        })
-        .returning();
-
-      if (!newVariable) {
-        throw new Error("Failed to create user variable");
-      }
-      return decryptVariableRow(newVariable);
+    if (!variable) {
+      throw new Error("Failed to set user variable");
     }
+    return decryptVariableRow(variable);
   }
 
   async getUserVariables(userId: string): Promise<UserVariable[]> {

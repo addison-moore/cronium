@@ -307,21 +307,6 @@ export type AuthenticatedContext = TRPCContext & {
 };
 
 /**
- * Helper middleware to ensure database transaction context
- * Usage: t.procedure.use(withTransaction).mutation(async ({ ctx }) => { ... })
- */
-export const withTransaction = t.middleware(async ({ ctx, next }) => {
-  return ctx.db.transaction(async (trx) => {
-    return next({
-      ctx: {
-        ...ctx,
-        db: trx,
-      },
-    });
-  });
-});
-
-/**
  * Performance timing middleware for monitoring request duration
  * Logs slow queries in development and production
  */

@@ -9,7 +9,6 @@ import {
   protectedProcedure,
   withTiming,
   withRateLimit,
-  withTransaction,
 } from "../trpc";
 import { EventStatus, RunLocation } from "@/shared/schema";
 import {
@@ -25,6 +24,7 @@ import {
 } from "@/shared/schemas/events";
 import { storage } from "@/server/storage";
 import { scheduler } from "@/lib/scheduler";
+import { touchesEventSchedule } from "@/lib/scheduling/materialize";
 import { payloadService } from "@/lib/services/payload-service";
 import {
   assertEventCapability,
@@ -102,7 +102,6 @@ export const eventsRouter = createTRPCRouter({
   create: protectedProcedure
     .use(withTiming)
     .use(withRateLimit(50, 60000)) // 50 creates per minute
-    .use(withTransaction)
     .input(createEventSchema)
     .mutation(async ({ ctx, input }) => {
       if (!ctx.session?.user?.id) {
@@ -136,11 +135,6 @@ export const eventsRouter = createTRPCRouter({
           );
         }
 
-        // Materialize the durable schedule — an event created directly as
-        // ACTIVE + SCHEDULE starts firing without needing a separate edit
-        // (scheduling review M6)
-        await scheduler.updateScript(event.id);
-
         // Handle environment variables
         if (input.envVars && input.envVars.length > 0) {
           for (const envVar of input.envVars) {
@@ -164,6 +158,12 @@ export const eventsRouter = createTRPCRouter({
             userId,
           );
         }
+
+        // Materialize the durable schedule — an event created directly as
+        // ACTIVE + SCHEDULE starts firing without needing a separate edit
+        // (scheduling review M6). Last, so the dispatcher cannot pick the event
+        // up before its env vars and servers exist.
+        await scheduler.updateScript(event.id);
 
         // Payload generation moved to orchestrator
         // The orchestrator will create payloads from job script content
@@ -190,7 +190,6 @@ export const eventsRouter = createTRPCRouter({
   update: protectedProcedure
     .use(withTiming)
     .use(withRateLimit(100, 60000)) // 100 updates per minute
-    .use(withTransaction)
     .input(updateEventSchema)
     .mutation(async ({ ctx, input }) => {
       if (!ctx.session?.user?.id) {
@@ -256,17 +255,7 @@ export const eventsRouter = createTRPCRouter({
         // Re-sync the in-memory schedule when status or schedule fields
         // changed (updateScript cancels the old job and re-schedules only
         // if the event is ACTIVE)
-        if (
-          input.status !== undefined ||
-          input.triggerType !== undefined ||
-          input.scheduleNumber !== undefined ||
-          input.scheduleUnit !== undefined ||
-          input.customSchedule !== undefined ||
-          input.timezone !== undefined ||
-          input.catchupPolicy !== undefined ||
-          input.overlapPolicy !== undefined ||
-          input.startTime !== undefined
-        ) {
+        if (touchesEventSchedule(input)) {
           await scheduler.updateScript(id);
         }
 
@@ -610,7 +599,6 @@ export const eventsRouter = createTRPCRouter({
   fork: protectedProcedure
     .use(withTiming)
     .use(withRateLimit(50, 60000)) // 50 forks per minute
-    .use(withTransaction)
     .input(eventIdSchema)
     .mutation(async ({ ctx, input }) => {
       if (!ctx.session?.user?.id) {
@@ -657,6 +645,11 @@ export const eventsRouter = createTRPCRouter({
               value: string;
             }>) ?? [],
           httpBody: forkProjection.httpBody,
+          // Only your own: a shared tool action points at the owner's credential.
+          ...(forkProjection.owner && {
+            toolActionConfig: originalEvent.toolActionConfig,
+          }),
+          triggerType: originalEvent.triggerType,
           scheduleNumber: originalEvent.scheduleNumber,
           scheduleUnit: originalEvent.scheduleUnit,
           customSchedule: originalEvent.customSchedule,

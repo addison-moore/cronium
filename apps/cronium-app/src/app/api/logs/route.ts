@@ -8,6 +8,13 @@ import {
 import { z } from "zod";
 import { LogStatus } from "@/shared/schema";
 
+const MAX_PAGE_SIZE = 100;
+
+function positiveInt(raw: string | null, fallback: number): number {
+  const parsed = Number.parseInt(raw ?? "", 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const auth = await authenticateRestPrincipal(req, "view");
@@ -23,16 +30,24 @@ export async function GET(req: NextRequest) {
     const workflowId = searchParams.get("workflowId");
     const ownEventsOnly = searchParams.get("ownEventsOnly") === "true";
     const sharedOnly = searchParams.get("sharedOnly") === "true";
-    const page = parseInt(searchParams.get("page") ?? "1");
-    const pageSize = parseInt(searchParams.get("pageSize") ?? "20");
+    const page = positiveInt(searchParams.get("page"), 1);
+    const pageSize = Math.min(
+      positiveInt(searchParams.get("pageSize"), 20),
+      MAX_PAGE_SIZE,
+    );
 
     // Build filter object for database query
     const filters: LogFilters = {};
 
     // Add eventId filter if provided
     if (eventId) {
+      const parsedEventId = positiveInt(eventId, 0);
+      if (!parsedEventId) {
+        return NextResponse.json({ error: "Invalid eventId" }, { status: 400 });
+      }
+
       // Check if the user has access to this script
-      const script = await storage.getEvent(parseInt(eventId));
+      const script = await storage.getEvent(parsedEventId);
 
       if (!script) {
         return NextResponse.json(
@@ -48,7 +63,7 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      filters.eventId = eventId;
+      filters.eventId = String(parsedEventId);
     }
 
     // Add status filter if provided
@@ -66,7 +81,14 @@ export async function GET(req: NextRequest) {
       if (workflowId === "none") {
         filters.workflowId = null;
       } else {
-        filters.workflowId = parseInt(workflowId);
+        const parsedWorkflowId = positiveInt(workflowId, 0);
+        if (!parsedWorkflowId) {
+          return NextResponse.json(
+            { error: "Invalid workflowId" },
+            { status: 400 },
+          );
+        }
+        filters.workflowId = parsedWorkflowId;
       }
     }
 

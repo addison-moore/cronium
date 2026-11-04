@@ -116,6 +116,7 @@ export async function assertServerCapabilities(
   serverIds: readonly number[],
   userId: string,
   capability: ResourceCapability,
+  options: { allowArchived?: boolean } = {},
 ): Promise<void> {
   const ids = [...new Set(serverIds)];
   if (ids.length === 0) return;
@@ -131,7 +132,7 @@ export async function assertServerCapabilities(
     .where(inArray(servers.id, ids));
 
   if (
-    rows.some((server) => server.isArchived) ||
+    (!options.allowArchived && rows.some((server) => server.isArchived)) ||
     !allRequestedResourcesHaveCapability(ids, rows, userId, capability)
   ) {
     deny("server relationship");
@@ -156,7 +157,12 @@ export async function assertEventRelations(
   const serverIds = related.map((row) => row.serverId);
   if (event.serverId !== null) serverIds.push(event.serverId);
 
-  await assertServerCapabilities(serverIds, userId, "use-secret");
+  // An archived server blocks running the event, not looking at it. Refusing the
+  // read as well left the owner unable to open the event to repoint it, because
+  // archiving a server does not detach the events bound to it.
+  await assertServerCapabilities(serverIds, userId, "use-secret", {
+    allowArchived: capability === "view",
+  });
 }
 
 export async function assertWorkflowCapability(

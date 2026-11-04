@@ -58,18 +58,10 @@ export async function transformSSHJobForOrchestrator(
         : envVar.value;
     }
 
-    // Extract script content from event
-    const eventContent = event.content as {
-      content?: string;
-      type?: string;
-    } | null;
-    const scriptContent = eventContent?.content ?? "";
-    const scriptType = eventContent?.type ?? "BASH";
-
     // Ensure script content is included in execution
     transformedJob.execution.script ??= {
-      type: scriptType,
-      content: scriptContent,
+      type: event.type,
+      content: event.content ?? "",
       workingDirectory: "/tmp",
     };
 

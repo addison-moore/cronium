@@ -25,7 +25,7 @@ jest.mock("@/lib/services/job-service", () => ({
 }));
 
 jest.mock("@/lib/services/enhanced-job-transformer", () => ({
-  enhancedTransformJobsForOrchestrator: jest.fn(),
+  prepareJobsForOrchestrator: jest.fn(),
 }));
 
 jest.mock("@/server/db", () => ({
@@ -42,7 +42,7 @@ import fs from "fs";
 import path from "path";
 import { NextRequest } from "next/server";
 import { jobService } from "@/lib/services/job-service";
-import { enhancedTransformJobsForOrchestrator } from "@/lib/services/enhanced-job-transformer";
+import { prepareJobsForOrchestrator } from "@/lib/services/enhanced-job-transformer";
 import { db } from "@/server/db";
 import { JobStatus } from "@/shared/schema";
 import {
@@ -154,7 +154,7 @@ const wrongJobToken = () =>
   mintJobCapability({ jobId: "job-other", userId: USER_ID }, nowSec());
 
 const mockJobService = jobService as unknown as Record<string, jest.Mock>;
-const mockTransform = enhancedTransformJobsForOrchestrator as jest.Mock;
+const mockPrepare = prepareJobsForOrchestrator as jest.Mock;
 const mockDb = db as unknown as Record<string, jest.Mock>;
 
 /** Thenable Drizzle-style chain: every builder method returns itself. */
@@ -284,6 +284,34 @@ describe("POST /api/internal/jobs/claim", () => {
     expect(mockJobService.claimJobs).not.toHaveBeenCalled();
   });
 
+  it("fails a job it cannot prepare without taking the rest of the batch down", async () => {
+    const bad = { ...claimedJob(), id: "job-undecryptable" };
+    mockJobService.claimJobs!.mockResolvedValue([claimedJob(), bad]);
+    mockJobService.updateJobStatus!.mockResolvedValue(undefined);
+    mockPrepare.mockResolvedValue({
+      ready: [{ job: claimedJob(), transformed: orchJob() }],
+      failed: [{ job: bad, error: new Error("SECRET-DETAIL") }],
+    });
+
+    const res = await claimPOST(req(url, "POST", body, orchAuth));
+
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as {
+      jobs: Array<{ id: string; capabilityToken?: string }>;
+      count: number;
+    };
+    expect(payload.count).toBe(1);
+    expect(payload.jobs[0]!.id).toBe(JOB_ID);
+    expect(payload.jobs[0]!.capabilityToken).toBeTruthy();
+
+    const [failedId, status, update] = mockJobService.updateJobStatus!.mock
+      .calls[0] as [string, string, { error: string }];
+    expect(failedId).toBe("job-undecryptable");
+    expect(status).toBe("failed");
+    // The reason goes to the log, not onto a record the user reads.
+    expect(update.error).not.toContain("SECRET-DETAIL");
+  });
+
   it("401s with a wrong orchestrator key", async () => {
     const res = await claimPOST(
       req(url, "POST", body, { authorization: "Bearer wrong-key" }),
@@ -298,7 +326,10 @@ describe("POST /api/internal/jobs/claim", () => {
 
   it("claims a batch and mints a per-job capability token (fixture: success)", async () => {
     mockJobService.claimJobs!.mockResolvedValue([claimedJob()]);
-    mockTransform.mockResolvedValue([orchJob()]);
+    mockPrepare.mockResolvedValue({
+      ready: [{ job: claimedJob(), transformed: orchJob() }],
+      failed: [],
+    });
 
     const res = await claimPOST(req(url, "POST", body, orchAuth));
     const json = (await expectContract(res, fx.responses.success!)) as {
@@ -325,14 +356,14 @@ describe("POST /api/internal/jobs/claim", () => {
 
   it("returns an empty batch (fixture: empty)", async () => {
     mockJobService.claimJobs!.mockResolvedValue([]);
-    mockTransform.mockResolvedValue([]);
+    mockPrepare.mockResolvedValue({ ready: [], failed: [] });
     const res = await claimPOST(req(url, "POST", body, orchAuth));
     await expectContract(res, fx.responses.empty!);
   });
 
   it("clamps batchSize to 1..50 and leaseSeconds to 15..600", async () => {
     mockJobService.claimJobs!.mockResolvedValue([]);
-    mockTransform.mockResolvedValue([]);
+    mockPrepare.mockResolvedValue({ ready: [], failed: [] });
 
     await claimPOST(
       req(url, "POST", { ...body, batchSize: 999, leaseSeconds: 5 }, orchAuth),

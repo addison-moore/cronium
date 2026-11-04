@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { jobService } from "@/lib/services/job-service";
-import { enhancedTransformJobsForOrchestrator } from "@/lib/services/enhanced-job-transformer";
+import { prepareJobsForOrchestrator } from "@/lib/services/enhanced-job-transformer";
+import { JobStatus } from "@/shared/schema";
 import { verifyOrchestratorKey } from "@/lib/internal-auth";
 import { mintJobCapability } from "@/lib/security/job-capability";
 
@@ -41,13 +42,33 @@ export async function POST(request: NextRequest) {
       batchSize,
       leaseMs,
     );
-    const transformedJobs = await enhancedTransformJobsForOrchestrator(jobs);
+    const { ready, failed } = await prepareJobsForOrchestrator(jobs);
+
+    // Fail what could not be prepared now, with the reason, instead of letting
+    // it wait out a lease. The message stays generic: decryption and driver
+    // errors go to the server log, not to the job record the user reads.
+    for (const { job, error } of failed) {
+      console.error(
+        `Could not prepare job ${job.id} for the orchestrator:`,
+        error instanceof Error ? error.message : String(error),
+      );
+      await jobService.updateJobStatus(
+        job.id,
+        JobStatus.FAILED,
+        {
+          completedAt: new Date(),
+          error:
+            "Could not prepare this job to run. An environment variable or server credential may no longer be decryptable; re-enter it and run again.",
+          exitCode: 1,
+        },
+        `orchestrator:${body.orchestratorId}`,
+      );
+    }
 
     // Mint a per-job capability token (HI-10) scoped to the job, its owner, and
     // its target server. The orchestrator carries it and presents it on this
     // job's status/complete/fail/logs and execution create/update calls instead
-    // of the shared internal key. The transform is 1:1 and order-preserving, so
-    // job[i] pairs with transformedJobs[i].
+    // of the shared internal key.
     //
     // The token lifetime tracks the job's OWN timeout (not the lease, which is
     // short and renewed by heartbeat) plus a reporting buffer, so the token
@@ -55,19 +76,18 @@ export async function POST(request: NextRequest) {
     // module clamps this to its absolute ceiling.
     const nowSeconds = Math.floor(Date.now() / 1000);
     const REPORTING_BUFFER_SECONDS = 5 * 60;
-    transformedJobs.forEach((tj, i) => {
-      const source = jobs[i];
-      if (!source) return;
-      const timeoutSeconds = Math.ceil(tj.execution.timeout / 1e9);
-      tj.capabilityToken = mintJobCapability(
+    const transformedJobs = ready.map(({ job, transformed }) => {
+      const timeoutSeconds = Math.ceil(transformed.execution.timeout / 1e9);
+      transformed.capabilityToken = mintJobCapability(
         {
-          jobId: tj.id,
-          userId: source.userId ?? "",
-          serverId: tj.execution.target.serverId,
+          jobId: transformed.id,
+          userId: job.userId ?? "",
+          serverId: transformed.execution.target.serverId,
           ttlSeconds: timeoutSeconds + REPORTING_BUFFER_SECONDS,
         },
         nowSeconds,
       );
+      return transformed;
     });
 
     return NextResponse.json({

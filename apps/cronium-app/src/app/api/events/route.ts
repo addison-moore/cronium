@@ -1,7 +1,20 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
-import { EventType, EventStatus, RunLocation, TimeUnit } from "@/shared/schema";
+import {
+  EventType,
+  EventStatus,
+  EventTriggerType,
+  RunLocation,
+  TimeUnit,
+} from "@/shared/schema";
+import { scheduler } from "@/lib/scheduler";
+import {
+  intervalSecondsFor,
+  validateCronExpr,
+  validateIntervalSeconds,
+} from "@/lib/scheduling/schedule-math";
+import { canReadEnvVarValues } from "@/server/token-scopes";
 import { z } from "zod";
 import {
   authenticateRestPrincipal,
@@ -16,7 +29,10 @@ import { toEventApiDto, toEventListApiDto } from "@/server/security/api-dto";
 // Schema for validating new script input
 const createEventSchema = z
   .object({
-    name: z.string().min(1, { message: "Script name is required" }),
+    name: z
+      .string()
+      .min(1, { message: "Script name is required" })
+      .max(100, { message: "Script name must be less than 100 characters" }),
     description: z.string().optional(),
     shared: z.boolean().default(false),
     tags: z.array(z.string()).optional().default([]),
@@ -44,6 +60,8 @@ const createEventSchema = z
     httpBody: z.string().optional(),
 
     status: z.enum([EventStatus.ACTIVE, EventStatus.PAUSED, EventStatus.DRAFT]),
+    // Optional for compatibility; inferred from the schedule fields when absent.
+    triggerType: z.nativeEnum(EventTriggerType).optional(),
     scheduleNumber: z.number().min(1).optional(),
     scheduleUnit: z.enum([
       TimeUnit.SECONDS,
@@ -53,10 +71,10 @@ const createEventSchema = z
     ]),
     customSchedule: z.string().optional(),
     // Add start time field - can be string ISO date or null
-    startTime: z.union([z.string(), z.null(), z.undefined()]),
+    startTime: z.string().nullish(),
     runLocation: z.enum([RunLocation.LOCAL, RunLocation.REMOTE]),
     // Allow serverId to be null, undefined, or a number
-    serverId: z.union([z.number().int().positive(), z.null(), z.undefined()]),
+    serverId: z.number().int().positive().nullish(),
     // Support multiple servers
     selectedServerIds: z.array(z.number().int().positive()).optional(),
     timeoutValue: z.number().min(1),
@@ -76,7 +94,7 @@ const createEventSchema = z
     (data) => {
       // For HTTP_REQUEST type, require httpUrl and httpMethod
       if (data.type === EventType.HTTP_REQUEST) {
-        return !!data.httpUrl && !!data.httpMethod;
+        return (!!data.httpUrl && !!data.httpMethod) || !!data.httpRequest;
       }
       // For all other script types, require content
       return !!data.content;
@@ -85,7 +103,56 @@ const createEventSchema = z
       message: "Required fields are missing for the selected script type",
       path: ["type"],
     },
+  )
+  .refine(
+    (data) =>
+      !data.customSchedule || validateCronExpr(data.customSchedule).valid,
+    { message: "Invalid cron expression", path: ["customSchedule"] },
+  )
+  .refine(
+    (data) =>
+      Boolean(data.customSchedule) ||
+      !data.scheduleNumber ||
+      validateIntervalSeconds(
+        intervalSecondsFor(data.scheduleNumber, data.scheduleUnit),
+      ) === null,
+    {
+      message: "Intervals below 10 seconds are not supported",
+      path: ["scheduleNumber"],
+    },
   );
+
+/** The HTTP fields of a new event, from `httpRequest` JSON or the separate fields. */
+function httpFieldsFrom(data: z.infer<typeof createEventSchema>): {
+  httpMethod: string | null;
+  httpUrl: string | null;
+  httpBody: string;
+  httpHeaders: Array<{ key: string; value: string }>;
+} {
+  const fallback = {
+    httpMethod: data.httpMethod ?? null,
+    httpUrl: data.httpUrl ?? null,
+    httpBody: data.httpBody ?? "",
+    httpHeaders: data.httpHeaders ?? [],
+  };
+  if (!data.httpRequest) return fallback;
+  try {
+    const parsed = JSON.parse(data.httpRequest) as {
+      method?: string;
+      url?: string;
+      body?: string;
+      headers?: Array<{ key: string; value: string }>;
+    };
+    return {
+      httpMethod: parsed.method ?? fallback.httpMethod,
+      httpUrl: parsed.url ?? fallback.httpUrl,
+      httpBody: parsed.body ?? fallback.httpBody,
+      httpHeaders: parsed.headers ?? fallback.httpHeaders,
+    };
+  } catch {
+    return fallback;
+  }
+}
 
 // GET all scripts for the authenticated user
 export async function GET(request: NextRequest) {
@@ -100,30 +167,19 @@ export async function GET(request: NextRequest) {
       return restPrincipalErrorResponse(auth);
     }
 
-    console.log(`Fetching events for user: ${auth.userId}`);
-
     // Get all scripts for this user
     const events = await storage.getAllEvents(auth.userId);
-
-    console.log(`Found ${events.length} events for user ${auth.userId}`);
 
     return NextResponse.json(
       events.map((event) => toEventListApiDto(event, auth.userId)),
     );
   } catch (error) {
     console.error("Error fetching scripts:", error);
-    return new NextResponse(
-      JSON.stringify({ error: "Internal server error" }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      },
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
     );
   }
-}
-
-interface RequestBody {
-  httpRequest?: string;
 }
 
 // POST to create a new script
@@ -139,35 +195,17 @@ export async function POST(request: NextRequest) {
       return restPrincipalErrorResponse(auth);
     }
 
-    const body = (await request.json()) as RequestBody &
-      z.infer<typeof createEventSchema>;
-
-    // Validate input
-    const validationResult = createEventSchema.safeParse(body);
+    const validationResult = createEventSchema.safeParse(await request.json());
 
     if (!validationResult.success) {
-      console.error(
-        "Validation error details:",
-        JSON.stringify(validationResult.error.format(), null, 2),
-      );
-
-      return new NextResponse(
-        JSON.stringify({
+      return NextResponse.json(
+        {
           error: "Validation error",
           details: validationResult.error.format(),
-        }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
         },
+        { status: 400 },
       );
     }
-
-    // Log the validated data for debugging
-    console.log(
-      "Valid event data:",
-      JSON.stringify(validationResult.data, null, 2),
-    );
 
     const data = validationResult.data;
     await assertProposedEventServers(
@@ -176,121 +214,52 @@ export async function POST(request: NextRequest) {
       data.selectedServerIds,
     );
 
-    // Create the script
-    interface ScriptData {
-      userId: string;
-      name: string;
-      type: EventType;
-      status: EventStatus;
-      scheduleNumber: number;
-      scheduleUnit: TimeUnit;
-      customSchedule?: string;
-      startTime: Date | null;
-      runLocation: RunLocation;
-      serverId?: number | null;
-      timeoutValue: number;
-      timeoutUnit: TimeUnit;
-      retries: number;
-      content?: string;
-      httpMethod?: string | null;
-      httpUrl?: string | null;
-      httpBody?: string | null;
-      httpHeaders?: string | null;
-    }
-
-    const scriptData: ScriptData = {
+    const isHttpRequest = data.type === EventType.HTTP_REQUEST;
+    const script = await storage.createScript({
       userId: auth.userId,
       name: data.name,
+      ...(data.description !== undefined && { description: data.description }),
+      shared: data.shared,
+      tags: data.tags,
       type: data.type,
       status: data.status,
+      // The dispatcher only fires SCHEDULE events, and the column defaults to
+      // MANUAL, so a schedule supplied here used to be silently ignored.
+      triggerType:
+        data.triggerType ??
+        (data.customSchedule || data.scheduleNumber
+          ? EventTriggerType.SCHEDULE
+          : EventTriggerType.MANUAL),
       scheduleNumber: data.scheduleNumber ?? 1,
       scheduleUnit: data.scheduleUnit,
       ...(data.customSchedule ? { customSchedule: data.customSchedule } : {}),
-      // Handle the start time field - ensure it's a valid Date or null
       startTime: data.startTime ? new Date(data.startTime) : null,
       runLocation: data.runLocation,
-      ...(data.serverId !== undefined ? { serverId: data.serverId } : {}),
+      serverId:
+        data.runLocation === RunLocation.LOCAL ? null : (data.serverId ?? null),
       timeoutValue: data.timeoutValue,
       timeoutUnit: data.timeoutUnit,
       retries: data.retries,
-    };
-
-    // Handle serverId properly based on runLocation
-    if (scriptData.runLocation === RunLocation.LOCAL) {
-      scriptData.serverId = null;
-    }
-
-    // Add type-specific fields
-    if (data.type === EventType.HTTP_REQUEST) {
-      // Check if we have the new format httpRequest field
-      if (body.httpRequest && typeof body.httpRequest === "string") {
-        try {
-          const httpRequestData = JSON.parse(body.httpRequest) as {
-            method: string;
-            url: string;
-            body?: string;
-            headers?: Array<{ key: string; value: string }>;
-          };
-          scriptData.httpMethod = httpRequestData.method;
-          scriptData.httpUrl = httpRequestData.url;
-          scriptData.httpBody = httpRequestData.body ?? "";
-          scriptData.httpHeaders = JSON.stringify(
-            httpRequestData.headers ?? [],
-          );
-        } catch (parseError) {
-          console.error("Error parsing HTTP request data:", parseError);
-          // Fall back to the old format
-          if (data.httpMethod !== undefined)
-            scriptData.httpMethod = data.httpMethod;
-          if (data.httpUrl !== undefined) scriptData.httpUrl = data.httpUrl;
-          scriptData.httpBody = data.httpBody ?? "";
-
-          // Add HTTP headers if provided
-          if (data.httpHeaders && data.httpHeaders.length > 0) {
-            scriptData.httpHeaders = JSON.stringify(data.httpHeaders);
-          } else {
-            scriptData.httpHeaders = JSON.stringify([]);
-          }
-        }
-      } else {
-        // Use the old format
-        if (data.httpMethod !== undefined)
-          scriptData.httpMethod = data.httpMethod;
-        if (data.httpUrl !== undefined) scriptData.httpUrl = data.httpUrl;
-        scriptData.httpBody = data.httpBody ?? "";
-
-        // Add HTTP headers if provided
-        if (data.httpHeaders && data.httpHeaders.length > 0) {
-          scriptData.httpHeaders = JSON.stringify(data.httpHeaders);
-        } else {
-          scriptData.httpHeaders = JSON.stringify([]);
-        }
-      }
-
-      // For HTTP requests, we still need to set content to an empty string
-      // to satisfy database constraints
-      scriptData.content = "";
-    } else {
-      scriptData.content = data.content ?? "";
-
-      // For non-HTTP requests, ensure HTTP fields are null/empty
-      scriptData.httpMethod = null;
-      scriptData.httpUrl = null;
-      scriptData.httpBody = null;
-      scriptData.httpHeaders = null;
-    }
-
-    const script = await storage.createScript(scriptData);
+      // Headers stay an array: a JSON-encoded string in this jsonb column reads
+      // back as a string, which the HTTP executor drops as "no headers".
+      ...(isHttpRequest
+        ? { ...httpFieldsFrom(data), content: "" }
+        : {
+            content: data.content ?? "",
+            httpMethod: null,
+            httpUrl: null,
+            httpBody: null,
+            httpHeaders: null,
+          }),
+    });
 
     // Add environment variables if provided
-    if (data.envVars && data.envVars.length > 0) {
-      for (const envVar of data.envVars) {
-        await storage.createEnvVar({
-          eventId: script.id,
-          key: envVar.key,
-          value: envVar.value,
-        });
-      }
+    for (const envVar of data.envVars ?? []) {
+      await storage.createEnvVar({
+        eventId: script.id,
+        key: envVar.key,
+        value: envVar.value,
+      });
     }
 
     // Handle multiple server selection for remote events
@@ -302,22 +271,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Last, so the dispatcher cannot pick the event up half-configured.
+    await scheduler.updateScript(script.id);
+
     // Get the full script with all relations
     const fullScript = await storage.getEventWithRelations(script.id);
 
     return NextResponse.json(
-      fullScript ? toEventApiDto(fullScript, auth.userId) : null,
+      fullScript
+        ? toEventApiDto(fullScript, auth.userId, {
+            revealEnvVarValues: canReadEnvVarValues(auth.scopes),
+          })
+        : null,
       { status: 201 },
     );
   } catch (error) {
-    console.error("Error creating script:", error);
+    console.error(
+      "Error creating script:",
+      error instanceof Error ? error.message : String(error),
+    );
     const accessStatus = resourceAccessHttpStatus(error);
-    return new NextResponse(
-      JSON.stringify({ error: "Internal server error" }),
-      {
-        status: accessStatus ?? 500,
-        headers: { "Content-Type": "application/json" },
-      },
+    return NextResponse.json(
+      { error: accessStatus ? "Access denied" : "Internal server error" },
+      { status: accessStatus ?? 500 },
     );
   }
 }

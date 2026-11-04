@@ -39,7 +39,12 @@ export async function POST(
       timestamp: string;
     };
 
-    if (JSON.stringify(body.output ?? null).length > MAX_OUTPUT_BYTES) {
+    // Bytes, not UTF-16 code units: multi-byte text would otherwise get past the
+    // cap by up to a factor of 3.
+    if (
+      Buffer.byteLength(JSON.stringify(body.output ?? null), "utf8") >
+      MAX_OUTPUT_BYTES
+    ) {
       return NextResponse.json(
         { error: `Output exceeds the ${MAX_OUTPUT_BYTES}-byte limit` },
         { status: 413 },

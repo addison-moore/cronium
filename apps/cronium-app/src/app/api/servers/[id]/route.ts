@@ -163,10 +163,13 @@ export async function PUT(
       }
     }
 
-    // Filter out undefined values to satisfy exactOptionalPropertyTypes
+    // Filter out undefined values to satisfy exactOptionalPropertyTypes. A blank
+    // sshKey means "keep the current key" (see updateServerSchema); passing it on
+    // would overwrite the stored key with an empty string.
     const updateData = Object.fromEntries(
       Object.entries(parsedBody.data).filter(
-        ([_, value]) => value !== undefined,
+        ([key, value]) =>
+          value !== undefined && !(key === "sshKey" && value === ""),
       ),
     );
     const updatedServer = await storage.updateServer(serverId, updateData);

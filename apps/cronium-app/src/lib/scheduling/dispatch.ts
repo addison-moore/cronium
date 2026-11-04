@@ -211,6 +211,14 @@ export async function dispatchEventJob(
       );
       return { job: null, logId: null, skipped: "overlap" };
     }
+    // No job will ever finalize this row, so it would sit PENDING forever.
+    await storage
+      .updateLog(log.id, {
+        status: LogStatus.FAILURE,
+        endTime: new Date(),
+        error: "Failed to enqueue the job for this run",
+      })
+      .catch(() => undefined);
     throw error;
   }
 

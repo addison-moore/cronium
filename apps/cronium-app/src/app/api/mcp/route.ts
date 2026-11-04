@@ -22,7 +22,9 @@ import { MCP_TOOLS, MCP_TOOL_BY_NAME } from "./tools";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const SERVER_INFO = { name: "cronium", version: "0.1.0" };
+const SERVER_INFO = { name: "cronium", version: "0.2.0" };
+// Tools run sequentially and can execute events, so a batch has to be bounded.
+const MAX_BATCH_SIZE = 25;
 const DEFAULT_PROTOCOL = "2025-06-18";
 
 type JsonRpcId = string | number | null;
@@ -56,6 +58,11 @@ async function handleMessage(
   caller: ReturnType<typeof createCaller>,
   baseUrl: string,
 ): Promise<object | null> {
+  // JSON-RPC bodies are untrusted: `null` or `[null]` parse fine but are not
+  // messages, and dereferencing them took the whole request down with a 500.
+  if (typeof msg !== "object" || msg === null) {
+    return rpcError(null, -32600, "Invalid Request");
+  }
   const id = msg.id ?? null;
   switch (msg.method) {
     case "initialize": {
@@ -166,6 +173,12 @@ export async function POST(req: Request): Promise<Response> {
 
   // Support a JSON-RPC batch (array) or a single message.
   const messages = Array.isArray(body) ? body : [body];
+  if (messages.length > MAX_BATCH_SIZE) {
+    return Response.json(
+      rpcError(null, -32600, `Batch limit is ${MAX_BATCH_SIZE} messages`),
+      { status: 400 },
+    );
+  }
   const responses: object[] = [];
   for (const m of messages) {
     const res = await handleMessage(m as JsonRpcRequest, caller, baseUrl);
