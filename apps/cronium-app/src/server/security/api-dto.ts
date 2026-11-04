@@ -1,5 +1,6 @@
 import { RunLocation, type Server, type User } from "@/shared/schema";
-import type { Workflow } from "@/shared/schema";
+import type { EnvVar, Workflow } from "@/shared/schema";
+import { decryptEnvVarValue } from "@/lib/security/field-secret";
 import type {
   EventWithRelations,
   WorkflowWithRelations,
@@ -70,6 +71,41 @@ export type EventApiDto = Omit<EventWithRelations, "server" | "servers"> & {
 };
 
 /**
+ * `event.envVars` holds ciphertext: storage returns the row as is so dispatch can
+ * copy it into `jobs.payload` without ever persisting plaintext (ME-11). Anything
+ * bound for a client has to come through here. Returning the stored value instead
+ * is how the edit form came to display `crn.1...` and then re-encrypt it on save.
+ */
+function decryptedEnvVars(event: { id: number; envVars: EnvVar[] }): EnvVar[] {
+  return event.envVars.map((envVar) => {
+    if (!envVar.value) return envVar;
+    try {
+      return {
+        ...envVar,
+        value: decryptEnvVarValue(envVar.value, event.id, envVar.key),
+      };
+    } catch (error) {
+      // Blank rather than ciphertext: a client must never be handed something it
+      // could save back as the value. Usually means a retired key was removed.
+      console.error(
+        `Could not decrypt env var "${envVar.key}" of event ${event.id}:`,
+        error instanceof Error ? error.message : String(error),
+      );
+      return { ...envVar, value: "" };
+    }
+  });
+}
+
+export interface EventDtoOptions {
+  /**
+   * Include env var values in plaintext for the owner. Off by default, so a
+   * caller has to opt in; keys are still listed either way. Gate it with
+   * `canReadEnvVarValues` from token-scopes.ts.
+   */
+  revealEnvVarValues?: boolean;
+}
+
+/**
  * Owners can read event configuration, but nested SSH credentials never leave
  * the server. Shared viewers receive a reusable template without environment,
  * HTTP-secret, or server bindings.
@@ -77,6 +113,7 @@ export type EventApiDto = Omit<EventWithRelations, "server" | "servers"> & {
 export function toEventApiDto(
   event: EventWithRelations,
   viewerUserId: string,
+  options: EventDtoOptions = {},
 ): EventApiDto {
   const owner = event.userId === viewerUserId;
   // Drizzle relation objects may carry an undeclared `eventServers` runtime
@@ -91,7 +128,11 @@ export function toEventApiDto(
   void _eventServers;
   const safe: EventApiDto = {
     ...baseEvent,
-    envVars: owner ? event.envVars : [],
+    envVars: !owner
+      ? []
+      : options.revealEnvVarValues
+        ? decryptedEnvVars(event)
+        : event.envVars.map((envVar) => ({ ...envVar, value: "" })),
     serverId: owner ? event.serverId : null,
     ...(server !== undefined && {
       server: owner && server ? toServerApiDto(server) : null,
@@ -141,6 +182,7 @@ export function toEventListApiDto<
 export function toEventForkSecurityProjection(
   event: Pick<
     EventWithRelations,
+    | "id"
     | "userId"
     | "httpUrl"
     | "httpHeaders"
@@ -160,7 +202,9 @@ export function toEventForkSecurityProjection(
     httpBody: owner ? event.httpBody : null,
     runLocation: owner ? event.runLocation : RunLocation.LOCAL,
     serverId: owner ? event.serverId : null,
-    envVars: owner ? event.envVars : [],
+    // Plaintext, because the fork re-encrypts under its own (eventId, key): the
+    // source ciphertext is bound to this event and cannot decrypt anywhere else.
+    envVars: owner ? decryptedEnvVars(event) : [],
     servers: owner ? event.servers : [],
   };
 }

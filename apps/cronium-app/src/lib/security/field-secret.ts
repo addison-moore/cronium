@@ -140,12 +140,61 @@ export function encryptEnvVarValue(
   return encrypt(plaintext, envVarBinding(eventId, key));
 }
 
+// Upper bound on the unwrap below. A row gains one layer per save, so this only
+// has to outlast how often anyone edited an event while the bug was live; it
+// exists to bound the work, not as a meaningful limit.
+const MAX_ENV_VAR_ENVELOPE_DEPTH = 32;
+
+/**
+ * Decrypt an env var value, unwrapping any nested envelopes bound to the same
+ * (eventId, key).
+ *
+ * The unwrap repairs rows corrupted before the event read path decrypted values:
+ * the edit form was handed ciphertext and saved it back, and each save encrypted
+ * the previous ciphertext again, so a script received `crn.1...` instead of its
+ * secret. It is safe to apply unconditionally, because an inner value only
+ * decrypts if AES-GCM authenticates it under this exact binding, which only this
+ * code can produce. Anything else that merely starts with `crn.` is the user's
+ * real value and is returned as is.
+ */
 export function decryptEnvVarValue(
   stored: string,
   eventId: number | string,
   key: string,
 ): string {
-  return decrypt(stored, envVarBinding(eventId, key));
+  const binding = envVarBinding(eventId, key);
+  let value = decrypt(stored, binding);
+  for (
+    let depth = 0;
+    depth < MAX_ENV_VAR_ENVELOPE_DEPTH && isSecretEnvelope(value);
+    depth++
+  ) {
+    try {
+      value = getSecretVault().decrypt(value, binding);
+    } catch {
+      break;
+    }
+  }
+  return value;
+}
+
+/**
+ * Whether `value` is already a ciphertext for this exact (eventId, key). Lets the
+ * write path keep such a value as is instead of wrapping it again when a client
+ * submits back what an older read handed it.
+ */
+export function isEnvVarCiphertext(
+  value: string,
+  eventId: number | string,
+  key: string,
+): boolean {
+  if (!isSecretEnvelope(value)) return false;
+  try {
+    getSecretVault().decrypt(value, envVarBinding(eventId, key));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /* ---- system_settings (secret values, bound to the setting key) ---- */

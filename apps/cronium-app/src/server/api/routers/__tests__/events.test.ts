@@ -459,6 +459,23 @@ describe("getById", () => {
     expect(result.envVars).toEqual([{ key: "TOKEN", value: "s3cret" }]);
   });
 
+  it("hides env var values from a token scoped below `full`, keeping the keys", async () => {
+    // mcp scope may call events.getById, but token-scopes.ts promises env-var
+    // values are not readable through it.
+    storageMock.getEventWithRelations.mockResolvedValue(
+      eventWithRelations({ envVars: [{ key: "TOKEN", value: "s3cret" }] }),
+    );
+    const caller = createCaller({
+      session: sessionFor(),
+      db,
+      headers: new Headers(),
+      tokenScopes: ["mcp"],
+      requestSource: null,
+    });
+    const result = await caller.events.getById({ id: 1 });
+    expect(result?.envVars).toEqual([{ key: "TOKEN", value: "" }]);
+  });
+
   it("returns a redacted template for a shared event owned by someone else", async () => {
     dbState.events = [eventAccessRow({ userId: OTHER, shared: true })];
     storageMock.getEventWithRelations.mockResolvedValue(

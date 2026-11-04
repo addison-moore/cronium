@@ -91,6 +91,7 @@ import {
   decryptServerSecret,
   encryptEnvVarValue,
   decryptEnvVarValue,
+  isEnvVarCiphertext,
   encryptSystemSetting,
   decryptSystemSetting,
   encryptMfaSecret,
@@ -1733,14 +1734,22 @@ class DatabaseStorage implements IStorage {
   }
 
   async createEnvVar(insertEnvVar: InsertEnvVar): Promise<EnvVar> {
-    // Encrypt the value record-bound to (eventId, key) before storing (2.1).
-    const storedValue = insertEnvVar.value
-      ? encryptEnvVarValue(
-          insertEnvVar.value,
-          insertEnvVar.eventId,
-          insertEnvVar.key,
-        )
-      : insertEnvVar.value;
+    // Encrypt the value record-bound to (eventId, key) before storing (2.1). A
+    // value that is already ciphertext for this binding is kept as is, so a
+    // client resubmitting what it read cannot wrap the secret a second time.
+    const storedValue =
+      !insertEnvVar.value ||
+      isEnvVarCiphertext(
+        insertEnvVar.value,
+        insertEnvVar.eventId,
+        insertEnvVar.key,
+      )
+        ? insertEnvVar.value
+        : encryptEnvVarValue(
+            insertEnvVar.value,
+            insertEnvVar.eventId,
+            insertEnvVar.key,
+          );
 
     const [envVar] = await db
       .insert(envVars)

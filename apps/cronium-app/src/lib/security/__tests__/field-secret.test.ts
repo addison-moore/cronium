@@ -3,6 +3,7 @@ import {
   decryptServerSecret,
   encryptEnvVarValue,
   decryptEnvVarValue,
+  isEnvVarCiphertext,
   encryptSystemSetting,
   decryptSystemSetting,
   encryptMfaSecret,
@@ -58,6 +59,33 @@ describe("field-secret record-bound migration (2.1)", () => {
     const env = encryptMfaSecret("TOTPSEED", "user-1");
     expect(decryptMfaSecret(env, "user-1")).toBe("TOTPSEED");
     expect(() => decryptMfaSecret(env, "user-2")).toThrow();
+  });
+
+  it("unwraps env var values encrypted more than once under the same binding", () => {
+    const once = encryptEnvVarValue("s3cret", 42, "API_KEY");
+    const thrice = encryptEnvVarValue(
+      encryptEnvVarValue(once, 42, "API_KEY"),
+      42,
+      "API_KEY",
+    );
+    expect(decryptEnvVarValue(thrice, 42, "API_KEY")).toBe("s3cret");
+  });
+
+  it("does not unwrap an inner envelope bound to a different record", () => {
+    const foreign = encryptEnvVarValue("s3cret", 99, "API_KEY");
+    const outer = encryptEnvVarValue(foreign, 42, "API_KEY");
+    // The inner layer does not authenticate here, so it stays opaque rather
+    // than being treated as a decryption failure.
+    expect(decryptEnvVarValue(outer, 42, "API_KEY")).toBe(foreign);
+  });
+
+  it("recognizes only ciphertext for this exact binding", () => {
+    const env = encryptEnvVarValue("s3cret", 42, "API_KEY");
+    expect(isEnvVarCiphertext(env, 42, "API_KEY")).toBe(true);
+    expect(isEnvVarCiphertext(env, 99, "API_KEY")).toBe(false);
+    expect(isEnvVarCiphertext(env, 42, "OTHER")).toBe(false);
+    expect(isEnvVarCiphertext("plain", 42, "API_KEY")).toBe(false);
+    expect(isEnvVarCiphertext("crn.1.fake.a.b.c", 42, "API_KEY")).toBe(false);
   });
 
   it("passes legacy/plaintext values through the decrypt (non-breaking migration)", () => {

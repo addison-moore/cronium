@@ -36,6 +36,7 @@ import {
   toEventForkSecurityProjection,
   toEventListApiDto,
 } from "@/server/security/api-dto";
+import { canReadEnvVarValues } from "@/server/token-scopes";
 
 // Use the centralized development-friendly protected procedure
 // This handles authentication and auto-login in development mode
@@ -81,7 +82,9 @@ export const eventsRouter = createTRPCRouter({
             message: "Event not found",
           });
         }
-        return toEventApiDto(event, userId);
+        return toEventApiDto(event, userId, {
+          revealEnvVarValues: canReadEnvVarValues(ctx.tokenScopes),
+        });
       } catch (error) {
         if (error instanceof TRPCError) throw error;
 
@@ -168,7 +171,11 @@ export const eventsRouter = createTRPCRouter({
         // Get the complete event with relations
         const completeEvent = await storage.getEventWithRelations(event.id);
 
-        return completeEvent ? toEventApiDto(completeEvent, userId) : undefined;
+        return completeEvent
+          ? toEventApiDto(completeEvent, userId, {
+              revealEnvVarValues: canReadEnvVarValues(ctx.tokenScopes),
+            })
+          : undefined;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -279,7 +286,11 @@ export const eventsRouter = createTRPCRouter({
           }
         }
 
-        return updatedEvent ? toEventApiDto(updatedEvent, userId) : undefined;
+        return updatedEvent
+          ? toEventApiDto(updatedEvent, userId, {
+              revealEnvVarValues: canReadEnvVarValues(ctx.tokenScopes),
+            })
+          : undefined;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -553,7 +564,13 @@ export const eventsRouter = createTRPCRouter({
           return {
             format: "json",
             filename: `${String(event.name ?? "event")}.json`,
-            data: JSON.stringify(toEventApiDto(event, userId), null, 2),
+            data: JSON.stringify(
+              toEventApiDto(event, userId, {
+                revealEnvVarValues: canReadEnvVarValues(ctx.tokenScopes),
+              }),
+              null,
+              2,
+            ),
           };
         }
 
@@ -569,7 +586,11 @@ export const eventsRouter = createTRPCRouter({
           filename: "events.json",
           data: JSON.stringify(
             events.map((event) =>
-              event ? toEventApiDto(event, userId) : null,
+              event
+                ? toEventApiDto(event, userId, {
+                    revealEnvVarValues: canReadEnvVarValues(ctx.tokenScopes),
+                  })
+                : null,
             ),
             null,
             2,
@@ -690,7 +711,9 @@ export const eventsRouter = createTRPCRouter({
         );
 
         return completeForkedEvent
-          ? toEventApiDto(completeForkedEvent, userId)
+          ? toEventApiDto(completeForkedEvent, userId, {
+              revealEnvVarValues: canReadEnvVarValues(ctx.tokenScopes),
+            })
           : undefined;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
