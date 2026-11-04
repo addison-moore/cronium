@@ -6,7 +6,8 @@ import Link from "next/link";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { registerUser } from "@/app/(auth)/auth/signup/actions";
+import { trpc } from "@/lib/trpc";
+import { UserStatus } from "@/shared/schema";
 import {
   Form,
   FormControl,
@@ -53,7 +54,9 @@ const copy = {
   confirmPasswordLabel: "Confirm Password",
   submitIdle: "Create Account",
   submitBusy: "Creating account...",
-  registrationFailed: "Registration failed. Please try again.",
+  pendingApproval:
+    "Registration successful! Your account is pending admin approval.",
+  canSignIn: "Registration successful! You can now sign in.",
   unexpectedError: "An unexpected error occurred. Please try again.",
 };
 
@@ -62,6 +65,7 @@ export default function SignUpForm() {
 
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const registerMutation = trpc.userAuth.register.useMutation();
 
   const form = useForm<FormData>({
     resolver: zodResolver(signupSchema),
@@ -81,23 +85,15 @@ export default function SignUpForm() {
 
   const onSubmit = async (data: FormData) => {
     try {
-      // Use the server action to handle password hashing and user creation
-      const result = await registerUser({
+      const { status } = await registerMutation.mutateAsync({
         username: data.username,
         email: data.email,
         password: data.password,
       });
 
-      if (!result.success) {
-        setError("root.serverError", {
-          type: "manual",
-          message: result.error ?? copy.registrationFailed,
-        });
-        return;
-      }
-
-      // Registration successful
-      setSuccessMessage(result.message ?? copy.successTitle);
+      setSuccessMessage(
+        status === UserStatus.PENDING ? copy.pendingApproval : copy.canSignIn,
+      );
       setRegistrationComplete(true);
 
       // After a delay, redirect to sign in page
@@ -105,10 +101,12 @@ export default function SignUpForm() {
         router.push("/auth/signin");
       }, 3000);
     } catch (error) {
-      console.error("Registration error:", error);
+      // The route's own messages ("Username already taken", "Registration is
+      // currently closed") are written for the user. Anything malformed was already
+      // caught by the form's schema, which is at least as strict as the server's.
       setError("root.serverError", {
         type: "manual",
-        message: copy.unexpectedError,
+        message: error instanceof Error ? error.message : copy.unexpectedError,
       });
     }
   };

@@ -147,15 +147,8 @@ export const userAuthRouter = createTRPCRouter({
           updatedAt: new Date(),
         });
 
-        // Return user without password
-        const {
-          password: _password,
-          mfaSecret: _mfaSecret,
-          mfaRecoveryCodes: _mfaRecoveryCodes,
-          ...userWithoutPassword
-        } = user;
-
-        return userWithoutPassword;
+        // Whether they can sign in yet is all the form needs to know.
+        return { status: user.status };
       } catch (error) {
         if (error instanceof TRPCError) {
           throw error;
@@ -552,21 +545,11 @@ export const userAuthRouter = createTRPCRouter({
         return { success: false, mfaRequired: true } as const;
       }
 
-      // Update last login
-      await storage.updateUser(user.id, { lastLogin: new Date() });
-
-      // Return success with user data (without password)
-      const {
-        password: _password,
-        mfaSecret: _mfaSecret,
-        mfaRecoveryCodes: _mfaRecoveryCodes,
-        ...userWithoutPassword
-      } = user;
-
-      return {
-        success: true,
-        user: userWithoutPassword,
-      };
+      // Nothing about the account comes back. This step only checks the password,
+      // and any non-empty `totp` gets past the gate above, so returning the user
+      // here handed the profile to someone holding only the password. NextAuth
+      // verifies the factor, creates the session and records the last login.
+      return { success: true } as const;
     } catch (error) {
       if (error instanceof TRPCError) {
         throw error;

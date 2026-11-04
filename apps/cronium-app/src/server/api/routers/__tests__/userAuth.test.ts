@@ -295,8 +295,8 @@ describe("userAuth.register", () => {
       role: UserRole.USER,
       status: UserStatus.ACTIVE,
     });
-    expectNoSecrets(result as Record<string, unknown>);
-    expect(result.username).toBe("newuser");
+    // Only whether they can sign in yet, not the stored record.
+    expect(result).toEqual({ status: UserStatus.ACTIVE });
   });
 
   it("never honors a caller-supplied role or status (privilege injection)", async () => {
@@ -641,7 +641,7 @@ describe("userAuth.verifyToken", () => {
 describe("userAuth.login", () => {
   const input = { username: "alice", password: VALID_PASSWORD };
 
-  it("authenticates an active user and never echoes credential material", async () => {
+  it("confirms the password and returns nothing about the account", async () => {
     s.getUserByUsername.mockResolvedValue(userRow());
     mocked(encryptionService.verifyPassword).mockResolvedValue(true);
 
@@ -651,14 +651,10 @@ describe("userAuth.login", () => {
       VALID_PASSWORD,
       userRow().password,
     );
-    expect(s.updateUser).toHaveBeenCalledWith("user-1", {
-      lastLogin: expect.any(Date),
-    });
-    expect(result.success).toBe(true);
-    if (!result.success || !("user" in result)) {
-      throw new Error("expected a success result with user");
-    }
-    expectNoSecrets(result.user as unknown as Record<string, unknown>);
+    // Only the password has been checked at this point, so nothing about the
+    // account comes back. NextAuth records the login when it creates the session.
+    expect(result).toEqual({ success: true });
+    expect(s.updateUser).not.toHaveBeenCalled();
   });
 
   it("falls back to email lookup when the username is unknown", async () => {
@@ -738,11 +734,13 @@ describe("userAuth.login", () => {
     expect(challenge).toEqual({ success: false, mfaRequired: true });
     expect(s.updateUser).not.toHaveBeenCalled();
 
+    // A code is not verified here, so it must not unlock anything but the next step.
     const withTotp = await publicCaller().userAuth.login({
       ...input,
       totp: "123456",
     });
-    expect(withTotp.success).toBe(true);
+    expect(withTotp).toEqual({ success: true });
+    expect(s.updateUser).not.toHaveBeenCalled();
   });
 
   it("rejects empty credentials (zod) and rate-limited attempts", async () => {
