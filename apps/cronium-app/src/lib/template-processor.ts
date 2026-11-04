@@ -7,6 +7,112 @@
 
 import Handlebars from "handlebars";
 
+/**
+ * What a value gets encoded for, which depends on where the output is going.
+ * Handlebars only knows HTML, and escaping everything for HTML corrupted any value
+ * holding `=`, `&` or a quote: a base64 token in a header, a URL's query string, a
+ * JSON body.
+ *
+ * - `html`: the output is HTML. Handlebars' own escaping.
+ * - `text`: the value is used verbatim, as in a URL, a header or a bound parameter.
+ * - `markup`: only `&`, `<` and `>` are encoded, which is what Slack and Teams
+ *   decode in message text. It stops a value from becoming a mention or a link.
+ */
+export type TemplateEncoding = "html" | "text" | "markup";
+
+// A JSON string literal, or a {{tag}} outside of one. Strings are matched first, so
+// any tag this returns is in a bare position like `{"count": {{n}}}`.
+const JSON_STRING_OR_BARE_TAG = /"(?:[^"\\]|\\.)*"|\{\{[^{}]*\}\}/g;
+
+/** Whether a template is a JSON document once its tags are filled in. */
+function isJsonTemplate(template: string): boolean {
+  if (!/^\s*[{[]/.test(template)) return false;
+  try {
+    const doc: unknown = JSON.parse(
+      template.replace(JSON_STRING_OR_BARE_TAG, (token) =>
+        token.startsWith('"') ? token : "0",
+      ),
+    );
+    return typeof doc === "object" && doc !== null;
+  } catch {
+    return false;
+  }
+}
+
+function isJson(value: string): boolean {
+  try {
+    JSON.parse(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Render only the tags of a JSON document, re-encoding each result as JSON. A value
+ * holding a quote therefore cannot end its string and add fields to the document,
+ * and everything between the tags stays exactly as the author wrote it.
+ */
+function renderJsonDocument(
+  template: string,
+  render: (source: string) => string,
+): string {
+  return template.replace(JSON_STRING_OR_BARE_TAG, (token) => {
+    if (!token.includes("{{")) return token;
+    if (token.startsWith('"')) {
+      return JSON.stringify(render(JSON.parse(token) as string));
+    }
+    const rendered = render(token);
+    return isJson(rendered) ? rendered : JSON.stringify(rendered);
+  });
+}
+
+const encodeMarkup = (value: string): string =>
+  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/**
+ * Copy a value for rendering. Objects and arrays stringify as JSON, because an
+ * upstream step's rows reached their destination as "[object Object],[object
+ * Object]" otherwise. A symbol key keeps this invisible to `lookup`, `each` and the
+ * `json` helper.
+ */
+function prepareValue(
+  value: unknown,
+  encodeString: (value: string) => string,
+): unknown {
+  if (typeof value === "string") return encodeString(value);
+  if (Array.isArray(value)) {
+    return withJsonString(
+      value.map((item) => prepareValue(item, encodeString)),
+      value,
+      encodeString,
+    );
+  }
+  if (Object.prototype.toString.call(value) === "[object Object]") {
+    return withJsonString(
+      Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+          key,
+          prepareValue(item, encodeString),
+        ]),
+      ),
+      value,
+      encodeString,
+    );
+  }
+  return value;
+}
+
+function withJsonString<T extends object>(
+  copy: T,
+  original: unknown,
+  encodeString: (value: string) => string,
+): T {
+  return Object.defineProperty(copy, Symbol.toPrimitive, {
+    value: () => encodeString(JSON.stringify(original)),
+  });
+}
+
 export interface TemplateContext {
   event: {
     id: number;
@@ -131,61 +237,42 @@ export class TemplateProcessor {
   }
 
   /**
-   * Process a template with the provided context
+   * Render a template for the given output. A template that does not compile or
+   * throws in a helper throws here, so the job fails. Sending its error text on to
+   * a recipient as if it were the message would hide the problem from the author.
    */
-  processTemplate(template: string, context: TemplateContext): string {
-    try {
-      // Create cronium namespace for template access
-      const templateData = {
+  processTemplate(
+    template: string,
+    context: TemplateContext,
+    encoding: TemplateEncoding = "html",
+  ): string {
+    if (!template.includes("{{")) return template;
+
+    const encodeString =
+      encoding === "markup" ? encodeMarkup : (v: string) => v;
+    const templateData = prepareValue(
+      {
         cronium: {
           event: context.event,
           getVariables: context.variables,
           input: context.input,
           getCondition: context.conditions,
         },
-      };
-
-      const compiledTemplate = this.handlebars.compile(template);
-      return compiledTemplate(templateData);
-    } catch (error) {
-      console.error("Template processing error:", error);
-      // Return original template with error notice for debugging
-      return `[Template Error: ${error instanceof Error ? error.message : "Unknown error"}]\n\n${template}`;
-    }
-  }
-
-  /**
-   * Process a template specifically for JSON output
-   * Ensures proper JSON escaping and formatting
-   */
-  processJsonTemplate(template: string, context: TemplateContext): string {
-    const processed = this.processTemplate(template, context);
-
-    try {
-      // Validate that the result is valid JSON
-      JSON.parse(processed);
-      return processed;
-    } catch (error) {
-      console.error("JSON template validation error:", error);
-      // Return a safe JSON error response
-      return JSON.stringify(
-        {
-          error: "Template processing resulted in invalid JSON",
-          original: template,
-          processed: processed,
-        },
-        null,
-        2,
+      },
+      encodeString,
+    );
+    // String(): a template that is one lone tag returns the value itself, not a
+    // string, when escaping is off.
+    const render = (source: string) =>
+      String(
+        this.handlebars.compile(source, { noEscape: encoding !== "html" })(
+          templateData,
+        ),
       );
-    }
-  }
 
-  /**
-   * Process a template specifically for HTML output
-   * Ensures proper HTML escaping by default
-   */
-  processHtmlTemplate(template: string, context: TemplateContext): string {
-    return this.processTemplate(template, context);
+    return isJsonTemplate(template)
+      ? renderJsonDocument(template, render)
+      : render(template);
   }
 
   /**
@@ -224,22 +311,6 @@ export class TemplateProcessor {
       input,
       conditions,
     };
-  }
-
-  /**
-   * Validate template syntax without processing
-   */
-  validateTemplate(template: string): { isValid: boolean; error?: string } {
-    try {
-      this.handlebars.compile(template);
-      return { isValid: true };
-    } catch (error) {
-      return {
-        isValid: false,
-        error:
-          error instanceof Error ? error.message : "Unknown template error",
-      };
-    }
   }
 
   /**

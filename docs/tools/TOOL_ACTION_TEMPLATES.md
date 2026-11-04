@@ -132,6 +132,26 @@ Templates are stored in the `tool_action_templates` table with:
 - Variables are replaced at event execution time
 - Nested object support for complex data structures
 - Safe evaluation prevents code injection
+- A parameter's value comes only from its template: workflow data reaches it where
+  you write `{{cronium.input.*}}`, and cannot replace a parameter or shadow a
+  `{{cronium.getVariables.*}}` value
+- A failed template fails the job rather than sending its error text as the message
+
+### How values are encoded
+
+Values are inserted as they are, so a token, URL or quote arrives intact. A few
+places need encoding, and Cronium applies it for you:
+
+- **Objects and arrays** render as JSON, so `{{cronium.input.rows}}` gives the rows
+  rather than `[object Object]`.
+- **JSON parameters and request bodies** stay valid: a value inside a string has its
+  quotes and newlines escaped, and a bare tag such as `{"rows": {{cronium.input.rows}}}`
+  embeds the value with its type. A value cannot add fields to the document.
+- **HTML email bodies** escape values, so input cannot add markup.
+- **Slack and Teams messages** encode `&`, `<` and `>`, so a value cannot become a
+  mention or a link.
+- **SQL query text** is HTML-escaped as a safeguard, but should not contain templates
+  at all. Use `:named` placeholders and put values in Parameters, where they are bound.
 
 ## API Reference
 

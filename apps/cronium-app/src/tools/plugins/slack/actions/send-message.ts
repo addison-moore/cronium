@@ -35,6 +35,7 @@ export const sendMessageAction: ToolAction = {
   developmentMode: "visual",
   inputSchema: sendMessageSchema,
   parameters: safeZodToParameters(sendMessageSchema),
+  templateEncoding: () => "markup",
   outputSchema: z.object({
     ok: z.boolean(),
     ts: z.string().optional().describe("Message timestamp"),

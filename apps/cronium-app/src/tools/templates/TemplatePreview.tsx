@@ -10,7 +10,7 @@ import { Alert, AlertDescription } from "@cronium/ui";
 import { Copy, Eye } from "lucide-react";
 import { type ToolAction } from "@/tools/types/tool-plugin";
 import {
-  processToolActionTemplate,
+  previewToolActionTemplate,
   extractTemplateVariables,
 } from "@/lib/tool-action-template-processor";
 import { type TemplateContext } from "@/lib/template-processor";
@@ -93,9 +93,10 @@ export function TemplatePreview({
     });
 
   // Process the template with sample data
-  const processedTemplate = processToolActionTemplate(
+  const processedTemplate = previewToolActionTemplate(
     { parameters },
     getCurrentContext() as TemplateContext,
+    action.templateEncoding,
   );
 
   // Extract variables used in the template

@@ -1,6 +1,7 @@
 import { type LucideIcon } from "lucide-react";
 import { type z } from "zod";
 import { type Tool } from "@/shared/schema";
+import { type ParameterEncoding } from "@/lib/tool-action-template-processor";
 
 // Tool Action Types
 export type ActionType = "create" | "update" | "search" | "delete";
@@ -47,6 +48,10 @@ export interface ToolAction {
   // cronium.input(). Set on read/fetch actions (e.g. SQL query, search); leave
   // false/undefined on send/write actions so they don't pollute the data channel.
   producesOutput?: boolean;
+
+  // How template values are encoded for each parameter, for an action that puts one
+  // somewhere other than a plain value (HTML, message markup). Defaults to verbatim.
+  templateEncoding?: ParameterEncoding;
 
   // Execution
   execute: (

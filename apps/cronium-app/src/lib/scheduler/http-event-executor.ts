@@ -4,7 +4,7 @@
  * Like tool actions, HTTP request events have no script, so the orchestrator
  * (container/ssh only) rejected them as scriptless container jobs. They are just
  * outbound HTTP calls, and the app already has a low-level `executeHttpRequest`
- * (axios). This wraps it at the event level: it interpolates `${cronium.input.*}`
+ * (axios). This wraps it at the event level: it interpolates `{{cronium.input.*}}`
  * and user variables into the URL / body / header values (the same templating
  * script and tool-action events get), runs the request, and returns a normalized
  * result the in-process job runner can finalize.
@@ -70,12 +70,16 @@ export async function executeHttpEvent(
         server: event.serverId ? `server-${event.serverId}` : "local",
         output: "",
       },
-      { ...variablesMap, ...input },
+      // Input stays under cronium.input: letting it shadow a variable meant a webhook
+      // caller could repoint `{{cronium.getVariables.apiBase}}` at their own host and
+      // collect the Authorization header sent with it.
+      variablesMap,
       input,
       {},
     );
+    // Verbatim, not HTML-escaped: these go into a URL, headers and a request body.
     process = (value: string) =>
-      templateProcessor.processTemplate(value, context);
+      templateProcessor.processTemplate(value, context, "text");
   } catch (err) {
     console.warn(
       "[HttpEvent] Template context unavailable; using raw request values:",

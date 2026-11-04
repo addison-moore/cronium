@@ -84,6 +84,7 @@ export const sendMessageAction: ToolAction = {
   developmentMode: "visual",
   inputSchema: sendMessageSchema,
   parameters: safeZodToParameters(sendMessageSchema),
+  templateEncoding: (name) => (name === "webhookUrl" ? "text" : "markup"),
   outputSchema: z.object({
     success: z.boolean(),
     error: z.string().optional(),
