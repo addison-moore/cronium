@@ -84,6 +84,11 @@ const nextConfig = {
                 name: "framework",
                 chunks: "all",
                 test: /[\\/]node_modules[\\/](react|react-dom|scheduler|next)[\\/]/,
+                // JavaScript only. next/font's stylesheet also lives under
+                // node_modules/next. Pulled into this chunk, it gets listed as a
+                // script, and the browser fails to parse it on every page:
+                // "Uncaught SyntaxError: Unexpected token '.'".
+                type: /^javascript\//,
                 priority: 40,
                 enforce: true,
               },

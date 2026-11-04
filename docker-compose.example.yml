@@ -33,7 +33,9 @@
 # 5002 to loopback so /broadcast/* is not independently public; those routes
 # are service-only and also require SOCKET_BROADCAST_KEY. If trusted frontends use
 # multiple origins, list each exact origin (scheme, host, and port) in
-# comma-separated SOCKET_ALLOWED_ORIGINS.
+# comma-separated SOCKET_ALLOWED_ORIGINS. Behind a proxy, also set
+# TRUSTED_PROXY_HOPS=1 (one per trusted proxy), or every client shares one login
+# rate-limit bucket and webhook IP allowlists can never match.
 #
 # Every value below can be overridden from .env; none of this file needs
 # editing for a standard deployment.

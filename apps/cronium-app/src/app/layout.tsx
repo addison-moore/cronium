@@ -1,5 +1,6 @@
 import "./styles/global.css";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import React from "react";
 import { Inter } from "next/font/google";
 import { Providers } from "@/components/providers/Providers";
@@ -30,16 +31,23 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Reading the request here also keeps every page out of static prerendering, which
+  // is required: the production CSP allows a script only with this request's nonce,
+  // and prerendered HTML has none, so the browser blocked all of a static page's
+  // JavaScript. That left forgot-password, reset-password and invite activation
+  // rendering forms that could not submit.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html suppressHydrationWarning className={inter.variable}>
       <body className={inter.className}>
         <React.Suspense fallback={null}>
-          <Providers>
+          <Providers nonce={nonce}>
             <main className="min-h-screen">{children}</main>
             <Toaster />
           </Providers>

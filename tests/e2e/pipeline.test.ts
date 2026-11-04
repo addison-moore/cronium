@@ -13,6 +13,13 @@
  * Scenario 2 — Unified I/O: a two-step workflow where step A publishes via
  * `cronium_output` and step B receives it via `cronium_input` (runtime
  * sidecar + workflow engine + orchestrator together).
+ *
+ * Scenario 3 — signup: an account made through the public route can sign in. A unit
+ * test with a mocked store cannot see this, and it was once broken end to end.
+ *
+ * Scenario 4 — CSP: every page's scripts carry the request's nonce. A prerendered page
+ * has none, so the browser blocks all of its JavaScript while the server still answers
+ * 200. Only a production build shows this, which is what this stack runs.
  */
 import {
   APP_URL,
@@ -255,5 +262,61 @@ describe("scenario 2 — two-step workflow passes data via Unified I/O", () => {
       { timeoutMs: 60_000 },
     );
     expect(logB.output).toContain(runMarker);
+  });
+});
+
+describe("scenario 3 — signup", () => {
+  it("an account created through userAuth.register passes the login check", async () => {
+    const suffix = Date.now().toString(36);
+    const credentials = {
+      username: `e2e-signup-${suffix}`,
+      password: "A-long-valid-passw0rd",
+    };
+    const call = (proc: string, input: unknown) =>
+      fetch(`${APP_URL}/api/trpc/${proc}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ json: input }),
+      });
+
+    const registered = await call("userAuth.register", {
+      ...credentials,
+      email: `${credentials.username}@e2e.test`,
+    });
+    expect(registered.status).toBe(200);
+
+    const login = await call("userAuth.login", credentials);
+    expect(login.status).toBe(200);
+    const body = (await login.json()) as {
+      result: { data: { json: unknown } };
+    };
+    expect(body.result.data.json).toEqual({ success: true });
+  });
+});
+
+describe("scenario 4 — production CSP", () => {
+  it.each([
+    "/auth/signin",
+    "/auth/signup",
+    "/auth/forgot-password",
+    "/auth/reset-password?token=x",
+    "/auth/activate?token=x",
+    "/auth/error",
+    "/auth/signout",
+    "/no-such-page",
+  ])("%s runs its scripts", async (path) => {
+    const res = await fetch(`${APP_URL}${path}`, { redirect: "manual" });
+    const csp = res.headers.get("content-security-policy") ?? "";
+    const nonce = /'nonce-([^']+)'/.exec(csp)?.[1];
+    expect(nonce).toBeTruthy();
+
+    const html = await res.text();
+    const scripts = html.match(/<script\b[^>]*>/g) ?? [];
+    expect(scripts.length).toBeGreaterThan(0);
+    for (const tag of scripts) {
+      expect(tag).toContain(`nonce="${nonce}"`);
+      // A stylesheet listed as a script is a SyntaxError on every page.
+      expect(tag).not.toMatch(/src="[^"]*\.css/);
+    }
   });
 });

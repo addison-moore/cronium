@@ -16,12 +16,19 @@ interface ThemeProviderProps {
   themes?: string[];
   forcedTheme?: string;
   value?: Record<string, string>;
+  // Allows next-themes' inline script under the production CSP.
+  nonce?: string | undefined;
 }
 
-export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
+export function ThemeProvider({
+  children,
+  nonce,
+  ...props
+}: ThemeProviderProps) {
   return (
     <NextThemesProvider
       {...props}
+      {...(nonce ? { nonce } : {})}
       attribute="class"
       enableSystem={true}
       enableColorScheme={true}

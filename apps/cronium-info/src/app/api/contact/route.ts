@@ -46,9 +46,13 @@ function clientIp(request: Request): string {
   // The last entry is the one the nearest proxy appended. Anything before it came
   // from the client, who could otherwise send a new value for a new rate-limit
   // bucket on every request.
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",");
-  const nearest = forwarded?.at(-1)?.trim();
-  return nearest || (request.headers.get("x-real-ip")?.trim() ?? "unknown");
+  const nearest = request.headers
+    .get("x-forwarded-for")
+    ?.split(",")
+    .at(-1)
+    ?.trim();
+  if (nearest) return nearest;
+  return request.headers.get("x-real-ip")?.trim() ?? "unknown";
 }
 
 function rateLimited(ip: string): boolean {

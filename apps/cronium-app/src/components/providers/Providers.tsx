@@ -5,7 +5,13 @@ import { NextAuthProvider } from "./NextAuthProvider";
 import { TrpcProvider } from "./TrpcProvider";
 import { ThemeProvider } from "./ThemeProvider";
 
-export function Providers({ children }: { children: ReactNode }) {
+export function Providers({
+  children,
+  nonce,
+}: {
+  children: ReactNode;
+  nonce?: string | undefined;
+}) {
   return (
     <NextAuthProvider>
       <TrpcProvider>
@@ -13,6 +19,7 @@ export function Providers({ children }: { children: ReactNode }) {
           attribute="class"
           defaultTheme="system"
           enableSystem={true}
+          nonce={nonce}
         >
           {children}
         </ThemeProvider>
