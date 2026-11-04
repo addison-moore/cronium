@@ -279,7 +279,6 @@ export interface IStorage {
     userData: InsertUser & { skipPasswordHashing?: boolean },
   ): Promise<User>;
   updateUser(id: string, updateData: Partial<InsertUser>): Promise<User>;
-  upsertUser(userData: InsertUser): Promise<User>;
   disableUser(id: string): Promise<User>;
   revokeUserSessions(id: string): Promise<User>;
   deleteUser(id: string): Promise<void>;
@@ -306,32 +305,22 @@ export interface IStorage {
   // Script methods
   getEvent(id: number): Promise<Event | undefined>;
   getEventWithRelations(id: number): Promise<EventWithRelations | undefined>;
-  getActiveEventsWithRelations(): Promise<EventWithRelations[]>;
   getAllEvents(userId: string): Promise<Event[]>;
   queryEvents(
     userId: string,
     query: EventQueryInput,
   ): Promise<PaginatedResult<Event>>;
   getEventsByServerId(serverId: number, userId: string): Promise<Event[]>;
-  canViewEvent(eventId: number, userId: string): Promise<boolean>;
-  canEditEvent(eventId: number, userId: string): Promise<boolean>;
   createScript(insertScript: InsertEvent): Promise<Event>;
   updateScript(id: number, updateData: Partial<InsertEvent>): Promise<Event>;
   recordEventDispatch(id: number, at?: Date): Promise<void>;
   deleteScript(id: number): Promise<void>;
 
-  // Environment variable methods
-  getEnvVars(eventId: number): Promise<EnvVar[]>;
   createEnvVar(insertEnvVar: InsertEnvVar): Promise<EnvVar>;
   deleteEnvVarsByEventId(eventId: number): Promise<void>;
 
   // Log methods
   getLog(id: number): Promise<Log | undefined>;
-  getLatestLogForScript(eventId: number): Promise<Log | undefined>;
-  getAllLogs(
-    limit?: number,
-    page?: number,
-  ): Promise<{ logs: Log[]; total: number }>;
   getLogs(
     eventId: number,
     limit?: number,
@@ -346,9 +335,6 @@ export interface IStorage {
     limit?: number,
     page?: number,
   ): Promise<{ logs: Log[]; total: number }>;
-  getDistinctWorkflowsFromLogs(
-    userId: string,
-  ): Promise<{ id: number; name: string }[]>;
   createLog(insertLog: InsertLog): Promise<Log>;
   updateLog(id: number, updateData: Partial<InsertLog>): Promise<Log>;
   deleteLog(id: number): Promise<void>;
@@ -404,16 +390,6 @@ export interface IStorage {
 
   // Event-Server relationship methods
   getEventServers(eventId: number): Promise<EventServer[]>;
-  addEventServer(
-    eventId: number,
-    serverId: number,
-    userId: string,
-  ): Promise<EventServer>;
-  removeEventServer(
-    eventId: number,
-    serverId: number,
-    userId: string,
-  ): Promise<void>;
   setEventServers(
     eventId: number,
     serverIds: number[],
@@ -456,41 +432,22 @@ export interface IStorage {
   ): Promise<Workflow>;
   deleteWorkflow(id: number): Promise<void>;
 
-  // Workflow node methods
-  getWorkflowNode(id: number): Promise<WorkflowNode | undefined>;
   getWorkflowNodes(workflowId: number): Promise<WorkflowNode[]>;
   createWorkflowNode(insertNode: InsertWorkflowNode): Promise<WorkflowNode>;
-  updateWorkflowNode(
-    id: number,
-    updateData: Partial<InsertWorkflowNode>,
-  ): Promise<WorkflowNode>;
   deleteWorkflowNode(id: number): Promise<void>;
 
-  // Workflow connection methods
-  getWorkflowConnection(id: number): Promise<WorkflowConnection | undefined>;
   getWorkflowConnections(workflowId: number): Promise<WorkflowConnection[]>;
   createWorkflowConnection(
     insertConnection: InsertWorkflowConnection,
   ): Promise<WorkflowConnection>;
-  updateWorkflowConnection(
-    id: number,
-    updateData: Partial<InsertWorkflowConnection>,
-  ): Promise<WorkflowConnection>;
   deleteWorkflowConnection(id: number): Promise<void>;
 
-  // Workflow log methods
-  getWorkflowLog(id: number): Promise<WorkflowLog | undefined>;
   getWorkflowLogs(
     workflowId: number,
     limit?: number,
     page?: number,
   ): Promise<{ logs: WorkflowLog[]; total: number }>;
   createWorkflowLog(insertLog: InsertWorkflowLog): Promise<WorkflowLog>;
-  updateWorkflowLog(
-    id: number,
-    updateData: Partial<InsertWorkflowLog>,
-  ): Promise<WorkflowLog>;
-
   // Workflow execution methods
   getWorkflowExecution(id: number): Promise<WorkflowExecution | undefined>;
   getWorkflowExecutions(
@@ -501,11 +458,6 @@ export interface IStorage {
   createWorkflowExecution(
     insertExecution: InsertWorkflowExecution,
   ): Promise<WorkflowExecution>;
-  updateWorkflowExecution(
-    id: number,
-    updateData: Partial<InsertWorkflowExecution>,
-  ): Promise<WorkflowExecution>;
-
   // Workflow execution event methods
   createWorkflowExecutionEvent(
     insertEvent: InsertWorkflowExecutionEvent,
@@ -550,7 +502,6 @@ export interface IStorage {
   getPasswordResetToken(
     tokenHash: string,
   ): Promise<PasswordResetToken | undefined>;
-  markPasswordResetTokenAsUsed(tokenHash: string): Promise<void>;
   consumePasswordResetToken(
     tokenHash: string,
   ): Promise<PasswordResetToken | undefined>;
@@ -566,14 +517,6 @@ export interface IStorage {
     webhook: typeof webhooks.$inferSelect;
     event: typeof webhookEvents.$inferSelect;
   } | null>;
-  getUserWebhooksWithStats(userId: string): Promise<
-    Array<{
-      webhook: typeof webhooks.$inferSelect;
-      totalDeliveries: number;
-      successfulDeliveries: number;
-      failedDeliveries: number;
-    }>
-  >;
 }
 
 class DatabaseStorage implements IStorage {
@@ -722,19 +665,6 @@ class DatabaseStorage implements IStorage {
       await publishUserSocketRevocation(id, "user authorization changed");
     }
     return user;
-  }
-
-  async upsertUser(userData: InsertUser): Promise<User> {
-    // Try to find the user first
-    const existingUser = await this.getUser(userData.id);
-
-    if (existingUser) {
-      // Update existing user
-      return await this.updateUser(userData.id, userData);
-    } else {
-      // Create new user
-      return await this.createUser(userData);
-    }
   }
 
   // --- MFA (TOTP) ---
@@ -1046,124 +976,8 @@ class DatabaseStorage implements IStorage {
 
   // Script methods (now renamed to events)
   async getEvent(id: number): Promise<Script | undefined> {
-    try {
-      const [script] = await db.select().from(events).where(eq(events.id, id));
-      return script ?? undefined;
-    } catch (error) {
-      // If the error is about missing payload_version column, use explicit column selection
-      const err = error as { message?: string; code?: string };
-      if (err?.message?.includes("payload_version") || err?.code === "42703") {
-        const [script] = await db
-          .select({
-            id: events.id,
-            userId: events.userId,
-            name: events.name,
-            description: events.description,
-            shared: events.shared,
-            type: events.type,
-            content: events.content,
-            httpMethod: events.httpMethod,
-            httpUrl: events.httpUrl,
-            httpHeaders: events.httpHeaders,
-            httpBody: events.httpBody,
-            toolActionConfig: events.toolActionConfig,
-            status: events.status,
-            triggerType: events.triggerType,
-            scheduleNumber: events.scheduleNumber,
-            scheduleUnit: events.scheduleUnit,
-            customSchedule: events.customSchedule,
-            scheduleKind: events.scheduleKind,
-            timezone: events.timezone,
-            catchupPolicy: events.catchupPolicy,
-            overlapPolicy: events.overlapPolicy,
-            misfireGraceS: events.misfireGraceS,
-            leaseLossPolicy: events.leaseLossPolicy,
-            priority: events.priority,
-            runLocation: events.runLocation,
-            serverId: events.serverId,
-            timeoutValue: events.timeoutValue,
-            timeoutUnit: events.timeoutUnit,
-            retries: events.retries,
-            startTime: events.startTime,
-            executionCount: events.executionCount,
-            maxExecutions: events.maxExecutions,
-            resetCounterOnActive: events.resetCounterOnActive,
-            lastRunAt: events.lastRunAt,
-            nextRunAt: events.nextRunAt,
-            successCount: events.successCount,
-            failureCount: events.failureCount,
-            source: events.source,
-            tags: events.tags,
-            createdAt: events.createdAt,
-            updatedAt: events.updatedAt,
-          })
-          .from(events)
-          .where(eq(events.id, id));
-
-        // Add default payloadVersion
-        if (script) {
-          return { ...script, payloadVersion: 1 };
-        }
-        return undefined;
-      }
-      throw error;
-    }
-  }
-
-  // Check if a user has access to view an event (they own it or it's shared)
-  async canViewEvent(eventId: number, userId: string): Promise<boolean> {
-    try {
-      const [script] = await db
-        .select()
-        .from(events)
-        .where(
-          and(
-            eq(events.id, eventId),
-            sql`(${events.userId} = ${userId} OR ${events.shared} = true)`,
-          ),
-        );
-
-      return !!script;
-    } catch (error) {
-      // If the error is about missing payload_version column, use a simpler query
-      const err = error as { message?: string; code?: string };
-      if (err?.message?.includes("payload_version") || err?.code === "42703") {
-        const [script] = await db
-          .select({ id: events.id })
-          .from(events)
-          .where(
-            and(
-              eq(events.id, eventId),
-              sql`(${events.userId} = ${userId} OR ${events.shared} = true)`,
-            ),
-          );
-        return !!script;
-      }
-      throw error;
-    }
-  }
-
-  // Check if a user has permission to edit/delete an event (they must own it)
-  async canEditEvent(eventId: number, userId: string): Promise<boolean> {
-    try {
-      const [script] = await db
-        .select()
-        .from(events)
-        .where(and(eq(events.id, eventId), eq(events.userId, userId)));
-
-      return !!script;
-    } catch (error) {
-      // If the error is about missing payload_version column, use a simpler query
-      const err = error as { message?: string; code?: string };
-      if (err?.message?.includes("payload_version") || err?.code === "42703") {
-        const [script] = await db
-          .select({ id: events.id })
-          .from(events)
-          .where(and(eq(events.id, eventId), eq(events.userId, userId)));
-        return !!script;
-      }
-      throw error;
-    }
+    const [script] = await db.select().from(events).where(eq(events.id, id));
+    return script ?? undefined;
   }
 
   async getEventWithRelations(
@@ -1195,130 +1009,25 @@ class DatabaseStorage implements IStorage {
     };
   }
 
-  async getActiveEventsWithRelations(): Promise<EventWithRelations[]> {
-    const { EventStatus } = await import("@/shared/schema");
-    const activeEvents = await db.query.events.findMany({
-      where: eq(events.status, EventStatus.ACTIVE),
+  async getAllEvents(userId: string): Promise<Event[]> {
+    // Get user's own scripts and shared scripts from other users with all relations in a single query
+    const eventsWithRelations = await db.query.events.findMany({
+      where: or(eq(events.userId, userId), eq(events.shared, true)),
+      orderBy: [desc(events.updatedAt)],
       with: {
-        envVars: true,
-        server: true,
         eventServers: {
-          with: {
-            server: true,
+          columns: {
+            serverId: true,
           },
         },
       },
     });
 
-    // Transform the results
-    return activeEvents.map((event) => {
-      const { eventServers: _eventServers, ...baseEvent } = event;
-      void _eventServers;
-      const transformed: EventWithRelations = {
-        ...baseEvent,
-        envVars: event.envVars ?? [],
-        server: event.server ?? null,
-        servers:
-          event.eventServers?.map((es) => es.server).filter(Boolean) ?? [],
-      };
-
-      return transformed;
-    });
-  }
-
-  async getAllEvents(userId: string): Promise<Event[]> {
-    try {
-      // Get user's own scripts and shared scripts from other users with all relations in a single query
-      const eventsWithRelations = await db.query.events.findMany({
-        where: or(eq(events.userId, userId), eq(events.shared, true)),
-        orderBy: [desc(events.updatedAt)],
-        with: {
-          eventServers: {
-            columns: {
-              serverId: true,
-            },
-          },
-        },
-      });
-
-      // Transform to include eventServers array for backward compatibility
-      const enrichedScripts = eventsWithRelations.map((event) => ({
-        ...event,
-        eventServers: event.eventServers.map((es) => es.serverId),
-        // Provide default for payload_version if missing
-        payloadVersion:
-          ((event as Record<string, unknown>).payloadVersion as number) ?? 1,
-      }));
-
-      return enrichedScripts;
-    } catch (error) {
-      // If the error is about missing payload_version column, provide a fallback
-      const err = error as { message?: string; code?: string };
-      if (err?.message?.includes("payload_version") || err?.code === "42703") {
-        console.warn(
-          "payload_version column missing - using fallback query. Run migration: pnpm tsx src/scripts/migrations/add-payload-version.ts",
-        );
-
-        // Fallback query without payload_version
-        const eventsWithRelations = await db
-          .select({
-            id: events.id,
-            userId: events.userId,
-            name: events.name,
-            description: events.description,
-            shared: events.shared,
-            type: events.type,
-            content: events.content,
-            httpMethod: events.httpMethod,
-            httpUrl: events.httpUrl,
-            httpHeaders: events.httpHeaders,
-            httpBody: events.httpBody,
-            toolActionConfig: events.toolActionConfig,
-            status: events.status,
-            triggerType: events.triggerType,
-            scheduleNumber: events.scheduleNumber,
-            scheduleUnit: events.scheduleUnit,
-            customSchedule: events.customSchedule,
-            scheduleKind: events.scheduleKind,
-            timezone: events.timezone,
-            catchupPolicy: events.catchupPolicy,
-            overlapPolicy: events.overlapPolicy,
-            misfireGraceS: events.misfireGraceS,
-            leaseLossPolicy: events.leaseLossPolicy,
-            priority: events.priority,
-            runLocation: events.runLocation,
-            serverId: events.serverId,
-            timeoutValue: events.timeoutValue,
-            timeoutUnit: events.timeoutUnit,
-            retries: events.retries,
-            startTime: events.startTime,
-            executionCount: events.executionCount,
-            maxExecutions: events.maxExecutions,
-            resetCounterOnActive: events.resetCounterOnActive,
-            lastRunAt: events.lastRunAt,
-            nextRunAt: events.nextRunAt,
-            successCount: events.successCount,
-            failureCount: events.failureCount,
-            source: events.source,
-            tags: events.tags,
-            createdAt: events.createdAt,
-            updatedAt: events.updatedAt,
-          })
-          .from(events)
-          .where(or(eq(events.userId, userId), eq(events.shared, true)))
-          .orderBy(desc(events.updatedAt));
-
-        // Add default payloadVersion and empty eventServers
-        return eventsWithRelations.map((event) => ({
-          ...event,
-          payloadVersion: 1,
-          eventServers: [],
-        }));
-      }
-
-      // Re-throw other errors
-      throw error;
-    }
+    // Transform to include eventServers array for backward compatibility
+    return eventsWithRelations.map((event) => ({
+      ...event,
+      eventServers: event.eventServers.map((es) => es.serverId),
+    }));
   }
 
   async queryEvents(
@@ -1378,8 +1087,6 @@ class DatabaseStorage implements IStorage {
     const items = rows.map((event) => ({
       ...event,
       eventServers: event.eventServers.map((es) => es.serverId),
-      payloadVersion:
-        ((event as Record<string, unknown>).payloadVersion as number) ?? 1,
     }));
 
     return createPaginatedResult(items, total, pagination);
@@ -1616,29 +1323,6 @@ class DatabaseStorage implements IStorage {
     }
   }
 
-  // Environment variable methods
-  async getEnvVars(eventId: number): Promise<EnvVar[]> {
-    const vars = await db
-      .select()
-      .from(envVars)
-      .where(eq(envVars.eventId, eventId));
-
-    // Decrypt env var values (record-bound vault, legacy passthrough — 2.1)
-    return vars.map((envVar) => {
-      try {
-        if (!envVar.value) return envVar;
-        return {
-          ...envVar,
-          value: decryptEnvVarValue(envVar.value, eventId, envVar.key),
-        };
-      } catch (error) {
-        console.error(`Error decrypting env var for event ${eventId}:`, error);
-        // Return env var without decryption rather than failing
-        return envVar;
-      }
-    });
-  }
-
   async createEnvVar(insertEnvVar: InsertEnvVar): Promise<EnvVar> {
     // Encrypt the value record-bound to (eventId, key) before storing (2.1). A
     // value that is already ciphertext for this binding is kept as is, so a
@@ -1683,36 +1367,6 @@ class DatabaseStorage implements IStorage {
   async getLog(id: number): Promise<Log | undefined> {
     const [log] = await db.select().from(logs).where(eq(logs.id, id));
     return log;
-  }
-
-  async getLatestLogForScript(eventId: number): Promise<Log | undefined> {
-    const [log] = await db
-      .select()
-      .from(logs)
-      .where(eq(logs.eventId, eventId))
-      .orderBy(desc(logs.startTime))
-      .limit(1);
-
-    return log;
-  }
-
-  async getAllLogs(
-    limit = 10,
-    page = 1,
-  ): Promise<{ logs: Log[]; total: number }> {
-    const offset = (page - 1) * limit;
-
-    const [countResult] = await db.select({ count: count() }).from(logs);
-    const total = Number(countResult?.count) ?? 0;
-
-    const logResults = await db
-      .select()
-      .from(logs)
-      .orderBy(desc(logs.startTime))
-      .limit(limit)
-      .offset(offset);
-
-    return { logs: logResults, total };
   }
 
   async getFilteredLogs(
@@ -1840,26 +1494,6 @@ class DatabaseStorage implements IStorage {
       .offset(offset);
 
     return { logs: logsResult, total };
-  }
-
-  async getDistinctWorkflowsFromLogs(
-    userId: string,
-  ): Promise<{ id: number; name: string }[]> {
-    // Distinct workflows in the logs this user can read, i.e. their own events'.
-    const distinctWorkflows = await db
-      .selectDistinct({
-        id: workflows.id,
-        name: workflows.name,
-      })
-      .from(logs)
-      .innerJoin(events, eq(logs.eventId, events.id))
-      .innerJoin(workflows, eq(logs.workflowId, workflows.id))
-      .where(
-        and(sql`${logs.workflowId} IS NOT NULL`, eq(events.userId, userId)),
-      )
-      .orderBy(workflows.name);
-
-    return distinctWorkflows;
   }
 
   async getLogs(
@@ -2802,15 +2436,6 @@ class DatabaseStorage implements IStorage {
     await db.delete(workflows).where(eq(workflows.id, id));
   }
 
-  // Workflow node methods
-  async getWorkflowNode(id: number): Promise<WorkflowNode | undefined> {
-    const [node] = await db
-      .select()
-      .from(workflowNodes)
-      .where(eq(workflowNodes.id, id));
-    return node;
-  }
-
   async getWorkflowNodes(workflowId: number): Promise<WorkflowNode[]> {
     const nodes = await db
       .select()
@@ -2852,44 +2477,6 @@ class DatabaseStorage implements IStorage {
     return node;
   }
 
-  async updateWorkflowNode(
-    id: number,
-    updateData: Partial<InsertWorkflowNode>,
-  ): Promise<WorkflowNode> {
-    const node = await db.transaction(async (tx) => {
-      if (updateData.eventId !== undefined) {
-        const [relationship] = await tx
-          .select({
-            workflowUserId: workflows.userId,
-            eventUserId: events.userId,
-          })
-          .from(workflowNodes)
-          .innerJoin(workflows, eq(workflows.id, workflowNodes.workflowId))
-          .innerJoin(events, eq(events.id, updateData.eventId))
-          .where(eq(workflowNodes.id, id))
-          .limit(1);
-        if (
-          !relationship ||
-          relationship.workflowUserId !== relationship.eventUserId
-        ) {
-          throw new Error("Unauthorized workflow event relationship");
-        }
-      }
-
-      const [updated] = await tx
-        .update(workflowNodes)
-        .set(updateData)
-        .where(eq(workflowNodes.id, id))
-        .returning();
-      return updated;
-    });
-
-    if (!node) {
-      throw new Error("Failed to update workflow node - node not found");
-    }
-    return node;
-  }
-
   async deleteWorkflowNode(id: number): Promise<void> {
     // Delete connections that include this node
     await db
@@ -2901,17 +2488,6 @@ class DatabaseStorage implements IStorage {
 
     // Delete the node itself
     await db.delete(workflowNodes).where(eq(workflowNodes.id, id));
-  }
-
-  // Workflow connection methods
-  async getWorkflowConnection(
-    id: number,
-  ): Promise<WorkflowConnection | undefined> {
-    const [connection] = await db
-      .select()
-      .from(workflowConnections)
-      .where(eq(workflowConnections.id, id));
-    return connection;
   }
 
   async getWorkflowConnections(
@@ -2938,35 +2514,8 @@ class DatabaseStorage implements IStorage {
     return connection;
   }
 
-  async updateWorkflowConnection(
-    id: number,
-    updateData: Partial<InsertWorkflowConnection>,
-  ): Promise<WorkflowConnection> {
-    const [connection] = await db
-      .update(workflowConnections)
-      .set(updateData)
-      .where(eq(workflowConnections.id, id))
-      .returning();
-
-    if (!connection) {
-      throw new Error(
-        "Failed to update workflow connection - connection not found",
-      );
-    }
-    return connection;
-  }
-
   async deleteWorkflowConnection(id: number): Promise<void> {
     await db.delete(workflowConnections).where(eq(workflowConnections.id, id));
-  }
-
-  // Workflow log methods
-  async getWorkflowLog(id: number): Promise<WorkflowLog | undefined> {
-    const [log] = await db
-      .select()
-      .from(workflowLogs)
-      .where(eq(workflowLogs.id, id));
-    return log;
   }
 
   async getWorkflowLogs(
@@ -2999,22 +2548,6 @@ class DatabaseStorage implements IStorage {
 
     if (!log) {
       throw new Error("Failed to create workflow log");
-    }
-    return log;
-  }
-
-  async updateWorkflowLog(
-    id: number,
-    updateData: Partial<InsertWorkflowLog>,
-  ): Promise<WorkflowLog> {
-    const [log] = await db
-      .update(workflowLogs)
-      .set(updateData)
-      .where(eq(workflowLogs.id, id))
-      .returning();
-
-    if (!log) {
-      throw new Error("Failed to update workflow log - log not found");
     }
     return log;
   }
@@ -3056,48 +2589,6 @@ class DatabaseStorage implements IStorage {
     };
   }
 
-  async getUserWorkflowExecutions(
-    userId: string,
-    limit = 50,
-    offset = 0,
-  ): Promise<{ executions: WorkflowExecution[]; total: number }> {
-    // Get all workflow executions for a user's workflows in a single query
-    const executions = await db
-      .select({
-        id: workflowExecutions.id,
-        workflowId: workflowExecutions.workflowId,
-        userId: workflowExecutions.userId,
-        status: workflowExecutions.status,
-        triggerType: workflowExecutions.triggerType,
-        startedAt: workflowExecutions.startedAt,
-        completedAt: workflowExecutions.completedAt,
-        totalDuration: workflowExecutions.totalDuration,
-        totalEvents: workflowExecutions.totalEvents,
-        successfulEvents: workflowExecutions.successfulEvents,
-        failedEvents: workflowExecutions.failedEvents,
-        executionData: workflowExecutions.executionData,
-        createdAt: workflowExecutions.createdAt,
-        updatedAt: workflowExecutions.updatedAt,
-      })
-      .from(workflowExecutions)
-      .innerJoin(workflows, eq(workflowExecutions.workflowId, workflows.id))
-      .where(eq(workflows.userId, userId))
-      .orderBy(desc(workflowExecutions.createdAt))
-      .limit(limit)
-      .offset(offset);
-
-    const [totalResult] = await db
-      .select({ count: count() })
-      .from(workflowExecutions)
-      .innerJoin(workflows, eq(workflowExecutions.workflowId, workflows.id))
-      .where(eq(workflows.userId, userId));
-
-    return {
-      executions,
-      total: totalResult?.count ?? 0,
-    };
-  }
-
   async createWorkflowExecution(
     insertExecution: InsertWorkflowExecution,
   ): Promise<WorkflowExecution> {
@@ -3108,27 +2599,6 @@ class DatabaseStorage implements IStorage {
 
     if (!execution) {
       throw new Error("Failed to create workflow execution");
-    }
-    return execution;
-  }
-
-  async updateWorkflowExecution(
-    id: number,
-    updateData: Partial<InsertWorkflowExecution>,
-  ): Promise<WorkflowExecution> {
-    const [execution] = await db
-      .update(workflowExecutions)
-      .set({
-        ...updateData,
-        updatedAt: new Date(),
-      })
-      .where(eq(workflowExecutions.id, id))
-      .returning();
-
-    if (!execution) {
-      throw new Error(
-        "Failed to update workflow execution - execution not found",
-      );
     }
     return execution;
   }
@@ -3202,60 +2672,6 @@ class DatabaseStorage implements IStorage {
       .where(eq(eventServers.eventId, eventId));
 
     return eventServerList;
-  }
-
-  async addEventServer(
-    eventId: number,
-    serverId: number,
-    userId: string,
-  ): Promise<EventServer> {
-    const eventServer = await db.transaction(async (tx) => {
-      const [authorized] = await tx
-        .select({ eventId: events.id, serverId: servers.id })
-        .from(events)
-        .innerJoin(servers, eq(servers.id, serverId))
-        .where(
-          and(
-            eq(events.id, eventId),
-            eq(events.userId, userId),
-            eq(servers.userId, userId),
-            eq(servers.isArchived, false),
-          ),
-        )
-        .limit(1);
-      if (!authorized) {
-        throw new Error("Unauthorized event server relationship");
-      }
-
-      const [created] = await tx
-        .insert(eventServers)
-        .values({ eventId, serverId })
-        .returning();
-      return created;
-    });
-
-    if (!eventServer) {
-      throw new Error("Failed to add event server association");
-    }
-    return eventServer;
-  }
-
-  async removeEventServer(
-    eventId: number,
-    serverId: number,
-    userId: string,
-  ): Promise<void> {
-    await db.delete(eventServers).where(
-      and(
-        eq(eventServers.eventId, eventId),
-        eq(eventServers.serverId, serverId),
-        sql`EXISTS (
-            SELECT 1 FROM ${events}
-            WHERE ${events.id} = ${eventId}
-              AND ${events.userId} = ${userId}
-          )`,
-      ),
-    );
   }
 
   async setEventServers(
@@ -3678,13 +3094,6 @@ class DatabaseStorage implements IStorage {
     return resetToken;
   }
 
-  async markPasswordResetTokenAsUsed(tokenHash: string): Promise<void> {
-    await db
-      .update(passwordResetTokens)
-      .set({ used: true })
-      .where(eq(passwordResetTokens.token, tokenHash));
-  }
-
   /**
    * Atomically consume a password-reset token: mark it used only if it is
    * currently unused and unexpired, returning the row when this call is the one
@@ -3763,31 +3172,6 @@ class DatabaseStorage implements IStorage {
       .limit(1);
 
     return result[0] ?? null;
-  }
-
-  async getUserWebhooksWithStats(userId: string): Promise<
-    Array<{
-      webhook: typeof webhooks.$inferSelect;
-      totalDeliveries: number;
-      successfulDeliveries: number;
-      failedDeliveries: number;
-    }>
-  > {
-    // Optimized query to get webhooks with delivery statistics
-    const result = await db
-      .select({
-        webhook: webhooks,
-        totalDeliveries: count(webhookDeliveries.id),
-        successfulDeliveries: sql<number>`COUNT(CASE WHEN ${webhookDeliveries.status} = 'success' THEN 1 END)`,
-        failedDeliveries: sql<number>`COUNT(CASE WHEN ${webhookDeliveries.status} = 'failed' THEN 1 END)`,
-      })
-      .from(webhooks)
-      .leftJoin(webhookDeliveries, eq(webhooks.id, webhookDeliveries.webhookId))
-      .where(eq(webhooks.userId, userId))
-      .groupBy(webhooks.id)
-      .orderBy(desc(webhooks.createdAt));
-
-    return result;
   }
 
   /**

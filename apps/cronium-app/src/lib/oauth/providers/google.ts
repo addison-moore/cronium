@@ -65,26 +65,3 @@ export class GoogleOAuthProvider extends BaseOAuthProvider {
     return (await response.json()) as Record<string, unknown>;
   }
 }
-
-// Helper function to create Google provider for common services
-export function createGoogleProvider(
-  clientId: string,
-  clientSecret: string,
-  redirectUri: string,
-  service: "drive" | "sheets" | "calendar" | "gmail" | "all",
-): GoogleOAuthProvider {
-  const scopes: Record<string, string> = {
-    drive: "https://www.googleapis.com/auth/drive.file",
-    sheets: "https://www.googleapis.com/auth/spreadsheets",
-    calendar: "https://www.googleapis.com/auth/calendar",
-    gmail: "https://www.googleapis.com/auth/gmail.send",
-    all: "openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/calendar",
-  };
-
-  return new GoogleOAuthProvider({
-    clientId,
-    clientSecret,
-    redirectUri,
-    scope: scopes[service]!,
-  });
-}

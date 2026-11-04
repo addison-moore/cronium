@@ -305,40 +305,6 @@ export class RateLimiter {
   }
 
   /**
-   * Set custom quota for a user
-   */
-  async setUserQuota(
-    userId: string,
-    toolType: string | null,
-    quota: QuotaConfig,
-  ): Promise<void> {
-    await db
-      .insert(userToolQuotas)
-      .values({
-        userId,
-        toolType,
-        tier: quota.tier ?? "free",
-        dailyLimit: quota.daily,
-        hourlyLimit: quota.hourly,
-        burstLimit: quota.burst,
-        customLimits: quota,
-      })
-      .onConflictDoUpdate({
-        target: toolType
-          ? [userToolQuotas.userId, userToolQuotas.toolType]
-          : [userToolQuotas.userId],
-        set: {
-          tier: quota.tier ?? "free",
-          dailyLimit: quota.daily,
-          hourlyLimit: quota.hourly,
-          burstLimit: quota.burst,
-          customLimits: quota,
-          updatedAt: new Date(),
-        },
-      });
-  }
-
-  /**
    * Clean up old rate limit records
    */
   async cleanup(retentionHours = 24): Promise<number> {

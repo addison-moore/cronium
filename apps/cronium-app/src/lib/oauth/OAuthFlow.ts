@@ -156,19 +156,4 @@ export class OAuthFlow {
       );
     }
   }
-
-  /**
-   * Get token manager for this flow
-   */
-  getTokenManager(): TokenManager {
-    return this.tokenManager;
-  }
-
-  /**
-   * Clean up expired states
-   */
-  static async cleanupExpiredStates(): Promise<void> {
-    const { lt } = await import("drizzle-orm");
-    await db.delete(oauthStates).where(lt(oauthStates.expiresAt, new Date()));
-  }
 }

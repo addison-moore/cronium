@@ -4,7 +4,7 @@
  * running through the REAL protectedProcedure middleware chain and the REAL
  * resource-access/api-dto security layers. Only the process boundaries are
  * mocked: the database driver, the storage monolith, the scheduler facade,
- * the payload service, and the dispatch enqueue path.
+ * and the dispatch enqueue path.
  */
 
 type Row = Record<string, unknown>;
@@ -138,13 +138,6 @@ jest.mock("@/lib/scheduler", () => ({
   },
 }));
 
-jest.mock("@/lib/services/payload-service", () => ({
-  payloadService: {
-    removeOldPayloads: jest.fn(),
-    cleanupEventPayloads: jest.fn(),
-  },
-}));
-
 jest.mock("@/lib/scheduling/dispatch", () => ({
   dispatchEventJob: jest.fn(),
 }));
@@ -167,7 +160,6 @@ import {
 import { db } from "@/server/db";
 import { storage } from "@/server/storage";
 import { scheduler } from "@/lib/scheduler";
-import { payloadService } from "@/lib/services/payload-service";
 import { dispatchEventJob } from "@/lib/scheduling/dispatch";
 
 // The route-capability inventory is keyed by "events.<procedure>", so the
@@ -192,10 +184,6 @@ const schedulerMock = scheduler as unknown as {
   updateScript: jest.Mock;
   deleteScript: jest.Mock;
   scheduleScript: jest.Mock;
-};
-const payloadMock = payloadService as unknown as {
-  removeOldPayloads: jest.Mock;
-  cleanupEventPayloads: jest.Mock;
 };
 const dispatchMock = dispatchEventJob as unknown as jest.Mock;
 
@@ -312,8 +300,6 @@ beforeEach(() => {
   schedulerMock.updateScript.mockResolvedValue(undefined);
   schedulerMock.deleteScript.mockResolvedValue(undefined);
   schedulerMock.scheduleScript.mockResolvedValue(undefined);
-  payloadMock.removeOldPayloads.mockResolvedValue(undefined);
-  payloadMock.cleanupEventPayloads.mockResolvedValue(undefined);
   dispatchMock.mockResolvedValue({ job: { id: 42 }, logId: 7 });
 });
 
@@ -741,32 +727,6 @@ describe("update", () => {
     expect(storageMock.setEventServers).toHaveBeenCalledWith(1, [], OWNER);
   });
 
-  it("cleans up stale payloads when a remote event's content changes", async () => {
-    storageMock.getEventWithRelations.mockResolvedValue(
-      eventWithRelations({ runLocation: RunLocation.REMOTE }),
-    );
-    const caller = callerWith(sessionFor());
-    await caller.events.update({ id: 1, content: "echo updated" });
-    expect(payloadMock.removeOldPayloads).toHaveBeenCalledWith(1, 0);
-  });
-
-  it("ignores payload cleanup failures", async () => {
-    storageMock.getEventWithRelations.mockResolvedValue(
-      eventWithRelations({ runLocation: RunLocation.REMOTE }),
-    );
-    payloadMock.removeOldPayloads.mockRejectedValue(new Error("fs error"));
-    const caller = callerWith(sessionFor());
-    await expect(
-      caller.events.update({ id: 1, content: "echo updated" }),
-    ).resolves.toMatchObject({ id: 1 });
-  });
-
-  it("does not touch payloads for local events", async () => {
-    const caller = callerWith(sessionFor());
-    await caller.events.update({ id: 1, content: "echo updated" });
-    expect(payloadMock.removeOldPayloads).not.toHaveBeenCalled();
-  });
-
   it("denies editing another user's event even when shared", async () => {
     dbState.events = [eventAccessRow({ userId: OTHER, shared: true })];
     const caller = callerWith(sessionFor());
@@ -793,21 +753,17 @@ describe("update", () => {
 });
 
 describe("delete", () => {
-  it("cleans up payloads, cancels the schedule, then deletes", async () => {
+  it("cancels the schedule, then deletes", async () => {
     const caller = callerWith(sessionFor());
     await expect(caller.events.delete({ id: 1 })).resolves.toEqual({
       success: true,
     });
-    expect(payloadMock.cleanupEventPayloads).toHaveBeenCalledWith(1);
     expect(schedulerMock.deleteScript).toHaveBeenCalledWith(1);
     expect(storageMock.deleteScript).toHaveBeenCalledWith(1);
 
-    const payloadOrder =
-      payloadMock.cleanupEventPayloads.mock.invocationCallOrder[0]!;
     const scheduleOrder =
       schedulerMock.deleteScript.mock.invocationCallOrder[0]!;
     const deleteOrder = storageMock.deleteScript.mock.invocationCallOrder[0]!;
-    expect(payloadOrder).toBeLessThan(scheduleOrder);
     expect(scheduleOrder).toBeLessThan(deleteOrder);
   });
 

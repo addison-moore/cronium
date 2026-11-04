@@ -11,7 +11,7 @@ jest.mock("@/lib/scheduler/http-event-executor", () => ({
   executeHttpEvent: jest.fn(),
 }));
 
-import { runInProcessJob, isInProcessJobType } from "../in-process-executor";
+import { runInProcessJob } from "../in-process-executor";
 import { jobService } from "@/lib/services/job-service";
 import { executeToolAction } from "@/lib/scheduler/tool-action-executor";
 import { executeHttpEvent } from "@/lib/scheduler/http-event-executor";
@@ -43,14 +43,6 @@ beforeEach(() => {
   mockUpdate.mockReset().mockResolvedValue(null);
   mockExec.mockReset();
   mockHttp.mockReset();
-});
-
-describe("isInProcessJobType", () => {
-  it("is true for the scriptless in-process types, false for scripts", () => {
-    expect(isInProcessJobType(JobType.TOOL_ACTION)).toBe(true);
-    expect(isInProcessJobType(JobType.HTTP_REQUEST)).toBe(true);
-    expect(isInProcessJobType(JobType.SCRIPT)).toBe(false);
-  });
 });
 
 describe("runInProcessJob — dispatch by job type", () => {

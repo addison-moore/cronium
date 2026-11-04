@@ -63,23 +63,6 @@ curl -X POST http://localhost:5001/api/trpc/tools.create \
 
 ## Running Tests
 
-### Using the Test Script
-
-```bash
-# Check configured tools
-npx tsx src/scripts/check-configured-tools.ts
-
-# Run the real tools test (will send actual messages)
-npx tsx src/scripts/test-real-tools.ts
-```
-
-The test script will:
-
-1. Find all active Slack/Discord tools
-2. Create test events for each
-3. Execute them and send real messages
-4. Log the results
-
 ### Manual Testing via Dashboard
 
 1. Go to Dashboard > Tools
@@ -90,22 +73,6 @@ The test script will:
    - **Discord**: Message content
 5. Set trigger to "Manual"
 6. Save and click "Run Now"
-
-### Testing via API Endpoint
-
-```bash
-# Test a specific tool
-curl -X POST http://localhost:5001/api/test-tool-action \
-  -H "Content-Type: application/json" \
-  -d '{
-    "toolId": 123,
-    "actionId": "slack.send-message",
-    "parameters": {
-      "channel": "#test",
-      "message": "Test message from API"
-    }
-  }'
-```
 
 ## Expected Results
 

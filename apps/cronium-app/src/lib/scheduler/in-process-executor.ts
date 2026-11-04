@@ -20,15 +20,6 @@ import { executeHttpEvent } from "@/lib/scheduler/http-event-executor";
 import { MAX_UNIFIED_IO_OUTPUT_BYTES, toMb } from "@/lib/unified-io/limits";
 
 /**
- * Job types executed in the app process rather than dispatched to the
- * orchestrator (which only runs container/ssh scripts). Both tool actions and
- * HTTP requests are scriptless outbound calls with a working in-process engine.
- */
-export function isInProcessJobType(type: JobType): boolean {
-  return type === JobType.TOOL_ACTION || type === JobType.HTTP_REQUEST;
-}
-
-/**
  * Run a tool-action job in-process and finalize it via the normal job lifecycle.
  * Never throws and always finalizes the job (COMPLETED/FAILED) so it can't be
  * left QUEUED — the orchestrator will never claim it (see jobService.claimJobs).

@@ -25,7 +25,6 @@ import {
 import { storage } from "@/server/storage";
 import { scheduler } from "@/lib/scheduler";
 import { touchesEventSchedule } from "@/lib/scheduling/materialize";
-import { payloadService } from "@/lib/services/payload-service";
 import {
   assertEventCapability,
   assertEventRelations,
@@ -165,9 +164,6 @@ export const eventsRouter = createTRPCRouter({
         // up before its env vars and servers exist.
         await scheduler.updateScript(event.id);
 
-        // Payload generation moved to orchestrator
-        // The orchestrator will create payloads from job script content
-
         // Get the complete event with relations
         const completeEvent = await storage.getEventWithRelations(event.id);
 
@@ -259,22 +255,6 @@ export const eventsRouter = createTRPCRouter({
           await scheduler.updateScript(id);
         }
 
-        // Payload generation moved to orchestrator
-        // The orchestrator will create payloads from job script content
-        // Clean up old payloads if they exist
-        if (
-          updatedEvent &&
-          updatedEvent.runLocation !== RunLocation.LOCAL &&
-          (input.content !== undefined || input.envVars !== undefined)
-        ) {
-          try {
-            // Just clean up old payloads without generating new ones
-            await payloadService.removeOldPayloads(id, 0); // Remove all payloads
-          } catch {
-            // Ignore cleanup errors
-          }
-        }
-
         return updatedEvent
           ? toEventApiDto(updatedEvent, userId, {
               revealEnvVarValues: canReadEnvVarValues(ctx.tokenScopes),
@@ -298,9 +278,6 @@ export const eventsRouter = createTRPCRouter({
 
       try {
         await assertEventCapability(input.id, userId, "edit");
-
-        // Clean up payloads before deleting the event
-        await payloadService.cleanupEventPayloads(input.id);
 
         // Cancel the in-memory scheduled job before removing the event
         await scheduler.deleteScript(input.id);

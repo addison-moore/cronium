@@ -240,10 +240,3 @@ export function transformJobForOrchestrator(job: Job): OrchestratorJob {
     },
   };
 }
-
-/**
- * Transform multiple jobs for the orchestrator
- */
-export function transformJobsForOrchestrator(jobs: Job[]): OrchestratorJob[] {
-  return jobs.map(transformJobForOrchestrator);
-}

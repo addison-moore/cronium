@@ -214,27 +214,6 @@ export class CacheService {
   }
 
   /**
-   * Delete all keys with a specific tag
-   */
-  async deleteByTag(tag: string): Promise<boolean> {
-    if (!this.client || !this.isConnected) {
-      return false;
-    }
-
-    try {
-      const keys = await this.client.smembers(`tag:${tag}`);
-      if (keys.length > 0) {
-        await this.client.del(...keys);
-        await this.client.del(`tag:${tag}`);
-      }
-      return true;
-    } catch (error) {
-      console.error(`Cache delete by tag error for ${tag}:`, error);
-      return false;
-    }
-  }
-
-  /**
    * Clear all cache
    */
   async clear(): Promise<boolean> {
@@ -315,44 +294,3 @@ declare global {
 // Export singleton instance
 global.__cacheService ??= new CacheService();
 export const cacheService = global.__cacheService;
-
-// Helper functions for common cache operations
-export const cacheHelpers = {
-  /**
-   * Get or set cache with a factory function
-   */
-  async getOrSet<T>(
-    key: string,
-    factory: () => Promise<T>,
-    options: CacheOptions = {},
-  ): Promise<T> {
-    // Try to get from cache first
-    const cached = await cacheService.get<T>(key);
-    if (cached !== null) {
-      return cached;
-    }
-
-    // If not in cache, get from factory and cache it
-    const value = await factory();
-    await cacheService.set(key, value, options);
-    return value;
-  },
-
-  /**
-   * Invalidate cache for an entity
-   */
-  async invalidateEntity(
-    entityType: keyof typeof CACHE_PREFIXES,
-    entityId: string | number,
-  ): Promise<void> {
-    const prefix = CACHE_PREFIXES[entityType];
-    await cacheService.deleteByPattern(`${prefix}${entityId}*`);
-  },
-
-  /**
-   * Invalidate cache for a user's session/auth data
-   */
-  async invalidateUserCache(userId: string): Promise<void> {
-    await cacheService.deleteByPattern(`${CACHE_PREFIXES.USER}${userId}*`);
-  },
-};

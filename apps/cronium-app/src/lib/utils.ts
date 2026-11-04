@@ -17,9 +17,3 @@ export function formatDate(date: Date | string | null | undefined): string {
     return "Never";
   }
 }
-
-export function truncateString(str: string, length: number): string {
-  if (!str) return "";
-  if (str.length <= length) return str;
-  return str.slice(0, length) + "...";
-}

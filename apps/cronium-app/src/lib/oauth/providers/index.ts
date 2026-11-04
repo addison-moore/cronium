@@ -3,9 +3,9 @@ import { MicrosoftOAuthProvider } from "./microsoft";
 import { SlackOAuthProvider } from "./slack";
 import type { OAuthProvider } from "../types";
 
-export { GoogleOAuthProvider, createGoogleProvider } from "./google";
-export { MicrosoftOAuthProvider, createMicrosoftProvider } from "./microsoft";
-export { SlackOAuthProvider, createSlackProvider } from "./slack";
+export { GoogleOAuthProvider } from "./google";
+export { MicrosoftOAuthProvider } from "./microsoft";
+export { SlackOAuthProvider } from "./slack";
 
 // Re-export types
 export type { OAuthProvider } from "../types";

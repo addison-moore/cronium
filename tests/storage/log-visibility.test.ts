@@ -88,16 +88,6 @@ describe("getFilteredLogs", () => {
     expect(rows).toEqual([]);
   });
 
-  it("does not list another user's workflow names", async () => {
-    await seed();
-    await expect(storage.getDistinctWorkflowsFromLogs(OTHER)).resolves.toEqual(
-      [],
-    );
-    await expect(
-      storage.getDistinctWorkflowsFromLogs(OWNER),
-    ).resolves.toHaveLength(1);
-  });
-
   it("ignores an unparseable date instead of failing the query", async () => {
     await seed();
     const { total } = await storage.getFilteredLogs({

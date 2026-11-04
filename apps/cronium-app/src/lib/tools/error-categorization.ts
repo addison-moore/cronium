@@ -335,41 +335,4 @@ export class ErrorCategorizer {
 
     return [...new Set(suggestions)]; // Remove duplicates
   }
-
-  /**
-   * Determine if error should trigger circuit breaker
-   */
-  static shouldTripCircuit(error: CategorizedError): boolean {
-    // Don't trip circuit for client errors
-    if (
-      ["validation", "authentication", "authorization"].includes(error.category)
-    ) {
-      return false;
-    }
-
-    // Trip circuit for severe errors
-    if (error.severity === "critical") {
-      return true;
-    }
-
-    // Trip circuit for persistent server errors
-    if (error.category === "server_error") {
-      return true;
-    }
-
-    return false;
-  }
-
-  /**
-   * Get user-friendly error message
-   */
-  static getUserMessage(error: CategorizedError, includeAction = true): string {
-    let message = error.userMessage;
-
-    if (includeAction && error.suggestedAction) {
-      message += `. ${error.suggestedAction}`;
-    }
-
-    return message;
-  }
 }

@@ -109,18 +109,3 @@ export async function revokeJobExecutionTokens(
     );
   }
 }
-
-/** Whether a job's execution tokens have been revoked (test/introspection). */
-export async function isJobExecutionRevoked(jobId: string): Promise<boolean> {
-  const client = await commandClient();
-  const n = await client.exists(revocationKey(jobId));
-  return n > 0;
-}
-
-export async function closeExecutionRevocationStore(): Promise<void> {
-  const promise = commandClientPromise;
-  commandClientPromise = null;
-  if (!promise) return;
-  const client = await promise.catch(() => null);
-  client?.disconnect();
-}

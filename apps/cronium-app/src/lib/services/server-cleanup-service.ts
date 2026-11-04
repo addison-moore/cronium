@@ -25,9 +25,7 @@ interface CleanupResult {
 export class ServerCleanupService {
   private static instance: ServerCleanupService | null = null;
   private intervalId: NodeJS.Timeout | null = null;
-  private isRunning = false;
   private config: CleanupServiceConfig;
-  private lastRunTime: Date | null = null;
 
   private constructor(config?: Partial<CleanupServiceConfig>) {
     this.config = {
@@ -73,8 +71,6 @@ export class ServerCleanupService {
     this.intervalId = setInterval(() => {
       void this.runCleanupCycle();
     }, this.config.interval);
-
-    this.isRunning = true;
   }
 
   /**
@@ -84,23 +80,8 @@ export class ServerCleanupService {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
-      this.isRunning = false;
       console.log("[ServerCleanupService] Service stopped");
     }
-  }
-
-  /**
-   * Check if the service is running
-   */
-  isServiceRunning(): boolean {
-    return this.isRunning;
-  }
-
-  /**
-   * Get the last run time
-   */
-  getLastRunTime(): Date | null {
-    return this.lastRunTime;
   }
 
   /**
@@ -134,7 +115,6 @@ export class ServerCleanupService {
       // 3. Clean up any orphaned resources
       await this.cleanupOrphanedResources();
 
-      this.lastRunTime = startTime;
       result.endTime = new Date();
 
       console.log(
@@ -301,24 +281,6 @@ export class ServerCleanupService {
         error,
       );
       return [];
-    }
-  }
-
-  /**
-   * Manually trigger deletion of a specific server
-   */
-  async deleteServerNow(serverId: number): Promise<void> {
-    try {
-      console.log(
-        `[ServerCleanupService] Manual deletion requested for server ${serverId}`,
-      );
-      await storage.permanentlyDeleteServer(serverId);
-    } catch (error) {
-      console.error(
-        `[ServerCleanupService] Error deleting server ${serverId}:`,
-        error,
-      );
-      throw error;
     }
   }
 }

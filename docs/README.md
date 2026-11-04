@@ -38,15 +38,14 @@ are aimed at people **running** or **developing** Cronium.
 
 ## Contributing
 
-| Guide                                                        | Covers                             |
-| ------------------------------------------------------------ | ---------------------------------- |
-| [TRPC.md](./TRPC.md)                                         | tRPC router and procedure patterns |
-| [TYPE_SAFETY.md](./TYPE_SAFETY.md)                           | End-to-end type-safety conventions |
-| [RHF_GUIDE.md](./RHF_GUIDE.md)                               | React Hook Form + Zod patterns     |
-| [STYLING.md](./STYLING.md)                                   | TailwindCSS conventions            |
-| [UX_GUIDE.md](./UX_GUIDE.md)                                 | UI/UX conventions                  |
-| [CACHING_STRATEGY.md](./CACHING_STRATEGY.md)                 | Caching layers                     |
-| [QUERY_OPTIMIZATION_GUIDE.md](./QUERY_OPTIMIZATION_GUIDE.md) | Database query performance         |
+| Guide                                        | Covers                             |
+| -------------------------------------------- | ---------------------------------- |
+| [TRPC.md](./TRPC.md)                         | tRPC router and procedure patterns |
+| [TYPE_SAFETY.md](./TYPE_SAFETY.md)           | End-to-end type-safety conventions |
+| [RHF_GUIDE.md](./RHF_GUIDE.md)               | React Hook Form + Zod patterns     |
+| [STYLING.md](./STYLING.md)                   | TailwindCSS conventions            |
+| [UX_GUIDE.md](./UX_GUIDE.md)                 | UI/UX conventions                  |
+| [CACHING_STRATEGY.md](./CACHING_STRATEGY.md) | Caching layers                     |
 
 See also the repository root: [CONTRIBUTING.md](../CONTRIBUTING.md) and
 [SECURITY.md](../SECURITY.md).

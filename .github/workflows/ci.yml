@@ -44,7 +44,7 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # --ignore-scripts skips native rebuilds (node-pty, cpu-features, bcrypt).
+      # --ignore-scripts skips native rebuilds (cpu-features, bcrypt).
       # Lint, typecheck and the jest suite need none of them, and skipping the
       # builds means the runner does not need a C toolchain. The Docker image
       # build still compiles them, inside a container that has one.
@@ -140,7 +140,7 @@ jobs:
 
       # FULL install (no --ignore-scripts): unlike the pure-jest jobs, the app
       # actually RUNS here and its import graph needs the native modules
-      # (bcrypt via the auth routers, node-pty via the socket server).
+      # (bcrypt via the auth routers).
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

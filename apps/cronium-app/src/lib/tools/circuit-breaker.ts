@@ -260,23 +260,6 @@ export class CircuitBreaker<T> {
     delete this.nextAttemptTime;
     console.log(`Circuit breaker ${this.name} has been reset`);
   }
-
-  /**
-   * Force open circuit (for testing/maintenance)
-   */
-  forceOpen(): void {
-    this.openCircuit();
-  }
-
-  /**
-   * Force close circuit (for testing/recovery)
-   */
-  forceClose(): void {
-    this.state = "CLOSED";
-    this.failures = 0;
-    this.successes = 0;
-    delete this.nextAttemptTime;
-  }
 }
 
 /**
@@ -342,39 +325,6 @@ export class CircuitBreakerManager {
     }
 
     return this.breakers.get(key)!;
-  }
-
-  /**
-   * Get all circuit breaker metrics
-   */
-  getAllMetrics(): Record<string, CircuitBreakerMetrics> {
-    const metrics: Record<string, CircuitBreakerMetrics> = {};
-
-    for (const [key, breaker] of this.breakers.entries()) {
-      metrics[key] = breaker.getMetrics();
-    }
-
-    return metrics;
-  }
-
-  /**
-   * Reset all circuit breakers
-   */
-  resetAll(): void {
-    for (const breaker of this.breakers.values()) {
-      breaker.reset();
-    }
-  }
-
-  /**
-   * Reset specific tool's circuit breakers
-   */
-  resetTool(toolType: string): void {
-    for (const [key, breaker] of this.breakers.entries()) {
-      if (key.startsWith(`${toolType}-`)) {
-        breaker.reset();
-      }
-    }
   }
 }
 

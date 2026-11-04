@@ -100,34 +100,3 @@ export class SlackOAuthProvider extends BaseOAuthProvider {
     return data;
   }
 }
-
-// Helper function to create Slack provider with common scopes
-export function createSlackProvider(
-  clientId: string,
-  clientSecret: string,
-  redirectUri: string,
-  botScopes: string[] = [],
-  userScopes: string[] = [],
-): SlackOAuthProvider {
-  const defaultBotScopes = [
-    "channels:read",
-    "channels:write",
-    "chat:write",
-    "files:write",
-    "users:read",
-  ];
-
-  const defaultUserScopes = ["identity.basic", "identity.email"];
-
-  const provider = new SlackOAuthProvider({
-    clientId,
-    clientSecret,
-    redirectUri,
-    scope: [...new Set([...defaultBotScopes, ...botScopes])].join(","),
-    options: {
-      userScope: [...new Set([...defaultUserScopes, ...userScopes])].join(","),
-    },
-  });
-
-  return provider;
-}

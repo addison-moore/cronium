@@ -499,39 +499,6 @@ export class QuotaManager extends EventEmitter {
   }
 
   /**
-   * Get usage report
-   */
-  async getUsageReport(
-    userId: string,
-    startDate: Date,
-    endDate: Date,
-  ): Promise<
-    Array<{
-      resource: string;
-      date: Date;
-      amount: number;
-    }>
-  > {
-    const usage = await db
-      .select()
-      .from(quotaUsage)
-      .where(
-        and(
-          eq(quotaUsage.userId, userId),
-          gte(quotaUsage.createdAt, startDate),
-          sql`${quotaUsage.createdAt} <= ${endDate}`,
-        ),
-      )
-      .orderBy(quotaUsage.createdAt);
-
-    return usage.map((u) => ({
-      resource: u.resource,
-      date: u.createdAt,
-      amount: u.amount,
-    }));
-  }
-
-  /**
    * Start cache cleanup
    */
   private startCacheCleanup(): void {

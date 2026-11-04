@@ -39,37 +39,6 @@ export interface TRPCError extends Error {
   data?: TRPCErrorData;
 }
 
-// Helper function to check if an error is a tRPC error
-export function isTRPCError(error: unknown): error is TRPCError {
-  return (
-    error instanceof Error &&
-    "data" in error &&
-    typeof error.data === "object" &&
-    error.data !== null &&
-    "code" in error.data
-  );
-}
-
-// Helper function to extract Zod validation errors
-export function getZodErrors(error: unknown): Record<string, string[]> | null {
-  if (isTRPCError(error) && error.data?.zodError?.fieldErrors) {
-    return error.data.zodError.fieldErrors;
-  }
-  return null;
-}
-
-// Helper function to get field-specific error
-export function getFieldError(
-  error: unknown,
-  fieldName: string,
-): string | null {
-  const zodErrors = getZodErrors(error);
-  if (zodErrors?.[fieldName]?.[0]) {
-    return zodErrors[fieldName][0];
-  }
-  return null;
-}
-
 // Common query options for different data types
 export const QUERY_OPTIONS = {
   // Fast-changing data (real-time updates)
@@ -108,59 +77,5 @@ export const QUERY_OPTIONS = {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     retry: 1, // Minimal retries for background data
-  },
-} as const;
-
-// Advanced query patterns for specific use cases
-export const ADVANCED_PATTERNS = {
-  // Infinite query configuration
-  infinite: {
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
-    maxPages: 10, // Limit cached pages
-  },
-
-  // Optimistic update configuration
-  optimistic: {
-    retry: false, // Don't retry optimistic updates
-    gcTime: 1 * 60 * 1000, // Short cache time
-  },
-
-  // Critical data that should always be fresh
-  critical: {
-    staleTime: 0,
-    gcTime: 30 * 1000, // 30 seconds
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    retry: 3,
-  },
-} as const;
-
-// Middleware application helpers
-export const MIDDLEWARE_COMBINATIONS = {
-  // For API endpoints that need timing and caching
-  cached: {
-    timing: true,
-    cache: 60000, // 1 minute cache
-  },
-
-  // For rate-limited endpoints
-  rateLimited: {
-    timing: true,
-    rateLimit: { maxRequests: 100, windowMs: 60000 },
-  },
-
-  // For critical operations with full monitoring
-  monitored: {
-    timing: true,
-    rateLimit: { maxRequests: 50, windowMs: 60000 },
-    transaction: true,
-  },
-
-  // For public endpoints
-  public: {
-    timing: true,
-    cache: 300000, // 5 minute cache
-    rateLimit: { maxRequests: 200, windowMs: 60000 },
   },
 } as const;

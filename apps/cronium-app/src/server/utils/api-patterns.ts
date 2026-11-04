@@ -63,20 +63,6 @@ export interface ApiBulkResponse<T> {
 }
 
 /**
- * Create a standard success response
- */
-export function successResponse<T>(
-  data: T,
-  metadata?: Record<string, unknown>,
-): ApiSuccessResponse<T> {
-  return {
-    success: true,
-    data,
-    ...(metadata && { metadata }),
-  };
-}
-
-/**
  * Create a standard list response
  */
 export function listResponse<T>(
@@ -224,43 +210,6 @@ export function statsResponse(
 }
 
 /**
- * Transform raw database records to API format
- */
-export function transformDates<T extends Record<string, unknown>>(
-  record: T,
-  dateFields: Array<keyof T> = ["createdAt", "updatedAt"],
-): T {
-  const transformed = { ...record };
-
-  for (const field of dateFields) {
-    if (transformed[field] instanceof Date) {
-      // TypeScript needs help understanding this mutation is safe
-      (transformed as Record<string, unknown>)[field as string] = (
-        transformed[field] as Date
-      ).toISOString();
-    }
-  }
-
-  return transformed;
-}
-
-/**
- * Remove sensitive fields from responses
- */
-export function sanitizeResponse<T extends Record<string, unknown>>(
-  record: T,
-  sensitiveFields: Array<keyof T> = ["password", "sshKey", "apiKey"],
-): Omit<T, keyof (typeof sensitiveFields)[number]> {
-  const sanitized = { ...record };
-
-  for (const field of sensitiveFields) {
-    delete sanitized[field];
-  }
-
-  return sanitized;
-}
-
-/**
  * Standard file download response headers
  */
 export interface ApiDownloadHeaders {
@@ -268,20 +217,4 @@ export interface ApiDownloadHeaders {
   "Content-Disposition": string;
   "Content-Length"?: string;
   "Cache-Control"?: string;
-}
-
-/**
- * Create download headers
- */
-export function downloadHeaders(
-  filename: string,
-  contentType: string,
-  size?: number,
-): ApiDownloadHeaders {
-  return {
-    "Content-Type": contentType,
-    "Content-Disposition": `attachment; filename="${filename}"`,
-    ...(size && { "Content-Length": size.toString() }),
-    "Cache-Control": "no-cache",
-  };
 }

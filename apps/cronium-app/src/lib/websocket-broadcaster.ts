@@ -57,7 +57,6 @@ interface BroadcastResult {
 
 export class WebSocketBroadcaster {
   private config: BroadcastConfig;
-  private healthCheckInterval: NodeJS.Timeout | null = null;
   private isHealthy = false;
   private broadcastQueue: BroadcastQueueItem[] = [];
 
@@ -315,7 +314,7 @@ export class WebSocketBroadcaster {
     void this.checkHealth();
 
     // Periodic health checks every 30 seconds
-    this.healthCheckInterval = setInterval(() => {
+    setInterval(() => {
       void this.checkHealth();
     }, 30000);
   }
@@ -349,16 +348,6 @@ export class WebSocketBroadcaster {
         console.error("[WebSocketBroadcaster] Health check failed:", error);
       }
       this.isHealthy = false;
-    }
-  }
-
-  /**
-   * Stop health monitoring
-   */
-  stopHealthMonitoring(): void {
-    if (this.healthCheckInterval) {
-      clearInterval(this.healthCheckInterval);
-      this.healthCheckInterval = null;
     }
   }
 

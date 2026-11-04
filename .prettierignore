@@ -1,4 +1,2 @@
 pnpm-lock.yaml
-scripts/deprecated/
-src/scripts/migrations/archived/
 .next/

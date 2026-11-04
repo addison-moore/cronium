@@ -162,27 +162,3 @@ Cronium Automation Platform`,
     },
   },
 ];
-
-/**
- * Get default templates for a specific tool type
- */
-export function getDefaultTemplatesForTool(
-  toolType: string,
-): DefaultToolActionTemplate[] {
-  return defaultToolActionTemplates.filter(
-    (template) => template.toolType === toolType,
-  );
-}
-
-/**
- * Get default templates for a specific tool and action
- */
-export function getDefaultTemplatesForAction(
-  toolType: string,
-  actionId: string,
-): DefaultToolActionTemplate[] {
-  return defaultToolActionTemplates.filter(
-    (template) =>
-      template.toolType === toolType && template.actionId === actionId,
-  );
-}

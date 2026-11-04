@@ -153,7 +153,6 @@ const nextConfig = {
   },
   serverExternalPackages: [
     "ssh2",
-    "node-ssh",
     "mysql2",
     "mongodb",
     "ioredis",

@@ -37,7 +37,5 @@ export const serverFormSchema = z
 // Legacy exports for backwards compatibility
 export const serverSchema = serverFormSchema;
 
-export const updateServerFormSchema = serverFormSchema;
-
 export type ServerFormValues = z.infer<typeof serverSchema>;
 export type UpdateServerFormValues = z.infer<typeof serverFormSchema>;

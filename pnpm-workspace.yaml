@@ -52,7 +52,6 @@ allowBuilds:
   bcrypt: true
   cpu-features: false
   esbuild: true
-  node-pty: false
   protobufjs: false
   sharp: false
   ssh2: true
@@ -64,7 +63,6 @@ onlyBuiltDependencies:
   - bcrypt
   - cpu-features
   - esbuild
-  - node-pty
   - sharp
   - ssh2
   - unrs-resolver

@@ -197,13 +197,6 @@ export class WebhookSecurity {
   }
 
   /**
-   * Generate webhook endpoint URL
-   */
-  generateEndpointUrl(baseUrl: string, webhookKey: string): string {
-    return `${baseUrl}/api/webhooks/${webhookKey}`;
-  }
-
-  /**
    * Sanitize webhook payload to prevent injection attacks
    */
   sanitizePayload<T extends Record<string, unknown>>(payload: T): T {
@@ -323,57 +316,5 @@ export class WebhookSecurity {
     };
 
     return str.replace(/[&<>"']/g, (match) => htmlEscapes[match] ?? match);
-  }
-
-  /**
-   * Validate webhook URL
-   */
-  validateWebhookUrl(url: string): { isValid: boolean; error?: string } {
-    try {
-      const urlObj = new URL(url);
-
-      // Check protocol
-      if (!["http:", "https:"].includes(urlObj.protocol)) {
-        return {
-          isValid: false,
-          error: "Invalid protocol. Only HTTP and HTTPS are allowed.",
-        };
-      }
-
-      // Check for localhost/private IPs in production
-      if (process.env.NODE_ENV === "production") {
-        const hostname = urlObj.hostname.toLowerCase();
-        const privatePatterns = [
-          "localhost",
-          "127.0.0.1",
-          "0.0.0.0",
-          "::1",
-          /^10\./,
-          /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
-          /^192\.168\./,
-        ];
-
-        const isPrivate = privatePatterns.some((pattern) => {
-          if (typeof pattern === "string") {
-            return hostname === pattern;
-          }
-          return pattern.test(hostname);
-        });
-
-        if (isPrivate) {
-          return {
-            isValid: false,
-            error: "Private or local URLs are not allowed in production.",
-          };
-        }
-      }
-
-      return { isValid: true };
-    } catch {
-      return {
-        isValid: false,
-        error: "Invalid URL format",
-      };
-    }
   }
 }

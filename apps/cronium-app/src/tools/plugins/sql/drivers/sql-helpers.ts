@@ -165,13 +165,6 @@ export function toJsonSafe(value: unknown): unknown {
   return value;
 }
 
-/** Map a driver's raw row objects to JSON-safe row objects. */
-export function normalizeRows(
-  rows: Record<string, unknown>[],
-): Record<string, unknown>[] {
-  return rows.map((row) => toJsonSafe(row) as Record<string, unknown>);
-}
-
 export interface RowAccumulator {
   /** JSON-safe rows collected so far. */
   readonly rows: Record<string, unknown>[];

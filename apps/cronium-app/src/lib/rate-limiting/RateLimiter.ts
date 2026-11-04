@@ -31,7 +31,6 @@ export interface RateLimitKey {
 export class RateLimiter extends EventEmitter {
   private static instance: RateLimiter;
   private memoryStore = new Map<string, { count: number; resetAt: Date }>();
-  private cleanupInterval: NodeJS.Timeout | undefined;
 
   private constructor() {
     super();
@@ -128,27 +127,6 @@ export class RateLimiter extends EventEmitter {
         resetAt,
       };
     }
-  }
-
-  /**
-   * Reset rate limit for a key
-   */
-  async resetLimit(
-    key: RateLimitKey,
-    config: Partial<RateLimitConfig> = {},
-  ): Promise<void> {
-    const fullConfig = RateLimitConfigSchema.parse(config);
-    const bucketKey = this.generateKey(key, fullConfig.keyPrefix);
-
-    // Clear from memory
-    this.memoryStore.delete(bucketKey);
-
-    // Clear from database
-    await db
-      .delete(rateLimitBuckets)
-      .where(eq(rateLimitBuckets.key, bucketKey));
-
-    this.emit("rate-limit-reset", { key, config: fullConfig });
   }
 
   /**
@@ -367,7 +345,7 @@ export class RateLimiter extends EventEmitter {
    * Start cleanup interval
    */
   private startCleanup(): void {
-    this.cleanupInterval = setInterval(() => {
+    setInterval(() => {
       const now = Date.now();
       for (const [key, bucket] of this.memoryStore) {
         if (bucket.resetAt.getTime() < now) {
@@ -375,16 +353,6 @@ export class RateLimiter extends EventEmitter {
         }
       }
     }, 60000); // Clean up every minute
-  }
-
-  /**
-   * Stop cleanup interval
-   */
-  stopCleanup(): void {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.cleanupInterval = undefined;
-    }
   }
 
   /**

@@ -16,7 +16,7 @@ import {
   JobType,
   type Job,
 } from "@/shared/schema";
-import { and, desc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lte } from "drizzle-orm";
 import { transitionJob } from "./job-transition";
 
 const IN_PROCESS_TYPES = [JobType.TOOL_ACTION, JobType.HTTP_REQUEST];
@@ -178,23 +178,4 @@ export class InProcessWorkerPool {
       new Promise((resolve) => setTimeout(resolve, timeoutMs)),
     ]);
   }
-}
-
-/** True when any QUEUED in-process job is due — lets the worker skip a claim
- * round-trip when idle. */
-export async function hasDueInProcessJobs(
-  now: Date = new Date(),
-): Promise<boolean> {
-  const [row] = await db
-    .select({ one: sql<number>`1` })
-    .from(jobs)
-    .where(
-      and(
-        inArray(jobs.type, IN_PROCESS_TYPES),
-        eq(jobs.status, JobStatus.QUEUED),
-        lte(jobs.scheduledFor, now),
-      ),
-    )
-    .limit(1);
-  return !!row;
 }

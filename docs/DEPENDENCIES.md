@@ -34,10 +34,9 @@ positives that must be verified by hand.
 | `express`                                                                              | HTTP server for the standalone socket process (`server.ts`).     |
 | `ws`                                                                                   | WebSocket primitive used by the socket/terminal layer.           |
 | `socket.io`, `socket.io-client`                                                        | Live log + terminal streaming transport.                         |
-| `node-pty`                                                                             | PTY allocation for the interactive terminal.                     |
 | `@xterm/xterm`, `@xterm/addon-fit`, `@xterm/addon-unicode11`, `@xterm/addon-web-links` | Browser terminal emulator.                                       |
-| `node-schedule`, `cron-parser`                                                         | Schedule parsing/next-run computation.                           |
-| `node-ssh`, `ssh2`                                                                     | Remote (SSH) execution + terminal transport.                     |
+| `cron-parser`                                                                          | Schedule parsing/next-run computation.                           |
+| `ssh2`                                                                                 | Remote (SSH) execution + terminal transport.                     |
 | `ioredis`                                                                              | Valkey/Redis client (rate limiting, socket tickets, revocation). |
 | `lru-cache`                                                                            | In-process caches.                                               |
 | `handlebars`                                                                           | Message/template rendering (`template-processor.ts`).            |
@@ -57,31 +56,26 @@ positives that must be verified by hand.
 
 ### UI (app-level)
 
-| Package                                              | Purpose                                                                                                                                                 |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@cronium/ui`                                        | Shared internal component library.                                                                                                                      |
-| `@radix-ui/react-*`                                  | Accessible UI primitives (dialog, select, tabs, tooltip, …). Also declared by `@cronium/ui`; retained here for components rendered directly in the app. |
-| `lucide-react`                                       | Icon set.                                                                                                                                               |
-| `@monaco-editor/react`, `monaco-editor`              | Self-hosted code editor.                                                                                                                                |
-| `@xyflow/react`                                      | Workflow graph canvas.                                                                                                                                  |
-| `react-hook-form`, `@hookform/resolvers`             | Forms + zod resolver.                                                                                                                                   |
-| `react-day-picker`                                   | Date picker.                                                                                                                                            |
-| `prismjs`                                            | Syntax highlighting.                                                                                                                                    |
-| `class-variance-authority`, `clsx`, `tailwind-merge` | Class composition utilities.                                                                                                                            |
-| `zustand`                                            | Client state store.                                                                                                                                     |
+| Package                                  | Purpose                            |
+| ---------------------------------------- | ---------------------------------- |
+| `@cronium/ui`                            | Shared internal component library. |
+| `lucide-react`                           | Icon set.                          |
+| `@monaco-editor/react`, `monaco-editor`  | Self-hosted code editor.           |
+| `@xyflow/react`                          | Workflow graph canvas.             |
+| `react-hook-form`, `@hookform/resolvers` | Forms + zod resolver.              |
+| `clsx`, `tailwind-merge`                 | Class composition utilities.       |
 
 ## packages/ui (`@cronium/ui`)
 
 Shared component library. Depends on the `@radix-ui/react-*` primitives,
-`lucide-react`, `prismjs`, `react-day-picker`, `react-hook-form` +
-`@hookform/resolvers`, `class-variance-authority`/`clsx`/`tailwind-merge`,
-`date-fns`, `next-themes`, and `zod` — each backing a specific exported
-component. `react`/`react-dom` are peers provided by the consuming app.
+`lucide-react`, `prismjs`, `react-day-picker`, `react-hook-form`,
+`class-variance-authority`/`clsx`/`tailwind-merge`, and `next-themes` — each
+backing a specific exported component. `react`/`react-dom` are peers provided by the consuming app.
 
 ## apps/cronium-info (`@cronium/info`)
 
 Marketing/docs site. Direct production deps: `next`, `react`, `react-dom`,
-`@cronium/ui`, `lucide-react`, `clsx`, `prismjs` (docs code highlighting), and
+`@cronium/ui`, `lucide-react`, `prismjs` (docs code highlighting), and
 `nodemailer` (contact form). `@cronium/tailwind-config` supplies styling presets.
 
 ## Deprecated-package budget

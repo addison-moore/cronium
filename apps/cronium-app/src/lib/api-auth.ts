@@ -50,42 +50,6 @@ export async function authenticateApiToken(token: string): Promise<{
   }
 }
 
-/**
- * Middleware to authenticate API requests using API tokens
- * This allows API access without a session
- */
-export async function authenticateApiRequest(request: NextRequest): Promise<{
-  userId: string;
-  authenticated: boolean;
-  tokenId?: number;
-}> {
-  const token = getBearerToken(request.headers);
-  if (!token) {
-    return { authenticated: false, userId: "" };
-  }
-
-  const result = await authenticateApiToken(token);
-  if (!result) {
-    return { authenticated: false, userId: "" };
-  }
-
-  return {
-    authenticated: true,
-    userId: result.userId,
-    tokenId: result.tokenId,
-  };
-}
-
-/**
- * Helper function to create an error response for API authentication failures
- */
-export function createApiAuthErrorResponse(error: string): NextResponse {
-  return NextResponse.json(
-    { error },
-    { status: 401, headers: { "WWW-Authenticate": "Bearer" } },
-  );
-}
-
 export type RestPrincipal =
   | {
       ok: true;

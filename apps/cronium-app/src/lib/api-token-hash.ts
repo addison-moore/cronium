@@ -13,8 +13,3 @@ import { createHash } from "crypto";
 export function hashApiToken(rawToken: string): string {
   return createHash("sha256").update(rawToken, "utf8").digest("hex");
 }
-
-/** True if a stored value is already a SHA-256 hex digest (post-migration). */
-export function isHashedApiToken(stored: string): boolean {
-  return /^[0-9a-f]{64}$/.test(stored);
-}
