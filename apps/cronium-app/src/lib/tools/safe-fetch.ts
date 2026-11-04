@@ -72,6 +72,50 @@ const IPV4_BLOCKED: Array<[string, number]> = [
   ["240.0.0.0", 4], // reserved / broadcast
 ];
 
+/**
+ * Expand an IPv6 literal to its eight 16-bit groups, or null if malformed.
+ * Handles `::` compression, a dotted IPv4 tail, and a zone id.
+ */
+function ipv6ToGroups(ip: string): number[] | null {
+  let addr = ip.split("%", 1)[0]!.toLowerCase();
+
+  const dottedTail = /^(.*:)(\d+\.\d+\.\d+\.\d+)$/.exec(addr);
+  if (dottedTail) {
+    const v4 = ipv4ToInt(dottedTail[2]!);
+    if (v4 === null) return null;
+    addr = `${dottedTail[1]}${(v4 >>> 16).toString(16)}:${(v4 & 0xffff).toString(16)}`;
+  }
+
+  const sides = addr.split("::");
+  if (sides.length > 2) return null;
+  const parse = (part: string | undefined) =>
+    part ? part.split(":").map((group) => parseInt(group, 16)) : [];
+  const head = parse(sides[0]);
+  const tail = parse(sides[1]);
+
+  const missing = 8 - head.length - tail.length;
+  if (missing < 0 || (sides.length === 1 && missing !== 0)) return null;
+
+  const groups = [...head, ...new Array<number>(missing).fill(0), ...tail];
+  return groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 0xffff)
+    ? groups
+    : null;
+}
+
+function ipv4FromGroups(high: number, low: number): string {
+  return `${high >>> 8}.${high & 0xff}.${low >>> 8}.${low & 0xff}`;
+}
+
+/**
+ * True for any address that must not be reachable from a user-configured URL.
+ *
+ * IPv6 is compared numerically on purpose. WHATWG URL serializes an IPv4-mapped
+ * literal in hex, so `http://[::ffff:169.254.169.254]/` reaches this function as
+ * `::ffff:a9fe:a9fe`; a string match on a dotted tail never saw it, and since
+ * Node skips DNS for IP literals the connect-time guard never did either. Every
+ * form that embeds an IPv4 address is therefore unpacked and judged by the IPv4
+ * rules, so an internal target cannot be hidden in an IPv6 spelling.
+ */
 export function isDisallowedIp(ip: string): boolean {
   const kind = net.isIP(ip);
   if (kind === 4) {
@@ -80,21 +124,43 @@ export function isDisallowedIp(ip: string): boolean {
     return IPV4_BLOCKED.some(([base, bits]) => ipv4InRange(n, base, bits));
   }
   if (kind === 6) {
-    const addr = ip.toLowerCase();
-    // IPv4-mapped/embedded (::ffff:a.b.c.d or ::a.b.c.d) -> validate the v4 part
-    const mapped = /(\d+\.\d+\.\d+\.\d+)$/.exec(addr);
-    if (mapped?.[1]) return isDisallowedIp(mapped[1]);
-    if (addr === "::" || addr === "::1") return true; // unspecified / loopback
+    const g = ipv6ToGroups(ip);
+    if (!g) return true; // unparseable -> treat as disallowed
+    const [a, b, c, d, e, f, h, l] = g as [
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+    ];
+    const leadingZeros = a === 0 && b === 0 && c === 0 && d === 0;
+
+    // ::/128 unspecified, ::1/128 loopback
+    if (leadingZeros && e === 0 && f === 0 && h === 0 && l <= 1) return true;
+    // ::a.b.c.d (IPv4-compatible), ::ffff:a.b.c.d (mapped),
+    // ::ffff:0:a.b.c.d (translated), 64:ff9b::a.b.c.d (NAT64)
     if (
-      addr.startsWith("fe8") ||
-      addr.startsWith("fe9") ||
-      addr.startsWith("fea") ||
-      addr.startsWith("feb")
+      (leadingZeros && e === 0 && (f === 0 || f === 0xffff)) ||
+      (leadingZeros && e === 0xffff && f === 0) ||
+      (a === 0x64 && b === 0xff9b && c === 0 && d === 0 && e === 0 && f === 0)
     ) {
-      return true; // fe80::/10 link-local
+      return isDisallowedIp(ipv4FromGroups(h, l));
     }
-    if (addr.startsWith("fc") || addr.startsWith("fd")) return true; // fc00::/7 ULA
-    return false;
+    // 2002:a.b.c.d::/48 (6to4)
+    if (a === 0x2002) return isDisallowedIp(ipv4FromGroups(b, c));
+
+    return (
+      (a === 0x64 && b === 0xff9b && c === 1) || // 64:ff9b:1::/48 local NAT64
+      (a === 0x100 && b === 0 && c === 0 && d === 0) || // 100::/64 discard
+      (a === 0x2001 && b === 0) || // 2001::/32 Teredo (obfuscated IPv4)
+      (a & 0xfe00) === 0xfc00 || // fc00::/7 ULA
+      (a & 0xffc0) === 0xfe80 || // fe80::/10 link-local
+      (a & 0xffc0) === 0xfec0 || // fec0::/10 site-local (deprecated)
+      (a & 0xff00) === 0xff00 // ff00::/8 multicast
+    );
   }
   // not a valid IP literal
   return true;

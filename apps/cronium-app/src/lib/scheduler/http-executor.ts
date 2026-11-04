@@ -113,7 +113,6 @@ export async function executeHttpRequest(
       }
     }
 
-    console.log(`Executing HTTP ${config.method ?? "GET"} request to ${url}`);
     const response = await axios(config);
 
     return {
@@ -126,7 +125,10 @@ export async function executeHttpRequest(
     };
   } catch (err) {
     const error = err as AxiosError;
-    console.error("HTTP request execution error:", error);
+    // Message only. An AxiosError carries the whole request config, so logging
+    // the object would write the event's Authorization headers (and any secret
+    // in the URL) to the server logs.
+    console.error(`HTTP request execution error: ${error.message}`);
 
     // Return structured error response
     return {

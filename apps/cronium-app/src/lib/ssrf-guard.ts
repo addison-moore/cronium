@@ -23,51 +23,58 @@ import { isDisallowedIp, SsrfBlockedError } from "@/lib/tools/safe-fetch";
  * the http/https agents means the check runs at actual connect time — including
  * on every redirect hop — which closes the DNS-rebinding (TOCTOU) gap that a
  * pre-flight-only resolution check would leave open.
+ *
+ * It must honor `options.all`. Node 20+ defaults `autoSelectFamily` on, so
+ * `net.connect` asks for every address and expects an array back; a single
+ * address string makes it fail with ERR_INVALID_IP_ADDRESS, which took down every
+ * HTTP_REQUEST event and webhook delivery aimed at a hostname.
+ *
+ * Every resolved address is checked, including ones the family filter would drop,
+ * so a host cannot pass by publishing one public record next to an internal one.
  */
-const guardedLookup: net.LookupFunction = (
+export const guardedLookup: net.LookupFunction = (
   hostname,
   options,
-  callback: (
-    err: NodeJS.ErrnoException | null,
-    address: string,
-    family: number,
-  ) => void,
+  callback,
 ) => {
-  const family = typeof options === "number" ? options : (options?.family ?? 0);
+  const fail = (error: NodeJS.ErrnoException) => callback(error, "", 0);
+  const family =
+    options?.family === "IPv4"
+      ? 4
+      : options?.family === "IPv6"
+        ? 6
+        : (options?.family ?? 0);
+
   dnsLookup(hostname, { all: true })
     .then((addresses) => {
-      const candidates = family
-        ? addresses.filter((a) => a.family === family)
-        : addresses;
-      for (const { address } of candidates) {
+      for (const { address } of addresses) {
         if (isDisallowedIp(address)) {
-          callback(
+          fail(
             new SsrfBlockedError(
               `Host "${hostname}" resolves to a disallowed address (${address})`,
             ),
-            "",
-            0,
           );
           return;
         }
       }
+
+      const candidates = family
+        ? addresses.filter((a) => a.family === family)
+        : addresses;
       const chosen = candidates[0];
       if (!chosen) {
-        callback(
-          new SsrfBlockedError(`Could not resolve host "${hostname}"`),
-          "",
-          0,
-        );
+        fail(new SsrfBlockedError(`Could not resolve host "${hostname}"`));
         return;
       }
-      callback(null, chosen.address, chosen.family);
+
+      if (options?.all) {
+        callback(null, candidates);
+      } else {
+        callback(null, chosen.address, chosen.family);
+      }
     })
     .catch(() => {
-      callback(
-        new SsrfBlockedError(`Could not resolve host "${hostname}"`),
-        "",
-        0,
-      );
+      fail(new SsrfBlockedError(`Could not resolve host "${hostname}"`));
     });
 };
 
