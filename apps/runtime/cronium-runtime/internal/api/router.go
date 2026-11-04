@@ -1,9 +1,7 @@
 package api
 
 import (
-	"context"
 	"net/http"
-	"time"
 
 	"github.com/addison-moore/cronium/apps/runtime/internal/auth"
 	"github.com/addison-moore/cronium/apps/runtime/internal/config"
@@ -25,14 +23,6 @@ func NewRouter(runtime *service.RuntimeService, cfg *config.Config, log *logrus.
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(middleware.LoggingMiddleware(log))
-
-	// Add request time to context
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := context.WithValue(r.Context(), "requestTime", time.Now())
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	})
 
 	// CORS configuration
 	if cfg.Security.EnableCORS {

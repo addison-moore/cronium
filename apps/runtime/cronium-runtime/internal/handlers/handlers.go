@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/addison-moore/cronium/apps/runtime/internal/middleware"
 	"github.com/addison-moore/cronium/apps/runtime/internal/service"
@@ -311,10 +312,10 @@ func (h *Handler) ExecuteToolAction(w http.ResponseWriter, r *http.Request) {
 }
 
 // Health handles GET /health
-func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Health(w http.ResponseWriter, _ *http.Request) {
 	h.writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status": "healthy",
-		"time":   r.Context().Value("requestTime"),
+		"time":   time.Now(),
 	})
 }
 

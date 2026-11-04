@@ -412,9 +412,6 @@ func processConfig(config *Config) error {
 		config.Container.Network.DNS = []string{"8.8.8.8", "8.8.4.4"}
 	}
 
-	// Parse resource sizes
-	// TODO: Implement size parsing for memory and disk values
-
 	return nil
 }
 

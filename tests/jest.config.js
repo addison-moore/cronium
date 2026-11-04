@@ -22,12 +22,12 @@ const sharedProjectConfig = {
         // partial tsconfig (e.g. discriminated-union narrowing in job-service.ts
         // without the app's full strict lib config). `pnpm typecheck` remains
         // the real type gate.
-        isolatedModules: true,
         // Module resolution options are deliberately absent: transpile-only
         // never resolves imports, moduleNameMapper above is what maps the
         // aliases at runtime, and TypeScript 6 rejects `baseUrl` and
         // `moduleResolution: node` outright.
         tsconfig: {
+          isolatedModules: true,
           target: "ES2022",
           module: "CommonJS",
           jsx: "react-jsx",
