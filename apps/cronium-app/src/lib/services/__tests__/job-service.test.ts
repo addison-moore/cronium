@@ -436,67 +436,6 @@ describe("listJobs", () => {
 });
 
 // ---------------------------------------------------------------------------
-// updateJob
-// ---------------------------------------------------------------------------
-
-describe("updateJob", () => {
-  it("maps provided fields and coerces explicit undefined to null", async () => {
-    const updated = makeJob({ id: "job_u" });
-    const updateChain = chain([updated]);
-    mockDb.update.mockReturnValueOnce(updateChain);
-
-    const completedAt = new Date("2026-07-22T12:05:00.000Z");
-    const result = await service.updateJob("job_u", {
-      status: JobStatus.RUNNING,
-      orchestratorId: undefined,
-      startedAt: undefined,
-      completedAt,
-      result: { exitCode: 0 },
-      attempts: 2,
-      lastError: undefined,
-      scheduledFor: undefined,
-    });
-
-    expect(result).toBe(updated);
-    expect(mockDb.update).toHaveBeenCalledWith(jobsTable);
-    const setArg = updateChain.set.mock.calls[0]![0] as Record<string, unknown>;
-    expect(setArg).toEqual({
-      updatedAt: NOW,
-      status: JobStatus.RUNNING,
-      orchestratorId: null,
-      startedAt: null,
-      completedAt,
-      result: { exitCode: 0 },
-      attempts: 2,
-      lastError: null,
-      // scheduledFor: undefined is skipped (guarded by truthiness)
-    });
-    expect(setArg).not.toHaveProperty("scheduledFor");
-    expect(updateChain.where).toHaveBeenCalledWith(eq(jobsTable.id, "job_u"));
-  });
-
-  it("only touches updatedAt when no fields are given, and includes scheduledFor when set", async () => {
-    const updateChain = chain([makeJob()]);
-    mockDb.update.mockReturnValueOnce(updateChain);
-    const scheduledFor = new Date("2026-07-23T00:00:00.000Z");
-
-    await service.updateJob("job_u", { scheduledFor });
-
-    expect(updateChain.set.mock.calls[0]![0]).toEqual({
-      updatedAt: NOW,
-      scheduledFor,
-    });
-  });
-
-  it("returns null when the job does not exist", async () => {
-    mockDb.update.mockReturnValueOnce(chain([]));
-    await expect(
-      service.updateJob("missing", { attempts: 1 }),
-    ).resolves.toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
 // claimJobs
 // ---------------------------------------------------------------------------
 
@@ -638,32 +577,8 @@ describe("heartbeatJobs", () => {
 });
 
 // ---------------------------------------------------------------------------
-// startJob / completeJob / failJob / cancelJob
+// completeJob / failJob / cancelJob
 // ---------------------------------------------------------------------------
-
-describe("startJob", () => {
-  it("transitions to RUNNING with startedAt and returns the job", async () => {
-    const running = makeJob({ status: JobStatus.RUNNING });
-    mockTransition.mockResolvedValueOnce({ ok: true, job: running });
-
-    const result = await service.startJob("job_1", "orchestrator:orch-1");
-
-    expect(result).toBe(running);
-    expect(mockTransition).toHaveBeenCalledWith("job_1", JobStatus.RUNNING, {
-      actor: "orchestrator:orch-1",
-      set: { startedAt: NOW },
-    });
-  });
-
-  it("returns null when the CAS transition is rejected", async () => {
-    mockTransition.mockResolvedValueOnce({
-      ok: false,
-      current: JobStatus.CANCELLED,
-      error: "Illegal transition cancelled → running",
-    });
-    await expect(service.startJob("job_1")).resolves.toBeNull();
-  });
-});
 
 describe("completeJob", () => {
   it("marks exitCode 0 with no error as COMPLETED and stores only minimal result data", async () => {

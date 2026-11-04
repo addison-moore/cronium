@@ -248,37 +248,6 @@ export class JobService {
   }
 
   /**
-   * Update a job
-   */
-  async updateJob(jobId: string, update: UpdateJobInput): Promise<Job | null> {
-    // Build update object, handling explicit undefined values
-    const updateData: Partial<Job> & { updatedAt: Date } = {
-      updatedAt: new Date(),
-    };
-
-    // Handle fields that can be explicitly set to undefined/null
-    if ("status" in update) updateData.status = update.status;
-    if ("orchestratorId" in update)
-      updateData.orchestratorId = update.orchestratorId ?? null;
-    if ("startedAt" in update) updateData.startedAt = update.startedAt ?? null;
-    if ("completedAt" in update)
-      updateData.completedAt = update.completedAt ?? null;
-    if ("result" in update) updateData.result = update.result;
-    if ("attempts" in update) updateData.attempts = update.attempts;
-    if ("lastError" in update) updateData.lastError = update.lastError ?? null;
-    if ("scheduledFor" in update && update.scheduledFor)
-      updateData.scheduledFor = update.scheduledFor;
-
-    const [updated] = await this.db
-      .update(jobsTable)
-      .set(updateData)
-      .where(eq(jobsTable.id, jobId))
-      .returning();
-
-    return updated ?? null;
-  }
-
-  /**
    * Claim SCRIPT jobs for an orchestrator (PLAN.md §4.2): one transaction,
    * FOR UPDATE SKIP LOCKED, stamping ownership plus a lease the owner must
    * keep renewing via heartbeatJobs — an expired lease hands the job to the
@@ -375,17 +344,6 @@ export class JobService {
         .filter((row) => row.cancelRequested)
         .map((row) => row.id),
     };
-  }
-
-  /**
-   * Mark a job as started
-   */
-  async startJob(jobId: string, actor = "app"): Promise<Job | null> {
-    const outcome = await transitionJob(jobId, JobStatus.RUNNING, {
-      actor,
-      set: { startedAt: new Date() },
-    });
-    return outcome.ok ? outcome.job : null;
   }
 
   /**

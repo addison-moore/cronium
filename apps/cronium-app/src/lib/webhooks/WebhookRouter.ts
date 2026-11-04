@@ -6,14 +6,6 @@ import { db } from "@/server/db";
 import { webhookEvents, webhookLogs } from "@/shared/schema";
 import { clientIpFromHeaders } from "@/lib/security/client-ip";
 
-export interface WebhookRequest {
-  method: string;
-  headers: Record<string, string>;
-  body: unknown;
-  query: Record<string, string>;
-  ip?: string;
-}
-
 /** Thrown when an inbound webhook body exceeds the size cap. */
 class WebhookBodyTooLargeError extends Error {
   constructor() {
@@ -22,21 +14,10 @@ class WebhookBodyTooLargeError extends Error {
   }
 }
 
-export interface WebhookResponse {
-  status: number;
-  body: unknown;
-  headers?: Record<string, string>;
-}
-
 export class WebhookRouter {
   private static instance: WebhookRouter;
   private webhookManager: WebhookManager;
   private webhookSecurity: WebhookSecurity;
-  private routes = new Map<
-    string,
-    (req: WebhookRequest) => Promise<WebhookResponse>
-  >();
-
   private constructor() {
     this.webhookManager = WebhookManager.getInstance();
     this.webhookSecurity = new WebhookSecurity();
@@ -241,16 +222,6 @@ export class WebhookRouter {
         { status: 500 },
       );
     }
-  }
-
-  /**
-   * Register custom webhook handler
-   */
-  registerHandler(
-    eventType: string,
-    handler: (req: WebhookRequest) => Promise<WebhookResponse>,
-  ): void {
-    this.routes.set(eventType, handler);
   }
 
   /** Parse an already-read raw body by content type. */
