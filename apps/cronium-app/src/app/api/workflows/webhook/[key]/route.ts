@@ -20,8 +20,11 @@ export async function POST(
   const { key: webhookKey } = await params;
 
   try {
+    // Everything below keys on the hash. The presented key is a bearer credential
+    // (only its hash is stored, HI-12), so it must not end up in Valkey key names.
+    const webhookKeyHash = hashWorkflowWebhookKey(webhookKey);
     const rateLimit = await RateLimitService.tryCheckLimit(
-      webhookKey,
+      webhookKeyHash,
       "workflow-webhook",
       { maxRequests: RATE_LIMIT_PER_MINUTE, windowMs: 60_000 },
     );
@@ -41,7 +44,7 @@ export async function POST(
       .from(workflows)
       .where(
         and(
-          eq(workflows.webhookKeyHash, hashWorkflowWebhookKey(webhookKey)),
+          eq(workflows.webhookKeyHash, webhookKeyHash),
           eq(workflows.triggerType, WorkflowTriggerType.WEBHOOK),
         ),
       )

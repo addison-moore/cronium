@@ -405,9 +405,9 @@ describe("POST /api/webhooks/[key] — dispatch contract and tenant scoping", ()
     expect(eventName).toBe("webhook.user.created");
     expect(payload).toMatchObject({ eventType: "user.created" });
     expect(tenantId).toBe(TENANT);
+    // The inbound key is a credential: it must not travel to outbound subscribers.
     expect(meta).toEqual({
       webhookId: 7,
-      webhookKey: "whk_valid",
       source: "webhook",
     });
 

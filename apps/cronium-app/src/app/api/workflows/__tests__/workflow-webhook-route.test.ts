@@ -184,6 +184,22 @@ describe("POST /api/workflows/webhook/[key] — lookup", () => {
 });
 
 describe("POST /api/workflows/webhook/[key] — rate limiting", () => {
+  it("rate limits on the key's hash, keeping the raw credential out of Valkey", async () => {
+    const key = "raw-webhook-key";
+    await POST(
+      new NextRequest(`http://localhost:5001/api/workflows/webhook/${key}`, {
+        method: "POST",
+        body: "{}",
+      }),
+      { params: Promise.resolve({ key }) },
+    );
+
+    const identifier = rateLimitMock.RateLimitService.tryCheckLimit.mock
+      .calls[0]![0] as string;
+    expect(identifier).toBe(realHash(key));
+    expect(identifier).not.toContain(key);
+  });
+
   it("returns 429 with Retry-After when the per-key limit is exhausted", async () => {
     const resetAt = new Date("2026-07-22T12:00:00Z");
     rateLimitMock.RateLimitService.tryCheckLimit.mockResolvedValue({
@@ -195,7 +211,7 @@ describe("POST /api/workflows/webhook/[key] — rate limiting", () => {
     expect(res.status).toBe(429);
     expect(res.headers.get("Retry-After")).toBe(resetAt.toUTCString());
     expect(rateLimitMock.RateLimitService.tryCheckLimit).toHaveBeenCalledWith(
-      KEY,
+      realHash(KEY),
       "workflow-webhook",
       {
         maxRequests: 60,

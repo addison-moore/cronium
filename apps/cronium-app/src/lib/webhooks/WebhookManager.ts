@@ -1,4 +1,3 @@
-import { EventEmitter } from "events";
 import crypto from "crypto";
 import { z } from "zod";
 import axios from "axios";
@@ -15,6 +14,7 @@ import {
   ssrfHttpsAgent,
 } from "@/lib/ssrf-guard";
 import { SsrfBlockedError } from "@/lib/tools/safe-fetch";
+import { webhookRetryConfigSchema } from "./retry-config-schema";
 
 // Cap the response body we buffer from a webhook target.
 const MAX_WEBHOOK_RESPONSE_BYTES = 1 * 1024 * 1024;
@@ -26,13 +26,7 @@ export const WebhookConfigSchema = z.object({
   secret: z.string().optional(),
   headers: z.record(z.string(), z.string()).optional(),
   active: z.boolean().default(true),
-  retryConfig: z
-    .object({
-      maxRetries: z.number().default(3),
-      retryDelay: z.number().default(1000),
-      backoffMultiplier: z.number().default(2),
-    })
-    .optional(),
+  retryConfig: webhookRetryConfigSchema.optional(),
 });
 
 export type WebhookConfig = z.infer<typeof WebhookConfigSchema>;
@@ -56,13 +50,12 @@ export interface WebhookDeliveryResult {
   retryCount: number;
 }
 
-export class WebhookManager extends EventEmitter {
+export class WebhookManager {
   private static instance: WebhookManager;
   private webhookQueue: WebhookQueue;
   private webhookSecurity: WebhookSecurity;
 
   private constructor() {
-    super();
     this.webhookQueue = new WebhookQueue();
     this.webhookSecurity = new WebhookSecurity();
   }
@@ -269,11 +262,6 @@ export class WebhookManager extends EventEmitter {
         ...(retryConfig !== undefined && { retryConfig }),
       });
     }
-
-    this.emit("event:triggered", {
-      event,
-      webhookCount: subscribedWebhooks.length,
-    });
   }
 
   /**
@@ -331,14 +319,27 @@ export class WebhookManager extends EventEmitter {
       );
 
       // Prepare headers
-      const requestHeaders = {
+      const systemHeaders = {
         "Content-Type": "application/json",
         "X-Webhook-Id": webhookId.toString(),
         "X-Webhook-Event": payload.event,
-        "X-Webhook-Signature": signature,
         "X-Webhook-Timestamp": payload.timestamp.toISOString(),
         "X-Delivery-Id": deliveryId,
+      };
+      const requestHeaders = {
+        ...systemHeaders,
+        "X-Webhook-Signature": signature,
         ...headers,
+      };
+      // What the delivery record keeps. `headers` was decrypted just to make this
+      // request (HI-09), and they are usually credentials, so only their names
+      // survive; webhook_deliveries is not encrypted and is returned by the
+      // history API.
+      const recordedHeaders = {
+        ...systemHeaders,
+        ...Object.fromEntries(
+          Object.keys(headers).map((name) => [name, "[redacted]"]),
+        ),
       };
 
       // Send webhook through the SSRF-guarded HTTP client: the guarded agents
@@ -376,7 +377,7 @@ export class WebhookManager extends EventEmitter {
         status: ok ? "success" : "failed",
         statusCode: response.status,
         response: responseText.substring(0, 1000), // Limit response size
-        headers: requestHeaders,
+        headers: recordedHeaders,
         duration,
         attemptedAt: new Date(),
       });
@@ -485,36 +486,5 @@ export class WebhookManager extends EventEmitter {
       duration: 0,
       retryCount: 1,
     };
-  }
-
-  /**
-   * Clean up old webhook events and deliveries
-   */
-  async cleanup(daysToKeep = 30): Promise<void> {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
-
-    // Delete old deliveries
-    await db
-      .delete(webhookDeliveries)
-      .where(eq(webhookDeliveries.attemptedAt, cutoffDate));
-
-    // Delete old events that have no deliveries
-    const eventsWithDeliveries = db
-      .select({ webhookEventId: webhookDeliveries.webhookEventId })
-      .from(webhookDeliveries)
-      .groupBy(webhookDeliveries.webhookEventId);
-
-    await db
-      .delete(webhookEvents)
-      .where(
-        and(
-          eq(webhookEvents.createdAt, cutoffDate),
-          eq(
-            webhookEvents.id,
-            eventsWithDeliveries as unknown as typeof webhookEvents.id,
-          ),
-        ),
-      );
   }
 }

@@ -194,3 +194,80 @@ describe("WebhookSecurity.verifyWebhook (HI-12)", () => {
     expect(res.error).toMatch(/source ip/i);
   });
 });
+
+describe("WebhookSecurity.verifySignature", () => {
+  it("rejects a wrong-length signature without leaking a crypto error", () => {
+    expect(sec.verifySignature("body", "sha256=short", SECRET)).toEqual({
+      isValid: false,
+      error: "Invalid signature",
+    });
+  });
+
+  it("rejects a same-length wrong signature with a reason", () => {
+    const wrong = sec.generateSignature("other body", SECRET);
+    expect(sec.verifySignature("body", wrong, SECRET)).toEqual({
+      isValid: false,
+      error: "Invalid signature",
+    });
+  });
+});
+
+describe("WebhookSecurity.verifyWebhook replay memory", () => {
+  it("remembers a delivery id for the whole time its signature stays valid", async () => {
+    // A timestamp at the far future edge of the 5 minute tolerance stays
+    // acceptable for 10 minutes from now, so a 6 minute memory left a window
+    // where the same signed request could be replayed.
+    const replayStore = replay as unknown as {
+      consumeWebhookDeliveryOnce: jest.Mock;
+    };
+    const timestamp = new Date().toISOString();
+    const deliveryId = "ttl-check";
+    await sec.verifyWebhook(
+      {
+        webhookId: 77,
+        rawBody: "{}",
+        headers: {
+          "x-webhook-signature": sec.generateSignature(
+            `${timestamp}.${deliveryId}.{}`,
+            SECRET,
+          ),
+          "x-webhook-timestamp": timestamp,
+          "x-webhook-delivery-id": deliveryId,
+        },
+      },
+      { secret: SECRET },
+    );
+
+    const ttl = replayStore.consumeWebhookDeliveryOnce.mock.lastCall?.[2];
+    expect(ttl).toBeGreaterThanOrEqual(10 * 60);
+  });
+});
+
+describe("WebhookSecurity.sanitizePayload", () => {
+  it("keeps arrays as arrays, at any depth", () => {
+    expect(
+      sec.sanitizePayload({
+        tags: ["a", "b"],
+        nested: { items: [{ name: "x" }, 1, null, ["y"]] },
+      }),
+    ).toEqual({
+      tags: ["a", "b"],
+      nested: { items: [{ name: "x" }, 1, null, ["y"]] },
+    });
+  });
+
+  it("does not let __proto__ in a JSON body set the result's prototype", () => {
+    const parsed = JSON.parse(
+      '{"__proto__": {"isAdmin": true}, "nested": {"__proto__": {"isAdmin": true}}}',
+    ) as Record<string, unknown>;
+
+    const result = sec.sanitizePayload(parsed) as {
+      isAdmin?: unknown;
+      nested: { isAdmin?: unknown };
+    };
+
+    expect(result.isAdmin).toBeUndefined();
+    expect(result.nested.isAdmin).toBeUndefined();
+    expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+  });
+});

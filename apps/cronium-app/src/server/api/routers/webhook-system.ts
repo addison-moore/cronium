@@ -9,6 +9,7 @@ import {
   WebhookConfigSchema,
   type WebhookConfig,
 } from "@/lib/webhooks";
+import { webhookRetryConfigSchema } from "@/lib/webhooks/retry-config-schema";
 import { withErrorHandling, notFoundError } from "@/server/utils/error-utils";
 import {
   listResponse,
@@ -35,13 +36,7 @@ const WebhookUpdateSchema = z.object({
   secret: z.string().optional(),
   headers: z.record(z.string(), z.string()).optional(),
   active: z.boolean().optional(),
-  retryConfig: z
-    .object({
-      maxRetries: z.number().default(3),
-      retryDelay: z.number().default(1000),
-      backoffMultiplier: z.number().default(2),
-    })
-    .optional(),
+  retryConfig: webhookRetryConfigSchema.optional(),
 });
 
 /** True when a webhook has any custom headers configured, in either the

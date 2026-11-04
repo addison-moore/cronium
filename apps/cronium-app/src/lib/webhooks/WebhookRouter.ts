@@ -205,7 +205,6 @@ export class WebhookRouter {
         webhook.userId,
         {
           webhookId: webhook.id,
-          webhookKey: webhook.key,
           source: "webhook",
         },
       );
@@ -235,11 +234,10 @@ export class WebhookRouter {
     } catch (error) {
       console.error("Webhook processing error:", error);
 
+      // Logged above. The caller may be anyone holding the key, so nothing about
+      // the failure (driver errors, table names) goes back to them.
       return NextResponse.json(
-        {
-          error: "Internal server error",
-          message: error instanceof Error ? error.message : "Unknown error",
-        },
+        { error: "Internal server error" },
         { status: 500 },
       );
     }
@@ -348,8 +346,9 @@ export class WebhookRouter {
       webhookId,
     };
 
-    // Ensure data is an object
-    if (typeof data === "object" && data !== null) {
+    // Merge objects into the envelope; anything else, including an array (which
+    // would spread into numeric keys), goes under `data`.
+    if (typeof data === "object" && data !== null && !Array.isArray(data)) {
       processed = { ...processed, ...data };
     } else {
       processed.data = data;
@@ -396,7 +395,11 @@ export class WebhookRouter {
     let current: unknown = obj;
 
     for (const key of keys) {
-      if (current && typeof current === "object" && key in current) {
+      if (
+        current &&
+        typeof current === "object" &&
+        Object.prototype.hasOwnProperty.call(current, key)
+      ) {
         current = (current as Record<string, unknown>)[key];
       } else {
         return undefined;

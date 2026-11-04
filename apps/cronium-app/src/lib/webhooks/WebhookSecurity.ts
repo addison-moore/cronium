@@ -37,23 +37,21 @@ export class WebhookSecurity {
       }
 
       // Generate expected signature
-      const expectedSignature = this.generateSignature(payload, secret);
+      const expected = Buffer.from(this.generateSignature(payload, secret));
+      const received = Buffer.from(signature);
 
-      // Constant-time comparison
-      const isValid = crypto.timingSafeEqual(
-        Buffer.from(signature),
-        Buffer.from(expectedSignature),
-      );
+      // Constant-time comparison (which throws on a length mismatch, so that has
+      // to be ruled out first).
+      if (
+        received.length !== expected.length ||
+        !crypto.timingSafeEqual(received, expected)
+      ) {
+        return { isValid: false, error: "Invalid signature" };
+      }
 
-      return { isValid };
-    } catch (error) {
-      return {
-        isValid: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Signature verification failed",
-      };
+      return { isValid: true };
+    } catch {
+      return { isValid: false, error: "Signature verification failed" };
     }
   }
 
@@ -183,10 +181,13 @@ export class WebhookSecurity {
     // the replay store is unavailable).
     const { consumeWebhookDeliveryOnce } =
       await import("./webhook-replay-store");
+    // Remembered for the whole span the signature stays acceptable. The tolerance
+    // applies both ways, so a request stamped at the far future edge remains valid
+    // for two tolerances from now; a shorter memory reopens the replay in between.
     const fresh = await consumeWebhookDeliveryOnce(
       request.webhookId,
       deliveryId,
-      Math.ceil(WebhookSecurity.TIMESTAMP_TOLERANCE_MS / 1000) + 60,
+      Math.ceil((2 * WebhookSecurity.TIMESTAMP_TOLERANCE_MS) / 1000) + 60,
     );
     if (!fresh) {
       return { isValid: false, error: "Duplicate or replayed delivery" };
@@ -206,23 +207,27 @@ export class WebhookSecurity {
    * Sanitize webhook payload to prevent injection attacks
    */
   sanitizePayload<T extends Record<string, unknown>>(payload: T): T {
-    const sanitized = {} as T;
+    const sanitized: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(payload)) {
-      if (typeof value === "string") {
-        // Remove potential script tags and escape HTML
-        sanitized[key as keyof T] = this.escapeHtml(value) as T[keyof T];
-      } else if (typeof value === "object" && value !== null) {
-        // Recursively sanitize nested objects
-        sanitized[key as keyof T] = this.sanitizePayload(
-          value as Record<string, unknown>,
-        ) as T[keyof T];
-      } else {
-        sanitized[key as keyof T] = value as T[keyof T];
-      }
+      // JSON.parse makes `__proto__` an ordinary own key, and assigning it here
+      // would replace this object's prototype with attacker-supplied data.
+      if (key === "__proto__") continue;
+      sanitized[key] = this.sanitizeValue(value);
     }
 
-    return sanitized;
+    return sanitized as T;
+  }
+
+  private sanitizeValue(value: unknown): unknown {
+    if (typeof value === "string") return this.escapeHtml(value);
+    // Arrays stay arrays. Treating them as records turned `["a","b"]` into
+    // `{"0":"a","1":"b"}` in everything a webhook stored or forwarded.
+    if (Array.isArray(value)) return value.map((v) => this.sanitizeValue(v));
+    if (typeof value === "object" && value !== null) {
+      return this.sanitizePayload(value as Record<string, unknown>);
+    }
+    return value;
   }
 
   /**
