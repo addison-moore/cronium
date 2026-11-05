@@ -64,6 +64,7 @@ jest.mock("@/lib/scheduler", () => ({
 }));
 
 import { DrizzleQueryError } from "drizzle-orm/errors";
+import { db } from "@/server/db";
 import { dispatchEventJob } from "../dispatch";
 import { storage, type EventWithRelations } from "@/server/storage";
 import { jobService } from "@/lib/services/job-service";
@@ -392,6 +393,49 @@ describe("dispatchEventJob — overlap policy", () => {
     },
   );
 
+  describe("when a write fails on the way to recording a skip", () => {
+    const violation = Object.assign(new Error("duplicate key"), {
+      code: "23505",
+    });
+    const skip = () =>
+      dispatchEventJob(makeEvent({ overlapPolicy: OverlapPolicy.SKIP }), {
+        triggeredBy: "manual",
+      });
+
+    beforeEach(() => {
+      mockCreateJob.mockRejectedValue(violation);
+    });
+
+    it("still finalizes the log and reports the skip if the incident can't be written", async () => {
+      (db.insert as jest.Mock).mockImplementationOnce(() => ({
+        values: () => Promise.reject(new Error("db down")),
+      }));
+
+      await expect(skip()).resolves.toEqual({
+        job: null,
+        logId: null,
+        skipped: "overlap",
+      });
+
+      expect(mockUpdateLog).toHaveBeenCalledWith(
+        42,
+        expect.objectContaining({ status: LogStatus.FAILURE }),
+      );
+    });
+
+    it("still records the incident and reports the skip if the log can't be finalized", async () => {
+      mockUpdateLog.mockRejectedValue(new Error("db down"));
+
+      await expect(skip()).resolves.toEqual({
+        job: null,
+        logId: null,
+        skipped: "overlap",
+      });
+
+      expect(incidentInserts()).toHaveLength(1);
+    });
+  });
+
   it("rethrows non-unique-violation errors from job creation", async () => {
     mockCreateJob.mockRejectedValue(new Error("connection refused"));
 
@@ -542,6 +586,53 @@ describe("dispatchEventJob — execution bookkeeping", () => {
     for (const call of mockRecordDispatch.mock.calls) {
       expect(call).toEqual([7]);
     }
+  });
+
+  // Anything thrown after createJob would report a failure for a job that goes on to
+  // run: a CI caller would retry into a second run, and a workflow step would be
+  // marked failed over a job still running.
+  describe("once the job is queued", () => {
+    const dispatch = () =>
+      dispatchEventJob(makeEvent(), { triggeredBy: "schedule" });
+
+    it("reports the job, and carries on, if linking it to its log fails", async () => {
+      mockUpdateLog.mockRejectedValue(new Error("db down"));
+
+      await expect(dispatch()).resolves.toEqual({
+        job: createdJob,
+        logId: 42,
+      });
+
+      expect(mockRecordCreated).toHaveBeenCalledTimes(1);
+      expect(mockRecordDispatch).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports the job, and carries on, if recording its creation fails", async () => {
+      mockRecordCreated.mockRejectedValue(new Error("db down"));
+
+      await expect(dispatch()).resolves.toEqual({
+        job: createdJob,
+        logId: 42,
+      });
+
+      expect(mockUpdateLog).toHaveBeenCalledWith(42, {
+        jobId: "job-1",
+        status: LogStatus.PENDING,
+      });
+      expect(mockRecordDispatch).toHaveBeenCalledTimes(1);
+    });
+
+    it("says what failed", async () => {
+      const consoleError = console.error as jest.Mock;
+      mockRecordCreated.mockRejectedValue(new Error("db down"));
+
+      await dispatch();
+
+      expect(consoleError).toHaveBeenCalledWith(
+        "[Dispatch] Failed to record a job's creation for event 7:",
+        "db down",
+      );
+    });
   });
 
   it("swallows bookkeeping failures — the job is already enqueued", async () => {

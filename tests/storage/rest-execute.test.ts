@@ -13,14 +13,14 @@ jest.mock("next-auth", () => ({
 jest.mock("@/lib/auth", () => ({ authOptions: {} }));
 
 import { randomUUID } from "node:crypto";
-import { count, eq } from "drizzle-orm";
+import { and, count, eq, isNull } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { POST as executeEvent } from "@/app/api/events/[id]/execute/route";
 import { POST as executeWorkflow } from "@/app/api/workflows/[id]/execute/route";
 import { cacheService } from "@/lib/cache/cache-service";
 import { RateLimitService } from "@/lib/rate-limit-service";
 import { jobService } from "@/lib/services/job-service";
-import { db } from "@/server/db";
+import { db, pool } from "@/server/db";
 import { storage } from "@/server/storage";
 import {
   ConnectionType,
@@ -258,6 +258,70 @@ describe("POST /api/events/{id}/execute", () => {
       expect(incidents.map((i) => i.kind)).toEqual([
         ScheduleIncidentKind.SKIPPED_OVERLAP,
       ]);
+    });
+
+    /** New rows in `table` now fail in Postgres itself, until `fn` returns. */
+    async function withWritesRefused(
+      table: string,
+      fn: () => Promise<void>,
+    ): Promise<void> {
+      await pool.query(
+        `ALTER TABLE ${table} ADD CONSTRAINT test_refuse_writes CHECK (false) NOT VALID`,
+      );
+      try {
+        await fn();
+      } finally {
+        await pool.query(
+          `ALTER TABLE ${table} DROP CONSTRAINT test_refuse_writes`,
+        );
+      }
+    }
+
+    it("still answers 409 and finalizes the log when the incident can't be written", async () => {
+      const errors = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      const owner = await seedUser();
+      const eventId = await seedEvent(owner, {
+        overlapPolicy: OverlapPolicy.SKIP,
+      });
+      const token = await seedToken(owner);
+      expect((await runEvent(eventId, token)).status).toBe(202);
+
+      await withWritesRefused("schedule_incidents", async () => {
+        expect((await runEvent(eventId, token)).status).toBe(409);
+      });
+
+      const skipped = await db
+        .select()
+        .from(logs)
+        .where(and(eq(logs.eventId, eventId), isNull(logs.jobId)));
+      expect(skipped).toEqual([
+        expect.objectContaining({
+          status: LogStatus.FAILURE,
+          error: expect.stringContaining("overlap policy: SKIP"),
+        }),
+      ]);
+      errors.mockRestore();
+    });
+
+    it("answers 202 for a queued job even when recording its creation fails, and the job can still be claimed", async () => {
+      const errors = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      const owner = await seedUser();
+      const eventId = await seedEvent(owner);
+      const token = await seedToken(owner);
+
+      await withWritesRefused("job_transitions", async () => {
+        const res = await runEvent(eventId, token);
+        expect(res.status).toBe(202);
+      });
+
+      expect(await jobCount()).toBe(1);
+      const claimed = await jobService.claimJobs("test-orchestrator", 1);
+      expect(claimed.map((job) => job.eventId)).toEqual([eventId]);
+      errors.mockRestore();
     });
   });
 
