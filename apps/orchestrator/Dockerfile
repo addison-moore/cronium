@@ -47,17 +47,8 @@ COPY apps/runner/cronium-runner/go.mod apps/runner/cronium-runner/go.sum ./
 RUN go mod download && go mod verify
 COPY apps/runner/cronium-runner/ ./
 
-# Build the helpers the runner embeds from this same source. The copies tracked in
-# the repo date from August 2025, so fixes to the helpers never reached a server.
-RUN for arch in amd64 arm64; do \
-      for helper in input output getVariable setVariable event; do \
-        CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" go build \
-          -trimpath \
-          -ldflags="-w -s" \
-          -o "internal/helpers/binaries/linux_${arch}_cronium.${helper}" \
-          "./cmd/helpers/${helper}"; \
-      done; \
-    done
+# Generate the helper binaries the runner embeds, from this same source.
+RUN sh ./build-helpers.sh
 
 ARG BUILD_TIME
 ARG RUNNER_VERSION=dev

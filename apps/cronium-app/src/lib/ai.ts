@@ -154,10 +154,10 @@ const CRONIUM_HELPERS_NODEJS = `A global \`cronium\` object is automatically ava
 - await cronium.getVariable(key) — read a persistent variable (returns null if unset).
 - await cronium.setVariable(key, value) — write a persistent variable. Variables persist across runs and are shared across the user's events and workflows.
 - await cronium.setCondition(boolean) — set the condition evaluated by conditional workflow connections (true takes the "condition true" branch).
-- await cronium.event() — metadata about the running event (id, name, type, etc.).
+- await cronium.event() — metadata about the running event: eventId, eventName, eventType, executionId, and event.runLocation.
+- await cronium.executeToolAction(tool, action, config) — run a tool action with a saved connection's type and the action's ID, e.g. ("SQL", "run-query", {query: "SELECT 1"}). Do not use the sendEmail, sendSlackMessage or sendDiscordMessage wrappers: they do not work yet.
 Wrap the script body in an async IIFE — (async () => { ... })(); — and always \`await\` cronium calls. Do not use top-level await.
-Extra helpers available only when the event runs in a Cronium container (not on remote servers): cronium.executeToolAction(tool, action, config), cronium.sendEmail({to, subject, body}), cronium.sendSlackMessage({channel, text}), cronium.sendDiscordMessage({channelId, content}).
-On events that run on remote servers over SSH, only input, output, getVariable, setVariable, and event are available — setCondition and the extra helpers are not.`;
+These work the same whether the event runs in a container or on a remote server over SSH.`;
 
 const CRONIUM_HELPERS_PYTHON = `The \`cronium\` module is automatically available (no import needed) with synchronous, snake_case functions:
 - cronium.input() — JSON input for this run: the output of the previous workflow step, or the trigger payload. Returns None when there is none.
@@ -165,9 +165,9 @@ const CRONIUM_HELPERS_PYTHON = `The \`cronium\` module is automatically availabl
 - cronium.get_variable(key) — read a persistent variable (returns None if unset).
 - cronium.set_variable(key, value) — write a persistent variable. Variables persist across runs and are shared across the user's events and workflows.
 - cronium.set_condition(bool) — set the condition evaluated by conditional workflow connections (True takes the "condition true" branch).
-- cronium.event() — metadata dict about the running event (id, name, type, etc.).
-Extra helpers available only when the event runs in a Cronium container (not on remote servers): cronium.execute_tool_action(tool, action, config), cronium.send_email(to, subject, body), cronium.send_slack_message(channel, text), cronium.send_discord_message(channel_id, content).
-On events that run on remote servers over SSH, only input, output, get_variable, set_variable, and event are available — set_condition and the extra helpers are not.`;
+- cronium.event() — metadata dict about the running event: eventId, eventName, eventType, executionId, and event.runLocation.
+- cronium.execute_tool_action(tool, action, config) — run a tool action with a saved connection's type and the action's ID, e.g. ("SQL", "run-query", {"query": "SELECT 1"}). Do not use the send_email, send_slack_message or send_discord_message wrappers: they do not work yet.
+These work the same whether the event runs in a container or on a remote server over SSH.`;
 
 const CRONIUM_HELPERS_BASH = `Cronium helper shell functions are automatically available (already sourced, no setup needed):
 - cronium_input — echoes this run's JSON input: the output of the previous workflow step, or the trigger payload. Usage: input=$(cronium_input)
@@ -175,9 +175,10 @@ const CRONIUM_HELPERS_BASH = `Cronium helper shell functions are automatically a
 - cronium_get_variable <key> — echoes a persistent variable's value (empty if unset).
 - cronium_set_variable <key> <value> — write a persistent variable. Variables persist across runs and are shared across the user's events and workflows.
 - cronium_set_condition <true|false> — set the condition evaluated by conditional workflow connections (true takes the "condition true" branch).
-- cronium_event — echoes event metadata JSON; cronium_event_field <field> extracts one field.
-Extra helpers available only when the event runs in a Cronium container (not on remote servers): cronium_execute_tool_action <tool> <action> <config_json>, cronium_send_email, cronium_send_slack_message, cronium_send_discord_message, cronium_variable_exists, cronium_increment_variable.
-On events that run on remote servers over SSH, only cronium_input, cronium_output, cronium_get_variable, cronium_set_variable, and cronium_event are available — cronium_set_condition and the extra helpers are not.`;
+- cronium_event — echoes event metadata JSON: eventId, eventName, eventType, executionId, and event.runLocation. cronium_event_field <field> extracts one field, e.g. cronium_event_field event.runLocation.
+- cronium_variable_exists <key>, cronium_increment_variable <key> [by], cronium_append_variable <key> <value> [separator] — variable shortcuts.
+- cronium_execute_tool_action <tool> <action> <config_json> — run a tool action with a saved connection's type and the action's ID, e.g. SQL run-query '{"query":"SELECT 1"}'. Do not use cronium_send_email, cronium_send_slack_message or cronium_send_discord_message: they do not work yet.
+These work the same whether the event runs in a container or on a remote server over SSH. jq is always available in a container, but on a remote server only if it is installed there.`;
 
 export function buildPrompts(
   prompt: string,

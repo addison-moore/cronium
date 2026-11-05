@@ -44,6 +44,11 @@ type VariableData struct {
 	Value interface{} `json:"value"`
 }
 
+// ConditionData represents a workflow condition
+type ConditionData struct {
+	Condition bool `json:"condition"`
+}
+
 // EventContext represents the event execution context
 type EventContext struct {
 	EventID     string                 `json:"eventId"`

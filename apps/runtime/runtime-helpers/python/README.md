@@ -1,6 +1,6 @@
 # Cronium Python SDK
 
-Runtime SDK for Cronium containerized script execution.
+Runtime SDK for Python scripts in Cronium, in a container or on a remote server. In both, `cronium` is already available to a script, and `import cronium` works too.
 
 ## Installation
 
@@ -32,18 +32,17 @@ cronium.output(result)
 cronium.set_variable("last_run", datetime.now().isoformat())
 last_run = cronium.get_variable("last_run")
 
-# Send notifications
-cronium.send_email(
-    to="admin@example.com",
-    subject="Task Complete",
-    body=f"Processed {len(result)} items"
-)
+# Run a tool action
+rows = cronium.execute_tool_action("SQL", "run-query", {"query": "SELECT 1"})
 ```
 
-> **Note:** the tool-action helpers (`execute_tool_action` and the
-> `send_email`/`send_slack_message`/`send_discord_message` wrappers) run against
-> the tool connection of the given type belonging to the event's owner. If you
-> have more than one connection of a type, the most recently created one is used.
+> **Note:** `execute_tool_action` takes the type of a saved tool connection and
+> the action's ID. It runs against the event owner's connection of that type, and
+> the most recently created one if there are several.
+>
+> The `send_email`/`send_slack_message`/`send_discord_message` wrappers **currently
+> fail**, in a container and on a remote server. They send a lowercase tool type,
+> the action ID `send_message`, and parameter names those tools do not recognize.
 
 ## Async Usage
 

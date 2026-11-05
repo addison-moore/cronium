@@ -235,14 +235,24 @@ The worker is a separate process/service using the app image (entrypoint
 dispatcher, the in-process executor pool for tool-action/HTTP jobs, the lease
 sweeper, and retention. All values have sensible defaults.
 
-| Variable                      | Description                                        | Type     | Default             | Required |
-| ----------------------------- | -------------------------------------------------- | -------- | ------------------- | -------- |
-| `WORKER_ID`                   | Stable worker identity (leases, audit actor)       | `string` | `worker-<hostname>` | No       |
-| `WORKER_HEALTH_PORT`          | HTTP health endpoint port (container healthcheck)  | `number` | `5003`              | No       |
-| `WORKER_DISPATCH_INTERVAL_MS` | Schedule dispatcher tick interval                  | `number` | `5000`              | No       |
-| `WORKER_CLAIM_INTERVAL_MS`    | In-process job claim interval                      | `number` | `2000`              | No       |
-| `WORKER_MAX_CONCURRENT`       | Max concurrent in-process (tool/HTTP) executions   | `number` | `10`                | No       |
-| `CRONIUM_JOB_RETENTION_DAYS`  | Days before terminal job queue records are deleted | `number` | `30`                | No       |
+| Variable                                 | Description                                                                        | Type     | Default             | Required |
+| ---------------------------------------- | ---------------------------------------------------------------------------------- | -------- | ------------------- | -------- |
+| `WORKER_ID`                              | Stable worker identity (leases, audit actor)                                       | `string` | `worker-<hostname>` | No       |
+| `WORKER_HEALTH_PORT`                     | HTTP health endpoint port (container healthcheck)                                  | `number` | `5003`              | No       |
+| `WORKER_DISPATCH_INTERVAL_MS`            | Schedule dispatcher tick interval                                                  | `number` | `5000`              | No       |
+| `WORKER_CLAIM_INTERVAL_MS`               | In-process job claim interval                                                      | `number` | `2000`              | No       |
+| `WORKER_MAX_CONCURRENT`                  | Max concurrent in-process (tool/HTTP) executions                                   | `number` | `10`                | No       |
+| `CRONIUM_JOB_RETENTION_DAYS`             | Days to keep finished jobs, with their executions and transitions. Their logs stay | `number` | `30`                | No       |
+| `CRONIUM_LOG_RETENTION_DAYS`             | Days to keep run logs                                                              | `number` | `90`                | No       |
+| `CRONIUM_WORKFLOW_RETENTION_DAYS`        | Days to keep finished workflow runs and their step rows                            | `number` | `90`                | No       |
+| `CRONIUM_INCIDENT_RETENTION_DAYS`        | Days to keep schedule incidents                                                    | `number` | `90`                | No       |
+| `CRONIUM_TOOL_ACTION_LOG_RETENTION_DAYS` | Days to keep tool action logs                                                      | `number` | `90`                | No       |
+| `CRONIUM_WEBHOOK_RETENTION_DAYS`         | Days to keep webhook deliveries, events and logs                                   | `number` | `30`                | No       |
+
+For the `*_RETENTION_DAYS` variables, `0` keeps that data forever. An unset or
+empty variable uses the default. Any other value that isn't a number of days up
+to 36500 is ignored with a warning in the worker's log, and that data is kept
+until it is fixed. See [Data Retention](./DEPLOYMENT.md#data-retention).
 
 ### Orchestrator Service (cronium-orchestrator)
 
@@ -501,6 +511,7 @@ openssl rand -base64 32  # For SOCKET_BROADCAST_KEY
 3. **Consolidation**: Some variables serve similar purposes (e.g., `ENCRYPTION_KEY` and `ENCRYPTION_MASTER_KEY`) and should be consolidated
 4. **Containerization**: Container-related variables are prepared for future isolation features
 5. **Service Architecture**: The application uses multiple services (app, websocket, orchestrator) that communicate via internal URLs
+6. **Proxies**: HTTP request events, outbound webhooks and user-supplied AI endpoints ignore `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` and always connect directly, because a proxy would resolve the target itself and bypass the SSRF guard. These features need direct outbound access from the app and worker.
 
 ## Key rotation (`ENCRYPTION_KEY`)
 

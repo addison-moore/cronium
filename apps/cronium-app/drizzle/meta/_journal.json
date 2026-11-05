@@ -92,6 +92,13 @@
       "when": 1793830019384,
       "tag": "0012_scrub_webhook_delivery_headers",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793854034566,
+      "tag": "0013_retention_indexes",
+      "breakpoints": true
     }
   ]
 }

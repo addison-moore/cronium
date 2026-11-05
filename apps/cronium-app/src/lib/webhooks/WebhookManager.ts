@@ -343,8 +343,10 @@ export class WebhookManager {
       };
 
       // Send webhook through the SSRF-guarded HTTP client: the guarded agents
-      // re-validate the resolved IP at connect time (defeats DNS rebinding) and
-      // redirects are not followed so a 3xx cannot bounce past the guard.
+      // re-validate the resolved IP at connect time (defeats DNS rebinding), a
+      // proxy from the environment is ignored because it would resolve the host
+      // itself, out of the guard's sight, and redirects are not followed so a
+      // 3xx cannot bounce past the guard.
       const response = await axios.request({
         method: "POST",
         url,
@@ -353,6 +355,7 @@ export class WebhookManager {
         timeout: 30000,
         httpAgent: ssrfHttpAgent,
         httpsAgent: ssrfHttpsAgent,
+        proxy: false,
         maxRedirects: 0,
         maxContentLength: MAX_WEBHOOK_RESPONSE_BYTES,
         maxBodyLength: MAX_WEBHOOK_RESPONSE_BYTES,
