@@ -13,7 +13,7 @@ import {
   workflowLogs,
   executions,
 } from "@/shared/schema";
-import { eq, and, lt, or, isNull, sql } from "drizzle-orm";
+import { eq, and, lt, or, isNull, inArray, sql } from "drizzle-orm";
 import { LogStatus, JobStatus, WorkflowLogLevel } from "@/shared/schema";
 
 interface CleanupOptions {
@@ -99,8 +99,8 @@ export class WorkflowCleanupService {
 
     try {
       // Find stuck workflow executions
-      const stuckWorkflows = await db
-        .select()
+      const stuckRuns = await db
+        .select({ id: workflowExecutions.id })
         .from(workflowExecutions)
         .where(
           and(
@@ -111,16 +111,22 @@ export class WorkflowCleanupService {
         )
         .limit(100);
 
-      if (stuckWorkflows.length === 0) {
+      if (stuckRuns.length === 0) {
         return;
       }
 
       console.log(
-        `[WorkflowCleanup] Found ${stuckWorkflows.length} stuck workflows`,
+        `[WorkflowCleanup] Found ${stuckRuns.length} stuck workflow runs`,
       );
 
-      for (const workflow of stuckWorkflows) {
-        await this.markWorkflowAsTimedOut(workflow.id);
+      for (const run of stuckRuns) {
+        // One run that can't be updated must not hold up the rest of the batch
+        await this.markWorkflowAsTimedOut(run.id).catch((error: unknown) => {
+          console.error(
+            `[WorkflowCleanup] Error marking workflow run ${run.id} as timed out:`,
+            error,
+          );
+        });
       }
     } catch (error) {
       console.error("[WorkflowCleanup] Error cleaning up workflows:", error);
@@ -167,57 +173,88 @@ export class WorkflowCleanupService {
   }
 
   /**
-   * Mark a workflow execution as timed out
+   * Mark a workflow run as timed out, along with its running jobs.
+   *
+   * `runId` is a workflow_executions id. Runs and workflows are numbered
+   * separately, so the workflow and owner for the log line come from the run.
+   *
+   * Returns false if no run with that id is still running, and throws if the
+   * run can't be updated. Past that point the run has timed out, so a failure
+   * writing the log line or finding the jobs is logged, not thrown, and neither
+   * one stops the other.
    */
-  private async markWorkflowAsTimedOut(workflowId: number): Promise<void> {
+  private async markWorkflowAsTimedOut(runId: number): Promise<boolean> {
     const now = new Date();
 
-    try {
+    console.log(`[WorkflowCleanup] Marking workflow run ${runId} as timed out`);
+
+    // RUNNING only: the engine may have finished this run since the sweep read
+    // it, and the admin route passes whatever id it was given. A finished run
+    // keeps its result, and gets no timeout line.
+    const [run] = await db
+      .update(workflowExecutions)
+      .set({
+        status: LogStatus.TIMEOUT,
+        completedAt: now,
+        totalDuration: this.options.maxWorkflowAge,
+      })
+      .where(
+        and(
+          eq(workflowExecutions.id, runId),
+          eq(workflowExecutions.status, LogStatus.RUNNING),
+        ),
+      )
+      .returning({
+        workflowId: workflowExecutions.workflowId,
+        userId: workflowExecutions.userId,
+      });
+
+    if (!run) {
       console.log(
-        `[WorkflowCleanup] Marking workflow ${workflowId} as timed out`,
+        `[WorkflowCleanup] Skipping workflow run ${runId}: not running`,
       );
+      return false;
+    }
 
-      // Update workflow execution
-      await db
-        .update(workflowExecutions)
-        .set({
-          status: LogStatus.TIMEOUT,
-          completedAt: now,
-          totalDuration: this.options.maxWorkflowAge,
-        })
-        .where(eq(workflowExecutions.id, workflowId));
-
-      // Add a timeout log entry
+    try {
       await db.insert(workflowLogs).values({
-        workflowId,
+        workflowId: run.workflowId,
+        userId: run.userId,
         status: LogStatus.TIMEOUT,
         startTime: now,
         level: WorkflowLogLevel.ERROR,
         message: `Workflow execution timed out after ${this.options.maxWorkflowAge / 1000}s`,
         timestamp: now,
       });
+    } catch (error) {
+      console.error(
+        `[WorkflowCleanup] Error writing the timeout log for workflow run ${runId}:`,
+        error,
+      );
+    }
 
-      // Also mark any associated running jobs as timed out
-      // Find jobs associated with this workflow
-      // Note: We need to check metadata JSON field differently
-      const allJobs = await db.select().from(jobs);
-      const runningJobs = allJobs.filter((job) => {
-        const metadata = job.metadata as Record<string, unknown>;
-        return (
-          metadata?.workflowExecutionId === workflowId &&
-          (job.status === JobStatus.RUNNING || job.status === JobStatus.CLAIMED)
+    try {
+      const runningJobs = await db
+        .select({ id: jobs.id })
+        .from(jobs)
+        .where(
+          and(
+            inArray(jobs.status, [JobStatus.RUNNING, JobStatus.CLAIMED]),
+            sql`${jobs.metadata}->>'workflowExecutionId' = ${String(runId)}`,
+          ),
         );
-      });
 
       for (const job of runningJobs) {
         await this.markJobAsTimedOut(job.id);
       }
     } catch (error) {
       console.error(
-        `[WorkflowCleanup] Error marking workflow ${workflowId} as timed out:`,
+        `[WorkflowCleanup] Error timing out the jobs of workflow run ${runId}:`,
         error,
       );
     }
+
+    return true;
   }
 
   /**
@@ -291,10 +328,11 @@ export class WorkflowCleanupService {
   }
 
   /**
-   * Manually trigger cleanup of a specific workflow
+   * Manually time out one workflow run. `runId` is a workflow_executions id, not
+   * a workflows id. Returns false if no run with that id is still running.
    */
-  async cleanupWorkflow(workflowId: number): Promise<void> {
-    await this.markWorkflowAsTimedOut(workflowId);
+  async cleanupWorkflow(runId: number): Promise<boolean> {
+    return this.markWorkflowAsTimedOut(runId);
   }
 
   /**

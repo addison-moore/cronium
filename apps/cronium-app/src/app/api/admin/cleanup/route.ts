@@ -55,11 +55,20 @@ export async function POST(request: NextRequest) {
     const service = getCleanupService();
 
     if (body.type === "workflow" && body.id) {
-      // Clean specific workflow
-      await service.cleanupWorkflow(Number(body.id));
+      // `id` is one run (workflow_executions.id), not a workflow (workflows.id)
+      const runId = Number(body.id);
+      const timedOut =
+        Number.isInteger(runId) && (await service.cleanupWorkflow(runId));
+      if (!timedOut) {
+        auditAdminAction(auth.userId, "cleanup.workflow", "error");
+        return NextResponse.json(
+          { error: `No running workflow run with id ${body.id}` },
+          { status: 404 },
+        );
+      }
       auditAdminAction(auth.userId, "cleanup.workflow", "ok");
       return NextResponse.json({
-        message: `Workflow ${body.id} marked as timed out`,
+        message: `Workflow run ${body.id} marked as timed out`,
       });
     } else if (body.type === "job" && body.id) {
       // Clean specific job
