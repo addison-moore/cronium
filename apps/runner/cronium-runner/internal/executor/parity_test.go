@@ -522,6 +522,36 @@ func TestParityPythonFailingScript(t *testing.T) {
 	}
 }
 
+// A container's AsyncCronium needs aiohttp, so this runs only on the runner.
+func TestRunnerPythonAsyncCronium(t *testing.T) {
+	requireTools(t, "python3")
+	result := runOnRunner(t, types.ScriptTypePython, `
+import asyncio
+from cronium import AsyncCronium
+
+async def main():
+    async with AsyncCronium() as client:
+        print("input:", (await client.input())["z"])
+        print("set:", await client.set_variable("STR", "hello"))
+        print("string:", await client.get_variable("STR"))
+        print("condition:", await client.set_condition(True))
+        print("output:", await client.output({"done": True}))
+        await client.close()
+
+asyncio.run(main())
+`)
+	if result.exitCode != 0 {
+		t.Fatalf("exit code = %d\nstderr: %s", result.exitCode, result.stderr)
+	}
+	want := "input: 1\nset: None\nstring: hello\ncondition: None\noutput: None\n"
+	if result.stdout != want {
+		t.Errorf("stdout = %q, want %q", result.stdout, want)
+	}
+	if !strings.Contains(strings.Join(result.requests, "\n"), `POST /executions/exec-parity/condition {"condition":true}`) {
+		t.Errorf("no condition request in:\n%s", strings.Join(result.requests, "\n"))
+	}
+}
+
 const parityNodeScript = `
 (async () => {
   console.log("input:", JSON.stringify(await cronium.input()));

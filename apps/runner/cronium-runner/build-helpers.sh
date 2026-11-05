@@ -6,8 +6,7 @@
 # Usage: ./build-helpers.sh [arch...]   (default: amd64 arm64)
 #
 # The helpers import the package that embeds them, so they are built with the
-# nohelpers tag. Without it, each one would need the others to already exist, and
-# would carry a copy of them.
+# nohelpers tag. Without it they could not compile until they already existed.
 #
 # POSIX sh: the orchestrator image builds in an Alpine stage with no bash.
 set -eu
