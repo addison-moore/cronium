@@ -30,15 +30,17 @@ import {
   WorkflowLogLevel,
   WorkflowStepStatus,
   jobs as jobsTable,
+  workflowExecutionEvents,
   workflowExecutions,
   workflowStepRuns,
   type Job,
   type WorkflowConnection,
+  type WorkflowExecution,
   type WorkflowNode,
   type WorkflowTriggerType,
   type WorkflowStepRun,
 } from "@/shared/schema";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { resolveWorkflowInput } from "@/lib/unified-io/resolve-input";
 import { dispatchEventJob } from "./dispatch";
 import { assertWorkflowGraphCapability } from "@/server/security/resource-access";
@@ -59,6 +61,13 @@ const TERMINAL_STEP_STATUSES: WorkflowStepStatus[] = [
 /** A claimed-but-not-yet-dispatched step older than this is recovered by the
  * sweep: its job is re-attached by metadata, or it is failed loudly. */
 const DISPATCH_STALL_MS = 2 * 60_000;
+
+const STEP_NOT_STARTED_BEFORE_TIMEOUT =
+  "Workflow run timed out before this step started";
+const NO_JOB_BEFORE_TIMEOUT =
+  "Workflow run timed out before this step's job was created";
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export type EdgeState = "satisfied" | "pending" | "unsatisfiable";
 
@@ -242,7 +251,14 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
       .where(eq(workflowExecutions.id, runId))
       .for("update", { skipLocked: true });
     if (!run) return false; // busy elsewhere (or gone)
-    if (TERMINAL_RUN_STATUSES.includes(run.status)) return true;
+    if (TERMINAL_RUN_STATUSES.includes(run.status)) {
+      // A run that finished on its own has no open steps. A timeout ends it
+      // from outside this reducer, so it can leave some, and they settle here.
+      if (run.status === LogStatus.TIMEOUT) {
+        await settleTimedOutSteps(tx, run);
+      }
+      return true;
+    }
     runUserId = run.userId;
 
     const executionData = run.executionData as {
@@ -263,72 +279,7 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
       (s) => s.status === WorkflowStepStatus.DISPATCHED && s.jobId,
     );
     if (dispatched.length > 0) {
-      const jobRows = await tx
-        .select()
-        .from(jobsTable)
-        .where(
-          inArray(
-            jobsTable.id,
-            dispatched.map((s) => s.jobId!),
-          ),
-        );
-      const jobById = new Map<string, Job>(jobRows.map((j) => [j.id, j]));
-      for (const step of dispatched) {
-        const job = step.jobId ? jobById.get(step.jobId) : undefined;
-        if (!job) {
-          // Retention or manual deletion removed the job mid-run
-          await settleStep(
-            tx,
-            step,
-            {
-              status: WorkflowStepStatus.FAILED,
-              error: "Job record disappeared",
-            },
-            pendingTelemetry,
-          );
-          continue;
-        }
-        const result = job.result as {
-          scriptOutput?: unknown;
-          condition?: boolean;
-        } | null;
-        switch (job.status) {
-          case JobStatus.COMPLETED:
-            await settleStep(
-              tx,
-              step,
-              {
-                status: WorkflowStepStatus.SUCCEEDED,
-                output: result?.scriptOutput,
-                condition: result?.condition,
-              },
-              pendingTelemetry,
-            );
-            break;
-          case JobStatus.FAILED:
-          case JobStatus.TIMED_OUT:
-          case JobStatus.CANCELLED:
-            await settleStep(
-              tx,
-              step,
-              {
-                status: WorkflowStepStatus.FAILED,
-                condition: result?.condition,
-                error:
-                  job.lastError ??
-                  (job.status === JobStatus.TIMED_OUT
-                    ? "Job timed out"
-                    : job.status === JobStatus.CANCELLED
-                      ? "Job cancelled"
-                      : "Job failed"),
-              },
-              pendingTelemetry,
-            );
-            break;
-          default:
-            break; // still in flight
-        }
-      }
+      await settleStepsFromJobs(tx, dispatched, pendingTelemetry);
       steps = await tx
         .select()
         .from(workflowStepRuns)
@@ -344,16 +295,7 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
         Date.now() - s.startedAt.getTime() > DISPATCH_STALL_MS,
     );
     for (const step of stalled) {
-      // dispatch stamps the step id into job metadata for exactly this
-      // recovery path (crash between claim and jobId write)
-      const candidates = await tx
-        .select()
-        .from(jobsTable)
-        .where(eq(jobsTable.eventId, step.eventId));
-      const orphanJob = candidates.find((j) => {
-        const meta = j.metadata as { workflowStepRunId?: number } | null;
-        return meta?.workflowStepRunId === step.id;
-      });
+      const orphanJob = await findOrphanJob(tx, step);
       if (orphanJob) {
         await tx
           .update(workflowStepRuns)
@@ -575,18 +517,259 @@ function logStatusForStep(status: WorkflowStepStatus): LogStatus {
  * commits (see settleStep). */
 type PendingTelemetry = () => Promise<void>;
 
+/** The job this step dispatched, if its id never reached the step. dispatch
+ * stamps the step id into job metadata for exactly this recovery path (crash
+ * between claim and jobId write). */
+async function findOrphanJob(
+  tx: Tx,
+  step: WorkflowStepRun,
+): Promise<Job | undefined> {
+  const candidates = await tx
+    .select()
+    .from(jobsTable)
+    .where(eq(jobsTable.eventId, step.eventId));
+  return candidates.find((j) => {
+    const meta = j.metadata as { workflowStepRunId?: number } | null;
+    return meta?.workflowStepRunId === step.id;
+  });
+}
+
+/** Settle dispatched steps whose job has finished. A step whose job is still in
+ * flight stays DISPATCHED. `at` overrides the settle time. */
+async function settleStepsFromJobs(
+  tx: Tx,
+  dispatched: WorkflowStepRun[],
+  pendingTelemetry: PendingTelemetry[],
+  at?: Date,
+): Promise<void> {
+  const jobRows = await tx
+    .select()
+    .from(jobsTable)
+    .where(
+      inArray(
+        jobsTable.id,
+        dispatched.map((s) => s.jobId!),
+      ),
+    );
+  const jobById = new Map<string, Job>(jobRows.map((j) => [j.id, j]));
+  for (const step of dispatched) {
+    const job = step.jobId ? jobById.get(step.jobId) : undefined;
+    if (!job) {
+      // Retention or manual deletion removed the job mid-run
+      await settleStep(
+        tx,
+        step,
+        {
+          status: WorkflowStepStatus.FAILED,
+          error: "Job record disappeared",
+          at,
+        },
+        pendingTelemetry,
+      );
+      continue;
+    }
+    const result = job.result as {
+      scriptOutput?: unknown;
+      condition?: boolean;
+    } | null;
+    switch (job.status) {
+      case JobStatus.COMPLETED:
+        await settleStep(
+          tx,
+          step,
+          {
+            status: WorkflowStepStatus.SUCCEEDED,
+            output: result?.scriptOutput,
+            condition: result?.condition,
+            at,
+          },
+          pendingTelemetry,
+        );
+        break;
+      case JobStatus.FAILED:
+      case JobStatus.TIMED_OUT:
+      case JobStatus.CANCELLED:
+        await settleStep(
+          tx,
+          step,
+          {
+            status: WorkflowStepStatus.FAILED,
+            condition: result?.condition,
+            error:
+              job.lastError ??
+              (job.status === JobStatus.TIMED_OUT
+                ? "Job timed out"
+                : job.status === JobStatus.CANCELLED
+                  ? "Job cancelled"
+                  : "Job failed"),
+            at,
+          },
+          pendingTelemetry,
+        );
+        break;
+      default:
+        break; // still in flight
+    }
+  }
+}
+
+/**
+ * Settle what a timed-out run left open: finished jobs give their steps a real
+ * result, and whatever never ran is closed out. Nothing is dispatched. A step
+ * whose job is still in flight stays open until that job is timed out, which is
+ * the cleanup service's job, so call this again afterwards.
+ *
+ * Steps close at the moment the run timed out, however much later this runs.
+ * Telemetry is written here on the transaction, so a settled step can't leave
+ * its row RUNNING, and it goes by node rather than by the step's
+ * executionEventId, which a crash during dispatch can leave unset. Safe to
+ * repeat: with nothing open it writes nothing.
+ */
+async function settleTimedOutSteps(
+  tx: Tx,
+  run: WorkflowExecution,
+): Promise<void> {
+  const at = run.completedAt ?? new Date();
+  // settleStep queues its own telemetry write for after commit; the pass below
+  // covers those rows and more, in this transaction.
+  const superseded: PendingTelemetry[] = [];
+
+  const steps = await tx
+    .select()
+    .from(workflowStepRuns)
+    .where(eq(workflowStepRuns.workflowExecutionId, run.id));
+  const open = steps.filter((s) => !TERMINAL_STEP_STATUSES.includes(s.status));
+
+  const withJob: WorkflowStepRun[] = [];
+  for (const step of open) {
+    if (step.status === WorkflowStepStatus.PENDING) {
+      await settleStep(
+        tx,
+        step,
+        {
+          status: WorkflowStepStatus.SKIPPED,
+          error: STEP_NOT_STARTED_BEFORE_TIMEOUT,
+          at,
+        },
+        superseded,
+      );
+      continue;
+    }
+    if (step.jobId) {
+      withJob.push(step);
+      continue;
+    }
+    const orphanJob = await findOrphanJob(tx, step);
+    if (orphanJob) {
+      await tx
+        .update(workflowStepRuns)
+        .set({ jobId: orphanJob.id, updatedAt: new Date() })
+        .where(eq(workflowStepRuns.id, step.id));
+      withJob.push({ ...step, jobId: orphanJob.id });
+    } else {
+      await settleStep(
+        tx,
+        step,
+        {
+          status: WorkflowStepStatus.FAILED,
+          error: NO_JOB_BEFORE_TIMEOUT,
+          at,
+        },
+        superseded,
+      );
+    }
+  }
+  if (withJob.length > 0) {
+    await settleStepsFromJobs(tx, withJob, superseded, at);
+  }
+
+  let settled = steps;
+  if (open.length > 0) {
+    settled = await tx
+      .select()
+      .from(workflowStepRuns)
+      .where(eq(workflowStepRuns.workflowExecutionId, run.id));
+    await tx
+      .update(workflowExecutions)
+      .set({
+        successfulEvents: settled.filter(
+          (s) => s.status === WorkflowStepStatus.SUCCEEDED,
+        ).length,
+        failedEvents: settled.filter(
+          (s) => s.status === WorkflowStepStatus.FAILED,
+        ).length,
+        updatedAt: new Date(),
+      })
+      .where(eq(workflowExecutions.id, run.id));
+  }
+
+  const stepByNode = new Map(settled.map((s) => [s.nodeId, s]));
+  const runningTelemetry = await tx
+    .select()
+    .from(workflowExecutionEvents)
+    .where(
+      and(
+        eq(workflowExecutionEvents.workflowExecutionId, run.id),
+        eq(workflowExecutionEvents.status, LogStatus.RUNNING),
+      ),
+    );
+  for (const row of runningTelemetry) {
+    const step = stepByNode.get(row.nodeId);
+    if (step && !TERMINAL_STEP_STATUSES.includes(step.status)) continue;
+    const completedAt = step?.completedAt ?? at;
+    await tx
+      .update(workflowExecutionEvents)
+      .set({
+        status: step ? logStatusForStep(step.status) : LogStatus.FAILURE,
+        completedAt,
+        duration: durationBetween(row.startedAt, completedAt),
+        output:
+          step?.output !== undefined && step.output !== null
+            ? JSON.stringify(step.output)
+            : null,
+        errorMessage: step ? step.error : "Workflow run timed out",
+      })
+      .where(eq(workflowExecutionEvents.id, row.id));
+  }
+}
+
+/**
+ * Settle a timed-out run's steps and telemetry. Unlike advanceWorkflowRun this
+ * waits for the run's lock: an advance holding it may have read the jobs before
+ * the caller timed them out, so skipping could leave a step open.
+ */
+export async function settleTimedOutRunSteps(runId: number): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [run] = await tx
+      .select()
+      .from(workflowExecutions)
+      .where(eq(workflowExecutions.id, runId))
+      .for("update");
+    if (run?.status === LogStatus.TIMEOUT) {
+      await settleTimedOutSteps(tx, run);
+    }
+  });
+}
+
+/** Clocks can differ between processes, so a duration never goes negative. */
+function durationBetween(from: Date | null, to: Date): number | null {
+  return from ? Math.max(0, to.getTime() - from.getTime()) : null;
+}
+
 async function settleStep(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tx: Tx,
   step: WorkflowStepRun,
   data: {
     status: WorkflowStepStatus;
     output?: unknown;
     condition?: boolean | undefined;
     error?: string;
+    at?: Date | undefined;
   },
   pendingTelemetry: PendingTelemetry[],
 ): Promise<void> {
   const now = new Date();
+  const completedAt = data.at ?? now;
   await tx
     .update(workflowStepRuns)
     .set({
@@ -594,7 +777,7 @@ async function settleStep(
       output: data.output ?? null,
       condition: data.condition ?? null,
       error: data.error ?? null,
-      completedAt: now,
+      completedAt,
       updatedAt: now,
     })
     .where(eq(workflowStepRuns.id, step.id));
@@ -610,10 +793,8 @@ async function settleStep(
       storage
         .updateWorkflowExecutionEvent(executionEventId, {
           status: logStatusForStep(data.status),
-          completedAt: now,
-          duration: step.startedAt
-            ? now.getTime() - step.startedAt.getTime()
-            : null,
+          completedAt,
+          duration: durationBetween(step.startedAt, completedAt),
           output:
             data.output !== undefined ? JSON.stringify(data.output) : null,
           errorMessage: data.error ?? null,
@@ -637,6 +818,12 @@ async function dispatchClaimedStep(
   // render this step RUNNING forever).
   let executionEventId: number | undefined;
   try {
+    // Claimed before the run timed out, but dispatched after: no job at all.
+    if (await runHasTimedOut(step.workflowExecutionId)) {
+      await failClaimedStep(step, NO_JOB_BEFORE_TIMEOUT);
+      return;
+    }
+
     const event = await storage.getEventWithRelations(step.eventId);
     if (!event) {
       await failClaimedStep(step, `Event ${step.eventId} no longer exists`);
@@ -708,6 +895,8 @@ async function dispatchClaimedStep(
         updatedAt: new Date(),
       })
       .where(eq(workflowStepRuns.id, step.id));
+
+    await cleanUpIfRunTimedOut(step.workflowExecutionId);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(
@@ -718,6 +907,39 @@ async function dispatchClaimedStep(
       step,
       `Dispatch failed: ${message}`,
       executionEventId,
+    );
+  }
+}
+
+async function runHasTimedOut(runId: number): Promise<boolean> {
+  const [run] = await db
+    .select({ status: workflowExecutions.status })
+    .from(workflowExecutions)
+    .where(eq(workflowExecutions.id, runId));
+  return run?.status === LogStatus.TIMEOUT;
+}
+
+/**
+ * The run may have timed out while this step's job was being created, too late
+ * for the timeout path to have found it. That path writes the run and then reads
+ * its jobs. This writes the job and then reads the run. So at least one of the
+ * two sees the other, and no job can slip between them.
+ *
+ * The job already exists by now, so a failure here must not fail its step. The
+ * cleanup sweep retries anything still open under a timed-out run.
+ */
+async function cleanUpIfRunTimedOut(runId: number): Promise<void> {
+  try {
+    if (await runHasTimedOut(runId)) {
+      // Dynamic import: the cleanup service imports this module.
+      const { getCleanupService } =
+        await import("@/lib/services/workflow-cleanup-service");
+      await getCleanupService().settleTimedOutRun(runId);
+    }
+  } catch (error) {
+    console.error(
+      `[WorkflowEngine] Failed to check run ${runId} for a timeout after dispatch:`,
+      error instanceof Error ? error.message : String(error),
     );
   }
 }

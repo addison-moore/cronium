@@ -9,19 +9,53 @@
 import { eq } from "drizzle-orm";
 import { db, pool } from "@/server/db";
 import { storage } from "@/server/storage";
-import { WorkflowCleanupService } from "@/lib/services/workflow-cleanup-service";
+import { deriveNodeStatuses } from "@/components/workflows/lib/execution-graph";
+import * as httpEvents from "@/lib/scheduler/http-event-executor";
+import { transitionJob } from "@/lib/scheduling/job-transition";
+import { InProcessWorkerPool } from "@/lib/scheduling/worker-executor";
 import {
+  advanceRunsForJob,
+  advanceWorkflowRun,
+  settleTimedOutRunSteps,
+  startWorkflowRun,
+} from "@/lib/scheduling/workflow-engine";
+import { jobService } from "@/lib/services/job-service";
+import { WorkflowCleanupService } from "@/lib/services/workflow-cleanup-service";
+import * as resourceAccess from "@/server/security/resource-access";
+import {
+  executions,
   jobs,
   jobTransitions,
+  logs,
+  workflowConnections,
+  workflowExecutionEvents,
   workflowExecutions,
   workflowLogs,
+  workflowNodes,
   workflows,
+  workflowStepRuns,
+  ConnectionType,
+  EventType,
   JobStatus,
+  OverlapPolicy,
   LogStatus,
   WorkflowLogLevel,
+  WorkflowStepStatus,
+  WorkflowTriggerType,
 } from "@/shared/schema";
 import { resetDatabase, closePool } from "./helpers/db-reset";
-import { seedEvent, seedJob, seedUser } from "./helpers/seed";
+import { seedEvent, seedExecution, seedJob, seedUser } from "./helpers/seed";
+
+// Real engine runs and many queries per test. `testTimeout` on the Jest project
+// has no effect, so without this these get the 5 second default.
+jest.setTimeout(60_000);
+
+// There's no socket server here, and each log update would retry with backoff.
+jest.mock("@/lib/websocket-broadcaster", () => ({
+  getWebSocketBroadcaster: () => ({
+    broadcastLogUpdate: () => Promise.resolve({ success: true, attempts: 1 }),
+  }),
+}));
 
 const MAX_AGE_MS = 30 * 60 * 1000;
 const TIMEOUT_MESSAGE = "Workflow execution timed out after 1800s";
@@ -117,6 +151,165 @@ async function withWorkflowLogWritesRefused(
       `ALTER TABLE workflow_logs DROP CONSTRAINT test_refuse_writes`,
     );
   }
+}
+
+/** Workflow first -> second, started through the real engine with nothing there
+ * to claim its jobs, then aged past the cutoff. `first` is dispatched, with its
+ * job queued and its telemetry row RUNNING. `second` is waiting on it. */
+async function startStuckRun(
+  eventOverrides: Parameters<typeof seedEvent>[1] = {},
+) {
+  const userId = await seedUser();
+  const workflowId = await seedWorkflow(userId);
+  const firstEvent = await seedEvent(userId, eventOverrides);
+  const secondEvent = await seedEvent(userId);
+  const [firstNode] = await db
+    .insert(workflowNodes)
+    .values({ workflowId, eventId: firstEvent })
+    .returning({ id: workflowNodes.id });
+  const [secondNode] = await db
+    .insert(workflowNodes)
+    .values({ workflowId, eventId: secondEvent })
+    .returning({ id: workflowNodes.id });
+  await db.insert(workflowConnections).values({
+    workflowId,
+    sourceNodeId: firstNode!.id,
+    targetNodeId: secondNode!.id,
+    connectionType: ConnectionType.ON_SUCCESS,
+  });
+
+  const started = await startWorkflowRun(workflowId, {
+    triggerType: WorkflowTriggerType.MANUAL,
+  });
+  expect(started).toMatchObject({ success: true });
+  const runId = started.executionId!;
+  await db
+    .update(workflowExecutions)
+    .set({ startedAt: pastTheCutoff() })
+    .where(eq(workflowExecutions.id, runId));
+
+  const firstStep = await stepOf(runId, firstNode!.id);
+  expect(firstStep.status).toBe(WorkflowStepStatus.DISPATCHED);
+  expect(firstStep.jobId).toEqual(expect.any(String));
+  expect(await jobStatus(firstStep.jobId!)).toBe(JobStatus.QUEUED);
+
+  return {
+    userId,
+    workflowId,
+    runId,
+    jobId: firstStep.jobId!,
+    firstEvent,
+    secondEvent,
+    firstNode: firstNode!.id,
+    secondNode: secondNode!.id,
+  };
+}
+
+/** Time out a run the way the code before step settling did: the run row alone,
+ * which is the state older runs are still sitting in. */
+async function timeOutRunRowOnly(runId: number, completedAt: Date) {
+  await db
+    .update(workflowExecutions)
+    .set({ status: LogStatus.TIMEOUT, completedAt, totalDuration: MAX_AGE_MS })
+    .where(eq(workflowExecutions.id, runId));
+}
+
+async function logOf(jobId: string) {
+  const [row] = await db.select().from(logs).where(eq(logs.jobId, jobId));
+  return row!;
+}
+
+async function jobOf(jobId: string) {
+  const [row] = await db.select().from(jobs).where(eq(jobs.id, jobId));
+  return row!;
+}
+
+/** The job, claimed and started, as an orchestrator would leave it. */
+async function startJob(jobId: string) {
+  const [claimed] = await jobService.claimJobs("orch-1", 10);
+  expect(claimed?.id).toBe(jobId);
+  await jobService.updateJobStatus(jobId, JobStatus.RUNNING, {
+    startedAt: new Date(),
+  });
+}
+
+async function closeAllSteps(runId: number) {
+  await db
+    .update(workflowStepRuns)
+    .set({ status: WorkflowStepStatus.FAILED, completedAt: new Date() })
+    .where(eq(workflowStepRuns.workflowExecutionId, runId));
+}
+
+async function closeAllTelemetry(runId: number) {
+  await db
+    .update(workflowExecutionEvents)
+    .set({ status: LogStatus.FAILURE, completedAt: new Date() })
+    .where(eq(workflowExecutionEvents.workflowExecutionId, runId));
+}
+
+/** Everything a run wrote, for checking that nothing changed. */
+async function snapshot(runId: number) {
+  return {
+    run: await runOf(runId),
+    steps: await db
+      .select()
+      .from(workflowStepRuns)
+      .where(eq(workflowStepRuns.workflowExecutionId, runId))
+      .orderBy(workflowStepRuns.id),
+    telemetry: await telemetryOf(runId),
+    jobs: await db.select().from(jobs).orderBy(jobs.id),
+    workflowLogs: await db.select().from(workflowLogs).orderBy(workflowLogs.id),
+  };
+}
+
+/** Start a run while a spy interrupts its dispatch, so none of startStuckRun's
+ * checks on the finished dispatch apply. */
+async function startRunWithoutChecks() {
+  const userId = await seedUser();
+  const workflowId = await seedWorkflow(userId);
+  const firstEvent = await seedEvent(userId);
+  const secondEvent = await seedEvent(userId);
+  const [firstNode] = await db
+    .insert(workflowNodes)
+    .values({ workflowId, eventId: firstEvent })
+    .returning({ id: workflowNodes.id });
+  const [secondNode] = await db
+    .insert(workflowNodes)
+    .values({ workflowId, eventId: secondEvent })
+    .returning({ id: workflowNodes.id });
+  await db.insert(workflowConnections).values({
+    workflowId,
+    sourceNodeId: firstNode!.id,
+    targetNodeId: secondNode!.id,
+    connectionType: ConnectionType.ON_SUCCESS,
+  });
+
+  const started = await startWorkflowRun(workflowId, {
+    triggerType: WorkflowTriggerType.MANUAL,
+  });
+  expect(started).toMatchObject({ success: true });
+  const [job] = await db.select().from(jobs);
+  return {
+    runId: started.executionId!,
+    jobId: job!.id,
+    firstNode: firstNode!.id,
+    secondNode: secondNode!.id,
+  };
+}
+
+async function stepOf(runId: number, nodeId: number) {
+  const steps = await db
+    .select()
+    .from(workflowStepRuns)
+    .where(eq(workflowStepRuns.workflowExecutionId, runId));
+  return steps.find((step) => step.nodeId === nodeId)!;
+}
+
+async function telemetryOf(runId: number) {
+  return db
+    .select()
+    .from(workflowExecutionEvents)
+    .where(eq(workflowExecutionEvents.workflowExecutionId, runId));
 }
 
 beforeEach(async () => {
@@ -271,7 +464,7 @@ describe("the run's jobs", () => {
     ).toHaveLength(1);
   });
 
-  it("are only the active ones stamped with this run", async () => {
+  it("are only the unfinished ones stamped with this run", async () => {
     const userId = await seedUser();
     const workflowId = await seedWorkflow(userId);
     const eventId = await seedEvent(userId);
@@ -305,10 +498,13 @@ describe("the run's jobs", () => {
       workflowStepRunId: stuckRun,
     });
     const noMetadata = await seed(JobStatus.RUNNING, {});
-    // Not picked up by this path; the worker's own sweeps own these.
     const queued = await seed(JobStatus.QUEUED, {
       workflowExecutionId: stuckRun,
     });
+    const queuedForOtherRun = await seed(JobStatus.QUEUED, {
+      workflowExecutionId: liveRun!.id,
+    });
+    const queuedOutsideAnyRun = await seed(JobStatus.QUEUED, {});
     const finished = await seed(JobStatus.COMPLETED, {
       workflowExecutionId: stuckRun,
     });
@@ -320,7 +516,9 @@ describe("the run's jobs", () => {
     expect(await jobStatus(sharedPrefix)).toBe(JobStatus.RUNNING);
     expect(await jobStatus(otherKeys)).toBe(JobStatus.RUNNING);
     expect(await jobStatus(noMetadata)).toBe(JobStatus.RUNNING);
-    expect(await jobStatus(queued)).toBe(JobStatus.QUEUED);
+    expect(await jobStatus(queued)).toBe(JobStatus.TIMED_OUT);
+    expect(await jobStatus(queuedForOtherRun)).toBe(JobStatus.QUEUED);
+    expect(await jobStatus(queuedOutsideAnyRun)).toBe(JobStatus.QUEUED);
     expect(await jobStatus(finished)).toBe(JobStatus.COMPLETED);
   });
 
@@ -349,6 +547,28 @@ describe("the run's jobs", () => {
 });
 
 describe("a failure finding the run's jobs", () => {
+  it("does not stop the steps that have no job from settling", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const userId = await seedUser();
+    const workflowId = await seedWorkflow(userId);
+    const eventId = await seedEvent(userId);
+    const stuckRun = await seedStuckRun(workflowId, userId);
+    await db.insert(workflowStepRuns).values({
+      workflowExecutionId: stuckRun,
+      nodeId: 1,
+      eventId,
+      status: WorkflowStepStatus.PENDING,
+    });
+    await pool.query(`ALTER TABLE jobs RENAME TO jobs_hidden`);
+    try {
+      await expect(service.cleanupWorkflow(stuckRun)).resolves.toBe(true);
+    } finally {
+      await pool.query(`ALTER TABLE jobs_hidden RENAME TO jobs`);
+    }
+
+    expect((await stepOf(stuckRun, 1)).status).toBe(WorkflowStepStatus.SKIPPED);
+  });
+
   it("is logged, and the run and its log line stand", async () => {
     const errors = jest
       .spyOn(console, "error")
@@ -495,5 +715,838 @@ describe("the sweep", () => {
 
     expect((await runOf(live!.id)).status).toBe(LogStatus.RUNNING);
     expect(await allLogs()).toEqual([]);
+  });
+});
+
+describe("a step job still queued when its run times out", () => {
+  it("is not claimed by an orchestrator afterwards", async () => {
+    const { runId, jobId } = await startStuckRun();
+
+    await service.performCleanup();
+
+    expect((await runOf(runId)).status).toBe(LogStatus.TIMEOUT);
+    expect(await jobService.claimJobs("orch-after-the-timeout", 10)).toEqual(
+      [],
+    );
+    expect(await jobStatus(jobId)).toBe(JobStatus.TIMED_OUT);
+  });
+
+  it("is not claimed by the worker's in-process pool afterwards", async () => {
+    const { runId, jobId } = await startStuckRun({
+      type: EventType.HTTP_REQUEST,
+      httpMethod: "GET",
+      httpUrl: "https://example.test/never-called",
+    });
+
+    await service.performCleanup();
+
+    expect((await runOf(runId)).status).toBe(LogStatus.TIMEOUT);
+    const workerPool = new InProcessWorkerPool("worker-after-the-timeout", 10);
+    const execute = jest.spyOn(httpEvents, "executeHttpEvent");
+    await expect(workerPool.claimAndRun()).resolves.toBe(0);
+    await workerPool.drain();
+    expect(execute).not.toHaveBeenCalled();
+    expect(await jobStatus(jobId)).toBe(JobStatus.TIMED_OUT);
+  });
+
+  it("says why, on the audit row, the job and its log", async () => {
+    const { jobId } = await startStuckRun();
+
+    await service.performCleanup();
+
+    const reason = "Workflow run timed out before this job started";
+    const transitions = await db
+      .select()
+      .from(jobTransitions)
+      .where(eq(jobTransitions.jobId, jobId));
+    expect(transitions.at(-1)).toMatchObject({
+      fromStatus: JobStatus.QUEUED,
+      toStatus: JobStatus.TIMED_OUT,
+      actor: "sweeper",
+      reason,
+    });
+    expect(await jobOf(jobId)).toMatchObject({
+      lastError: reason,
+      completedAt: expect.any(Date),
+      startedAt: null,
+    });
+    // PENDING forever without this. It never ran, so it reports no duration.
+    expect(await logOf(jobId)).toMatchObject({
+      status: LogStatus.TIMEOUT,
+      error: reason,
+      endTime: expect.any(Date),
+      duration: null,
+    });
+  });
+
+  it("does not start later when it was waiting out a retry backoff", async () => {
+    const { jobId } = await startStuckRun({ retries: 2 });
+    await startJob(jobId);
+    await seedExecution(jobId, {
+      id: "exec-first-attempt",
+      status: JobStatus.FAILED,
+      completedAt: new Date(Date.now() - 1000),
+      error: "the first attempt's own error",
+      exitCode: 7,
+    });
+    await jobService.updateJobStatus(jobId, JobStatus.FAILED, {
+      error: "the first attempt's own error",
+    });
+    const requeued = await jobOf(jobId);
+    expect(requeued.status).toBe(JobStatus.QUEUED);
+    expect(requeued.scheduledFor.getTime()).toBeGreaterThan(Date.now());
+
+    await service.performCleanup();
+
+    expect(await jobStatus(jobId)).toBe(JobStatus.TIMED_OUT);
+    // Even once the backoff has passed
+    await db
+      .update(jobs)
+      .set({ scheduledFor: new Date(Date.now() - 1000) })
+      .where(eq(jobs.id, jobId));
+    expect(await jobService.claimJobs("orch-after-the-timeout", 10)).toEqual(
+      [],
+    );
+    // The attempt that really ran keeps what it reported
+    const [execution] = await db
+      .select()
+      .from(executions)
+      .where(eq(executions.jobId, jobId));
+    expect(execution).toMatchObject({
+      error: "the first attempt's own error",
+      exitCode: 7,
+    });
+  });
+
+  it("finishes an execution still in progress, unlike a finished one", async () => {
+    const { jobId } = await startStuckRun();
+    await startJob(jobId);
+    await seedExecution(jobId, {
+      id: "exec-in-progress",
+      status: JobStatus.RUNNING,
+      completedAt: null,
+    });
+
+    await service.performCleanup();
+
+    const [execution] = await db
+      .select()
+      .from(executions)
+      .where(eq(executions.jobId, jobId));
+    expect(execution).toMatchObject({
+      status: JobStatus.FAILED,
+      error: "Workflow run timed out",
+      exitCode: -1,
+      completedAt: expect.any(Date),
+    });
+  });
+
+  it("gives up its overlap slot, so the event can run again", async () => {
+    const { jobId } = await startStuckRun({
+      overlapPolicy: OverlapPolicy.SKIP,
+    });
+    expect((await jobOf(jobId)).activeKey).not.toBeNull();
+
+    await service.performCleanup();
+
+    expect((await jobOf(jobId)).activeKey).toBeNull();
+  });
+
+  it("does not execute if the pool claimed it just as the timeout landed", async () => {
+    const { runId, jobId } = await startStuckRun({
+      type: EventType.HTTP_REQUEST,
+      httpMethod: "GET",
+      httpUrl: "https://example.test/never-called",
+    });
+    const execute = jest.spyOn(httpEvents, "executeHttpEvent");
+    const getEvent = storage.getEventWithRelations.bind(storage);
+    // Runs between the claim and the job's first status report
+    jest
+      .spyOn(storage, "getEventWithRelations")
+      .mockImplementationOnce(async (id) => {
+        expect(await jobStatus(jobId)).toBe(JobStatus.CLAIMED);
+        await service.cleanupWorkflow(runId);
+        return getEvent(id);
+      });
+    const workerPool = new InProcessWorkerPool("worker-1", 10);
+
+    await expect(workerPool.claimAndRun()).resolves.toBe(1);
+    await workerPool.drain();
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(await jobStatus(jobId)).toBe(JobStatus.TIMED_OUT);
+  });
+});
+
+describe("a run that times out while a step is being dispatched", () => {
+  it("creates no job when the timeout landed after the claim", async () => {
+    const authorize = resourceAccess.assertWorkflowGraphCapability;
+    const userId = await seedUser();
+    const workflowId = await seedWorkflow(userId);
+    const eventId = await seedEvent(userId);
+    const [node] = await db
+      .insert(workflowNodes)
+      .values({ workflowId, eventId })
+      .returning({ id: workflowNodes.id });
+    jest
+      .spyOn(resourceAccess, "assertWorkflowGraphCapability")
+      // startWorkflowRun's own check, before the run exists
+      .mockImplementationOnce(authorize)
+      // The advance's check, after it committed the claim
+      .mockImplementationOnce(async (...args) => {
+        const [run] = await db.select().from(workflowExecutions);
+        await service.cleanupWorkflow(run!.id);
+        return authorize(...args);
+      });
+
+    const started = await startWorkflowRun(workflowId, {
+      triggerType: WorkflowTriggerType.MANUAL,
+    });
+
+    expect(await db.select().from(jobs)).toEqual([]);
+    expect(await db.select().from(logs)).toEqual([]);
+    expect(await telemetryOf(started.executionId!)).toEqual([]);
+    expect(await stepOf(started.executionId!, node!.id)).toMatchObject({
+      status: WorkflowStepStatus.FAILED,
+      error: "Workflow run timed out before this step's job was created",
+    });
+  });
+
+  it("times out the job when the timeout landed before it was created", async () => {
+    const getEvent = storage.getEventWithRelations.bind(storage);
+    jest
+      .spyOn(storage, "getEventWithRelations")
+      .mockImplementationOnce(async (id) => {
+        const [run] = await db.select().from(workflowExecutions);
+        await service.cleanupWorkflow(run!.id);
+        return getEvent(id);
+      });
+
+    const { runId, firstNode, jobId } = await startRunWithoutChecks();
+
+    expect((await runOf(runId)).status).toBe(LogStatus.TIMEOUT);
+    expect(await jobStatus(jobId)).toBe(JobStatus.TIMED_OUT);
+    expect(await logOf(jobId)).toMatchObject({ status: LogStatus.TIMEOUT });
+    expect(await jobService.claimJobs("orch-after-the-timeout", 10)).toEqual(
+      [],
+    );
+    expect((await stepOf(runId, firstNode)).status).toBe(
+      WorkflowStepStatus.FAILED,
+    );
+    // The telemetry row was created after the steps had already been settled
+    expect(await telemetryOf(runId)).toEqual([
+      expect.objectContaining({
+        nodeId: firstNode,
+        status: LogStatus.FAILURE,
+        completedAt: expect.any(Date),
+      }),
+    ]);
+  });
+
+  it("re-attaches a job created but not yet recorded on its step", async () => {
+    const record = storage.recordEventDispatch.bind(storage);
+    // Runs after the job insert, before the step is told about the job
+    jest
+      .spyOn(storage, "recordEventDispatch")
+      .mockImplementationOnce(async (id) => {
+        const [run] = await db.select().from(workflowExecutions);
+        await service.cleanupWorkflow(run!.id);
+        return record(id);
+      });
+
+    const { runId, firstNode, secondNode, jobId } =
+      await startRunWithoutChecks();
+
+    expect(await jobStatus(jobId)).toBe(JobStatus.TIMED_OUT);
+    expect(await stepOf(runId, firstNode)).toMatchObject({
+      status: WorkflowStepStatus.FAILED,
+      jobId,
+      error: "Workflow run timed out before this job started",
+    });
+    expect((await stepOf(runId, secondNode)).status).toBe(
+      WorkflowStepStatus.SKIPPED,
+    );
+    expect(await telemetryOf(runId)).toEqual([
+      expect.objectContaining({ status: LogStatus.FAILURE }),
+    ]);
+  });
+
+  it("leaves the step alone if the check after dispatch cannot read the run", async () => {
+    const errors = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const select = db.select.bind(db);
+    let dispatched = false;
+    jest
+      .spyOn(storage, "recordEventDispatch")
+      .mockImplementationOnce(async () => {
+        dispatched = true;
+      });
+    const failingSelect = jest.spyOn(db, "select").mockImplementation(((
+      ...args: never[]
+    ) => {
+      // The next read of workflow_executions.status after the job exists
+      const [fields] = args as unknown as [Record<string, unknown>?];
+      if (dispatched && fields && "status" in fields) {
+        throw new Error("connection lost");
+      }
+      return (select as (...a: never[]) => unknown)(...args);
+    }) as never);
+
+    const { runId, firstNode, jobId } = await startRunWithoutChecks();
+    failingSelect.mockRestore();
+
+    expect(await stepOf(runId, firstNode)).toMatchObject({
+      status: WorkflowStepStatus.DISPATCHED,
+      jobId,
+    });
+    expect(await jobStatus(jobId)).toBe(JobStatus.QUEUED);
+    expect(
+      errors.mock.calls.some((call) =>
+        String(call[0]).includes(`run ${runId} for a timeout`),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("the steps of a timed-out run", () => {
+  it("reach a terminal state, and so does their telemetry", async () => {
+    const { runId, firstNode, secondNode } = await startStuckRun();
+    expect(await telemetryOf(runId)).toEqual([
+      expect.objectContaining({
+        nodeId: firstNode,
+        status: LogStatus.RUNNING,
+      }),
+    ]);
+
+    await service.performCleanup();
+
+    const run = await runOf(runId);
+    expect(run.status).toBe(LogStatus.TIMEOUT);
+    expect(await stepOf(runId, firstNode)).toMatchObject({
+      status: WorkflowStepStatus.FAILED,
+      error: "Workflow run timed out before this job started",
+      completedAt: run.completedAt,
+    });
+    expect(await stepOf(runId, secondNode)).toMatchObject({
+      status: WorkflowStepStatus.SKIPPED,
+      error: "Workflow run timed out before this step started",
+      completedAt: run.completedAt,
+    });
+    expect(await telemetryOf(runId)).toEqual([
+      expect.objectContaining({
+        nodeId: firstNode,
+        status: LogStatus.FAILURE,
+        errorMessage: "Workflow run timed out before this job started",
+        completedAt: run.completedAt,
+        duration: expect.any(Number),
+      }),
+    ]);
+    expect(run).toMatchObject({ successfulEvents: 0, failedEvents: 1 });
+  });
+
+  it("no longer read as executing in the app's graph", async () => {
+    const { runId, firstNode, secondNode } = await startStuckRun();
+    const graphNode = (id: number) => ({
+      id: `node-${id}`,
+      type: "event",
+      position: { x: 0, y: 0 },
+      data: {
+        eventId: 0,
+        label: `node ${id}`,
+        type: "BASH",
+        eventTypeIcon: "",
+        description: "",
+      },
+    });
+    // What workflows.getExecution returns, through what the graph derives from it
+    const graph = async () =>
+      deriveNodeStatuses(
+        [graphNode(firstNode), graphNode(secondNode)],
+        (await storage.getWorkflowExecutionEvents(runId)) as never,
+      );
+    expect((await graph())[0]).toMatchObject({ isCurrentlyExecuting: true });
+
+    await service.performCleanup();
+
+    const [first, second] = await graph();
+    expect(first).toMatchObject({
+      isCurrentlyExecuting: false,
+      status: LogStatus.FAILURE,
+      hasError: true,
+    });
+    expect(second).toMatchObject({
+      isCurrentlyExecuting: false,
+      status: LogStatus.PENDING,
+    });
+  });
+
+  it("take the result of a job that finished before the timeout", async () => {
+    const { runId, jobId, firstNode, secondNode, secondEvent } =
+      await startStuckRun();
+    await startJob(jobId);
+    await jobService.updateJobStatus(jobId, JobStatus.COMPLETED, {
+      result: { scriptOutput: { rows: 3 }, condition: true },
+    });
+
+    await service.performCleanup();
+
+    expect(await stepOf(runId, firstNode)).toMatchObject({
+      status: WorkflowStepStatus.SUCCEEDED,
+      output: { rows: 3 },
+      condition: true,
+      error: null,
+    });
+    expect(await telemetryOf(runId)).toEqual([
+      expect.objectContaining({
+        status: LogStatus.SUCCESS,
+        output: JSON.stringify({ rows: 3 }),
+        errorMessage: null,
+      }),
+    ]);
+    expect(await jobStatus(jobId)).toBe(JobStatus.COMPLETED);
+    expect(await runOf(runId)).toMatchObject({
+      status: LogStatus.TIMEOUT,
+      successfulEvents: 1,
+      failedEvents: 0,
+    });
+    // Its successor was ready to go, and the run is over, so it never starts
+    expect((await stepOf(runId, secondNode)).status).toBe(
+      WorkflowStepStatus.SKIPPED,
+    );
+    const stepJobs = await db
+      .select()
+      .from(jobs)
+      .where(eq(jobs.eventId, secondEvent));
+    expect(stepJobs).toEqual([]);
+  });
+
+  it("keep the error of a job that failed on its own", async () => {
+    const { runId, jobId, firstNode } = await startStuckRun();
+    await startJob(jobId);
+    await jobService.failJob(jobId, "exit status 3");
+
+    await service.performCleanup();
+
+    expect(await stepOf(runId, firstNode)).toMatchObject({
+      status: WorkflowStepStatus.FAILED,
+      error: "exit status 3",
+    });
+    expect(await jobStatus(jobId)).toBe(JobStatus.FAILED);
+  });
+
+  it("fail with the run's timeout when their job was still running", async () => {
+    const { runId, jobId, firstNode } = await startStuckRun();
+    await startJob(jobId);
+
+    await service.performCleanup();
+
+    expect(await jobOf(jobId)).toMatchObject({
+      status: JobStatus.TIMED_OUT,
+      lastError: "Workflow run timed out",
+    });
+    expect(await stepOf(runId, firstNode)).toMatchObject({
+      status: WorkflowStepStatus.FAILED,
+      error: "Workflow run timed out",
+    });
+    expect((await logOf(jobId)).duration).toEqual(expect.any(Number));
+  });
+
+  it("fail when retention already removed their job", async () => {
+    const { runId, jobId, firstNode } = await startStuckRun();
+    await db.update(logs).set({ jobId: null }).where(eq(logs.jobId, jobId));
+    await db.delete(jobTransitions).where(eq(jobTransitions.jobId, jobId));
+    await db.delete(jobs).where(eq(jobs.id, jobId));
+
+    await service.performCleanup();
+
+    expect(await stepOf(runId, firstNode)).toMatchObject({
+      status: WorkflowStepStatus.FAILED,
+      error: "Job record disappeared",
+    });
+  });
+
+  it("settle telemetry that never got linked to its step", async () => {
+    const { runId, firstNode } = await startStuckRun();
+    // A crash between creating the telemetry row and recording its id
+    await db
+      .update(workflowStepRuns)
+      .set({ executionEventId: null })
+      .where(eq(workflowStepRuns.nodeId, firstNode));
+
+    await service.performCleanup();
+
+    expect(await telemetryOf(runId)).toEqual([
+      expect.objectContaining({ status: LogStatus.FAILURE }),
+    ]);
+  });
+
+  it("settle through the admin route's entry point as well", async () => {
+    const { runId, jobId, firstNode, secondNode } = await startStuckRun();
+
+    await expect(service.cleanupWorkflow(runId)).resolves.toBe(true);
+
+    expect(await jobStatus(jobId)).toBe(JobStatus.TIMED_OUT);
+    expect((await stepOf(runId, firstNode)).status).toBe(
+      WorkflowStepStatus.FAILED,
+    );
+    expect((await stepOf(runId, secondNode)).status).toBe(
+      WorkflowStepStatus.SKIPPED,
+    );
+  });
+});
+
+describe("advancing a timed-out run", () => {
+  it("settles a step when a job's notification arrives", async () => {
+    const { runId, jobId, firstNode } = await startStuckRun();
+    await timeOutRunRowOnly(runId, new Date());
+    await jobService.failJob(jobId, "exit status 3");
+
+    await advanceRunsForJob(jobId);
+
+    expect(await stepOf(runId, firstNode)).toMatchObject({
+      status: WorkflowStepStatus.FAILED,
+      error: "exit status 3",
+    });
+  });
+
+  it("holds a step open while its job is in flight, then closes it", async () => {
+    const { runId, jobId, firstNode, secondNode } = await startStuckRun();
+    await timeOutRunRowOnly(runId, new Date());
+
+    await advanceWorkflowRun(runId);
+
+    // The job could still report a real result
+    expect((await stepOf(runId, firstNode)).status).toBe(
+      WorkflowStepStatus.DISPATCHED,
+    );
+    expect(await telemetryOf(runId)).toEqual([
+      expect.objectContaining({ status: LogStatus.RUNNING }),
+    ]);
+    expect((await stepOf(runId, secondNode)).status).toBe(
+      WorkflowStepStatus.SKIPPED,
+    );
+
+    await startJob(jobId);
+    await jobService.updateJobStatus(jobId, JobStatus.COMPLETED, {
+      result: { scriptOutput: "done" },
+    });
+    await advanceWorkflowRun(runId);
+
+    expect((await stepOf(runId, firstNode)).status).toBe(
+      WorkflowStepStatus.SUCCEEDED,
+    );
+    expect(await telemetryOf(runId)).toEqual([
+      expect.objectContaining({ status: LogStatus.SUCCESS }),
+    ]);
+  });
+
+  it("changes nothing once everything is settled", async () => {
+    const { runId } = await startStuckRun();
+    await service.performCleanup();
+    const before = await snapshot(runId);
+
+    await advanceWorkflowRun(runId);
+    await settleTimedOutRunSteps(runId);
+
+    expect(await snapshot(runId)).toEqual(before);
+  });
+
+  it("leaves a run that finished on its own alone", async () => {
+    const { runId, jobId } = await startStuckRun();
+    await db
+      .update(workflowExecutions)
+      .set({ status: LogStatus.FAILURE, completedAt: new Date() })
+      .where(eq(workflowExecutions.id, runId));
+    const before = await snapshot(runId);
+
+    await advanceWorkflowRun(runId);
+    await settleTimedOutRunSteps(runId);
+    await service.performCleanup();
+
+    expect(await snapshot(runId)).toEqual(before);
+    expect(await jobStatus(jobId)).toBe(JobStatus.QUEUED);
+  });
+
+  it("waits for an advance holding the run, where a plain advance would skip", async () => {
+    const { runId, jobId, firstNode } = await startStuckRun();
+    await timeOutRunRowOnly(runId, new Date());
+    await jobService.failJob(jobId, "exit status 3");
+
+    const holder = await pool.connect();
+    try {
+      await holder.query("BEGIN");
+      await holder.query(
+        `SELECT id FROM workflow_executions WHERE id = $1 FOR UPDATE`,
+        [runId],
+      );
+
+      await advanceWorkflowRun(runId);
+      expect((await stepOf(runId, firstNode)).status).toBe(
+        WorkflowStepStatus.DISPATCHED,
+      );
+
+      let finished = false;
+      const settling = settleTimedOutRunSteps(runId).then(() => {
+        finished = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(finished).toBe(false);
+
+      await holder.query("COMMIT");
+      await settling;
+    } finally {
+      holder.release();
+    }
+
+    expect((await stepOf(runId, firstNode)).status).toBe(
+      WorkflowStepStatus.FAILED,
+    );
+  });
+});
+
+describe("the sweep, for runs that have already timed out", () => {
+  it("settles a run left open by an earlier version", async () => {
+    const { runId, jobId, firstNode, secondNode } = await startStuckRun();
+    const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000);
+    await timeOutRunRowOnly(runId, threeDaysAgo);
+    const before = await runOf(runId);
+
+    await service.performCleanup();
+
+    expect(await jobStatus(jobId)).toBe(JobStatus.TIMED_OUT);
+    // Closed when the run ended, not when the sweep got to it
+    const first = await stepOf(runId, firstNode);
+    expect(first).toMatchObject({
+      status: WorkflowStepStatus.FAILED,
+      completedAt: threeDaysAgo,
+    });
+    expect(await stepOf(runId, secondNode)).toMatchObject({
+      status: WorkflowStepStatus.SKIPPED,
+      completedAt: threeDaysAgo,
+    });
+    const [telemetry] = await telemetryOf(runId);
+    expect(telemetry).toMatchObject({
+      status: LogStatus.FAILURE,
+      completedAt: threeDaysAgo,
+      // The row started after the back-dated timeout here, which real clocks
+      // can't do by days, and a duration still never goes negative
+      duration: 0,
+    });
+    // The run itself keeps its result, and gets no second timeout line
+    expect(await runOf(runId)).toMatchObject({
+      status: before.status,
+      completedAt: before.completedAt,
+      totalDuration: before.totalDuration,
+    });
+    const timeoutLines = (await allLogs()).filter(
+      (row) => row.status === LogStatus.TIMEOUT,
+    );
+    expect(timeoutLines).toEqual([]);
+  });
+
+  it("retries after the job lookup failed", async () => {
+    const errors = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const { runId, jobId, firstNode } = await startStuckRun();
+    await pool.query(`ALTER TABLE jobs RENAME TO jobs_hidden`);
+    try {
+      await expect(service.cleanupWorkflow(runId)).resolves.toBe(true);
+    } finally {
+      await pool.query(`ALTER TABLE jobs_hidden RENAME TO jobs`);
+    }
+    expect(await jobStatus(jobId)).toBe(JobStatus.QUEUED);
+    expect(
+      errors.mock.calls.some((call) =>
+        String(call[0]).includes(`run ${runId}`),
+      ),
+    ).toBe(true);
+
+    await service.performCleanup();
+
+    expect(await jobStatus(jobId)).toBe(JobStatus.TIMED_OUT);
+    expect((await stepOf(runId, firstNode)).status).toBe(
+      WorkflowStepStatus.FAILED,
+    );
+    // Only the first attempt wrote a timeout line
+    const timeoutLines = (await allLogs()).filter(
+      (row) => row.status === LogStatus.TIMEOUT,
+    );
+    expect(timeoutLines).toHaveLength(1);
+  });
+
+  it("retries after settling the steps failed, which changed nothing", async () => {
+    const errors = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const { runId, firstNode, secondNode } = await startStuckRun();
+    await pool.query(
+      `ALTER TABLE workflow_step_runs ADD CONSTRAINT test_refuse_skipped CHECK (status <> 'SKIPPED') NOT VALID`,
+    );
+    try {
+      await service.cleanupWorkflow(runId);
+    } finally {
+      await pool.query(
+        `ALTER TABLE workflow_step_runs DROP CONSTRAINT test_refuse_skipped`,
+      );
+    }
+    // All or nothing: the first step and its telemetry rolled back together
+    expect((await stepOf(runId, firstNode)).status).toBe(
+      WorkflowStepStatus.DISPATCHED,
+    );
+    expect(await telemetryOf(runId)).toEqual([
+      expect.objectContaining({ status: LogStatus.RUNNING }),
+    ]);
+    expect(
+      errors.mock.calls.some((call) =>
+        String(call[0]).includes(`steps of workflow run ${runId}`),
+      ),
+    ).toBe(true);
+
+    await service.performCleanup();
+
+    expect((await stepOf(runId, firstNode)).status).toBe(
+      WorkflowStepStatus.FAILED,
+    );
+    expect((await stepOf(runId, secondNode)).status).toBe(
+      WorkflowStepStatus.SKIPPED,
+    );
+    expect(await telemetryOf(runId)).toEqual([
+      expect.objectContaining({ status: LogStatus.FAILURE }),
+    ]);
+  });
+
+  // Each of the next three is the only thing open, so it alone gets the run found.
+  it("finds a run whose only open thing is a queued job", async () => {
+    const { runId, jobId } = await startStuckRun();
+    await timeOutRunRowOnly(runId, new Date());
+    await closeAllSteps(runId);
+    await closeAllTelemetry(runId);
+
+    await service.performCleanup();
+
+    expect(await jobStatus(jobId)).toBe(JobStatus.TIMED_OUT);
+  });
+
+  it("finds a run whose only open thing is a dispatched step", async () => {
+    const { runId, jobId, firstNode, secondNode } = await startStuckRun();
+    await timeOutRunRowOnly(runId, new Date());
+    await jobService.failJob(jobId, "exit status 3");
+    await closeAllTelemetry(runId);
+    await db
+      .update(workflowStepRuns)
+      .set({ status: WorkflowStepStatus.SKIPPED })
+      .where(eq(workflowStepRuns.nodeId, secondNode));
+
+    await service.performCleanup();
+
+    expect(await stepOf(runId, firstNode)).toMatchObject({
+      status: WorkflowStepStatus.FAILED,
+      error: "exit status 3",
+    });
+  });
+
+  it("finds a run whose only open thing is a step that never started", async () => {
+    const { runId, jobId, firstNode, secondNode } = await startStuckRun();
+    await timeOutRunRowOnly(runId, new Date());
+    await jobService.failJob(jobId, "exit status 3");
+    await closeAllTelemetry(runId);
+    await db
+      .update(workflowStepRuns)
+      .set({ status: WorkflowStepStatus.FAILED })
+      .where(eq(workflowStepRuns.nodeId, firstNode));
+
+    await service.performCleanup();
+
+    expect((await stepOf(runId, secondNode)).status).toBe(
+      WorkflowStepStatus.SKIPPED,
+    );
+  });
+
+  it("finds a telemetry row left RUNNING under a settled step, and gives it the step's result", async () => {
+    const { runId, jobId, firstNode } = await startStuckRun();
+    await startJob(jobId);
+    await jobService.updateJobStatus(jobId, JobStatus.COMPLETED, {
+      result: { scriptOutput: "done" },
+    });
+    await service.performCleanup();
+    // As if the best-effort write had failed on a run settled by the old path
+    await db
+      .update(workflowExecutionEvents)
+      .set({ status: LogStatus.RUNNING, completedAt: null, output: null })
+      .where(eq(workflowExecutionEvents.workflowExecutionId, runId));
+
+    await service.performCleanup();
+
+    expect((await stepOf(runId, firstNode)).status).toBe(
+      WorkflowStepStatus.SUCCEEDED,
+    );
+    expect(await telemetryOf(runId)).toEqual([
+      expect.objectContaining({
+        status: LogStatus.SUCCESS,
+        output: JSON.stringify("done"),
+        completedAt: expect.any(Date),
+      }),
+    ]);
+  });
+
+  it("finishes a telemetry row with no step, which only the old executor wrote", async () => {
+    const { runId, firstEvent } = await startStuckRun();
+    await timeOutRunRowOnly(runId, new Date());
+    await db
+      .delete(workflowStepRuns)
+      .where(eq(workflowStepRuns.workflowExecutionId, runId));
+    await db
+      .update(jobs)
+      .set({ metadata: {} })
+      .where(eq(jobs.eventId, firstEvent));
+
+    await service.performCleanup();
+
+    expect(await telemetryOf(runId)).toEqual([
+      expect.objectContaining({
+        status: LogStatus.FAILURE,
+        errorMessage: "Workflow run timed out",
+      }),
+    ]);
+  });
+
+  it("leaves a settled run alone", async () => {
+    const { runId } = await startStuckRun();
+    await service.performCleanup();
+    const before = await snapshot(runId);
+
+    await service.performCleanup();
+
+    expect(await snapshot(runId)).toEqual(before);
+  });
+
+  it("carries on past a run it cannot settle", async () => {
+    const errors = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const refused = await startStuckRun();
+    const fine = await startStuckRun();
+    await timeOutRunRowOnly(refused.runId, new Date());
+    await timeOutRunRowOnly(fine.runId, new Date());
+    await pool.query(
+      `ALTER TABLE workflow_step_runs ADD CONSTRAINT test_refuse_one_run CHECK (workflow_execution_id <> ${refused.runId} OR status IN ('PENDING', 'DISPATCHED')) NOT VALID`,
+    );
+    try {
+      await service.performCleanup();
+    } finally {
+      await pool.query(
+        `ALTER TABLE workflow_step_runs DROP CONSTRAINT test_refuse_one_run`,
+      );
+    }
+
+    expect((await stepOf(refused.runId, refused.firstNode)).status).toBe(
+      WorkflowStepStatus.DISPATCHED,
+    );
+    expect((await stepOf(fine.runId, fine.firstNode)).status).toBe(
+      WorkflowStepStatus.FAILED,
+    );
+    expect(errors).toHaveBeenCalled();
   });
 });

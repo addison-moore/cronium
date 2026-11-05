@@ -52,6 +52,13 @@ jest.mock("../dispatch", () => ({
   dispatchEventJob: jest.fn(),
 }));
 
+const mockSettleTimedOutRun = jest.fn();
+jest.mock("@/lib/services/workflow-cleanup-service", () => ({
+  getCleanupService: () => ({
+    settleTimedOutRun: (runId: number) => mockSettleTimedOutRun(runId),
+  }),
+}));
+
 // Replace the SQL condition builders with plain descriptors the in-memory
 // store can evaluate. Everything else (sql, relations, getTableColumns, ...)
 // stays real so @/shared/schema loads unchanged.
@@ -78,6 +85,7 @@ import {
   WorkflowStepStatus,
   WorkflowTriggerType,
   jobs as jobsTable,
+  workflowExecutionEvents,
   workflowExecutions,
   workflowStepRuns,
 } from "@/shared/schema";
@@ -90,6 +98,7 @@ import {
   evaluateEdge,
   reconcileWorkflowRuns,
   resolveReadiness,
+  settleTimedOutRunSteps,
   startWorkflowRun,
   type EdgeState,
 } from "../workflow-engine";
@@ -101,15 +110,22 @@ import {
 const runsStore: Row[] = [];
 const stepsStore: Row[] = [];
 const jobsStore: Row[] = [];
+const telemetryStore: Row[] = [];
 
 const tableStores = new Map<unknown, Row[]>([
   [workflowExecutions, runsStore],
   [workflowStepRuns, stepsStore],
   [jobsTable, jobsStore],
+  [workflowExecutionEvents, telemetryStore],
 ]);
 
 const columnKeys = new Map<unknown, string>();
-for (const table of [workflowExecutions, workflowStepRuns, jobsTable]) {
+for (const table of [
+  workflowExecutions,
+  workflowStepRuns,
+  jobsTable,
+  workflowExecutionEvents,
+]) {
   for (const [key, col] of Object.entries(getTableColumns(table as any))) {
     columnKeys.set(col, key);
   }
@@ -1147,6 +1163,251 @@ describe("advanceWorkflowRun — idempotency", () => {
     await advanceWorkflowRun(run.id);
     expect(JSON.stringify([runsStore, stepsStore])).toBe(snapshot);
     expect(mockDispatch).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// advanceWorkflowRun — a run that timed out with steps open. The real database
+// behaviour is in tests/storage/workflow-timeout.test.ts.
+// ---------------------------------------------------------------------------
+
+describe("advanceWorkflowRun — a timed-out run", () => {
+  const timedOutAt = new Date(Date.now() - 60_000);
+
+  function seedRunningTelemetry(
+    runId: number,
+    nodeId: number,
+    overrides: Row = {},
+  ): Row {
+    const row: Row = {
+      id: idSeq++,
+      workflowExecutionId: runId,
+      nodeId,
+      eventId: 101,
+      status: LogStatus.RUNNING,
+      startedAt: new Date(timedOutAt.getTime() - 5_000),
+      completedAt: null,
+      duration: null,
+      output: null,
+      errorMessage: null,
+      ...overrides,
+    };
+    telemetryStore.push(row);
+    return row;
+  }
+
+  function seedTimedOutRun(): Row {
+    return seedRun({ status: LogStatus.TIMEOUT, completedAt: timedOutAt });
+  }
+
+  beforeEach(() => {
+    telemetryStore.length = 0;
+    setGraph([{ id: 1, eventId: 101 }]);
+  });
+
+  it("gives a finished job's step its result and closes the rest, dispatching nothing", async () => {
+    const run = seedTimedOutRun();
+    const done = seedJob({
+      status: JobStatus.COMPLETED,
+      result: { scriptOutput: { rows: 1 }, condition: true },
+    });
+    const failed = seedJob({ status: JobStatus.FAILED, lastError: "exit 3" });
+    const finishedStep = seedStep(run.id, {
+      nodeId: 1,
+      status: WorkflowStepStatus.DISPATCHED,
+      jobId: done.id,
+    });
+    const failedStep = seedStep(run.id, {
+      nodeId: 2,
+      status: WorkflowStepStatus.DISPATCHED,
+      jobId: failed.id,
+    });
+    const noJobStep = seedStep(run.id, {
+      nodeId: 3,
+      status: WorkflowStepStatus.DISPATCHED,
+    });
+    const neverStarted = seedStep(run.id, { nodeId: 4 });
+    const telemetry = seedRunningTelemetry(run.id, 1);
+
+    await advanceWorkflowRun(run.id);
+
+    expect(stepRow(finishedStep.id)).toMatchObject({
+      status: WorkflowStepStatus.SUCCEEDED,
+      output: { rows: 1 },
+      condition: true,
+      completedAt: timedOutAt,
+    });
+    expect(stepRow(failedStep.id)).toMatchObject({
+      status: WorkflowStepStatus.FAILED,
+      error: "exit 3",
+    });
+    expect(stepRow(noJobStep.id)).toMatchObject({
+      status: WorkflowStepStatus.FAILED,
+      error: "Workflow run timed out before this step's job was created",
+    });
+    expect(stepRow(neverStarted.id)).toMatchObject({
+      status: WorkflowStepStatus.SKIPPED,
+      error: "Workflow run timed out before this step started",
+    });
+    expect(telemetry).toMatchObject({
+      status: LogStatus.SUCCESS,
+      completedAt: timedOutAt,
+      duration: 5_000,
+      output: JSON.stringify({ rows: 1 }),
+      errorMessage: null,
+    });
+    expect(runRow(run.id)).toMatchObject({
+      status: LogStatus.TIMEOUT,
+      successfulEvents: 1,
+      failedEvents: 2,
+    });
+    expect(mockDispatch).not.toHaveBeenCalled();
+  });
+
+  it("re-attaches an orphaned job and follows it", async () => {
+    const run = seedTimedOutRun();
+    const step = seedStep(run.id, { status: WorkflowStepStatus.DISPATCHED });
+    const orphan = seedJob({
+      status: JobStatus.TIMED_OUT,
+      lastError: "Workflow run timed out",
+      metadata: { workflowStepRunId: step.id },
+    });
+
+    await advanceWorkflowRun(run.id);
+
+    expect(stepRow(step.id)).toMatchObject({
+      status: WorkflowStepStatus.FAILED,
+      jobId: orphan.id,
+      error: "Workflow run timed out",
+    });
+  });
+
+  it("holds a step and its telemetry open while the job is in flight", async () => {
+    const run = seedTimedOutRun();
+    const job = seedJob({ status: JobStatus.QUEUED });
+    const step = seedStep(run.id, {
+      status: WorkflowStepStatus.DISPATCHED,
+      jobId: job.id,
+    });
+    const telemetry = seedRunningTelemetry(run.id, 1);
+
+    await advanceWorkflowRun(run.id);
+
+    expect(stepRow(step.id).status).toBe(WorkflowStepStatus.DISPATCHED);
+    expect(telemetry.status).toBe(LogStatus.RUNNING);
+  });
+
+  it("closes a telemetry row that has no step", async () => {
+    const run = seedTimedOutRun();
+    const telemetry = seedRunningTelemetry(run.id, 99);
+
+    await advanceWorkflowRun(run.id);
+
+    expect(telemetry).toMatchObject({
+      status: LogStatus.FAILURE,
+      errorMessage: "Workflow run timed out",
+    });
+  });
+
+  it("reports no negative duration when clocks disagree", async () => {
+    const run = seedTimedOutRun();
+    seedStep(run.id, {
+      status: WorkflowStepStatus.FAILED,
+      completedAt: timedOutAt,
+    });
+    const telemetry = seedRunningTelemetry(run.id, 1, {
+      startedAt: new Date(timedOutAt.getTime() + 5_000),
+    });
+
+    await advanceWorkflowRun(run.id);
+
+    expect(telemetry.duration).toBe(0);
+  });
+
+  it("writes nothing to the run when no step is open", async () => {
+    const run = seedTimedOutRun();
+    seedStep(run.id, { status: WorkflowStepStatus.FAILED });
+    const before = JSON.stringify(runRow(run.id));
+
+    await advanceWorkflowRun(run.id);
+
+    expect(JSON.stringify(runRow(run.id))).toBe(before);
+  });
+
+  it("settleTimedOutRunSteps does the same, and only for a timed-out run", async () => {
+    const running = seedRun();
+    const runningStep = seedStep(running.id);
+    const timedOut = seedTimedOutRun();
+    const timedOutStep = seedStep(timedOut.id);
+
+    await settleTimedOutRunSteps(running.id);
+    await settleTimedOutRunSteps(timedOut.id);
+    await settleTimedOutRunSteps(99_999);
+
+    expect(stepRow(runningStep.id).status).toBe(WorkflowStepStatus.PENDING);
+    expect(stepRow(timedOutStep.id).status).toBe(WorkflowStepStatus.SKIPPED);
+  });
+
+  it("dispatches nothing when the timeout lands after the claim", async () => {
+    const run = seedRun();
+    const step = seedStep(run.id);
+    mockAssert.mockImplementationOnce(() => {
+      runRow(run.id).status = LogStatus.TIMEOUT;
+      runRow(run.id).completedAt = timedOutAt;
+      return Promise.resolve();
+    });
+
+    await advanceWorkflowRun(run.id);
+
+    expect(mockDispatch).not.toHaveBeenCalled();
+    expect(stepRow(step.id)).toMatchObject({
+      status: WorkflowStepStatus.FAILED,
+      error: "Workflow run timed out before this step's job was created",
+    });
+  });
+
+  it("settles the run again when the timeout lands during dispatch", async () => {
+    const run = seedRun();
+    seedStep(run.id);
+    mockDispatch.mockImplementationOnce(() => {
+      runRow(run.id).status = LogStatus.TIMEOUT;
+      return Promise.resolve({ job: { id: "job-late" }, logId: 1 });
+    });
+
+    await advanceWorkflowRun(run.id);
+
+    expect(mockSettleTimedOutRun).toHaveBeenCalledWith(run.id);
+  });
+
+  it("does not fail a dispatched step when that settling fails", async () => {
+    const run = seedRun();
+    const step = seedStep(run.id);
+    mockDispatch.mockImplementationOnce(() => {
+      runRow(run.id).status = LogStatus.TIMEOUT;
+      return Promise.resolve({ job: { id: "job-late" }, logId: 1 });
+    });
+    mockSettleTimedOutRun.mockRejectedValueOnce(new Error("lost"));
+
+    await advanceWorkflowRun(run.id);
+
+    expect(stepRow(step.id)).toMatchObject({
+      status: WorkflowStepStatus.DISPATCHED,
+      jobId: "job-late",
+    });
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining(`run ${run.id} for a timeout`),
+      "lost",
+    );
+  });
+
+  it("does not settle anything when the run is still going after dispatch", async () => {
+    const run = seedRun();
+    seedStep(run.id);
+    mockDispatch.mockResolvedValueOnce({ job: { id: "job-ok" }, logId: 1 });
+
+    await advanceWorkflowRun(run.id);
+
+    expect(mockSettleTimedOutRun).not.toHaveBeenCalled();
   });
 });
 

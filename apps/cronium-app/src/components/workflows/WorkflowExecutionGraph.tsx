@@ -21,6 +21,7 @@ import {
   computeCanvasBounds,
   deriveNodeStatuses,
   getNodeStatusClasses,
+  isFinishedRunStatus,
 } from "./lib/execution-graph";
 
 interface WorkflowExecutionGraphProps {
@@ -181,13 +182,7 @@ export default function WorkflowExecutionGraph({
       }
 
       // Update internal execution state based on actual status
-      const isCompleted =
-        executionData.status === LogStatus.SUCCESS ||
-        executionData.status === LogStatus.FAILURE ||
-        executionData.status === LogStatus.TIMEOUT ||
-        executionData.status === LogStatus.PARTIAL;
-
-      setActuallyExecuting(!isCompleted);
+      setActuallyExecuting(!isFinishedRunStatus(executionData.status));
     }
   }, [executionData]);
 
@@ -253,12 +248,7 @@ export default function WorkflowExecutionGraph({
         hasAnyDataRef.current = true;
 
         // Set executing state based on cached execution status
-        const isCompleted =
-          cached.execution.status === LogStatus.SUCCESS ||
-          cached.execution.status === LogStatus.FAILURE ||
-          cached.execution.status === "completed" ||
-          cached.execution.status === "failed";
-        setActuallyExecuting(!isCompleted);
+        setActuallyExecuting(!isFinishedRunStatus(cached.execution.status));
       }
     }
 
@@ -324,12 +314,7 @@ export default function WorkflowExecutionGraph({
       setActuallyExecuting(true);
     } else if (!isExecuting && actuallyExecuting && currentExecution) {
       // Execution completed, check if execution data confirms completion
-      const isCompleted =
-        currentExecution.status === LogStatus.SUCCESS ||
-        currentExecution.status === LogStatus.FAILURE ||
-        currentExecution.status === "completed" ||
-        currentExecution.status === "failed";
-      if (isCompleted) {
+      if (isFinishedRunStatus(currentExecution.status)) {
         setActuallyExecuting(false);
       }
     }
