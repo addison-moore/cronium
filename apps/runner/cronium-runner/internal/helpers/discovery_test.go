@@ -10,7 +10,10 @@ import (
 
 const fakeHelperDir = "/opt/cronium/.cronium/bin"
 
-var helperNames = []string{"input", "output", "getVariable", "setVariable", "event"}
+// sdkPath locates a file in the container SDK, the reference for the runner's.
+func sdkPath(parts ...string) string {
+	return filepath.Join(append([]string{"..", "..", "..", "..", "runtime", "runtime-helpers"}, parts...)...)
+}
 
 func TestGenerateDiscoveryScriptContents(t *testing.T) {
 	script := GenerateDiscoveryScript(fakeHelperDir)
@@ -18,26 +21,54 @@ func TestGenerateDiscoveryScriptContents(t *testing.T) {
 	if !strings.Contains(script, `export CRONIUM_HELPERS_DIR="`+fakeHelperDir+`"`) {
 		t.Error("bash discovery script does not export CRONIUM_HELPERS_DIR with the helper dir")
 	}
-	for _, name := range helperNames {
+	if strings.Contains(script, helpersDirPlaceholder) {
+		t.Error("bash discovery script still has its placeholder")
+	}
+	for _, name := range []string{"input", "output", "getVariable", "setVariable", "setCondition", "event"} {
 		if !strings.Contains(script, "cronium."+name+"() {") {
 			t.Errorf("bash discovery script missing dotted function cronium.%s", name)
 		}
-		if !strings.Contains(script, "export -f cronium."+name) {
-			t.Errorf("bash discovery script missing export -f cronium.%s", name)
+	}
+}
+
+// exportedFunctions returns the names in a script's "export -f" lines.
+func exportedFunctions(script string) map[string]bool {
+	names := make(map[string]bool)
+	for _, line := range strings.Split(script, "\n") {
+		if rest, ok := strings.CutPrefix(line, "export -f "); ok {
+			for _, name := range strings.Fields(rest) {
+				names[name] = true
+			}
 		}
 	}
-	// Canonical container-SDK snake_case aliases must exist so scripts written
-	// to the documented interface run unchanged locally and remotely.
-	for _, alias := range []string{
-		"cronium_input", "cronium_output", "cronium_get_variable",
-		"cronium_set_variable", "cronium_event",
-	} {
-		if !strings.Contains(script, alias+"()") {
-			t.Errorf("bash discovery script missing snake_case alias %s", alias)
+	return names
+}
+
+// Every function the container's bash SDK offers a script exists on the runner
+// too, defined and exported, so a new one cannot be added to only one of them.
+func TestBashDiscoveryCoversTheContainerSDK(t *testing.T) {
+	sdk, err := os.ReadFile(sdkPath("bash", "cronium.sh"))
+	if err != nil {
+		t.Fatalf("failed to read the container SDK: %v", err)
+	}
+	script := GenerateDiscoveryScript(fakeHelperDir)
+	exported := exportedFunctions(script)
+
+	checked := 0
+	for name := range exportedFunctions(string(sdk)) {
+		if strings.HasPrefix(name, "_") {
+			continue // the SDK's HTTP plumbing, which the helper binaries replace
 		}
-		if !strings.Contains(script, "export -f "+alias) {
-			t.Errorf("bash discovery script missing export -f %s", alias)
+		checked++
+		if !strings.Contains(script, name+"() {") {
+			t.Errorf("runner discovery does not define %s", name)
 		}
+		if !exported[name] {
+			t.Errorf("runner discovery does not export %s", name)
+		}
+	}
+	if checked < 10 {
+		t.Errorf("found only %d functions in the container SDK; has its format changed?", checked)
 	}
 }
 
@@ -51,9 +82,16 @@ func TestGeneratePythonDiscoveryContents(t *testing.T) {
 		"def output(data):",
 		"def getVariable(key):",
 		"def setVariable(key, value):",
+		"def setCondition(condition):",
 		"def event():",
+		"def execute_tool_action(tool, action, config):",
+		"def send_email(to, subject, body, **kwargs):",
+		"def send_slack_message(channel, text, **kwargs):",
+		"def send_discord_message(channel_id, content, **kwargs):",
 		"cronium.get_variable = cronium.getVariable",
 		"cronium.set_variable = cronium.setVariable",
+		"cronium.set_condition = cronium.setCondition",
+		`sys.modules["cronium"] = cronium`,
 		"builtins.cronium = cronium",
 	} {
 		if !strings.Contains(script, want) {
@@ -67,12 +105,17 @@ func TestGenerateNodeDiscoveryContents(t *testing.T) {
 
 	for _, want := range []string{
 		"const CRONIUM_HELPERS_DIR = '" + fakeHelperDir + "'",
-		"global.cronium = {",
-		"input: function()",
-		"output: function(data)",
-		"getVariable: function(key)",
-		"setVariable: function(key, value)",
-		"event: function()",
+		"global.cronium = module.exports",
+		"async input()",
+		"async output(data)",
+		"async getVariable(key)",
+		"async setVariable(key, value)",
+		"async setCondition(condition)",
+		"async event()",
+		"async executeToolAction(tool, action, config)",
+		"async sendEmail({",
+		"async sendSlackMessage({",
+		"async sendDiscordMessage({",
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("node discovery script missing %q", want)
@@ -171,10 +214,14 @@ func TestBashDiscoveryScriptFunctionsWork(t *testing.T) {
 		t.Fatalf("failed to create bin dir: %v", err)
 	}
 	stubs := map[string]string{
-		"cronium.input":       "#!/bin/sh\necho '{\"fake\":\"input\"}'\n",
-		"cronium.getVariable": "#!/bin/sh\necho \"getVariable:$1\"\n",
-		// Like the real binary, this reads only stdin.
-		"cronium.output": "#!/bin/sh\necho \"output:$(cat)\"\n",
+		"cronium.input":        "#!/bin/sh\necho '{\"fake\":\"input\"}'\n",
+		"cronium.getVariable":  "#!/bin/sh\necho \"getVariable:$*\"\n",
+		"cronium.setCondition": "#!/bin/sh\necho \"setCondition:$*\"\n",
+		"cronium.event":        "#!/bin/sh\necho \"event:$*\"\n",
+		"cronium.toolAction":   "#!/bin/sh\necho \"toolAction:$*:$(cat)\"\n",
+		// Like the real binary, these read their value from stdin.
+		"cronium.output":      "#!/bin/sh\necho \"output:$(cat)\"\n",
+		"cronium.setVariable": "#!/bin/sh\necho \"setVariable:$*:$(cat)\"\n",
 	}
 	for name, content := range stubs {
 		if err := os.WriteFile(filepath.Join(binDir, name), []byte(content), 0o755); err != nil {
@@ -192,14 +239,25 @@ cronium.getVariable mykey
 cronium_get_variable otherkey
 cronium_output '{"via":"arg"}'
 cronium.output 'two words'
-echo '{"via":"stdin"}' | cronium_output`
+echo '{"via":"stdin"}' | cronium_output
+cronium_set_variable K '{"a":1}'
+cronium_set_condition yes
+cronium.setCondition no
+cronium_event
+cronium_event_field event.name
+cronium_execute_tool_action sql run_query '{"q":1}' </dev/null
+cronium_send_email a@x.io Subject Body --html </dev/null`
 	out, err := exec.Command(bashPath, "-c", script).CombinedOutput()
 	if err != nil {
 		t.Fatalf("bash discovery functions failed: %v\noutput: %s", err, out)
 	}
 	for _, want := range []string{
-		`{"fake":"input"}`, "getVariable:mykey", "getVariable:otherkey",
+		`{"fake":"input"}`, "getVariable:mykey", "getVariable:--raw otherkey",
 		`output:{"via":"arg"}`, "output:two words", `output:{"via":"stdin"}`,
+		`setVariable:K:{"a":1}`, "setCondition:yes", "setCondition:no",
+		"event:\n", "event:--field event.name",
+		`toolAction:execute sql run_query:{"q":1}`,
+		"toolAction:email a@x.io Subject Body --html:",
 	} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("output missing %q:\n%s", want, out)

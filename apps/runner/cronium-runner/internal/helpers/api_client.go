@@ -6,112 +6,143 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
-// APIClient handles communication with the runtime API
+// Same limits as the container SDKs: three tries, one and then two seconds apart,
+// so a runtime restart or a dropped tunnel costs a script the same on both paths.
+const (
+	maxRequestAttempts = 3
+	defaultRetryDelay  = time.Second
+)
+
+// APIClient talks to the runtime API for one execution.
 type APIClient struct {
-	endpoint string
-	token    string
-	client   *http.Client
+	endpoint    string
+	token       string
+	executionID string
+	client      *http.Client
+	retryDelay  time.Duration
 }
 
-// NewAPIClient creates a new API client
-func NewAPIClient(endpoint, token string) *APIClient {
+// NewAPIClient creates a client for one execution's runtime API.
+func NewAPIClient(endpoint, token, executionID string) *APIClient {
 	return &APIClient{
-		endpoint: endpoint,
-		token:    token,
+		endpoint:    endpoint,
+		token:       token,
+		executionID: executionID,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		retryDelay: defaultRetryDelay,
 	}
 }
 
-// GetInput retrieves input data from the API
-func (c *APIClient) GetInput(executionID string) (interface{}, error) {
-	url := fmt.Sprintf("%s/executions/%s/input", c.endpoint, executionID)
-
-	resp, err := c.doRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var result struct {
-		Success bool        `json:"success"`
-		Data    interface{} `json:"data"`
-		Error   string      `json:"error,omitempty"`
-	}
-
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	if !result.Success {
-		return nil, fmt.Errorf("API error: %s", result.Error)
-	}
-
-	return result.Data, nil
+// executionURL builds a path under this execution's API root.
+func (c *APIClient) executionURL(suffix string) string {
+	return fmt.Sprintf("%s/executions/%s/%s", c.endpoint, url.PathEscape(c.executionID), suffix)
 }
 
-// SetOutput sends output data to the API
-func (c *APIClient) SetOutput(executionID string, data interface{}) error {
-	url := fmt.Sprintf("%s/executions/%s/output", c.endpoint, executionID)
-
-	body := map[string]interface{}{
-		"data": data,
-	}
-
-	resp, err := c.doRequest("POST", url, body)
-	if err != nil {
-		return err
-	}
-
-	return checkEnvelope(resp)
+// GetInput retrieves input data, or nil when there is none.
+func (c *APIClient) GetInput() (json.RawMessage, error) {
+	return c.getData(c.executionURL("input"))
 }
 
-// GetVariable retrieves a variable value from the API
-func (c *APIClient) GetVariable(executionID, key string) (interface{}, error) {
-	url := fmt.Sprintf("%s/executions/%s/variables/%s", c.endpoint, executionID, key)
+// SetOutput sends output data to the API.
+func (c *APIClient) SetOutput(data json.RawMessage) error {
+	return c.write("POST", c.executionURL("output"), map[string]interface{}{"data": data})
+}
 
-	resp, err := c.doRequest("GET", url, nil)
+// GetVariable retrieves a variable's value, or nil when it is unset.
+func (c *APIClient) GetVariable(key string) (json.RawMessage, error) {
+	resp, err := c.doRequest("GET", c.executionURL("variables/"+url.PathEscape(key)), nil)
 	if err != nil {
+		if isNotFound(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 
 	var result struct {
 		Success bool `json:"success"`
 		Data    struct {
-			Key   string      `json:"key"`
-			Value interface{} `json:"value"`
+			Value json.RawMessage `json:"value"`
 		} `json:"data"`
 		Error string `json:"error,omitempty"`
 	}
-
 	if err := json.Unmarshal(resp, &result); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
-
 	if !result.Success {
 		return nil, fmt.Errorf("API error: %s", result.Error)
 	}
-
-	return result.Data.Value, nil
+	return nilIfNull(result.Data.Value), nil
 }
 
-// SetVariable sets a variable value via the API
-func (c *APIClient) SetVariable(executionID, key string, value interface{}) error {
-	url := fmt.Sprintf("%s/executions/%s/variables/%s", c.endpoint, executionID, key)
+// SetVariable sets a variable's value.
+func (c *APIClient) SetVariable(key string, value json.RawMessage) error {
+	return c.write("PUT", c.executionURL("variables/"+url.PathEscape(key)), map[string]interface{}{"value": value})
+}
 
-	body := map[string]interface{}{
-		"value": value,
+// SetCondition sets the condition that ON_CONDITION workflow edges read.
+func (c *APIClient) SetCondition(condition bool) error {
+	return c.write("POST", c.executionURL("condition"), map[string]interface{}{"condition": condition})
+}
+
+// GetContext retrieves the execution context exactly as the runtime returns it.
+func (c *APIClient) GetContext() (json.RawMessage, error) {
+	return c.getData(c.executionURL("context"))
+}
+
+// ExecuteToolAction runs a tool action and returns its result, or nil when it has
+// none. It makes one attempt, unlike every other call here: a retry after a
+// failure the tool reported could send the same message twice.
+func (c *APIClient) ExecuteToolAction(tool, action string, config json.RawMessage) (json.RawMessage, error) {
+	resp, err := c.send("POST", c.endpoint+"/tool-actions/execute", map[string]interface{}{
+		"tool":   tool,
+		"action": action,
+		"config": config,
+	}, 1)
+	if err != nil {
+		return nil, err
 	}
+	return parseData(resp)
+}
 
-	resp, err := c.doRequest("PUT", url, body)
+// getData fetches a URL and returns the data field of its response.
+func (c *APIClient) getData(target string) (json.RawMessage, error) {
+	resp, err := c.doRequest("GET", target, nil)
+	if err != nil {
+		return nil, err
+	}
+	return parseData(resp)
+}
+
+// write sends a request whose response carries nothing but the envelope.
+func (c *APIClient) write(method, target string, body interface{}) error {
+	resp, err := c.doRequest(method, target, body)
 	if err != nil {
 		return err
 	}
-
 	return checkEnvelope(resp)
+}
+
+// parseData returns the data field of a runtime response, or nil when it is null.
+func parseData(resp []byte) (json.RawMessage, error) {
+	var result struct {
+		Success bool            `json:"success"`
+		Data    json.RawMessage `json:"data"`
+		Error   string          `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	if !result.Success {
+		return nil, fmt.Errorf("API error: %s", result.Error)
+	}
+	return nilIfNull(result.Data), nil
 }
 
 // checkEnvelope inspects the runtime's {"success":bool,...} response envelope
@@ -135,46 +166,84 @@ func checkEnvelope(resp []byte) error {
 	return nil
 }
 
-// GetContext retrieves the event execution context
-func (c *APIClient) GetContext(executionID string) (*EventContext, error) {
-	url := fmt.Sprintf("%s/executions/%s/context", c.endpoint, executionID)
-
-	resp, err := c.doRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var result struct {
-		Success bool          `json:"success"`
-		Data    *EventContext `json:"data"`
-		Error   string        `json:"error,omitempty"`
-	}
-
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	if !result.Success {
-		return nil, fmt.Errorf("API error: %s", result.Error)
-	}
-
-	return result.Data, nil
+// httpStatusError is a response the runtime answered with an error status.
+type httpStatusError struct {
+	status int
+	body   string
 }
 
-// doRequest performs an HTTP request
-func (c *APIClient) doRequest(method, url string, body interface{}) ([]byte, error) {
-	var bodyReader io.Reader
+// Error reads the same as the container's bash SDK, for a job's log to match. The
+// Python and Node bindings pick the status code out of it.
+func (e *httpStatusError) Error() string {
+	return fmt.Sprintf("API request failed - HTTP %d - %s", e.status, e.message())
+}
+
+func (e *httpStatusError) message() string {
+	var body struct {
+		Message string `json:"message"`
+		Error   string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(e.body), &body); err != nil {
+		return strings.TrimSpace(e.body)
+	}
+	if body.Message != "" {
+		return body.Message
+	}
+	if body.Error != "" {
+		return body.Error
+	}
+	return "Unknown error"
+}
+
+func isNotFound(err error) bool {
+	statusErr, ok := err.(*httpStatusError)
+	return ok && statusErr.status == http.StatusNotFound
+}
+
+// doRequest performs an HTTP request, retrying what a retry can fix.
+func (c *APIClient) doRequest(method, target string, body interface{}) ([]byte, error) {
+	return c.send(method, target, body, maxRequestAttempts)
+}
+
+func (c *APIClient) send(method, target string, body interface{}, attempts int) ([]byte, error) {
+	var payload []byte
 	if body != nil {
-		jsonBody, err := json.Marshal(body)
-		if err != nil {
+		var err error
+		if payload, err = json.Marshal(body); err != nil {
 			return nil, fmt.Errorf("failed to marshal request body: %w", err)
 		}
-		bodyReader = bytes.NewReader(jsonBody)
 	}
 
-	req, err := http.NewRequest(method, url, bodyReader)
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		if attempt > 1 {
+			time.Sleep(c.retryDelay * time.Duration(attempt-1))
+		}
+
+		resp, retry, err := c.sendOnce(method, target, payload)
+		if err == nil {
+			return resp, nil
+		}
+		lastErr = err
+		if !retry {
+			break
+		}
+	}
+	return nil, lastErr
+}
+
+// sendOnce makes one attempt and reports whether a failure is worth retrying.
+// Network failures and 5xx responses are. A 501 is not: it means the endpoint is
+// permanently unsupported in this execution context.
+func (c *APIClient) sendOnce(method, target string, payload []byte) ([]byte, bool, error) {
+	var bodyReader io.Reader
+	if payload != nil {
+		bodyReader = bytes.NewReader(payload)
+	}
+
+	req, err := http.NewRequest(method, target, bodyReader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, false, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.token)
@@ -182,18 +251,19 @@ func (c *APIClient) doRequest(method, url string, body interface{}) ([]byte, err
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+		return nil, true, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, true, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(respBody))
+		retry := resp.StatusCode >= 500 && resp.StatusCode != http.StatusNotImplemented
+		return nil, retry, &httpStatusError{status: resp.StatusCode, body: string(respBody)}
 	}
 
-	return respBody, nil
+	return respBody, false, nil
 }

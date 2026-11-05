@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -170,7 +171,7 @@ func (h *Handler) SetVariable(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Value interface{} `json:"value"`
+		Value json.RawMessage `json:"value"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -178,7 +179,13 @@ func (h *Handler) SetVariable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.SetVariable(r.Context(), executionID, key, body.Value); err != nil {
+	value, ok := variableText(body.Value)
+	if !ok {
+		h.writeError(w, http.StatusBadRequest, "variable value must not be null")
+		return
+	}
+
+	if err := h.service.SetVariable(r.Context(), executionID, key, value); err != nil {
 		h.log.WithError(err).Error("Failed to set variable")
 		h.writeError(w, http.StatusInternalServerError, "failed to set variable")
 		return
@@ -187,6 +194,30 @@ func (h *Handler) SetVariable(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, types.SuccessResponse{
 		Success: true,
 	})
+}
+
+// variableText converts a value from a script to the string the app stores, as a
+// variable is always a string there. The SDKs send JSON values as JSON: a number
+// or object from Python or Node, or a bash argument that parses as one. Without
+// this the app rejects them, so `cronium_set_variable COUNT 5` failed in a container
+// while the same call worked on a remote server. It reports false for null.
+func variableText(raw json.RawMessage) (string, bool) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		return "", false
+	}
+	if trimmed[0] == '"' {
+		var text string
+		if err := json.Unmarshal(trimmed, &text); err != nil {
+			return "", false
+		}
+		return text, true
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, trimmed); err != nil {
+		return "", false
+	}
+	return compact.String(), true
 }
 
 // SetCondition handles POST /executions/{id}/condition

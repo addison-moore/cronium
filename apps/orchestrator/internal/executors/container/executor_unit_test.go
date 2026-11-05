@@ -280,9 +280,9 @@ func TestReadStream_SplitsLinesAndAssignsSequence(t *testing.T) {
 		entries = append(entries, entry)
 	}
 
-	// Empty lines are skipped; sequence is monotonic from 1.
-	require.Len(t, entries, 3)
-	for i, wantLine := range []string{"line1", "line2", "line3"} {
+	// A blank line is output like any other; sequence is monotonic from 1.
+	require.Len(t, entries, 4)
+	for i, wantLine := range []string{"line1", "line2", "", "line3"} {
 		assert.Equal(t, wantLine, entries[i].Line)
 		assert.Equal(t, "stderr", entries[i].Stream)
 		assert.EqualValues(t, i+1, entries[i].Sequence)
