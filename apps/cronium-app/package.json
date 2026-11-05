@@ -4,9 +4,9 @@
   "private": true,
   "license": "AGPL-3.0-or-later",
   "scripts": {
-    "dev": "dotenv -e ../../env/.env.local -- next dev --webpack -p 5001",
-    "build": "dotenv -e ../../env/.env.local -- next build --webpack",
-    "start": "dotenv -e ../../env/.env.local -- next start -p 5001",
+    "dev": "dotenv-cli -e ../../env/.env.local -- next dev --webpack -p 5001",
+    "build": "dotenv-cli -e ../../env/.env.local -- next build --webpack",
+    "start": "dotenv-cli -e ../../env/.env.local -- next start -p 5001",
     "lint": "SKIP_ENV_VALIDATION=1 eslint .",
     "lint:fix": "SKIP_ENV_VALIDATION=1 eslint . --fix",
     "lint:log": "SKIP_ENV_VALIDATION=1 eslint . > ../../logs/lint.log 2>&1",
