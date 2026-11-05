@@ -96,7 +96,6 @@ export const systemSettingsSchema = z.object({
   enableGuestAccess: z.boolean().optional(),
   defaultUserRole: z.nativeEnum(UserRole).optional(),
   sessionTimeout: z.number().min(60).max(86400).optional(), // 1 minute to 24 hours in seconds
-  logRetentionDays: z.number().min(1).max(365).optional(),
   // SMTP settings
   smtpHost: z.string().optional(),
   // Accept numbers too: clients that round-trip getSystemSettings send the

@@ -39,7 +39,6 @@ interface SystemSettings {
   enableGuestAccess?: boolean;
   defaultUserRole?: UserRole;
   sessionTimeout?: number;
-  logRetentionDays?: number;
 }
 
 // Validation schemas

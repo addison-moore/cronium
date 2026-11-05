@@ -21,7 +21,7 @@ echo ""
 
 # Step 1: Build helper binaries
 echo "Step 1: Building helper binaries..."
-./build-helpers-simple.sh
+./build-helpers.sh
 echo ""
 
 # Step 2: Build runner binaries
@@ -54,15 +54,15 @@ ARTIFACTS_DIR="../../orchestrator/artifacts/runners"
 mkdir -p "$ARTIFACTS_DIR/dev"
 mkdir -p "$ARTIFACTS_DIR/$VERSION"
 
-# Copy to dev directory (for immediate use)
-cp dist/cronium-runner-linux-amd64 "$ARTIFACTS_DIR/dev/"
-cp dist/cronium-runner-linux-arm64 "$ARTIFACTS_DIR/dev/"
-echo "Copied to $ARTIFACTS_DIR/dev/"
-
-# Copy to versioned directory (for history)
-cp dist/cronium-runner-linux-amd64 "$ARTIFACTS_DIR/$VERSION/"
-cp dist/cronium-runner-linux-arm64 "$ARTIFACTS_DIR/$VERSION/"
-echo "Copied to $ARTIFACTS_DIR/$VERSION/"
+# Copy to the dev directory (for immediate use) and the versioned one (for history),
+# with the checksum manifests the orchestrator verifies a runner against.
+for dir in "$ARTIFACTS_DIR/dev" "$ARTIFACTS_DIR/$VERSION"; do
+    for arch in amd64 arm64; do
+        cp "dist/cronium-runner-linux-$arch" "$dir/"
+        (cd "$dir" && sha256sum "cronium-runner-linux-$arch" > "cronium-runner-linux-$arch.sha256")
+    done
+    echo "Copied to $dir/"
+done
 
 # Step 5: Final verification
 echo ""

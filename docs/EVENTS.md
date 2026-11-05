@@ -113,7 +113,7 @@ const input = await cronium.input(); // Get data from previous event
 await cronium.output({ result: data }); // Pass data to next event
 const apiKey = await cronium.getVariable("API_KEY"); // Access variables
 await cronium.setVariable("LAST_RUN", new Date()); // Store data
-const eventInfo = cronium.event(); // Access event metadata
+const eventInfo = await cronium.event(); // Access event metadata
 ```
 
 Similar helpers available for Python (`cronium.py`) and Bash (`cronium.sh`).

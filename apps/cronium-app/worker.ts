@@ -23,7 +23,7 @@ import os from "os";
 import { Client as PgClient } from "pg";
 import { runDispatchTick } from "./src/lib/scheduling/dispatcher";
 import { runSweepTick } from "./src/lib/scheduling/sweeper";
-import { runRetention } from "./src/lib/scheduling/retention";
+import { retentionWindows, runRetention } from "./src/lib/scheduling/retention";
 import {
   consumeJobTransitions,
   outboxBacklog,
@@ -51,6 +51,7 @@ const SWEEP_INTERVAL_MS = 30_000;
 const OUTBOX_INTERVAL_MS = 5_000;
 const LEASE_EXTEND_INTERVAL_MS = 20_000;
 const RETENTION_INTERVAL_MS = 6 * 60 * 60_000;
+const RETENTION_BACKLOG_DELAY_MS = 60_000;
 const MAX_CONCURRENT_IN_PROCESS = Number(
   process.env.WORKER_MAX_CONCURRENT ?? 10,
 );
@@ -150,11 +151,19 @@ const leaseLoop = startLoop(
   },
 );
 
-const retentionLoop = startLoop(
+const retentionLoop: Loop = startLoop(
   "retention",
   RETENTION_INTERVAL_MS,
   async () => {
-    await runRetention();
+    const { backlog } = await runRetention();
+    // A pass stops at a per-table cap, which on a six-hour interval is too slow
+    // for a busy instance or the first passes after an upgrade. Come back soon.
+    if (backlog) {
+      setTimeout(
+        () => retentionLoop.poke(),
+        RETENTION_BACKLOG_DELAY_MS,
+      ).unref();
+    }
   },
 );
 
@@ -274,6 +283,11 @@ async function main(): Promise<void> {
   if (process.env.SERVER_CLEANUP_ENABLED === "true") {
     serverCleanupService.start();
   }
+
+  const windows = Object.entries(retentionWindows())
+    .map(([name, days]) => `${name}=${days}`)
+    .join(", ");
+  console.log(`[Worker] Retention in days (0 keeps forever): ${windows}`);
 
   await startListener();
   healthServer.listen(HEALTH_PORT, () => {
