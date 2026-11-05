@@ -1,326 +1,423 @@
-// Events API code examples for API documentation
+// Events API documentation
 
-export const eventsApiExamples = {
-  listEvents: {
-    curl: `curl -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  "https://cronium.example.com/api/events?page=1&limit=10"`,
-    python: `import requests
+import { apiExample, type ApiEndpoint } from "./api-example";
+import { responseExamples } from "./responses";
 
-headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
-params = {'page': 1, 'limit': 10, 'status': 'active'}
+const eventId = {
+  name: "id",
+  in: "path",
+  type: "integer",
+  required: true,
+  description: "Event ID.",
+} as const;
 
-response = requests.get(
-    'https://cronium.example.com/api/events',
-    headers=headers,
-    params=params
-)
-
-events = response.json()['events']
-for event in events:
-    print(f"Event: {event['name']} - Status: {event['status']}")`,
-    nodejs: `const axios = require('axios');
-
-const client = axios.create({
-  baseURL: 'https://cronium.example.com/api',
-  headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
-});
-
-const response = await client.get('/events', {
-  params: { page: 1, limit: 10, status: 'active' }
-});
-
-const events = response.data.events;
-events.forEach(event => {
-  console.log(\`Event: \${event.name} - Status: \${event.status}\`);
-});`,
+const httpFields = [
+  {
+    name: "httpHeaders",
+    in: "body",
+    type: "array",
+    required: false,
+    description: "HTTP_REQUEST events: headers as [{ key, value }].",
   },
-  createEvent: {
-    curl: `curl -X POST \\
-  -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "name": "API Created Event",
-    "description": "Event created via API",
-    "type": "BASH",
-    "script": "echo \\"Hello from API\\"",
-    "schedule": "0 9 * * MON"
-  }' \\
-  https://cronium.example.com/api/events`,
-    python: `import requests
-
-headers = {
-    'Authorization': 'Bearer YOUR_API_TOKEN',
-    'Content-Type': 'application/json'
-}
-
-data = {
-    'name': 'API Created Event',
-    'description': 'Event created via API',
-    'type': 'PYTHON',
-    'script': 'print("Hello from API")',
-    'schedule': '0 9 * * MON'
-}
-
-response = requests.post(
-    'https://cronium.example.com/api/events',
-    headers=headers,
-    json=data
-)
-
-if response.status_code == 201:
-    event = response.json()['event']
-    print(f"Created event with ID: {event['id']}")
-else:
-    print(f"Error: {response.status_code} - {response.text}")`,
-    nodejs: `const axios = require('axios');
-
-const client = axios.create({
-  baseURL: 'https://cronium.example.com/api',
-  headers: {
-    'Authorization': 'Bearer YOUR_API_TOKEN',
-    'Content-Type': 'application/json'
-  }
-});
-
-const eventData = {
-  name: 'API Created Event',
-  description: 'Event created via API',
-  type: 'NODEJS',
-  script: 'console.log("Hello from API");',
-  schedule: '0 9 * * MON'
-};
-
-try {
-  const response = await client.post('/events', eventData);
-  console.log(\`Created event with ID: \${response.data.event.id}\`);
-} catch (error) {
-  console.error('Error creating event:', error.response?.data || error.message);
-}`,
+  {
+    name: "httpBody",
+    in: "body",
+    type: "string",
+    required: false,
+    description: "HTTP_REQUEST events: request body.",
   },
-  getEvent: {
-    curl: `curl -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  https://cronium.example.com/api/events/123`,
-    python: `import requests
+] as const;
 
-headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
-
-response = requests.get(
-    'https://cronium.example.com/api/events/123',
-    headers=headers
-)
-
-if response.status_code == 200:
-    event = response.json()['event']
-    print(f"Event Name: {event['name']}")
-    print(f"Type: {event['type']}")
-    print(f"Status: {event['status']}")
-else:
-    print(f"Error: {response.status_code} - {response.text}")`,
-    nodejs: `const axios = require('axios');
-
-const client = axios.create({
-  baseURL: 'https://cronium.example.com/api',
-  headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
-});
-
-try {
-  const response = await client.get('/events/123');
-  const event = response.data.event;
-  console.log(\`Event Name: \${event.name}\`);
-  console.log(\`Type: \${event.type}\`);
-  console.log(\`Status: \${event.status}\`);
-} catch (error) {
-  console.error('Error fetching event:', error.response?.data || error.message);
-}`,
+export const eventEndpoints: readonly ApiEndpoint[] = [
+  {
+    method: "GET",
+    path: "/api/events",
+    description: "List your events and events shared with you",
+    scopes: ["full", "mcp"],
+    status: 200,
+    response: responseExamples.eventList,
+    notes:
+      "Returns every event as a JSON array. There is no paging or filtering. On an event someone else shared, the HTTP fields and server are removed and `secretFieldsRedacted` is true.",
+    example: apiExample({ method: "GET", path: "/api/events" }),
   },
-  updateEvent: {
-    curl: `curl -X PUT \\
-  -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "name": "Updated Event Name",
-    "description": "Updated description",
-    "status": "paused"
-  }' \\
-  https://cronium.example.com/api/events/123`,
-    python: `import requests
-
-headers = {
-    'Authorization': 'Bearer YOUR_API_TOKEN',
-    'Content-Type': 'application/json'
-}
-
-data = {
-    'name': 'Updated Event Name',
-    'description': 'Updated description',
-    'status': 'paused'
-}
-
-response = requests.put(
-    'https://cronium.example.com/api/events/123',
-    headers=headers,
-    json=data
-)
-
-if response.status_code == 200:
-    event = response.json()['event']
-    print(f"Updated event: {event['name']}")
-else:
-    print(f"Error: {response.status_code} - {response.text}")`,
-    nodejs: `const axios = require('axios');
-
-const client = axios.create({
-  baseURL: 'https://cronium.example.com/api',
-  headers: {
-    'Authorization': 'Bearer YOUR_API_TOKEN',
-    'Content-Type': 'application/json'
-  }
-});
-
-const updateData = {
-  name: 'Updated Event Name',
-  description: 'Updated description',
-  status: 'paused'
-};
-
-try {
-  const response = await client.put('/events/123', updateData);
-  console.log(\`Updated event: \${response.data.event.name}\`);
-} catch (error) {
-  console.error('Error updating event:', error.response?.data || error.message);
-}`,
+  {
+    method: "POST",
+    path: "/api/events",
+    description: "Create an event",
+    scopes: ["full", "mcp"],
+    parameters: [
+      {
+        name: "name",
+        in: "body",
+        type: "string",
+        required: true,
+        description: "Up to 100 characters.",
+      },
+      {
+        name: "type",
+        in: "body",
+        type: "string",
+        required: true,
+        description: "BASH, PYTHON, NODEJS or HTTP_REQUEST.",
+      },
+      {
+        name: "status",
+        in: "body",
+        type: "string",
+        required: true,
+        description: "ACTIVE, PAUSED or DRAFT.",
+      },
+      {
+        name: "scheduleUnit",
+        in: "body",
+        type: "string",
+        required: true,
+        description:
+          "SECONDS, MINUTES, HOURS or DAYS. Required even when the event has no schedule.",
+      },
+      {
+        name: "runLocation",
+        in: "body",
+        type: "string",
+        required: true,
+        description: "LOCAL, or REMOTE to run on your servers over SSH.",
+      },
+      {
+        name: "timeoutValue",
+        in: "body",
+        type: "number",
+        required: true,
+        description: "Timeout, at least 1.",
+      },
+      {
+        name: "timeoutUnit",
+        in: "body",
+        type: "string",
+        required: true,
+        description: "SECONDS, MINUTES or HOURS.",
+      },
+      {
+        name: "retries",
+        in: "body",
+        type: "number",
+        required: true,
+        description: "Retry attempts, 0 or more.",
+      },
+      {
+        name: "content",
+        in: "body",
+        type: "string",
+        required: false,
+        description: "The script. Required unless type is HTTP_REQUEST.",
+      },
+      {
+        name: "httpMethod",
+        in: "body",
+        type: "string",
+        required: false,
+        description: "Required for HTTP_REQUEST events.",
+      },
+      {
+        name: "httpUrl",
+        in: "body",
+        type: "string",
+        required: false,
+        description: "Required for HTTP_REQUEST events.",
+      },
+      ...httpFields,
+      {
+        name: "customSchedule",
+        in: "body",
+        type: "string",
+        required: false,
+        description: "Cron expression. Takes priority over scheduleNumber.",
+      },
+      {
+        name: "scheduleNumber",
+        in: "body",
+        type: "number",
+        required: false,
+        description:
+          "Run every this many scheduleUnits. The shortest interval is 10 seconds.",
+      },
+      {
+        name: "triggerType",
+        in: "body",
+        type: "string",
+        required: false,
+        description:
+          "SCHEDULE or MANUAL. Defaults to SCHEDULE if customSchedule or scheduleNumber is set, otherwise MANUAL.",
+      },
+      {
+        name: "startTime",
+        in: "body",
+        type: "string",
+        required: false,
+        description: "ISO 8601 time the schedule starts from, or null.",
+      },
+      {
+        name: "serverId",
+        in: "body",
+        type: "integer",
+        required: false,
+        description: "REMOTE events: the server to run on, or null.",
+      },
+      {
+        name: "selectedServerIds",
+        in: "body",
+        type: "array",
+        required: false,
+        description: "REMOTE events: run on each of these servers.",
+      },
+      {
+        name: "envVars",
+        in: "body",
+        type: "array",
+        required: false,
+        description: "Environment variables as [{ key, value }].",
+      },
+      {
+        name: "description",
+        in: "body",
+        type: "string",
+        required: false,
+        description: "Free text.",
+      },
+      {
+        name: "shared",
+        in: "body",
+        type: "boolean",
+        required: false,
+        description:
+          "Let other users view and fork the event. They cannot run it. Defaults to false.",
+      },
+      {
+        name: "tags",
+        in: "body",
+        type: "array",
+        required: false,
+        description: "Labels, as strings.",
+      },
+    ],
+    status: 201,
+    response: responseExamples.event,
+    example: apiExample({
+      method: "POST",
+      path: "/api/events",
+      body: {
+        name: "Nightly backup",
+        type: "BASH",
+        content: 'echo "Starting backup"',
+        status: "ACTIVE",
+        customSchedule: "0 2 * * *",
+        scheduleUnit: "MINUTES",
+        runLocation: "LOCAL",
+        timeoutValue: 5,
+        timeoutUnit: "MINUTES",
+        retries: 1,
+      },
+    }),
   },
-  deleteEvent: {
-    curl: `curl -X DELETE \\
-  -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  https://cronium.example.com/api/events/123`,
-    python: `import requests
-
-headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
-
-response = requests.delete(
-    'https://cronium.example.com/api/events/123',
-    headers=headers
-)
-
-if response.status_code == 200:
-    print("Event deleted successfully")
-else:
-    print(f"Error: {response.status_code} - {response.text}")`,
-    nodejs: `const axios = require('axios');
-
-const client = axios.create({
-  baseURL: 'https://cronium.example.com/api',
-  headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
-});
-
-try {
-  await client.delete('/events/123');
-  console.log('Event deleted successfully');
-} catch (error) {
-  console.error('Error deleting event:', error.response?.data || error.message);
-}`,
+  {
+    method: "GET",
+    path: "/api/events/{id}",
+    description: "Get one event, with its env vars and servers",
+    scopes: ["full", "mcp"],
+    parameters: [eventId],
+    status: 200,
+    response: responseExamples.event,
+    notes:
+      "Env var values are returned to a full token. An mcp token gets the keys with blank values.",
+    example: apiExample({ method: "GET", path: "/api/events/42" }),
   },
-  executeEvent: {
-    curl: `curl -X POST \\
-  -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  -H "Content-Type: application/json" \\
-  -d '{"input": {"param1": "value1", "param2": "value2"}}' \\
-  https://cronium.example.com/api/events/123/execute`,
-    python: `import requests
-
-headers = {
-    'Authorization': 'Bearer YOUR_API_TOKEN',
-    'Content-Type': 'application/json'
-}
-
-# Optional input data for the event
-input_data = {
-    'input': {
-        'param1': 'value1',
-        'param2': 'value2'
-    }
-}
-
-response = requests.post(
-    'https://cronium.example.com/api/events/123/execute',
-    headers=headers,
-    json=input_data
-)
-
-if response.status_code == 200:
-    execution = response.json()['execution']
-    print(f"Execution started with ID: {execution['id']}")
-    print(f"Status: {execution['status']}")
-else:
-    print(f"Error: {response.status_code} - {response.text}")`,
-    nodejs: `const axios = require('axios');
-
-const client = axios.create({
-  baseURL: 'https://cronium.example.com/api',
-  headers: {
-    'Authorization': 'Bearer YOUR_API_TOKEN',
-    'Content-Type': 'application/json'
-  }
-});
-
-// Optional input data for the event
-const inputData = {
-  input: {
-    param1: 'value1',
-    param2: 'value2'
-  }
-};
-
-try {
-  const response = await client.post('/events/123/execute', inputData);
-  const execution = response.data.execution;
-  console.log(\`Execution started with ID: \${execution.id}\`);
-  console.log(\`Status: \${execution.status}\`);
-} catch (error) {
-  console.error('Error executing event:', error.response?.data || error.message);
-}`,
+  {
+    method: "PATCH",
+    path: "/api/events/{id}",
+    description: "Update your event",
+    scopes: ["full", "mcp"],
+    parameters: [
+      eventId,
+      {
+        name: "name",
+        in: "body",
+        type: "string",
+        required: false,
+        description: "Up to 100 characters.",
+      },
+      {
+        name: "description",
+        in: "body",
+        type: "string",
+        required: false,
+        description: "Up to 500 characters.",
+      },
+      {
+        name: "content",
+        in: "body",
+        type: "string",
+        required: false,
+        description: "The script.",
+      },
+      {
+        name: "status",
+        in: "body",
+        type: "string",
+        required: false,
+        description:
+          "ACTIVE, PAUSED, DRAFT or ARCHIVED. Pausing stops the schedule.",
+      },
+      {
+        name: "customSchedule",
+        in: "body",
+        type: "string",
+        required: false,
+        description: "Cron expression.",
+      },
+      {
+        name: "scheduleNumber",
+        in: "body",
+        type: "number",
+        required: false,
+        description: "Run every this many scheduleUnits.",
+      },
+      {
+        name: "scheduleUnit",
+        in: "body",
+        type: "string",
+        required: false,
+        description: "SECONDS, MINUTES, HOURS or DAYS.",
+      },
+      {
+        name: "triggerType",
+        in: "body",
+        type: "string",
+        required: false,
+        description: "SCHEDULE or MANUAL.",
+      },
+      {
+        name: "timezone",
+        in: "body",
+        type: "string",
+        required: false,
+        description: "IANA name the cron schedule is evaluated in.",
+      },
+      {
+        name: "overlapPolicy",
+        in: "body",
+        type: "string",
+        required: false,
+        description:
+          "What to do when a run starts while another is active: ALLOW, SKIP, QUEUE or CANCEL_PREVIOUS.",
+      },
+      {
+        name: "runLocation",
+        in: "body",
+        type: "string",
+        required: false,
+        description: "LOCAL, REMOTE or LOCAL_AND_REMOTE.",
+      },
+      {
+        name: "serverId",
+        in: "body",
+        type: "integer",
+        required: false,
+        description: "The server to run on, or null.",
+      },
+      {
+        name: "selectedServerIds",
+        in: "body",
+        type: "array",
+        required: false,
+        description: "Replaces the event's list of servers.",
+      },
+      {
+        name: "timeoutValue",
+        in: "body",
+        type: "number",
+        required: false,
+        description: "Timeout, at least 1.",
+      },
+      {
+        name: "timeoutUnit",
+        in: "body",
+        type: "string",
+        required: false,
+        description: "SECONDS, MINUTES or HOURS.",
+      },
+      {
+        name: "retries",
+        in: "body",
+        type: "number",
+        required: false,
+        description: "Retry attempts, from 0 to 10.",
+      },
+      {
+        name: "maxExecutions",
+        in: "body",
+        type: "number",
+        required: false,
+        description:
+          "Pause the schedule after this many runs. 0 means no limit.",
+      },
+      {
+        name: "envVars",
+        in: "body",
+        type: "array",
+        required: false,
+        description:
+          "Replaces all env vars, as [{ key, value }]. Send the values too: a value left blank is stored blank.",
+      },
+      {
+        name: "httpMethod",
+        in: "body",
+        type: "string",
+        required: false,
+        description: "HTTP_REQUEST events: request method.",
+      },
+      {
+        name: "httpUrl",
+        in: "body",
+        type: "string",
+        required: false,
+        description: "HTTP_REQUEST events: request URL.",
+      },
+      ...httpFields,
+      {
+        name: "shared",
+        in: "body",
+        type: "boolean",
+        required: false,
+        description: "Let other users view and fork the event.",
+      },
+      {
+        name: "tags",
+        in: "body",
+        type: "array",
+        required: false,
+        description: "Labels, as strings.",
+      },
+    ],
+    status: 200,
+    response: responseExamples.event,
+    notes:
+      "Send only the fields you are changing. PUT /api/events/{id} does the same thing.",
+    example: apiExample({
+      method: "PATCH",
+      path: "/api/events/42",
+      body: { name: "Nightly backup (staging)", status: "PAUSED" },
+    }),
   },
-  getEventLogs: {
-    curl: `curl -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  "https://cronium.example.com/api/events/123/logs?page=1&limit=10"`,
-    python: `import requests
-
-headers = {'Authorization': 'Bearer YOUR_API_TOKEN'}
-params = {'page': 1, 'limit': 10}
-
-response = requests.get(
-    'https://cronium.example.com/api/events/123/logs',
-    headers=headers,
-    params=params
-)
-
-if response.status_code == 200:
-    logs = response.json()['logs']
-    for log in logs:
-        status = "✓" if log['success'] else "✗"
-        print(f"{status} {log['executedAt']}: {log['output'][:100]}...")
-else:
-    print(f"Error: {response.status_code} - {response.text}")`,
-    nodejs: `const axios = require('axios');
-
-const client = axios.create({
-  baseURL: 'https://cronium.example.com/api',
-  headers: { 'Authorization': 'Bearer YOUR_API_TOKEN' }
-});
-
-try {
-  const response = await client.get('/events/123/logs', {
-    params: { page: 1, limit: 10 }
-  });
-  
-  const logs = response.data.logs;
-  logs.forEach(log => {
-    const status = log.success ? '✓' : '✗';
-    console.log(\`\${status} \${log.executedAt}: \${log.output.substring(0, 100)}...\`);
-  });
-} catch (error) {
-  console.error('Error fetching logs:', error.response?.data || error.message);
-}`,
+  {
+    method: "DELETE",
+    path: "/api/events/{id}",
+    description: "Delete your event",
+    scopes: ["full", "mcp"],
+    parameters: [eventId],
+    status: 204,
+    example: apiExample({
+      method: "DELETE",
+      path: "/api/events/42",
+      noContent: true,
+    }),
   },
-};
+];

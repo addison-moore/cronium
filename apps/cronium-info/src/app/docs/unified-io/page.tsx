@@ -14,6 +14,7 @@ import ApiCodeExamples, {
   CodeBlock,
   SimpleCodeBlock,
 } from "@/components/docs/api-code-examples";
+import { apiExample } from "../api/examples/api-example";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -206,62 +207,17 @@ if [[ $(echo "$input_data" | jq -r '.verbose // false') == "true" ]]; then
     echo "Input received: $input_data"
 fi`,
   },
-  apiIntegration: {
-    python: `import requests
-
-# Execute event with input data
-response = requests.post(
-    'https://cronium.example.com/api/events/42/execute',
-    headers={
-        'Authorization': 'Bearer YOUR_API_TOKEN',
-        'Content-Type': 'application/json'
+  apiIntegration: apiExample({
+    method: "POST",
+    path: "/api/events/42/execute",
+    body: {
+      input: {
+        user_id: 123,
+        action: "process_data",
+        data: { items: ["item1", "item2"] },
+      },
     },
-    json={
-        "input": {
-            "user_id": 123,
-            "action": "process_data",
-            "data": {"items": ["item1", "item2"]}
-        }
-    }
-)
-
-result = response.json()
-print(f"Execution result: {result}")`,
-    nodejs: `const fetch = require('node-fetch');
-
-// Execute event with input data
-const response = await fetch(
-    'https://cronium.example.com/api/events/42/execute',
-    {
-        method: 'POST',
-        headers: {
-            'Authorization': 'Bearer YOUR_API_TOKEN',
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            input: {
-                user_id: 123,
-                action: "process_data",
-                data: {items: ["item1", "item2"]}
-            }
-        })
-    }
-);
-
-const result = await response.json();
-console.log('Execution result:', result);`,
-    curl: `curl -X POST \\
-  -H "Authorization: Bearer YOUR_API_TOKEN" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "input": {
-      "user_id": 123,
-      "action": "process_data",
-      "data": {"items": ["item1", "item2"]}
-    }
-  }' \\
-  https://cronium.example.com/api/events/42/execute`,
-  },
+  }),
   quickReference: {
     python: `# cronium is automatically available - no imports needed!
 
@@ -412,9 +368,8 @@ export default function UnifiedIOPage() {
             <h2 className="mb-4 text-2xl font-bold">Using cronium.output()</h2>
             <p className="text-muted-foreground mb-6">
               Set output data using the simple <code>cronium.output()</code>{" "}
-              function. This data can be accessed by subsequent workflow nodes
-              or retrieved via API. The cronium object is automatically
-              available in all scripts.
+              function. This data can be accessed by subsequent workflow nodes.
+              The cronium object is automatically available in all scripts.
             </p>
 
             <CodeBlock
@@ -497,8 +452,10 @@ export default function UnifiedIOPage() {
               <CardHeader>
                 <CardTitle>Passing Input via API</CardTitle>
                 <CardDescription>
-                  Execute events with custom input data using the REST API
-                  endpoint
+                  Run an event with custom input data through the{" "}
+                  <a href="/docs/api#running-from-ci" className="underline">
+                    REST API
+                  </a>
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -530,6 +487,10 @@ Authorization: Bearer YOUR_API_TOKEN
                     examples={runtimeExamples.apiIntegration}
                     title="API Integration Examples"
                   />
+                  <p className="text-muted-foreground text-sm">
+                    The response comes back as soon as the run is queued, with
+                    the <code>logId</code> to follow its result.
+                  </p>
                 </div>
               </CardContent>
             </Card>
