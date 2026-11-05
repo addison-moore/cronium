@@ -151,9 +151,10 @@ cronium_input() {
 cronium_output() {
     local data="$1"
     
-    # Ensure data is valid JSON
-    if ! echo "$data" | jq . >/dev/null 2>&1; then
-        # If not valid JSON, wrap as string
+    # Anything that is not a single JSON value is sent as a string. Asking
+    # --argjson is what matters: `jq .` also passes an empty value and "1 2",
+    # which --argjson then rejects below.
+    if ! jq -n --argjson d "$data" '$d' >/dev/null 2>&1; then
         data=$(jq -n --arg d "$data" '$d')
     fi
     
@@ -182,9 +183,8 @@ cronium_set_variable() {
     local value="$2"
     local encoded_key=$(printf '%s' "$key" | jq -sRr @uri)
     
-    # Ensure value is valid JSON
-    if ! echo "$value" | jq . >/dev/null 2>&1; then
-        # If not valid JSON, wrap as string
+    # See cronium_output. The runtime stores whatever arrives as a string.
+    if ! jq -n --argjson v "$value" '$v' >/dev/null 2>&1; then
         value=$(jq -n --arg v "$value" '$v')
     fi
     
@@ -362,6 +362,7 @@ cronium_increment_variable() {
     local key="$1"
     local increment="${2:-1}"
     local current=$(cronium_get_variable "$key" 2>/dev/null || echo "0")
+    current="${current:-0}"
     
     # Check if current value is numeric
     if ! [[ "$current" =~ ^-?[0-9]+$ ]]; then
