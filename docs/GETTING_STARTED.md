@@ -42,7 +42,7 @@ cd cronium
 pnpm install
 
 # Build shared packages
-pnpm build --filter @cronium/ui --filter @cronium/config-*
+pnpm build --filter @cronium/ui --filter '@cronium/config-*'
 ```
 
 ### 3. Set Up Your Development Environment
@@ -362,16 +362,16 @@ See [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md) for a complete list o
 
 ### Key Development Variables
 
-| Variable           | Purpose                      | Required    |
-| ------------------ | ---------------------------- | ----------- |
-| `DATABASE_URL`     | PostgreSQL connection string | Yes         |
-| `AUTH_SECRET`      | Session encryption           | Yes         |
-| `ENCRYPTION_KEY`   | Data encryption              | Yes         |
+| Variable                   | Purpose                            | Required    |
+| -------------------------- | ---------------------------------- | ----------- |
+| `DATABASE_URL`             | PostgreSQL connection string       | Yes         |
+| `AUTH_SECRET`              | Session encryption                 | Yes         |
+| `ENCRYPTION_KEY`           | Data encryption                    | Yes         |
 | `CRONIUM_ORCHESTRATOR_KEY` | Orchestrator service-identity auth | Yes         |
-| `SOCKET_BROADCAST_KEY` | App/worker→socket broadcast auth   | Yes         |
-| `JWT_SECRET`       | JWT token signing            | Yes         |
-| `NODE_ENV`         | Set to "development"         | Yes         |
-| `LOG_LEVEL`        | Set to "debug" for dev       | Recommended |
+| `SOCKET_BROADCAST_KEY`     | App/worker→socket broadcast auth   | Yes         |
+| `JWT_SECRET`               | JWT token signing                  | Yes         |
+| `NODE_ENV`                 | Set to "development"               | Yes         |
+| `LOG_LEVEL`                | Set to "debug" for dev             | Recommended |
 
 ## Next Steps
 
