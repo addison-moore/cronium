@@ -207,26 +207,9 @@ const nextConfig = {
           },
         ],
       },
-      {
-        // Cache documentation pages (with PPR)
-        source: "/docs/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, s-maxage=3600, stale-while-revalidate=86400",
-          },
-        ],
-      },
-      {
-        // Cache landing page (with PPR)
-        source: "/",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, s-maxage=3600, stale-while-revalidate=86400",
-          },
-        ],
-      },
+      // No rule here may let a page be stored. Every page is rendered per request with
+      // that request's CSP nonce in its HTML (app/layout.tsx), and a replayed nonce stops
+      // protecting anything. Next's default for a dynamic page is already no-store.
       {
         // No cache for dynamic pages (dashboard, auth, etc.)
         source: "/(dashboard|auth)/:path*",
