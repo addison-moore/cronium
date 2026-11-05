@@ -446,6 +446,70 @@ describe("documented responses", () => {
   });
 });
 
+// The parameter descriptions make promises the checks above cannot see, and no other
+// suite covered this route: with main's version of it in place, nothing here failed.
+describe("what the docs say about GET /api/logs", () => {
+  const list = (query: string) =>
+    send({ method: "GET", path: `/api/logs?${query}` });
+  const filtersSent = () =>
+    s.getFilteredLogs!.mock.calls[0]![0] as Record<string, unknown>;
+
+  it("defaults to page 1 of 20", async () => {
+    await send({ method: "GET", path: "/api/logs" });
+    expect(s.getFilteredLogs).toHaveBeenCalledWith(expect.anything(), 20, 1);
+  });
+
+  it("caps pageSize at 100", async () => {
+    const res = await list("pageSize=500");
+    expect(s.getFilteredLogs).toHaveBeenCalledWith(expect.anything(), 100, 1);
+    expect(await res.json()).toMatchObject({ pageSize: 100 });
+  });
+
+  it("only ever asks for the caller's logs", async () => {
+    await list("status=SUCCESS");
+    expect(filtersSent()).toMatchObject({ userId: USER, status: "SUCCESS" });
+  });
+
+  it("ignores a status it does not know", async () => {
+    const res = await list("status=NOPE");
+    expect(res.status).toBe(200);
+    expect(filtersSent()).not.toHaveProperty("status");
+  });
+
+  it.each(["eventId=abc", "eventId=-1", "workflowId=abc", "workflowId=-1"])(
+    "answers 400 for %s",
+    async (query) => {
+      expect((await list(query)).status).toBe(400);
+      expect(s.getFilteredLogs).not.toHaveBeenCalled();
+    },
+  );
+
+  it("answers 404 for an event that does not exist", async () => {
+    s.getEvent!.mockResolvedValue(undefined);
+    expect((await list("eventId=42")).status).toBe(404);
+  });
+
+  it("answers 403 for an event that is not the caller's", async () => {
+    s.getEvent!.mockResolvedValue({ id: 42, userId: "someone-else" });
+    expect((await list("eventId=42")).status).toBe(403);
+    expect(s.getFilteredLogs).not.toHaveBeenCalled();
+  });
+
+  it("takes none to mean outside any workflow, and all to mean no filter", async () => {
+    await list("workflowId=none");
+    expect(filtersSent()).toMatchObject({ workflowId: null });
+
+    s.getFilteredLogs!.mockClear();
+    await list("workflowId=all");
+    expect(filtersSent()).not.toHaveProperty("workflowId");
+  });
+
+  it("filters by a numeric workflow id", async () => {
+    await list("workflowId=12");
+    expect(filtersSent()).toMatchObject({ workflowId: 12 });
+  });
+});
+
 describe("the example generator", () => {
   it("quotes a URL with a query string, so the shell leaves it alone", () => {
     const { curl } = apiExample({ method: "GET", path: "/api/logs?a=1&b=2" });

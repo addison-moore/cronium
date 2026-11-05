@@ -29,7 +29,7 @@ export const runEndpoints: readonly ApiEndpoint[] = [
     status: 202,
     response: responseExamples.eventRun,
     notes:
-      "Works in any event status and does not count toward maxExecutions. Answers 409 if the event's overlap policy is SKIP and a previous run is still active.",
+      "Works in any event status and does not count toward maxExecutions. Answers 403 if the event is bound to an archived server or one you cannot use, and 409 if its overlap policy is SKIP and a previous run is still active.",
     example: apiExample({
       method: "POST",
       path: "/api/events/42/execute",
@@ -61,7 +61,7 @@ export const runEndpoints: readonly ApiEndpoint[] = [
     status: 202,
     response: responseExamples.workflowRun,
     notes:
-      "Works in any workflow status. Answers 409 with the reason if the workflow has no nodes, or no node without an incoming connection.",
+      "Works in any workflow status. Answers 403 if a step's event is not yours or is bound to an archived server or one you cannot use, and 409 with the reason if the workflow has no nodes, or no node without an incoming connection.",
     example: apiExample({
       method: "POST",
       path: "/api/workflows/12/execute",

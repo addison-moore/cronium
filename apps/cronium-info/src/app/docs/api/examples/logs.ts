@@ -16,7 +16,7 @@ export const logEndpoints: readonly ApiEndpoint[] = [
         type: "integer",
         required: false,
         description:
-          "Only this event's logs. Answers 404 if it does not exist and 403 if it is not yours.",
+          "Only this event's logs. Answers 400 if it is not a number, 404 if the event does not exist, and 403 if it is not yours.",
       },
       {
         name: "workflowId",
@@ -24,7 +24,7 @@ export const logEndpoints: readonly ApiEndpoint[] = [
         type: "integer",
         required: false,
         description:
-          "Only logs from this workflow's steps, or `none` for logs from outside any workflow.",
+          "Only logs from this workflow's steps. `none` means logs from outside any workflow and `all` means no filter. Anything else that is not a number answers 400.",
       },
       {
         name: "status",
