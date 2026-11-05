@@ -12,9 +12,7 @@ import { UserStatus, type Server as CroniumServer } from "@/shared/schema";
 import type { ClientChannel } from "ssh2";
 
 interface TerminalSession {
-  ptyProcess: ClientChannel & {
-    resize?: (columns: number, rows: number) => void;
-  };
+  ptyProcess: ClientChannel;
   userId: string;
   serverId: number;
   createdAt: number;
@@ -193,10 +191,7 @@ export class TerminalWebSocketHandler {
           input.length <= 64 * 1024
         ) {
           session.lastActivity = Date.now(); // Update last activity on input
-          // Check if it's a node-pty process or node-ssh shell stream
-          if ("write" in session.ptyProcess) {
-            session.ptyProcess.write(input);
-          }
+          session.ptyProcess.write(input);
         } else {
           console.warn(
             `Server: rejected 'terminal-input' for socket ${socket.id}`,
@@ -229,12 +224,7 @@ export class TerminalWebSocketHandler {
           rows <= 1000
         ) {
           session.lastActivity = Date.now(); // Update last activity on resize
-          // Check if it's a node-pty process or node-ssh shell stream
-          if (typeof session.ptyProcess.resize === "function") {
-            session.ptyProcess.resize(cols, rows);
-          } else if (typeof session.ptyProcess.setWindow === "function") {
-            session.ptyProcess.setWindow(rows, cols, 0, 0);
-          }
+          session.ptyProcess.setWindow(rows, cols, 0, 0);
         } else {
           console.warn(
             `Server: rejected 'terminal-resize' for socket ${socket.id}`,
@@ -474,14 +464,6 @@ export class TerminalWebSocketHandler {
       console.log(`Server: Cleaning up old PTY session: ${sessionId}`);
       this.destroyTerminalSession(sessionId);
     });
-  }
-
-  public getActiveSessionsCount(): number {
-    return this.activeSessions.size;
-  }
-
-  public getSessionInfo(sessionId: string): TerminalSession | undefined {
-    return this.activeSessions.get(sessionId);
   }
 
   public revokeUser(userId: string): void {

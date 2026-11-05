@@ -40,7 +40,8 @@ Full instructions, upgrades, and backups: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.m
 or https://cronium.app/docs/self-hosting. For local development, see
 [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md). For a public deployment,
 route only `/api/socketio` through your TLS proxy to the loopback-bound port 5002. Cronium applies exact origin checks, shared one-time tickets, and active
-authorization revocation to live logs and terminals.
+authorization revocation to live logs and terminals. Also set
+`TRUSTED_PROXY_HOPS=1` behind a proxy, so rate limits see real client addresses.
 
 ## Key Features
 

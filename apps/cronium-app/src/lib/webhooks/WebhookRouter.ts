@@ -4,15 +4,7 @@ import { WebhookManager } from "./WebhookManager";
 import { WebhookSecurity } from "./WebhookSecurity";
 import { db } from "@/server/db";
 import { webhookEvents, webhookLogs } from "@/shared/schema";
-import { resolveClientIp } from "@/lib/security/client-ip";
-
-export interface WebhookRequest {
-  method: string;
-  headers: Record<string, string>;
-  body: unknown;
-  query: Record<string, string>;
-  ip?: string;
-}
+import { clientIpFromHeaders } from "@/lib/security/client-ip";
 
 /** Thrown when an inbound webhook body exceeds the size cap. */
 class WebhookBodyTooLargeError extends Error {
@@ -22,21 +14,10 @@ class WebhookBodyTooLargeError extends Error {
   }
 }
 
-export interface WebhookResponse {
-  status: number;
-  body: unknown;
-  headers?: Record<string, string>;
-}
-
 export class WebhookRouter {
   private static instance: WebhookRouter;
   private webhookManager: WebhookManager;
   private webhookSecurity: WebhookSecurity;
-  private routes = new Map<
-    string,
-    (req: WebhookRequest) => Promise<WebhookResponse>
-  >();
-
   private constructor() {
     this.webhookManager = WebhookManager.getInstance();
     this.webhookSecurity = new WebhookSecurity();
@@ -205,7 +186,6 @@ export class WebhookRouter {
         webhook.userId,
         {
           webhookId: webhook.id,
-          webhookKey: webhook.key,
           source: "webhook",
         },
       );
@@ -235,24 +215,13 @@ export class WebhookRouter {
     } catch (error) {
       console.error("Webhook processing error:", error);
 
+      // Logged above. The caller may be anyone holding the key, so nothing about
+      // the failure (driver errors, table names) goes back to them.
       return NextResponse.json(
-        {
-          error: "Internal server error",
-          message: error instanceof Error ? error.message : "Unknown error",
-        },
+        { error: "Internal server error" },
         { status: 500 },
       );
     }
-  }
-
-  /**
-   * Register custom webhook handler
-   */
-  registerHandler(
-    eventType: string,
-    handler: (req: WebhookRequest) => Promise<WebhookResponse>,
-  ): void {
-    this.routes.set(eventType, handler);
   }
 
   /** Parse an already-read raw body by content type. */
@@ -305,12 +274,7 @@ export class WebhookRouter {
    * rate limiting) by prepending X-Forwarded-For entries.
    */
   private getClientIP(request: NextRequest): string | undefined {
-    return (
-      resolveClientIp(
-        request.headers.get("x-forwarded-for"),
-        request.headers.get("x-real-ip"),
-      ) ?? undefined
-    );
+    return clientIpFromHeaders(request.headers) ?? undefined;
   }
 
   /**
@@ -353,8 +317,9 @@ export class WebhookRouter {
       webhookId,
     };
 
-    // Ensure data is an object
-    if (typeof data === "object" && data !== null) {
+    // Merge objects into the envelope; anything else, including an array (which
+    // would spread into numeric keys), goes under `data`.
+    if (typeof data === "object" && data !== null && !Array.isArray(data)) {
       processed = { ...processed, ...data };
     } else {
       processed.data = data;
@@ -401,7 +366,11 @@ export class WebhookRouter {
     let current: unknown = obj;
 
     for (const key of keys) {
-      if (current && typeof current === "object" && key in current) {
+      if (
+        current &&
+        typeof current === "object" &&
+        Object.prototype.hasOwnProperty.call(current, key)
+      ) {
         current = (current as Record<string, unknown>)[key];
       } else {
         return undefined;

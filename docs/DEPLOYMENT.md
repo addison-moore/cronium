@@ -263,6 +263,9 @@ docker compose down -v     # stop and delete data volumes
 - Rotate secrets periodically; restart the stack after updating `.env`.
   Rotating `ENCRYPTION_KEY` requires re-entering stored tool credentials.
 - Keep images fresh (`docker compose pull` on a schedule, or pin and bump).
+- Behind a TLS proxy, set `TRUSTED_PROXY_HOPS=1` (one per trusted proxy). At the
+  default of `0` forwarding headers are ignored, so every client shares one login
+  rate-limit bucket and webhook IP allowlists can never match.
 - Keep port 5002 loopback-only and proxy only `/api/socketio`; never expose the
   `/broadcast/*` internal routes.
 - The app runs as a non-root user; the orchestrator image is distroless. The

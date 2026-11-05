@@ -38,7 +38,7 @@ import {
   type WorkflowTriggerType,
   type WorkflowStepRun,
 } from "@/shared/schema";
-import { and, eq, inArray, lt } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { resolveWorkflowInput } from "@/lib/unified-io/resolve-input";
 import { dispatchEventJob } from "./dispatch";
 import { assertWorkflowGraphCapability } from "@/server/security/resource-access";
@@ -794,21 +794,4 @@ export async function reconcileWorkflowRuns(limit = 100): Promise<number> {
     });
   }
   return runs.length;
-}
-
-/** Cheap staleness probe used by the worker sweep so quiet systems don't
- * hammer advance: any RUNNING run with no step activity in the window. */
-export async function hasStaleRuns(olderThanMs = 60_000): Promise<boolean> {
-  const cutoff = new Date(Date.now() - olderThanMs);
-  const [row] = await db
-    .select({ id: workflowExecutions.id })
-    .from(workflowExecutions)
-    .where(
-      and(
-        eq(workflowExecutions.status, LogStatus.RUNNING),
-        lt(workflowExecutions.updatedAt, cutoff),
-      ),
-    )
-    .limit(1);
-  return !!row;
 }

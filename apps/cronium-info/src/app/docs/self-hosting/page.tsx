@@ -306,6 +306,12 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                 <code>Authorization: Bearer $SOCKET_BROADCAST_KEY</code>.
               </li>
               <li>
+                Behind a TLS proxy, set <code>TRUSTED_PROXY_HOPS=1</code> (one
+                per trusted proxy). At the default of <code>0</code> forwarding
+                headers are ignored, so every client shares one login rate-limit
+                bucket and webhook IP allowlists can never match.
+              </li>
+              <li>
                 Optional features are enabled purely by adding variables to{" "}
                 <code>.env</code>: <code>SMTP_HOST</code>/<code>SMTP_PORT</code>
                 /<code>SMTP_USER</code>/<code>SMTP_PASSWORD</code>/

@@ -15,6 +15,7 @@ import http from "http";
 import https from "https";
 import { lookup as dnsLookup } from "dns/promises";
 import net from "net";
+import axios from "axios";
 import { isDisallowedIp, SsrfBlockedError } from "@/lib/tools/safe-fetch";
 
 /**
@@ -23,51 +24,58 @@ import { isDisallowedIp, SsrfBlockedError } from "@/lib/tools/safe-fetch";
  * the http/https agents means the check runs at actual connect time — including
  * on every redirect hop — which closes the DNS-rebinding (TOCTOU) gap that a
  * pre-flight-only resolution check would leave open.
+ *
+ * It must honor `options.all`. Node 20+ defaults `autoSelectFamily` on, so
+ * `net.connect` asks for every address and expects an array back; a single
+ * address string makes it fail with ERR_INVALID_IP_ADDRESS, which took down every
+ * HTTP_REQUEST event and webhook delivery aimed at a hostname.
+ *
+ * Every resolved address is checked, including ones the family filter would drop,
+ * so a host cannot pass by publishing one public record next to an internal one.
  */
-const guardedLookup: net.LookupFunction = (
+export const guardedLookup: net.LookupFunction = (
   hostname,
   options,
-  callback: (
-    err: NodeJS.ErrnoException | null,
-    address: string,
-    family: number,
-  ) => void,
+  callback,
 ) => {
-  const family = typeof options === "number" ? options : (options?.family ?? 0);
+  const fail = (error: NodeJS.ErrnoException) => callback(error, "", 0);
+  const family =
+    options?.family === "IPv4"
+      ? 4
+      : options?.family === "IPv6"
+        ? 6
+        : (options?.family ?? 0);
+
   dnsLookup(hostname, { all: true })
     .then((addresses) => {
-      const candidates = family
-        ? addresses.filter((a) => a.family === family)
-        : addresses;
-      for (const { address } of candidates) {
+      for (const { address } of addresses) {
         if (isDisallowedIp(address)) {
-          callback(
+          fail(
             new SsrfBlockedError(
               `Host "${hostname}" resolves to a disallowed address (${address})`,
             ),
-            "",
-            0,
           );
           return;
         }
       }
+
+      const candidates = family
+        ? addresses.filter((a) => a.family === family)
+        : addresses;
       const chosen = candidates[0];
       if (!chosen) {
-        callback(
-          new SsrfBlockedError(`Could not resolve host "${hostname}"`),
-          "",
-          0,
-        );
+        fail(new SsrfBlockedError(`Could not resolve host "${hostname}"`));
         return;
       }
-      callback(null, chosen.address, chosen.family);
+
+      if (options?.all) {
+        callback(null, candidates);
+      } else {
+        callback(null, chosen.address, chosen.family);
+      }
     })
     .catch(() => {
-      callback(
-        new SsrfBlockedError(`Could not resolve host "${hostname}"`),
-        "",
-        0,
-      );
+      fail(new SsrfBlockedError(`Could not resolve host "${hostname}"`));
     });
 };
 
@@ -105,3 +113,61 @@ export function assertRequestUrlIsPublic(rawUrl: string): URL {
   }
   return parsed;
 }
+
+/**
+ * assertRequestUrlIsPublic plus a DNS check, for callers that want to refuse a host
+ * with a clear error before handing the URL to a library that would report the
+ * connect-time refusal as a generic connection failure. A host that does not resolve
+ * passes: the request itself will fail, with a more useful message.
+ */
+export async function assertUrlResolvesPublic(rawUrl: string): Promise<void> {
+  const { hostname } = assertRequestUrlIsPublic(rawUrl);
+  const host = hostname.replace(/^\[|\]$/g, "");
+  if (net.isIP(host)) return;
+
+  const addresses = await dnsLookup(host, { all: true }).catch(() => []);
+  const internal = addresses.find(({ address }) => isDisallowedIp(address));
+  if (internal) {
+    throw new SsrfBlockedError(
+      `Host "${hostname}" resolves to a disallowed address (${internal.address})`,
+    );
+  }
+}
+
+// Bound what is buffered for a response from a host the user chose.
+const MAX_GUARDED_FETCH_RESPONSE_BYTES = 20 * 1024 * 1024;
+
+/**
+ * A `fetch` for SDKs that accept one. It goes through the guarded agents, so the
+ * address is validated at connect time, and does not follow redirects. Responses are
+ * buffered, so it does not suit a streaming API.
+ */
+export const ssrfGuardedFetch: typeof fetch = async (input, init) => {
+  const url = input instanceof Request ? input.url : input.toString();
+  assertRequestUrlIsPublic(url);
+
+  const response = await axios.request<ArrayBuffer>({
+    url,
+    method: init?.method ?? "GET",
+    headers: Object.fromEntries(new Headers(init?.headers).entries()),
+    data: init?.body,
+    ...(init?.signal ? { signal: init.signal } : {}),
+    httpAgent: ssrfHttpAgent,
+    httpsAgent: ssrfHttpsAgent,
+    maxRedirects: 0,
+    maxContentLength: MAX_GUARDED_FETCH_RESPONSE_BYTES,
+    responseType: "arraybuffer",
+    validateStatus: () => true,
+  });
+
+  const headers = new Headers();
+  for (const [key, value] of Object.entries(response.headers)) {
+    if (value !== undefined && value !== null) headers.set(key, String(value));
+  }
+  const hasBody = ![204, 205, 304].includes(response.status);
+  return new Response(hasBody ? response.data : null, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+};

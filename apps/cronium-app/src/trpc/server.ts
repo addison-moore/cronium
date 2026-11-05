@@ -24,28 +24,3 @@ const createContext = cache(async () => {
  * Automatically handles context creation and caching for Server Components.
  */
 export const api = createCaller(createContext);
-
-/**
- * Create a context for testing or manual server-side calls.
- * This bypasses the cache and creates a fresh context.
- */
-export const createTestContext = async (overrides?: { userId?: string }) => {
-  const heads = new Headers();
-  heads.set("x-trpc-source", "test");
-
-  if (overrides?.userId) {
-    heads.set("x-test-user-id", overrides.userId);
-  }
-
-  return createTRPCContext({
-    headers: heads,
-  });
-};
-
-/**
- * Create a caller with custom context - useful for testing or background jobs.
- */
-export const createTestCaller = async (overrides?: { userId?: string }) => {
-  const context = await createTestContext(overrides);
-  return createCaller(async () => context);
-};

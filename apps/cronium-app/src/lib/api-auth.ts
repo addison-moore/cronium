@@ -50,44 +50,14 @@ export async function authenticateApiToken(token: string): Promise<{
   }
 }
 
-/**
- * Middleware to authenticate API requests using API tokens
- * This allows API access without a session
- */
-export async function authenticateApiRequest(request: NextRequest): Promise<{
-  userId: string;
-  authenticated: boolean;
-  tokenId?: number;
-}> {
-  const token = getBearerToken(request.headers);
-  if (!token) {
-    return { authenticated: false, userId: "" };
-  }
-
-  const result = await authenticateApiToken(token);
-  if (!result) {
-    return { authenticated: false, userId: "" };
-  }
-
-  return {
-    authenticated: true,
-    userId: result.userId,
-    tokenId: result.tokenId,
-  };
-}
-
-/**
- * Helper function to create an error response for API authentication failures
- */
-export function createApiAuthErrorResponse(error: string): NextResponse {
-  return NextResponse.json(
-    { error },
-    { status: 401, headers: { "WWW-Authenticate": "Bearer" } },
-  );
-}
-
 export type RestPrincipal =
-  | { ok: true; userId: string; role: UserRole }
+  | {
+      ok: true;
+      userId: string;
+      role: UserRole;
+      /** The bearer token's scopes; null for a cookie session. */
+      scopes: string[] | null;
+    }
   | { ok: false; status: 401 | 403 };
 
 /**
@@ -102,9 +72,11 @@ export async function authenticateRestPrincipal(
   request: NextRequest,
   capability: Capability,
   // tRPC-equivalent path for this REST route. When the request is authenticated
-  // by a *scoped* bearer token, the token's scopes must permit this path — the
-  // same policy tRPC enforces (HI-25), so a scoped token can't exceed its scope
-  // by switching to the REST transport. Cookie sessions are never scope-limited.
+  // by a bearer token, the token's scopes must permit this path — the same policy
+  // tRPC enforces (HI-25), so a scoped token can't exceed its scope by switching
+  // to the REST transport. A route that declares no path is reachable only by a
+  // `full` token: omitting the argument must never mean "any token will do".
+  // Cookie sessions are never scope-limited.
   scopePath?: string,
 ): Promise<RestPrincipal> {
   // Deferred imports keep this module light for token-only callers and avoid
@@ -143,9 +115,12 @@ export async function authenticateRestPrincipal(
   }
 
   // Enforce token scope for bearer-authenticated requests.
-  if (tokenScopes !== null && scopePath) {
+  if (tokenScopes !== null) {
     const { isPathAllowedForScopes } = await import("@/server/token-scopes");
-    if (!isPathAllowedForScopes(tokenScopes, scopePath)) {
+    const allowed = scopePath
+      ? isPathAllowedForScopes(tokenScopes, scopePath)
+      : tokenScopes.includes("full");
+    if (!allowed) {
       return { ok: false, status: 403 };
     }
   }
@@ -158,7 +133,12 @@ export async function authenticateRestPrincipal(
     if (!roleAllowsCapability(principal.role, capability)) {
       return { ok: false, status: 403 };
     }
-    return { ok: true, userId: principal.id, role: principal.role };
+    return {
+      ok: true,
+      userId: principal.id,
+      role: principal.role,
+      scopes: tokenScopes,
+    };
   } catch {
     return { ok: false, status: 401 };
   }

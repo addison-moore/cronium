@@ -56,6 +56,7 @@ When creating an event, users can specify a timeout for their script execution:
 
 ### Important Notes
 
+- A job's runtime API token and completion token are issued for its own timeout plus a buffer, and are revoked when the job ends, so `cronium.output()` and friends keep working for the whole run. Both have a hard ceiling of 7 days.
 - The user timeout applies **only** to the execution phase
 - Setup time (pulling Docker images, SSH connection, etc.) does NOT count against the user timeout
 - If no timeout is specified, defaults to 1 hour

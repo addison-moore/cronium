@@ -58,11 +58,18 @@ const mockCoreQuery = jest.fn(() => ({
   },
   stream: () => Readable.from(mysqlRows, { objectMode: true }),
 }));
+const mockCoreStatement = jest.fn();
 jest.mock("mysql2", () => ({
   createConnection: jest.fn(() => ({
     on: jest.fn(),
     connect: (cb: (e?: Error) => void) => cb(undefined),
-    query: mockCoreQuery,
+    // A callback marks a plain statement; the streaming query has none.
+    query: (arg: unknown, cb?: (e?: Error) => void) => {
+      if (!cb) return (mockCoreQuery as jest.Mock)(arg);
+      mockCoreStatement(arg);
+      cb(undefined);
+      return undefined;
+    },
     destroy: mockCoreDestroy,
   })),
 }));
@@ -98,6 +105,13 @@ beforeEach(() => {
 });
 
 describe("postgresDriver.query (cursor streaming)", () => {
+  it("runs inside a read-only transaction", async () => {
+    fakeCursor = makeFakeCursor([], [{ name: "id" }]);
+    mockPgQuery.mockClear();
+    await postgresDriver.query(pgCreds, "SELECT 1", {}, read);
+    expect(mockPgQuery).toHaveBeenCalledWith("BEGIN READ ONLY");
+  });
+
   it("binds :name as $n and returns normalized rows with columns", async () => {
     fakeCursor = makeFakeCursor([{ id: 1n }, { id: 2n }], [{ name: "id" }]);
     const res = await postgresDriver.query(
@@ -188,6 +202,20 @@ describe("postgresDriver.execute (buffered write)", () => {
 });
 
 describe("mysqlDriver.query (row streaming)", () => {
+  it("runs inside a read-only transaction, before the query", async () => {
+    mysqlRows = [];
+    mysqlFields = [];
+    mockCoreStatement.mockClear();
+    (mockCoreQuery as jest.Mock).mockClear();
+    await mysqlDriver.query(myCreds, "SELECT 1", {}, read);
+    expect(mockCoreStatement).toHaveBeenCalledWith(
+      "START TRANSACTION READ ONLY",
+    );
+    expect(mockCoreStatement.mock.invocationCallOrder[0]!).toBeLessThan(
+      (mockCoreQuery as jest.Mock).mock.invocationCallOrder[0]!,
+    );
+  });
+
   it("binds :name as ? and returns normalized rows with columns", async () => {
     mysqlRows = [{ id: 1 }, { id: 2 }];
     mysqlFields = [{ name: "id" }];

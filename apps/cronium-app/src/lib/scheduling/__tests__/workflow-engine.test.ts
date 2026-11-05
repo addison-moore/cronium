@@ -88,7 +88,6 @@ import {
   advanceRunsForJob,
   advanceWorkflowRun,
   evaluateEdge,
-  hasStaleRuns,
   reconcileWorkflowRuns,
   resolveReadiness,
   startWorkflowRun,
@@ -1431,7 +1430,7 @@ describe("advanceWorkflowRun — input resolution", () => {
 });
 
 // ---------------------------------------------------------------------------
-// advanceRunsForJob / reconcileWorkflowRuns / hasStaleRuns
+// advanceRunsForJob / reconcileWorkflowRuns
 // ---------------------------------------------------------------------------
 
 describe("advanceRunsForJob", () => {
@@ -1540,28 +1539,5 @@ describe("reconcileWorkflowRuns", () => {
       expect.stringContaining("reconcile failed for run"),
       "boom",
     );
-  });
-});
-
-describe("hasStaleRuns", () => {
-  it("is false with no RUNNING runs", async () => {
-    seedRun({ status: LogStatus.SUCCESS, updatedAt: new Date(0) });
-    await expect(hasStaleRuns()).resolves.toBe(false);
-  });
-
-  it("is false when every RUNNING run was touched inside the window", async () => {
-    seedRun({ status: LogStatus.RUNNING, updatedAt: new Date() });
-    await expect(hasStaleRuns()).resolves.toBe(false);
-  });
-
-  it("is true when a RUNNING run has gone quiet past the window", async () => {
-    seedRun({
-      status: LogStatus.RUNNING,
-      updatedAt: new Date(Date.now() - 2 * 60_000),
-    });
-    await expect(hasStaleRuns()).resolves.toBe(true);
-    // A tighter custom window flips a 30s-old run stale too
-    runsStore[0]!.updatedAt = new Date(Date.now() - 30_000);
-    await expect(hasStaleRuns(10_000)).resolves.toBe(true);
   });
 });

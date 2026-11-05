@@ -1,4 +1,8 @@
-import { resolveClientIp } from "@/lib/security/client-ip";
+import {
+  clientIpFromHeaders,
+  resolveClientIp,
+  resolveRequestClientIp,
+} from "@/lib/security/client-ip";
 
 const ORIGINAL = process.env.TRUSTED_PROXY_HOPS;
 
@@ -69,5 +73,35 @@ describe("resolveClientIp — hardening", () => {
   it("clamps absurd hop counts and fails closed on short chains", () => {
     setHops("99");
     expect(resolveClientIp("1.1.1.1, 2.2.2.2", "3.3.3.3")).toBeNull();
+  });
+});
+
+describe("resolveRequestClientIp — no socket peer (route handlers)", () => {
+  it("ignores X-Real-IP when no proxy is trusted: the client sets it freely", () => {
+    setHops("0");
+    expect(resolveRequestClientIp("1.1.1.1", "2.2.2.2")).toBeNull();
+    expect(resolveRequestClientIp(null, "2.2.2.2")).toBeNull();
+  });
+
+  it("gives every spoofed X-Real-IP the same bucket when no proxy is trusted", () => {
+    // The login limiter keys on this. A per-request value here means a fresh
+    // budget per guess.
+    setHops(undefined);
+    const results = ["1.1.1.1", "2.2.2.2", "3.3.3.3"].map((spoofed) =>
+      clientIpFromHeaders(new Headers({ "x-real-ip": spoofed })),
+    );
+    expect(new Set(results)).toEqual(new Set([null]));
+  });
+
+  it("prefers the forwarded chain behind a trusted proxy", () => {
+    setHops("1");
+    expect(resolveRequestClientIp("203.0.113.5", "10.0.0.1")).toBe(
+      "203.0.113.5",
+    );
+  });
+
+  it("falls back to X-Real-IP behind a trusted proxy that sets nothing else", () => {
+    setHops("1");
+    expect(resolveRequestClientIp(null, "203.0.113.5")).toBe("203.0.113.5");
   });
 });

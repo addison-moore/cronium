@@ -9,7 +9,6 @@ import {
   protectedProcedure,
   withTiming,
   withRateLimit,
-  withTransaction,
 } from "../trpc";
 import { EventStatus, RunLocation } from "@/shared/schema";
 import {
@@ -25,7 +24,7 @@ import {
 } from "@/shared/schemas/events";
 import { storage } from "@/server/storage";
 import { scheduler } from "@/lib/scheduler";
-import { payloadService } from "@/lib/services/payload-service";
+import { touchesEventSchedule } from "@/lib/scheduling/materialize";
 import {
   assertEventCapability,
   assertEventRelations,
@@ -36,6 +35,7 @@ import {
   toEventForkSecurityProjection,
   toEventListApiDto,
 } from "@/server/security/api-dto";
+import { canReadEnvVarValues } from "@/server/token-scopes";
 
 // Use the centralized development-friendly protected procedure
 // This handles authentication and auto-login in development mode
@@ -81,7 +81,9 @@ export const eventsRouter = createTRPCRouter({
             message: "Event not found",
           });
         }
-        return toEventApiDto(event, userId);
+        return toEventApiDto(event, userId, {
+          revealEnvVarValues: canReadEnvVarValues(ctx.tokenScopes),
+        });
       } catch (error) {
         if (error instanceof TRPCError) throw error;
 
@@ -99,7 +101,6 @@ export const eventsRouter = createTRPCRouter({
   create: protectedProcedure
     .use(withTiming)
     .use(withRateLimit(50, 60000)) // 50 creates per minute
-    .use(withTransaction)
     .input(createEventSchema)
     .mutation(async ({ ctx, input }) => {
       if (!ctx.session?.user?.id) {
@@ -133,11 +134,6 @@ export const eventsRouter = createTRPCRouter({
           );
         }
 
-        // Materialize the durable schedule — an event created directly as
-        // ACTIVE + SCHEDULE starts firing without needing a separate edit
-        // (scheduling review M6)
-        await scheduler.updateScript(event.id);
-
         // Handle environment variables
         if (input.envVars && input.envVars.length > 0) {
           for (const envVar of input.envVars) {
@@ -162,13 +158,20 @@ export const eventsRouter = createTRPCRouter({
           );
         }
 
-        // Payload generation moved to orchestrator
-        // The orchestrator will create payloads from job script content
+        // Materialize the durable schedule — an event created directly as
+        // ACTIVE + SCHEDULE starts firing without needing a separate edit
+        // (scheduling review M6). Last, so the dispatcher cannot pick the event
+        // up before its env vars and servers exist.
+        await scheduler.updateScript(event.id);
 
         // Get the complete event with relations
         const completeEvent = await storage.getEventWithRelations(event.id);
 
-        return completeEvent ? toEventApiDto(completeEvent, userId) : undefined;
+        return completeEvent
+          ? toEventApiDto(completeEvent, userId, {
+              revealEnvVarValues: canReadEnvVarValues(ctx.tokenScopes),
+            })
+          : undefined;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -183,7 +186,6 @@ export const eventsRouter = createTRPCRouter({
   update: protectedProcedure
     .use(withTiming)
     .use(withRateLimit(100, 60000)) // 100 updates per minute
-    .use(withTransaction)
     .input(updateEventSchema)
     .mutation(async ({ ctx, input }) => {
       if (!ctx.session?.user?.id) {
@@ -249,37 +251,15 @@ export const eventsRouter = createTRPCRouter({
         // Re-sync the in-memory schedule when status or schedule fields
         // changed (updateScript cancels the old job and re-schedules only
         // if the event is ACTIVE)
-        if (
-          input.status !== undefined ||
-          input.triggerType !== undefined ||
-          input.scheduleNumber !== undefined ||
-          input.scheduleUnit !== undefined ||
-          input.customSchedule !== undefined ||
-          input.timezone !== undefined ||
-          input.catchupPolicy !== undefined ||
-          input.overlapPolicy !== undefined ||
-          input.startTime !== undefined
-        ) {
+        if (touchesEventSchedule(input)) {
           await scheduler.updateScript(id);
         }
 
-        // Payload generation moved to orchestrator
-        // The orchestrator will create payloads from job script content
-        // Clean up old payloads if they exist
-        if (
-          updatedEvent &&
-          updatedEvent.runLocation !== RunLocation.LOCAL &&
-          (input.content !== undefined || input.envVars !== undefined)
-        ) {
-          try {
-            // Just clean up old payloads without generating new ones
-            await payloadService.removeOldPayloads(id, 0); // Remove all payloads
-          } catch {
-            // Ignore cleanup errors
-          }
-        }
-
-        return updatedEvent ? toEventApiDto(updatedEvent, userId) : undefined;
+        return updatedEvent
+          ? toEventApiDto(updatedEvent, userId, {
+              revealEnvVarValues: canReadEnvVarValues(ctx.tokenScopes),
+            })
+          : undefined;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -298,9 +278,6 @@ export const eventsRouter = createTRPCRouter({
 
       try {
         await assertEventCapability(input.id, userId, "edit");
-
-        // Clean up payloads before deleting the event
-        await payloadService.cleanupEventPayloads(input.id);
 
         // Cancel the in-memory scheduled job before removing the event
         await scheduler.deleteScript(input.id);
@@ -553,7 +530,13 @@ export const eventsRouter = createTRPCRouter({
           return {
             format: "json",
             filename: `${String(event.name ?? "event")}.json`,
-            data: JSON.stringify(toEventApiDto(event, userId), null, 2),
+            data: JSON.stringify(
+              toEventApiDto(event, userId, {
+                revealEnvVarValues: canReadEnvVarValues(ctx.tokenScopes),
+              }),
+              null,
+              2,
+            ),
           };
         }
 
@@ -569,7 +552,11 @@ export const eventsRouter = createTRPCRouter({
           filename: "events.json",
           data: JSON.stringify(
             events.map((event) =>
-              event ? toEventApiDto(event, userId) : null,
+              event
+                ? toEventApiDto(event, userId, {
+                    revealEnvVarValues: canReadEnvVarValues(ctx.tokenScopes),
+                  })
+                : null,
             ),
             null,
             2,
@@ -589,7 +576,6 @@ export const eventsRouter = createTRPCRouter({
   fork: protectedProcedure
     .use(withTiming)
     .use(withRateLimit(50, 60000)) // 50 forks per minute
-    .use(withTransaction)
     .input(eventIdSchema)
     .mutation(async ({ ctx, input }) => {
       if (!ctx.session?.user?.id) {
@@ -636,6 +622,11 @@ export const eventsRouter = createTRPCRouter({
               value: string;
             }>) ?? [],
           httpBody: forkProjection.httpBody,
+          // Only your own: a shared tool action points at the owner's credential.
+          ...(forkProjection.owner && {
+            toolActionConfig: originalEvent.toolActionConfig,
+          }),
+          triggerType: originalEvent.triggerType,
           scheduleNumber: originalEvent.scheduleNumber,
           scheduleUnit: originalEvent.scheduleUnit,
           customSchedule: originalEvent.customSchedule,
@@ -690,7 +681,9 @@ export const eventsRouter = createTRPCRouter({
         );
 
         return completeForkedEvent
-          ? toEventApiDto(completeForkedEvent, userId)
+          ? toEventApiDto(completeForkedEvent, userId, {
+              revealEnvVarValues: canReadEnvVarValues(ctx.tokenScopes),
+            })
           : undefined;
       } catch (error) {
         if (error instanceof TRPCError) throw error;

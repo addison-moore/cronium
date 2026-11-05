@@ -172,57 +172,6 @@ export class AuditLogger {
   }
 
   /**
-   * Get audit summary for a user
-   */
-  async getUserSummary(
-    userId: string,
-    days = 30,
-  ): Promise<{
-    totalActions: number;
-    successRate: number;
-    actionBreakdown: Record<string, number>;
-    recentFailures: (typeof toolAuditLogs.$inferSelect)[];
-  }> {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-
-    // Get all logs for the period
-    const logs = await db
-      .select()
-      .from(toolAuditLogs)
-      .where(
-        and(
-          eq(toolAuditLogs.userId, userId),
-          gte(toolAuditLogs.createdAt, startDate),
-        ),
-      );
-
-    // Calculate metrics
-    const totalActions = logs.length;
-    const successfulActions = logs.filter((log) => log.success).length;
-    const successRate = totalActions > 0 ? successfulActions / totalActions : 0;
-
-    // Action breakdown
-    const actionBreakdown: Record<string, number> = {};
-    logs.forEach((log) => {
-      actionBreakdown[log.action] = (actionBreakdown[log.action] ?? 0) + 1;
-    });
-
-    // Recent failures
-    const recentFailures = logs
-      .filter((log) => !log.success)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .slice(0, 10);
-
-    return {
-      totalActions,
-      successRate,
-      actionBreakdown,
-      recentFailures,
-    };
-  }
-
-  /**
    * Clean up old audit logs
    */
   async cleanup(retentionDays = 90): Promise<number> {

@@ -191,12 +191,20 @@ export const serversRouter = createTRPCRouter({
           const authCredential = updateData.sshKey ?? updateData.password ?? "";
           const authType = updateData.sshKey ? "privateKey" : "password";
 
+          const address = updateData.address ?? existingServer.address;
+          const port = updateData.port ?? existingServer.port;
           const connectionResult = await sshService.testConnection(
-            updateData.address ?? existingServer.address,
+            address,
             authCredential,
             updateData.username ?? existingServer.username,
-            updateData.port ?? existingServer.port,
+            port,
             authType,
+            // Same host, so its pinned key applies: without this, a new password
+            // or key was handed to whoever answered, pinned or not. A new address
+            // is a new host, and updateServer clears the pin when it changes.
+            address === existingServer.address && port === existingServer.port
+              ? existingServer.id
+              : undefined,
           );
 
           if (!connectionResult.success) {

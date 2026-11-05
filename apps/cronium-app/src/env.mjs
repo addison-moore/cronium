@@ -94,6 +94,10 @@ export const env = createEnv({
     // relaxed in development (so the dev auto-admin isn't blocked). Set
     // explicitly to "true"/"false" to override.
     CRONIUM_ENFORCE_ADMIN_MFA: z.enum(["true", "false"]).optional(),
+    // Let users' AI connections point at private addresses (a LAN Ollama or
+    // vLLM). Off by default, because it means any user with an AI connection can
+    // reach this server's internal network. Admin-configured endpoints are exempt.
+    CRONIUM_AI_ALLOW_PRIVATE_URLS: z.enum(["true", "false"]).optional(),
   },
   client: {
     PUBLIC_APP_URL: productionPublicUrl(),
@@ -125,6 +129,7 @@ export const env = createEnv({
     TRUSTED_PROXY_HOPS: process.env.TRUSTED_PROXY_HOPS,
     BOOTSTRAP_TOKEN_HASH: process.env.BOOTSTRAP_TOKEN_HASH,
     CRONIUM_ENFORCE_ADMIN_MFA: process.env.CRONIUM_ENFORCE_ADMIN_MFA,
+    CRONIUM_AI_ALLOW_PRIVATE_URLS: process.env.CRONIUM_AI_ALLOW_PRIVATE_URLS,
   },
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
   emptyStringAsUndefined: true,

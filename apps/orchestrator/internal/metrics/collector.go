@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"sync"
 
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/config"
 	"github.com/prometheus/client_golang/prometheus"
@@ -31,8 +30,6 @@ type Collector struct {
 
 	// Resource metrics
 	connectionPool *prometheus.GaugeVec
-
-	mu sync.RWMutex
 }
 
 // NewCollector creates a new metrics collector

@@ -19,6 +19,9 @@ import {
   resourceAccessHttpStatus,
 } from "@/server/security/resource-access";
 import { toEventApiDto } from "@/server/security/api-dto";
+import { canReadEnvVarValues } from "@/server/token-scopes";
+import { scheduler } from "@/lib/scheduler";
+import { touchesEventSchedule } from "@/lib/scheduling/materialize";
 
 // GET a specific script
 export async function GET(
@@ -60,7 +63,11 @@ export async function GET(
 
     await assertEventRelations(eventId, userId, "view");
 
-    return NextResponse.json(toEventApiDto(script, userId));
+    return NextResponse.json(
+      toEventApiDto(script, userId, {
+        revealEnvVarValues: canReadEnvVarValues(auth.scopes),
+      }),
+    );
   } catch (error) {
     console.error(
       "Error fetching script:",
@@ -68,7 +75,9 @@ export async function GET(
     );
     const accessStatus = resourceAccessHttpStatus(error);
     return new NextResponse(
-      JSON.stringify({ error: "Internal server error" }),
+      JSON.stringify({
+        error: accessStatus ? "Access denied" : "Internal server error",
+      }),
       {
         status: accessStatus ?? 500,
         headers: { "Content-Type": "application/json" },
@@ -82,8 +91,6 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params;
-  console.log("PATCH request received for event ID:", id);
   try {
     const auth = await authenticateRestPrincipal(
       request,
@@ -254,11 +261,20 @@ export async function PATCH(
       await storage.setEventServers(eventId, selectedServerIds, userId);
     }
 
+    // Without this, pausing over REST kept firing and a new schedule never applied.
+    if (touchesEventSchedule(parsed.data)) {
+      await scheduler.updateScript(eventId);
+    }
+
     // Get the full updated script with all relations
     const fullScript = await storage.getEventWithRelations(eventId);
 
     return NextResponse.json(
-      fullScript ? toEventApiDto(fullScript, userId) : null,
+      fullScript
+        ? toEventApiDto(fullScript, userId, {
+            revealEnvVarValues: canReadEnvVarValues(auth.scopes),
+          })
+        : null,
     );
   } catch (error) {
     console.error(
@@ -267,7 +283,9 @@ export async function PATCH(
     );
     const accessStatus = resourceAccessHttpStatus(error);
     return new NextResponse(
-      JSON.stringify({ error: "Internal server error" }),
+      JSON.stringify({
+        error: accessStatus ? "Access denied" : "Internal server error",
+      }),
       {
         status: accessStatus ?? 500,
         headers: { "Content-Type": "application/json" },
@@ -330,20 +348,10 @@ export async function DELETE(
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     console.error("Error deleting script:", error);
-    console.error("Error details:", {
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
     const accessStatus = resourceAccessHttpStatus(error);
     return new NextResponse(
       JSON.stringify({
-        error: "Internal server error",
-        details:
-          process.env.NODE_ENV === "development"
-            ? error instanceof Error
-              ? error.message
-              : String(error)
-            : undefined,
+        error: accessStatus ? "Access denied" : "Internal server error",
       }),
       {
         status: accessStatus ?? 500,

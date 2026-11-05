@@ -9,7 +9,6 @@
  * default to DENY.
  */
 
-import { TRPCError } from "@trpc/server";
 import { storage } from "@/server/storage";
 import type { Role, RolePermissions } from "@/server/storage";
 import { UserRole } from "@/shared/schema";
@@ -66,21 +65,5 @@ export async function hasServerPermission(
   } catch (error) {
     console.error(`Permission check failed for ${userId}/${key}:`, error);
     return false;
-  }
-}
-
-/**
- * tRPC permission check: throws FORBIDDEN when the user lacks the permission.
- */
-export async function requirePermission(
-  userId: string,
-  key: keyof RolePermissions,
-): Promise<void> {
-  const allowed = await hasServerPermission(userId, key);
-  if (!allowed) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: `You do not have the '${key}' permission`,
-    });
   }
 }

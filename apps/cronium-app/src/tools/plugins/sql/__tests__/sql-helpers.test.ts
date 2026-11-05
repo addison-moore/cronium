@@ -4,7 +4,6 @@
 import {
   rewriteNamedPlaceholders,
   toJsonSafe,
-  normalizeRows,
   leadingKeyword,
   countStatements,
   assertReadOnlyStatement,
@@ -106,7 +105,7 @@ describe("rewriteNamedPlaceholders", () => {
   });
 });
 
-describe("toJsonSafe / normalizeRows", () => {
+describe("toJsonSafe", () => {
   it("coerces Date, bigint, and Buffer to JSON-safe values", () => {
     const d = new Date("2020-01-02T03:04:05.000Z");
     expect(toJsonSafe(d)).toBe("2020-01-02T03:04:05.000Z");
@@ -122,9 +121,11 @@ describe("toJsonSafe / normalizeRows", () => {
       at: new Date("2021-06-01T00:00:00.000Z"),
       tags: [1n],
     };
-    expect(normalizeRows([row])).toEqual([
-      { id: "1", at: "2021-06-01T00:00:00.000Z", tags: ["1"] },
-    ]);
+    expect(toJsonSafe(row)).toEqual({
+      id: "1",
+      at: "2021-06-01T00:00:00.000Z",
+      tags: ["1"],
+    });
   });
 
   it("passes primitives through and maps null/undefined to null", () => {

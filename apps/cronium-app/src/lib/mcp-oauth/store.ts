@@ -33,6 +33,7 @@ export interface AuthCodeData {
   codeChallenge: string;
   scope: string;
   resource: string;
+  sv: number; // the user's sessionVersion when consent was given
 }
 
 export interface RefreshData {
@@ -40,6 +41,7 @@ export interface RefreshData {
   cid: string;
   scope: string;
   aud: string;
+  sv: number;
 }
 
 export async function registerClient(client: OAuthClient): Promise<void> {

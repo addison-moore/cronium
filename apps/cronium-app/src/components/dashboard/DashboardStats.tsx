@@ -121,10 +121,6 @@ export default function DashboardStats() {
       : [],
   };
 
-  // Use the total activity count from the API if available
-  const _totalActivityCount =
-    (dashboardData?.metrics?.totalActivityCount as number) ?? 0;
-
   // Use recent activity data from stats
   const activityData = stats.recentActivity;
   const isLoadingActivity = isLoading;

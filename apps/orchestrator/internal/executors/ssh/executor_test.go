@@ -326,14 +326,3 @@ func TestMultiServerExecution(t *testing.T) {
 	assert.NotNil(t, multiExecutor.executor)
 	assert.Equal(t, executor.Type(), multiExecutor.Type())
 }
-
-// Helper function to create test server details
-func createTestServer(id, host string) *types.ServerDetails {
-	return &types.ServerDetails{
-		ID:         id,
-		Host:       host,
-		Port:       22,
-		Username:   "test",
-		PrivateKey: "test-key",
-	}
-}

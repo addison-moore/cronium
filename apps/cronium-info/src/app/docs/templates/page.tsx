@@ -383,6 +383,20 @@ export default function TemplatesPage() {
               <code>cronium</code> namespace to access runtime data and context
               variables.
             </p>
+            <p>
+              Values are inserted as they are, so a token, URL or quote arrives
+              intact. Objects and arrays render as JSON. JSON parameters and
+              request bodies stay valid whatever a value contains. HTML email
+              bodies escape values, and Slack and Teams messages encode{" "}
+              <code>&amp;</code>, <code>&lt;</code> and <code>&gt;</code>, so a
+              value cannot add markup, a mention or a link.
+            </p>
+            <p>
+              A parameter gets workflow data only where you write{" "}
+              <code>{"{{cronium.input.*}}"}</code>. A workflow&apos;s input
+              cannot replace a parameter you configured or stand in for one of
+              your variables.
+            </p>
           </div>
 
           <div className="space-y-6">

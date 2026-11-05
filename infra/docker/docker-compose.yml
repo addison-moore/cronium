@@ -101,6 +101,7 @@ services:
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
       # AI (optional)
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CRONIUM_AI_ALLOW_PRIVATE_URLS: ${CRONIUM_AI_ALLOW_PRIVATE_URLS:-}
     ports:
       - "${APP_PORT:-3000}:3000"
       # Host reverse proxies can reach this loopback bind. Containerized
@@ -144,6 +145,7 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CRONIUM_AI_ALLOW_PRIVATE_URLS: ${CRONIUM_AI_ALLOW_PRIVATE_URLS:-}
     healthcheck:
       test:
         [

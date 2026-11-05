@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import {
+  authenticateRestPrincipal,
+  restPrincipalErrorResponse,
+} from "@/lib/api-auth";
 import { z } from "zod";
 import { OAuthFlow } from "@/lib/oauth/OAuthFlow";
 import { createProviderFromEnv } from "@/lib/oauth/providers";
@@ -17,10 +19,13 @@ const authorizeSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Live principal, not just a valid JWT: a revoked session must not be able to
+    // bind a new OAuth grant to the account. Connecting a tool stores a credential.
+    const auth = await authenticateRestPrincipal(request, "edit");
+    if (!auth.ok) {
+      return restPrincipalErrorResponse(auth);
     }
+    const userId = auth.userId;
 
     const body = (await request.json()) as unknown;
     const { toolId, providerId, scope } = authorizeSchema.parse(body);
@@ -33,7 +38,7 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     const toolRecord = tool[0];
-    if (toolRecord?.userId !== session.user.id) {
+    if (toolRecord?.userId !== userId) {
       return NextResponse.json(
         { error: "Tool not found or unauthorized" },
         { status: 404 },
@@ -56,7 +61,7 @@ export async function POST(request: NextRequest) {
     // Initialize OAuth flow
     const flow = new OAuthFlow(provider);
     const { authUrl, browserNonce } = await flow.initiate(
-      session.user.id,
+      userId,
       toolId,
       redirectUri,
       scope,

@@ -43,8 +43,15 @@ function getEnv(name: string): string {
 }
 
 function clientIp(request: Request): string {
-  const fwd = request.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0]!.trim();
+  // The last entry is the one the nearest proxy appended. Anything before it came
+  // from the client, who could otherwise send a new value for a new rate-limit
+  // bucket on every request.
+  const nearest = request.headers
+    .get("x-forwarded-for")
+    ?.split(",")
+    .at(-1)
+    ?.trim();
+  if (nearest) return nearest;
   return request.headers.get("x-real-ip")?.trim() ?? "unknown";
 }
 
@@ -99,9 +106,16 @@ export async function POST(request: Request) {
     );
   }
 
-  // Cap the body before parsing.
+  // Cap the body before parsing, and before reading it when the size is declared.
+  const declaredBytes = Number(request.headers.get("content-length"));
+  if (declaredBytes > MAX_BODY_BYTES) {
+    return NextResponse.json(
+      { success: false, error: "Request too large." },
+      { status: 413 },
+    );
+  }
   const raw = await request.text();
-  if (raw.length > MAX_BODY_BYTES) {
+  if (Buffer.byteLength(raw, "utf8") > MAX_BODY_BYTES) {
     return NextResponse.json(
       { success: false, error: "Request too large." },
       { status: 413 },

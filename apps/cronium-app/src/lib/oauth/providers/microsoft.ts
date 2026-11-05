@@ -66,29 +66,3 @@ export class MicrosoftOAuthProvider extends BaseOAuthProvider {
     return (await response.json()) as Record<string, unknown>;
   }
 }
-
-// Helper function to create Microsoft provider for common services
-export function createMicrosoftProvider(
-  clientId: string,
-  clientSecret: string,
-  redirectUri: string,
-  service: "teams" | "outlook" | "onedrive" | "graph" | "all",
-  tenantId?: string,
-): MicrosoftOAuthProvider {
-  const scopes: Record<string, string> = {
-    teams:
-      "offline_access Team.ReadWrite.All Channel.ReadWrite.All Chat.ReadWrite",
-    outlook: "offline_access Mail.Send Calendars.ReadWrite",
-    onedrive: "offline_access Files.ReadWrite.All",
-    graph: "offline_access User.Read",
-    all: "offline_access User.Read Team.ReadWrite.All Mail.Send Calendars.ReadWrite Files.ReadWrite.All",
-  };
-
-  return new MicrosoftOAuthProvider({
-    clientId,
-    clientSecret,
-    redirectUri,
-    scope: scopes[service]!,
-    ...(tenantId && { tenantId }),
-  });
-}

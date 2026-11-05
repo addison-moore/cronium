@@ -5,7 +5,7 @@
 # Pinned to BUILDPLATFORM so the Go toolchain always runs natively on the
 # builder; cross-compilation to TARGETARCH below is free, whereas letting
 # buildx run this stage under QEMU for a foreign platform is not.
-FROM --platform=$BUILDPLATFORM golang:1.25.12-alpine AS orchestrator-builder
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine AS orchestrator-builder
 
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata
@@ -37,7 +37,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
 # Build the remote runner from the same tracked source snapshot as the
 # orchestrator. The artifacts directory is intentionally gitignored, so an
 # image build must never depend on binaries left behind on a developer host.
-FROM --platform=$BUILDPLATFORM golang:1.25.12-alpine AS runner-builder
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine AS runner-builder
 
 RUN apk add --no-cache ca-certificates
 
@@ -46,6 +46,18 @@ WORKDIR /build/runner
 COPY apps/runner/cronium-runner/go.mod apps/runner/cronium-runner/go.sum ./
 RUN go mod download && go mod verify
 COPY apps/runner/cronium-runner/ ./
+
+# Build the helpers the runner embeds from this same source. The copies tracked in
+# the repo date from August 2025, so fixes to the helpers never reached a server.
+RUN for arch in amd64 arm64; do \
+      for helper in input output getVariable setVariable event; do \
+        CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" go build \
+          -trimpath \
+          -ldflags="-w -s" \
+          -o "internal/helpers/binaries/linux_${arch}_cronium.${helper}" \
+          "./cmd/helpers/${helper}"; \
+      done; \
+    done
 
 ARG BUILD_TIME
 ARG RUNNER_VERSION=dev

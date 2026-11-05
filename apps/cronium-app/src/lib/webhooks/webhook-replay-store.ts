@@ -101,11 +101,3 @@ export async function consumeWebhookDeliveryOnce(
     return false;
   }
 }
-
-export async function closeWebhookReplayStore(): Promise<void> {
-  const promise = commandClientPromise;
-  commandClientPromise = null;
-  if (!promise) return;
-  const client = await promise.catch(() => null);
-  client?.disconnect();
-}

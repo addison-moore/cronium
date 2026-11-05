@@ -1,6 +1,7 @@
 package container
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -76,11 +77,15 @@ func NewExecutor(cfg config.ContainerConfig, apiClient *api.Client, log *logrus.
 	if err := validateDockerEndpoint(cfg.Docker.Endpoint); err != nil {
 		return nil, err
 	}
-	// Create Docker client
-	dockerClient, err := client.NewClientWithOpts(
-		client.WithHost(cfg.Docker.Endpoint),
-		client.WithVersion(cfg.Docker.Version),
-	)
+	// Create Docker client. The API version is negotiated with the daemon unless
+	// an operator pins one: a fixed default goes stale in both directions (stock
+	// Linux Docker Engine 29+ refuses anything below API 1.44, so the old 1.41
+	// default turned every ContainerCreate into a 400).
+	opts := []client.Opt{client.WithHost(cfg.Docker.Endpoint)}
+	if cfg.Docker.Version != "" {
+		opts = append(opts, client.WithAPIVersion(cfg.Docker.Version))
+	}
+	dockerClient, err := client.New(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}
@@ -578,7 +583,9 @@ func (e *Executor) streamLogs(ctx context.Context, containerID string, updates c
 		ShowStdout: true,
 		ShowStderr: true,
 		Follow:     true,
-		Timestamps: true,
+		// LogEntry carries its own timestamp. Asking Docker for one as well prefixed
+		// every live line with it, unlike the stored output (see phase_executor.go).
+		Timestamps: false,
 	}
 
 	logs, err := e.dockerClient.ContainerLogs(ctx, containerID, options)
@@ -625,34 +632,38 @@ func (e *Executor) streamLogs(ctx context.Context, containerID string, updates c
 	wg.Wait()
 }
 
-// readStream reads from a stream and sends log updates
+// maxLogLineBytes bounds how much of one line is buffered. A longer line (or a
+// binary stream with no newlines) is emitted in pieces of this size instead of
+// growing without limit.
+const maxLogLineBytes = 64 * 1024
+
+// readStream reads from a stream and sends one log update per line. Lines are
+// reassembled across reads: splitting whatever each Read returned cut any line
+// that straddled a read boundary in two, multi-byte characters included.
 func (e *Executor) readStream(reader io.Reader, stream string, updates chan<- types.ExecutionUpdate) {
-	buffer := make([]byte, 4096)
+	buffered := bufio.NewReaderSize(reader, maxLogLineBytes)
 	sequence := int64(0)
 
 	for {
-		n, err := reader.Read(buffer)
-		if n > 0 {
-			lines := strings.Split(string(buffer[:n]), "\n")
-			for _, line := range lines {
-				if line != "" {
-					sequence++
-					e.sendUpdate(updates, types.UpdateTypeLog, &types.LogEntry{
-						Stream:    stream,
-						Line:      line,
-						Timestamp: time.Now(),
-						Sequence:  sequence,
-					})
-				}
-			}
+		chunk, err := buffered.ReadSlice('\n')
+		if line := strings.TrimRight(string(chunk), "\r\n"); line != "" {
+			sequence++
+			e.sendUpdate(updates, types.UpdateTypeLog, &types.LogEntry{
+				Stream:    stream,
+				Line:      line,
+				Timestamp: time.Now(),
+				Sequence:  sequence,
+			})
 		}
 
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
+		switch err {
+		case nil, bufio.ErrBufferFull:
+			continue
+		case io.EOF:
+			return
+		default:
 			e.log.WithError(err).Errorf("Error reading %s stream", stream)
-			break
+			return
 		}
 	}
 }

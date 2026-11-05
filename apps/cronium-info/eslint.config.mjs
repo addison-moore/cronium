@@ -10,8 +10,6 @@ export default [
       "**/*.backup.ts",
       "**/*.backup.tsx",
       "scripts/**",
-      "src/scripts/deprecated/**",
-      "src/scripts/migrations/archived/**",
     ],
   },
 ];

@@ -316,7 +316,8 @@ export const logsRouter = createTRPCRouter({
             message: "Workflow not found",
           });
         }
-        if (workflow.userId !== ctx.session.user.id && !workflow.shared) {
+        // Owner only: sharing a workflow does not share its execution history.
+        if (workflow.userId !== ctx.session.user.id) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
         }
 

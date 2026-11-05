@@ -9,15 +9,16 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// absoluteMaxLifetime bounds a runtime token's total life across refreshes
-// (HI-14). No token — original or refreshed — is valid beyond its original
-// issuance plus this cap, so a leaked token cannot be extended indefinitely.
-const absoluteMaxLifetime = 2 * time.Hour
+// absoluteMaxLifetime is the ceiling on any token's life (HI-14). The real bound is
+// the job: the orchestrator mints each token for the job's own timeout plus a small
+// buffer, and revokes it the moment the job ends. This only catches a mis-issued
+// token, so it sits above any execution timeout a deployment would configure. It was
+// 2h, which cut the runtime API off from every longer job mid-run.
+const absoluteMaxLifetime = 7 * 24 * time.Hour
 
 // JWTManager handles JWT token operations
 type JWTManager struct {
-	secret          []byte
-	tokenExpiration time.Duration
+	secret []byte
 }
 
 // Claims represents the JWT claims
@@ -36,60 +37,12 @@ type Claims struct {
 	// by the orchestrator so the runtime can present it on its outbound calls
 	// to the app's job-scoped internal routes. Opaque to the runtime.
 	Capability string `json:"capabilityToken,omitempty"`
-	// OrigIat is the immutable original issuance time; preserved across
-	// refreshes so the absolute lifetime cap cannot be reset.
-	OrigIat *jwt.NumericDate `json:"origIat,omitempty"`
 	jwt.RegisteredClaims
 }
 
 // NewJWTManager creates a new JWT manager
 func NewJWTManager(cfg config.AuthConfig) *JWTManager {
-	exp := cfg.TokenExpiration
-	if exp <= 0 || exp > absoluteMaxLifetime {
-		exp = absoluteMaxLifetime
-	}
-	return &JWTManager{
-		secret:          []byte(cfg.JWTSecret),
-		tokenExpiration: exp,
-	}
-}
-
-// GenerateToken generates a new JWT token for an execution
-func (m *JWTManager) GenerateToken(executionID, userID, eventID string) (string, error) {
-	now := time.Now()
-	return m.generate(executionID, userID, eventID, now, now)
-}
-
-// generate mints a token, preserving origIat and capping the expiry at the
-// absolute lifetime bound.
-func (m *JWTManager) generate(executionID, userID, eventID string, now, origIat time.Time) (string, error) {
-	expiresAt := now.Add(m.tokenExpiration)
-	if cap := origIat.Add(absoluteMaxLifetime); expiresAt.After(cap) {
-		expiresAt = cap
-	}
-
-	claims := &Claims{
-		ExecutionID: executionID,
-		UserID:      userID,
-		EventID:     eventID,
-		OrigIat:     jwt.NewNumericDate(origIat),
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expiresAt),
-			IssuedAt:  jwt.NewNumericDate(now),
-			NotBefore: jwt.NewNumericDate(now),
-			Issuer:    "cronium-runtime",
-			Subject:   executionID,
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-	tokenString, err := token.SignedString(m.secret)
-	if err != nil {
-		return "", fmt.Errorf("failed to sign token: %w", err)
-	}
-
-	return tokenString, nil
+	return &JWTManager{secret: []byte(cfg.JWTSecret)}
 }
 
 // ValidateToken validates a JWT token and returns the claims
@@ -115,22 +68,15 @@ func (m *JWTManager) ValidateToken(tokenString string) (*types.TokenClaims, erro
 		return nil, fmt.Errorf("invalid token claims")
 	}
 
-	now := time.Now()
-
-	// Check expiration
-	if claims.ExpiresAt != nil && claims.ExpiresAt.Before(now) {
-		return nil, fmt.Errorf("token expired")
+	// The library accepts a token with no exp unless told otherwise, and a token
+	// that never expires is exactly what this check exists to refuse.
+	if claims.ExpiresAt == nil || claims.IssuedAt == nil {
+		return nil, fmt.Errorf("token missing expiry or issue time")
 	}
 
-	// Enforce the absolute lifetime cap independently of ExpiresAt (HI-14): a
-	// token is invalid once it is older than absoluteMaxLifetime from its
-	// original issuance, even if a (mis-issued) ExpiresAt is later. Fall back to
-	// IssuedAt for tokens minted before OrigIat existed.
-	origIat := claims.IssuedAt
-	if claims.OrigIat != nil {
-		origIat = claims.OrigIat
-	}
-	if origIat != nil && now.After(origIat.Time.Add(absoluteMaxLifetime)) {
+	// Enforce the absolute ceiling independently of ExpiresAt (HI-14): a mis-issued
+	// token with a distant expiry still dies here.
+	if time.Now().After(claims.IssuedAt.Add(absoluteMaxLifetime)) {
 		return nil, fmt.Errorf("token exceeded absolute lifetime")
 	}
 
@@ -148,39 +94,4 @@ func (m *JWTManager) ValidateToken(tokenString string) (*types.TokenClaims, erro
 		ExpiresAt:   claims.ExpiresAt.Time,
 		IssuedAt:    claims.IssuedAt.Time,
 	}, nil
-}
-
-// RefreshToken issues a new token that preserves the original issuance time, so
-// the absolute lifetime cap is not reset. Refresh past the cap is refused.
-func (m *JWTManager) RefreshToken(oldToken string) (string, error) {
-	token, err := jwt.ParseWithClaims(oldToken, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method")
-		}
-		return m.secret, nil
-	})
-	if err != nil || !token.Valid {
-		return "", fmt.Errorf("invalid token for refresh")
-	}
-	claims, ok := token.Claims.(*Claims)
-	if !ok {
-		return "", fmt.Errorf("invalid token claims")
-	}
-
-	now := time.Now()
-	if claims.ExpiresAt != nil && claims.ExpiresAt.Before(now) {
-		return "", fmt.Errorf("token expired")
-	}
-	origIat := claims.IssuedAt
-	if claims.OrigIat != nil {
-		origIat = claims.OrigIat
-	}
-	if origIat == nil {
-		return "", fmt.Errorf("token missing issuance time")
-	}
-	if now.After(origIat.Time.Add(absoluteMaxLifetime)) {
-		return "", fmt.Errorf("token exceeded absolute lifetime; cannot refresh")
-	}
-
-	return m.generate(claims.ExecutionID, claims.UserID, claims.EventID, now, origIat.Time)
 }

@@ -301,9 +301,11 @@ func (m *MultiServerExecutor) executeOnServer(ctx context.Context, job *types.Jo
 							updateData.Error = &errorStr
 						}
 
+						// Not deferred: this is inside the update loop, so a defer would
+						// hold every context until the whole job finished.
 						apiCtx, apiCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-						defer apiCancel()
 						m.apiClient.UpdateExecution(apiCtx, executionID, result.Status, updateData)
+						apiCancel()
 					}
 				}
 			case types.UpdateTypeError:

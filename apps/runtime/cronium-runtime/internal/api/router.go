@@ -1,9 +1,7 @@
 package api
 
 import (
-	"context"
 	"net/http"
-	"time"
 
 	"github.com/addison-moore/cronium/apps/runtime/internal/auth"
 	"github.com/addison-moore/cronium/apps/runtime/internal/config"
@@ -23,17 +21,8 @@ func NewRouter(runtime *service.RuntimeService, cfg *config.Config, log *logrus.
 
 	// Basic middleware
 	r.Use(chimiddleware.RequestID)
-	r.Use(chimiddleware.RealIP)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(middleware.LoggingMiddleware(log))
-
-	// Add request time to context
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := context.WithValue(r.Context(), "requestTime", time.Now())
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	})
 
 	// CORS configuration
 	if cfg.Security.EnableCORS {
@@ -69,6 +58,11 @@ func NewRouter(runtime *service.RuntimeService, cfg *config.Config, log *logrus.
 		// Rate limiting
 		rateLimiter := middleware.NewRateLimiter(cfg.Security.RateLimitPerMin, log)
 		r.Use(middleware.RateLimitMiddleware(rateLimiter))
+
+		// Scripts share this service, and most handlers decode the whole body, so
+		// one job must not be able to exhaust its memory. SetOutput applies the
+		// tighter limit it reports errors against.
+		r.Use(middleware.MaxBodySize(handlers.MaxRequestBytes))
 
 		// Execution endpoints
 		r.Route("/executions/{id}", func(r chi.Router) {

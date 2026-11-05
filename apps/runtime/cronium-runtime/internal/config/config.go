@@ -65,9 +65,7 @@ type AuthConfig struct {
 	// applyLegacyEnvOverrides, so a required tag here would reject a config that
 	// supplies the secret via RUNTIME_JWT_SECRET (the documented/compose var).
 	// Validate() enforces non-empty after all overrides are applied.
-	JWTSecret         string        `yaml:"jwtSecret" envconfig:"JWT_SECRET"`
-	TokenExpiration   time.Duration `yaml:"tokenExpiration" envconfig:"TOKEN_EXPIRATION" default:"1h"`
-	RefreshExpiration time.Duration `yaml:"refreshExpiration" envconfig:"REFRESH_EXPIRATION" default:"24h"`
+	JWTSecret string `yaml:"jwtSecret" envconfig:"JWT_SECRET"`
 }
 
 // LoggingConfig defines logging settings

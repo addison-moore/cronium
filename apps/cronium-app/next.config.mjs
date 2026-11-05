@@ -37,6 +37,11 @@ const nextConfig = {
       "mysql2",
       "mongodb",
       "ioredis",
+      // Nodemailer 10 ships ESM with `node:`-scheme imports, which the client
+      // webpack rejects outright (a resolve.fallback entry cannot catch them).
+      // It is reachable from client components only through the same
+      // server-executed tool-plugin dynamic imports as the drivers above.
+      "nodemailer",
       { "@anthropic-ai/sdk": "commonjs @anthropic-ai/sdk" },
     ];
 
@@ -79,6 +84,11 @@ const nextConfig = {
                 name: "framework",
                 chunks: "all",
                 test: /[\\/]node_modules[\\/](react|react-dom|scheduler|next)[\\/]/,
+                // JavaScript only. next/font's stylesheet also lives under
+                // node_modules/next. Pulled into this chunk, it gets listed as a
+                // script, and the browser fails to parse it on every page:
+                // "Uncaught SyntaxError: Unexpected token '.'".
+                type: /^javascript\//,
                 priority: 40,
                 enforce: true,
               },
@@ -148,7 +158,6 @@ const nextConfig = {
   },
   serverExternalPackages: [
     "ssh2",
-    "node-ssh",
     "mysql2",
     "mongodb",
     "ioredis",
@@ -159,17 +168,14 @@ const nextConfig = {
     "@xterm/addon-unicode11",
     "@xterm/addon-web-links",
   ],
-  eslint: {
-    // Disable ESLint during builds for now
-    ignoreDuringBuilds: true,
-  },
   reactStrictMode: true,
   output: "standalone",
   images: {
+    // SVG stays out of the optimizer (next/image serves .svg sources directly,
+    // unoptimized, when this flag is off). Every icon here is a same-origin
+    // static asset, so routing them through the optimizer buys nothing and only
+    // widens that endpoint's attack surface.
     formats: ["image/avif", "image/webp"],
-    dangerouslyAllowSVG: true,
-    contentDispositionType: "attachment",
-    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
   async rewrites() {
     return [

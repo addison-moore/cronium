@@ -12,8 +12,6 @@ export default [
       "_scratch/**",
       "_backups/**",
       "scripts/**",
-      "src/scripts/deprecated/**",
-      "src/scripts/migrations/**",
       // Jest tests are excluded from the TS project (tsconfig excludes
       // __tests__); jest runs them, so skip typed-linting here.
       "**/__tests__/**",

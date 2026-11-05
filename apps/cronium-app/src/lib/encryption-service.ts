@@ -149,18 +149,6 @@ class EncryptionService {
 export const encryptionService = new EncryptionService();
 
 /**
- * Configuration for which fields need encryption by table
- */
-export const SENSITIVE_FIELDS = {
-  servers: ["sshKey", "password"],
-  users: ["password"],
-  envVars: ["value"],
-  apiTokens: ["token"],
-  settings: ["value"],
-  systemSettings: ["value"],
-} as const;
-
-/**
  * List of system settings keys that contain sensitive data
  */
 export const SENSITIVE_SYSTEM_SETTINGS = [
@@ -179,37 +167,4 @@ export function isSystemSettingSensitive(key: string): boolean {
   return SENSITIVE_SYSTEM_SETTINGS.includes(
     key as (typeof SENSITIVE_SYSTEM_SETTINGS)[number],
   );
-}
-
-/**
- * Check if a field should be encrypted
- */
-export function shouldEncrypt(table: string, field: string): boolean {
-  const fields = SENSITIVE_FIELDS[table as keyof typeof SENSITIVE_FIELDS];
-  return fields?.includes(field as never) ?? false;
-}
-
-/**
- * Encrypt sensitive fields in data object
- */
-export function encryptSensitiveData<T extends Record<string, unknown>>(
-  data: T,
-  tableName: string,
-): T {
-  const result = { ...data };
-
-  Object.keys(data).forEach((key) => {
-    if (
-      shouldEncrypt(tableName, key) &&
-      typeof data[key] === "string" &&
-      data[key]
-    ) {
-      // Use proper type assertion for the result object
-      (result as Record<string, unknown>)[key] = encryptionService.encrypt(
-        data[key],
-      );
-    }
-  });
-
-  return result;
 }

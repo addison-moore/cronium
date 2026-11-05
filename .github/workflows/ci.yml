@@ -17,8 +17,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GOLANGCI_LINT_VERSION: "2.12.2"
-  GOVULNCHECK_VERSION: "1.6.0"
+  GOLANGCI_LINT_VERSION: "2.15.0"
+  GOVULNCHECK_VERSION: "1.9.0"
 
 jobs:
   node:
@@ -44,7 +44,7 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # --ignore-scripts skips native rebuilds (node-pty, cpu-features, bcrypt).
+      # --ignore-scripts skips native rebuilds (cpu-features, bcrypt).
       # Lint, typecheck and the jest suite need none of them, and skipping the
       # builds means the runner does not need a C toolchain. The Docker image
       # build still compiles them, inside a container that has one.
@@ -140,7 +140,7 @@ jobs:
 
       # FULL install (no --ignore-scripts): unlike the pure-jest jobs, the app
       # actually RUNS here and its import graph needs the native modules
-      # (bcrypt via the auth routers, node-pty via the socket server).
+      # (bcrypt via the auth routers).
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -208,7 +208,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.25.12"
+          go-version: "1.27.3"
           cache-dependency-path: |
             apps/orchestrator/go.sum
             apps/runtime/cronium-runtime/go.sum
@@ -258,7 +258,7 @@ jobs:
         run: node infra/scripts/check-go-coverage-ratchet.mjs
 
       # Supply-chain gate (3.4): fail when a known vulnerability is reachable
-      # from our code. Requires the pinned patched toolchain (go 1.25.12) so the
+      # from our code. Requires the pinned patched toolchain (go 1.27.3) so the
       # standard-library findings resolve; run per-module so each go.mod's
       # dependency graph is analyzed.
       - name: Install govulncheck
@@ -301,7 +301,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.25.12"
+          go-version: "1.27.3"
           cache-dependency-path: apps/orchestrator/go.sum
 
       - name: Pull alpine (integration test never pulls)

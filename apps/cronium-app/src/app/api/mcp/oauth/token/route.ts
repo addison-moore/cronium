@@ -11,6 +11,8 @@ import {
   consumeRefresh,
 } from "@/lib/mcp-oauth/store";
 import { jsonResponse, oauthError, corsPreflight } from "@/lib/mcp-oauth/http";
+import { storage } from "@/server/storage";
+import { UserStatus } from "@/shared/schema";
 
 // OAuth 2.1 token endpoint (public client + PKCE). Supports authorization_code
 // and refresh_token grants.
@@ -40,6 +42,15 @@ function tokenResponse(
     refresh_token: refresh,
     scope,
   });
+}
+
+/** A grant is good only while its user is active and has not been revoked. */
+async function grantStillValid(data: {
+  sub: string;
+  sv: number;
+}): Promise<boolean> {
+  const user = await storage.getUser(data.sub);
+  return user?.status === UserStatus.ACTIVE && user.sessionVersion === data.sv;
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -76,27 +87,21 @@ export async function POST(req: Request): Promise<Response> {
     if (!pkceMatches(codeVerifier, data.codeChallenge)) {
       return oauthError("invalid_grant", "PKCE verification failed");
     }
+    if (!(await grantStillValid(data))) {
+      return oauthError("invalid_grant", "The authorizing user was revoked");
+    }
 
-    const access = mintAccessToken({
+    const grant = {
       sub: data.sub,
       cid: data.cid,
       scope: data.scope,
       aud: data.resource,
-    });
+      sv: data.sv,
+    };
+    const access = mintAccessToken(grant);
     const jti = randomId(16);
-    const refresh = mintRefreshToken({
-      sub: data.sub,
-      cid: data.cid,
-      scope: data.scope,
-      aud: data.resource,
-      jti,
-    });
-    await allowRefresh(jti, {
-      sub: data.sub,
-      cid: data.cid,
-      scope: data.scope,
-      aud: data.resource,
-    });
+    const refresh = mintRefreshToken({ ...grant, jti });
+    await allowRefresh(jti, grant);
     return tokenResponse(access, refresh, data.scope);
   }
 
@@ -124,20 +129,15 @@ export async function POST(req: Request): Promise<Response> {
       );
     }
 
-    const access = mintAccessToken({
-      sub: data.sub,
-      cid: data.cid,
-      scope: data.scope,
-      aud: data.aud,
-    });
+    // Refresh tokens rotate for 30 days at a time, so without this a grant would
+    // outlive a password reset or "revoke sessions" indefinitely.
+    if (!(await grantStillValid(data))) {
+      return oauthError("invalid_grant", "Refresh token has been revoked");
+    }
+
+    const access = mintAccessToken(data);
     const newJti = randomId(16);
-    const refresh = mintRefreshToken({
-      sub: data.sub,
-      cid: data.cid,
-      scope: data.scope,
-      aud: data.aud,
-      jti: newJti,
-    });
+    const refresh = mintRefreshToken({ ...data, jti: newJti });
     await allowRefresh(newJti, data);
     return tokenResponse(access, refresh, data.scope);
   }

@@ -13,6 +13,10 @@ declare module "next-auth" {
     lastName?: string | null;
     profileImageUrl?: string | null;
   }
+
+  interface Session {
+    user: User;
+  }
 }
 
 declare module "next-auth/jwt" {
@@ -26,21 +30,5 @@ declare module "next-auth/jwt" {
     firstName?: string | null;
     lastName?: string | null;
     profileImageUrl?: string | null;
-  }
-}
-
-declare module "next-auth/core/types" {
-  interface Session {
-    user: {
-      id: string;
-      email?: string | null;
-      username?: string | null;
-      role: UserRole;
-      status: UserStatus;
-      sessionVersion: number;
-      firstName?: string | null;
-      lastName?: string | null;
-      profileImageUrl?: string | null;
-    };
   }
 }

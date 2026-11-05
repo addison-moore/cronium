@@ -51,6 +51,7 @@ interface TokenPayload {
   cid: string; // client id
   scope: string;
   aud: string; // resource (RFC 8707)
+  sv: number; // user's sessionVersion at grant time; a bump revokes the token
   jti?: string; // refresh tokens only
   iat: number;
   exp: number;
@@ -95,6 +96,7 @@ export interface MintTokenInput {
   cid: string;
   scope: string;
   aud: string;
+  sv: number;
 }
 
 export function mintAccessToken(input: MintTokenInput): {

@@ -320,29 +320,29 @@ export async function executeToolAction(
         server: event.serverId ? `server-${event.serverId}` : "local",
         output: "", // Will be populated during execution
       },
-      {
-        ...variablesMap, // User-defined variables
-        ...input, // Include all input data as variables (can override user variables)
-      },
+      // Input stays under cronium.input. Letting it shadow a variable meant a webhook
+      // caller could swap their own value in for anything the author read from one,
+      // such as `{{cronium.getVariables.ADMIN_EMAIL}}` in a recipient field.
+      variablesMap,
       input, // Pass input data for cronium.input.* access
       {}, // Empty conditions object (can be populated from workflow context later)
     );
 
     // Process template parameters
-    const processedTemplateData = processToolActionTemplate(
+    // The configured parameters are the whole of what runs: workflow data reaches
+    // them only where the author wrote {{cronium.input.*}}. Merging the input over
+    // them let anyone holding a workflow's webhook key replace a SQL statement or an
+    // email's recipients, and let an upstream step's `text` or `body` output silently
+    // overwrite the same-named field on the next action.
+    const { parameters } = processToolActionTemplate(
       { parameters: toolActionConfig.parameters },
       templateContext,
+      action.templateEncoding,
     );
-
-    // Merge processed parameters with input data (input can still override)
-    const mergedParameters = {
-      ...processedTemplateData.parameters,
-      ...input, // Input from workflow can override configured parameters
-    };
 
     // Validate parameters against action schema
     try {
-      action.inputSchema.parse(mergedParameters);
+      action.inputSchema.parse(parameters);
     } catch (validationError) {
       if (validationError instanceof Error && "errors" in validationError) {
         const zodError = validationError as {
@@ -362,7 +362,7 @@ export async function executeToolAction(
     context.logger.info(`Executing action: ${action.name} (${action.id})`);
     console.log(
       `[ToolAction] Executing with parameters:`,
-      JSON.stringify(redactSecrets(mergedParameters), null, 2),
+      JSON.stringify(redactSecrets(parameters), null, 2),
     );
     context.onProgress?.({ step: "Initializing action", percentage: 10 });
 
@@ -412,7 +412,7 @@ export async function executeToolAction(
           // driver also applies context.timeoutMs as its statement timeout, so
           // a query is cancelled DB-side within the same budget.
           const actionResult: unknown = await withTimeout(
-            action.execute(credentials, mergedParameters, context),
+            action.execute(credentials, parameters, context),
             context.timeoutMs ?? 30_000,
             `Action "${action.name}"`,
           );
@@ -451,7 +451,7 @@ export async function executeToolAction(
       actionName: action.name,
       executionTime,
       result,
-      parameters: redactSecrets(mergedParameters),
+      parameters: redactSecrets(parameters),
       timestamp: new Date().toISOString(),
     };
 
@@ -496,7 +496,7 @@ export async function executeToolAction(
         toolType: toolActionConfig.toolType,
         actionType: action.actionType,
         actionId: action.id,
-        parameters: redactSecrets(mergedParameters),
+        parameters: redactSecrets(parameters),
         result: redactSecrets(formattedOutput),
         status: "SUCCESS",
         executionTime,

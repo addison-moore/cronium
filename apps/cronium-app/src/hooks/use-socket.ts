@@ -42,31 +42,3 @@ export function useSocket(): Socket | null {
 
   return socket;
 }
-
-export function useSocketConnection(): {
-  socket: Socket | null;
-  isConnected: boolean;
-} {
-  const socket = useSocket();
-  const [isConnected, setIsConnected] = useState(false);
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleConnect = () => setIsConnected(true);
-    const handleDisconnect = () => setIsConnected(false);
-
-    socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
-
-    // Set initial state
-    setIsConnected(socket.connected);
-
-    return () => {
-      socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
-    };
-  }, [socket]);
-
-  return { socket, isConnected };
-}

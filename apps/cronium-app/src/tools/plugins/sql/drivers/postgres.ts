@@ -112,6 +112,11 @@ export const postgresDriver: SqlDriver = {
     let cursor: InstanceType<typeof Cursor> | undefined;
     try {
       client = await connect(credentials, opts.timeoutMs);
+      // The action's keyword check is only a first pass: `WITH d AS (DELETE ...)
+      // SELECT` and `EXPLAIN ANALYZE DELETE ...` both start with an allowed word.
+      // This has the database refuse the write. Nothing here commits, and ending
+      // the connection discards the transaction.
+      await client.query("BEGIN READ ONLY");
       // A cursor streams the result: rows are pulled a batch at a time and we
       // stop the moment a limit is hit, so an unbounded SELECT never lands in
       // the app's heap.

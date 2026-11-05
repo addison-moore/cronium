@@ -102,6 +102,16 @@ describe("POST /api/socket-ticket — authentication", () => {
     expect(mintMock).not.toHaveBeenCalled();
   });
 
+  it("rejects a revoked session: the JWT is still valid but its version is stale", async () => {
+    getServerSessionMock.mockResolvedValue({
+      user: { id: USER_ID, sessionVersion: 3 },
+    });
+    getUserMock.mockResolvedValue(activeUser({ sessionVersion: 4 }));
+    const res = await post({ audience: "terminal" });
+    expect(res.status).toBe(401);
+    expect(mintMock).not.toHaveBeenCalled();
+  });
+
   it("re-checks the database: a disabled user is rejected despite a session", async () => {
     getUserMock.mockResolvedValue(activeUser({ status: UserStatus.DISABLED }));
     const res = await post({ audience: "logs" });

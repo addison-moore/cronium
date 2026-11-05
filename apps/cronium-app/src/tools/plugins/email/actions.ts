@@ -45,6 +45,14 @@ export const sendEmailSchema = z.object({
     .describe("Send the body as HTML (defaults to true)"),
 });
 
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 export const emailActions: ToolAction[] = [
   {
     id: "send-email",
@@ -56,6 +64,9 @@ export const emailActions: ToolAction[] = [
     developmentMode: "visual",
     inputSchema: sendEmailSchema,
     parameters: safeZodToParameters(sendEmailSchema),
+    // Only an HTML body is markup. A subject or plain-text body goes out as written.
+    templateEncoding: (name, parameters) =>
+      name === "body" && parameters.isHtml !== false ? "html" : "text",
     outputSchema: z.object({
       messageId: z.string(),
       status: z.enum(["sent", "failed"]),
@@ -112,7 +123,7 @@ export const emailActions: ToolAction[] = [
           text: isHtml ? params.body.replace(/<[^>]*>/g, "") : params.body,
           html: isHtml
             ? params.body
-            : `<p>${params.body.replace(/\n/g, "<br>")}</p>`,
+            : `<p>${escapeHtml(params.body).replace(/\n/g, "<br>")}</p>`,
         },
         {
           host: emailCreds.smtpHost,

@@ -22,27 +22,17 @@ const sharedProjectConfig = {
         // partial tsconfig (e.g. discriminated-union narrowing in job-service.ts
         // without the app's full strict lib config). `pnpm typecheck` remains
         // the real type gate.
-        isolatedModules: true,
+        // Module resolution options are deliberately absent: transpile-only
+        // never resolves imports, moduleNameMapper above is what maps the
+        // aliases at runtime, and TypeScript 6 rejects `baseUrl` and
+        // `moduleResolution: node` outright.
         tsconfig: {
+          isolatedModules: true,
           target: "ES2022",
           module: "CommonJS",
-          moduleResolution: "Node",
           jsx: "react-jsx",
           esModuleInterop: true,
           allowSyntheticDefaultImports: true,
-          baseUrl: path.join(__dirname, "../apps/cronium-app"),
-          paths: {
-            "@/*": ["./src/*"],
-            "@shared/*": ["./src/shared/*"],
-            "@server/*": ["./src/server/*"],
-            "@lib/*": ["./src/lib/*"],
-            // Cross-cutting suites in tests/ import a few app deps directly
-            // (drizzle-orm operators). Those live under the app's node_modules,
-            // which TS's default resolution from tests/ won't find — map them
-            // explicitly (baseUrl is apps/cronium-app).
-            "drizzle-orm": ["./node_modules/drizzle-orm"],
-            "drizzle-orm/*": ["./node_modules/drizzle-orm/*"],
-          },
         },
       },
     ],
@@ -70,6 +60,7 @@ module.exports = {
         "<rootDir>/../apps/cronium-app/src/lib/__tests__/socket-ticket.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/__tests__/socket-client-url.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/__tests__/ssrf-guard.test.ts",
+        "<rootDir>/../apps/cronium-app/src/lib/__tests__/ssrf-guard-connect.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/__tests__/valkey-url.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/mcp-oauth/__tests__/tokens.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/mcp-oauth/__tests__/store-consume.test.ts",

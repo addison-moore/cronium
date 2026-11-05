@@ -18,6 +18,7 @@ import {
 } from "@cronium/ui";
 import { Input } from "@cronium/ui";
 import { Button } from "@cronium/ui";
+import { sameOriginRedirect } from "@/lib/safe-redirect";
 
 const signinSchema = z.object({
   username: z.string().min(1, "Username or email is required"),
@@ -147,11 +148,11 @@ export default function SignIn() {
         return;
       }
 
-      // Successfully signed in, redirect to dashboard
-      const redirectUrl = callbackUrl;
-
-      // If the callback URL doesn't have a language prefix and it's a relative path
-      router.push(redirectUrl);
+      // Successfully signed in. callbackUrl comes straight from the query string,
+      // so only follow it within this origin.
+      router.push(
+        sameOriginRedirect(callbackUrl, window.location.origin) ?? "/dashboard",
+      );
       router.refresh();
     } catch (error) {
       console.error("Sign in error:", error);

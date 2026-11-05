@@ -26,6 +26,34 @@ import {
   specFromWorkflow,
 } from "./schedule-math";
 
+/**
+ * Whether an event update touches anything next_run_at depends on. A refresh
+ * re-anchors the cadence to "now", so unrelated edits must not trigger one.
+ */
+export function touchesEventSchedule(update: {
+  status?: unknown;
+  triggerType?: unknown;
+  scheduleNumber?: unknown;
+  scheduleUnit?: unknown;
+  customSchedule?: unknown;
+  timezone?: unknown;
+  catchupPolicy?: unknown;
+  overlapPolicy?: unknown;
+  startTime?: unknown;
+}): boolean {
+  return [
+    update.status,
+    update.triggerType,
+    update.scheduleNumber,
+    update.scheduleUnit,
+    update.customSchedule,
+    update.timezone,
+    update.catchupPolicy,
+    update.overlapPolicy,
+    update.startTime,
+  ].some((value) => value !== undefined);
+}
+
 export async function notifyScheduleChanged(eventId: number): Promise<void> {
   try {
     await db.execute(

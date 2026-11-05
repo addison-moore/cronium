@@ -15,7 +15,6 @@ import (
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/retry"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/singleflight"
 )
 
 // Client is the API client for communicating with the Cronium backend
@@ -27,7 +26,6 @@ type Client struct {
 	log        *logrus.Logger
 
 	// Deduplication for concurrent requests
-	requestGroup singleflight.Group
 }
 
 // NewClient creates a new API client

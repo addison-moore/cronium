@@ -1,83 +1,87 @@
-import { templateProcessor, type TemplateContext } from "./template-processor";
+import {
+  templateProcessor,
+  type TemplateContext,
+  type TemplateEncoding,
+} from "./template-processor";
 
 export interface ToolActionTemplateData {
   parameters: Record<string, unknown>;
 }
 
+/** Picks the encoding for a top-level parameter. Nested values inherit it. */
+export type ParameterEncoding = (
+  name: string,
+  parameters: Record<string, unknown>,
+) => TemplateEncoding;
+
+function renderValue(
+  value: unknown,
+  context: TemplateContext,
+  encoding: TemplateEncoding,
+): unknown {
+  if (typeof value === "string") {
+    return templateProcessor.processTemplate(value, context, encoding);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => renderValue(item, context, encoding));
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        renderValue(item, context, encoding),
+      ]),
+    );
+  }
+  return value;
+}
+
 /**
- * Process tool action template parameters
- * Replaces template variables in all string values within the parameters object
+ * Process tool action template parameters. Replaces template variables in all
+ * string values within the parameters object. Values are used verbatim unless the
+ * action says a parameter ends up somewhere that needs encoding.
  */
 export function processToolActionTemplate(
   templateData: ToolActionTemplateData,
   context: TemplateContext,
+  encodingFor: ParameterEncoding = () => "text",
 ): ToolActionTemplateData {
-  const processedParameters = processParametersRecursively(
-    templateData.parameters,
-    context,
-  );
-
+  const { parameters } = templateData;
   return {
-    parameters: processedParameters,
+    parameters: Object.fromEntries(
+      Object.entries(parameters).map(([name, value]) => [
+        name,
+        renderValue(value, context, encodingFor(name, parameters)),
+      ]),
+    ),
   };
 }
 
 /**
- * Recursively process parameters object, replacing template variables in string values
+ * The same rendering for the editor's live preview, where a half-typed tag is the
+ * normal case: a parameter that does not compile shows the error in place.
  */
-function processParametersRecursively(
-  params: Record<string, unknown>,
+export function previewToolActionTemplate(
+  templateData: ToolActionTemplateData,
   context: TemplateContext,
-): Record<string, unknown> {
-  const processed: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(params)) {
-    if (typeof value === "string") {
-      // Process string values with template processor
-      processed[key] = templateProcessor.processTemplate(value, context);
-    } else if (Array.isArray(value)) {
-      // Process arrays recursively
-      processed[key] = value.map((item) => {
-        if (typeof item === "string") {
-          return templateProcessor.processTemplate(item, context);
-        } else if (typeof item === "object" && item !== null) {
-          return processParametersRecursively(
-            item as Record<string, unknown>,
-            context,
-          );
-        }
-        return item as unknown;
-      });
-    } else if (typeof value === "object" && value !== null) {
-      // Process nested objects recursively
-      processed[key] = processParametersRecursively(
-        value as Record<string, unknown>,
-        context,
-      );
-    } else {
-      // Keep other types (numbers, booleans, null) as-is
-      processed[key] = value;
-    }
-  }
-
-  return processed;
-}
-
-/**
- * Validate that template parameters match the expected schema
- * This is a simple validation that checks required fields are present
- */
-export function validateTemplateParameters(
-  parameters: Record<string, unknown>,
-  requiredFields: string[],
-): { isValid: boolean; missingFields: string[] } {
-  const missingFields = requiredFields.filter(
-    (field) => !(field in parameters) || parameters[field] === undefined,
-  );
-
+  encodingFor: ParameterEncoding = () => "text",
+): ToolActionTemplateData {
+  const { parameters } = templateData;
   return {
-    isValid: missingFields.length === 0,
-    missingFields,
+    parameters: Object.fromEntries(
+      Object.entries(parameters).map(([name, value]) => {
+        try {
+          return [
+            name,
+            renderValue(value, context, encodingFor(name, parameters)),
+          ];
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          return [name, `[Template Error: ${message}]\n\n${String(value)}`];
+        }
+      }),
+    ),
   };
 }
 

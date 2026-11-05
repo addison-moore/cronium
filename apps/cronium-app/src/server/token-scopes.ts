@@ -82,3 +82,13 @@ export function isPathAllowedForScopes(
     (s) => isApiTokenScope(s) && s !== "full" && SCOPE_PATHS[s].has(path),
   );
 }
+
+/**
+ * Whether a principal may read env var values in plaintext. Cookie sessions
+ * (`null`) and `full` tokens can; narrower tokens see the keys only. The `mcp`
+ * scope can reach `events.getById`, and this is what keeps the promise above that
+ * env-var values are not readable through it.
+ */
+export function canReadEnvVarValues(scopes: readonly string[] | null): boolean {
+  return scopes === null || scopes.includes("full");
+}

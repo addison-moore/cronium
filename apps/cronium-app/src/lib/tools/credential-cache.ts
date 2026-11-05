@@ -109,45 +109,6 @@ export class CredentialCacheManager {
   }
 
   /**
-   * Invalidate all credentials for a user
-   */
-  invalidateUser(userId: string): void {
-    for (const [key, credential] of this.cache.entries()) {
-      if (credential.userId === userId) {
-        this.cache.delete(key);
-      }
-    }
-  }
-
-  /**
-   * Warm up cache for a user's active tools
-   */
-  async warmUp(userId: string): Promise<void> {
-    try {
-      const tools = await db
-        .select()
-        .from(toolCredentials)
-        .where(eq(toolCredentials.userId, userId));
-
-      // Cache all active tools
-      for (const tool of tools) {
-        if (tool.isActive) {
-          const key = `${tool.id}-${userId}`;
-          const cached: CachedCredential = {
-            ...tool,
-            credentials: tool.credentials,
-            cachedAt: new Date(),
-            accessCount: 0,
-          };
-          this.cache.set(key, cached);
-        }
-      }
-    } catch (error) {
-      console.error("Error warming up credential cache:", error);
-    }
-  }
-
-  /**
    * Get cache statistics
    */
   getStats(): {

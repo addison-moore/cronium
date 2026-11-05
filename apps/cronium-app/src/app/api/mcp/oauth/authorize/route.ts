@@ -6,7 +6,9 @@ import {
   getBaseUrl,
   resourceUrl,
   DEFAULT_SCOPE,
+  isSupportedScopeRequest,
 } from "@/lib/mcp-oauth/metadata";
+import { getAuthorizedPrincipal } from "@/server/security/authorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,13 +37,31 @@ function htmlError(message: string, status = 400): Response {
 }
 
 // Resource owner: browser session first, then a Cronium API token (headless/CLI).
-async function resolveOwner(req: Request): Promise<string | null> {
-  const session = await getCachedServerSession();
-  if (session?.user?.id) return session.user.id;
-  const token = getBearerToken(req.headers);
-  if (token) {
-    const auth = await authenticateApiToken(token);
-    if (auth) return auth.userId;
+// Either way the principal is re-checked live, because approving here mints a
+// long-lived grant: a revoked session or a disabled owner must not get that far.
+// A bearer token must itself hold what is being granted, so this cannot turn a
+// deny-all token into an `mcp` one.
+async function resolveOwner(
+  req: Request,
+): Promise<{ sub: string; sv: number } | null> {
+  try {
+    const session = await getCachedServerSession();
+    if (session?.user?.id) {
+      const principal = await getAuthorizedPrincipal(session.user.id, {
+        expectedSessionVersion: session.user.sessionVersion ?? -1,
+      });
+      return { sub: principal.id, sv: principal.sessionVersion };
+    }
+    const token = getBearerToken(req.headers);
+    if (token) {
+      const auth = await authenticateApiToken(token);
+      if (auth?.scopes?.some((s) => s === "mcp" || s === "full")) {
+        const principal = await getAuthorizedPrincipal(auth.userId);
+        return { sub: principal.id, sv: principal.sessionVersion };
+      }
+    }
+  } catch {
+    // Not a live principal: fall through and make them sign in again.
   }
   return null;
 }
@@ -98,9 +118,18 @@ export async function GET(req: Request): Promise<Response> {
     });
   }
 
+  // Only scopes this server can grant. Anything else used to be stored as asked,
+  // so a client could request `full` behind a consent page describing `mcp`.
+  if (!isSupportedScopeRequest(scope)) {
+    return redirectBack(redirectUri, state, {
+      error: "invalid_scope",
+      error_description: `Unsupported scope: ${scope}`,
+    });
+  }
+
   // Authenticate the resource owner.
-  const sub = await resolveOwner(req);
-  if (!sub) {
+  const owner = await resolveOwner(req);
+  if (!owner) {
     const signin = `${base}/api/auth/signin?callbackUrl=${encodeURIComponent(req.url)}`;
     return Response.redirect(signin, 302);
   }
@@ -113,10 +142,11 @@ export async function GET(req: Request): Promise<Response> {
     // Consent screen. Approve carries a signed ticket bound to this user +
     // params, so approve can't be CSRF'd.
     const ticket = signTicket({
-      sub,
+      sub: owner.sub,
       cid: clientId,
       ru: redirectUri,
       cc: codeChallenge,
+      sc: scope,
       exp: nowSec() + 300,
     });
     const approveUrl = `${url.href}&consent=${encodeURIComponent(ticket)}`;
@@ -146,12 +176,14 @@ export async function GET(req: Request): Promise<Response> {
     cid: string;
     ru: string;
     cc: string;
+    sc: string;
   }>(consent);
   if (
-    ticket?.sub !== sub ||
+    ticket?.sub !== owner.sub ||
     ticket.cid !== clientId ||
     ticket.ru !== redirectUri ||
-    ticket.cc !== codeChallenge
+    ticket.cc !== codeChallenge ||
+    ticket.sc !== scope
   ) {
     return redirectBack(redirectUri, state, {
       error: "access_denied",
@@ -161,12 +193,13 @@ export async function GET(req: Request): Promise<Response> {
 
   const code = randomId(24);
   await putAuthCode(code, {
-    sub,
+    sub: owner.sub,
     cid: clientId,
     redirectUri,
     codeChallenge,
     scope,
     resource: aud,
+    sv: owner.sv,
   });
   return redirectBack(redirectUri, state, { code });
 }

@@ -33,7 +33,8 @@ jobQueue:
 
 docker:
   host: "unix:///var/run/docker.sock"
-  version: "1.41"
+  # Leave empty to negotiate the API version with the daemon (recommended).
+  version: ""
   network: "cronium-network"
   registry: "${DOCKER_REGISTRY}"
   registryAuth:

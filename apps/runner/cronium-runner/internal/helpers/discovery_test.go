@@ -173,6 +173,8 @@ func TestBashDiscoveryScriptFunctionsWork(t *testing.T) {
 	stubs := map[string]string{
 		"cronium.input":       "#!/bin/sh\necho '{\"fake\":\"input\"}'\n",
 		"cronium.getVariable": "#!/bin/sh\necho \"getVariable:$1\"\n",
+		// Like the real binary, this reads only stdin.
+		"cronium.output": "#!/bin/sh\necho \"output:$(cat)\"\n",
 	}
 	for name, content := range stubs {
 		if err := os.WriteFile(filepath.Join(binDir, name), []byte(content), 0o755); err != nil {
@@ -187,13 +189,17 @@ func TestBashDiscoveryScriptFunctionsWork(t *testing.T) {
 cronium.input
 cronium_input
 cronium.getVariable mykey
-cronium_get_variable otherkey`
+cronium_get_variable otherkey
+cronium_output '{"via":"arg"}'
+cronium.output 'two words'
+echo '{"via":"stdin"}' | cronium_output`
 	out, err := exec.Command(bashPath, "-c", script).CombinedOutput()
 	if err != nil {
 		t.Fatalf("bash discovery functions failed: %v\noutput: %s", err, out)
 	}
 	for _, want := range []string{
 		`{"fake":"input"}`, "getVariable:mykey", "getVariable:otherkey",
+		`output:{"via":"arg"}`, "output:two words", `output:{"via":"stdin"}`,
 	} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("output missing %q:\n%s", want, out)

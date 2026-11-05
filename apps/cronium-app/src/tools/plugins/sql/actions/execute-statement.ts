@@ -24,6 +24,10 @@ export const executeStatementAction: ToolAction = {
   developmentMode: "visual",
   inputSchema: executeStatementSchema,
   parameters: safeZodToParameters(executeStatementSchema),
+  // The query text should hold only :placeholders, with values in Parameters where
+  // they are bound. If a template is used here anyway, HTML escaping at least keeps
+  // quotes out of the SQL, which verbatim text would not.
+  templateEncoding: (name) => (name === "statement" ? "html" : "text"),
   outputSchema: z.object({
     rowCount: z.number().optional(),
     success: z.boolean().optional(),

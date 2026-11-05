@@ -123,10 +123,6 @@ export class SecretVault {
     return [...this.keys.entries()].map(([keyId, key]) => ({ keyId, key }));
   }
 
-  activeKeyIdValue(): string {
-    return this.activeKeyId;
-  }
-
   encrypt(plaintext: string, binding: SecretBinding): string {
     const key = this.keys.get(this.activeKeyId)!;
     const iv = randomBytes(IV_LENGTH);

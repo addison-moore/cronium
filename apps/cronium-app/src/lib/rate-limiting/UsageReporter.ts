@@ -10,7 +10,6 @@ import {
 } from "@/shared/schema";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { QuotaManager } from "./QuotaManager";
-import { RateLimiter } from "./RateLimiter";
 
 export interface UsageMetrics {
   period: "day" | "week" | "month";
@@ -58,11 +57,9 @@ export interface UsageTrends {
 export class UsageReporter {
   private static instance: UsageReporter;
   private quotaManager: QuotaManager;
-  private rateLimiter: RateLimiter;
 
   private constructor() {
     this.quotaManager = QuotaManager.getInstance();
-    this.rateLimiter = RateLimiter.getInstance();
   }
 
   static getInstance(): UsageReporter {

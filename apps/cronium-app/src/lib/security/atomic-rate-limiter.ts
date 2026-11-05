@@ -146,24 +146,3 @@ export async function consumeAtomicRateLimit(
     };
   }
 }
-
-/** Clear a bucket for an identifier (e.g. after a successful login). */
-export async function resetAtomicRateLimit(
-  identifier: string,
-  bucket: string,
-): Promise<void> {
-  try {
-    const client = await commandClient();
-    await client.del(`${KEY_PREFIX}${bucket}:${identifier}`);
-  } catch {
-    // Best effort: a failed reset only preserves the existing (safe) counter.
-  }
-}
-
-export async function closeAtomicRateLimiter(): Promise<void> {
-  const promise = commandClientPromise;
-  commandClientPromise = null;
-  if (!promise) return;
-  const client = await promise.catch(() => null);
-  client?.disconnect();
-}

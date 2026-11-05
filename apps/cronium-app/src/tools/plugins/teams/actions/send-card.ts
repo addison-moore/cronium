@@ -131,6 +131,7 @@ export const sendCardAction: ToolAction = {
   developmentMode: "visual",
   inputSchema: sendCardSchema,
   parameters: safeZodToParameters(sendCardSchema),
+  templateEncoding: (name) => (name === "webhookUrl" ? "text" : "markup"),
   outputSchema: z.object({
     success: z.boolean(),
     error: z.string().optional(),

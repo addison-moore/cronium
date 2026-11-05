@@ -71,8 +71,9 @@ container:
     # Docker endpoint
     endpoint: ${DOCKER_HOST:-unix:///var/run/docker.sock}
 
-    # Docker API version
-    version: "1.41"
+    # Docker API version. Leave empty to negotiate with the daemon (recommended);
+    # a pinned version can be refused after an Engine upgrade.
+    version: ""
 
     # TLS verification
     tlsVerify: false

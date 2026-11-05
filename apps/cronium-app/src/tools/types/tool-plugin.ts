@@ -1,6 +1,7 @@
 import { type LucideIcon } from "lucide-react";
 import { type z } from "zod";
 import { type Tool } from "@/shared/schema";
+import { type ParameterEncoding } from "@/lib/tool-action-template-processor";
 
 // Tool Action Types
 export type ActionType = "create" | "update" | "search" | "delete";
@@ -47,6 +48,10 @@ export interface ToolAction {
   // cronium.input(). Set on read/fetch actions (e.g. SQL query, search); leave
   // false/undefined on send/write actions so they don't pollute the data channel.
   producesOutput?: boolean;
+
+  // How template values are encoded for each parameter, for an action that puts one
+  // somewhere other than a plain value (HTML, message markup). Defaults to verbatim.
+  templateEncoding?: ParameterEncoding;
 
   // Execution
   execute: (
@@ -254,23 +259,10 @@ export class ToolPluginRegistry {
     );
   }
 
-  static getCategories(): string[] {
-    const categories = new Set(
-      Array.from(this.plugins.values()).map((plugin) => plugin.category),
-    );
-    return Array.from(categories).sort();
-  }
-
   // New action-related methods
   static getAllActions(): ToolAction[] {
     return Array.from(this.plugins.values()).flatMap(
       (plugin) => plugin.actions || [],
-    );
-  }
-
-  static getActionsByCategory(category: string): ToolAction[] {
-    return this.getAllActions().filter(
-      (action) => action.category === category,
     );
   }
 
@@ -294,18 +286,5 @@ export class ToolPluginRegistry {
 
   static clear() {
     this.plugins.clear();
-  }
-
-  // Schema access methods
-  static getSchema(id: string): z.ZodSchema<unknown> | undefined {
-    const plugin = this.plugins.get(id);
-    return plugin?.schema;
-  }
-
-  static getSchemaForToolType(
-    toolType: string,
-  ): z.ZodSchema<unknown> | undefined {
-    const plugin = this.plugins.get(toolType.toLowerCase());
-    return plugin?.schema;
   }
 }

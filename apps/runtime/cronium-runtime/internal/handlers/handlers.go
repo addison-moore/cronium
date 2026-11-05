@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/addison-moore/cronium/apps/runtime/internal/middleware"
 	"github.com/addison-moore/cronium/apps/runtime/internal/service"
@@ -20,6 +21,10 @@ import (
 // so the runtime fails fast with an honest 413 instead of shipping an
 // over-limit body upstream and mapping the app's 413 to a generic 500.
 const maxOutputBytes = 5242880 // 5 MiB
+
+// MaxRequestBytes caps every other request body on the runtime API. Slightly above
+// maxOutputBytes so an over-limit output still gets SetOutput's specific 413.
+const MaxRequestBytes = maxOutputBytes + 1024*1024
 
 // Handler implements the HTTP handlers for the runtime API
 type Handler struct {
@@ -307,10 +312,10 @@ func (h *Handler) ExecuteToolAction(w http.ResponseWriter, r *http.Request) {
 }
 
 // Health handles GET /health
-func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Health(w http.ResponseWriter, _ *http.Request) {
 	h.writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status": "healthy",
-		"time":   r.Context().Value("requestTime"),
+		"time":   time.Now(),
 	})
 }
 

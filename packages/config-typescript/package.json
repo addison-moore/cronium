@@ -9,7 +9,6 @@
   "files": [
     "base.json",
     "nextjs.json",
-    "node.json",
     "library.json"
   ]
 }

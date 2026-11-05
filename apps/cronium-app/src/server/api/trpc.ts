@@ -307,21 +307,6 @@ export type AuthenticatedContext = TRPCContext & {
 };
 
 /**
- * Helper middleware to ensure database transaction context
- * Usage: t.procedure.use(withTransaction).mutation(async ({ ctx }) => { ... })
- */
-export const withTransaction = t.middleware(async ({ ctx, next }) => {
-  return ctx.db.transaction(async (trx) => {
-    return next({
-      ctx: {
-        ...ctx,
-        db: trx,
-      },
-    });
-  });
-});
-
-/**
  * Performance timing middleware for monitoring request duration
  * Logs slow queries in development and production
  */
@@ -371,10 +356,11 @@ import { RateLimitService } from "@/lib/rate-limit-service";
 
 export const withRateLimit = (maxRequests = 100, windowMs = 60000) => {
   return t.middleware(async ({ ctx, path, next }) => {
+    // Only reached by protected procedures today, but the fallback must not
+    // trust a raw header if a public one ever uses this.
+    const { clientIpFromHeaders } = await import("@/lib/security/client-ip");
     const identifier =
-      ctx.session?.user?.id ??
-      ctx.headers?.get?.("x-forwarded-for") ??
-      "anonymous";
+      ctx.session?.user?.id ?? clientIpFromHeaders(ctx.headers) ?? "anonymous";
 
     await RateLimitService.checkLimit(identifier, path, {
       maxRequests,

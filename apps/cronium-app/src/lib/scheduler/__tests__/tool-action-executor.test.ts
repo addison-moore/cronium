@@ -78,6 +78,7 @@ interface FakeAction {
   actionType: string;
   producesOutput?: boolean;
   features?: { webhookSupport?: boolean };
+  templateEncoding?: () => "markup";
   inputSchema: { parse: jest.Mock };
   execute: jest.Mock;
 }
@@ -486,22 +487,105 @@ describe("executeToolAction — happy path", () => {
     );
   });
 
-  it("validates and passes merged parameters where input overrides config", async () => {
-    await executeToolAction(makeEvent(), { text: "from-workflow" });
+  it("runs the configured parameters, whatever the workflow input says", async () => {
+    // A webhook payload or an upstream step's output must not be able to replace
+    // what the action does (a SQL statement, an email's recipients).
+    await executeToolAction(makeEvent(), {
+      text: "from-workflow",
+      channel: "#attacker",
+      extra: "smuggled",
+    });
 
-    const merged = action.inputSchema.parse.mock.calls[0]?.[0] as Record<
+    const params = action.inputSchema.parse.mock.calls[0]?.[0] as Record<
       string,
       unknown
     >;
-    expect(merged).toMatchObject({
-      channel: "#general",
-      text: "from-workflow",
-    });
+    expect(params).toEqual({ channel: "#general", text: "hi" });
     expect(action.execute).toHaveBeenCalledWith(
       { token: SECRET_TOKEN },
-      expect.objectContaining({ text: "from-workflow" }),
+      { channel: "#general", text: "hi" },
       expect.objectContaining({ timeoutMs: 30_000 }),
     );
+  });
+
+  it("delivers workflow input where a template asks for it", async () => {
+    const event = makeEvent({
+      toolActionConfig: {
+        toolType: "slack",
+        actionId: "slack-send-message",
+        toolId: 7,
+        parameters: { channel: "#general", text: "{{cronium.input.text}}" },
+      },
+    });
+
+    await executeToolAction(event, { text: "a=b & 'c'" });
+
+    expect(action.execute).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ text: "a=b & 'c'" }),
+      expect.any(Object),
+    );
+  });
+
+  it("keeps a user variable from being shadowed by workflow input", async () => {
+    mockGetUserVariables.mockResolvedValue([
+      { key: "apiBase", value: "https://real.example" },
+    ]);
+    const event = makeEvent({
+      toolActionConfig: {
+        toolType: "slack",
+        actionId: "slack-send-message",
+        toolId: 7,
+        parameters: {
+          channel: "#general",
+          text: "{{cronium.getVariables.apiBase}}",
+        },
+      },
+    });
+
+    await executeToolAction(event, { apiBase: "https://attacker.example" });
+
+    expect(action.execute).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ text: "https://real.example" }),
+      expect.any(Object),
+    );
+  });
+
+  it("applies the encoding the action asks for", async () => {
+    action.templateEncoding = () => "markup";
+    const event = makeEvent({
+      toolActionConfig: {
+        toolType: "slack",
+        actionId: "slack-send-message",
+        toolId: 7,
+        parameters: { channel: "#general", text: "{{cronium.input.text}}" },
+      },
+    });
+
+    await executeToolAction(event, { text: "<!channel> a=b" });
+
+    expect(action.execute).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ text: "&lt;!channel&gt; a=b" }),
+      expect.any(Object),
+    );
+  });
+
+  it("fails the job on a template that does not compile, sending nothing", async () => {
+    const event = makeEvent({
+      toolActionConfig: {
+        toolType: "slack",
+        actionId: "slack-send-message",
+        toolId: 7,
+        parameters: { channel: "#general", text: "{{#if broken" },
+      },
+    });
+
+    const result = await executeToolAction(event);
+
+    expect(result.exitCode).toBe(1);
+    expect(action.execute).not.toHaveBeenCalled();
   });
 
   it("resolves template placeholders in parameters from user variables", async () => {

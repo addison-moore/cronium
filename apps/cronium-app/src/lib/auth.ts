@@ -4,8 +4,12 @@ import { compare } from "bcrypt";
 import { storage } from "@/server/storage";
 import { UserStatus } from "@/shared/schema";
 import { consumeAtomicRateLimit } from "@/lib/security/atomic-rate-limiter";
-import { resolveClientIp } from "@/lib/security/client-ip";
+import { resolveRequestClientIp } from "@/lib/security/client-ip";
+import { sameOriginRedirect } from "@/lib/safe-redirect";
 import { verifyTotp } from "@/lib/security/totp";
+
+// A TOTP code verifies for up to 90s (±1 step of 30s); remember it a little longer.
+const TOTP_REPLAY_WINDOW_MS = 120_000;
 
 export const authOptions: NextAuthOptions = {
   pages: {
@@ -46,9 +50,9 @@ export const authOptions: NextAuthOptions = {
           return Array.isArray(value) ? value[0] : value;
         };
         const clientIp =
-          resolveClientIp(
-            pickHeader("x-forwarded-for") ?? null,
-            pickHeader("x-real-ip") ?? null,
+          resolveRequestClientIp(
+            pickHeader("x-forwarded-for"),
+            pickHeader("x-real-ip"),
           ) ?? "unknown-ip";
         const { allowed } = await consumeAtomicRateLimit(
           clientIp,
@@ -96,7 +100,19 @@ export const authOptions: NextAuthOptions = {
             }
             const secret = await storage.getMfaSecret(user.id);
             const totpOk = secret ? verifyTotp(secret, submitted) : false;
-            if (!totpOk) {
+            if (totpOk) {
+              // RFC 6238 §5.2: a code must not be accepted twice. Without this
+              // a code read off someone's screen stays good for the whole
+              // ±1-step window. Keyed on the code and held past that window.
+              const { allowed } = await consumeAtomicRateLimit(
+                `${user.id}:${submitted}`,
+                "auth:totp-used",
+                { maxRequests: 1, windowMs: TOTP_REPLAY_WINDOW_MS },
+              );
+              if (!allowed) {
+                throw new Error("Invalid authenticator or recovery code.");
+              }
+            } else {
               // Fall back to a single-use recovery code.
               const { hashRecoveryCode } =
                 await import("@/lib/security/mfa-recovery");
@@ -171,15 +187,7 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
     async redirect({ url, baseUrl }) {
-      if (url.startsWith(baseUrl)) {
-        return url;
-      }
-
-      if (url.startsWith("/")) {
-        return url;
-      }
-
-      return baseUrl;
+      return sameOriginRedirect(url, baseUrl) ?? baseUrl;
     },
   },
 };

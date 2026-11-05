@@ -40,13 +40,11 @@ declare global {
  * Credential encryption service using AES-256-GCM
  */
 export class CredentialEncryption {
-  private static instance: CredentialEncryption;
   private readonly algorithm = "aes-256-gcm";
   private readonly keyLength = 32; // 256 bits
   private readonly ivLength = 16; // 128 bits
   private readonly saltLength = 32; // 256 bits
   private readonly iterations = 100000; // PBKDF2 iterations
-  private readonly tagLength = 16; // 128 bits
 
   private masterKey: Buffer | null = null;
   // Retired master keys (derived from ENCRYPTION_KEYS_RETIRED) that decrypt is
@@ -63,7 +61,7 @@ export class CredentialEncryption {
     "utf8",
   );
 
-  private constructor(private config?: EncryptionConfig) {
+  private constructor(config?: EncryptionConfig) {
     if (config) {
       Object.assign(this, config);
     }
@@ -301,36 +299,6 @@ export class CredentialEncryption {
         this.keyCache.delete(key);
       }
     }
-  }
-
-  /**
-   * Rotate master key
-   */
-  async rotateMasterKey(
-    newMasterKey: string,
-    reencryptCallback: (
-      decrypt: (data: EncryptedData) => unknown,
-      encrypt: (data: unknown) => EncryptedData,
-    ) => Promise<void>,
-  ): Promise<void> {
-    if (!newMasterKey || newMasterKey.length < 32) {
-      throw new Error("New master key must be at least 32 characters long");
-    }
-
-    // Store old decrypt function
-    const oldDecrypt = this.decrypt.bind(this);
-
-    // Update master key
-    const salt = Buffer.from("cronium-tool-credentials-v1", "utf8");
-    this.masterKey = scryptSync(newMasterKey, salt, this.keyLength);
-
-    // Clear key cache
-    this.keyCache.clear();
-
-    // Re-encrypt all data
-    await reencryptCallback(oldDecrypt, this.encrypt.bind(this));
-
-    console.log("Master key rotation completed");
   }
 
   /**

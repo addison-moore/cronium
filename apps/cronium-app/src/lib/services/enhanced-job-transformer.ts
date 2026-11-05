@@ -143,11 +143,32 @@ export async function enhancedTransformJobForOrchestrator(
   return transformedJob;
 }
 
+export interface PreparedJobs {
+  ready: Array<{ job: Job; transformed: OrchestratorJob }>;
+  failed: Array<{ job: Job; error: unknown }>;
+}
+
 /**
- * Transform multiple jobs with enhanced server support
+ * Transform a claimed batch job by job. By this point the jobs are already
+ * CLAIMED, so one that cannot be prepared (an env var that no longer decrypts
+ * after a key change, say) must not fail the others: rejecting the whole batch
+ * left every job in it stuck until its lease expired, then failed or re-ran them
+ * too, and the same batch could come straight back.
  */
-export async function enhancedTransformJobsForOrchestrator(
+export async function prepareJobsForOrchestrator(
   jobs: Job[],
-): Promise<OrchestratorJob[]> {
-  return Promise.all(jobs.map(enhancedTransformJobForOrchestrator));
+): Promise<PreparedJobs> {
+  const results = await Promise.allSettled(
+    jobs.map(enhancedTransformJobForOrchestrator),
+  );
+  const prepared: PreparedJobs = { ready: [], failed: [] };
+  results.forEach((result, index) => {
+    const job = jobs[index]!;
+    if (result.status === "fulfilled") {
+      prepared.ready.push({ job, transformed: result.value });
+    } else {
+      prepared.failed.push({ job, error: result.reason });
+    }
+  });
+  return prepared;
 }

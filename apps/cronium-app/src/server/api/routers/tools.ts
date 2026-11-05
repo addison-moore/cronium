@@ -18,6 +18,7 @@ import {
 } from "@/lib/security/credential-encryption";
 import { credentialCache } from "@/lib/tools/credential-cache";
 import { auditLog } from "@/lib/security/audit-logger";
+import { clientIpFromHeaders } from "@/lib/security/client-ip";
 import { rateLimiter } from "@/lib/security/rate-limiter";
 import {
   redactCredentialValues,
@@ -715,10 +716,7 @@ export const toolsRouter = createTRPCRouter({
           {
             userId: ctx.session.user.id,
             toolId: newTool.id,
-            ipAddress:
-              ctx.headers?.get?.("x-forwarded-for") ??
-              ctx.headers?.get?.("x-real-ip") ??
-              "unknown",
+            ipAddress: clientIpFromHeaders(ctx.headers) ?? "unknown",
             userAgent: ctx.headers?.get?.("user-agent") ?? "unknown",
           },
           input.type,
@@ -892,10 +890,7 @@ export const toolsRouter = createTRPCRouter({
           {
             userId: ctx.session.user.id,
             toolId: id,
-            ipAddress:
-              ctx.headers?.get?.("x-forwarded-for") ??
-              ctx.headers?.get?.("x-real-ip") ??
-              "unknown",
+            ipAddress: clientIpFromHeaders(ctx.headers) ?? "unknown",
             userAgent: ctx.headers?.get?.("user-agent") ?? "unknown",
           },
           changes,
@@ -955,10 +950,7 @@ export const toolsRouter = createTRPCRouter({
           {
             userId: ctx.session.user.id,
             toolId: input.id,
-            ipAddress:
-              ctx.headers?.get?.("x-forwarded-for") ??
-              ctx.headers?.get?.("x-real-ip") ??
-              "unknown",
+            ipAddress: clientIpFromHeaders(ctx.headers) ?? "unknown",
             userAgent: ctx.headers?.get?.("user-agent") ?? "unknown",
           },
           tool.type,

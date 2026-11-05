@@ -24,7 +24,7 @@ jest.mock("@/lib/scheduler/in-process-executor", () => ({
 }));
 
 import { db } from "@/server/db";
-import { InProcessWorkerPool, hasDueInProcessJobs } from "../worker-executor";
+import { InProcessWorkerPool } from "../worker-executor";
 import { storage } from "@/server/storage";
 import { transitionJob } from "../job-transition";
 import { runInProcessJob } from "@/lib/scheduler/in-process-executor";
@@ -385,27 +385,5 @@ describe("drain", () => {
     await pool.drain(100);
     expect(Date.now() - started).toBeGreaterThanOrEqual(90);
     expect(pool.activeCount).toBe(1);
-  });
-});
-
-describe("hasDueInProcessJobs", () => {
-  function primeDueQuery(rows: Array<{ one: number }>): void {
-    mockDb.select.mockImplementation(() => ({
-      from: () => ({
-        where: () => ({
-          limit: () => Promise.resolve(rows),
-        }),
-      }),
-    }));
-  }
-
-  it("is true when a due queued in-process job exists", async () => {
-    primeDueQuery([{ one: 1 }]);
-    await expect(hasDueInProcessJobs(NOW)).resolves.toBe(true);
-  });
-
-  it("is false when nothing is due (default clock)", async () => {
-    primeDueQuery([]);
-    await expect(hasDueInProcessJobs()).resolves.toBe(false);
   });
 });

@@ -34,8 +34,6 @@ const customJestConfig = {
     "src/**/*.{ts,tsx}",
     "!src/**/__tests__/**",
     "!src/**/*.d.ts",
-    "!src/scripts/deprecated/**",
-    "!src/scripts/migrations/**",
   ],
   coverageReporters: ["text-summary", "json-summary", "lcov"],
 };

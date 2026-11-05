@@ -118,8 +118,11 @@ type RetryConfig struct {
 
 // DockerConfig defines Docker daemon settings
 type DockerConfig struct {
-	Endpoint  string `yaml:"endpoint" envconfig:"ENDPOINT" default:"unix:///var/run/docker.sock"`
-	Version   string `yaml:"version" envconfig:"VERSION" default:"1.41"`
+	Endpoint string `yaml:"endpoint" envconfig:"ENDPOINT" default:"unix:///var/run/docker.sock"`
+	// Version pins the Docker API version. Empty (the default) negotiates with
+	// the daemon, which is the only setting that keeps working across Engine
+	// upgrades; set it only to work around a specific daemon.
+	Version   string `yaml:"version" envconfig:"VERSION"`
 	TLSVerify bool   `yaml:"tlsVerify" envconfig:"TLS_VERIFY" default:"false"`
 	CertPath  string `yaml:"certPath" envconfig:"CERT_PATH"`
 }
@@ -357,7 +360,6 @@ func setDefaults() {
 	viper.SetDefault("jobs.leaseRenewal", "30s")
 
 	viper.SetDefault("container.docker.endpoint", "unix:///var/run/docker.sock")
-	viper.SetDefault("container.docker.version", "1.41")
 	viper.SetDefault("container.resources.defaults.cpu", 0.5)
 	viper.SetDefault("container.resources.defaults.memory", "512MB")
 	viper.SetDefault("container.resources.defaults.disk", "1GB")
@@ -409,9 +411,6 @@ func processConfig(config *Config) error {
 	if len(config.Container.Network.DNS) == 0 {
 		config.Container.Network.DNS = []string{"8.8.8.8", "8.8.4.4"}
 	}
-
-	// Parse resource sizes
-	// TODO: Implement size parsing for memory and disk values
 
 	return nil
 }

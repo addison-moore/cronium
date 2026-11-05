@@ -12,7 +12,10 @@ Add an AI connection on the **Tools** page. A connection stores:
   OpenAI-compatible endpoint: Groq, Together, OpenRouter, Ollama, vLLM, …).
 - **API key** — encrypted at rest (`tool_credentials`), never returned to the
   browser after saving.
-- **Base URL** — required for `custom` providers; ignored otherwise.
+- **Base URL** — required for `custom` providers; ignored otherwise. It must be a
+  public address unless the instance sets `CRONIUM_AI_ALLOW_PRIVATE_URLS=true`, which
+  a LAN Ollama or vLLM needs. That setting lets any user with an AI connection reach
+  the server's internal network, so turn it on only if you trust them with it.
 - **Default model** — used when an action doesn't override it. Use
   **Refresh models** to load the live model list for your key.
 
