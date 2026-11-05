@@ -27,14 +27,18 @@ describe("proxy page gate", () => {
   // These reach their handler, which authenticates the token and answers in
   // JSON. They used to be redirected to the HTML sign-in page for lacking a
   // cookie, which made the bearer-token REST API unusable.
-  it.each(["/api/events", "/api/events/1", "/api/logs", "/api/logs/1"])(
-    "does not redirect a bearer-token request to %s",
-    async (path) => {
-      const res = await proxy(
-        request(path, { authorization: "Bearer some-token" }),
-      );
-      expect(res.status).toBe(200);
-      expect(res.headers.get("location")).toBeNull();
-    },
-  );
+  it.each([
+    "/api/events",
+    "/api/events/1",
+    "/api/events/1/execute",
+    "/api/workflows/1/execute",
+    "/api/logs",
+    "/api/logs/1",
+  ])("does not redirect a bearer-token request to %s", async (path) => {
+    const res = await proxy(
+      request(path, { authorization: "Bearer some-token" }),
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
 });
