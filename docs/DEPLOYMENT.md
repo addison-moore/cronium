@@ -15,6 +15,7 @@ lives at https://cronium.app/docs/self-hosting.
 - [Verification](#verification)
 - [Upgrades](#upgrades)
 - [Backup and Restore](#backup-and-restore)
+- [Data Retention](#data-retention)
 - [Troubleshooting](#troubleshooting)
 - [Security Notes](#security-notes)
 
@@ -150,7 +151,8 @@ see [GETTING_STARTED.md](./GETTING_STARTED.md) and `pnpm dev:docker:up`.
    [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md). Common `.env`
    options: `APP_PORT` (public web port), `SOCKET_PORT` (loopback proxy target),
    `SOCKET_ALLOWED_ORIGINS` (exact trusted browser origins),
-   `CRONIUM_IMAGE_TAG` (pin a release), `LOG_LEVEL`.
+   `CRONIUM_IMAGE_TAG` (pin a release), `LOG_LEVEL`, and the
+   `CRONIUM_*_RETENTION_DAYS` windows ([Data Retention](#data-retention)).
 2. **Orchestrator tuning** — advanced settings (polling cadence, SSH executor
    limits, metrics) via `apps/orchestrator/configs/cronium-orchestrator.yaml`.
    SSH remains disabled unless the operator explicitly attests to external
@@ -201,6 +203,11 @@ docker compose up -d
   (e.g. `1.2.0`) instead of tracking `latest`, and bump it deliberately.
   `install.sh --version vX.Y.Z` does this for you.
 - Take a database backup before major-version upgrades.
+- **Run history is deleted by age.** If your instance predates
+  [Data Retention](#data-retention), the worker starts deleting history past the
+  default windows as soon as it comes up after the upgrade. To keep everything,
+  set those variables to `0` in `.env` first. Re-running `install.sh` keeps your
+  existing `.env` and does not add them for you.
 - The orchestrator's signing key persists in `orchestrator-data`, so remote
   runners keep working across upgrades.
 
@@ -222,6 +229,43 @@ docker run --rm -v cronium-e2e_orchestrator-data:/data -v "$(pwd)":/backup \
 `docker volume ls`.) Store `.env` with your backups: the database is useless
 without the same `ENCRYPTION_KEY`, since stored credentials are encrypted with
 it.
+
+## Data Retention
+
+The `cronium-worker` service deletes old run history so the database does not
+grow without limit. It runs when the worker starts and every six hours. Each kind
+of data has its own window, set in `.env`; restart the worker to apply a change.
+
+| Variable                                 | Default (days) | What it deletes                                                |
+| ---------------------------------------- | -------------- | -------------------------------------------------------------- |
+| `CRONIUM_LOG_RETENTION_DAYS`             | 90             | Run logs (`logs`), the history shown on the Logs page          |
+| `CRONIUM_WORKFLOW_RETENTION_DAYS`        | 90             | Finished workflow runs and their per-step rows                 |
+| `CRONIUM_INCIDENT_RETENTION_DAYS`        | 90             | Schedule incidents (missed or skipped runs)                    |
+| `CRONIUM_TOOL_ACTION_LOG_RETENTION_DAYS` | 90             | Tool action logs                                               |
+| `CRONIUM_JOB_RETENTION_DAYS`             | 30             | Finished job queue rows, with their executions and transitions |
+| `CRONIUM_WEBHOOK_RETENTION_DAYS`         | 30             | Webhook deliveries, events and logs                            |
+
+- **`0` keeps that data forever.** A value that isn't a number of days up to 36500
+  is ignored with a warning in the worker's log, and that data is kept until it is
+  fixed.
+- **Only finished work is deleted.** A job that is still active keeps its logs, and
+  a workflow run in progress keeps its rows, however old they are. Definitions
+  (events, workflows, servers, webhooks) are never touched.
+- **Logs outlive their jobs.** Deleting a job row only detaches its log, so logs
+  stay on their own longer window.
+- **Keep the log and tool action windows at 31 days or more if you use quotas.**
+  Monthly quotas count rows in those two tables, so a shorter window makes usage
+  read low.
+
+The worker logs the windows in effect when it starts, and what it deleted on each
+pass. It deletes in small batches, and when a pass stops at its per-table cap it
+returns a minute later rather than six hours later, so a large backlog clears
+gradually without holding long locks.
+
+Postgres reuses the freed space for new rows rather than returning it to the
+operating system, so the database stops growing but doesn't shrink. To shrink it
+after a large first purge, run `VACUUM FULL` in a quiet period. It locks each table
+while rewriting it and needs enough free disk for a copy.
 
 ## Troubleshooting
 
