@@ -73,15 +73,19 @@ export const runEndpoints: readonly ApiEndpoint[] = [
 export const ciWaitForRun = `set -euo pipefail
 
 # Queue the run. --fail turns any 4xx or 5xx response into a failed step.
+# Don't add --retry here: a retried request can start a second run.
 LOG_ID=$(curl --silent --show-error --fail -X POST \\
   -H "Authorization: Bearer $CRONIUM_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d "{\\"input\\": {\\"commit\\": \\"$GITHUB_SHA\\"}}" \\
   https://cronium.example.com/api/events/42/execute | jq -r .logId)
 
-# Wait for it to finish.
-while true; do
-  STATUS=$(curl --silent --show-error --fail \\
+# Wait up to 30 minutes for it to finish, because a run nothing picks up
+# stays PENDING. Set this above the event's timeout. --retry rides out a
+# server restart.
+DEADLINE=$((SECONDS + 1800))
+while ((SECONDS < DEADLINE)); do
+  STATUS=$(curl --silent --show-error --fail --retry 5 --retry-connrefused \\
     -H "Authorization: Bearer $CRONIUM_TOKEN" \\
     "https://cronium.example.com/api/logs/$LOG_ID" | jq -r .status)
   case "$STATUS" in
@@ -89,4 +93,6 @@ while true; do
     SUCCESS) exit 0 ;;
     *) echo "Run finished with status $STATUS" >&2; exit 1 ;;
   esac
-done`;
+done
+echo "Run $LOG_ID had not finished after 30 minutes" >&2
+exit 1`;
