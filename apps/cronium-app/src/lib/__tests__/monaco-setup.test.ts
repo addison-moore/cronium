@@ -1,9 +1,8 @@
 /**
  * Monaco must never load from a CDN. If @monaco-editor/react's loader is left
- * unconfigured it injects a <script> pointing at jsDelivr, and the production
- * CSP lets that run: 'strict-dynamic' trusts scripts inserted by a nonced
- * script. The first sign of it is the stylesheet being blocked, which only
- * shows up in a production browser, so these tests pin the wiring instead.
+ * unconfigured it injects a <script> pointing at jsDelivr. The production CSP
+ * blocks that, so the editor never renders, and that only shows up in a
+ * production browser, so these tests pin the wiring instead.
  */
 import fs from "node:fs";
 import path from "node:path";
