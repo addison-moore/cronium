@@ -63,6 +63,7 @@ jest.mock("@/lib/scheduler", () => ({
   scheduler: { deleteScript: jest.fn(() => Promise.resolve(undefined)) },
 }));
 
+import { DrizzleQueryError } from "drizzle-orm/errors";
 import { dispatchEventJob } from "../dispatch";
 import { storage, type EventWithRelations } from "@/server/storage";
 import { jobService } from "@/lib/services/job-service";
@@ -349,36 +350,47 @@ describe("dispatchEventJob — overlap policy", () => {
     expect("activeKey" in input).toBe(false);
   });
 
-  it("records a SKIPPED_OVERLAP incident and finalizes the log on unique violation", async () => {
-    mockCreateJob.mockRejectedValue(
-      Object.assign(new Error("duplicate key"), { code: "23505" }),
-    );
+  it.each([
+    [
+      "wrapped by Drizzle, the way the real driver path throws it",
+      new DrizzleQueryError(
+        "insert into jobs",
+        [],
+        Object.assign(new Error("duplicate key"), { code: "23505" }),
+      ),
+    ],
+    ["unwrapped", Object.assign(new Error("duplicate key"), { code: "23505" })],
+  ])(
+    "records a SKIPPED_OVERLAP incident and finalizes the log on a unique violation %s",
+    async (_label, violation) => {
+      mockCreateJob.mockRejectedValue(violation);
 
-    const result = await dispatchEventJob(
-      makeEvent({ overlapPolicy: OverlapPolicy.SKIP }),
-      { triggeredBy: "schedule" },
-    );
+      const result = await dispatchEventJob(
+        makeEvent({ overlapPolicy: OverlapPolicy.SKIP }),
+        { triggeredBy: "schedule" },
+      );
 
-    expect(result).toEqual({ job: null, logId: null, skipped: "overlap" });
+      expect(result).toEqual({ job: null, logId: null, skipped: "overlap" });
 
-    const incidents = incidentInserts();
-    expect(incidents).toHaveLength(1);
-    expect(incidents[0]!.values).toEqual({
-      eventId: 7,
-      kind: ScheduleIncidentKind.SKIPPED_OVERLAP,
-      details: { logId: 42, triggeredBy: "schedule" },
-    });
+      const incidents = incidentInserts();
+      expect(incidents).toHaveLength(1);
+      expect(incidents[0]!.values).toEqual({
+        eventId: 7,
+        kind: ScheduleIncidentKind.SKIPPED_OVERLAP,
+        details: { logId: 42, triggeredBy: "schedule" },
+      });
 
-    expect(mockUpdateLog).toHaveBeenCalledWith(42, {
-      status: LogStatus.FAILURE,
-      endTime: expect.any(Date),
-      error: expect.stringContaining("overlap policy: SKIP"),
-    });
+      expect(mockUpdateLog).toHaveBeenCalledWith(42, {
+        status: LogStatus.FAILURE,
+        endTime: expect.any(Date),
+        error: expect.stringContaining("overlap policy: SKIP"),
+      });
 
-    // The skip is not a dispatch: no birth row, no bookkeeping.
-    expect(mockRecordCreated).not.toHaveBeenCalled();
-    expect(mockRecordDispatch).not.toHaveBeenCalled();
-  });
+      // The skip is not a dispatch: no birth row, no bookkeeping.
+      expect(mockRecordCreated).not.toHaveBeenCalled();
+      expect(mockRecordDispatch).not.toHaveBeenCalled();
+    },
+  );
 
   it("rethrows non-unique-violation errors from job creation", async () => {
     mockCreateJob.mockRejectedValue(new Error("connection refused"));

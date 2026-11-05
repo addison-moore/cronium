@@ -72,11 +72,13 @@ function jobTypeForEvent(event: EventWithRelations): JobType {
 }
 
 function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    (error as { code?: string }).code === "23505"
-  );
+  // Drizzle wraps driver errors in DrizzleQueryError, so the Postgres code is on
+  // `cause`. Reading only `code` here made the overlap policy throw instead of skip.
+  const { code, cause } = (error ?? {}) as {
+    code?: string;
+    cause?: { code?: string };
+  };
+  return code === "23505" || cause?.code === "23505";
 }
 
 /**
