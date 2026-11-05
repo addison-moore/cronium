@@ -5,6 +5,8 @@
 
 set -e
 
+cd "$(dirname "$0")"
+
 VERSION=${VERSION:-dev}
 BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -15,23 +17,24 @@ mkdir -p "$DIST_DIR"
 # Build flags for optimization
 LDFLAGS="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME -X main.GitCommit=$GIT_COMMIT"
 
+echo "Building helper binaries..."
+./build-helpers.sh
+
 echo "Building optimized, platform-specific runners..."
 
-# Build Linux AMD64 runner (only embeds linux_amd64 helpers)
+# Build Linux AMD64 runner
 echo "Building linux/amd64 runner..."
 GOOS=linux GOARCH=amd64 go build \
     -ldflags "$LDFLAGS" \
     -trimpath \
-    -tags "linux_amd64_only" \
     -o "$DIST_DIR/cronium-runner-linux-amd64-optimized" \
     ./cmd/runner
 
-# Build Linux ARM64 runner (only embeds linux_arm64 helpers)  
+# Build Linux ARM64 runner
 echo "Building linux/arm64 runner..."
 GOOS=linux GOARCH=arm64 go build \
     -ldflags "$LDFLAGS" \
     -trimpath \
-    -tags "linux_arm64_only" \
     -o "$DIST_DIR/cronium-runner-linux-arm64-optimized" \
     ./cmd/runner
 

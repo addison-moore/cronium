@@ -17,26 +17,26 @@ BINARY_NAME = cronium-runner
 # Platforms to build
 PLATFORMS = linux/amd64 linux/arm64
 
-.PHONY: all build clean test install-tools build-optimized build-helpers
+.PHONY: all build clean test install-tools build-local build-optimized build-helpers $(PLATFORMS)
 
 all: clean build
 
 # Build for all platforms
 build: $(PLATFORMS)
 
-$(PLATFORMS):
+$(PLATFORMS): build-helpers
 	@echo "Building for $@..."
 	@mkdir -p $(DIST_DIR)
 	@GOOS=$(word 1,$(subst /, ,$@)) GOARCH=$(word 2,$(subst /, ,$@)) \
 		go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)-$(word 1,$(subst /, ,$@))-$(word 2,$(subst /, ,$@)) ./cmd/runner
 
 # Build for current platform
-build-local:
+build-local: build-helpers
 	@echo "Building for current platform..."
 	@mkdir -p $(DIST_DIR)
 	go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME) ./cmd/runner
 
-# Build optimized binaries with platform-specific embeds
+# Build optimized binaries
 build-optimized: build-helpers
 	@echo "Building optimized binaries..."
 	@mkdir -p $(DIST_DIR)
@@ -56,21 +56,17 @@ build-optimized: build-helpers
 	@for platform in $(PLATFORMS); do \
 		os=$$(echo $$platform | cut -d'/' -f1); \
 		arch=$$(echo $$platform | cut -d'/' -f2); \
-		cp $(DIST_DIR)/$(BINARY_NAME)-$$os-$$arch ../../orchestrator/artifacts/runners/$(VERSION)/; \
-		cp $(DIST_DIR)/$(BINARY_NAME)-$$os-$$arch ../../orchestrator/artifacts/runners/dev/; \
+		for dir in ../../orchestrator/artifacts/runners/$(VERSION) ../../orchestrator/artifacts/runners/dev; do \
+			cp $(DIST_DIR)/$(BINARY_NAME)-$$os-$$arch $$dir/; \
+			(cd $$dir && sha256sum $(BINARY_NAME)-$$os-$$arch > $(BINARY_NAME)-$$os-$$arch.sha256); \
+		done; \
 	done
 	@echo "Optimized build complete!"
 
-# Build and compress helper binaries
+# Generate the helper binaries the runner embeds
 build-helpers:
 	@echo "Building helper binaries..."
 	@./build-helpers.sh
-	@echo "Compressing helper binaries..."
-	@for file in internal/helpers/binaries/linux_*.cronium.*; do \
-		if [ -f "$$file" ] && [ ! -f "$$file.gz" ]; then \
-			gzip -9 -k -f "$$file"; \
-		fi \
-	done
 
 # Install build dependencies
 install-tools:
@@ -95,9 +91,9 @@ store-artifacts: build
 	@cp $(DIST_DIR)/* $(ARTIFACTS_DIR)/$(VERSION)/
 	@echo "Artifacts stored in $(ARTIFACTS_DIR)/$(VERSION)"
 
-# Run tests
+# Run tests. The nohelpers tag compiles without the generated helper binaries.
 test:
-	go test ./...
+	go test -tags nohelpers ./...
 
 # Clean build artifacts
 clean:

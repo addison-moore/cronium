@@ -16,23 +16,17 @@ export CRONIUM_EVENT_ID=test-event-789
 
 # Create test directory
 TEST_DIR="/tmp/cronium-env-test-$$"
-mkdir -p "$TEST_DIR"
-cd "$TEST_DIR"
+mkdir -p "$TEST_DIR/.cronium/bin"
 
-# Build helpers if needed
+# Build helpers for this machine
 echo "Building runtime helpers..."
-cd /Users/addison/Code/cronium/cronium/apps/runner/cronium-runner
-./build-helpers.sh
+cd "$(dirname "$0")/.."
+for dir in cmd/helpers/*/; do
+    go build -tags nohelpers -o "$TEST_DIR/.cronium/bin/cronium.$(basename "$dir")" "./$dir"
+done
 
-# Extract helpers
 echo "Setting up test environment..."
 cd "$TEST_DIR"
-mkdir -p .cronium/bin
-
-# Copy the current platform's helpers
-PLATFORM="$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/')"
-cp /Users/addison/Code/cronium/cronium/apps/runner/cronium-runner/internal/helpers/binaries/${PLATFORM}_cronium.* .cronium/bin/
-chmod +x .cronium/bin/*
 
 # Add to PATH
 export PATH="$TEST_DIR/.cronium/bin:$PATH"
@@ -113,8 +107,7 @@ echo "Test setup complete!"
 echo "Working directory: $TEST_DIR"
 echo ""
 echo "To run the test:"
-echo "1. Start the mock runtime API:"
-echo "   cd /Users/addison/Code/cronium/cronium/test && go run mock-runtime-api.go"
+echo "1. Start the runtime service on port 8089"
 echo ""
 echo "2. Run the test script:"
 echo "   cd $TEST_DIR && ./test.sh"

@@ -11,14 +11,15 @@ import (
 func New(level string) *logrus.Logger {
 	log := logrus.New()
 
-	// Set output to stdout
-	log.SetOutput(os.Stdout)
+	// Stdout belongs to the script: it is the job's output. The runner's own
+	// messages go to stderr.
+	log.SetOutput(os.Stderr)
 
 	// Set formatter
 	log.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp:   true,
 		TimestampFormat: time.RFC3339,
-		DisableColors:   false,
+		DisableColors:   true,
 	})
 
 	// Parse and set log level
