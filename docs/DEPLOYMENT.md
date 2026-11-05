@@ -22,7 +22,8 @@ lives at https://cronium.app/docs/self-hosting.
 ## Prerequisites
 
 - Docker Engine 24.x+ with the Docker Compose V2 plugin
-- 4GB RAM minimum (8GB recommended), 20GB disk
+- 4GB RAM minimum to run the published images (8GB recommended), 20GB disk.
+  [Building from source](#building-from-source) needs 8GB.
 - Linux, macOS, or Windows with WSL2
 - The Docker socket must be available to the orchestrator for container jobs
   (an externally isolated SSH-only setup can drop that mount)
@@ -141,6 +142,10 @@ git clone https://github.com/addison-moore/cronium.git && cd cronium
 # .env with the same variables as above (setup helper: ./infra/scripts/setup-secrets.sh)
 docker compose -f infra/docker/docker-compose.yml up -d --build
 ```
+
+Give Docker about 8GB of memory for the build. `next build` alone peaks above
+4GB and can run out of memory on a smaller machine. If it does, build somewhere
+larger or use the published images.
 
 For the local development loop (app on the host, infrastructure in Docker),
 see [GETTING_STARTED.md](./GETTING_STARTED.md) and `pnpm dev:docker:up`.

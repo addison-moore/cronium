@@ -44,15 +44,6 @@ export function setupMonaco(): void {
               import.meta.url,
             ),
           );
-        case "css":
-        case "scss":
-        case "less":
-          return new Worker(
-            new URL(
-              "monaco-editor/language/css/css.worker.js",
-              import.meta.url,
-            ),
-          );
         case "html":
         case "handlebars":
         case "razor":
