@@ -16,6 +16,9 @@ import {
 import { eq, and, lt, or, isNull, inArray, sql } from "drizzle-orm";
 import { LogStatus, JobStatus, WorkflowLogLevel } from "@/shared/schema";
 
+// What workflow_executions.total_duration, an integer, can hold: about 24.8 days.
+const MAX_TOTAL_DURATION_MS = 2_147_483_647;
+
 interface CleanupOptions {
   maxWorkflowAge?: number; // Max time a workflow can run (ms)
   maxJobAge?: number; // Max time a job can run (ms)
@@ -188,6 +191,22 @@ export class WorkflowCleanupService {
 
     console.log(`[WorkflowCleanup] Marking workflow run ${runId} as timed out`);
 
+    const [current] = await db
+      .select({ startedAt: workflowExecutions.startedAt })
+      .from(workflowExecutions)
+      .where(eq(workflowExecutions.id, runId));
+
+    if (!current) {
+      console.log(
+        `[WorkflowCleanup] Skipping workflow run ${runId}: no such run`,
+      );
+      return false;
+    }
+
+    // How long it really ran: the admin route can make that far less than the
+    // limit, and a stopped worker far more.
+    const elapsedMs = now.getTime() - current.startedAt.getTime();
+
     // RUNNING only: the engine may have finished this run since the sweep read
     // it, and the admin route passes whatever id it was given. A finished run
     // keeps its result, and gets no timeout line.
@@ -196,7 +215,9 @@ export class WorkflowCleanupService {
       .set({
         status: LogStatus.TIMEOUT,
         completedAt: now,
-        totalDuration: this.options.maxWorkflowAge,
+        // Capped so that a run stuck for weeks can still be updated
+        totalDuration: Math.min(elapsedMs, MAX_TOTAL_DURATION_MS),
+        updatedAt: now,
       })
       .where(
         and(
@@ -223,7 +244,7 @@ export class WorkflowCleanupService {
         status: LogStatus.TIMEOUT,
         startTime: now,
         level: WorkflowLogLevel.ERROR,
-        message: `Workflow execution timed out after ${this.options.maxWorkflowAge / 1000}s`,
+        message: `Workflow execution timed out after ${Math.round(elapsedMs / 1000)}s`,
         timestamp: now,
       });
     } catch (error) {
