@@ -1,5 +1,6 @@
 "use client";
 
+import { loader } from "@monaco-editor/react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState, type ComponentType } from "react";
 import { Button } from "./button";
@@ -10,6 +11,11 @@ import type { MonacoEditorProps } from "./monaco-editor";
 type MonacoSetup = () => Promise<void>;
 
 let monacoSetup: MonacoSetup | undefined;
+
+// The loader's default is a public CDN. Pointing it at a path that doesn't exist
+// makes anything that mounts an editor without a setup fail here, rather than run
+// third-party code in the app's origin. A setup's bundled Monaco takes priority.
+loader.config({ paths: { vs: "/monaco-editor-not-configured" } });
 
 /**
  * Registers how the host app provides Monaco to `MonacoEditor`. The setup must
