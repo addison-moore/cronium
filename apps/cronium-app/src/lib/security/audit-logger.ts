@@ -172,21 +172,6 @@ export class AuditLogger {
   }
 
   /**
-   * Clean up old audit logs
-   */
-  async cleanup(retentionDays = 90): Promise<number> {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
-
-    const result = await db
-      .delete(toolAuditLogs)
-      .where(sql`${toolAuditLogs.createdAt} < ${cutoffDate}`);
-
-    // Drizzle returns an array with result info
-    return (result as { rowCount?: number }).rowCount ?? 0;
-  }
-
-  /**
    * Flush buffered logs to database
    */
   private async flush(): Promise<void> {

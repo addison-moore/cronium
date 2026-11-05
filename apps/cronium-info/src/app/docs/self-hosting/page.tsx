@@ -63,7 +63,8 @@ const retentionWindows = [
   {
     variable: "CRONIUM_WORKFLOW_RETENTION_DAYS",
     days: 90,
-    deletes: "Finished workflow runs and their per-step rows",
+    deletes:
+      "Finished workflow runs, their per-step rows, and workflow log lines",
   },
   {
     variable: "CRONIUM_INCIDENT_RETENTION_DAYS",
@@ -74,6 +75,11 @@ const retentionWindows = [
     variable: "CRONIUM_TOOL_ACTION_LOG_RETENTION_DAYS",
     days: 90,
     deletes: "Tool action logs",
+  },
+  {
+    variable: "CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS",
+    days: 90,
+    deletes: "Tool audit log: who changed or used a tool credential",
   },
   {
     variable: "CRONIUM_JOB_RETENTION_DAYS",
@@ -889,9 +895,19 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
               </li>
               <li>
                 Only finished work is deleted. A job that is still active keeps
-                its logs, and a workflow run in progress keeps its rows, however
-                old they are. Events, workflows, servers and webhooks themselves
-                are never touched.
+                its logs, and a workflow run in progress keeps its run and step
+                rows, however old they are. Events, workflows, servers, webhooks
+                and tool credentials themselves are never touched. Workflow log
+                lines aren&apos;t tied to a run, so each one ages from when it
+                was written.
+              </li>
+              <li>
+                The tool audit log has its own window because it is a security
+                record, not run output. It holds who changed or used a tool
+                credential, with the IP address and user agent for changes.
+                Raise the window if you must keep that record longer, or lower
+                it if you must drop those details sooner. The tool action window
+                doesn&apos;t affect it, and quotas don&apos;t read it.
               </li>
               <li>
                 Monthly quotas count run logs and tool action logs, so keep
@@ -903,9 +919,11 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
               <AlertDescription>
                 If your instance predates retention, the worker starts deleting
                 history past these defaults as soon as it comes up after the
-                upgrade. To keep everything, set the variables to <code>0</code>{" "}
-                in <code>.env</code> first. Re-running the installer keeps your
-                existing <code>.env</code> and does not add them for you.
+                upgrade. That includes the tool audit log, so if you need that
+                record kept, set its variable first. To keep everything, set the
+                variables to <code>0</code> in <code>.env</code> first.
+                Re-running the installer keeps your existing <code>.env</code>{" "}
+                and does not add them for you.
               </AlertDescription>
             </Alert>
           </div>

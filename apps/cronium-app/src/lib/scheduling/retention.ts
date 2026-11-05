@@ -18,10 +18,12 @@ import {
   logs,
   scheduleIncidents,
   toolActionLogs,
+  toolAuditLogs,
   webhookDeliveries,
   webhookEvents,
   webhookLogs,
   workflowExecutions,
+  workflowLogs,
   JobStatus,
   LogStatus,
 } from "@/shared/schema";
@@ -80,6 +82,14 @@ const WINDOWS = {
   },
   toolActionLogs: {
     env: "CRONIUM_TOOL_ACTION_LOG_RETENTION_DAYS",
+    defaultDays: 90,
+  },
+  // Not shared with toolActionLogs, because the two change for different reasons.
+  // That one is run output: disk space sets it, and monthly quotas need 31 days of
+  // it. This one is the security record of who changed or used a credential, with
+  // IP addresses, so compliance and privacy rules set it, in either direction.
+  toolAuditLogs: {
+    env: "CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS",
     defaultDays: 90,
   },
   webhooks: { env: "CRONIUM_WEBHOOK_RETENTION_DAYS", defaultDays: 30 },
@@ -240,7 +250,17 @@ const purgeJobsBatch: BatchPurge = (cutoff, limit) =>
     return ids.length;
   });
 
-/** In FK-safe order; tables that share a window age out together. */
+/**
+ * In FK-safe order; tables that share a window age out together.
+ *
+ * quota_usage is left out because no window is safe for it. QuotaManager.getUsage
+ * only bounds its read by time for resources named PerMonth or PerDay, so any other
+ * resource reads a row of any age. Once the last row goes, totalStorageMB and
+ * apiRequestsPerMinute fall back to a count that is always 0, so purging an old row
+ * makes a live read low. Nothing writes the table today either: consumeQuota is
+ * only reached from createMiddleware, which has no callers. Whoever wires that up
+ * decides what is safe to purge then.
+ */
 const PURGES = [
   // Ahead of jobs so logs that are going anyway are never detached first.
   { table: "logs", window: "logs", batch: purgeLogsBatch },
@@ -262,6 +282,17 @@ const PURGES = [
     ),
   },
   {
+    table: "workflow_logs",
+    window: "workflowExecutions",
+    // It has no FK to workflow_executions, so that purge doesn't reach it. Rows
+    // are never updated, so a start row reads RUNNING for good and status can't
+    // be a filter here. With no run id to check instead, each row ages from when
+    // it was written: guarding by workflow would keep a busy one's rows forever.
+    batch: flatBatch(workflowLogs, workflowLogs.id, (cutoff) =>
+      lt(workflowLogs.createdAt, cutoff),
+    ),
+  },
+  {
     table: "schedule_incidents",
     window: "scheduleIncidents",
     batch: flatBatch(scheduleIncidents, scheduleIncidents.id, (cutoff) =>
@@ -273,6 +304,13 @@ const PURGES = [
     window: "toolActionLogs",
     batch: flatBatch(toolActionLogs, toolActionLogs.id, (cutoff) =>
       lt(toolActionLogs.createdAt, cutoff),
+    ),
+  },
+  {
+    table: "tool_audit_logs",
+    window: "toolAuditLogs",
+    batch: flatBatch(toolAuditLogs, toolAuditLogs.id, (cutoff) =>
+      lt(toolAuditLogs.createdAt, cutoff),
     ),
   },
   // Ahead of webhook_events, which are only eligible once no delivery is left.
