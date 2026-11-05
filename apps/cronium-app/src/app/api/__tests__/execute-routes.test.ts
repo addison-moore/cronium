@@ -293,6 +293,155 @@ describe.each(routes)("POST /api/$path/{id}/execute", (route) => {
       expect(res.status).toBe(413);
       expect(route.enqueue).not.toHaveBeenCalled();
     });
+
+    describe("reading the body", () => {
+      const MAX_BODY_BYTES = 1024 * 1024;
+      const encoder = new TextEncoder();
+
+      /** A JSON body of exactly `bytes` bytes. */
+      const jsonOfSize = (bytes: number) => {
+        const shell = JSON.stringify({ input: { a: "" } });
+        return JSON.stringify({
+          input: { a: "x".repeat(bytes - shell.length) },
+        });
+      };
+
+      /** A body sent in pieces, with no declared length, counting what's read. */
+      function streamed(chunks: Iterable<Uint8Array>) {
+        const source = chunks[Symbol.iterator]();
+        const seen = { pulls: 0, cancelled: false };
+        const stream = new ReadableStream<Uint8Array>(
+          {
+            pull(controller) {
+              seen.pulls++;
+              const next = source.next();
+              if (next.done) controller.close();
+              else controller.enqueue(next.value);
+            },
+            cancel() {
+              seen.cancelled = true;
+            },
+          },
+          { highWaterMark: 0 },
+        );
+        return { stream, seen };
+      }
+
+      const callStreamed = (
+        target: Route,
+        stream: ReadableStream<Uint8Array>,
+        headers: Record<string, string> = {},
+      ) =>
+        target.POST(
+          new NextRequest(
+            `http://localhost:5001/api/${target.path}/7/execute`,
+            {
+              method: "POST",
+              headers: { authorization: "Bearer a-token", ...headers },
+              body: stream,
+              duplex: "half",
+            } as ConstructorParameters<typeof NextRequest>[1],
+          ),
+          { params: Promise.resolve({ id: "7" }) },
+        );
+
+      it("accepts a body of exactly the limit", async () => {
+        const res = await call(route, { body: jsonOfSize(MAX_BODY_BYTES) });
+        expect(res.status).toBe(202);
+      });
+
+      it("refuses a body one byte over the limit", async () => {
+        const res = await call(route, { body: jsonOfSize(MAX_BODY_BYTES + 1) });
+        expect(res.status).toBe(413);
+        expect(route.enqueue).not.toHaveBeenCalled();
+      });
+
+      it("refuses a declared oversize body without reading any of it", async () => {
+        const { stream, seen } = streamed([encoder.encode("{}")]);
+
+        const res = await callStreamed(route, stream, {
+          "content-length": String(MAX_BODY_BYTES + 1),
+        });
+
+        expect(res.status).toBe(413);
+        expect(seen.pulls).toBe(0);
+        expect(route.enqueue).not.toHaveBeenCalled();
+      });
+
+      it("stops reading an undeclared body as soon as it passes the limit", async () => {
+        const chunkSize = 256 * 1024;
+        // Bounded, so a regression fails the assertion below instead of running
+        // the test process out of memory.
+        function* farTooMuch() {
+          for (let i = 0; i < 64; i++) yield new Uint8Array(chunkSize);
+        }
+        const { stream, seen } = streamed(farTooMuch());
+
+        const res = await callStreamed(route, stream);
+
+        expect(res.status).toBe(413);
+        // Four chunks reach the limit exactly, and the fifth passes it.
+        expect(seen.pulls).toBe(5);
+        expect(seen.cancelled).toBe(true);
+        expect(route.enqueue).not.toHaveBeenCalled();
+      });
+
+      it("does not trust a declared length that understates the body", async () => {
+        function* tooMuch() {
+          for (let i = 0; i < 5; i++) yield new Uint8Array(256 * 1024);
+        }
+        const { stream } = streamed(tooMuch());
+
+        const res = await callStreamed(route, stream, {
+          "content-length": "2",
+        });
+
+        expect(res.status).toBe(413);
+      });
+
+      it("rebuilds a character split across two chunks", async () => {
+        const bytes = encoder.encode('{"input":{"a":"é"}}');
+        const split = bytes.indexOf(0xc3) + 1; // inside the two bytes of é
+        const { stream } = streamed([
+          bytes.slice(0, split),
+          bytes.slice(split),
+        ]);
+
+        const res = await callStreamed(route, stream);
+
+        expect(res.status).toBe(202);
+        expect(route.enqueue).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({ input: { a: "é" } }),
+        );
+      });
+
+      it("ignores a byte order mark, as request.text() does", async () => {
+        const res = await call(route, {
+          body: '\uFEFF{"input":{"a":"1"}}',
+        });
+
+        expect(res.status).toBe(202);
+      });
+
+      it("answers 500 if the connection fails partway through", async () => {
+        const errors = silenceErrors();
+        const stream = new ReadableStream<Uint8Array>(
+          {
+            pull() {
+              throw new Error("connection reset");
+            },
+          },
+          { highWaterMark: 0 },
+        );
+
+        const res = await callStreamed(route, stream);
+
+        expect(res.status).toBe(500);
+        expect(route.enqueue).not.toHaveBeenCalled();
+        errors.mockRestore();
+      });
+    });
   });
 
   describe("rate limit", () => {

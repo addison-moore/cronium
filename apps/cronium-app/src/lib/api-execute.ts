@@ -40,6 +40,35 @@ function parseResourceId(raw: string): number | null {
   return id <= MAX_POSTGRES_INT ? id : null;
 }
 
+/**
+ * The request body as text, or null once it passes `limit` bytes. Stops reading as
+ * soon as it knows, rather than taking in the rest first. The declared length can't
+ * be the only check, because a chunked request doesn't declare one.
+ */
+async function readBodyWithin(
+  request: NextRequest,
+  limit: number,
+): Promise<string | null> {
+  if (Number(request.headers.get("content-length")) > limit) return null;
+  if (!request.body) return "";
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytes += value.byteLength;
+    if (bytes > limit) {
+      // Not awaited: the answer doesn't depend on how the stream shuts down.
+      void reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks));
+}
+
 function refuse(body: object, status: number, headers?: HeadersInit) {
   return {
     ok: false as const,
@@ -89,8 +118,8 @@ export async function parseExecuteRequest(
     });
   }
 
-  const rawBody = await request.text();
-  if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) {
+  const rawBody = await readBodyWithin(request, MAX_BODY_BYTES);
+  if (rawBody === null) {
     return refuse({ error: "Request body too large (max 1 MB)" }, 413);
   }
 

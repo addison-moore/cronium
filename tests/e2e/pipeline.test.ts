@@ -384,6 +384,48 @@ describe("scenario 5 — triggering runs from CI over REST", () => {
     expect(rows[0]?.orchestrator_id).toBe("e2e-orchestrator");
   });
 
+  it("refuses an oversized body, declared or chunked, before running anything", async () => {
+    const marker = `e2e-rest-big-${Date.now().toString(36)}`;
+    const event = await trpc<EventDto>(token, "events.create", {
+      name: marker,
+      type: "BASH",
+      content: `echo "${marker}"`,
+      triggerType: "MANUAL",
+      status: "DRAFT",
+    });
+    const url = `${APP_URL}/api/events/${event.id}/execute`;
+    const headers = { authorization: `Bearer ${token}` };
+    const twoMegabytes = "x".repeat(2 * 1024 * 1024);
+
+    const declared = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ input: { a: twoMegabytes } }),
+    });
+    expect(declared.status).toBe(413);
+
+    const chunk = new TextEncoder().encode(twoMegabytes.slice(0, 256 * 1024));
+    let sent = 0;
+    const chunked = await fetch(url, {
+      method: "POST",
+      headers,
+      duplex: "half",
+      body: new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (sent++ >= 8) controller.close();
+          else controller.enqueue(chunk);
+        },
+      }),
+    } as RequestInit);
+    expect(chunked.status).toBe(413);
+
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM jobs WHERE event_id = $1`,
+      [event.id],
+    );
+    expect(rows[0].n).toBe(0);
+  });
+
   it("runs a workflow to completion", async () => {
     const marker = `e2e-rest-wf-${Date.now().toString(36)}`;
     const step = await trpc<EventDto>(token, "events.create", {
