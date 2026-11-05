@@ -23,10 +23,10 @@ env:
 jobs:
   node:
     name: Lint, Typecheck & Test (Node)
-    # Pull requests stay on GitHub-hosted runners: this repo accepts PRs from
-    # forks, and a fork PR running on self-hosted would execute untrusted code
-    # on our own machine.
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'self-hosted' }}
+    # Always GitHub-hosted. On the self-hosted runner, pnpm/action-setup fails
+    # with "Cannot find module '../lib/cli.js'" from the npm in the runner's
+    # bundled Node 24, which stops this job before any project code runs.
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
