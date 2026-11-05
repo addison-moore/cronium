@@ -221,11 +221,6 @@ describe("ssrf-guard", () => {
     let connections: number;
     let paths: string[];
 
-    beforeAll(() => {
-      // Keep axios away from any proxy configured in the developer's shell.
-      process.env.NO_PROXY = "*";
-    });
-
     beforeEach(async () => {
       connections = 0;
       paths = [];
@@ -480,6 +475,7 @@ describe("ssrf-guard", () => {
         axios.get(`http://public.test:${port}/redirect`, {
           httpAgent: ssrfHttpAgent,
           httpsAgent: ssrfHttpsAgent,
+          proxy: false,
           maxRedirects: 5,
         }),
       ).rejects.toThrow(/resolves to a disallowed address/);

@@ -73,11 +73,6 @@ describe("webhook delivery behind the SSRF guard", () => {
       },
     );
 
-  beforeAll(() => {
-    // Keep axios away from any proxy configured in the developer's shell.
-    process.env.NO_PROXY = "*";
-  });
-
   beforeEach(async () => {
     mockLookup.mockReset();
     mockIsDisallowedIp.mockImplementation(realIsDisallowedIp);
