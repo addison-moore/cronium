@@ -48,9 +48,6 @@ export const eventQuerySchema = z.object({
 // stack). Past either, a job fails as it starts with "argument list too long", which
 // says nothing about the variable. So these refuse it at save, leaving room for the
 // longest key, the process's arguments and the variables Cronium adds.
-//
-// Saving replaces an event's variables one row at a time, so whatever the database
-// refuses costs the rows after it. Refusing here costs nothing.
 export const MAX_ENV_VAR_KEY_LENGTH = 255; // env_vars.key is varchar(255)
 export const MAX_ENV_VAR_VALUE_BYTES = 128_000;
 export const MAX_ENV_VARS_TOTAL_BYTES = 1_000_000;
