@@ -301,11 +301,11 @@ jobs:
         run: ../../../infra/scripts/lint-go.sh
         continue-on-error: true
 
-  # The container-hardening integration test creates a REAL container and
-  # inspects it via the Docker API (build tag `integration`); before this job
-  # existed it never ran anywhere. Pinned to ubuntu-latest, which always has a
-  # Docker daemon; alpine is pre-pulled because the test skips (rather than
-  # pulls) when the image is absent.
+  # The container integration tests create REAL containers through the Docker
+  # API (build tag `integration`): they inspect the sandbox, and run scripts in
+  # it. Before this job existed they never ran anywhere. Pinned to ubuntu-latest,
+  # which always has a Docker daemon; the images are prepared first because the
+  # tests skip (rather than pull or build) when one is absent.
   go-container-integration:
     name: Container hardening (integration, real Docker)
     runs-on: ubuntu-latest
@@ -322,14 +322,23 @@ jobs:
       - name: Pull alpine (integration test never pulls)
         run: docker pull alpine:latest
 
+      # Scripts reach a job on stdin through a bootstrap per language, so these
+      # tests run in the real images. The E2E job builds only the bash one.
+      - name: Build the runner images (integration tests never build)
+        working-directory: apps/runtime/container-images
+        run: |
+          docker build -q -t cronium/runner:bash-alpine bash
+          docker build -q -t cronium/runner:python-alpine python
+          docker build -q -t cronium/runner:node-alpine nodejs
+
       - name: Integration tests (container executor)
         working-directory: apps/orchestrator
         run: |
           set -o pipefail
           go test -tags=integration -count=1 -v ./internal/executors/container/ | tee /tmp/itest.out
-          # The test self-skips when Docker/alpine is unavailable; on this
-          # runner that would mean the job silently proved nothing — fail.
-          if grep -q -- "--- SKIP: TestCreatedContainerHasHardenedHostConfig" /tmp/itest.out; then
-            echo "hardening integration test was skipped — Docker/alpine unavailable" >&2
+          # These tests self-skip when Docker or an image is unavailable; on
+          # this runner that would mean the job silently proved nothing — fail.
+          if grep -E -- "--- SKIP: (TestCreatedContainerHasHardenedHostConfig|.*InTheSandbox|TestCutOffDeliveryRunsNothing)" /tmp/itest.out; then
+            echo "a container integration test was skipped — Docker or an image is unavailable" >&2
             exit 1
           fi

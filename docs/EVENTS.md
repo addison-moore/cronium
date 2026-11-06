@@ -88,6 +88,7 @@ Execute pre-built integrations with third-party services:
 - **Timeout Controls**: Prevent runaway executions
 - **Retry Logic**: Automatic retries on failure (0-10 attempts)
 - **Execution Logs**: Complete stdout/stderr capture with timestamps
+- **Script Length**: A script can be up to about 10 MB, the most one save request can carry
 - **Real-time Monitoring**: Watch executions as they happen
 
 #### 🔗 Chaining events (Workflows)
