@@ -217,6 +217,11 @@ docker compose up -d
 - The orchestrator's signing key persists in `orchestrator-data`, so remote
   runners keep working across upgrades.
 
+Both compose files give `cronium-app` 20 seconds to stop and `cronium-worker` 40, so
+requests and jobs can finish and the last tool audit log entries can be written. If you
+run the images another way, allow them the same: a process killed sooner loses the
+entries it hadn't written.
+
 ## Backup and Restore
 
 The entire state of a deployment is: the three data volumes plus your `.env`.

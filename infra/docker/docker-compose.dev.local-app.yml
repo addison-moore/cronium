@@ -32,6 +32,9 @@ services:
     image: cronium/worker:dev
     container_name: cronium-worker-dev
     command: ["apps/cronium-app/scripts/start-worker.sh"]
+    # Time to finish running jobs (up to 30s) and write their audit log entries (up
+    # to 5s more) before Docker kills it.
+    stop_grace_period: 40s
     environment:
       DATABASE_URL: ${CRONIUM_DEV_WORKER_DATABASE_URL:-${DATABASE_URL:-}}
       AUTH_URL: ${AUTH_URL:-http://localhost:5001}

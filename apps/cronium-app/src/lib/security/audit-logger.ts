@@ -53,9 +53,29 @@ export interface AuditLogEntry {
  */
 export const MAX_PENDING_AUDIT_ENTRIES = 1000;
 
+/**
+ * How long shutdown() keeps writing before what's left goes to the server log.
+ * Compose's stop_grace_period for each service has to leave room for this.
+ */
+const AUDIT_SHUTDOWN_TIMEOUT_MS = 5000;
+
+/** Between attempts during shutdown: an outage may be over in time. */
+const SHUTDOWN_RETRY_MS = 1000;
+
+/** For the server log to take what shutdown() wrote to it. */
+const SERVER_LOG_DRAIN_MS = 2000;
+
+/**
+ * An entry as the buffer holds it. The time it happened is an ISO string because
+ * this also goes to the server log, where redactSecrets would turn a Date into {}.
+ */
+interface PendingEntry extends AuditLogEntry {
+  occurredAt: string;
+}
+
 type AuditRow = typeof toolAuditLogs.$inferInsert;
 
-function toRow(entry: AuditLogEntry, keepToolReference = true): AuditRow {
+function toRow(entry: PendingEntry, keepToolReference = true): AuditRow {
   const { toolId } = entry.context;
   // A deleted credential can't be referenced, so its id moves into the details.
   const referencesTool =
@@ -74,6 +94,7 @@ function toRow(entry: AuditLogEntry, keepToolReference = true): AuditRow {
     userAgent: entry.context.userAgent ?? null,
     success: entry.success,
     errorMessage: entry.errorMessage ?? null,
+    createdAt: new Date(entry.occurredAt),
   };
 }
 
@@ -81,7 +102,7 @@ function toRow(entry: AuditLogEntry, keepToolReference = true): AuditRow {
  * The row for an entry whose contents the database still won't store once they
  * are cleaned: who did what and whether it worked.
  */
-function toMinimalRow(entry: AuditLogEntry, rejection: unknown): AuditRow {
+function toMinimalRow(entry: PendingEntry, rejection: unknown): AuditRow {
   const { code, name } = driverError(rejection);
   const { toolId } = entry.context;
 
@@ -94,6 +115,7 @@ function toMinimalRow(entry: AuditLogEntry, rejection: unknown): AuditRow {
       ...(toolId ? { toolId } : {}),
     },
     success: entry.success,
+    createdAt: new Date(entry.occurredAt),
   };
 }
 
@@ -150,16 +172,26 @@ async function insertUnlessRejected(row: AuditRow): Promise<unknown> {
 }
 
 /**
+ * One logger per process, so it can't live on the class. Next builds this module
+ * once per layer, and shutting down from instrumentation would otherwise reach a
+ * copy with nothing in it while the route handlers' entries sat in another.
+ */
+const INSTANCE_KEY = Symbol.for("cronium.auditLogger");
+
+/**
  * Audit logger for tracking security events
  */
 export class AuditLogger {
-  private static instance: AuditLogger;
-  private buffer: AuditLogEntry[] = [];
+  private buffer: PendingEntry[] = [];
   private flushInterval: NodeJS.Timeout | null = null;
   private readonly flushThreshold = 100;
   private readonly flushIntervalMs = 5000; // 5 seconds
   private retrying = false;
   private earlyFlush: Promise<void> | null = null;
+  /** Each flush still running, by the entries it hasn't finished writing. */
+  private readonly writing = new Map<PendingEntry[], Promise<void>>();
+  /** shutdown() has finished with the buffer, so nothing will write it again. */
+  private closed = false;
 
   private constructor() {
     // Start flush interval
@@ -167,18 +199,30 @@ export class AuditLogger {
   }
 
   static getInstance(): AuditLogger {
-    if (!AuditLogger.instance) {
-      AuditLogger.instance = new AuditLogger();
-    }
-    return AuditLogger.instance;
+    const shared = globalThis as unknown as {
+      [INSTANCE_KEY]?: AuditLogger;
+    };
+    return (shared[INSTANCE_KEY] ??= new AuditLogger());
   }
 
   /**
    * Log an audit event
    */
   async log(entry: AuditLogEntry): Promise<void> {
+    // The row's time: when this happened, not when a flush got to it, which an
+    // outage can make much later.
+    const occurredAt = new Date().toISOString();
+    const pending: PendingEntry = { occurredAt, ...storableEntry(entry) };
+
+    if (this.closed) {
+      console.error(
+        `[AuditLog] DROPPED a ${pending.action} entry: logged after shutting down. Full entry: ${serializeEntry(pending)}`,
+      );
+      return;
+    }
+
     // Add to buffer
-    this.buffer.push(storableEntry(entry));
+    this.buffer.push(pending);
     this.dropOldestPastLimit();
 
     // Flush a full batch early, one flush at a time so a failure can't put entries
@@ -309,6 +353,15 @@ export class AuditLogger {
     const pending = this.buffer;
     this.buffer = [];
 
+    const write = this.write(pending).finally(() => {
+      this.writing.delete(pending);
+    });
+    this.writing.set(pending, write);
+    await write;
+  }
+
+  /** Takes entries out of `pending` as they are dealt with. */
+  private async write(pending: PendingEntry[]): Promise<void> {
     try {
       // Batch insert
       await db
@@ -325,11 +378,12 @@ export class AuditLogger {
 
     // A batch insert is all or nothing, so one rejected entry failed the lot.
     // Alone, it can only cost itself.
-    for (const [index, entry] of pending.entries()) {
+    while (pending.length > 0) {
       try {
-        await this.writeAlone(entry);
+        await this.writeAlone(pending[0]!);
+        pending.shift();
       } catch (error) {
-        this.keepForRetry(pending.slice(index), error);
+        this.keepForRetry(pending, error);
         return;
       }
     }
@@ -344,7 +398,7 @@ export class AuditLogger {
    * row that finally goes in is what proves the entry was the problem. Throws if
    * the entry should be kept for another try.
    */
-  private async writeAlone(entry: AuditLogEntry): Promise<void> {
+  private async writeAlone(entry: PendingEntry): Promise<void> {
     const rejected = await insertUnlessRejected(toRow(entry));
     if (!rejected) return;
 
@@ -380,7 +434,10 @@ export class AuditLogger {
   }
 
   /** Put entries back at the front of the buffer, in their original order. */
-  private keepForRetry(entries: AuditLogEntry[], error: unknown): void {
+  private keepForRetry(entries: PendingEntry[], error: unknown): void {
+    // Shutdown gave up on these while they were being written, and logged them.
+    if (entries.length === 0) return;
+
     this.buffer = [...entries, ...this.buffer];
     this.retrying = true;
     console.error(
@@ -420,12 +477,82 @@ export class AuditLogger {
   }
 
   /**
-   * Shutdown and flush remaining logs
+   * Write everything still waiting, including what a flush already under way has
+   * hold of, and send to the server log whatever isn't written in time. A hung
+   * database gets no longer than `timeoutMs`, because nothing else stops it from
+   * holding the process open. Call this once whatever creates entries has stopped:
+   * from the moment it has finished with the buffer, log() goes straight to the
+   * server log.
    */
-  async shutdown(): Promise<void> {
+  async shutdown(timeoutMs = AUDIT_SHUTDOWN_TIMEOUT_MS): Promise<void> {
     this.stopFlushInterval();
-    await this.earlyFlush;
-    await this.flush();
+
+    let timer: NodeJS.Timeout | undefined;
+    let outOfTime = false;
+    const timeUp = new Promise<void>((resolve) => {
+      timer = setTimeout(() => {
+        outOfTime = true;
+        resolve();
+      }, timeoutMs);
+    });
+
+    const writeEverything = async () => {
+      while (!outOfTime && (this.buffer.length > 0 || this.writing.size > 0)) {
+        await Promise.allSettled(this.writing.values());
+        await this.flush();
+        if (this.retrying && !outOfTime) {
+          await Promise.race([
+            new Promise((resolve) => setTimeout(resolve, SHUTDOWN_RETRY_MS)),
+            timeUp,
+          ]);
+        }
+      }
+      // With no await since the check above, so no entry can slip in between.
+      this.closed = true;
+    };
+
+    await Promise.race([writeEverything(), timeUp]);
+    clearTimeout(timer);
+
+    if (outOfTime) await this.logUnwritten(timeoutMs);
+  }
+
+  /**
+   * The server log as the last record of what never reached the table. Emptying
+   * each batch in place means a write that finishes after this has nothing to put
+   * back, so nothing here can also be written by a later flush.
+   */
+  private async logUnwritten(timeoutMs: number): Promise<void> {
+    this.closed = true;
+    let logged = false;
+
+    for (const pending of this.writing.keys()) {
+      for (const entry of pending.splice(0)) {
+        logged = true;
+        console.error(
+          `[AuditLog] DROPPED a ${entry.action} entry: its write hadn't finished ${timeoutMs}ms into shutting down, so it may still have been written. Full entry: ${serializeEntry(entry)}`,
+        );
+      }
+    }
+
+    for (const entry of this.buffer.splice(0)) {
+      logged = true;
+      console.error(
+        `[AuditLog] DROPPED a ${entry.action} entry: not written ${timeoutMs}ms into shutting down. Full entry: ${serializeEntry(entry)}`,
+      );
+    }
+
+    // The caller is about to exit. On a pipe, which is what Docker gives a process,
+    // these writes are asynchronous, and process.exit discards what hasn't gone out.
+    if (logged) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, SERVER_LOG_DRAIN_MS);
+        process.stderr.write("", () => {
+          clearTimeout(timer);
+          resolve();
+        });
+      });
+    }
   }
 }
 
