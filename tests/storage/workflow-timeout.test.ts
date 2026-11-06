@@ -12,6 +12,7 @@ import { storage } from "@/server/storage";
 import { deriveNodeStatuses } from "@/components/workflows/lib/execution-graph";
 import * as httpEvents from "@/lib/scheduler/http-event-executor";
 import { dispatchEventJob } from "@/lib/scheduling/dispatch";
+import { runSweepTick } from "@/lib/scheduling/sweeper";
 import { InProcessWorkerPool } from "@/lib/scheduling/worker-executor";
 import {
   advanceRunsForJob,
@@ -233,6 +234,61 @@ async function startJob(jobId: string) {
   await jobService.updateJobStatus(jobId, JobStatus.RUNNING, {
     startedAt: new Date(),
   });
+}
+
+/** Holds a run's row lock from another connection, as an advance would while `fn`
+ * runs. The lock is gone again however `fn` ends. */
+async function holdingRunLock<T>(runId: number, fn: () => Promise<T>) {
+  const holder = await pool.connect();
+  try {
+    await holder.query("BEGIN");
+    await holder.query(
+      `SELECT id FROM workflow_executions WHERE id = $1 FOR UPDATE`,
+      [runId],
+    );
+    return await fn();
+  } finally {
+    await holder.query("ROLLBACK");
+    holder.release();
+  }
+}
+
+/** Whether `work` finished on its own, without leaving a hung query behind. */
+async function finishesWithin(ms: number, work: Promise<unknown>) {
+  let timer: NodeJS.Timeout | undefined;
+  const outcome = await Promise.race([
+    work.then(() => "finished"),
+    new Promise<string>((resolve) => {
+      timer = setTimeout(() => resolve("still waiting"), ms);
+    }),
+  ]);
+  clearTimeout(timer);
+  return outcome;
+}
+
+/** The SQL every transaction runs from here on. Drizzle takes a client from the
+ * pool for a transaction, so a spy on pool.query wouldn't see these. pool.query
+ * itself connects with a callback, and those pass straight through. */
+function recordTransactionQueries(): string[] {
+  const seen: string[] = [];
+  const connect = pool.connect.bind(pool) as unknown as (
+    callback?: unknown,
+  ) => Promise<{ query: (...args: unknown[]) => unknown }>;
+  jest.spyOn(pool, "connect").mockImplementation(((callback?: unknown) => {
+    if (callback) return connect(callback);
+    return connect().then((client) => {
+      if (!jest.isMockFunction(client.query)) {
+        const query = client.query.bind(client);
+        jest.spyOn(client, "query").mockImplementation((...args: unknown[]) => {
+          const [text] = args as [string | { text: string }];
+          seen.push(typeof text === "string" ? text : text.text);
+          return query(...args);
+        });
+      }
+      return client;
+    });
+  }) as never);
+  return seen;
 }
 
 async function closeAllSteps(runId: number) {
@@ -884,7 +940,18 @@ describe("a step job still queued when its run times out", () => {
 
     await service.performCleanup();
 
-    expect(await jobStatus(jobId)).toBe(JobStatus.TIMED_OUT);
+    const reason = "Workflow run timed out while this job was waiting to retry";
+    expect(await jobOf(jobId)).toMatchObject({
+      status: JobStatus.TIMED_OUT,
+      lastError: reason,
+      attempts: 1,
+    });
+    // The requeue cleared startedAt, so the wait isn't reported as run time
+    expect(await logOf(jobId)).toMatchObject({
+      status: LogStatus.TIMEOUT,
+      error: reason,
+      duration: null,
+    });
     // Even once the backoff has passed
     await db
       .update(jobs)
@@ -902,6 +969,63 @@ describe("a step job still queued when its run times out", () => {
       error: "the first attempt's own error",
       exitCode: 7,
     });
+  });
+
+  it("says it was waiting to retry after losing its lease as well", async () => {
+    const { jobId } = await startStuckRun({ retries: 2 });
+    await startJob(jobId);
+    await db
+      .update(jobs)
+      .set({ leaseExpiresAt: new Date(Date.now() - 1000) })
+      .where(eq(jobs.id, jobId));
+    await runSweepTick();
+    expect(await jobOf(jobId)).toMatchObject({
+      status: JobStatus.QUEUED,
+      attempts: 1,
+      startedAt: null,
+    });
+
+    await service.performCleanup();
+
+    const reason = "Workflow run timed out while this job was waiting to retry";
+    expect(await jobOf(jobId)).toMatchObject({
+      status: JobStatus.TIMED_OUT,
+      lastError: reason,
+    });
+    expect(await logOf(jobId)).toMatchObject({ error: reason, duration: null });
+  });
+
+  it("finishes its log when the link from the log to the job was never written", async () => {
+    const { jobId } = await startStuckRun();
+    const { id: logId } = await logOf(jobId);
+    // dispatch writes this link best-effort, so a job can run without it
+    await db.update(logs).set({ jobId: null }).where(eq(logs.id, logId));
+
+    await service.performCleanup();
+
+    const [log] = await db.select().from(logs).where(eq(logs.id, logId));
+    expect(log).toMatchObject({
+      status: LogStatus.TIMEOUT,
+      error: "Workflow run timed out before this job started",
+      endTime: expect.any(Date),
+    });
+  });
+
+  it("finishes its log through the link when the job doesn't name its log", async () => {
+    const userId = await seedUser();
+    const workflowId = await seedWorkflow(userId);
+    const eventId = await seedEvent(userId);
+    const stuckRun = await seedStuckRun(workflowId, userId);
+    const jobId = await seedJob(eventId, userId, {
+      metadata: { workflowExecutionId: stuckRun },
+    });
+    await db
+      .insert(logs)
+      .values({ eventId, jobId, userId, status: LogStatus.PENDING });
+
+    await service.performCleanup();
+
+    expect((await logOf(jobId)).status).toBe(LogStatus.TIMEOUT);
   });
 
   it("finishes an execution still in progress, unlike a finished one", async () => {
@@ -1258,6 +1382,54 @@ describe("the steps of a timed-out run", () => {
     });
   });
 
+  it("count steps that had all finished before the run timed out", async () => {
+    const { runId, firstNode, secondNode } = await startStuckRun();
+    // Finished, but no advance ever got to finalize the run
+    await db
+      .update(workflowStepRuns)
+      .set({ status: WorkflowStepStatus.SUCCEEDED, completedAt: new Date() })
+      .where(eq(workflowStepRuns.nodeId, firstNode));
+    await db
+      .update(workflowStepRuns)
+      .set({ status: WorkflowStepStatus.FAILED, completedAt: new Date() })
+      .where(eq(workflowStepRuns.nodeId, secondNode));
+
+    await service.performCleanup();
+
+    expect(await runOf(runId)).toMatchObject({
+      status: LogStatus.TIMEOUT,
+      successfulEvents: 1,
+      failedEvents: 1,
+    });
+  });
+
+  it("are counted when the last open step failed through dispatch's own check", async () => {
+    const authorize = resourceAccess.assertWorkflowGraphCapability;
+    const userId = await seedUser();
+    const workflowId = await seedWorkflow(userId);
+    const eventId = await seedEvent(userId);
+    await db.insert(workflowNodes).values({ workflowId, eventId });
+    jest
+      .spyOn(resourceAccess, "assertWorkflowGraphCapability")
+      .mockImplementationOnce(authorize)
+      .mockImplementationOnce(async (...args) => {
+        const [run] = await db.select().from(workflowExecutions);
+        // The run row alone, so that dispatch's check gets there before settling
+        await timeOutRunRowOnly(run!.id, new Date());
+        return authorize(...args);
+      });
+
+    const started = await startWorkflowRun(workflowId, {
+      triggerType: WorkflowTriggerType.MANUAL,
+    });
+
+    expect(await runOf(started.executionId!)).toMatchObject({
+      status: LogStatus.TIMEOUT,
+      successfulEvents: 0,
+      failedEvents: 1,
+    });
+  });
+
   it("settle telemetry that never got linked to its step", async () => {
     const { runId, firstNode } = await startStuckRun();
     // A crash between creating the telemetry row and recording its id
@@ -1345,6 +1517,122 @@ describe("the steps of a timed-out run", () => {
     expect((await stepOf(runId, secondNode)).status).toBe(
       WorkflowStepStatus.SKIPPED,
     );
+  });
+});
+
+describe("finding the job a dispatched step never recorded", () => {
+  /** A dispatched step with no job id, on a run past the stall limit. */
+  async function seedStalledStep(status: LogStatus) {
+    const userId = await seedUser();
+    const workflowId = await seedWorkflow(userId);
+    const eventId = await seedEvent(userId);
+    const runId = await seedStuckRun(workflowId, userId);
+    await db
+      .update(workflowExecutions)
+      .set({ status, completedAt: new Date() })
+      .where(eq(workflowExecutions.id, runId));
+    const [node] = await db
+      .insert(workflowNodes)
+      .values({ workflowId, eventId })
+      .returning({ id: workflowNodes.id });
+    const [step] = await db
+      .insert(workflowStepRuns)
+      .values({
+        workflowExecutionId: runId,
+        nodeId: node!.id,
+        eventId,
+        status: WorkflowStepStatus.DISPATCHED,
+        startedAt: new Date(Date.now() - 3 * 60_000),
+      })
+      .returning();
+    return { userId, eventId, runId, step: step!, nodeId: node!.id };
+  }
+
+  it("re-attaches it in a running run's stall recovery", async () => {
+    const { userId, eventId, runId, step, nodeId } = await seedStalledStep(
+      LogStatus.RUNNING,
+    );
+    await db
+      .update(workflowExecutions)
+      .set({ completedAt: null })
+      .where(eq(workflowExecutions.id, runId));
+    const jobId = await seedJob(eventId, userId, {
+      metadata: { workflowStepRunId: step.id },
+    });
+
+    await advanceWorkflowRun(runId);
+
+    expect(await stepOf(runId, nodeId)).toMatchObject({
+      status: WorkflowStepStatus.DISPATCHED,
+      jobId,
+    });
+  });
+
+  it("re-attaches it under a timed-out run", async () => {
+    const { userId, eventId, runId, step, nodeId } = await seedStalledStep(
+      LogStatus.TIMEOUT,
+    );
+    const jobId = await seedJob(eventId, userId, {
+      status: JobStatus.FAILED,
+      lastError: "exit status 3",
+      metadata: { workflowStepRunId: step.id },
+    });
+
+    await advanceWorkflowRun(runId);
+
+    expect(await stepOf(runId, nodeId)).toMatchObject({
+      status: WorkflowStepStatus.FAILED,
+      jobId,
+      error: "exit status 3",
+    });
+  });
+
+  it("takes no other job of the same event", async () => {
+    const { userId, eventId, runId, step, nodeId } = await seedStalledStep(
+      LogStatus.TIMEOUT,
+    );
+    const decoys: Array<Record<string, unknown>> = [
+      {},
+      { workflowStepRunId: step.id + 1 },
+      // Compared as a value, so 1 must not match 10
+      { workflowStepRunId: Number(`${step.id}0`) },
+      // The step's id under a neighbouring key isn't this step
+      { workflowExecutionId: step.id },
+    ];
+    for (const metadata of decoys) {
+      await seedJob(eventId, userId, {
+        status: JobStatus.COMPLETED,
+        metadata,
+      });
+    }
+
+    await advanceWorkflowRun(runId);
+
+    expect(await stepOf(runId, nodeId)).toMatchObject({
+      status: WorkflowStepStatus.FAILED,
+      jobId: null,
+      error: "Workflow run timed out before this step's job was created",
+    });
+  });
+
+  it("doesn't load the event's other jobs while holding the run's lock", async () => {
+    const { userId, eventId, runId, step } = await seedStalledStep(
+      LogStatus.TIMEOUT,
+    );
+    await seedJob(eventId, userId, {
+      metadata: { workflowStepRunId: step.id },
+    });
+    const queries = recordTransactionQueries();
+
+    await advanceWorkflowRun(runId);
+
+    const byEvent = queries.filter((text) =>
+      /from "jobs" where[^]*"event_id"/.test(text),
+    );
+    // Empty would mean the spy stopped seeing these queries, not a pass
+    expect(byEvent).toHaveLength(1);
+    expect(byEvent[0]).toContain("workflowStepRunId");
+    expect(byEvent[0]).not.toContain('"payload"');
   });
 });
 
@@ -1672,6 +1960,111 @@ describe("the sweep, for runs that have already timed out", () => {
     await service.performCleanup();
 
     expect(await snapshot(runId)).toEqual(before);
+  });
+
+  it("gets past a full batch of runs that can't settle, then comes back to them", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    // Its own instance: the position it keeps across passes is the point here
+    const sweep = new WorkflowCleanupService({
+      maxWorkflowAge: MAX_AGE_MS,
+      sweepJobs: false,
+    });
+    const userId = await seedUser();
+    const workflowId = await seedWorkflow(userId);
+    const eventId = await seedEvent(userId);
+    await pool.query(
+      `INSERT INTO workflow_executions (workflow_id, user_id, status, trigger_type, completed_at)
+       SELECT $1, $2, 'TIMEOUT', 'MANUAL', now() FROM generate_series(1, 100)`,
+      [workflowId, userId],
+    );
+    await pool.query(
+      `INSERT INTO workflow_step_runs (workflow_execution_id, node_id, event_id, status)
+       SELECT id, 1, $1, 'PENDING' FROM workflow_executions`,
+      [eventId],
+    );
+    const lastRun = await seedFinishedRun(workflowId, userId);
+    await timeOutRunRowOnly(lastRun, new Date());
+    const queued = await seedJob(eventId, userId, {
+      metadata: { workflowExecutionId: lastRun },
+    });
+    await pool.query(
+      `ALTER TABLE workflow_step_runs ADD CONSTRAINT test_refuse_settling CHECK (status = 'PENDING') NOT VALID`,
+    );
+    try {
+      await sweep.performCleanup();
+      await sweep.performCleanup();
+    } finally {
+      await pool.query(
+        `ALTER TABLE workflow_step_runs DROP CONSTRAINT test_refuse_settling`,
+      );
+    }
+    expect(await jobStatus(queued)).toBe(JobStatus.TIMED_OUT);
+
+    await sweep.performCleanup();
+
+    const stillOpen = await db
+      .select()
+      .from(workflowStepRuns)
+      .where(eq(workflowStepRuns.status, WorkflowStepStatus.PENDING));
+    expect(stillOpen).toEqual([]);
+  });
+
+  it("moves on from a timed-out run another process holds, and retries it", async () => {
+    const errors = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const held = await startStuckRun();
+    const free = await startStuckRun();
+    await timeOutRunRowOnly(held.runId, new Date());
+    await timeOutRunRowOnly(free.runId, new Date());
+
+    const outcome = await holdingRunLock(held.runId, () =>
+      finishesWithin(20_000, service.performCleanup()),
+    );
+
+    expect(outcome).toBe("finished");
+    expect((await stepOf(free.runId, free.firstNode)).status).toBe(
+      WorkflowStepStatus.FAILED,
+    );
+    expect((await stepOf(held.runId, held.firstNode)).status).toBe(
+      WorkflowStepStatus.DISPATCHED,
+    );
+    expect(
+      errors.mock.calls.some((call) =>
+        String(call[0]).includes(`steps of workflow run ${held.runId}`),
+      ),
+    ).toBe(true);
+
+    await service.performCleanup();
+
+    expect((await stepOf(held.runId, held.firstNode)).status).toBe(
+      WorkflowStepStatus.FAILED,
+    );
+  });
+
+  it("moves on from a stuck run another process holds, and times it out later", async () => {
+    const errors = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const held = await startStuckRun();
+    const free = await startStuckRun();
+
+    const outcome = await holdingRunLock(held.runId, () =>
+      finishesWithin(20_000, service.performCleanup()),
+    );
+
+    expect(outcome).toBe("finished");
+    expect((await runOf(free.runId)).status).toBe(LogStatus.TIMEOUT);
+    expect((await runOf(held.runId)).status).toBe(LogStatus.RUNNING);
+    expect(
+      errors.mock.calls.some((call) =>
+        String(call[0]).includes(`run ${held.runId} as timed out`),
+      ),
+    ).toBe(true);
+
+    await service.performCleanup();
+
+    expect((await runOf(held.runId)).status).toBe(LogStatus.TIMEOUT);
   });
 
   it("carries on past a run it cannot settle", async () => {

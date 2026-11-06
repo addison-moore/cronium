@@ -50,7 +50,7 @@ export interface SweepResult {
   timedOut: number;
 }
 
-function executionLogIdOf(job: Job): number | undefined {
+export function executionLogIdOf(job: Job): number | undefined {
   const payload = job.payload as { executionLogId?: number } | undefined;
   const metadata = job.metadata as
     { executionLogId?: number; logId?: number } | undefined;

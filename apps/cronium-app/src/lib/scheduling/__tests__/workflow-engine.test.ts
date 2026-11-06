@@ -74,6 +74,14 @@ jest.mock("drizzle-orm", () => {
       values,
     }),
     lt: (column: any, value: any) => ({ __op: "lt", column, value }),
+    // Stays real, because the schema needs it, but remembers its parts so the store
+    // can evaluate `column->>'key' = value`.
+    sql: Object.assign((strings: TemplateStringsArray, ...values: any[]) => {
+      const real = actual.sql(strings, ...values);
+      real.__fakeText = strings.join("?");
+      real.__fakeValues = values;
+      return real;
+    }, actual.sql),
   };
 });
 
@@ -140,6 +148,12 @@ function fieldOf(row: Row, column: unknown): any {
 
 function evalCond(cond: any, row: Row): boolean {
   if (!cond) return true;
+  if (cond.__fakeText) {
+    const key = /->>'(\w+)' = \?$/.exec(cond.__fakeText)?.[1];
+    if (!key) throw new Error(`Unsupported SQL: ${String(cond.__fakeText)}`);
+    const [column, value] = cond.__fakeValues;
+    return String(fieldOf(row, column)?.[key]) === value;
+  }
   switch (cond.__op) {
     case "eq":
       return fieldOf(row, cond.column) === cond.value;
@@ -241,6 +255,7 @@ function makeInsert(table: unknown) {
 }
 
 const txApi = {
+  execute: () => Promise.resolve(), // SET LOCAL lock_timeout has nothing to bound here
   select: (projection?: Record<string, unknown>) => makeSelect(projection),
   update: (table: unknown) => makeUpdate(table),
   insert: (table: unknown) => makeInsert(table),
@@ -1340,8 +1355,22 @@ describe("advanceWorkflowRun — a timed-out run", () => {
     expect(telemetry.duration).toBe(MAX_DURATION_MS);
   });
 
-  it("writes nothing to the run when no step is open", async () => {
+  it("corrects stale counts even when no step is open", async () => {
     const run = seedTimedOutRun();
+    seedStep(run.id, { nodeId: 1, status: WorkflowStepStatus.SUCCEEDED });
+    seedStep(run.id, { nodeId: 2, status: WorkflowStepStatus.FAILED });
+
+    await advanceWorkflowRun(run.id);
+
+    expect(runRow(run.id)).toMatchObject({
+      successfulEvents: 1,
+      failedEvents: 1,
+    });
+  });
+
+  it("writes nothing to the run when its counts already agree", async () => {
+    const run = seedTimedOutRun();
+    run.failedEvents = 1;
     seedStep(run.id, { status: WorkflowStepStatus.FAILED });
     const before = JSON.stringify(runRow(run.id));
 

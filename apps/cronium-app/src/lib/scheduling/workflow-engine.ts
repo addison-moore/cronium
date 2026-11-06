@@ -40,7 +40,7 @@ import {
   type WorkflowTriggerType,
   type WorkflowStepRun,
 } from "@/shared/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { resolveWorkflowInput } from "@/lib/unified-io/resolve-input";
 import { dispatchEventJob } from "./dispatch";
 import { assertWorkflowGraphCapability } from "@/server/security/resource-access";
@@ -308,11 +308,11 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
         Date.now() - s.startedAt.getTime() > DISPATCH_STALL_MS,
     );
     for (const step of stalled) {
-      const orphanJob = await findOrphanJob(tx, step);
-      if (orphanJob) {
+      const orphanJobId = await findOrphanJobId(tx, step);
+      if (orphanJobId) {
         await tx
           .update(workflowStepRuns)
-          .set({ jobId: orphanJob.id, updatedAt: new Date() })
+          .set({ jobId: orphanJobId, updatedAt: new Date() })
           .where(eq(workflowStepRuns.id, step.id));
       } else {
         await settleStep(
@@ -532,19 +532,23 @@ type PendingTelemetry = () => Promise<void>;
 
 /** The job this step dispatched, if its id never reached the step. dispatch
  * stamps the step id into job metadata for exactly this recovery path (crash
- * between claim and jobId write). */
-async function findOrphanJob(
+ * between claim and jobId write). Filtered in SQL because this runs holding the
+ * run's lock, and an event can have a long history of jobs with large payloads. */
+async function findOrphanJobId(
   tx: Tx,
   step: WorkflowStepRun,
-): Promise<Job | undefined> {
-  const candidates = await tx
-    .select()
+): Promise<string | undefined> {
+  const [job] = await tx
+    .select({ id: jobsTable.id })
     .from(jobsTable)
-    .where(eq(jobsTable.eventId, step.eventId));
-  return candidates.find((j) => {
-    const meta = j.metadata as { workflowStepRunId?: number } | null;
-    return meta?.workflowStepRunId === step.id;
-  });
+    .where(
+      and(
+        eq(jobsTable.eventId, step.eventId),
+        sql`${jobsTable.metadata}->>'workflowStepRunId' = ${String(step.id)}`,
+      ),
+    )
+    .limit(1);
+  return job?.id;
 }
 
 /** Settle dispatched steps whose job has finished. A step whose job is still in
@@ -636,7 +640,7 @@ async function settleStepsFromJobs(
  * Telemetry is written here on the transaction, so a settled step can't leave
  * its row RUNNING, and it goes by node rather than by the step's
  * executionEventId, which a crash during dispatch can leave unset. Safe to
- * repeat: with nothing open it writes nothing.
+ * repeat: once everything agrees it writes nothing.
  */
 async function settleTimedOutSteps(
   tx: Tx,
@@ -672,13 +676,13 @@ async function settleTimedOutSteps(
       withJob.push(step);
       continue;
     }
-    const orphanJob = await findOrphanJob(tx, step);
-    if (orphanJob) {
+    const orphanJobId = await findOrphanJobId(tx, step);
+    if (orphanJobId) {
       await tx
         .update(workflowStepRuns)
-        .set({ jobId: orphanJob.id, updatedAt: new Date() })
+        .set({ jobId: orphanJobId, updatedAt: new Date() })
         .where(eq(workflowStepRuns.id, step.id));
-      withJob.push({ ...step, jobId: orphanJob.id });
+      withJob.push({ ...step, jobId: orphanJobId });
     } else {
       await settleStep(
         tx,
@@ -696,23 +700,29 @@ async function settleTimedOutSteps(
     await settleStepsFromJobs(tx, withJob, superseded, at);
   }
 
-  let settled = steps;
-  if (open.length > 0) {
-    settled = await tx
-      .select()
-      .from(workflowStepRuns)
-      .where(eq(workflowStepRuns.workflowExecutionId, run.id));
+  const settled =
+    open.length > 0
+      ? await tx
+          .select()
+          .from(workflowStepRuns)
+          .where(eq(workflowStepRuns.workflowExecutionId, run.id))
+      : steps;
+
+  // Checked even with nothing open: every step can have finished with no advance
+  // left to finalize the run, or just before this read them.
+  const successfulEvents = settled.filter(
+    (s) => s.status === WorkflowStepStatus.SUCCEEDED,
+  ).length;
+  const failedEvents = settled.filter(
+    (s) => s.status === WorkflowStepStatus.FAILED,
+  ).length;
+  if (
+    successfulEvents !== run.successfulEvents ||
+    failedEvents !== run.failedEvents
+  ) {
     await tx
       .update(workflowExecutions)
-      .set({
-        successfulEvents: settled.filter(
-          (s) => s.status === WorkflowStepStatus.SUCCEEDED,
-        ).length,
-        failedEvents: settled.filter(
-          (s) => s.status === WorkflowStepStatus.FAILED,
-        ).length,
-        updatedAt: new Date(),
-      })
+      .set({ successfulEvents, failedEvents, updatedAt: new Date() })
       .where(eq(workflowExecutions.id, run.id));
   }
 
@@ -747,12 +757,25 @@ async function settleTimedOutSteps(
 }
 
 /**
+ * Bound how long the rest of this transaction waits on a lock. A healthy advance
+ * holds a run's row for milliseconds, so this only trips on one that has hung,
+ * and the cleanup pass handles runs one at a time, so without it that one run
+ * would stall the whole pass. The error is the caller's to log: the sweep retries.
+ */
+export async function limitLockWait(tx: Tx): Promise<void> {
+  await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+}
+
+/**
  * Settle a timed-out run's steps and telemetry. Unlike advanceWorkflowRun this
  * waits for the run's lock: an advance holding it may have read the jobs before
- * the caller timed them out, so skipping could leave a step open.
+ * the caller timed them out, so skipping could leave a step open with no later
+ * notification to close it. Throws if the wait runs out, and then the step stays
+ * open, so the cleanup sweep finds it and tries again.
  */
 export async function settleTimedOutRunSteps(runId: number): Promise<void> {
   await db.transaction(async (tx) => {
+    await limitLockWait(tx);
     const [run] = await tx
       .select()
       .from(workflowExecutions)
