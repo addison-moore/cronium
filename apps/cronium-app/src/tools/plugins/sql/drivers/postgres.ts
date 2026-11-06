@@ -32,6 +32,11 @@ async function connect(credentials: SqlCredentials, timeoutMs: number) {
     connectionTimeoutMillis: Math.min(timeoutMs, 10_000),
     application_name: "cronium",
   });
+  // A lost connection rejects what's running, which is how the action hears of it.
+  // It also emits `error`, and with nothing listening that ends the process: the
+  // worker runs tool actions in process, so someone's database restarting would
+  // stop all scheduling.
+  client.on("error", () => undefined);
   await client.connect();
   return client;
 }
@@ -110,8 +115,13 @@ export const postgresDriver: SqlDriver = {
     const Cursor = (await import("pg-cursor")).default;
     let client: Awaited<ReturnType<typeof connect>> | undefined;
     let cursor: InstanceType<typeof Cursor> | undefined;
+    let connectionLost: Promise<void> | undefined;
     try {
       client = await connect(credentials, opts.timeoutMs);
+      const connected = client;
+      connectionLost = new Promise((resolve) => {
+        connected.once("error", () => resolve());
+      });
       // The action's keyword check is only a first pass: `WITH d AS (DELETE ...)
       // SELECT` and `EXPLAIN ANALYZE DELETE ...` both start with an allowed word.
       // This has the database refuse the write. Nothing here commits, and ending
@@ -150,7 +160,10 @@ export const postgresDriver: SqlDriver = {
         bytesExceeded: acc.bytesExceeded,
       };
     } finally {
-      await cursor?.close().catch(() => undefined);
+      // close() waits for the server's answer, which a lost connection never sends.
+      await Promise.race([cursor?.close(), connectionLost]).catch(
+        () => undefined,
+      );
       await client?.end().catch(() => undefined);
     }
   },
