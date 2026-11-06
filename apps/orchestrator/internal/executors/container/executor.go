@@ -27,13 +27,15 @@ import (
 
 // Executor implements container-based job execution
 type Executor struct {
-	config        config.ContainerConfig
-	timeoutConfig config.TimeoutConfig
-	dockerClient  *client.Client
-	log           *logrus.Logger
-	apiClient     *api.Client
-	sidecar       *SidecarManager
-	cleanup       *CleanupManager
+	config config.ContainerConfig
+	// orchestratorID labels this process's containers so a later one can find them.
+	orchestratorID string
+	timeoutConfig  config.TimeoutConfig
+	dockerClient   *client.Client
+	log            *logrus.Logger
+	apiClient      *api.Client
+	sidecar        *SidecarManager
+	cleanup        *CleanupManager
 
 	// Track active containers and resources
 	mu           sync.RWMutex
@@ -50,6 +52,16 @@ type Executor struct {
 	// silently failed to register saw every cronium_* helper die with curl
 	// exit 6 / "couldn't resolve host"). An IP needs no name resolution.
 	runtimeAddrs map[string]string
+
+	// leftovers is what FindLeftoverJobs found and nothing has resumed or removed yet.
+	leftovers map[string]jobResources
+	// handOver holds the jobs whose script is running and can be left for the next
+	// process to pick up.
+	handOver map[string]bool
+	// holds keeps finished jobs' containers until their results are reported.
+	holds map[string]*resultHold
+	// reportHoldLimit overrides the package default; tests shorten it.
+	reportHoldLimit time.Duration
 }
 
 // validateDockerEndpoint fails closed on a plaintext remote Docker endpoint
@@ -73,7 +85,7 @@ func validateDockerEndpoint(endpoint string) error {
 }
 
 // NewExecutor creates a new container executor
-func NewExecutor(cfg config.ContainerConfig, apiClient *api.Client, log *logrus.Logger) (*Executor, error) {
+func NewExecutor(cfg config.ContainerConfig, orchestratorID string, apiClient *api.Client, log *logrus.Logger) (*Executor, error) {
 	if err := validateDockerEndpoint(cfg.Docker.Endpoint); err != nil {
 		return nil, err
 	}
@@ -99,17 +111,21 @@ func NewExecutor(cfg config.ContainerConfig, apiClient *api.Client, log *logrus.
 	}
 
 	executor := &Executor{
-		config:        cfg,
-		timeoutConfig: config.LoadTimeoutConfig(),
-		dockerClient:  dockerClient,
-		log:           log,
-		apiClient:     apiClient,
-		containers:    make(map[string]string),
-		sidecars:      make(map[string]string),
-		networks:      make(map[string]string),
-		tokens:        make(map[string]string),
-		executionIDs:  make(map[string]string),
-		runtimeAddrs:  make(map[string]string),
+		config:         cfg,
+		orchestratorID: orchestratorID,
+		timeoutConfig:  config.LoadTimeoutConfig(),
+		dockerClient:   dockerClient,
+		log:            log,
+		apiClient:      apiClient,
+		containers:     make(map[string]string),
+		sidecars:       make(map[string]string),
+		networks:       make(map[string]string),
+		tokens:         make(map[string]string),
+		executionIDs:   make(map[string]string),
+		runtimeAddrs:   make(map[string]string),
+		leftovers:      make(map[string]jobResources),
+		handOver:       make(map[string]bool),
+		holds:          make(map[string]*resultHold),
 	}
 
 	// Create sidecar manager
@@ -169,8 +185,6 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 	e.mu.Unlock()
 
 	go func() {
-		defer close(updates)
-
 		// Initialize phase timing
 		timing := NewExecutionTiming()
 
@@ -195,7 +209,19 @@ func (e *Executor) Execute(ctx context.Context, job *types.Job) (<-chan types.Ex
 		}).Info("Starting job execution with phase-based timeouts")
 
 		// Execute with phase-based timeouts
-		e.executeWithPhaseTimeouts(ctx, job, updates, executionID, timing)
+		res, keepForReport := e.executeWithPhaseTimeouts(ctx, job, updates, executionID, timing)
+
+		// Update final timing while the job can still report on itself, then end
+		// the stream and remove what the job has on the host.
+		timing.MarkCleanupComplete()
+		if e.apiClient != nil {
+			cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), e.timeoutConfig.CleanupTimeout)
+			defer cleanupCancel()
+			if err := e.apiClient.UpdateExecution(cleanupCtx, executionID, types.JobStatusCompleted, timing.ToExecutionStatusUpdate()); err != nil {
+				e.log.WithError(err).Warn("Failed to update final execution timing")
+			}
+		}
+		e.finishRun(ctx, job, res, updates, keepForReport)
 	}()
 
 	return updates, nil
@@ -308,6 +334,7 @@ func (e *Executor) createContainer(ctx context.Context, job *types.Job, networkI
 		AttachStderr: true,
 		Tty:          false,
 		User:         e.config.Security.User,
+		Labels:       e.jobContainerLabels(job),
 	}
 
 	// Build host configuration with resource limits + sandbox hardening (3.1).
@@ -327,7 +354,7 @@ func (e *Executor) createContainer(ctx context.Context, job *types.Job, networkI
 		Config:           containerConfig,
 		HostConfig:       hostConfig,
 		NetworkingConfig: networkConfig,
-		Name:             fmt.Sprintf("cronium-job-%s", job.ID),
+		Name:             jobContainerName(job.ID),
 	})
 	if err != nil {
 		dockerErr := errors.NewDockerError(
