@@ -613,8 +613,10 @@ const HASHED_API_TOKEN = /^[0-9a-f]{64}$/;
  * the key changes would get a 401 for good. This hashes them while the old key is in
  * the ring, so nobody has to use or replace one.
  *
- * The lookup can hash the same row at the same moment, so this writes only over what
- * it read. A miss means the row has moved on, and counts as skipped.
+ * The lookup can hash the same row at the same moment, so this applies only to the row
+ * version it read. A miss means the row was hashed, revoked or deleted, which leaves
+ * nothing to do, so it counts as skipped. Comparing `xmin` rather than the ciphertext
+ * keeps the ciphertext out of the statement, and so out of Postgres's logs.
  *
  * Revoked and expired tokens get a 401 either way, and nothing makes one usable again,
  * so they stay as they are and aren't counted.
@@ -640,6 +642,7 @@ async function hashLegacyApiTokens(dryRun: boolean): Promise<SurfaceResult> {
       token: apiTokens.token,
       status: apiTokens.status,
       expiresAt: apiTokens.expiresAt,
+      version: sql<string>`xmin::text`,
     })
     .from(apiTokens)
     .orderBy(asc(apiTokens.id));
@@ -668,7 +671,7 @@ async function hashLegacyApiTokens(dryRun: boolean): Promise<SurfaceResult> {
       const written = await db
         .update(apiTokens)
         .set({ token: hashApiToken(raw) })
-        .where(and(eq(apiTokens.id, row.id), eq(apiTokens.token, row.token)));
+        .where(and(eq(apiTokens.id, row.id), sql`xmin::text = ${row.version}`));
       if ((written.rowCount ?? 0) > 0) r.hashed++;
       else r.skipped++;
     } catch (e) {

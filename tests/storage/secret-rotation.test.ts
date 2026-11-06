@@ -726,6 +726,27 @@ describe("API tokens from before hashing", () => {
     });
   });
 
+  it("keeps the ciphertext out of what it sends, which Postgres can log", async () => {
+    const id = await seedOldToken("old", "raw-old-canary");
+    const ciphertext = (await storedToken(id)).token;
+    restartWith(KEY_NEW, [KEY_OLD]);
+    const sent = jest.spyOn(pool, "query");
+
+    await rotateAllSecrets();
+
+    const calls = sent.mock.calls as unknown as [
+      { text: string },
+      unknown[] | undefined,
+    ][];
+    const writes = calls.filter(([query]) =>
+      query.text.startsWith('update "api_tokens"'),
+    );
+    expect(writes).toHaveLength(1);
+    expect(writes[0]![1]).toContain(hashApiToken("raw-old-canary"));
+    expect(JSON.stringify(calls)).not.toContain(ciphertext);
+    expect(JSON.stringify(calls)).not.toContain("raw-old-canary");
+  });
+
   it("reports a row it can't write, with no token in the log, and hashes the rest", async () => {
     const consoleError = jest
       .spyOn(console, "error")
@@ -868,8 +889,11 @@ describe("API tokens from before hashing", () => {
       });
       const report = await run!;
 
-      // What it read is still there, so it hashes it, and the status isn't its to change.
-      expect(surface(report, TOKENS)).toMatchObject({ hashed: 1, errors: 0 });
+      expect(surface(report, TOKENS)).toMatchObject({
+        hashed: 0,
+        skipped: 1,
+        errors: 0,
+      });
       expect((await storedToken(id)).status).toBe(TokenStatus.REVOKED);
       expect(await authenticateApiToken("raw-revoked-now")).toBeNull();
     });
