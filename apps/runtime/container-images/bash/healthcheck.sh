@@ -24,20 +24,11 @@ if [ "$bash_version" -lt 4 ]; then
     exit 1
 fi
 
-# Try to source the cronium script (without env vars it should still load)
-if ! source /usr/local/bin/cronium.sh 2>/dev/null; then
-    # If it fails due to missing env vars, that's OK for health check
-    if [ $? -eq 1 ]; then
-        # Check if the error is about missing env vars
-        source_output=$(source /usr/local/bin/cronium.sh 2>&1 || true)
-        if [[ "$source_output" == *"CRONIUM_EXECUTION_TOKEN"* ]] || [[ "$source_output" == *"CRONIUM_EXECUTION_ID"* ]]; then
-            # This is expected in health check context
-            true
-        else
-            echo "Error: Failed to source cronium.sh: $source_output"
-            exit 1
-        fi
-    fi
+# The SDK has to load with none of a job's variables set, as they may not be here. Each
+# helper checks for them when it's called.
+if ! source /usr/local/bin/cronium.sh; then
+    echo "Error: Failed to source cronium.sh"
+    exit 1
 fi
 
 echo "Health check passed"

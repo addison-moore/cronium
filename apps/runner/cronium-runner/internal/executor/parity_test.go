@@ -216,7 +216,7 @@ func runInContainerSDK(t *testing.T, interpreter types.ScriptType, script string
 	switch interpreter {
 	case types.ScriptTypeBash:
 		sdkScript := filepath.Join(sdk, "bash", "cronium.sh")
-		cmd = exec.Command("bash", "-c", "source "+sdkScript+" 2>/dev/null || true\n"+script)
+		cmd = exec.Command("bash", "-c", "source "+sdkScript+" || true\n"+script)
 	case types.ScriptTypePython:
 		cmd = exec.Command("python3", "-c", "import cronium\n"+script)
 		env = append(env, "PYTHONPATH="+filepath.Join(sdk, "python"), "PYTHONDONTWRITEBYTECODE=1")

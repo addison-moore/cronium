@@ -81,12 +81,15 @@ func childBashSandbox(t *testing.T) *Executor {
 
 // runWithFakeRuntime runs a bash script as a job on no network, with the environment a
 // real job gets, pointed at the stand-in for the runtime.
-func runWithFakeRuntime(t *testing.T, e *Executor, script string) fakeRuntimeRun {
+func runWithFakeRuntime(t *testing.T, e *Executor, script string, prepare ...func(*types.Job)) fakeRuntimeRun {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), childBashJobTimeout)
 	defer cancel()
 	job := sandboxedJob(t, ctx, e, interpreter{scriptType: types.ScriptTypeBash}, fakeRuntimeScript+script+fakeRuntimeReportScript)
 	e.runtimeAddrs[job.ID] = "127.0.0.1:8081"
+	for _, change := range prepare {
+		change(job)
+	}
 	run := fakeRuntimeRun{jobResult: runJob(t, ctx, e, job), executionID: e.executionIDs[job.ID]}
 
 	stdout := run.stdout
@@ -188,8 +191,8 @@ sh -c 'bash /tmp/child.sh'
 
 // TestChildBashStartsUntouchedInTheSandbox covers why a child gets the helpers by
 // inheriting them and not through BASH_ENV: nothing of the SDK runs when it starts. Run
-// at that point, cronium.sh ends a child with no token or no curl, overwrites variables
-// the child was given, and writes the token into a `bash -x` trace.
+// at that point, cronium.sh overwrites variables the child was given, and writes the
+// token into a `bash -x` trace.
 func TestChildBashStartsUntouchedInTheSandbox(t *testing.T) {
 	e := childBashSandbox(t)
 
@@ -246,11 +249,11 @@ func TestChildBashGetsNoCopyOfTheTokenInTheSandbox(t *testing.T) {
 		run := runWithFakeRuntime(t, e, `env -u CRONIUM_EXECUTION_TOKEN bash -c 'env; cronium_output x; echo "rc=$?"'
 `)
 
-		assert.Empty(t, run.stderr)
+		assert.Equal(t, []string{noTokenError}, run.stderr)
 		assert.Equal(t, 0, run.exitCode)
 		assert.NotContains(t, strings.Join(run.stdout, "\n"), childBashToken)
-		require.Len(t, run.requests, 1)
-		assert.NotContains(t, run.requests[0], childBashToken)
+		assert.Contains(t, run.stdout, "rc=1")
+		assert.Empty(t, run.requests)
 	})
 
 	t.Run("the script unset it, and can still call helpers", func(t *testing.T) {

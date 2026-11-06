@@ -213,7 +213,9 @@ cronium_set_condition true
 event_info=$(cronium_event)
 ```
 
-The helpers are exported shell functions, so a `bash` the script starts inherits them with the environment, and they read their settings from it each time they run. That includes a `bash` started from a script file or through `sh`. `sh` itself can't call them, and neither can a process started with `env -i`. To keep the execution token from something a container job runs, start it with `env -u CRONIUM_EXECUTION_TOKEN`: it runs as usual, but it has no token to send, so the runtime refuses any helper it calls.
+The helpers are exported shell functions, so a `bash` the script starts inherits them with the environment, and they read their settings from it each time they run. That includes a `bash` started from a script file or through `sh`. `sh` itself can't call them, and neither can a process started with `env -i`. To keep the execution token from something a container job runs, start it with `env -u CRONIUM_EXECUTION_TOKEN`: it runs as usual, but any helper it calls fails, saying it has no token.
+
+A helper that can't work, because the token, the execution ID, `curl` or `jq` is missing, prints why on stderr, makes no request and returns 1. The rest of the script still runs, so one that needs the helper should check its status or use `set -e`. In Python and Node, `import cronium` and `require('cronium')` raise the same message for a missing token or ID, before the script's first line.
 
 ## Chaining events (Workflows)
 
