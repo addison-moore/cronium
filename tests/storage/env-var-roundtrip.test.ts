@@ -496,12 +496,6 @@ describe("a save that fails partway", () => {
         "REFUSED",
         "PERFORM pg_terminate_backend(pg_backend_pid()); PERFORM pg_sleep(5)",
       );
-      // A checked-out client that loses its connection emits `error` with nothing
-      // listening, on top of the rejected query. In the app Next's uncaughtException
-      // handler logs that. Here it would fail the test instead.
-      pool.once("acquire", (client: PoolClient) => {
-        client.on("error", () => undefined);
-      });
 
       await expect(saveEnvVars(id, REFUSED_PARTWAY)).rejects.toThrow();
 
