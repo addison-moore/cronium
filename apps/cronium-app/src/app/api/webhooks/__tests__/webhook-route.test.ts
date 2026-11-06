@@ -11,11 +11,11 @@
 
 jest.mock("@/lib/webhooks/WebhookManager", () => {
   const getWebhookByKey = jest.fn();
-  const triggerEvent = jest.fn();
+  const prepareEvent = jest.fn();
   return {
-    __manager: { getWebhookByKey, triggerEvent },
+    __manager: { getWebhookByKey, prepareEvent },
     WebhookManager: {
-      getInstance: jest.fn(() => ({ getWebhookByKey, triggerEvent })),
+      getInstance: jest.fn(() => ({ getWebhookByKey, prepareEvent })),
     },
   };
 });
@@ -58,6 +58,11 @@ jest.mock("@/lib/webhooks/webhook-replay-store", () => {
         return true;
       },
     ),
+    releaseWebhookDelivery: jest.fn(
+      async (webhookId: number, deliveryId: string) => {
+        seen.delete(`${webhookId}:${deliveryId}`);
+      },
+    ),
   };
 });
 
@@ -67,7 +72,7 @@ import { GET, OPTIONS, POST } from "../[key]/route";
 import { webhookEvents, webhookLogs } from "@/shared/schema";
 
 const managerMock = jest.requireMock("@/lib/webhooks/WebhookManager") as {
-  __manager: { getWebhookByKey: jest.Mock; triggerEvent: jest.Mock };
+  __manager: { getWebhookByKey: jest.Mock; prepareEvent: jest.Mock };
 };
 const dbMock = jest.requireMock("@/server/db") as {
   __insertCalls: Array<{ table: unknown; values: Record<string, unknown> }>;
@@ -158,12 +163,18 @@ function logInserts() {
   return dbMock.__insertCalls.filter((c) => c.table === webhookLogs);
 }
 
+const sendPrepared = jest.fn();
+const cancelPrepared = jest.fn();
+
 beforeEach(() => {
   jest.clearAllMocks();
   replayMock.__seen.clear();
   dbMock.__insertCalls.length = 0;
   managerMock.__manager.getWebhookByKey.mockResolvedValue(undefined);
-  managerMock.__manager.triggerEvent.mockResolvedValue(undefined);
+  managerMock.__manager.prepareEvent.mockResolvedValue({
+    send: sendPrepared,
+    cancel: cancelPrepared,
+  });
   rateLimitMock.RateLimitService.tryCheckLimit.mockResolvedValue({
     allowed: true,
     remaining: 99,
@@ -188,7 +199,7 @@ describe("POST /api/webhooks/[key] — lookup and state", () => {
     const res = await post("whk_missing", "{}", signedHeaders("{}"));
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: "Webhook not found" });
-    expect(managerMock.__manager.triggerEvent).not.toHaveBeenCalled();
+    expect(managerMock.__manager.prepareEvent).not.toHaveBeenCalled();
     expect(eventInserts()).toHaveLength(0);
   });
 
@@ -200,7 +211,7 @@ describe("POST /api/webhooks/[key] — lookup and state", () => {
     const res = await post("whk_valid", body, signedHeaders(body));
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: "Webhook is disabled" });
-    expect(managerMock.__manager.triggerEvent).not.toHaveBeenCalled();
+    expect(managerMock.__manager.prepareEvent).not.toHaveBeenCalled();
   });
 
   it("returns 500 when the lookup boundary throws", async () => {
@@ -235,7 +246,7 @@ describe("POST /api/webhooks/[key] — signature verification (real HMAC)", () =
     delete (headers as Record<string, string>)["x-webhook-signature"];
     const res = await post("whk_valid", body, headers);
     expect(res.status).toBe(401);
-    expect(managerMock.__manager.triggerEvent).not.toHaveBeenCalled();
+    expect(managerMock.__manager.prepareEvent).not.toHaveBeenCalled();
     expect(eventInserts()).toHaveLength(0);
     // A failed verification is still audit-logged for the tenant's webhook.
     expect(logInserts()).toHaveLength(1);
@@ -263,7 +274,7 @@ describe("POST /api/webhooks/[key] — signature verification (real HMAC)", () =
       "x-webhook-signature": sign(timestamp, "d-wrong-secret", body, "other"),
     });
     expect(res.status).toBe(401);
-    expect(managerMock.__manager.triggerEvent).not.toHaveBeenCalled();
+    expect(managerMock.__manager.prepareEvent).not.toHaveBeenCalled();
   });
 
   it("rejects a tampered body (signature covers the exact raw bytes)", async () => {
@@ -271,7 +282,7 @@ describe("POST /api/webhooks/[key] — signature verification (real HMAC)", () =
     const headers = signedHeaders(signedBody);
     const res = await post("whk_valid", '{"amount":9999}', headers);
     expect(res.status).toBe(401);
-    expect(managerMock.__manager.triggerEvent).not.toHaveBeenCalled();
+    expect(managerMock.__manager.prepareEvent).not.toHaveBeenCalled();
   });
 
   it("rejects a body-only HMAC that does not bind timestamp/delivery id", async () => {
@@ -294,7 +305,7 @@ describe("POST /api/webhooks/[key] — signature verification (real HMAC)", () =
       "content-type": "text/plain",
     });
     expect(res.status).toBe(401);
-    expect(managerMock.__manager.triggerEvent).not.toHaveBeenCalled();
+    expect(managerMock.__manager.prepareEvent).not.toHaveBeenCalled();
   });
 
   it("rejects a stale timestamp even when correctly signed (replay window)", async () => {
@@ -333,7 +344,69 @@ describe("POST /api/webhooks/[key] — signature verification (real HMAC)", () =
     expect(((await second.json()) as { error: string }).error).toMatch(
       /replay|duplicate/i,
     );
-    expect(managerMock.__manager.triggerEvent).toHaveBeenCalledTimes(1);
+    expect(managerMock.__manager.prepareEvent).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("POST /api/webhooks/[key] — a full delivery queue", () => {
+  beforeEach(() => {
+    managerMock.__manager.getWebhookByKey.mockResolvedValue(webhookRow());
+  });
+
+  const fullFor = (refused: string) =>
+    managerMock.__manager.prepareEvent.mockResolvedValueOnce({ refused });
+
+  it.each([
+    ["webhook", /webhooks this event goes to/],
+    ["owner", /This account/],
+    ["total", /This server/],
+  ])(
+    "answers 503 and stores nothing when the %s limit is reached",
+    async (reason, says) => {
+      fullFor(reason);
+      const body = '{"event":"backed.up"}';
+
+      const res = await post("whk_valid", body, signedHeaders(body));
+
+      expect(res.status).toBe(503);
+      expect(res.headers.get("Retry-After")).toBe("60");
+      expect(((await res.json()) as { error: string }).error).toMatch(says);
+      expect(eventInserts()).toEqual([]);
+      expect(sendPrepared).not.toHaveBeenCalled();
+      expect(logInserts()).toHaveLength(1);
+      expect(logInserts()[0]!.values).toMatchObject({ success: false });
+    },
+  );
+
+  it("lets the sender use the same delivery id again", async () => {
+    fullFor("webhook");
+    const body = '{"event":"backed.up"}';
+    const headers = signedHeaders(body, {
+      "x-webhook-delivery-id": "d-refused",
+    });
+
+    expect((await post("whk_valid", body, headers)).status).toBe(503);
+    expect((await post("whk_valid", body, headers)).status).toBe(200);
+    expect(sendPrepared).toHaveBeenCalledTimes(1);
+
+    // Accepted now, so from here on that id is a replay.
+    expect((await post("whk_valid", body, headers)).status).toBe(401);
+  });
+
+  it("gives the room back if the event can't be stored", async () => {
+    const errors = jest.requireMock("@/server/db") as {
+      db: { insert: jest.Mock };
+    };
+    errors.db.insert.mockImplementationOnce(() => {
+      throw new Error("no database");
+    });
+    const body = '{"event":"unstorable"}';
+
+    const res = await post("whk_valid", body, signedHeaders(body));
+
+    expect(res.status).toBe(500);
+    expect(cancelPrepared).toHaveBeenCalledTimes(1);
+    expect(sendPrepared).not.toHaveBeenCalled();
   });
 });
 
@@ -348,7 +421,7 @@ describe("POST /api/webhooks/[key] — body handling", () => {
       "content-type": "application/json",
     });
     expect(res.status).toBe(413);
-    expect(managerMock.__manager.triggerEvent).not.toHaveBeenCalled();
+    expect(managerMock.__manager.prepareEvent).not.toHaveBeenCalled();
   });
 
   it("returns 400 for malformed JSON that was validly signed", async () => {
@@ -356,7 +429,7 @@ describe("POST /api/webhooks/[key] — body handling", () => {
     const res = await post("whk_valid", body, signedHeaders(body));
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "Invalid request body" });
-    expect(managerMock.__manager.triggerEvent).not.toHaveBeenCalled();
+    expect(managerMock.__manager.prepareEvent).not.toHaveBeenCalled();
     expect(eventInserts()).toHaveLength(0);
   });
 });
@@ -394,9 +467,9 @@ describe("POST /api/webhooks/[key] — dispatch contract and tenant scoping", ()
     });
 
     // Fan-out is scoped to the same tenant, with the full dispatch contract.
-    expect(managerMock.__manager.triggerEvent).toHaveBeenCalledTimes(1);
+    expect(managerMock.__manager.prepareEvent).toHaveBeenCalledTimes(1);
     const [eventName, payload, tenantId, meta] = managerMock.__manager
-      .triggerEvent.mock.calls[0] as [
+      .prepareEvent.mock.calls[0] as [
       string,
       Record<string, unknown>,
       string,
@@ -436,7 +509,7 @@ describe("POST /api/webhooks/[key] — dispatch contract and tenant scoping", ()
       "webhook",
       expect.any(Object),
     );
-    expect(managerMock.__manager.triggerEvent).not.toHaveBeenCalled();
+    expect(managerMock.__manager.prepareEvent).not.toHaveBeenCalled();
   });
 });
 
@@ -458,7 +531,7 @@ describe("GET and OPTIONS /api/webhooks/[key]", () => {
     expect(json.documentation.methods).toEqual(["POST"]);
     // No lookup happens, so responses are indistinguishable for any key.
     expect(managerMock.__manager.getWebhookByKey).not.toHaveBeenCalled();
-    expect(managerMock.__manager.triggerEvent).not.toHaveBeenCalled();
+    expect(managerMock.__manager.prepareEvent).not.toHaveBeenCalled();
   });
 
   it("OPTIONS advertises methods without opening CORS", async () => {

@@ -32,6 +32,7 @@ jest.mock("nanoid", () => ({ nanoid: () => "delivery-id" }));
 
 import http from "http";
 import type { AddressInfo } from "net";
+import { serializePayload } from "../delivery-body";
 import { WebhookManager } from "../WebhookManager";
 import { resolveHost } from "@/lib/resolve-host";
 import { isDisallowedIp } from "@/lib/tools/safe-fetch";
@@ -66,12 +67,12 @@ describe("webhook delivery behind the SSRF guard", () => {
       url,
       "secret",
       {},
-      {
+      serializePayload({
         id: "payload-id",
         event: "test.event",
         timestamp: new Date(0),
         data: {},
-      },
+      }),
     );
 
   beforeEach(async () => {

@@ -8,6 +8,7 @@ import { readdirSync, readFileSync } from "fs";
 import { join } from "path";
 import type { QueryResult } from "pg";
 import { db, pool } from "@/server/db";
+import { serializePayload } from "@/lib/webhooks/delivery-body";
 import { WebhookManager } from "@/lib/webhooks/WebhookManager";
 import { systemSettings, webhookEvents, webhooks } from "@/shared/schema";
 import { resetDatabase, closePool } from "./helpers/db-reset";
@@ -201,12 +202,12 @@ describe("a row with nothing left to remove", () => {
       "https://hooks.example/in",
       "hmac-secret",
       { Authorization: "Bearer SECRET-SENTINEL", "X-Api-Key": "SECRET" },
-      {
+      serializePayload({
         id: "1",
         event: "user.created",
         timestamp: new Date("2026-11-05T00:00:00Z"),
         data: {},
-      },
+      }),
     );
     const { rows } = await pool.query<{ id: number }>(
       `SELECT id FROM webhook_deliveries`,
