@@ -20,3 +20,11 @@ export const EVENT_TOO_LONG_MESSAGE =
 
 /** The same refusal for a request that isn't saving an event. */
 export const REQUEST_TOO_LONG_MESSAGE = "Request body too large (max 10 MB)";
+
+/**
+ * What the app says when a reverse proxy refuses a request as too long. Cronium never sees
+ * that request and can't learn the proxy's limit, so this gives Cronium's own instead. It
+ * names nginx's setting because that default, 1 MB, is the one most likely to be in the way.
+ */
+export const PROXY_REFUSED_REQUEST_MESSAGE =
+  "A reverse proxy in front of Cronium refused this request as too long. It should allow up to 10 MB, as Cronium does. In nginx, that's client_max_body_size.";

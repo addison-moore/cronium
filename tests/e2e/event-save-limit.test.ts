@@ -189,6 +189,26 @@ describe.each(creates)("%s", (_surface, path, build) => {
   });
 });
 
+// The app's tRPC client tells Cronium's 413 from a reverse proxy's by this shape, in
+// apps/cronium-app/src/lib/trpc.ts. Unit tests only have a stand-in for superjson, so this
+// is what holds the real one to it.
+it("refuses a batched tRPC save in the format the app's client knows as its own", async () => {
+  const res = await send(
+    "/api/trpc/events.create?batch=1",
+    "POST",
+    bodyOfSize(LIMIT + 1, (content) => ({
+      0: trpcEvent("limit-format", content),
+    })),
+  );
+
+  expect(res.status).toBe(413);
+  const [answer] = JSON.parse(res.text) as [
+    { error: { json: { code: unknown; message: string } } },
+  ];
+  expect(typeof answer.error.json.code).toBe("number");
+  expect(answer.error.json.message).toMatch(TOO_LONG);
+});
+
 const updates: Array<[string, string, string, (id: number) => Build]> = [
   ["REST PATCH", "/api/events/{id}", "PATCH", () => (content) => ({ content })],
   ["REST PUT", "/api/events/{id}", "PUT", () => (content) => ({ content })],
