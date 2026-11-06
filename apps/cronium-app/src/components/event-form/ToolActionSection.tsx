@@ -41,11 +41,7 @@ import {
 import { useToolPlugins } from "@/tools/use-tool-plugins";
 import ActionParameterForm from "./ActionParameterForm";
 import { cn } from "@/lib/utils";
-import {
-  SlackMessagePreview,
-  EmailPreview,
-  ApiRequestPreview,
-} from "@/tools/previews";
+import { SlackMessagePreview, EmailPreview } from "@/tools/previews";
 import Link from "next/link";
 
 // Tool Action Configuration Interface
@@ -65,6 +61,9 @@ interface ToolActionSectionProps {
   availableTools: Tool[];
   /** Whether the credentials are still loading: `availableTools` is empty until then. */
   isLoadingTools: boolean;
+  /** Whether they couldn't be loaded at all, which leaves `availableTools` empty too. */
+  toolsLoadFailed: boolean;
+  onRetryTools: () => void;
 }
 
 // Default fallback icons for categories (used if plugin doesn't provide categoryIcon)
@@ -88,14 +87,15 @@ const DEFAULT_ACTION_TYPE_COLORS: Record<string, string> = {
 
 // Helper function to get category icon from plugin or fallback
 const getCategoryIcon = (category: string): React.ReactNode => {
-  // Try to get from a plugin that has this category
-  const pluginsInCategory = ToolPluginRegistry.getByCategory(category);
-  if (pluginsInCategory.length > 0 && pluginsInCategory[0]?.categoryIcon) {
-    return pluginsInCategory[0].categoryIcon;
-  }
+  // Try to get from a plugin that has this category. Most of them only name an icon, in
+  // a string, and React would print that beside the category.
+  const pluginIcon = ToolPluginRegistry.getByCategory(category)
+    .map((plugin) => plugin.categoryIcon)
+    .find((icon) => icon && typeof icon !== "string");
+  if (pluginIcon) return pluginIcon;
   // Fallback to default icon
   const categoryLower = category.toLowerCase();
-  return DEFAULT_CATEGORY_ICONS[categoryLower] ?? <Zap className="h-3 w-3" />;
+  return DEFAULT_CATEGORY_ICONS[categoryLower] ?? <Zap className="h-4 w-4" />;
 };
 
 // Helper function to get action type color from action or fallback
@@ -108,12 +108,30 @@ const getActionTypeColor = (action: ToolAction): string => {
   );
 };
 
+// What a stored config's tool and action are called. A row can name ones no plugin has
+// now, or leave the tool out: only the form writes whole ones, and the API takes any JSON.
+const storedConfigNames = (
+  config: Partial<ToolActionConfig>,
+  plugins: ToolPlugin[],
+): { tool: string; action: string | undefined } => {
+  const toolType = config.toolType?.toUpperCase();
+  const plugin = plugins.find((p) => p.id.toUpperCase() === toolType);
+  return {
+    tool: plugin?.name ?? config.toolType ?? "an unknown tool",
+    action:
+      plugin?.actions?.find((a) => a.id === config.actionId)?.name ??
+      config.actionId,
+  };
+};
+
 export default function ToolActionSection({
   value,
   onChange,
   active = true,
   availableTools,
   isLoadingTools,
+  toolsLoadFailed,
+  onRetryTools,
 }: ToolActionSectionProps) {
   const { toast } = useToast();
 
@@ -439,7 +457,8 @@ export default function ToolActionSection({
           </div>
           {plugin.actions && (
             <Badge variant="secondary" className="text-xs">
-              {plugin.actions.length} actions
+              {plugin.actions.length} action
+              {plugin.actions.length !== 1 ? "s" : ""}
             </Badge>
           )}
         </div>
@@ -454,14 +473,15 @@ export default function ToolActionSection({
     }
 
     // Slack preview
-    if (selectedPlugin.id === "slack" && selectedAction.id === "send-message") {
+    if (
+      selectedPlugin.id === "slack" &&
+      selectedAction.id === "slack-send-message"
+    ) {
       return (
         <SlackMessagePreview
-          channel={
-            typeof parameters.channel === "string"
-              ? parameters.channel
-              : "#general"
-          }
+          {...(typeof parameters.channel === "string" && {
+            channel: parameters.channel,
+          })}
           message={typeof parameters.text === "string" ? parameters.text : ""}
           {...(typeof parameters.username === "string" && {
             username: parameters.username,
@@ -512,39 +532,14 @@ export default function ToolActionSection({
       return <EmailPreview {...emailProps} />;
     }
 
-    // Webhook/API preview
-    if (
-      selectedPlugin.id === "webhook" &&
-      selectedAction.id === "send-request"
-    ) {
-      const apiProps: React.ComponentProps<typeof ApiRequestPreview> = {
-        method:
-          typeof parameters.method === "string" ? parameters.method : "GET",
-        url: typeof parameters.url === "string" ? parameters.url : "",
-      };
-
-      if (parameters.headers)
-        apiProps.headers = parameters.headers as Record<string, string>;
-      if (parameters.queryParams)
-        apiProps.queryParams = parameters.queryParams as Record<string, string>;
-      if (parameters.body)
-        apiProps.body = parameters.body as string | Record<string, unknown>;
-      if (parameters.authType)
-        apiProps.authType = parameters.authType as
-          "none" | "api_key" | "bearer" | "basic";
-      if (parameters.timeout) apiProps.timeout = parameters.timeout as number;
-
-      return <ApiRequestPreview {...apiProps} />;
-    }
-
     // Discord preview (similar to Slack)
     if (
       selectedPlugin.id === "discord" &&
-      selectedAction.id === "send-message"
+      selectedAction.id === "discord-send-message"
     ) {
       return (
         <SlackMessagePreview
-          channel={parameters.webhook_url ? "Discord Channel" : "#general"}
+          title="Discord Message Preview"
           message={
             typeof parameters.content === "string" ? parameters.content : ""
           }
@@ -572,7 +567,7 @@ export default function ToolActionSection({
 
   // Nothing below can be right until both have answered: it would say that no tools
   // match, or that no credentials are configured, about an event that has both.
-  if (pluginsStatus === "failed") {
+  if (pluginsStatus === "failed" || toolsLoadFailed) {
     return (
       <Card>
         <CardHeader>{title}</CardHeader>
@@ -581,17 +576,24 @@ export default function ToolActionSection({
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="space-y-3">
               <p>
-                Couldn&apos;t load the tool list.{" "}
+                Couldn&apos;t load{" "}
+                {pluginsStatus === "failed"
+                  ? "the tool list"
+                  : "your tool credentials"}
+                .{" "}
                 {value
-                  ? "This event's tool settings can't be shown or changed until it loads, and saving keeps them as they are."
-                  : "A tool action can't be set up until it loads."}{" "}
+                  ? "This event's tool settings can't be shown or changed until that works, and saving keeps them as they are."
+                  : "A tool action can't be set up until that works."}{" "}
                 Check your connection and try again, or reload the page.
               </p>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={retryPlugins}
+                onClick={() => {
+                  if (pluginsStatus === "failed") retryPlugins();
+                  if (toolsLoadFailed) onRetryTools();
+                }}
               >
                 Try again
               </Button>
@@ -616,6 +618,22 @@ export default function ToolActionSection({
     );
   }
 
+  // What's stored has to show below. When its credential or action can't, the form still
+  // holds the config and a save sends it back, so say so: it's settings nobody can see
+  // otherwise. The credentials have answered by now, so one not in the list is gone.
+  const storedTool = availableTools.find((tool) => tool.id === value?.toolId);
+  const storedPlugin = allPlugins.find(
+    (plugin) => plugin.id.toUpperCase() === storedTool?.type.toUpperCase(),
+  );
+  const storedActionShows = storedPlugin?.actions?.some(
+    (action) => action.id === value?.actionId,
+  );
+  const storedNames =
+    !!value?.toolId &&
+    !!value.actionId &&
+    !storedActionShows &&
+    storedConfigNames(value, allPlugins);
+
   return (
     <Card>
       <CardHeader>
@@ -636,6 +654,24 @@ export default function ToolActionSection({
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {storedNames && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="space-y-2">
+              <p>
+                {storedTool
+                  ? "This event's action isn't available."
+                  : "This event's credential is gone, so its runs will fail."}
+              </p>
+              <p>
+                It&apos;s set to run <strong>{storedNames.action}</strong> on{" "}
+                <strong>{storedNames.tool}</strong>. Saving keeps that as it is,
+                until you choose a replacement below.
+              </p>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Tool selection section */}
         {!selectedToolType ? (
           <div className="space-y-4">
