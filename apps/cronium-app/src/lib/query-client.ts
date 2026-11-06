@@ -62,6 +62,11 @@ async function keepCachedEventCurrent(
   // Not awaited, so a save doesn't look unfinished until this comes back. A save's
   // answer isn't the last word either: it's read before the schedule is worked out.
   void client.invalidateQueries(filters);
+
+  // A workflow's nodes and sidebar show the list, not that copy. Only a list something
+  // is showing gets read again, and the events list's bulk actions, one write per event,
+  // are on a page rendered by the server, so they send no reads for this.
+  void client.invalidateQueries({ queryKey: getQueryKey(trpc.events.getAll) });
 }
 
 export function createQueryClient(): QueryClient {
