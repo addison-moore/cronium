@@ -27,8 +27,33 @@ const LEASE_SLACK_MS = 60_000;
 const HEARTBEAT_LEASE_MS = 90_000;
 const FALLBACK_TIMEOUT_MS = 30_000;
 
+/**
+ * How long drain() waits for a claim under way. It is a short transaction, so one
+ * still going after this is stuck on the database, which is no reason to spend the
+ * whole drain on it. If it does finish later, its jobs aren't started: see claim().
+ */
+const CLAIM_SETTLE_MS = 3_000;
+
+/** Waits for `work` to settle, or for `timeoutMs`, whichever comes first. */
+async function settledWithin(
+  work: Iterable<Promise<unknown>>,
+  timeoutMs: number,
+): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  await Promise.race([
+    Promise.allSettled(work),
+    new Promise((resolve) => {
+      timer = setTimeout(resolve, timeoutMs);
+    }),
+  ]);
+  clearTimeout(timer);
+}
+
 export class InProcessWorkerPool {
   private active = new Map<string, Promise<void>>();
+  private claims = new Set<Promise<number>>();
+  /** Set once drain() has stopped waiting for claims. */
+  private stopped = false;
 
   constructor(
     private readonly workerId: string,
@@ -42,6 +67,16 @@ export class InProcessWorkerPool {
   /** Claim up to `capacity` due in-process jobs (SKIP LOCKED) and launch them.
    * Returns how many were claimed. */
   async claimAndRun(now: Date = new Date()): Promise<number> {
+    const claim = this.claim(now);
+    this.claims.add(claim);
+    try {
+      return await claim;
+    } finally {
+      this.claims.delete(claim);
+    }
+  }
+
+  private async claim(now: Date): Promise<number> {
     const capacity = this.maxConcurrent - this.active.size;
     if (capacity <= 0) return 0;
 
@@ -93,6 +128,18 @@ export class InProcessWorkerPool {
       );
       return rows;
     });
+
+    // drain() has stopped waiting for this claim, so the process could exit at any
+    // moment. Started now, a job would be cut off partway and then run again. Left
+    // as it is, its lease runs out and the sweeper deals with it.
+    if (this.stopped) {
+      if (claimed.length > 0) {
+        console.warn(
+          `[WorkerPool] Not starting ${claimed.length} job(s) claimed while shutting down; the sweeper will recover them`,
+        );
+      }
+      return 0;
+    }
 
     for (const job of claimed) {
       this.launch(job);
@@ -167,15 +214,22 @@ export class InProcessWorkerPool {
       );
   }
 
-  /** Wait for in-flight jobs on shutdown, bounded. */
+  /** Wait for in-flight jobs on shutdown, bounded. That includes the jobs of a
+   * claim under way, which only start once it returns. */
   async drain(timeoutMs = 30_000): Promise<void> {
+    const started = Date.now();
+    if (this.claims.size > 0) {
+      await settledWithin(this.claims, Math.min(CLAIM_SETTLE_MS, timeoutMs));
+    }
+    this.stopped = true;
+
     if (this.active.size === 0) return;
     console.log(
       `[WorkerPool] Draining ${this.active.size} in-flight job(s) (max ${timeoutMs / 1000}s)`,
     );
-    await Promise.race([
-      Promise.allSettled([...this.active.values()]),
-      new Promise((resolve) => setTimeout(resolve, timeoutMs)),
-    ]);
+    await settledWithin(
+      this.active.values(),
+      timeoutMs - (Date.now() - started),
+    );
   }
 }
