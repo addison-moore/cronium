@@ -60,6 +60,8 @@ export interface ToolActionConfig {
 interface ToolActionSectionProps {
   value: ToolActionConfig | null;
   onChange: (config: ToolActionConfig | null) => void;
+  // False while the form this is part of is out of sight, as EventForm's `active`.
+  active?: boolean;
   availableTools: Tool[];
   /** Whether the credentials are still loading: `availableTools` is empty until then. */
   isLoadingTools: boolean;
@@ -109,6 +111,7 @@ const getActionTypeColor = (action: ToolAction): string => {
 export default function ToolActionSection({
   value,
   onChange,
+  active = true,
   availableTools,
   isLoadingTools,
 }: ToolActionSectionProps) {
@@ -143,7 +146,7 @@ export default function ToolActionSection({
         actionId: selectedAction?.id ?? "",
       },
       {
-        enabled: !!selectedPlugin && !!selectedAction,
+        enabled: active && !!selectedPlugin && !!selectedAction,
       },
     );
 

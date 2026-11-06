@@ -155,6 +155,9 @@ export interface EventFormProps {
   // Control visibility of header/footer
   showHeader?: boolean;
   showFooter?: boolean;
+  // False while the form is kept mounted but out of sight, as on the event page's
+  // other tabs. It then takes no keys and fetches nothing.
+  active?: boolean;
 }
 
 export default function EventForm(props: EventFormProps) {
@@ -172,6 +175,7 @@ function EventFormFields({
   onCancel,
   showHeader: _showHeader = true,
   showFooter = true,
+  active = true,
 }: EventFormProps) {
   const { toast } = useToast();
 
@@ -229,7 +233,7 @@ function EventFormFields({
   // Live cron validation + next-fire preview (debounced by react-query keying)
   const cronPreview = trpc.events.validateCron.useQuery(
     { expression: watchedCron ?? "", timezone: watchedTimezone || "UTC" },
-    { enabled: useCronScheduling && !!watchedCron, retry: false },
+    { enabled: active && useCronScheduling && !!watchedCron, retry: false },
   );
 
   const timezoneOptions = buildTimezoneOptions();
@@ -244,7 +248,7 @@ function EventFormFields({
   // Fetch available servers
   const { data: serversData } = trpc.servers.getAll.useQuery(
     { limit: 100, offset: 0 },
-    QUERY_OPTIONS.dynamic,
+    { ...QUERY_OPTIONS.dynamic, enabled: active },
   );
   const servers = (serversData?.servers ?? []) as ServerData[];
   // A linked server the list leaves out, as it does every archived one, still
@@ -263,13 +267,16 @@ function EventFormFields({
   // Fetch server groups (quick-select in the execution location picker)
   const { data: serverGroupsData } = trpc.servers.getGroups.useQuery(
     undefined,
-    QUERY_OPTIONS.dynamic,
+    { ...QUERY_OPTIONS.dynamic, enabled: active },
   );
   const serverGroups = serverGroupsData?.groups ?? [];
 
   // Fetch available tools
   const { data: toolsData, isLoading: isLoadingTools } =
-    trpc.tools.getAll.useQuery({}, QUERY_OPTIONS.dynamic);
+    trpc.tools.getAll.useQuery(
+      {},
+      { ...QUERY_OPTIONS.dynamic, enabled: active },
+    );
   const availableTools = (toolsData?.tools ?? []) as unknown as Tool[];
 
   // tRPC mutations
@@ -294,8 +301,11 @@ function EventFormFields({
     null,
   );
 
-  // Keyboard shortcut support (Ctrl+S / Cmd+S)
+  // Keyboard shortcut support (Ctrl+S / Cmd+S), only while the form is on screen. On
+  // another tab it would save what nobody can see, and then leave that tab.
   useEffect(() => {
+    if (!active) return;
+
     const handleKeyPress = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
@@ -308,7 +318,7 @@ function EventFormFields({
 
     document.addEventListener("keydown", handleKeyPress);
     return () => document.removeEventListener("keydown", handleKeyPress);
-  }, [form]);
+  }, [form, active]);
 
   // The form can't use this config, so it shows none. There's no other sign of why.
   useEffect(() => {
@@ -638,6 +648,7 @@ function EventFormFields({
             <ToolActionSection
               value={field.value ?? null}
               onChange={field.onChange}
+              active={active}
               availableTools={availableTools}
               isLoadingTools={isLoadingTools}
             />
