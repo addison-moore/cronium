@@ -61,6 +61,8 @@ module.exports = {
         "<rootDir>/../apps/cronium-app/src/lib/__tests__/socket-client-url.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/__tests__/ssrf-guard.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/__tests__/ssrf-guard-connect.test.ts",
+        "<rootDir>/../apps/cronium-app/src/lib/__tests__/ssrf-guard-name-server.test.ts",
+        "<rootDir>/../apps/cronium-app/src/lib/__tests__/resolve-host.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/__tests__/ssrf-proxy-env.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/__tests__/valkey-url.test.ts",
         "<rootDir>/../apps/cronium-app/src/lib/mcp-oauth/__tests__/tokens.test.ts",

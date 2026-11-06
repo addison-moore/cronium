@@ -38,6 +38,7 @@ jest.mock("nanoid", () => ({ nanoid: () => "delivery-1" }));
 import { Readable } from "stream";
 import axios from "axios";
 import { DrizzleQueryError } from "drizzle-orm/errors";
+import { serializePayload } from "../delivery-body";
 import { WebhookManager } from "../WebhookManager";
 
 const axiosRequest = axios.request as unknown as jest.Mock;
@@ -54,12 +55,12 @@ const deliver = (headers: Record<string, string> = CUSTOM_HEADERS) =>
     "https://hooks.example/in",
     "hmac-secret",
     headers,
-    {
+    serializePayload({
       id: "2",
       event: "user.created",
       timestamp: new Date("2026-11-04T00:00:00Z"),
       data: {},
-    },
+    }),
   );
 
 beforeEach(() => {

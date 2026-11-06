@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,7 +34,9 @@ func NewBackendClient(cfg config.BackendConfig, log *logrus.Logger) *BackendClie
 	}
 }
 
-// GetVariable retrieves a variable from the backend
+// GetVariable retrieves a variable from the backend, or nil if the user has none with this
+// key. That has to stay apart from an error: the bash helpers start a counter from nothing
+// on the one, and on the other must leave what's stored alone.
 func (c *BackendClient) GetVariable(ctx context.Context, executionID, userID, key string) (*types.Variable, error) {
 	url := fmt.Sprintf("%s/api/internal/variables/%s/%s", c.config.URL, userID, key)
 
@@ -46,6 +49,10 @@ func (c *BackendClient) GetVariable(ctx context.Context, executionID, userID, ke
 
 	var variable types.Variable
 	if err := c.doRequest(req, &variable); err != nil {
+		var status *backendStatusError
+		if errors.As(err, &status) && status.code == http.StatusNotFound {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("failed to get variable: %w", err)
 	}
 
@@ -243,6 +250,16 @@ func (c *BackendClient) newRequest(ctx context.Context, method, url string, body
 	return req, nil
 }
 
+// backendStatusError is an error status the app answered with.
+type backendStatusError struct {
+	code   int
+	detail string
+}
+
+func (e *backendStatusError) Error() string {
+	return "backend error: " + e.detail
+}
+
 // doRequest executes an HTTP request with retry logic
 func (c *BackendClient) doRequest(req *http.Request, result interface{}) error {
 	var lastErr error
@@ -294,9 +311,9 @@ func (c *BackendClient) doRequest(req *http.Request, result interface{}) error {
 				case errResp.Message != "":
 					detail = detail + " - " + errResp.Message
 				}
-				lastErr = fmt.Errorf("backend error: %s", detail)
+				lastErr = &backendStatusError{code: resp.StatusCode, detail: detail}
 			} else {
-				lastErr = fmt.Errorf("backend error: %s", resp.Status)
+				lastErr = &backendStatusError{code: resp.StatusCode, detail: resp.Status}
 			}
 
 			// Don't retry client errors

@@ -8,6 +8,7 @@ import {
   filterAvailableEvents,
   normalizeEdge,
   normalizeEdges,
+  withCurrentEventDetails,
 } from "../canvas-transforms";
 
 const events: AvailableEvent[] = [
@@ -195,5 +196,137 @@ describe("buildEventNode", () => {
     const position = { x: 10, y: 20 };
     buildEventNode(events[1]!, position, "id");
     expect(position).toEqual({ x: 10, y: 20 });
+  });
+});
+
+describe("withCurrentEventDetails", () => {
+  const createdAt = new Date("2026-01-02T03:04:05.000Z");
+  const updatedAt = new Date("2026-11-06T07:08:09.000Z");
+  const event: AvailableEvent = {
+    id: 7,
+    name: "Renamed",
+    type: EventType.PYTHON,
+    description: "After",
+    tags: ["after"],
+    serverId: 3,
+    createdAt,
+    updatedAt,
+  };
+  const showing = {
+    eventId: 7,
+    label: "Renamed",
+    type: EventType.PYTHON,
+    eventTypeIcon: EventType.PYTHON,
+    description: "After",
+    tags: ["after"],
+    serverId: 3,
+    createdAt,
+    updatedAt,
+  };
+  const nodeWith = (data: Record<string, unknown>) => ({
+    id: "node-1",
+    position: { x: 10, y: 20 },
+    data,
+  });
+
+  it("gives a node what its event says now", () => {
+    const node = nodeWith({
+      eventId: 7,
+      label: "Nightly",
+      type: EventType.BASH,
+      eventTypeIcon: EventType.BASH,
+      description: "Before",
+      tags: ["before"],
+    });
+
+    expect(withCurrentEventDetails([node], [event])[0]?.data).toEqual(showing);
+  });
+
+  it("notices a change to any one detail, not only the name", () => {
+    const changed = [
+      { description: "Before" },
+      { tags: ["before"] },
+      { serverId: 4 },
+      { updatedAt: new Date("2026-02-03T00:00:00.000Z") },
+    ];
+
+    for (const fields of changed) {
+      const [node] = withCurrentEventDetails(
+        [nodeWith({ ...showing, ...fields })],
+        [event],
+      );
+      expect(node?.data).toEqual(showing);
+    }
+  });
+
+  it("keeps everything else about the node", () => {
+    const node = {
+      ...nodeWith({ eventId: 7, label: "Nightly", extra: "kept" }),
+      selected: true,
+      measured: { width: 192, height: 60 },
+    };
+
+    expect(withCurrentEventDetails([node], [event])[0]).toMatchObject({
+      id: "node-1",
+      position: { x: 10, y: 20 },
+      selected: true,
+      measured: { width: 192, height: 60 },
+      data: { extra: "kept", label: "Renamed" },
+    });
+  });
+
+  it("clears what the event no longer has", () => {
+    const bare: AvailableEvent = {
+      id: 7,
+      name: "Renamed",
+      type: EventType.PYTHON,
+    };
+
+    const [node] = withCurrentEventDetails([nodeWith(showing)], [bare]);
+
+    expect(node?.data).toMatchObject({ description: "", tags: [] });
+    expect(node?.data.serverId).toBeUndefined();
+    expect(node?.data.updatedAt).toBeUndefined();
+  });
+
+  it("leaves a node alone when its event isn't in the list", () => {
+    const node = nodeWith({ eventId: 8, label: "Past the list's limit" });
+
+    expect(withCurrentEventDetails([node], [event])[0]).toBe(node);
+  });
+
+  it("leaves a node with no event alone", () => {
+    const node = nodeWith({ label: "No event" });
+
+    expect(withCurrentEventDetails([node], [event])[0]).toBe(node);
+  });
+
+  it("keeps the same object for a node that already matches", () => {
+    const node = nodeWith(showing);
+
+    expect(withCurrentEventDetails([node], [event])[0]).toBe(node);
+  });
+
+  it("doesn't count a date from the undo history, which is a string, as a change", () => {
+    const node = nodeWith(
+      JSON.parse(JSON.stringify(showing)) as typeof showing,
+    );
+
+    expect(withCurrentEventDetails([node], [event])[0]).toBe(node);
+  });
+
+  it("doesn't count a missing server as a change, whichever way it's missing", () => {
+    const { serverId: _serverId, ...withoutServer } = event;
+    const node = nodeWith({ ...showing, serverId: null });
+
+    expect(withCurrentEventDetails([node], [withoutServer])[0]).toBe(node);
+  });
+
+  it("doesn't change the node it was given", () => {
+    const node = nodeWith({ eventId: 7, label: "Nightly" });
+
+    withCurrentEventDetails([node], [event]);
+
+    expect(node.data).toEqual({ eventId: 7, label: "Nightly" });
   });
 });

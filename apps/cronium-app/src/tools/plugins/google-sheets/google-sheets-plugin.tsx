@@ -147,6 +147,7 @@ function GoogleConnectSection({ toolId }: { toolId: number }) {
 
   const handleConnect = async () => {
     setIsConnecting(true);
+    let reason = "Failed to start Google authorization";
     try {
       const response = await fetch("/api/oauth/authorize", {
         method: "POST",
@@ -161,14 +162,20 @@ function GoogleConnectSection({ toolId }: { toolId: number }) {
         authUrl?: string;
         error?: string;
       };
-      if (!response.ok || !data.authUrl) {
-        throw new Error(data.error ?? "Failed to start Google authorization");
+      if (response.ok && data.authUrl) {
+        window.location.href = data.authUrl;
+        return;
       }
-      window.location.href = data.authUrl;
+      reason = data.error ?? reason;
     } catch (error) {
       console.error("Google connect failed:", error);
-      setIsConnecting(false);
     }
+    toast({
+      title: "Connect Failed",
+      description: reason,
+      variant: "destructive",
+    });
+    setIsConnecting(false);
   };
 
   if (!oauthStatus) {
@@ -220,6 +227,23 @@ function GoogleConnectSection({ toolId }: { toolId: number }) {
   );
 }
 
+// The badge tests the connection when it mounts, so it has to mount again when the
+// connection changes: Disconnect would otherwise leave "Healthy" beside a Connect button.
+function GoogleHealthBadge({ toolId }: { toolId: number }) {
+  const { data: oauthStatus } = trpc.tools.checkOAuthStatus.useQuery({
+    toolId,
+    providerId: "google",
+  });
+
+  if (!oauthStatus) {
+    return null;
+  }
+
+  return (
+    <ToolHealthBadge key={String(oauthStatus.hasTokens)} toolId={toolId} />
+  );
+}
+
 function GoogleSheetsCredentialDisplay({
   tools,
   onEdit,
@@ -242,7 +266,7 @@ function GoogleSheetsCredentialDisplay({
               <div className="mb-2 flex items-center gap-3">
                 <h4 className="font-medium">{tool.name}</h4>
                 <StatusBadge status={tool.isActive ? "active" : "offline"} />
-                <ToolHealthBadge toolId={tool.id} />
+                <GoogleHealthBadge toolId={tool.id} />
               </div>
               <div className="text-muted-foreground grid grid-cols-1 gap-2 text-sm">
                 <div className="flex items-center gap-2">

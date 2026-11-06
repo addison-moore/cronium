@@ -423,10 +423,19 @@ export const toolsRouter = createTRPCRouter({
 
         const startTime = Date.now();
 
+        // A tool on OAuth keeps its token in oauth_tokens, not in its credentials
+        const { injectOAuthToken } =
+          await import("@/lib/oauth/credential-bridge");
+        const credentials = await injectOAuthToken(tool.credentials, {
+          userId: ctx.session.user.id,
+          toolId: tool.id,
+          toolType: tool.type,
+        });
+
         // Real provider check (SMTP verify, API auth call, webhook POST, ...)
         const connectionResult = await testToolConnection(
           tool.type,
-          tool.credentials,
+          credentials,
         );
 
         const testResult = {

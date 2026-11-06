@@ -18,10 +18,16 @@ The tools are defined once, in
 | **Remote** `/api/mcp` (in-process Next route, Streamable HTTP / stateless JSON)  | `apps/cronium-app/src/app/api/mcp/` | OAuth 2.1, or bearer API token | claude.ai web app, ChatGPT (Business+), any remote MCP client |
 | **Local stdio bridge** `@cronium/mcp-server` (npm, `npx -y @cronium/mcp-server`) | `apps/cronium-mcp/`                 | bearer API token (env)         | Claude Desktop / Claude Code and other stdio-only clients     |
 
-The bridge is ~180 dependency-free lines: it forwards each stdin JSON-RPC
+The bridge is ~300 dependency-free lines: it forwards each stdin JSON-RPC
 message to `POST <CRONIUM_BASE_URL>/api/mcp` with the token and writes the
 response back, probing the endpoint at startup so a bad URL/token fails at
 connect time. There is deliberately no second tool implementation.
+
+It tells Cronium's answers by the body. Anything that isn't JSON-RPC, at any
+status but a 401, reads `Got HTTP 502, not Cronium's answer` under the request's
+id, with possible causes and without the body, which only goes to its log. It
+doesn't follow redirects. Something in front of Cronium that answers in JSON-RPC
+can't be told apart, and is passed on as Cronium's.
 
 ## The tools
 

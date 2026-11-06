@@ -51,9 +51,7 @@ export default function AIScriptAssistant({
       let errorMessage =
         error.message || "Failed to generate code. Please try again.";
 
-      if (error.data?.code === "UNAUTHORIZED") {
-        errorMessage = "You need to be logged in to use the AI assistant";
-      } else if (error.data?.code === "FORBIDDEN") {
+      if (error.data?.code === "FORBIDDEN") {
         errorMessage =
           "AI script assistant is not enabled by the administrator";
       } else if (error.data?.code === "SERVICE_UNAVAILABLE") {
