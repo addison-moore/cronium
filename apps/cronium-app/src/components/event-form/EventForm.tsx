@@ -27,9 +27,9 @@ import EditorSettingsModal, {
   type EditorSettings,
 } from "./EditorSettingsModal";
 import { Eye, EyeOff, Trash2, Settings, Lock } from "lucide-react";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { isToolActionsUIEnabled } from "@/lib/featureFlags";
 import { parseToolActionConfig } from "@/lib/tools/tool-action-config";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   EventType,
   EventStatus,
