@@ -2,7 +2,6 @@
 
 import type { ReactNode } from "react";
 import { setMonacoSetup } from "@cronium/ui";
-import { NextAuthProvider } from "./NextAuthProvider";
 import { TrpcProvider } from "./TrpcProvider";
 import { ThemeProvider } from "./ThemeProvider";
 
@@ -23,18 +22,22 @@ export function Providers({
   children: ReactNode;
   nonce?: string | undefined;
 }) {
+  // NextAuthProvider isn't here, on purpose. It's in the dashboard's layout, the only place that
+  // reads the session. When the session arrives, React counts that as a change to everything
+  // under the provider, and throws away any server HTML it couldn't hydrate yet because the
+  // page's own chunk is still loading. On a slow connection those two arrive within milliseconds
+  // of each other, and when the session won, the sign-in form came back empty, with what was
+  // typed and any press made before hydration gone.
   return (
-    <NextAuthProvider>
-      <TrpcProvider>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem={true}
-          nonce={nonce}
-        >
-          {children}
-        </ThemeProvider>
-      </TrpcProvider>
-    </NextAuthProvider>
+    <TrpcProvider>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem={true}
+        nonce={nonce}
+      >
+        {children}
+      </ThemeProvider>
+    </TrpcProvider>
   );
 }
