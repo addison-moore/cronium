@@ -1,7 +1,7 @@
 {
   "note": "Total coverage baselines. croniumApp: apps/cronium-app jest totals (check-coverage-ratchet.mjs). go: per-module Go statement totals from each coverage.out (check-go-coverage-ratchet.mjs). CI fails if a PR drops these by more than the tolerance; raise (never lower) as coverage improves — see _plans/testing/PLAN.md.",
   "croniumApp": {
-    "statements": 41.52,
+    "statements": 41.56,
     "branches": 34.79
   },
   "go": {

@@ -69,6 +69,9 @@ services:
       dockerfile: apps/cronium-app/Dockerfile
     image: ghcr.io/addison-moore/cronium-app:${BUILD_VERSION:-latest}
     container_name: cronium-app
+    # Time to finish requests (up to 10s) and write the last audit log entries (up
+    # to 5s more) before Docker kills it.
+    stop_grace_period: 20s
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-cronium}:${POSTGRES_PASSWORD:?generate with openssl rand -hex 16}@postgres:5432/${POSTGRES_DB:-cronium}
       AUTH_URL: ${AUTH_URL:-http://localhost:3000}
@@ -126,6 +129,9 @@ services:
     image: ghcr.io/addison-moore/cronium-app:${BUILD_VERSION:-latest}
     container_name: cronium-worker
     command: ["apps/cronium-app/scripts/start-worker.sh"]
+    # Time to finish running jobs (up to 30s) and write their audit log entries (up
+    # to 5s more) before Docker kills it.
+    stop_grace_period: 40s
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-cronium}:${POSTGRES_PASSWORD:?generate with openssl rand -hex 16}@postgres:5432/${POSTGRES_DB:-cronium}
       AUTH_URL: ${AUTH_URL:-http://localhost:3000}
