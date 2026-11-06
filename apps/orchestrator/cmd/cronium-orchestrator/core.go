@@ -371,9 +371,13 @@ func (c *daemonCore) processJob(ctx context.Context, job *types.Job) {
 		switch update.Type {
 		case types.UpdateTypeLog:
 			if logEntry, ok := update.Data.(*types.LogEntry); ok {
-				if logEntry.Stream == "stdout" {
+				// Only what the script wrote is the job's output. The "system"
+				// stream is the executor's own notes, which would otherwise land
+				// in stderr on a remote run and not in a container.
+				switch logEntry.Stream {
+				case "stdout":
 					stdout.WriteLine(logEntry.Line)
-				} else {
+				case "stderr":
 					stderr.WriteLine(logEntry.Line)
 				}
 			}

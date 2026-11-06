@@ -240,6 +240,24 @@ func TestProcessJobForwardsLogsAndIntermediateStatus(t *testing.T) {
 	require.True(t, fx.hasLogEntry("Execution error"))
 }
 
+// A remote run's "Using Cronium Runner version" note must not read as script stderr.
+func TestProcessJobLeavesSystemLinesOutOfJobOutput(t *testing.T) {
+	t.Parallel()
+	fx := newCoreFixture(t, nil)
+	fx.exec.setFn(func(ctx context.Context, job *types.Job) (<-chan types.ExecutionUpdate, error) {
+		return preloadedUpdates(
+			logUpdate("system", "Using Cronium Runner version dev"),
+			logUpdate("stdout", "out-line"),
+			completeUpdate(types.JobStatusCompleted, 0),
+		), nil
+	})
+	fx.core.processJob(context.Background(), testJob("system-lines"))
+
+	rec := fx.waitComplete(t)
+	require.Equal(t, "out-line\n", rec.req.Output.Stdout)
+	require.Equal(t, "", rec.req.Output.Stderr)
+}
+
 // ---------- output capping through processJob ----------
 
 func TestProcessJobCapsOversizedOutput(t *testing.T) {

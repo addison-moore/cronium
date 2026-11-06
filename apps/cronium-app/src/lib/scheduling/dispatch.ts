@@ -11,6 +11,7 @@
 
 import { storage, type EventWithRelations } from "@/server/storage";
 import { db } from "@/server/db";
+import { pgErrorCode } from "@/lib/pg-errors";
 import {
   EventStatus,
   JobPriority,
@@ -71,12 +72,18 @@ function jobTypeForEvent(event: EventWithRelations): JobType {
   return map[event.type] ?? JobType.SCRIPT;
 }
 
+/** For a write that can't change what happened to the run: say so and carry on. */
+function reportFailedWrite(what: string, eventId: number) {
+  return (error: unknown): void => {
+    console.error(
+      `[Dispatch] Failed to ${what} for event ${eventId}:`,
+      error instanceof Error ? error.message : String(error),
+    );
+  };
+}
+
 function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    (error as { code?: string }).code === "23505"
-  );
+  return pgErrorCode(error) === "23505";
 }
 
 /**
@@ -194,18 +201,25 @@ export async function dispatchEventJob(
   } catch (error) {
     if (isUniqueViolation(error)) {
       // SKIP overlap policy: a previous run of this event is still active
-      // (jobs_active_key_uq). Record the skip loudly and finalize the log.
-      await db.insert(scheduleIncidents).values({
-        eventId: event.id,
-        kind: ScheduleIncidentKind.SKIPPED_OVERLAP,
-        details: { logId: log.id, triggeredBy: opts.triggeredBy },
-      });
-      await storage.updateLog(log.id, {
-        status: LogStatus.FAILURE,
-        endTime: new Date(),
-        error:
-          "Skipped: a previous run of this event is still active (overlap policy: SKIP)",
-      });
+      // (jobs_active_key_uq). Record the skip loudly and finalize the log. The run
+      // is skipped either way, so neither write failing changes the answer, and a
+      // failed incident can't leave the log PENDING with nothing to finalize it.
+      await storage
+        .updateLog(log.id, {
+          status: LogStatus.FAILURE,
+          endTime: new Date(),
+          error:
+            "Skipped: a previous run of this event is still active (overlap policy: SKIP)",
+        })
+        .catch(reportFailedWrite("finalize a skipped run's log", event.id));
+      await db
+        .insert(scheduleIncidents)
+        .values({
+          eventId: event.id,
+          kind: ScheduleIncidentKind.SKIPPED_OVERLAP,
+          details: { logId: log.id, triggeredBy: opts.triggeredBy },
+        })
+        .catch(reportFailedWrite("record a skipped run", event.id));
       console.log(
         `[Dispatch] Event ${event.id} skipped (overlap policy SKIP, previous run active)`,
       );
@@ -222,13 +236,20 @@ export async function dispatchEventJob(
     throw error;
   }
 
-  await storage.updateLog(log.id, { jobId: job.id, status: LogStatus.PENDING });
+  // The job is queued from here on and will run, so nothing below may fail the
+  // dispatch. A CI caller told it failed would retry into a second run, and a
+  // workflow step would be marked failed over a job still running. The run needs
+  // neither write: it finds its log through the payload, and the claim loops poll
+  // as well as listening for the notify in recordJobCreated.
+  await storage
+    .updateLog(log.id, { jobId: job.id, status: LogStatus.PENDING })
+    .catch(reportFailedWrite("link a job to its log", event.id));
 
   await recordJobCreated(job.id, actor, {
     eventId: event.id,
     triggeredBy: opts.triggeredBy,
     logId: log.id,
-  });
+  }).catch(reportFailedWrite("record a job's creation", event.id));
 
   // Execution bookkeeping the old system never wrote (C8): count scheduled/
   // workflow/webhook dispatches and stamp lastRunAt. Manual runs don't count

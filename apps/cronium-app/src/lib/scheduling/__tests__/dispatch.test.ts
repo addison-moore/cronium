@@ -63,6 +63,8 @@ jest.mock("@/lib/scheduler", () => ({
   scheduler: { deleteScript: jest.fn(() => Promise.resolve(undefined)) },
 }));
 
+import { DrizzleQueryError } from "drizzle-orm/errors";
+import { db } from "@/server/db";
 import { dispatchEventJob } from "../dispatch";
 import { storage, type EventWithRelations } from "@/server/storage";
 import { jobService } from "@/lib/services/job-service";
@@ -349,35 +351,89 @@ describe("dispatchEventJob — overlap policy", () => {
     expect("activeKey" in input).toBe(false);
   });
 
-  it("records a SKIPPED_OVERLAP incident and finalizes the log on unique violation", async () => {
-    mockCreateJob.mockRejectedValue(
-      Object.assign(new Error("duplicate key"), { code: "23505" }),
-    );
+  it.each([
+    [
+      "wrapped by Drizzle, the way the real driver path throws it",
+      new DrizzleQueryError(
+        "insert into jobs",
+        [],
+        Object.assign(new Error("duplicate key"), { code: "23505" }),
+      ),
+    ],
+    ["unwrapped", Object.assign(new Error("duplicate key"), { code: "23505" })],
+  ])(
+    "records a SKIPPED_OVERLAP incident and finalizes the log on a unique violation %s",
+    async (_label, violation) => {
+      mockCreateJob.mockRejectedValue(violation);
 
-    const result = await dispatchEventJob(
-      makeEvent({ overlapPolicy: OverlapPolicy.SKIP }),
-      { triggeredBy: "schedule" },
-    );
+      const result = await dispatchEventJob(
+        makeEvent({ overlapPolicy: OverlapPolicy.SKIP }),
+        { triggeredBy: "schedule" },
+      );
 
-    expect(result).toEqual({ job: null, logId: null, skipped: "overlap" });
+      expect(result).toEqual({ job: null, logId: null, skipped: "overlap" });
 
-    const incidents = incidentInserts();
-    expect(incidents).toHaveLength(1);
-    expect(incidents[0]!.values).toEqual({
-      eventId: 7,
-      kind: ScheduleIncidentKind.SKIPPED_OVERLAP,
-      details: { logId: 42, triggeredBy: "schedule" },
+      const incidents = incidentInserts();
+      expect(incidents).toHaveLength(1);
+      expect(incidents[0]!.values).toEqual({
+        eventId: 7,
+        kind: ScheduleIncidentKind.SKIPPED_OVERLAP,
+        details: { logId: 42, triggeredBy: "schedule" },
+      });
+
+      expect(mockUpdateLog).toHaveBeenCalledWith(42, {
+        status: LogStatus.FAILURE,
+        endTime: expect.any(Date),
+        error: expect.stringContaining("overlap policy: SKIP"),
+      });
+
+      // The skip is not a dispatch: no birth row, no bookkeeping.
+      expect(mockRecordCreated).not.toHaveBeenCalled();
+      expect(mockRecordDispatch).not.toHaveBeenCalled();
+    },
+  );
+
+  describe("when a write fails on the way to recording a skip", () => {
+    const violation = Object.assign(new Error("duplicate key"), {
+      code: "23505",
+    });
+    const skip = () =>
+      dispatchEventJob(makeEvent({ overlapPolicy: OverlapPolicy.SKIP }), {
+        triggeredBy: "manual",
+      });
+
+    beforeEach(() => {
+      mockCreateJob.mockRejectedValue(violation);
     });
 
-    expect(mockUpdateLog).toHaveBeenCalledWith(42, {
-      status: LogStatus.FAILURE,
-      endTime: expect.any(Date),
-      error: expect.stringContaining("overlap policy: SKIP"),
+    it("still finalizes the log and reports the skip if the incident can't be written", async () => {
+      (db.insert as jest.Mock).mockImplementationOnce(() => ({
+        values: () => Promise.reject(new Error("db down")),
+      }));
+
+      await expect(skip()).resolves.toEqual({
+        job: null,
+        logId: null,
+        skipped: "overlap",
+      });
+
+      expect(mockUpdateLog).toHaveBeenCalledWith(
+        42,
+        expect.objectContaining({ status: LogStatus.FAILURE }),
+      );
     });
 
-    // The skip is not a dispatch: no birth row, no bookkeeping.
-    expect(mockRecordCreated).not.toHaveBeenCalled();
-    expect(mockRecordDispatch).not.toHaveBeenCalled();
+    it("still records the incident and reports the skip if the log can't be finalized", async () => {
+      mockUpdateLog.mockRejectedValue(new Error("db down"));
+
+      await expect(skip()).resolves.toEqual({
+        job: null,
+        logId: null,
+        skipped: "overlap",
+      });
+
+      expect(incidentInserts()).toHaveLength(1);
+    });
   });
 
   it("rethrows non-unique-violation errors from job creation", async () => {
@@ -530,6 +586,53 @@ describe("dispatchEventJob — execution bookkeeping", () => {
     for (const call of mockRecordDispatch.mock.calls) {
       expect(call).toEqual([7]);
     }
+  });
+
+  // Anything thrown after createJob would report a failure for a job that goes on to
+  // run: a CI caller would retry into a second run, and a workflow step would be
+  // marked failed over a job still running.
+  describe("once the job is queued", () => {
+    const dispatch = () =>
+      dispatchEventJob(makeEvent(), { triggeredBy: "schedule" });
+
+    it("reports the job, and carries on, if linking it to its log fails", async () => {
+      mockUpdateLog.mockRejectedValue(new Error("db down"));
+
+      await expect(dispatch()).resolves.toEqual({
+        job: createdJob,
+        logId: 42,
+      });
+
+      expect(mockRecordCreated).toHaveBeenCalledTimes(1);
+      expect(mockRecordDispatch).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports the job, and carries on, if recording its creation fails", async () => {
+      mockRecordCreated.mockRejectedValue(new Error("db down"));
+
+      await expect(dispatch()).resolves.toEqual({
+        job: createdJob,
+        logId: 42,
+      });
+
+      expect(mockUpdateLog).toHaveBeenCalledWith(42, {
+        jobId: "job-1",
+        status: LogStatus.PENDING,
+      });
+      expect(mockRecordDispatch).toHaveBeenCalledTimes(1);
+    });
+
+    it("says what failed", async () => {
+      const consoleError = console.error as jest.Mock;
+      mockRecordCreated.mockRejectedValue(new Error("db down"));
+
+      await dispatch();
+
+      expect(consoleError).toHaveBeenCalledWith(
+        "[Dispatch] Failed to record a job's creation for event 7:",
+        "db down",
+      );
+    });
   });
 
   it("swallows bookkeeping failures — the job is already enqueued", async () => {

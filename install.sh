@@ -288,6 +288,16 @@ CRONIUM_IMAGE_TAG=${IMAGE_TAG}
 # Remote SSH jobs remain disabled unless an external launcher enforces a
 # separate OS identity or isolated container for every mutually untrusted job.
 CRONIUM_SSH_EXECUTION_ISOLATION_MODE=disabled
+
+# Run history is deleted by age. Uncomment to change a window, in days; 0 keeps
+# that data forever. The values shown are the defaults.
+# CRONIUM_LOG_RETENTION_DAYS=90
+# CRONIUM_WORKFLOW_RETENTION_DAYS=90
+# CRONIUM_INCIDENT_RETENTION_DAYS=90
+# CRONIUM_TOOL_ACTION_LOG_RETENTION_DAYS=90
+# CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS=0
+# CRONIUM_JOB_RETENTION_DAYS=30
+# CRONIUM_WEBHOOK_RETENTION_DAYS=30
 EOF
   umask 022
   chmod 600 .env

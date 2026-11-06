@@ -563,11 +563,12 @@ export async function executeToolAction(
     // Record health metrics for failure
     await toolActionHealthMonitor.recordExecution(healthStatus);
 
-    // Audit failed execution
+    // Audit failed execution. A config can name no tool at all, and there is no
+    // credential 0 for the audit table's foreign key to find.
     await auditLog.toolExecutionFailed(
       {
         userId: event.userId,
-        toolId: parsedConfig.toolId ?? 0,
+        ...(parsedConfig.toolId ? { toolId: parsedConfig.toolId } : {}),
       },
       parsedConfig.actionId ?? "unknown",
       redactText(errorMessage),

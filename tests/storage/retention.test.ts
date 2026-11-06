@@ -1,0 +1,1655 @@
+/**
+ * Retention against real Postgres. The FK constraints, row locks and timestamp
+ * encoding are the point: a missing dependent delete surfaces as a genuine
+ * 23503, and a shifted cutoff as a row on the wrong side of the boundary.
+ *
+ * Each test turns on only the windows it is about (see `pass`), so a row can only
+ * disappear because of the purge under test.
+ */
+import { count, eq, ne, type SQL } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
+import { db, pool } from "@/server/db";
+import { QuotaManager } from "@/lib/rate-limiting/QuotaManager";
+import { auditLogger } from "@/lib/security/audit-logger";
+import {
+  runRetention,
+  type RetentionOptions,
+  type RetentionWindows,
+} from "@/lib/scheduling/retention";
+import {
+  events,
+  executions,
+  jobs,
+  jobTransitions,
+  logs,
+  quotaUsage,
+  scheduleIncidents,
+  servers,
+  toolActionLogs,
+  toolAuditLogs,
+  toolCredentials,
+  users,
+  webhookDeliveries,
+  webhookEvents,
+  webhookLogs,
+  webhooks,
+  workflowExecutionEvents,
+  workflowExecutions,
+  workflowLogs,
+  workflowNodes,
+  workflows,
+  workflowStepRuns,
+  JobStatus,
+  LogStatus,
+  ScheduleIncidentKind,
+  WorkflowLogLevel,
+  WorkflowStepStatus,
+} from "@/shared/schema";
+import { resetDatabase, closePool } from "./helpers/db-reset";
+import {
+  seedEvent,
+  seedExecution,
+  seedFullGraph,
+  seedJob,
+  seedUser,
+} from "./helpers/seed";
+
+const DAY_MS = 86_400_000;
+const NOW = new Date();
+const daysAgo = (days: number) => new Date(NOW.getTime() - days * DAY_MS);
+
+const ALL_OFF: RetentionWindows = {
+  jobs: 0,
+  logs: 0,
+  workflowExecutions: 0,
+  scheduleIncidents: 0,
+  toolActionLogs: 0,
+  toolAuditLogs: 0,
+  webhooks: 0,
+};
+
+const ALL_ON: RetentionWindows = {
+  jobs: 30,
+  logs: 30,
+  workflowExecutions: 30,
+  scheduleIncidents: 30,
+  toolActionLogs: 30,
+  toolAuditLogs: 30,
+  webhooks: 30,
+};
+
+/** One retention pass with only the named windows on. */
+function pass(
+  windows: Partial<RetentionWindows>,
+  options: Partial<RetentionOptions> = {},
+) {
+  return runRetention({
+    now: NOW,
+    windows: { ...ALL_OFF, ...windows },
+    ...options,
+  });
+}
+
+async function countRows(table: PgTable, where?: SQL): Promise<number> {
+  const [row] = await db.select({ value: count() }).from(table).where(where);
+  return row!.value;
+}
+
+async function seedOwner(): Promise<{ userId: string; eventId: number }> {
+  const userId = await seedUser();
+  return { userId, eventId: await seedEvent(userId) };
+}
+
+async function seedLog(
+  eventId: number,
+  values: Partial<typeof logs.$inferInsert> = {},
+): Promise<number> {
+  const [row] = await db
+    .insert(logs)
+    .values({ eventId, status: LogStatus.SUCCESS, ...values })
+    .returning({ id: logs.id });
+  return row!.id;
+}
+
+async function logExists(id: number): Promise<boolean> {
+  return (await countRows(logs, eq(logs.id, id))) === 1;
+}
+
+async function jobExists(id: string): Promise<boolean> {
+  return (await countRows(jobs, eq(jobs.id, id))) === 1;
+}
+
+async function seedWorkflow(userId: string): Promise<number> {
+  const [row] = await db
+    .insert(workflows)
+    .values({ userId, name: "wf" })
+    .returning({ id: workflows.id });
+  return row!.id;
+}
+
+/** A workflow run with one telemetry row and one step row. */
+async function seedRun(
+  workflowId: number,
+  userId: string,
+  eventId: number,
+  values: Partial<typeof workflowExecutions.$inferInsert> = {},
+): Promise<number> {
+  const [run] = await db
+    .insert(workflowExecutions)
+    .values({
+      workflowId,
+      userId,
+      triggerType: "MANUAL",
+      status: LogStatus.SUCCESS,
+      ...values,
+    })
+    .returning({ id: workflowExecutions.id });
+  await db.insert(workflowExecutionEvents).values({
+    workflowExecutionId: run!.id,
+    eventId,
+    nodeId: 1,
+    sequenceOrder: 1,
+  });
+  await db.insert(workflowStepRuns).values({
+    workflowExecutionId: run!.id,
+    nodeId: 1,
+    eventId,
+    status: WorkflowStepStatus.SUCCEEDED,
+  });
+  return run!.id;
+}
+
+async function runRowCounts(runId: number) {
+  return {
+    runs: await countRows(workflowExecutions, eq(workflowExecutions.id, runId)),
+    events: await countRows(
+      workflowExecutionEvents,
+      eq(workflowExecutionEvents.workflowExecutionId, runId),
+    ),
+    steps: await countRows(
+      workflowStepRuns,
+      eq(workflowStepRuns.workflowExecutionId, runId),
+    ),
+  };
+}
+
+const RUN_GONE = { runs: 0, events: 0, steps: 0 };
+const RUN_INTACT = { runs: 1, events: 1, steps: 1 };
+
+async function seedWorkflowLog(
+  workflowId: number,
+  values: Partial<typeof workflowLogs.$inferInsert> = {},
+): Promise<number> {
+  const [row] = await db
+    .insert(workflowLogs)
+    .values({ workflowId, ...values })
+    .returning({ id: workflowLogs.id });
+  return row!.id;
+}
+
+async function workflowLogExists(id: number): Promise<boolean> {
+  return (await countRows(workflowLogs, eq(workflowLogs.id, id))) === 1;
+}
+
+async function seedAuditLog(
+  userId: string,
+  values: Partial<typeof toolAuditLogs.$inferInsert> = {},
+): Promise<number> {
+  const [row] = await db
+    .insert(toolAuditLogs)
+    .values({ userId, action: "tool.execute", ...values })
+    .returning({ id: toolAuditLogs.id });
+  return row!.id;
+}
+
+async function auditLogExists(id: number): Promise<boolean> {
+  return (await countRows(toolAuditLogs, eq(toolAuditLogs.id, id))) === 1;
+}
+
+const PURGE_ACTION = "retention.purge";
+
+function purgeRecords() {
+  return db
+    .select()
+    .from(toolAuditLogs)
+    .where(eq(toolAuditLogs.action, PURGE_ACTION));
+}
+
+/** Audit rows other than the purge's own records. */
+function countAuditedEvents(): Promise<number> {
+  return countRows(toolAuditLogs, ne(toolAuditLogs.action, PURGE_ACTION));
+}
+
+async function seedCredential(userId: string): Promise<number> {
+  const [row] = await db
+    .insert(toolCredentials)
+    .values({
+      userId,
+      name: "slack-cred",
+      type: "slack",
+      credentials: "encrypted-blob",
+    })
+    .returning({ id: toolCredentials.id });
+  return row!.id;
+}
+
+async function seedWebhook(userId: string): Promise<number> {
+  const [row] = await db
+    .insert(webhooks)
+    .values({
+      userId,
+      name: "hook",
+      url: "https://example.test/hook",
+      key: `key-${Math.random()}`,
+      secret: "secret",
+    })
+    .returning({ id: webhooks.id });
+  return row!.id;
+}
+
+async function seedWebhookEvent(createdAt: Date): Promise<number> {
+  const [row] = await db
+    .insert(webhookEvents)
+    .values({ event: "ping", payload: {}, createdAt })
+    .returning({ id: webhookEvents.id });
+  return row!.id;
+}
+
+async function seedDelivery(
+  webhookId: number,
+  webhookEventId: number,
+  attemptedAt: Date,
+): Promise<number> {
+  const [row] = await db
+    .insert(webhookDeliveries)
+    .values({
+      webhookId,
+      webhookEventId,
+      deliveryId: `dlv-${Math.random()}`,
+      status: "success",
+      attemptedAt,
+    })
+    .returning({ id: webhookDeliveries.id });
+  return row!.id;
+}
+
+beforeEach(async () => {
+  await resetDatabase();
+  jest.spyOn(console, "log").mockImplementation(() => undefined);
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
+afterAll(async () => {
+  auditLogger.stopFlushInterval();
+  await closePool();
+});
+
+describe("jobs", () => {
+  it("removes a finished job with its executions and transitions, and detaches its logs", async () => {
+    const { userId, eventId } = await seedOwner();
+    const jobId = await seedJob(eventId, userId, {
+      status: JobStatus.COMPLETED,
+      completedAt: daysAgo(31),
+    });
+    const executionId = await seedExecution(jobId);
+    await db
+      .insert(jobTransitions)
+      .values({ jobId, toStatus: JobStatus.COMPLETED, actor: "app" });
+    const logId = await seedLog(eventId, {
+      jobId,
+      executionId,
+      createdAt: daysAgo(31),
+    });
+
+    const result = await pass({ jobs: 30 });
+
+    expect(result.deleted.jobs).toBe(1);
+    expect(result.failed).toEqual([]);
+    expect(await jobExists(jobId)).toBe(false);
+    expect(await countRows(executions)).toBe(0);
+    expect(await countRows(jobTransitions)).toBe(0);
+    const [log] = await db.select().from(logs).where(eq(logs.id, logId));
+    expect(log).toMatchObject({ jobId: null, executionId: null });
+  });
+
+  it("clears a log that references the execution but not the job", async () => {
+    const { userId, eventId } = await seedOwner();
+    const jobId = await seedJob(eventId, userId, {
+      status: JobStatus.COMPLETED,
+      completedAt: daysAgo(31),
+    });
+    const executionId = await seedExecution(jobId);
+    const logId = await seedLog(eventId, { executionId });
+
+    const result = await pass({ jobs: 30 });
+
+    expect(result.failed).toEqual([]);
+    expect(await jobExists(jobId)).toBe(false);
+    const [log] = await db.select().from(logs).where(eq(logs.id, logId));
+    expect(log?.executionId).toBeNull();
+  });
+
+  it.each([
+    JobStatus.COMPLETED,
+    JobStatus.FAILED,
+    JobStatus.TIMED_OUT,
+    JobStatus.CANCELLED,
+  ])(
+    "purges a %s job past the window and keeps a recent one",
+    async (status) => {
+      const { userId, eventId } = await seedOwner();
+      const old = await seedJob(eventId, userId, {
+        status,
+        completedAt: daysAgo(31),
+      });
+      const recent = await seedJob(eventId, userId, {
+        status,
+        completedAt: daysAgo(29),
+      });
+
+      await pass({ jobs: 30 });
+
+      expect(await jobExists(old)).toBe(false);
+      expect(await jobExists(recent)).toBe(true);
+    },
+  );
+
+  it.each([JobStatus.QUEUED, JobStatus.CLAIMED, JobStatus.RUNNING])(
+    "never purges a %s job, however old",
+    async (status) => {
+      const { userId, eventId } = await seedOwner();
+      const jobId = await seedJob(eventId, userId, {
+        status,
+        completedAt: daysAgo(400),
+        createdAt: daysAgo(400),
+        updatedAt: daysAgo(400),
+      });
+
+      await pass({ jobs: 30 });
+
+      expect(await jobExists(jobId)).toBe(true);
+    },
+  );
+
+  describe("a finished job with no completed_at", () => {
+    it("ages from updated_at", async () => {
+      const { userId, eventId } = await seedOwner();
+      const old = await seedJob(eventId, userId, {
+        status: JobStatus.FAILED,
+        completedAt: null,
+        createdAt: daysAgo(40),
+        updatedAt: daysAgo(31),
+      });
+      const recentlyTouched = await seedJob(eventId, userId, {
+        status: JobStatus.FAILED,
+        completedAt: null,
+        createdAt: daysAgo(40),
+        updatedAt: daysAgo(29),
+      });
+
+      const result = await pass({ jobs: 30 });
+
+      expect(result.deleted.jobs).toBe(1);
+      expect(await jobExists(old)).toBe(false);
+      expect(await jobExists(recentlyTouched)).toBe(true);
+    });
+  });
+
+  it("ages from completed_at when it has one, even if the row was touched later", async () => {
+    const { userId, eventId } = await seedOwner();
+    const jobId = await seedJob(eventId, userId, {
+      status: JobStatus.COMPLETED,
+      completedAt: daysAgo(31),
+      updatedAt: daysAgo(1),
+    });
+
+    await pass({ jobs: 30 });
+
+    expect(await jobExists(jobId)).toBe(false);
+  });
+});
+
+describe("logs", () => {
+  it("purges logs past the window and keeps recent ones", async () => {
+    const { eventId } = await seedOwner();
+    const old = await seedLog(eventId, {
+      createdAt: daysAgo(91),
+      endTime: daysAgo(91),
+    });
+    const recent = await seedLog(eventId, {
+      createdAt: daysAgo(89),
+      endTime: daysAgo(89),
+    });
+
+    const result = await pass({ logs: 90 });
+
+    expect(result.deleted.logs).toBe(1);
+    expect(await logExists(old)).toBe(false);
+    expect(await logExists(recent)).toBe(true);
+  });
+
+  it("ages a long run from when it ended", async () => {
+    const { eventId } = await seedOwner();
+    const logId = await seedLog(eventId, {
+      createdAt: daysAgo(100),
+      endTime: daysAgo(89),
+    });
+
+    await pass({ logs: 90 });
+
+    expect(await logExists(logId)).toBe(true);
+  });
+
+  it("keeps an old log while its job is still active", async () => {
+    const { userId, eventId } = await seedOwner();
+    const jobId = await seedJob(eventId, userId, {
+      status: JobStatus.RUNNING,
+    });
+    const logId = await seedLog(eventId, {
+      jobId,
+      status: LogStatus.RUNNING,
+      createdAt: daysAgo(400),
+    });
+
+    await pass({ logs: 90 });
+
+    expect(await logExists(logId)).toBe(true);
+  });
+
+  it("purges a log left RUNNING once its job has finished", async () => {
+    const { userId, eventId } = await seedOwner();
+    const jobId = await seedJob(eventId, userId, {
+      status: JobStatus.FAILED,
+      completedAt: daysAgo(100),
+    });
+    const logId = await seedLog(eventId, {
+      jobId,
+      status: LogStatus.RUNNING,
+      createdAt: daysAgo(100),
+    });
+
+    await pass({ logs: 90 });
+
+    expect(await logExists(logId)).toBe(false);
+    expect(await jobExists(jobId)).toBe(true);
+  });
+
+  it("purges a log left RUNNING whose job is already gone", async () => {
+    const { eventId } = await seedOwner();
+    const logId = await seedLog(eventId, {
+      jobId: null,
+      status: LogStatus.RUNNING,
+      createdAt: daysAgo(100),
+    });
+
+    await pass({ logs: 90 });
+
+    expect(await logExists(logId)).toBe(false);
+  });
+
+  it("purges a log before its job when the log window is the shorter one", async () => {
+    const { userId, eventId } = await seedOwner();
+    const jobId = await seedJob(eventId, userId, {
+      status: JobStatus.COMPLETED,
+      completedAt: daysAgo(10),
+    });
+    const logId = await seedLog(eventId, {
+      jobId,
+      createdAt: daysAgo(10),
+      endTime: daysAgo(10),
+    });
+
+    const result = await pass({ logs: 7, jobs: 30 });
+
+    expect(result.failed).toEqual([]);
+    expect(await logExists(logId)).toBe(false);
+    expect(await jobExists(jobId)).toBe(true);
+  });
+});
+
+describe("schedule_incidents", () => {
+  it("purges event and workflow incidents past the window and keeps recent ones", async () => {
+    const { userId, eventId } = await seedOwner();
+    const workflowId = await seedWorkflow(userId);
+    await db.insert(scheduleIncidents).values([
+      {
+        eventId,
+        kind: ScheduleIncidentKind.MISSED,
+        createdAt: daysAgo(91),
+      },
+      {
+        workflowId,
+        kind: ScheduleIncidentKind.MISSED,
+        createdAt: daysAgo(91),
+      },
+      {
+        eventId,
+        kind: ScheduleIncidentKind.MISSED,
+        createdAt: daysAgo(89),
+      },
+    ]);
+
+    const result = await pass({ scheduleIncidents: 90 });
+
+    expect(result.deleted.schedule_incidents).toBe(2);
+    expect(await countRows(scheduleIncidents)).toBe(1);
+  });
+});
+
+describe("tool_action_logs", () => {
+  it("purges rows past the window and keeps recent ones", async () => {
+    const { eventId } = await seedOwner();
+    const row = {
+      eventId,
+      toolType: "slack",
+      actionType: "send_message",
+      actionId: "act-1",
+      status: "success",
+    };
+    await db.insert(toolActionLogs).values([
+      { ...row, createdAt: daysAgo(91) },
+      { ...row, createdAt: daysAgo(89) },
+    ]);
+
+    const result = await pass({ toolActionLogs: 90 });
+
+    expect(result.deleted.tool_action_logs).toBe(1);
+    expect(await countRows(toolActionLogs)).toBe(1);
+  });
+});
+
+describe("workflow_executions", () => {
+  it("removes a finished run with its step rows and leaves the workflow and recent runs", async () => {
+    const { userId, eventId } = await seedOwner();
+    const workflowId = await seedWorkflow(userId);
+    const old = await seedRun(workflowId, userId, eventId, {
+      completedAt: daysAgo(91),
+    });
+    const recent = await seedRun(workflowId, userId, eventId, {
+      completedAt: daysAgo(89),
+    });
+
+    const result = await pass({ workflowExecutions: 90 });
+
+    expect(result.deleted.workflow_executions).toBe(1);
+    expect(await runRowCounts(old)).toEqual(RUN_GONE);
+    expect(await runRowCounts(recent)).toEqual(RUN_INTACT);
+    expect(await countRows(workflows)).toBe(1);
+  });
+
+  it.each([
+    LogStatus.SUCCESS,
+    LogStatus.FAILURE,
+    LogStatus.TIMEOUT,
+    LogStatus.PARTIAL,
+  ])("purges a %s run past the window", async (status) => {
+    const { userId, eventId } = await seedOwner();
+    const workflowId = await seedWorkflow(userId);
+    const runId = await seedRun(workflowId, userId, eventId, {
+      status,
+      completedAt: daysAgo(91),
+    });
+
+    await pass({ workflowExecutions: 90 });
+
+    expect(await runRowCounts(runId)).toEqual(RUN_GONE);
+  });
+
+  it.each([LogStatus.RUNNING, LogStatus.PENDING])(
+    "never purges a %s run, however old",
+    async (status) => {
+      const { userId, eventId } = await seedOwner();
+      const workflowId = await seedWorkflow(userId);
+      const runId = await seedRun(workflowId, userId, eventId, {
+        status,
+        startedAt: daysAgo(400),
+        createdAt: daysAgo(400),
+        updatedAt: daysAgo(400),
+      });
+
+      await pass({ workflowExecutions: 90 });
+
+      expect(await runRowCounts(runId)).toEqual(RUN_INTACT);
+    },
+  );
+
+  it("ages a finished run with no completed_at from updated_at", async () => {
+    const { userId, eventId } = await seedOwner();
+    const workflowId = await seedWorkflow(userId);
+    const old = await seedRun(workflowId, userId, eventId, {
+      completedAt: null,
+      createdAt: daysAgo(100),
+      updatedAt: daysAgo(91),
+    });
+    const recentlyTouched = await seedRun(workflowId, userId, eventId, {
+      completedAt: null,
+      createdAt: daysAgo(100),
+      updatedAt: daysAgo(89),
+    });
+
+    await pass({ workflowExecutions: 90 });
+
+    expect(await runRowCounts(old)).toEqual(RUN_GONE);
+    expect(await runRowCounts(recentlyTouched)).toEqual(RUN_INTACT);
+  });
+});
+
+describe("workflow_logs", () => {
+  it("purges rows past the window and keeps recent ones", async () => {
+    const userId = await seedUser();
+    const workflowId = await seedWorkflow(userId);
+    const old = await seedWorkflowLog(workflowId, { createdAt: daysAgo(91) });
+    const recent = await seedWorkflowLog(workflowId, {
+      createdAt: daysAgo(89),
+    });
+
+    const result = await pass({ workflowExecutions: 90 });
+
+    expect(result.deleted.workflow_logs).toBe(1);
+    expect(await workflowLogExists(old)).toBe(false);
+    expect(await workflowLogExists(recent)).toBe(true);
+    expect(await countRows(workflows)).toBe(1);
+  });
+
+  // Rows are never updated, so a start row reads RUNNING for good. Filtering on a
+  // finished status, as the workflow_executions purge does, would keep every one
+  // of those forever.
+  it.each([
+    ["a start row", LogStatus.RUNNING, WorkflowLogLevel.INFO],
+    ["a finish row", LogStatus.SUCCESS, WorkflowLogLevel.INFO],
+    ["a failure row", LogStatus.FAILURE, WorkflowLogLevel.ERROR],
+    ["a timeout row", LogStatus.TIMEOUT, WorkflowLogLevel.ERROR],
+  ])("purges %s past the window", async (_name, status, level) => {
+    const userId = await seedUser();
+    const workflowId = await seedWorkflow(userId);
+    const id = await seedWorkflowLog(workflowId, {
+      status,
+      level,
+      createdAt: daysAgo(91),
+    });
+
+    await pass({ workflowExecutions: 90 });
+
+    expect(await workflowLogExists(id)).toBe(false);
+  });
+
+  it("ages a row from when it was written, not from when its run started", async () => {
+    const userId = await seedUser();
+    const workflowId = await seedWorkflow(userId);
+    // The finish row of a long run carries the run's start time.
+    const finishRow = await seedWorkflowLog(workflowId, {
+      status: LogStatus.SUCCESS,
+      startTime: daysAgo(100),
+      endTime: daysAgo(89),
+      timestamp: daysAgo(89),
+      createdAt: daysAgo(89),
+    });
+
+    await pass({ workflowExecutions: 90 });
+
+    expect(await workflowLogExists(finishRow)).toBe(true);
+  });
+
+  // A workflow on a one-minute schedule nearly always has a run in progress, so
+  // guarding by workflow would keep its old rows forever.
+  it("purges an old row while its workflow has a run in progress, and leaves the run", async () => {
+    const { userId, eventId } = await seedOwner();
+    const workflowId = await seedWorkflow(userId);
+    const running = await seedRun(workflowId, userId, eventId, {
+      status: LogStatus.RUNNING,
+      completedAt: null,
+    });
+    const old = await seedWorkflowLog(workflowId, {
+      status: LogStatus.RUNNING,
+      createdAt: daysAgo(91),
+    });
+
+    await pass({ workflowExecutions: 90 });
+
+    expect(await workflowLogExists(old)).toBe(false);
+    expect(await runRowCounts(running)).toEqual(RUN_INTACT);
+  });
+
+  it("goes with its run on the shared window, though no FK joins them", async () => {
+    const { userId, eventId } = await seedOwner();
+    const workflowId = await seedWorkflow(userId);
+    const run = await seedRun(workflowId, userId, eventId, {
+      completedAt: daysAgo(91),
+    });
+    await seedWorkflowLog(workflowId, { createdAt: daysAgo(91) });
+
+    const result = await pass({ workflowExecutions: 90 });
+
+    expect(result.deleted).toMatchObject({
+      workflow_executions: 1,
+      workflow_logs: 1,
+    });
+    expect(await runRowCounts(run)).toEqual(RUN_GONE);
+  });
+});
+
+describe("tool_audit_logs", () => {
+  it("purges rows past the window and keeps recent ones", async () => {
+    const userId = await seedUser();
+    const old = await seedAuditLog(userId, { createdAt: daysAgo(91) });
+    const recent = await seedAuditLog(userId, { createdAt: daysAgo(89) });
+
+    const result = await pass({ toolAuditLogs: 90 });
+
+    expect(result.deleted.tool_audit_logs).toBe(1);
+    expect(await auditLogExists(old)).toBe(false);
+    expect(await auditLogExists(recent)).toBe(true);
+  });
+
+  it("purges a row pointing at a credential and leaves the credential", async () => {
+    const userId = await seedUser();
+    const toolId = await seedCredential(userId);
+    const id = await seedAuditLog(userId, {
+      toolId,
+      action: "credential.read",
+      success: false,
+      errorMessage: "denied",
+      createdAt: daysAgo(91),
+    });
+
+    const result = await pass({ toolAuditLogs: 90 });
+
+    expect(result.failed).toEqual([]);
+    expect(await auditLogExists(id)).toBe(false);
+    expect(await countRows(toolCredentials)).toBe(1);
+  });
+
+  describe("keeps a window apart from tool_action_logs", () => {
+    async function seedBoth(createdAt: Date) {
+      const { userId, eventId } = await seedOwner();
+      await seedAuditLog(userId, { createdAt });
+      await db.insert(toolActionLogs).values({
+        eventId,
+        toolType: "slack",
+        actionType: "send_message",
+        actionId: "act-1",
+        status: "success",
+        createdAt,
+      });
+    }
+
+    it("so shortening tool action logs leaves the security record alone", async () => {
+      await seedBoth(daysAgo(10));
+
+      const result = await pass({ toolActionLogs: 7, toolAuditLogs: 365 });
+
+      expect(result.deleted).toMatchObject({
+        tool_action_logs: 1,
+        tool_audit_logs: 0,
+      });
+    });
+
+    it("so a short audit window doesn't take the rows monthly quotas count", async () => {
+      await seedBoth(daysAgo(10));
+
+      const result = await pass({ toolActionLogs: 90, toolAuditLogs: 7 });
+
+      expect(result.deleted).toMatchObject({
+        tool_action_logs: 0,
+        tool_audit_logs: 1,
+      });
+    });
+  });
+});
+
+describe("the record an audit purge leaves", () => {
+  afterEach(async () => {
+    await pool.query(
+      "DROP TRIGGER IF EXISTS retention_test_no_record ON tool_audit_logs",
+    );
+    await pool.query("DROP FUNCTION IF EXISTS retention_test_no_record()");
+  });
+
+  it("holds the window, the cutoff and what went, under a non-user actor", async () => {
+    const userId = await seedUser();
+    const first = await seedAuditLog(userId, { createdAt: daysAgo(91) });
+    const second = await seedAuditLog(userId, { createdAt: daysAgo(400) });
+    await seedAuditLog(userId, { createdAt: daysAgo(89) });
+
+    const result = await pass({ toolAuditLogs: 90 });
+
+    expect(result.deleted.tool_audit_logs).toBe(2);
+    const records = await purgeRecords();
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      userId: "system:retention",
+      toolId: null,
+      success: true,
+      errorMessage: null,
+      actionDetails: {
+        windowDays: 90,
+        cutoff: daysAgo(90).toISOString(),
+        deleted: 2,
+        minId: first,
+        maxId: second,
+      },
+    });
+  });
+
+  it("isn't written when nothing went", async () => {
+    const userId = await seedUser();
+    await seedAuditLog(userId, { createdAt: daysAgo(89) });
+
+    await pass({ toolAuditLogs: 90 });
+    expect(await purgeRecords()).toHaveLength(0);
+
+    await seedAuditLog(userId, { createdAt: daysAgo(400) });
+    await pass({ toolAuditLogs: 0 });
+    expect(await purgeRecords()).toHaveLength(0);
+  });
+
+  it("is never purged, because it has to outlive what it accounts for", async () => {
+    const userId = await seedUser();
+    await seedAuditLog(userId, { createdAt: daysAgo(91) });
+    await pass({ toolAuditLogs: 90 });
+    await db
+      .update(toolAuditLogs)
+      .set({ createdAt: daysAgo(3650) })
+      .where(eq(toolAuditLogs.action, PURGE_ACTION));
+
+    const result = await pass({ toolAuditLogs: 90 });
+
+    expect(result.deleted.tool_audit_logs).toBe(0);
+    expect(await purgeRecords()).toHaveLength(1);
+  });
+
+  it("goes in the delete's transaction: no record, no delete", async () => {
+    const error = jest.spyOn(console, "error").mockImplementation(() => {});
+    const userId = await seedUser();
+    const id = await seedAuditLog(userId, { createdAt: daysAgo(91) });
+    await pool.query(`
+      CREATE FUNCTION retention_test_no_record() RETURNS trigger AS $$
+      BEGIN RAISE EXCEPTION 'record failed on purpose'; END
+      $$ LANGUAGE plpgsql
+    `);
+    await pool.query(`
+      CREATE TRIGGER retention_test_no_record BEFORE INSERT ON tool_audit_logs
+      FOR EACH ROW EXECUTE FUNCTION retention_test_no_record()
+    `);
+
+    const result = await pass({ toolAuditLogs: 90 });
+
+    expect(result.failed).toEqual(["tool_audit_logs"]);
+    expect(result.deleted.tool_audit_logs).toBe(0);
+    expect(await auditLogExists(id)).toBe(true);
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining("tool_audit_logs"),
+      expect.objectContaining({
+        cause: expect.objectContaining({
+          message: "record failed on purpose",
+        }),
+      }),
+    );
+  });
+
+  it("adds up to what went, across batches and concurrent passes", async () => {
+    const userId = await seedUser();
+    for (let i = 0; i < 12; i++) {
+      await seedAuditLog(userId, { createdAt: daysAgo(91) });
+    }
+    const options = { batchSize: 5 };
+
+    const [a, b] = await Promise.all([
+      pass({ toolAuditLogs: 90 }, options),
+      pass({ toolAuditLogs: 90 }, options),
+    ]);
+
+    expect(a.failed).toEqual([]);
+    expect(b.failed).toEqual([]);
+    expect(a.deleted.tool_audit_logs + b.deleted.tool_audit_logs).toBe(12);
+    expect(await countAuditedEvents()).toBe(0);
+    const records = await purgeRecords();
+    const recorded = records.map(
+      (record) => (record.actionDetails as { deleted: number }).deleted,
+    );
+    expect(recorded.reduce((sum, deleted) => sum + deleted, 0)).toBe(12);
+  });
+
+  it("is found by the logger's query, and not as any user's activity", async () => {
+    const userId = await seedUser();
+    await seedAuditLog(userId, { createdAt: daysAgo(91) });
+    await seedAuditLog(userId, { createdAt: daysAgo(1) });
+    await pass({ toolAuditLogs: 90 });
+
+    const purges = await auditLogger.query({ action: PURGE_ACTION });
+    const byUser = await auditLogger.query({ userId });
+
+    expect(purges.total).toBe(1);
+    expect(byUser.total).toBe(1);
+    expect(byUser.logs[0]?.action).toBe("tool.execute");
+  });
+});
+
+/**
+ * Left out of retention on purpose: see the comment on PURGES in retention.ts.
+ * These pin the reason through the real QuotaManager, so anyone adding a purge, or
+ * changing how quotas read, finds out what this rested on.
+ */
+describe("quota_usage", () => {
+  it("is never purged, however old, with every window on", async () => {
+    const userId = await seedUser();
+    await db.insert(quotaUsage).values([
+      { userId, resource: "toolActionsPerMonth", createdAt: daysAgo(3650) },
+      { userId, resource: "toolActionsPerDay", createdAt: daysAgo(3650) },
+      { userId, resource: "totalStorageMB", createdAt: daysAgo(3650) },
+    ]);
+
+    const result = await pass(ALL_ON);
+
+    expect(result.failed).toEqual([]);
+    expect(await countRows(quotaUsage)).toBe(3);
+  });
+
+  // apiRequestsPerMinute is here because getUsage only recognizes PerMonth and
+  // PerDay, so its period has no time bound either.
+  it.each([
+    "totalStorageMB",
+    "logRetentionDays",
+    "apiRequestsPerMinute",
+  ] as const)(
+    "has no safe window for %s: a row of any age is read, and reads 0 once gone",
+    async (resource) => {
+      const userId = await seedUser();
+      await db
+        .insert(quotaUsage)
+        .values({ userId, resource, amount: 500, createdAt: daysAgo(3650) });
+      const quotas = QuotaManager.getInstance();
+
+      await pass(ALL_ON);
+      expect((await quotas.checkQuota(userId, resource)).used).toBe(500);
+
+      // What a purge of that row would do to the read.
+      await db.delete(quotaUsage);
+      expect((await quotas.checkQuota(userId, resource)).used).toBe(0);
+    },
+  );
+});
+
+describe("webhook delivery tables", () => {
+  it("purges deliveries, logs and events past the window and keeps the webhook", async () => {
+    const userId = await seedUser();
+    const webhookId = await seedWebhook(userId);
+    const oldEvent = await seedWebhookEvent(daysAgo(31));
+    await seedDelivery(webhookId, oldEvent, daysAgo(31));
+    const recentEvent = await seedWebhookEvent(daysAgo(29));
+    await seedDelivery(webhookId, recentEvent, daysAgo(29));
+    await db.insert(webhookLogs).values([
+      { webhookId, success: true, createdAt: daysAgo(31) },
+      { webhookId, success: true, createdAt: daysAgo(29) },
+    ]);
+
+    const result = await pass({ webhooks: 30 });
+
+    expect(result.failed).toEqual([]);
+    expect(result.deleted).toMatchObject({
+      webhook_deliveries: 1,
+      webhook_logs: 1,
+      webhook_events: 1,
+    });
+    expect(await countRows(webhookEvents)).toBe(1);
+    expect(await countRows(webhookDeliveries)).toBe(1);
+    expect(await countRows(webhookLogs)).toBe(1);
+    expect(await countRows(webhooks)).toBe(1);
+  });
+
+  it("keeps an old event that still has a recent delivery, and that delivery", async () => {
+    const userId = await seedUser();
+    const webhookId = await seedWebhook(userId);
+    const eventId = await seedWebhookEvent(daysAgo(60));
+    const oldDelivery = await seedDelivery(webhookId, eventId, daysAgo(60));
+    const retried = await seedDelivery(webhookId, eventId, daysAgo(1));
+
+    const result = await pass({ webhooks: 30 });
+
+    expect(result.deleted.webhook_events).toBe(0);
+    expect(await countRows(webhookEvents)).toBe(1);
+    const remaining = await db
+      .select({ id: webhookDeliveries.id })
+      .from(webhookDeliveries);
+    expect(remaining.map((row) => row.id)).toEqual([retried]);
+    expect(remaining.map((row) => row.id)).not.toContain(oldDelivery);
+  });
+
+  it("purges an old event that never had a delivery", async () => {
+    await seedWebhookEvent(daysAgo(31));
+
+    await pass({ webhooks: 30 });
+
+    expect(await countRows(webhookEvents)).toBe(0);
+  });
+});
+
+/** One expired row in every purged table, ten years old. */
+async function seedExpiredEverywhere() {
+  const { userId, eventId } = await seedOwner();
+  const workflowId = await seedWorkflow(userId);
+  const webhookId = await seedWebhook(userId);
+  const old = daysAgo(3650);
+
+  await seedJob(eventId, userId, {
+    status: JobStatus.COMPLETED,
+    completedAt: old,
+  });
+  await seedLog(eventId, { createdAt: old, endTime: old });
+  await seedRun(workflowId, userId, eventId, { completedAt: old });
+  await seedWorkflowLog(workflowId, { createdAt: old });
+  await db.insert(scheduleIncidents).values({
+    eventId,
+    kind: ScheduleIncidentKind.MISSED,
+    createdAt: old,
+  });
+  await db.insert(toolActionLogs).values({
+    eventId,
+    toolType: "slack",
+    actionType: "send_message",
+    actionId: "act-1",
+    status: "success",
+    createdAt: old,
+  });
+  await seedAuditLog(userId, { createdAt: old });
+  const webhookEventId = await seedWebhookEvent(old);
+  await seedDelivery(webhookId, webhookEventId, old);
+  await db
+    .insert(webhookLogs)
+    .values({ webhookId, success: true, createdAt: old });
+}
+
+const NOTHING_DELETED = {
+  logs: 0,
+  jobs: 0,
+  workflow_executions: 0,
+  workflow_logs: 0,
+  schedule_incidents: 0,
+  tool_action_logs: 0,
+  tool_audit_logs: 0,
+  webhook_deliveries: 0,
+  webhook_logs: 0,
+  webhook_events: 0,
+};
+
+describe("windows", () => {
+  it.each([
+    ["jobs", { jobs: 1 }],
+    ["logs", { logs: 1 }],
+    ["workflowExecutions", { workflow_executions: 1, workflow_logs: 1 }],
+    ["scheduleIncidents", { schedule_incidents: 1 }],
+    ["toolActionLogs", { tool_action_logs: 1 }],
+    ["toolAuditLogs", { tool_audit_logs: 1 }],
+    ["webhooks", { webhook_deliveries: 1, webhook_logs: 1, webhook_events: 1 }],
+  ] as const)(
+    "the %s window only purges its own tables",
+    async (name, expected) => {
+      await seedExpiredEverywhere();
+
+      const result = await pass({ [name]: 30 });
+
+      expect(result.deleted).toEqual({ ...NOTHING_DELETED, ...expected });
+    },
+  );
+
+  describe("from the environment", () => {
+    const VARIABLES = [
+      "CRONIUM_JOB_RETENTION_DAYS",
+      "CRONIUM_LOG_RETENTION_DAYS",
+      "CRONIUM_WORKFLOW_RETENTION_DAYS",
+      "CRONIUM_INCIDENT_RETENTION_DAYS",
+      "CRONIUM_TOOL_ACTION_LOG_RETENTION_DAYS",
+      "CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS",
+      "CRONIUM_WEBHOOK_RETENTION_DAYS",
+    ];
+    const saved = new Map<string, string | undefined>();
+
+    beforeEach(() => {
+      for (const name of VARIABLES) {
+        saved.set(name, process.env[name]);
+        delete process.env[name];
+      }
+    });
+
+    afterEach(() => {
+      for (const name of VARIABLES) {
+        const value = saved.get(name);
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+    });
+
+    it("keeps user-visible history for 90 days and queue and webhook rows for 30 by default", async () => {
+      const { userId, eventId } = await seedOwner();
+      const workflowId = await seedWorkflow(userId);
+      const webhookId = await seedWebhook(userId);
+      const toolLog = {
+        eventId,
+        toolType: "slack",
+        actionType: "send_message",
+        actionId: "act-1",
+        status: "success",
+      };
+
+      // One row just past each default window...
+      await seedLog(eventId, { createdAt: daysAgo(91) });
+      await seedJob(eventId, userId, {
+        status: JobStatus.COMPLETED,
+        completedAt: daysAgo(31),
+      });
+      await seedRun(workflowId, userId, eventId, { completedAt: daysAgo(91) });
+      await seedWorkflowLog(workflowId, { createdAt: daysAgo(91) });
+      await db.insert(scheduleIncidents).values({
+        eventId,
+        kind: ScheduleIncidentKind.MISSED,
+        createdAt: daysAgo(91),
+      });
+      await db
+        .insert(toolActionLogs)
+        .values({ ...toolLog, createdAt: daysAgo(91) });
+      await seedAuditLog(userId, { createdAt: daysAgo(91) });
+      const oldWebhookEvent = await seedWebhookEvent(daysAgo(31));
+      await seedDelivery(webhookId, oldWebhookEvent, daysAgo(31));
+      await db
+        .insert(webhookLogs)
+        .values({ webhookId, success: true, createdAt: daysAgo(31) });
+
+      // ...and one just inside it, which must survive.
+      await seedLog(eventId, { createdAt: daysAgo(89) });
+      await seedJob(eventId, userId, {
+        status: JobStatus.COMPLETED,
+        completedAt: daysAgo(29),
+      });
+      await seedRun(workflowId, userId, eventId, { completedAt: daysAgo(89) });
+      await seedWorkflowLog(workflowId, { createdAt: daysAgo(89) });
+      await db.insert(scheduleIncidents).values({
+        eventId,
+        kind: ScheduleIncidentKind.MISSED,
+        createdAt: daysAgo(89),
+      });
+      await db
+        .insert(toolActionLogs)
+        .values({ ...toolLog, createdAt: daysAgo(89) });
+      await seedAuditLog(userId, { createdAt: daysAgo(89) });
+      const recentWebhookEvent = await seedWebhookEvent(daysAgo(29));
+      await seedDelivery(webhookId, recentWebhookEvent, daysAgo(29));
+      await db
+        .insert(webhookLogs)
+        .values({ webhookId, success: true, createdAt: daysAgo(29) });
+
+      const result = await runRetention({ now: NOW });
+
+      expect(result.failed).toEqual([]);
+      expect(result.deleted).toEqual({
+        logs: 1,
+        jobs: 1,
+        workflow_executions: 1,
+        workflow_logs: 1,
+        schedule_incidents: 1,
+        tool_action_logs: 1,
+        tool_audit_logs: 0,
+        webhook_deliveries: 1,
+        webhook_logs: 1,
+        webhook_events: 1,
+      });
+      for (const table of [
+        logs,
+        jobs,
+        workflowExecutions,
+        workflowLogs,
+        scheduleIncidents,
+        toolActionLogs,
+        webhookEvents,
+        webhookDeliveries,
+        webhookLogs,
+      ]) {
+        expect(await countRows(table)).toBe(1);
+      }
+      expect(await countRows(toolAuditLogs)).toBe(2);
+    });
+
+    describe("the tool audit log, with no window set", () => {
+      it("keeps rows of any age and writes no record", async () => {
+        const userId = await seedUser();
+        await seedAuditLog(userId, { createdAt: daysAgo(3650) });
+
+        const result = await runRetention({ now: NOW });
+
+        expect(result.deleted.tool_audit_logs).toBe(0);
+        expect(await countRows(toolAuditLogs)).toBe(1);
+      });
+
+      // PR 2's upgrade note told operators to do this to keep their history, before
+      // this variable existed, so a default that deletes would catch them out.
+      it("deletes nothing for an operator who set every other window to 0", async () => {
+        for (const name of VARIABLES) {
+          if (name !== "CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS") {
+            process.env[name] = "0";
+          }
+        }
+        await seedExpiredEverywhere();
+
+        const result = await runRetention({ now: NOW });
+
+        expect(result.deleted).toEqual(NOTHING_DELETED);
+      });
+
+      // Compose passes an unset variable through as an empty string.
+      it("reads an empty variable the same way", async () => {
+        process.env.CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS = "";
+        const userId = await seedUser();
+        await seedAuditLog(userId, { createdAt: daysAgo(3650) });
+
+        const result = await runRetention({ now: NOW });
+
+        expect(result.deleted.tool_audit_logs).toBe(0);
+      });
+
+      it("starts purging once a window is set", async () => {
+        process.env.CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS = "90";
+        const userId = await seedUser();
+        const old = await seedAuditLog(userId, { createdAt: daysAgo(91) });
+        const recent = await seedAuditLog(userId, { createdAt: daysAgo(89) });
+
+        await runRetention({ now: NOW });
+
+        expect(await auditLogExists(old)).toBe(false);
+        expect(await auditLogExists(recent)).toBe(true);
+      });
+    });
+
+    it("keeps every table forever when its window is 0", async () => {
+      for (const name of VARIABLES) process.env[name] = "0";
+      await seedExpiredEverywhere();
+
+      const result = await runRetention({ now: NOW });
+
+      expect(result.deleted).toEqual(NOTHING_DELETED);
+    });
+
+    it("gives each table its own variable", async () => {
+      process.env.CRONIUM_LOG_RETENTION_DAYS = "0";
+      await seedExpiredEverywhere();
+
+      const result = await runRetention({ now: NOW });
+
+      expect(result.deleted).toMatchObject({ logs: 0, jobs: 1 });
+    });
+
+    it("keeps workflow_logs with CRONIUM_WORKFLOW_RETENTION_DAYS=0", async () => {
+      process.env.CRONIUM_WORKFLOW_RETENTION_DAYS = "0";
+      await seedExpiredEverywhere();
+
+      const result = await runRetention({ now: NOW });
+
+      expect(result.deleted).toMatchObject({
+        workflow_executions: 0,
+        workflow_logs: 0,
+        logs: 1,
+      });
+    });
+
+    it.each([
+      [
+        "CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS",
+        { tool_audit_logs: 0, tool_action_logs: 1 },
+      ],
+      [
+        "CRONIUM_TOOL_ACTION_LOG_RETENTION_DAYS",
+        { tool_audit_logs: 1, tool_action_logs: 0 },
+      ],
+    ])("doesn't let %s=0 reach the other tool log", async (name, expected) => {
+      process.env.CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS = "30";
+      process.env[name] = "0";
+      await seedExpiredEverywhere();
+
+      const result = await runRetention({ now: NOW });
+
+      expect(result.deleted).toMatchObject(expected);
+    });
+
+    it("treats an empty variable as unset, not as keep forever", async () => {
+      process.env.CRONIUM_LOG_RETENTION_DAYS = "";
+      const { eventId } = await seedOwner();
+      const old = await seedLog(eventId, { createdAt: daysAgo(91) });
+      const recent = await seedLog(eventId, { createdAt: daysAgo(89) });
+
+      await runRetention({ now: NOW });
+
+      expect(await logExists(old)).toBe(false);
+      expect(await logExists(recent)).toBe(true);
+    });
+
+    it("deletes nothing from a table whose variable it cannot read", async () => {
+      const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+      process.env.CRONIUM_LOG_RETENTION_DAYS = "never";
+      await seedExpiredEverywhere();
+
+      const result = await runRetention({ now: NOW });
+
+      expect(result.deleted).toMatchObject({ logs: 0, jobs: 1 });
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("CRONIUM_LOG_RETENTION_DAYS"),
+      );
+    });
+  });
+
+  /**
+   * These columns have no time zone and hold UTC, so a cutoff formatted in local
+   * time lands hours off. Rows an hour either side of the cutoff catch that on
+   * any non-UTC host, for both the column-bound and the COALESCE comparisons.
+   */
+  it("applies the cutoff to the hour", async () => {
+    const { userId, eventId } = await seedOwner();
+    const workflowId = await seedWorkflow(userId);
+    const hours = (count: number) => count * 3_600_000;
+    const pastCutoff = new Date(daysAgo(30).getTime() - hours(1));
+    const insideCutoff = new Date(daysAgo(30).getTime() + hours(1));
+
+    const oldLog = await seedLog(eventId, { createdAt: pastCutoff });
+    const newLog = await seedLog(eventId, { createdAt: insideCutoff });
+    const oldJob = await seedJob(eventId, userId, {
+      status: JobStatus.COMPLETED,
+      completedAt: pastCutoff,
+    });
+    const newJob = await seedJob(eventId, userId, {
+      status: JobStatus.COMPLETED,
+      completedAt: insideCutoff,
+    });
+    const oldRun = await seedRun(workflowId, userId, eventId, {
+      completedAt: pastCutoff,
+    });
+    const newRun = await seedRun(workflowId, userId, eventId, {
+      completedAt: insideCutoff,
+    });
+    const oldWorkflowLog = await seedWorkflowLog(workflowId, {
+      createdAt: pastCutoff,
+    });
+    const newWorkflowLog = await seedWorkflowLog(workflowId, {
+      createdAt: insideCutoff,
+    });
+    const oldAuditLog = await seedAuditLog(userId, { createdAt: pastCutoff });
+    const newAuditLog = await seedAuditLog(userId, { createdAt: insideCutoff });
+
+    await pass({
+      logs: 30,
+      jobs: 30,
+      workflowExecutions: 30,
+      toolAuditLogs: 30,
+    });
+
+    expect(await logExists(oldLog)).toBe(false);
+    expect(await logExists(newLog)).toBe(true);
+    expect(await jobExists(oldJob)).toBe(false);
+    expect(await jobExists(newJob)).toBe(true);
+    expect(await runRowCounts(oldRun)).toEqual(RUN_GONE);
+    expect(await runRowCounts(newRun)).toEqual(RUN_INTACT);
+    expect(await workflowLogExists(oldWorkflowLog)).toBe(false);
+    expect(await workflowLogExists(newWorkflowLog)).toBe(true);
+    expect(await auditLogExists(oldAuditLog)).toBe(false);
+    expect(await auditLogExists(newAuditLog)).toBe(true);
+  });
+});
+
+describe("batching", () => {
+  it("works through more rows than fit in one batch", async () => {
+    const { userId, eventId } = await seedOwner();
+    const workflowId = await seedWorkflow(userId);
+    for (let i = 0; i < 5; i++) {
+      await seedLog(eventId, { createdAt: daysAgo(31) });
+      await seedJob(eventId, userId, {
+        status: JobStatus.COMPLETED,
+        completedAt: daysAgo(31),
+      });
+      await seedRun(workflowId, userId, eventId, { completedAt: daysAgo(31) });
+      await seedWorkflowLog(workflowId, { createdAt: daysAgo(31) });
+      await seedAuditLog(userId, { createdAt: daysAgo(31) });
+    }
+
+    const result = await pass(
+      { logs: 30, jobs: 30, workflowExecutions: 30, toolAuditLogs: 30 },
+      { batchSize: 2 },
+    );
+
+    expect(result.deleted).toMatchObject({
+      logs: 5,
+      jobs: 5,
+      workflow_executions: 5,
+      workflow_logs: 5,
+      tool_audit_logs: 5,
+    });
+    expect(result.backlog).toBe(false);
+    expect(await countRows(workflowStepRuns)).toBe(0);
+    expect(await countRows(workflowExecutionEvents)).toBe(0);
+    expect(await countRows(workflowLogs)).toBe(0);
+    expect(await countAuditedEvents()).toBe(0);
+    expect(await purgeRecords()).toHaveLength(3);
+  });
+
+  it("stops at the cap, reports the backlog, and the next pass carries on", async () => {
+    const { eventId } = await seedOwner();
+    for (let i = 0; i < 5; i++) {
+      await seedLog(eventId, { createdAt: daysAgo(31) });
+    }
+    const options = { batchSize: 2, maxBatches: 2 };
+
+    const first = await pass({ logs: 30 }, options);
+    expect(first.deleted.logs).toBe(4);
+    expect(first.backlog).toBe(true);
+
+    const second = await pass({ logs: 30 }, options);
+    expect(second.deleted.logs).toBe(1);
+    expect(second.backlog).toBe(false);
+    expect(await countRows(logs)).toBe(0);
+  });
+
+  it("caps each table separately, so a large one cannot starve the rest", async () => {
+    const { eventId } = await seedOwner();
+    for (let i = 0; i < 5; i++) {
+      await seedLog(eventId, { createdAt: daysAgo(31) });
+    }
+    await db.insert(scheduleIncidents).values({
+      eventId,
+      kind: ScheduleIncidentKind.MISSED,
+      createdAt: daysAgo(31),
+    });
+
+    const result = await pass(
+      { logs: 30, scheduleIncidents: 30 },
+      { batchSize: 2, maxBatches: 1 },
+    );
+
+    expect(result.deleted).toMatchObject({ logs: 2, schedule_incidents: 1 });
+    expect(result.backlog).toBe(true);
+  });
+});
+
+describe("running alongside other work", () => {
+  it("lets two concurrent passes share the work with no row counted twice", async () => {
+    const { eventId } = await seedOwner();
+    for (let i = 0; i < 40; i++) {
+      await seedLog(eventId, { createdAt: daysAgo(31) });
+    }
+    const options = { batchSize: 5 };
+
+    const [a, b] = await Promise.all([
+      pass({ logs: 30 }, options),
+      pass({ logs: 30 }, options),
+    ]);
+
+    expect(a.failed).toEqual([]);
+    expect(b.failed).toEqual([]);
+    expect(a.deleted.logs + b.deleted.logs).toBe(40);
+    expect(await countRows(logs)).toBe(0);
+  });
+
+  it("skips a locked row instead of waiting on it, and takes it on a later pass", async () => {
+    const { eventId } = await seedOwner();
+    const held = await seedLog(eventId, { createdAt: daysAgo(31) });
+    const free = await seedLog(eventId, { createdAt: daysAgo(31) });
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT id FROM logs WHERE id = $1 FOR UPDATE", [
+        held,
+      ]);
+
+      await pass({ logs: 30 });
+
+      expect(await logExists(free)).toBe(false);
+      expect(await logExists(held)).toBe(true);
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+    }
+
+    await pass({ logs: 30 });
+    expect(await logExists(held)).toBe(false);
+  });
+
+  it("carries on with the other tables when one purge fails", async () => {
+    const error = jest.spyOn(console, "error").mockImplementation(() => {});
+    await seedExpiredEverywhere();
+    await pool.query(`
+      CREATE FUNCTION retention_test_fail() RETURNS trigger AS $$
+      BEGIN RAISE EXCEPTION 'purge failed on purpose'; END
+      $$ LANGUAGE plpgsql
+    `);
+    await pool.query(`
+      CREATE TRIGGER retention_test_fail BEFORE DELETE ON schedule_incidents
+      FOR EACH ROW EXECUTE FUNCTION retention_test_fail()
+    `);
+
+    try {
+      const result = await pass(ALL_ON);
+
+      expect(result.failed).toEqual(["schedule_incidents"]);
+      expect(result.deleted).toEqual({
+        logs: 1,
+        jobs: 1,
+        workflow_executions: 1,
+        workflow_logs: 1,
+        schedule_incidents: 0,
+        tool_action_logs: 1,
+        tool_audit_logs: 1,
+        webhook_deliveries: 1,
+        webhook_logs: 1,
+        webhook_events: 1,
+      });
+      expect(await countRows(scheduleIncidents)).toBe(1);
+      // Logged with its cause: Drizzle's own message is only the failed SQL.
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining("schedule_incidents"),
+        expect.objectContaining({
+          cause: expect.objectContaining({
+            message: "purge failed on purpose",
+          }),
+        }),
+      );
+    } finally {
+      await pool.query(
+        "DROP TRIGGER retention_test_fail ON schedule_incidents",
+      );
+      await pool.query("DROP FUNCTION retention_test_fail()");
+    }
+  });
+});
+
+describe("a fully connected graph", () => {
+  const LATER = new Date(NOW.getTime() + 400 * DAY_MS);
+
+  async function seedFinishedGraph() {
+    const graph = await seedFullGraph();
+    await db
+      .update(workflowExecutions)
+      .set({ status: LogStatus.SUCCESS, completedAt: NOW })
+      .where(eq(workflowExecutions.id, graph.workflowExecutionId));
+    return graph;
+  }
+
+  it("clears all history with no FK violation and leaves every definition", async () => {
+    const graph = await seedFinishedGraph();
+    const [credential] = await db
+      .select({ id: toolCredentials.id })
+      .from(toolCredentials)
+      .where(eq(toolCredentials.userId, graph.userId));
+    await seedAuditLog(graph.userId, { toolId: credential!.id });
+    const definitions = [
+      users,
+      events,
+      servers,
+      workflows,
+      workflowNodes,
+      webhooks,
+      toolCredentials,
+    ];
+    const before = await Promise.all(definitions.map((t) => countRows(t)));
+
+    const result = await runRetention({ now: LATER, windows: ALL_ON });
+
+    expect(result.failed).toEqual([]);
+    for (const table of [
+      logs,
+      jobs,
+      executions,
+      jobTransitions,
+      workflowExecutions,
+      workflowExecutionEvents,
+      workflowStepRuns,
+      workflowLogs,
+      scheduleIncidents,
+      toolActionLogs,
+      webhookEvents,
+      webhookDeliveries,
+      webhookLogs,
+    ]) {
+      expect(await countRows(table)).toBe(0);
+    }
+    expect(await countAuditedEvents()).toBe(0);
+    expect(await purgeRecords()).toHaveLength(1);
+    expect(await Promise.all(definitions.map((t) => countRows(t)))).toEqual(
+      before,
+    );
+    expect(before.every((rows) => rows > 0)).toBe(true);
+  });
+
+  it("detaches logs, with no FK violation, when only jobs age out", async () => {
+    const graph = await seedFinishedGraph();
+    const logsBefore = await countRows(logs);
+
+    const result = await runRetention({
+      now: LATER,
+      windows: { ...ALL_OFF, jobs: 30 },
+    });
+
+    expect(result.failed).toEqual([]);
+    expect(await jobExists(graph.jobId)).toBe(false);
+    expect(await countRows(logs)).toBe(logsBefore);
+    expect(await countRows(logs, eq(logs.jobId, graph.jobId))).toBe(0);
+  });
+
+  it("keeps a second user's recent graph when another's has aged out", async () => {
+    const graph = await seedFinishedGraph();
+    await db
+      .update(jobs)
+      .set({ completedAt: daysAgo(31) })
+      .where(eq(jobs.id, graph.jobId));
+    const bystander = await seedFinishedGraph();
+    await db
+      .update(jobs)
+      .set({ completedAt: daysAgo(1) })
+      .where(eq(jobs.id, bystander.jobId));
+
+    await pass({ jobs: 30 });
+
+    expect(await jobExists(graph.jobId)).toBe(false);
+    expect(await jobExists(bystander.jobId)).toBe(true);
+    expect(
+      await countRows(executions, eq(executions.jobId, bystander.jobId)),
+    ).toBe(1);
+  });
+});

@@ -450,6 +450,10 @@ export const logs = pgTable(
   },
   (t) => [
     index("logs_job_id_idx").on(t.jobId),
+    // Backs the FK from logs to executions. Without it, every deleted execution
+    // scans this table to check for references (about 320ms per row at 3M logs),
+    // which makes job retention unusable on a large instance.
+    index("logs_execution_id_idx").on(t.executionId),
     index("logs_event_created_idx").on(t.eventId, t.createdAt),
   ],
 );
@@ -1193,32 +1197,40 @@ export const workflowExecutions = pgTable("workflow_executions", {
     .notNull(),
 });
 
-export const workflowExecutionEvents = pgTable("workflow_execution_events", {
-  id: serial("id").primaryKey(),
-  workflowExecutionId: integer("workflow_execution_id")
-    .references(() => workflowExecutions.id, { onDelete: "cascade" })
-    .notNull(),
-  eventId: integer("event_id")
-    .references(() => events.id, { onDelete: "cascade" })
-    .notNull(),
-  nodeId: integer("node_id").notNull(),
-  sequenceOrder: integer("sequence_order").notNull(),
-  status: varchar("status", { length: 50 })
-    .$type<LogStatus>()
-    .default(LogStatus.PENDING)
-    .notNull(),
-  startedAt: timestamp("started_at"),
-  completedAt: timestamp("completed_at"),
-  duration: integer("duration"), // in milliseconds
-  output: text("output"),
-  errorMessage: text("error_message"),
-  connectionType: varchar("connection_type", { length: 50 }), // how this event was triggered
-  branchId: varchar("branch_id", { length: 100 }), // identifies which branch this event belongs to
-  parallelGroupId: varchar("parallel_group_id", { length: 100 }), // groups parallel nodes executing together
-  createdAt: timestamp("created_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-});
+export const workflowExecutionEvents = pgTable(
+  "workflow_execution_events",
+  {
+    id: serial("id").primaryKey(),
+    workflowExecutionId: integer("workflow_execution_id")
+      .references(() => workflowExecutions.id, { onDelete: "cascade" })
+      .notNull(),
+    eventId: integer("event_id")
+      .references(() => events.id, { onDelete: "cascade" })
+      .notNull(),
+    nodeId: integer("node_id").notNull(),
+    sequenceOrder: integer("sequence_order").notNull(),
+    status: varchar("status", { length: 50 })
+      .$type<LogStatus>()
+      .default(LogStatus.PENDING)
+      .notNull(),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    duration: integer("duration"), // in milliseconds
+    output: text("output"),
+    errorMessage: text("error_message"),
+    connectionType: varchar("connection_type", { length: 50 }), // how this event was triggered
+    branchId: varchar("branch_id", { length: 100 }), // identifies which branch this event belongs to
+    parallelGroupId: varchar("parallel_group_id", { length: 100 }), // groups parallel nodes executing together
+    createdAt: timestamp("created_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  // Backs the cascade from workflow_executions: without it, every deleted run
+  // scans this table.
+  (t) => [
+    index("workflow_execution_events_exec_idx").on(t.workflowExecutionId),
+  ],
+);
 
 // Source-of-truth step state for the event-sourced workflow engine
 // (src/lib/scheduling/workflow-engine.ts). One row per node per run; the
@@ -1536,23 +1548,29 @@ export const webhookEvents = pgTable("webhook_events", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const webhookDeliveries = pgTable("webhook_deliveries", {
-  id: serial("id").primaryKey(),
-  webhookId: integer("webhook_id")
-    .references(() => webhooks.id, { onDelete: "cascade" })
-    .notNull(),
-  webhookEventId: integer("webhook_event_id")
-    .references(() => webhookEvents.id, { onDelete: "cascade" })
-    .notNull(),
-  deliveryId: varchar("delivery_id", { length: 255 }).notNull(),
-  status: varchar("status", { length: 50 }).notNull(), // success, failed
-  statusCode: integer("status_code"),
-  response: text("response"),
-  error: text("error"),
-  headers: jsonb("headers"),
-  duration: integer("duration"), // milliseconds
-  attemptedAt: timestamp("attempted_at").notNull(),
-});
+export const webhookDeliveries = pgTable(
+  "webhook_deliveries",
+  {
+    id: serial("id").primaryKey(),
+    webhookId: integer("webhook_id")
+      .references(() => webhooks.id, { onDelete: "cascade" })
+      .notNull(),
+    webhookEventId: integer("webhook_event_id")
+      .references(() => webhookEvents.id, { onDelete: "cascade" })
+      .notNull(),
+    deliveryId: varchar("delivery_id", { length: 255 }).notNull(),
+    status: varchar("status", { length: 50 }).notNull(), // success, failed
+    statusCode: integer("status_code"),
+    response: text("response"),
+    error: text("error"),
+    headers: jsonb("headers"),
+    duration: integer("duration"), // milliseconds
+    attemptedAt: timestamp("attempted_at").notNull(),
+  },
+  // Backs the cascade from webhook_events and retention's "no delivery left"
+  // check, either of which would otherwise scan this table per event.
+  (t) => [index("webhook_deliveries_event_idx").on(t.webhookEventId)],
+);
 
 export const webhookLogs = pgTable("webhook_logs", {
   id: serial("id").primaryKey(),

@@ -576,7 +576,6 @@ export const adminRouter = createTRPCRouter({
           enableGuestAccess: settingsObject.enableGuestAccess ?? false,
           defaultUserRole: settingsObject.defaultUserRole ?? UserRole.USER,
           sessionTimeout: settingsObject.sessionTimeout ?? 3600,
-          logRetentionDays: settingsObject.logRetentionDays ?? 30,
 
           // SMTP settings
           smtpHost: settingsObject.smtpHost ?? "",
