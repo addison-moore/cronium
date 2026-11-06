@@ -12,8 +12,12 @@
  *     after an interruption simply finishes the remainder — that is the
  *     interrupted-rotation recovery. To ROLL BACK, run again with the keys
  *     swapped (old active, new retired).
- *   - Each row is updated independently; a single unreadable row is recorded as
- *     an error and skipped rather than aborting the whole run.
+ *   - Each row is one UPDATE; a row that can't be read or written is recorded as an
+ *     error and skipped rather than aborting the whole run.
+ *   - It never overwrites a newer value. The app keeps running during this, so each
+ *     UPDATE only applies to the row version it read. A row changed in between, such
+ *     as a secret someone just regenerated, is left as they saved it, counted as
+ *     neither re-encrypted nor an error, and picked up by a later run.
  *   - Decryption is authenticated (AES-GCM + AAD binding), so a wrong key or
  *     binding throws — it can never write mis-bound ciphertext.
  *
@@ -22,10 +26,10 @@
  *   2. run this driver until it reports 0 remaining
  *   3. remove <old> from ENCRYPTION_KEYS_RETIRED
  *
- * Plaintext from before encryption at rest is not this driver's job, though it
- * counts it as `legacy`: `legacy-secrets.ts` encrypts it.
+ * Values from before the vault are not this driver's job, though it counts them as
+ * `legacy`: `legacy-secrets.ts` moves them into it.
  */
-import { eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   servers,
@@ -37,6 +41,11 @@ import {
   toolCredentials,
   oauthTokens,
 } from "@/shared/schema";
+import {
+  isRowVersion,
+  rowVersion,
+  secretRowFailureReason,
+} from "@/lib/security/secret-row";
 import { getSecretVault, isSecretEnvelope } from "@/lib/security/secret-vault";
 import {
   encryptServerSecret,
@@ -47,6 +56,7 @@ import {
   decryptSystemSetting,
   encryptMfaSecret,
   decryptMfaSecret,
+  looksLikeLegacyCiphertext,
 } from "@/lib/security/field-secret";
 import {
   encryptVariableValue,
@@ -62,6 +72,7 @@ import {
 import {
   credentialEncryption,
   parseEncryptedData,
+  toolCredentialsHoldNothing,
 } from "@/lib/security/credential-encryption";
 
 export interface SurfaceResult {
@@ -70,14 +81,23 @@ export interface SurfaceResult {
   reencrypted: number;
   skipped: number;
   errors: number;
-  // Non-null values in an always-secret column that are NOT vault envelopes. On
-  // servers, env vars and MFA secrets these are legacy static-AAD ciphertext still
-  // bound to the CURRENT ENCRYPTION_KEY: the driver cannot rotate them (it would
-  // orphan them under the retired key), so they must be migrated to vault envelopes
-  // first (lazy passthrough on write) BEFORE the key is rotated. On webhooks and
-  // user variables they are plaintext, which a key change can't orphan and which
-  // `legacy-secrets.ts` encrypts.
+  /**
+   * Values left as they were because their row changed between this run's read and
+   * its write. They're neither re-encrypted nor errors: a later run picks them up. Like
+   * the other counts this is per value, so a row with two values to move counts twice.
+   */
+  changedDuringRun: number;
+  // Values in an always-secret column that `legacy-secrets.ts` still has to deal with
+  // and this driver can't. On servers, env vars and MFA secrets they are static-AAD
+  // ciphertext or plaintext. Elsewhere they're plaintext, or on tool credentials a row
+  // whose `encrypted` flag doesn't match what it holds.
   legacy: number;
+  /**
+   * The part of `legacy` that has the shape of static-AAD ciphertext, which only opens
+   * under the key it was written with, so a key change can orphan it. A key change
+   * can't orphan the rest.
+   */
+  legacyCiphertext: number;
 }
 
 export interface RotationReport {
@@ -86,17 +106,67 @@ export interface RotationReport {
   totalReencrypted: number;
   totalErrors: number;
   totalLegacy: number;
-  /** The part of totalLegacy that is plaintext `--encrypt-legacy` can encrypt. */
+  /** The part of totalLegacy that a key change can't orphan. */
   plaintextLegacy: number;
+  totalChangedDuringRun: number;
+  /**
+   * In a dry run, what a real run would re-encrypt. In a real run, what it couldn't:
+   * values that failed, and values whose row changed under it.
+   */
   remaining: number;
+}
+
+function emptyResult(surface: string): SurfaceResult {
+  return {
+    surface,
+    scanned: 0,
+    reencrypted: 0,
+    skipped: 0,
+    errors: 0,
+    changedDuringRun: 0,
+    legacy: 0,
+    legacyCiphertext: 0,
+  };
 }
 
 /**
  * A non-null, always-secret value that is NOT a vault envelope. Counting these lets
  * the driver warn about them: see `SurfaceResult.legacy` for what they are.
  */
-function isLegacyValue(value: string | null | undefined): boolean {
+function isLegacyValue(value: string | null | undefined): value is string {
   return !!value && !isSecretEnvelope(value);
+}
+
+function countLegacy(r: SurfaceResult, value: string): void {
+  r.legacy++;
+  if (looksLikeLegacyCiphertext(value)) r.legacyCiphertext++;
+}
+
+/**
+ * The one write a row gets, holding every value this run moved in it. It applies only
+ * to the version `isRowVersion` was given, so it has to be one write: a second would
+ * miss because of the first.
+ */
+async function writeRow(
+  r: SurfaceResult,
+  dryRun: boolean,
+  id: string,
+  moved: string[],
+  write: () => Promise<{ rowCount: number | null }>,
+): Promise<void> {
+  if (moved.length === 0) return;
+  if (dryRun) {
+    r.reencrypted += moved.length;
+    return;
+  }
+  try {
+    const { rowCount } = await write();
+    if ((rowCount ?? 0) > 0) r.reencrypted += moved.length;
+    else r.changedDuringRun += moved.length;
+  } catch (e) {
+    r.errors += moved.length;
+    logRowError(r.surface, id, moved.join("+"), e);
+  }
 }
 
 /** A stored vault value that was written under a retired (non-active) key. */
@@ -111,28 +181,24 @@ function vaultNeedsReencrypt(
 }
 
 async function rotateServers(dryRun: boolean): Promise<SurfaceResult> {
-  const r: SurfaceResult = {
-    surface: "servers.sshKey/password",
-    scanned: 0,
-    reencrypted: 0,
-    skipped: 0,
-    errors: 0,
-    legacy: 0,
-  };
+  const r = emptyResult("servers.sshKey/password");
   const rows = await db
     .select({
       id: servers.id,
       userId: servers.userId,
       sshKey: servers.sshKey,
       password: servers.password,
+      version: rowVersion,
     })
-    .from(servers);
+    .from(servers)
+    .orderBy(asc(servers.id));
   for (const row of rows) {
+    const set: Record<string, string> = {};
     for (const col of ["sshKey", "password"] as const) {
       const value = row[col];
       r.scanned++;
       if (isLegacyValue(value)) {
-        r.legacy++;
+        countLegacy(r, value);
         continue;
       }
       if (!vaultNeedsReencrypt(value)) {
@@ -141,198 +207,176 @@ async function rotateServers(dryRun: boolean): Promise<SurfaceResult> {
       }
       try {
         const pt = decryptServerSecret(value, col, row.userId);
-        const next = encryptServerSecret(pt, col, row.userId);
-        if (!dryRun) {
-          await db
-            .update(servers)
-            .set({ [col]: next })
-            .where(eq(servers.id, row.id));
-        }
-        r.reencrypted++;
+        set[col] = encryptServerSecret(pt, col, row.userId);
       } catch (e) {
         r.errors++;
         logRowError(r.surface, String(row.id), col, e);
       }
     }
+    await writeRow(r, dryRun, String(row.id), Object.keys(set), () =>
+      db
+        .update(servers)
+        .set(set)
+        .where(and(eq(servers.id, row.id), isRowVersion(row.version))),
+    );
   }
   return r;
 }
 
 async function rotateEnvVars(dryRun: boolean): Promise<SurfaceResult> {
-  const r: SurfaceResult = {
-    surface: "env_vars.value",
-    scanned: 0,
-    reencrypted: 0,
-    skipped: 0,
-    errors: 0,
-    legacy: 0,
-  };
+  const r = emptyResult("env_vars.value");
   const rows = await db
     .select({
       id: envVars.id,
       eventId: envVars.eventId,
       key: envVars.key,
       value: envVars.value,
+      version: rowVersion,
     })
-    .from(envVars);
+    .from(envVars)
+    .orderBy(asc(envVars.id));
   for (const row of rows) {
     r.scanned++;
     if (isLegacyValue(row.value)) {
-      r.legacy++;
+      countLegacy(r, row.value);
       continue;
     }
     if (!vaultNeedsReencrypt(row.value)) {
       r.skipped++;
       continue;
     }
+    let next: string;
     try {
       const pt = decryptEnvVarValue(row.value, row.eventId, row.key);
-      const next = encryptEnvVarValue(pt, row.eventId, row.key);
-      if (!dryRun) {
-        await db
-          .update(envVars)
-          .set({ value: next })
-          .where(eq(envVars.id, row.id));
-      }
-      r.reencrypted++;
+      next = encryptEnvVarValue(pt, row.eventId, row.key);
     } catch (e) {
       r.errors++;
       logRowError(r.surface, String(row.id), "value", e);
+      continue;
     }
+    await writeRow(r, dryRun, String(row.id), ["value"], () =>
+      db
+        .update(envVars)
+        .set({ value: next })
+        .where(and(eq(envVars.id, row.id), isRowVersion(row.version))),
+    );
   }
   return r;
 }
 
 async function rotateSystemSettings(dryRun: boolean): Promise<SurfaceResult> {
-  const r: SurfaceResult = {
-    surface: "system_settings.value",
-    scanned: 0,
-    reencrypted: 0,
-    skipped: 0,
-    errors: 0,
-    legacy: 0,
-  };
+  const r = emptyResult("system_settings.value");
   const rows = await db
-    .select({ key: systemSettings.key, value: systemSettings.value })
-    .from(systemSettings);
+    .select({
+      key: systemSettings.key,
+      value: systemSettings.value,
+      version: rowVersion,
+    })
+    .from(systemSettings)
+    .orderBy(asc(systemSettings.id));
   for (const row of rows) {
     r.scanned++;
     if (!vaultNeedsReencrypt(row.value)) {
       r.skipped++;
       continue;
     }
+    let next: string;
     try {
       const pt = decryptSystemSetting(row.value, row.key);
-      const next = encryptSystemSetting(pt, row.key);
-      if (!dryRun) {
-        await db
-          .update(systemSettings)
-          .set({ value: next })
-          .where(eq(systemSettings.key, row.key));
-      }
-      r.reencrypted++;
+      next = encryptSystemSetting(pt, row.key);
     } catch (e) {
       r.errors++;
       logRowError(r.surface, row.key, "value", e);
+      continue;
     }
+    await writeRow(r, dryRun, row.key, ["value"], () =>
+      db
+        .update(systemSettings)
+        .set({ value: next })
+        .where(and(eq(systemSettings.key, row.key), isRowVersion(row.version))),
+    );
   }
   return r;
 }
 
 async function rotateMfaSecrets(dryRun: boolean): Promise<SurfaceResult> {
-  const r: SurfaceResult = {
-    surface: "users.mfaSecret",
-    scanned: 0,
-    reencrypted: 0,
-    skipped: 0,
-    errors: 0,
-    legacy: 0,
-  };
+  const r = emptyResult("users.mfaSecret");
   const rows = await db
-    .select({ id: users.id, mfaSecret: users.mfaSecret })
-    .from(users);
+    .select({ id: users.id, mfaSecret: users.mfaSecret, version: rowVersion })
+    .from(users)
+    .orderBy(asc(users.id));
   for (const row of rows) {
     r.scanned++;
     if (isLegacyValue(row.mfaSecret)) {
-      r.legacy++;
+      countLegacy(r, row.mfaSecret);
       continue;
     }
     if (!vaultNeedsReencrypt(row.mfaSecret)) {
       r.skipped++;
       continue;
     }
+    let next: string;
     try {
       const pt = decryptMfaSecret(row.mfaSecret, row.id);
-      const next = encryptMfaSecret(pt, row.id);
-      if (!dryRun) {
-        await db
-          .update(users)
-          .set({ mfaSecret: next })
-          .where(eq(users.id, row.id));
-      }
-      r.reencrypted++;
+      next = encryptMfaSecret(pt, row.id);
     } catch (e) {
       r.errors++;
       logRowError(r.surface, row.id, "mfaSecret", e);
+      continue;
     }
+    await writeRow(r, dryRun, row.id, ["mfaSecret"], () =>
+      db
+        .update(users)
+        .set({ mfaSecret: next })
+        .where(and(eq(users.id, row.id), isRowVersion(row.version))),
+    );
   }
   return r;
 }
 
 async function rotateUserVariables(dryRun: boolean): Promise<SurfaceResult> {
-  const r: SurfaceResult = {
-    surface: "user_variables.value",
-    scanned: 0,
-    reencrypted: 0,
-    skipped: 0,
-    errors: 0,
-    legacy: 0,
-  };
+  const r = emptyResult("user_variables.value");
   const rows = await db
     .select({
       id: userVariables.id,
       userId: userVariables.userId,
       key: userVariables.key,
       value: userVariables.value,
+      version: rowVersion,
     })
-    .from(userVariables);
+    .from(userVariables)
+    .orderBy(asc(userVariables.id));
   for (const row of rows) {
     r.scanned++;
     if (isLegacyValue(row.value)) {
-      r.legacy++;
+      countLegacy(r, row.value);
       continue;
     }
     if (!vaultNeedsReencrypt(row.value)) {
       r.skipped++;
       continue;
     }
+    let next: string;
     try {
       const pt = decryptVariableValue(row.value, row.userId, row.key);
-      const next = encryptVariableValue(pt, row.userId, row.key);
-      if (!dryRun) {
-        await db
-          .update(userVariables)
-          .set({ value: next })
-          .where(eq(userVariables.id, row.id));
-      }
-      r.reencrypted++;
+      next = encryptVariableValue(pt, row.userId, row.key);
     } catch (e) {
       r.errors++;
       logRowError(r.surface, String(row.id), "value", e);
+      continue;
     }
+    await writeRow(r, dryRun, String(row.id), ["value"], () =>
+      db
+        .update(userVariables)
+        .set({ value: next })
+        .where(and(eq(userVariables.id, row.id), isRowVersion(row.version))),
+    );
   }
   return r;
 }
 
 async function rotateWebhooks(dryRun: boolean): Promise<SurfaceResult> {
-  const r: SurfaceResult = {
-    surface: "webhooks.secret/headers",
-    scanned: 0,
-    reencrypted: 0,
-    skipped: 0,
-    errors: 0,
-    legacy: 0,
-  };
+  const r = emptyResult("webhooks.secret/headers");
   const rows = await db
     .select({
       id: webhooks.id,
@@ -340,19 +384,20 @@ async function rotateWebhooks(dryRun: boolean): Promise<SurfaceResult> {
       key: webhooks.key,
       secret: webhooks.secret,
       headers: webhooks.headers,
+      version: rowVersion,
     })
-    .from(webhooks);
+    .from(webhooks)
+    .orderBy(asc(webhooks.id));
   for (const row of rows) {
+    const set: Record<string, unknown> = {};
     // secret (vault envelope string)
     r.scanned++;
-    let secretNext: string | undefined;
-    let headersNext: unknown;
     if (isLegacyValue(row.secret)) {
       r.legacy++;
     } else if (vaultNeedsReencrypt(row.secret)) {
       try {
         const pt = decryptWebhookSecret(row.secret, row.key, row.userId);
-        secretNext = encryptWebhookSecret(pt, row.key, row.userId);
+        set.secret = encryptWebhookSecret(pt, row.key, row.userId);
       } catch (e) {
         r.errors++;
         logRowError(r.surface, String(row.id), "secret", e);
@@ -368,7 +413,7 @@ async function rotateWebhooks(dryRun: boolean): Promise<SurfaceResult> {
     } else if (typeof enc === "string" && vaultNeedsReencrypt(enc)) {
       try {
         const decoded = decryptWebhookHeaders(row.headers, row.key, row.userId);
-        headersNext = encryptWebhookHeaders(decoded, row.key, row.userId);
+        set.headers = encryptWebhookHeaders(decoded, row.key, row.userId);
       } catch (e) {
         r.errors++;
         logRowError(r.surface, String(row.id), "headers", e);
@@ -376,103 +421,106 @@ async function rotateWebhooks(dryRun: boolean): Promise<SurfaceResult> {
     } else {
       r.skipped++;
     }
-    if ((secretNext !== undefined || headersNext !== undefined) && !dryRun) {
-      const set: Record<string, unknown> = {};
-      if (secretNext !== undefined) set.secret = secretNext;
-      if (headersNext !== undefined) set.headers = headersNext;
-      await db.update(webhooks).set(set).where(eq(webhooks.id, row.id));
-    }
-    if (secretNext !== undefined) r.reencrypted++;
-    if (headersNext !== undefined) r.reencrypted++;
+    await writeRow(r, dryRun, String(row.id), Object.keys(set), () =>
+      db
+        .update(webhooks)
+        .set(set)
+        .where(and(eq(webhooks.id, row.id), isRowVersion(row.version))),
+    );
   }
   return r;
 }
 
 async function rotateToolCredentials(dryRun: boolean): Promise<SurfaceResult> {
-  const r: SurfaceResult = {
-    surface: "tool_credentials.credentials",
-    scanned: 0,
-    reencrypted: 0,
-    skipped: 0,
-    errors: 0,
-    legacy: 0,
-  };
+  const r = emptyResult("tool_credentials.credentials");
   const rows = await db
     .select({
       id: toolCredentials.id,
       credentials: toolCredentials.credentials,
       encrypted: toolCredentials.encrypted,
+      version: rowVersion,
     })
-    .from(toolCredentials);
+    .from(toolCredentials)
+    .orderBy(asc(toolCredentials.id));
   for (const row of rows) {
     r.scanned++;
     const enc = row.encrypted ? parseEncryptedData(row.credentials) : null;
-    if (!enc || credentialEncryption.isUnderActiveKey(enc)) {
+    if (!enc) {
+      if (toolCredentialsHoldNothing(row.credentials)) r.skipped++;
+      else r.legacy++;
+      continue;
+    }
+    if (credentialEncryption.isUnderActiveKey(enc)) {
       r.skipped++;
       continue;
     }
+    let next: ReturnType<typeof credentialEncryption.encrypt>;
     try {
-      const data = credentialEncryption.decrypt(enc);
-      const next = credentialEncryption.encrypt(data);
-      if (!dryRun) {
-        await db
-          .update(toolCredentials)
-          .set({
-            credentials: JSON.stringify(next),
-            encryptionMetadata: {
-              algorithm: next.algorithm,
-              keyDerivation: next.keyDerivation,
-            },
-          })
-          .where(eq(toolCredentials.id, row.id));
-      }
-      r.reencrypted++;
+      next = credentialEncryption.encrypt(credentialEncryption.decrypt(enc));
     } catch (e) {
       r.errors++;
       logRowError(r.surface, String(row.id), "credentials", e);
+      continue;
     }
+    await writeRow(r, dryRun, String(row.id), ["credentials"], () =>
+      db
+        .update(toolCredentials)
+        .set({
+          credentials: JSON.stringify(next),
+          encryptionMetadata: {
+            algorithm: next.algorithm,
+            keyDerivation: next.keyDerivation,
+          },
+        })
+        .where(
+          and(eq(toolCredentials.id, row.id), isRowVersion(row.version)),
+        ),
+    );
   }
   return r;
 }
 
 async function rotateOauthTokens(dryRun: boolean): Promise<SurfaceResult> {
-  const r: SurfaceResult = {
-    surface: "oauth_tokens.access/refresh",
-    scanned: 0,
-    reencrypted: 0,
-    skipped: 0,
-    errors: 0,
-    legacy: 0,
-  };
+  const r = emptyResult("oauth_tokens.access/refresh");
   const rows = await db
     .select({
       id: oauthTokens.id,
       accessToken: oauthTokens.accessToken,
       refreshToken: oauthTokens.refreshToken,
+      version: rowVersion,
     })
-    .from(oauthTokens);
+    .from(oauthTokens)
+    .orderBy(asc(oauthTokens.id));
   for (const row of rows) {
-    const set: Record<string, unknown> = {};
+    const set: Record<string, string> = {};
     for (const col of ["accessToken", "refreshToken"] as const) {
       const stored = row[col];
       const enc = parseEncryptedData(stored);
       r.scanned++;
-      if (!enc || credentialEncryption.isUnderActiveKey(enc)) {
+      if (!enc) {
+        // Plaintext from before tokens were encrypted, which reads the same under any key.
+        if (stored) r.legacy++;
+        else r.skipped++;
+        continue;
+      }
+      if (credentialEncryption.isUnderActiveKey(enc)) {
         r.skipped++;
         continue;
       }
       try {
         const data = credentialEncryption.decrypt(enc);
         set[col] = JSON.stringify(credentialEncryption.encrypt(data));
-        r.reencrypted++;
       } catch (e) {
         r.errors++;
         logRowError(r.surface, String(row.id), col, e);
       }
     }
-    if (Object.keys(set).length > 0 && !dryRun) {
-      await db.update(oauthTokens).set(set).where(eq(oauthTokens.id, row.id));
-    }
+    await writeRow(r, dryRun, String(row.id), Object.keys(set), () =>
+      db
+        .update(oauthTokens)
+        .set(set)
+        .where(and(eq(oauthTokens.id, row.id), isRowVersion(row.version))),
+    );
   }
   return r;
 }
@@ -483,11 +531,9 @@ function logRowError(
   column: string,
   e: unknown,
 ): void {
-  // Never log the secret value — only the location and error class.
+  // Never log the secret value: only the location and a fixed reason.
   console.error(
-    `[secret-rotation] ${surface} id=${id} column=${column} failed: ${
-      e instanceof Error ? e.message : String(e)
-    }`,
+    `[secret-rotation] ${surface} id=${id} column=${column} failed: ${secretRowFailureReason(e)}`,
   );
 }
 
@@ -504,25 +550,31 @@ export async function rotateAllSecrets(
   surfaces.push(await rotateEnvVars(dryRun));
   surfaces.push(await rotateSystemSettings(dryRun));
   surfaces.push(await rotateMfaSecrets(dryRun));
-  const userVariableResult = await rotateUserVariables(dryRun);
-  surfaces.push(userVariableResult);
-  const webhookResult = await rotateWebhooks(dryRun);
-  surfaces.push(webhookResult);
+  surfaces.push(await rotateUserVariables(dryRun));
+  surfaces.push(await rotateWebhooks(dryRun));
   surfaces.push(await rotateToolCredentials(dryRun));
   surfaces.push(await rotateOauthTokens(dryRun));
 
   const totalReencrypted = surfaces.reduce((n, s) => n + s.reencrypted, 0);
   const totalErrors = surfaces.reduce((n, s) => n + s.errors, 0);
   const totalLegacy = surfaces.reduce((n, s) => n + s.legacy, 0);
+  const totalChangedDuringRun = surfaces.reduce(
+    (n, s) => n + s.changedDuringRun,
+    0,
+  );
   // In a dry run the "remaining" count is what still needs rotating.
-  const remaining = dryRun ? totalReencrypted : totalErrors;
+  const remaining = dryRun
+    ? totalReencrypted
+    : totalErrors + totalChangedDuringRun;
   return {
     dryRun,
     surfaces,
     totalReencrypted,
     totalErrors,
     totalLegacy,
-    plaintextLegacy: userVariableResult.legacy + webhookResult.legacy,
+    plaintextLegacy:
+      totalLegacy - surfaces.reduce((n, s) => n + s.legacyCiphertext, 0),
+    totalChangedDuringRun,
     remaining,
   };
 }

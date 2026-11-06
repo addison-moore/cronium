@@ -18,9 +18,9 @@
  *
  * To rotate, also set ENCRYPTION_KEY=<new> ENCRYPTION_KEYS_RETIRED='["<old>"]'.
  *
- * Exits 2 on a bad argument, and 1 if it couldn't run or a row failed. With
- * --encrypt-legacy, a real run also exits 1 if it leaves rows to do. Rotation doesn't:
- * what's left is in its report, and running it again finishes them.
+ * Exits 2 on a bad argument, and 1 if it couldn't run or a row failed. A real run also
+ * exits 1 if it leaves rows to do: with --encrypt-legacy any that still need it, and
+ * when rotating any that changed during the run, which running it again finishes.
  */
 import { driverError } from "@/lib/pg-errors";
 import { encryptLegacySecrets } from "@/lib/security/legacy-secrets";
@@ -35,7 +35,7 @@ async function rotate(dryRun: boolean): Promise<number> {
   const report = await rotateAllSecrets({ dryRun });
   for (const s of report.surfaces) {
     console.log(
-      `  ${s.surface}: scanned=${s.scanned} re-encrypted=${s.reencrypted} skipped=${s.skipped} legacy=${s.legacy} errors=${s.errors}`,
+      `  ${s.surface}: scanned=${s.scanned} re-encrypted=${s.reencrypted} skipped=${s.skipped} legacy=${s.legacy} changed-during-run=${s.changedDuringRun} errors=${s.errors}`,
     );
   }
   console.log(
@@ -52,12 +52,18 @@ async function rotate(dryRun: boolean): Promise<number> {
       `\nWARNING: ${report.plaintextLegacy} webhook or user-variable value(s) are still plaintext from before encryption at rest. Rotating the key doesn't affect them. To encrypt them, run this again with --encrypt-legacy.`,
     );
   }
-  if (!dryRun && report.totalErrors === 0) {
+  const changed = report.totalChangedDuringRun;
+  if (changed > 0) {
+    console.warn(
+      `\n${changed} value(s) changed during this run and were left as they were saved. Run this again to finish them before removing the retired key.`,
+    );
+  }
+  if (!dryRun && report.totalErrors === 0 && changed === 0) {
     console.log(
       "Rotation pass complete. Re-run to confirm 0 re-encrypted, then remove the retired key from ENCRYPTION_KEYS_RETIRED.",
     );
   }
-  return report.totalErrors > 0 ? 1 : 0;
+  return report.totalErrors > 0 || changed > 0 ? 1 : 0;
 }
 
 async function encryptLegacy(dryRun: boolean): Promise<number> {
