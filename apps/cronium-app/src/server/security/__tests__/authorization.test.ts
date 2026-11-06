@@ -48,6 +48,7 @@ import {
   roleAllowsCapability,
   type Capability,
 } from "@/server/security/authorization";
+import { AccountCheckFailedError } from "@/server/security/credential-check";
 import { capabilityForRoute } from "@/server/security/route-capabilities";
 import { UserRole, UserStatus } from "@/shared/schema";
 
@@ -171,10 +172,31 @@ describe("getAuthorizedPrincipal (fail closed)", () => {
   });
 
   it("fails closed when the database is unreachable", async () => {
+    const consoleError = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     dbState.error = new Error("connection refused");
-    await expect(getAuthorizedPrincipal("user-1")).rejects.toMatchObject({
+
+    const refused = getAuthorizedPrincipal("user-1");
+
+    await expect(refused).rejects.toMatchObject({
       code: "UNAUTHORIZED",
+      message: "Unable to verify account status",
     });
+    // Which isn't a verdict on the account, for a caller that has to tell them apart.
+    await expect(refused).rejects.toBeInstanceOf(AccountCheckFailedError);
+    expect(consoleError.mock.calls.flat().join(" ")).toContain(
+      "connection refused",
+    );
+    consoleError.mockRestore();
+  });
+
+  it("gives a refusal of the account an error that says so", async () => {
+    dbState.rows = [activeRow({ status: UserStatus.DISABLED })];
+
+    await expect(getAuthorizedPrincipal("user-1")).rejects.not.toBeInstanceOf(
+      AccountCheckFailedError,
+    );
   });
 
   it("survives a failing cache by reading the database", async () => {

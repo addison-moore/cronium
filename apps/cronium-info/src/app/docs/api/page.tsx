@@ -65,6 +65,10 @@ const statusCodes: Array<[number, string]> = [
   ],
   [429, "Too many run requests; see Retry-After"],
   [500, "Server error"],
+  [
+    503,
+    "Cronium could not check the token, usually because it can't reach its database. This says nothing about the token, so try again",
+  ],
 ];
 
 function formatJson(value: unknown): string {

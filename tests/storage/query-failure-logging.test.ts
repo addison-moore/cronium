@@ -574,7 +574,8 @@ describe("the other routes", () => {
     await withTableRenamed("api_tokens", async () => {
       const response = await listEvents(request("events", "GET", token));
 
-      expect(response.status).toBe(401);
+      // Not a 401: the token wasn't found to be bad, it couldn't be looked for.
+      expect(response.status).toBe(503);
     });
 
     const text = logged.join("\n");
