@@ -16,8 +16,9 @@ import {
  *
  * Migration is NON-BREAKING: writes always produce vault envelopes, but reads
  * fall back to the legacy scheme for values that are not yet vault envelopes, so
- * existing ciphertext keeps decrypting and rows migrate as they are rewritten.
- * Plaintext/legacy values pass through the legacy decrypt unchanged.
+ * existing ciphertext keeps decrypting, until a row is rewritten or
+ * `rotate:secrets --encrypt-legacy` moves it. Plaintext/legacy values pass through
+ * the legacy decrypt unchanged.
  */
 
 function encrypt(plaintext: string, binding: SecretBinding): string {

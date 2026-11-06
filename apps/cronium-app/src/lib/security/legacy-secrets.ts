@@ -616,7 +616,7 @@ async function upgradeSystemSettings(
       result,
       failures,
       dryRun,
-      row.id,
+      row.key, // What an operator will recognize, and a setting's name isn't secret.
       {
         value: () =>
           encryptedField(
@@ -626,7 +626,7 @@ async function upgradeSystemSettings(
             () =>
               readsAsCiphertext.push({
                 surface: result.surface,
-                id: row.id,
+                id: row.key,
                 column: "value",
               }),
           ),

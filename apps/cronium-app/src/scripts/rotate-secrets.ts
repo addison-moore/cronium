@@ -38,8 +38,9 @@ async function rotate(dryRun: boolean): Promise<number> {
       `  ${s.surface}: scanned=${s.scanned} re-encrypted=${s.reencrypted} skipped=${s.skipped} legacy=${s.legacy} changed-during-run=${s.changedDuringRun} errors=${s.errors}`,
     );
   }
+  const changed = report.totalChangedDuringRun;
   console.log(
-    `Total ${dryRun ? "to re-encrypt" : "re-encrypted"}: ${report.totalReencrypted}; errors: ${report.totalErrors}`,
+    `Total ${dryRun ? "to re-encrypt" : "re-encrypted"}: ${report.totalReencrypted}; errors: ${report.totalErrors}${changed > 0 ? `; changed during this run: ${changed}` : ""}`,
   );
   const boundToKey = report.totalLegacy - report.plaintextLegacy;
   if (boundToKey > 0) {
@@ -52,7 +53,6 @@ async function rotate(dryRun: boolean): Promise<number> {
       `\nWARNING: ${report.plaintextLegacy} value(s) are still plaintext from before encryption at rest. Rotating the key doesn't affect them. To encrypt them, run this again with --encrypt-legacy.`,
     );
   }
-  const changed = report.totalChangedDuringRun;
   if (changed > 0) {
     console.warn(
       `\n${changed} value(s) changed during this run and were left as they were saved. Run this again to finish them before removing the retired key.`,

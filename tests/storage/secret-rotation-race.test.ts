@@ -546,6 +546,76 @@ describe("a value in a row that moved on", () => {
   });
 });
 
+describe("a row someone else's transaction is holding", () => {
+  // No trigger here: a real second connection, and the UPDATE really waits for it.
+  const surface = SURFACES.find((s) => s.table === "webhooks")!;
+
+  async function holdRow(second: Row, setClause: string) {
+    const other = await pool.connect();
+    await other.query("BEGIN");
+    await other.query(
+      `UPDATE webhooks SET ${setClause} WHERE id = ${literal(second.id)}`,
+    );
+    return other;
+  }
+
+  async function waitUntilBlocked() {
+    const deadline = Date.now() + 30_000;
+    for (;;) {
+      const { rows } = await pool.query<{ count: number }>(
+        `SELECT count(*)::int AS count FROM pg_stat_activity
+         WHERE wait_event_type = 'Lock' AND query LIKE 'update "webhooks"%'`,
+      );
+      if (rows[0]!.count > 0) return;
+      if (Date.now() > deadline) throw new Error("The write never blocked");
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+
+  it("keeps what that transaction committed while the write waited", async () => {
+    const [first, second] = await surface.seed();
+    useKeys(NEW_KEY, [OLD_KEY]);
+    const other = await holdRow(
+      second,
+      second.change("committed-while-waiting"),
+    );
+    try {
+      const run = rotateAllSecrets();
+      await waitUntilBlocked();
+      await other.query("COMMIT");
+
+      const report = await run;
+
+      expect(await second.read()).toBe("committed-while-waiting");
+      expect(await first.read()).toBe("original-1");
+      expect(resultFor(report, surface).changedDuringRun).toBe(2);
+      expect(report.totalErrors).toBe(0);
+    } finally {
+      other.release();
+    }
+  });
+
+  it("goes ahead if that transaction rolled back, because the row didn't change", async () => {
+    const [, second] = await surface.seed();
+    useKeys(NEW_KEY, [OLD_KEY]);
+    const other = await holdRow(second, second.change("rolled-back"));
+    try {
+      const run = rotateAllSecrets();
+      await waitUntilBlocked();
+      await other.query("ROLLBACK");
+
+      const report = await run;
+
+      expect(resultFor(report, surface).changedDuringRun).toBe(0);
+      expect(report.remaining).toBe(0);
+      useKeys(NEW_KEY);
+      expect(await second.read()).toBe("original-2");
+    } finally {
+      other.release();
+    }
+  });
+});
+
 describe("a write that fails", () => {
   it.each(SURFACES.map((s) => [s.name, s] as const))(
     "%s: is an error on that row, and the run carries on",
@@ -627,6 +697,7 @@ describe("the CLI", () => {
     expect(output).toContain(
       "webhooks.secret/headers: scanned=4 re-encrypted=2 skipped=0 legacy=0 changed-during-run=2 errors=0",
     );
+    expect(output).toContain("errors: 0; changed during this run: 2");
     expect(output).toContain("2 value(s) changed during this run");
     expect(output).toContain("Run this again");
     expect(output).not.toContain("Rotation pass complete");

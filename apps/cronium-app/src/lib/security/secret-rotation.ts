@@ -133,13 +133,13 @@ function emptyResult(surface: string): SurfaceResult {
  * A non-null, always-secret value that is NOT a vault envelope. Counting these lets
  * the driver warn about them: see `SurfaceResult.legacy` for what they are.
  */
-function isLegacyValue(value: string | null | undefined): value is string {
+function isLegacyValue(value: string | null | undefined): boolean {
   return !!value && !isSecretEnvelope(value);
 }
 
-function countLegacy(r: SurfaceResult, value: string): void {
+function countLegacy(r: SurfaceResult, value: string | null): void {
   r.legacy++;
-  if (looksLikeLegacyCiphertext(value)) r.legacyCiphertext++;
+  if (value && looksLikeLegacyCiphertext(value)) r.legacyCiphertext++;
 }
 
 /**

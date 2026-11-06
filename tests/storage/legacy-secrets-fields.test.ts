@@ -721,6 +721,22 @@ describe("sensitive settings", () => {
     expect(await countLegacyRows()).toBe(0);
   });
 
+  it("names a setting it can't move by its key, which an operator will recognize", async () => {
+    await seedOldServer(old("readable-by-this-key"), null);
+    await seedSetting("customAiApiKey", LOOKS_LIKE_CIPHERTEXT);
+
+    const report = await encryptLegacySecrets();
+
+    expect(report.failures).toEqual([
+      {
+        surface: "system_settings",
+        id: "customAiApiKey",
+        column: "value",
+        reason: CANT_TELL,
+      },
+    ]);
+  });
+
   it("covers every setting the app treats as sensitive", async () => {
     const { SENSITIVE_SYSTEM_SETTINGS } =
       await import("@/lib/encryption-service");
@@ -736,6 +752,44 @@ describe("sensitive settings", () => {
     for (const key of SENSITIVE_SYSTEM_SETTINGS) {
       expect((await storage.getSetting(key))?.value).toBe(`value-of-${key}`);
     }
+  });
+});
+
+describe("a value that starts like an envelope and isn't one", () => {
+  it("is reported, and left, for the same reason a read fails on it", async () => {
+    await seedOldServer(old("readable-by-this-key"), null);
+    const { id } = await seedEnvVar("crn.not-really");
+    const before = await storedEnvVar(id);
+
+    const report = await encryptLegacySecrets();
+
+    expect(report.failures).toEqual([
+      {
+        surface: "env_vars",
+        id,
+        column: "value",
+        reason:
+          "looks encrypted, but this keyring can't decrypt it for this row",
+      },
+    ]);
+    expect((await storedEnvVar(id)).version).toBe(before.version);
+  });
+
+  it("is what's inside old ciphertext sometimes, and stays what it was", async () => {
+    const { id, eventId, key } = await seedEnvVar(
+      old("crn.1.not.really.an.env"),
+    );
+
+    const report = await encryptLegacySecrets();
+
+    expect(report.failures).toEqual([]);
+    const { value } = await storedEnvVar(id);
+    expect(decryptedWith(value, envBinding(eventId, key))).toBe(
+      "crn.1.not.really.an.env",
+    );
+    expect(decryptEnvVarValue(value, eventId, key)).toBe(
+      "crn.1.not.really.an.env",
+    );
   });
 });
 
@@ -1311,6 +1365,26 @@ describe("while the app keeps running", () => {
     const server = await storage.getServerForExecution(second, OWNER);
     expect(server?.password).toBe("changed");
     expect(server?.sshKey).toBe(SSH_KEY);
+  });
+
+  it("env vars: doesn't overwrite a value saved after the run read it", async () => {
+    const eventId = await seedEvent(OWNER);
+    const first = await seedEnvVar(old(ENV_VALUE), "FIRST", eventId);
+    const second = await seedEnvVar(old(ENV_VALUE), "SECOND", eventId);
+    const saved = encryptEnvVarValue("saved-mid-run", eventId, "SECOND");
+    await addTrigger(
+      "env_vars",
+      "AFTER",
+      `IF OLD.id = ${first.id} THEN
+         UPDATE env_vars SET value = '${saved}' WHERE id = ${second.id};
+       END IF`,
+    );
+
+    const report = await encryptLegacySecrets();
+
+    expect(surface(report, "env_vars").changedDuringRun).toBe(1);
+    expect((await storedEnvVar(second.id)).value).toBe(saved);
+    expect(report.remaining).toBe(0);
   });
 
   it("env vars: leaves a row the event's save deleted", async () => {
