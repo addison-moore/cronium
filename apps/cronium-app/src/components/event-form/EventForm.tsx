@@ -288,7 +288,11 @@ export default function EventForm({
     return () => document.removeEventListener("keydown", handleKeyPress);
   }, [form]);
 
-  // Initialize form data from initialData
+  // Initialize form data from initialData, once per event. The object itself can't
+  // be the dependency: EventEditTab builds a new one on every render, and every
+  // toast re-renders it, so each run put the saved tags, env vars and servers back
+  // over what had been edited. A refused save lost a new env var, and a toast
+  // closing re-ticked an archived server that had just been unticked.
   useEffect(() => {
     if (initialData) {
       // Parse and set tool action config. Stored value may be an object (newer
@@ -339,7 +343,7 @@ export default function EventForm({
         );
       }
     }
-  }, [initialData, setValue, isHttpRequest]);
+  }, [initialData?.id, setValue, isHttpRequest]);
 
   // Update content when type changes
   useEffect(() => {
@@ -348,7 +352,9 @@ export default function EventForm({
         setValue("content", getDefaultScriptContent(type));
       }
     }
-  }, [type, initialData, isScriptType, setValue]);
+    // Not the whole object, for the same reason as the effect above: a script
+    // written after changing the event's type would go back to the template.
+  }, [type, initialData?.content, initialData?.type, isScriptType, setValue]);
 
   // Force local execution for Tool Actions
   useEffect(() => {

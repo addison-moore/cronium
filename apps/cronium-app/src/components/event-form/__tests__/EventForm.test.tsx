@@ -651,6 +651,112 @@ describe("EventForm", () => {
       });
     });
 
+    describe("when the same event comes back as a new object", () => {
+      // EventEditTab hands over a new object on every render, and every toast
+      // re-renders it. See __tests__/EventEditTab.test.tsx for that wiring.
+      const event = eventOn([retiredBox], { id: 5 });
+
+      function renderWithRerender() {
+        const view = render(
+          <EventForm initialData={event} isEditing eventId={5} />,
+        );
+        return {
+          user: userEvent.setup(),
+          again: (data: Record<string, unknown>) =>
+            view.rerender(
+              <EventForm initialData={data} isEditing eventId={5} />,
+            ),
+        };
+      }
+
+      it("leaves an unticked server unticked", async () => {
+        const { user, again } = renderWithRerender();
+        const row = await screen.findByRole("checkbox", {
+          name: ARCHIVED_ROW,
+          checked: true,
+        });
+        await user.click(row);
+
+        again({ ...event });
+
+        expect(row).not.toBeChecked();
+      });
+
+      it("leaves an edited env var in place", async () => {
+        const { user, again } = renderWithRerender();
+        await user.click(screen.getByRole("button", { name: "Add Variable" }));
+        fireEvent.change(screen.getByLabelText("Key"), {
+          target: { value: "MY_VAR" },
+        });
+
+        again({ ...event, environmentVariables: [] });
+
+        expect(screen.getByLabelText("Key")).toHaveValue("MY_VAR");
+      });
+
+      it("leaves a script written over the template in place", () => {
+        const empty = { ...event, content: "" };
+        const view = render(
+          <EventForm initialData={empty} isEditing eventId={5} />,
+        );
+        fireEvent.change(screen.getByTestId("monaco-stub"), {
+          target: { value: "echo mine" },
+        });
+
+        view.rerender(
+          <EventForm initialData={{ ...empty }} isEditing eventId={5} />,
+        );
+
+        expect(screen.getByTestId("monaco-stub")).toHaveValue("echo mine");
+      });
+
+      it("still labels a server archived since the form loaded", async () => {
+        const live = { id: 11, name: "gone-box", address: "192.0.2.40" };
+        const withLive = eventOn([live], { id: 5 });
+        const view = render(
+          <EventForm initialData={withLive} isEditing eventId={5} />,
+        );
+        await screen.findByRole("checkbox", {
+          name: "gone-box (192.0.2.40)",
+          checked: true,
+        });
+        expect(screen.queryByText(NOTICE)).not.toBeInTheDocument();
+
+        view.rerender(
+          <EventForm
+            initialData={eventOn([{ ...live, isArchived: true }], { id: 5 })}
+            isEditing
+            eventId={5}
+          />,
+        );
+
+        expect(
+          screen.getByRole("checkbox", {
+            name: "gone-box (192.0.2.40) Archived",
+            checked: true,
+          }),
+        ).toBeInTheDocument();
+        expect(screen.getByText(NOTICE)).toBeInTheDocument();
+      });
+
+      it("takes up a different event's servers", async () => {
+        const { user, again } = renderWithRerender();
+        await user.click(
+          await screen.findByRole("checkbox", { name: ARCHIVED_ROW }),
+        );
+
+        again(eventOn([sandbox], { id: 6 }));
+
+        expect(
+          await screen.findByRole("checkbox", {
+            name: SANDBOX_ROW,
+            checked: true,
+          }),
+        ).toBeInTheDocument();
+        expect(rowNames()).toEqual(["location-local", "server-6"]);
+      });
+    });
+
     it("shows no extra rows when creating an event", () => {
       render(<EventForm initialData={scheduledBashEvent} />);
 
