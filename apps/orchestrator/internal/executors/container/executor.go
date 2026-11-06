@@ -403,6 +403,12 @@ func (e *Executor) buildEnvironment(job *types.Job) []string {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
 
+	// The images set HOME to /home/cronium, which the tmpfs at /home hides, so it
+	// wouldn't exist. A job that sets its own HOME keeps it.
+	if _, ownHome := job.Execution.Environment["HOME"]; !ownHome {
+		env = append(env, "HOME="+jobHomeDir)
+	}
+
 	// Get execution token
 	token, err := e.sidecar.getExecutionToken(job.ID)
 	if err != nil {
@@ -495,19 +501,32 @@ func (e *Executor) buildResourceLimits(job *types.Job) container.Resources {
 	}
 }
 
+// jobHomeDir is a job's $HOME, unless the job sets its own. It is the tmpfs mount itself
+// because a new tmpfs is empty: a directory under it, like the /home/cronium the images
+// set, would need a step in every job to create it first.
+const jobHomeDir = "/home"
+
+// jobWritableDirMode lets a job write to a tmpfs mount whichever user it runs as. A
+// tmpfs comes up owned by root, and a mount can't change that: the daemon refuses uid
+// and gid in its options ("invalid option: uid"). The user can't be assumed anyway. It
+// is configurable, may be a name only the image can resolve, and differs by image if
+// left unset. The open mode gives nothing away: a job runs as one user with no
+// capabilities, so no other user is there to use it.
+const jobWritableDirMode = 0o1777
+
 // buildMounts builds container mounts
 func (e *Executor) buildMounts(_ *types.Job) []mount.Mount {
 	// With a read-only root filesystem (3.1), every writable path a job needs
 	// must be an explicit tmpfs mount. /workspace is the working directory,
-	// /tmp is scratch, and /home gives nonroot tooling (pip/npm caches, etc.) a
-	// writable HOME. Everything else stays read-only.
+	// /tmp is scratch, and /home is $HOME, for nonroot tooling (pip/npm caches,
+	// etc.). Everything else stays read-only.
 	return []mount.Mount{
 		{
 			Type:   mount.TypeTmpfs,
 			Target: "/tmp",
 			TmpfsOptions: &mount.TmpfsOptions{
 				SizeBytes: 100 * 1024 * 1024, // 100MB
-				Mode:      0o1777,
+				Mode:      jobWritableDirMode,
 			},
 		},
 		{
@@ -515,15 +534,15 @@ func (e *Executor) buildMounts(_ *types.Job) []mount.Mount {
 			Target: "/workspace",
 			TmpfsOptions: &mount.TmpfsOptions{
 				SizeBytes: 500 * 1024 * 1024, // 500MB
-				Mode:      0o755,
+				Mode:      jobWritableDirMode,
 			},
 		},
 		{
 			Type:   mount.TypeTmpfs,
-			Target: "/home",
+			Target: jobHomeDir,
 			TmpfsOptions: &mount.TmpfsOptions{
 				SizeBytes: 100 * 1024 * 1024, // 100MB
-				Mode:      0o1777,
+				Mode:      jobWritableDirMode,
 			},
 		},
 	}
