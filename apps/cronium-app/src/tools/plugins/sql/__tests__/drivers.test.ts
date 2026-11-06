@@ -33,6 +33,8 @@ const mockPgQuery = jest.fn();
 const mockPgEnd = jest.fn().mockResolvedValue(undefined);
 jest.mock("pg", () => ({
   Client: jest.fn().mockImplementation(() => ({
+    on: jest.fn(),
+    once: jest.fn(),
     connect: jest.fn().mockResolvedValue(undefined),
     // Real pg submits a Cursor and returns it; anything else is a normal query.
     query: (arg: unknown) =>
