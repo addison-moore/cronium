@@ -156,9 +156,13 @@ describe("Duplicate from the events list", () => {
       const archived = await seedArchivedServer(owner, "retired-box");
       const eventId = await seedEventOnServers(owner, [fine, archived]);
 
-      await expect(duplicate(owner, eventId)).rejects.toMatchObject({
-        code: "FORBIDDEN",
-      });
+      const refusal = await duplicate(owner, eventId).catch(
+        (error: Error) => error,
+      );
+
+      expect(refusal).toMatchObject({ code: "FORBIDDEN" });
+      expect((refusal as Error).message).toContain("retired-box");
+      expect((refusal as Error).message).not.toContain("box-a");
       expect(await eventCount()).toBe(1);
     });
 
@@ -169,6 +173,7 @@ describe("Duplicate from the events list", () => {
 
       await expect(duplicate(owner, eventId)).rejects.toMatchObject({
         code: "FORBIDDEN",
+        message: expect.stringContaining("retired-box"),
       });
       expect(await eventCount()).toBe(1);
     });
