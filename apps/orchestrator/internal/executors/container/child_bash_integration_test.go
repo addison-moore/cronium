@@ -81,12 +81,15 @@ func childBashSandbox(t *testing.T) *Executor {
 
 // runWithFakeRuntime runs a bash script as a job on no network, with the environment a
 // real job gets, pointed at the stand-in for the runtime.
-func runWithFakeRuntime(t *testing.T, e *Executor, script string) fakeRuntimeRun {
+func runWithFakeRuntime(t *testing.T, e *Executor, script string, prepare ...func(*types.Job)) fakeRuntimeRun {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), childBashJobTimeout)
 	defer cancel()
 	job := sandboxedJob(t, ctx, e, interpreter{scriptType: types.ScriptTypeBash}, fakeRuntimeScript+script+fakeRuntimeReportScript)
 	e.runtimeAddrs[job.ID] = "127.0.0.1:8081"
+	for _, change := range prepare {
+		change(job)
+	}
 	run := fakeRuntimeRun{jobResult: runJob(t, ctx, e, job), executionID: e.executionIDs[job.ID]}
 
 	stdout := run.stdout
