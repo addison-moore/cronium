@@ -584,13 +584,31 @@ same value.
 
 The run is safe to repeat and to stop: each row is written once on its own, so a
 second run changes nothing and a run after an interruption does what's left. It
-doesn't overwrite a value someone changes while it runs. It stops before writing
-anything if `ENCRYPTION_KEY` can't be used, or if the database holds encrypted values
-and none of them use a key in the ring, which usually means a restored database next
-to a newly generated `.env`. If the database holds no encrypted values at all, there
-is nothing to check the key against, so make sure it's the one the app runs with: a
-row encrypted with the wrong key can only be read again by adding that key to
+doesn't overwrite a value someone changes while it runs.
+
+**It checks the key first.** It stops before writing anything if `ENCRYPTION_KEY`
+can't be used, or if the database holds encrypted values and the keys in the ring
+can't read any of those it checks. That usually means a restored database next to a
+newly generated `.env`. One value that fits is enough for it to go ahead. It looks at:
+
+- Vault values (`crn.1...`) in any column, which name the key they use.
+- Encrypted tool credentials and OAuth tokens, up to the 10 newest of each, which it
+  decrypts.
+- Older ciphertext in server credentials, event environment variables, MFA secrets,
+  sensitive system settings and API tokens that haven't been hashed yet, which it also
+  decrypts.
+
+Plaintext doesn't count, in either direction. If nothing in the database is encrypted
+there is nothing to check the key against, so make sure it's the one the app runs with:
+a row encrypted with the wrong key can only be read again by adding that key to
 `ENCRYPTION_KEYS_RETIRED` and rotating.
+
+If it refuses, it names the columns it couldn't read, with no values. Use the key the
+app runs with. If you're sure that's what you used, a long plaintext made only of
+base64 characters looks like older ciphertext, and the app can't read one either. Save
+that value again in the app, or create any webhook or variable there, then run this
+again. Whatever the app saves uses its own key, so the next run has something to check
+against.
 
 It ends with `Legacy rows remaining: N`, and exits non-zero if that isn't 0 or if a
 row failed. A failed row is named by id and column, and is left exactly as it was,
