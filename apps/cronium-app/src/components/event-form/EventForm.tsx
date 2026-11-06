@@ -22,11 +22,12 @@ import { getDefaultScriptContent } from "@/lib/scriptTemplates";
 import { MonacoEditor } from "@cronium/ui";
 import { TagsInput } from "@cronium/ui";
 import AIScriptAssistant from "@/components/dashboard/AIScriptAssistant-lazy";
+import EnvVarValueField from "./EnvVarValueField";
 import ToolActionSection from "./ToolActionSection";
 import EditorSettingsModal, {
   type EditorSettings,
 } from "./EditorSettingsModal";
-import { Eye, EyeOff, Trash2, Settings, Lock } from "lucide-react";
+import { Trash2, Settings, Lock } from "lucide-react";
 import { isToolActionsUIEnabled } from "@/lib/featureFlags";
 import { parseToolActionConfig } from "@/lib/tools/tool-action-config";
 import {
@@ -50,7 +51,13 @@ import {
   parseInitialTags,
   type EventFormInitialData,
 } from "./lib/event-form-defaults";
-import { buildEventPayload, isScriptEventType } from "./lib/event-payload";
+import {
+  buildEventPayload,
+  isScriptEventType,
+  saveRequestBytes,
+  tooLongToSaveMessage,
+} from "./lib/event-payload";
+import { MAX_REQUEST_BODY_BYTES } from "@/shared/request-limits";
 
 const eventsCopy = {
   basicInformation: "Basic Information",
@@ -186,6 +193,7 @@ export default function EventForm({
     setValue,
     control,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = form;
 
@@ -352,6 +360,29 @@ export default function EventForm({
         // location, and normalizes schedule/content fields).
         const formData = buildEventPayload(data);
 
+        // Say so here rather than send 10 MB to be told the same thing. Beside the script
+        // and scrolled to, because the submit button is a screen or more below it.
+        const requestBytes = saveRequestBytes(
+          isEditing && eventId ? { id: eventId, ...formData } : formData,
+        );
+        if (requestBytes > MAX_REQUEST_BODY_BYTES) {
+          const message = tooLongToSaveMessage(data.type, requestBytes);
+          if (isScriptEventType(data.type)) {
+            setError(
+              "content",
+              { type: "tooLong", message },
+              { shouldFocus: true },
+            );
+          } else {
+            toast({
+              title: "Too long to save",
+              description: message,
+              variant: "destructive",
+            });
+          }
+          return;
+        }
+
         let resultId: number | undefined;
 
         if (isEditing && eventId) {
@@ -396,6 +427,7 @@ export default function EventForm({
       eventId,
       createEventMutation,
       updateEventMutation,
+      setError,
       toast,
       onSuccess,
     ],
@@ -650,19 +682,23 @@ export default function EventForm({
                 name="content"
                 control={control}
                 render={({ field }) => (
-                  <MonacoEditor
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
-                    language={
-                      type === EventType.PYTHON
-                        ? "python"
-                        : type === EventType.BASH
-                          ? "bash"
-                          : "javascript"
-                    }
-                    height="400px"
-                    editorSettings={editorSettings}
-                  />
+                  // Takes the focus when a submit fails on the script, as the other
+                  // fields do, which brings it into view.
+                  <div ref={field.ref} tabIndex={-1} className="outline-none">
+                    <MonacoEditor
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      language={
+                        type === EventType.PYTHON
+                          ? "python"
+                          : type === EventType.BASH
+                            ? "bash"
+                            : "javascript"
+                      }
+                      height="400px"
+                      editorSettings={editorSettings}
+                    />
+                  </div>
                 )}
               />
               {errors.content && (
@@ -834,79 +870,90 @@ export default function EventForm({
             render={({ field }) => {
               const envVars = field.value;
               return (
-                <>
+                // Takes the focus when a submit fails on a row, as the other fields
+                // do. The submit button is a screen or more below this.
+                <div
+                  ref={field.ref}
+                  tabIndex={-1}
+                  className="space-y-4 outline-none"
+                >
                   {envVars.map((envVar, index) => (
-                    <div key={index} className="flex items-end gap-2">
-                      <div className="flex-1">
-                        <Label htmlFor={`envKey-${index}`}>
-                          {eventsCopy.Fields.Key}
-                        </Label>
-                        <Input
-                          id={`envKey-${index}`}
-                          value={envVar.key}
-                          onChange={(e) => {
-                            const updatedEnvVars = [...envVars];
-                            updatedEnvVars[index] = {
-                              ...envVar,
-                              key: e.target.value,
-                            };
-                            field.onChange(updatedEnvVars);
-                          }}
-                          placeholder={eventsCopy.Fields.KeyPlaceholder}
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <Label htmlFor={`envValue-${index}`}>
-                          {eventsCopy.Fields.Value}
-                        </Label>
-                        <div className="relative">
+                    <div key={index} className="space-y-1">
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
+                        <div>
+                          <Label htmlFor={`envKey-${index}`}>
+                            {eventsCopy.Fields.Key}
+                          </Label>
                           <Input
-                            id={`envValue-${index}`}
-                            type={
-                              passwordVisibility[index] ? "text" : "password"
-                            }
-                            value={envVar.value}
+                            id={`envKey-${index}`}
+                            value={envVar.key}
                             onChange={(e) => {
                               const updatedEnvVars = [...envVars];
                               updatedEnvVars[index] = {
                                 ...envVar,
-                                value: e.target.value,
+                                key: e.target.value,
                               };
                               field.onChange(updatedEnvVars);
                             }}
-                            placeholder={eventsCopy.Fields.ValuePlaceholder}
-                            className="pr-10"
+                            placeholder={eventsCopy.Fields.KeyPlaceholder}
+                            aria-invalid={!!errors.envVars?.[index]?.key}
                           />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="absolute top-0 right-0 h-10 w-10"
-                            onClick={() => togglePasswordVisibility(index)}
-                          >
-                            {passwordVisibility[index] ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                          </Button>
                         </div>
+                        <div className="col-span-2 lg:col-span-1">
+                          <Label htmlFor={`envValue-${index}`}>
+                            {eventsCopy.Fields.Value}
+                          </Label>
+                          <EnvVarValueField
+                            id={`envValue-${index}`}
+                            value={envVar.value}
+                            onChange={(value) => {
+                              const updatedEnvVars = [...envVars];
+                              updatedEnvVars[index] = { ...envVar, value };
+                              field.onChange(updatedEnvVars);
+                            }}
+                            shown={!!passwordVisibility[index]}
+                            onToggleShown={() =>
+                              togglePasswordVisibility(index)
+                            }
+                            placeholder={eventsCopy.Fields.ValuePlaceholder}
+                            invalid={!!errors.envVars?.[index]?.value}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          className="col-start-2 row-start-1 mt-6 lg:col-start-3"
+                          onClick={() => {
+                            const updatedEnvVars = envVars.filter(
+                              (_, i) => i !== index,
+                            );
+                            field.onChange(updatedEnvVars);
+                            // This is kept by position, so the row after a shown
+                            // one would otherwise appear in the clear.
+                            setPasswordVisibility({});
+                          }}
+                        >
+                          ×
+                        </Button>
                       </div>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="icon"
-                        onClick={() => {
-                          const updatedEnvVars = envVars.filter(
-                            (_, i) => i !== index,
-                          );
-                          field.onChange(updatedEnvVars);
-                        }}
-                      >
-                        ×
-                      </Button>
+                      {errors.envVars?.[index]?.key && (
+                        <p className="text-destructive text-sm">
+                          {errors.envVars[index].key.message}
+                        </p>
+                      )}
+                      {errors.envVars?.[index]?.value && (
+                        <p className="text-destructive text-sm">
+                          {errors.envVars[index].value.message}
+                        </p>
+                      )}
                     </div>
                   ))}
+                  {errors.envVars?.message && (
+                    <p className="text-destructive text-sm">
+                      {errors.envVars.message}
+                    </p>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
@@ -916,7 +963,7 @@ export default function EventForm({
                   >
                     {eventsCopy.Fields.AddVariable}
                   </Button>
-                </>
+                </div>
               );
             }}
           />

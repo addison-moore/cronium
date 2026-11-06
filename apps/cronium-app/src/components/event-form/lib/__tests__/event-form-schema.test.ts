@@ -188,6 +188,36 @@ describe("eventFormSchema validation", () => {
     ).toBe(false);
   });
 
+  // A row the server would refuse has to stop here: its error reaches the form as raw
+  // JSON in a toast, and a failed save has already deleted the event's other variables.
+  describe("environment variables (the server's rules)", () => {
+    const withEnvVars = (envVars: unknown) => ({ ...minimalScript, envVars });
+
+    it("takes a value too long for the old column", () => {
+      expect(
+        issuesAt(
+          withEnvVars([{ key: "TOKEN", value: "x".repeat(4_096) }]),
+          "envVars",
+        ),
+      ).toEqual([]);
+    });
+
+    it("requires a key", () => {
+      expect(
+        issuesAt(withEnvVars([{ key: "", value: "v" }]), "envVars"),
+      ).toEqual(["Environment variable key is required"]);
+    });
+
+    it("refuses a value too long to deliver", () => {
+      expect(
+        issuesAt(
+          withEnvVars([{ key: "TOKEN", value: "x".repeat(128_001) }]),
+          "envVars",
+        ),
+      ).toEqual([expect.stringContaining("at most 128 KB")]);
+    });
+  });
+
   describe("interval floor (mirror of the server's 10s minimum — FINDINGS #45)", () => {
     const scheduled = {
       ...minimalScript,

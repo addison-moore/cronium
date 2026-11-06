@@ -623,8 +623,7 @@ describe("setting up a REMOTE event with no servers", () => {
     });
 
     it("PATCH /api/events/{id} lets the owner fix it by choosing a server, and nothing else", async () => {
-      // The way out the refusal names. A PATCH with only servers in it used to
-      // answer 500, because there were no other fields to update.
+      // The way out the refusal names.
       const owner = await seedUser();
       const serverId = await seedServer(owner);
       const eventId = await seedRemoteEvent(owner, [], {

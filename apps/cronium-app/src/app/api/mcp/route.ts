@@ -17,6 +17,11 @@ import { sessionFromApiToken } from "@/server/api/trpc";
 import { sessionFromOAuthToken } from "@/lib/mcp-oauth/resource";
 import { getBearerToken } from "@/lib/api-auth";
 import { getBaseUrl, resourceMetadataUrl } from "@/lib/mcp-oauth/metadata";
+import { readBodyWithin } from "@/lib/request-body";
+import {
+  EVENT_TOO_LONG_MESSAGE,
+  MAX_REQUEST_BODY_BYTES,
+} from "@/shared/request-limits";
 import { MCP_TOOLS, MCP_TOOL_BY_NAME } from "./tools";
 
 export const runtime = "nodejs";
@@ -153,9 +158,18 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
+  // No request id to answer with, since the body isn't parsed. So this isn't a 200: a
+  // client couldn't match it to its call, and would wait until that timed out.
+  const rawBody = await readBodyWithin(req, MAX_REQUEST_BODY_BYTES);
+  if (rawBody === null) {
+    return Response.json(rpcError(null, -32600, EVENT_TOO_LONG_MESSAGE), {
+      status: 413,
+    });
+  }
+
   let body: unknown;
   try {
-    body = await req.json();
+    body = JSON.parse(rawBody);
   } catch {
     return Response.json(rpcError(null, -32700, "Parse error"), {
       status: 400,
