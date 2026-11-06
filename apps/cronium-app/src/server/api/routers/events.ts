@@ -28,6 +28,7 @@ import { touchesEventSchedule } from "@/lib/scheduling/materialize";
 import {
   assertEventCapability,
   assertEventRelations,
+  archivedServersMessage,
   assertProposedEventServers,
 } from "@/server/security/resource-access";
 import {
@@ -60,13 +61,9 @@ function assertNoArchivedServersToFork(
   );
   if (archived.size === 0) return;
 
-  const [servers, them] =
-    archived.size === 1
-      ? ["an archived server", "it"]
-      : ["archived servers", "them"];
   throw new TRPCError({
     code: "CONFLICT",
-    message: `This event can't be forked while it's linked to ${servers}: ${[...archived.values()].join(", ")}. Restore ${them} or remove ${them} from the event, then try again.`,
+    message: archivedServersMessage("forked", [...archived.values()]),
   });
 }
 

@@ -281,14 +281,20 @@ export async function assertProposedEventServers(
 ): Promise<void> {
   const ids = eventServerRelationshipIds(serverId, selectedServerIds);
   await assertServerCapabilities(ids, userId, "use-secret", {
-    archivedMessage: (names) => {
-      const [what, it] =
-        names.length === 1
-          ? ["an archived server", "it"]
-          : ["archived servers", "them"];
-      return `This event can't be saved while it's linked to ${what}: ${names.join(", ")}. Restore ${it} or remove ${it} from the event, then try again.`;
-    },
+    archivedMessage: (names) => archivedServersMessage("saved", names),
   });
+}
+
+/** Names the servers, so it's only for someone who owns all of them. */
+export function archivedServersMessage(
+  action: "saved" | "forked",
+  names: readonly string[],
+): string {
+  const [what, it] =
+    names.length === 1
+      ? ["an archived server", "it"]
+      : ["archived servers", "them"];
+  return `This event can't be ${action} while it's linked to ${what}: ${names.join(", ")}. Restore ${it} or remove ${it} from the event, then try again.`;
 }
 
 export function eventServerRelationshipIds(
