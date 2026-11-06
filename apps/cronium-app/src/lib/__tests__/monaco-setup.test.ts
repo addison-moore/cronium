@@ -79,15 +79,14 @@ describe("MonacoEnvironment.getWorker", () => {
 
   it.each([
     ["json", "language/json/json.worker.js"],
-    ["css", "language/css/css.worker.js"],
-    ["scss", "language/css/css.worker.js"],
-    ["less", "language/css/css.worker.js"],
     ["html", "language/html/html.worker.js"],
     ["handlebars", "language/html/html.worker.js"],
     ["razor", "language/html/html.worker.js"],
     ["typescript", "language/typescript/ts.worker.js"],
     ["javascript", "language/typescript/ts.worker.js"],
     ["editorWorkerService", "editor/editor.worker.js"],
+    // No editor uses a CSS language, so these don't get a worker of their own.
+    ["css", "editor/editor.worker.js"],
   ])("gives the %s label %s", async (label, expectedPath) => {
     const workerCtor = jest.fn();
     global.Worker = workerCtor as unknown as typeof Worker;
@@ -139,6 +138,42 @@ describe("@cronium/ui MonacoEditor", () => {
     await expect(loadEditor()).rejects.toThrow(/setMonacoSetup/);
   });
 
+  it("makes a mount with no setup fail on our own origin, not reach the CDN", async () => {
+    await loadWrapper();
+    const { loader } = await import("@monaco-editor/react");
+
+    void loader.init();
+
+    expect(injectedScript()).toBe("/monaco-editor-not-configured/loader.js");
+  });
+
+  it("lets a setup's bundled Monaco win over that path", async () => {
+    await loadWrapper();
+    const { loader } = await import("@monaco-editor/react");
+
+    loader.config({ monaco: mockMonaco as never });
+
+    await expect(loader.init()).resolves.toBe(mockMonaco);
+    expect(injectedScript()).toBeUndefined();
+  });
+
+  it("hands over a stand-in, not a rejection, when the download fails", async () => {
+    const consoleError = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const { setMonacoSetup, loadEditor } = await loadWrapper();
+    setMonacoSetup(() => Promise.reject(new Error("ChunkLoadError")));
+
+    const mod = (await loadEditor()) as { default: unknown };
+
+    expect(mod.default).toEqual(expect.any(Function));
+    expect(consoleError).toHaveBeenCalledWith(
+      "The code editor could not load:",
+      expect.any(Error),
+    );
+    consoleError.mockRestore();
+  });
+
   it("waits for the setup to finish before handing over the editor", async () => {
     const { setMonacoSetup, loadEditor } = await loadWrapper();
     let finishSetup = () => {};
@@ -168,8 +203,42 @@ describe("direct @monaco-editor/react imports", () => {
   // component that should render it; new editors should use that.
   const ALLOWED = new Set([
     "packages/ui/src/components/monaco-editor.tsx",
+    "packages/ui/src/components/monaco-editor-lazy.tsx",
     "apps/cronium-app/src/lib/monaco-setup.ts",
   ]);
+
+  /** Whether a source file can reach the package at runtime, by any route. */
+  function loadsPackage(source: string): boolean {
+    const withoutTypeImports = source.replace(
+      /^\s*(?:import|export) type\b[^;]*;/gm,
+      "",
+    );
+    return /["']@monaco-editor\/react["']/.test(withoutTypeImports);
+  }
+
+  it.each([
+    ['import Editor from "@monaco-editor/react";'],
+    ['import { Editor, loader } from "@monaco-editor/react";'],
+    ['import {\n  Editor,\n  loader,\n} from "@monaco-editor/react";'],
+    ['import "@monaco-editor/react";'],
+    ["import Editor from '@monaco-editor/react';"],
+    ['const Editor = dynamic(() => import("@monaco-editor/react"));'],
+    ['const mod = await import("@monaco-editor/react");'],
+    ['const { Editor } = require("@monaco-editor/react");'],
+    ['export { default } from "@monaco-editor/react";'],
+    ['export * from "@monaco-editor/react";'],
+  ])("spots %s", (source) => {
+    expect(loadsPackage(source)).toBe(true);
+  });
+
+  it.each([
+    ['import type { Monaco } from "@monaco-editor/react";'],
+    ['import type {\n  Monaco,\n} from "@monaco-editor/react";'],
+    ['export type { Monaco } from "@monaco-editor/react";'],
+    ["// `@monaco-editor/react`'s exported type is loose."],
+  ])("lets %s through", (source) => {
+    expect(loadsPackage(source)).toBe(false);
+  });
 
   function sourceFiles(dir: string): string[] {
     return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -188,11 +257,7 @@ describe("direct @monaco-editor/react imports", () => {
       "packages/ui/src",
     ]
       .flatMap((dir) => sourceFiles(path.join(REPO_ROOT, dir)))
-      .filter((file) =>
-        /^import (?!type\b)[^;]*from "@monaco-editor\/react"/m.test(
-          fs.readFileSync(file, "utf8"),
-        ),
-      )
+      .filter((file) => loadsPackage(fs.readFileSync(file, "utf8")))
       .map((file) => path.relative(REPO_ROOT, file));
 
     expect(importers.filter((file) => !ALLOWED.has(file))).toEqual([]);

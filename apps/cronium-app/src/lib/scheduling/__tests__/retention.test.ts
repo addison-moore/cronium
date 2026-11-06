@@ -24,6 +24,7 @@ const DEFAULTS = {
   workflowExecutions: 90,
   scheduleIncidents: 90,
   toolActionLogs: 90,
+  toolAuditLogs: 0,
   webhooks: 30,
 };
 
@@ -33,6 +34,7 @@ const ALL_ZERO = {
   CRONIUM_WORKFLOW_RETENTION_DAYS: "0",
   CRONIUM_INCIDENT_RETENTION_DAYS: "0",
   CRONIUM_TOOL_ACTION_LOG_RETENTION_DAYS: "0",
+  CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS: "0",
   CRONIUM_WEBHOOK_RETENTION_DAYS: "0",
 };
 
@@ -60,6 +62,7 @@ describe("retentionWindows", () => {
         CRONIUM_WORKFLOW_RETENTION_DAYS: "3",
         CRONIUM_INCIDENT_RETENTION_DAYS: "4",
         CRONIUM_TOOL_ACTION_LOG_RETENTION_DAYS: "5",
+        CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS: "7",
         CRONIUM_WEBHOOK_RETENTION_DAYS: "6",
       }),
     ).toEqual({
@@ -68,9 +71,21 @@ describe("retentionWindows", () => {
       workflowExecutions: 3,
       scheduleIncidents: 4,
       toolActionLogs: 5,
+      toolAuditLogs: 7,
       webhooks: 6,
     });
   });
+
+  it.each([undefined, "", "   ", "0"])(
+    "keeps the tool audit log forever when its variable is %j",
+    (value) => {
+      expect(
+        retentionWindows({ CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS: value })
+          .toolAuditLogs,
+      ).toBe(0);
+      expect(warn).not.toHaveBeenCalled();
+    },
+  );
 
   it("takes 0 to mean keep forever, for jobs too", () => {
     expect(retentionWindows({ CRONIUM_JOB_RETENTION_DAYS: "0" }).jobs).toBe(0);
@@ -132,6 +147,7 @@ describe("runRetention", () => {
         workflowExecutions: 0,
         scheduleIncidents: 0,
         toolActionLogs: 0,
+        toolAuditLogs: 0,
         webhooks: 0,
       },
     });

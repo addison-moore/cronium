@@ -28,6 +28,13 @@ export type EditorLanguage =
   | "html"
   | "text";
 
+// Where an EditorLanguage isn't Monaco's own ID. Monaco shows an ID it doesn't
+// know as plain text, with no error, so a wrong one is easy to miss.
+const MONACO_LANGUAGE_IDS: Partial<Record<EditorLanguage, string>> = {
+  bash: "shell",
+  text: "plaintext",
+};
+
 /**
  * Minimal shape of Monaco's TypeScript language service that we configure.
  *
@@ -271,7 +278,7 @@ export function MonacoEditor({
       defaultValue={defaultValue}
       value={value ?? ""}
       height={isExpanded ? "100vh" : height}
-      language={language}
+      language={MONACO_LANGUAGE_IDS[language] ?? language}
       theme={settings.theme}
       beforeMount={handleEditorWillMount}
       options={{
@@ -336,6 +343,7 @@ export function MonacoEditor({
           </div>
           <div className="flex items-center gap-2">
             <Button
+              type="button"
               variant="outline"
               size="sm"
               onClick={toggleExpanded}
@@ -344,7 +352,12 @@ export function MonacoEditor({
               <Minimize2 size={16} />
               Minimize
             </Button>
-            <Button variant="outline" size="sm" onClick={toggleExpanded}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={toggleExpanded}
+            >
               <X size={16} />
             </Button>
           </div>
@@ -362,6 +375,7 @@ export function MonacoEditor({
     >
       {/* Expand button */}
       <Button
+        type="button"
         variant="outline"
         size="sm"
         onClick={toggleExpanded}

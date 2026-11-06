@@ -63,7 +63,8 @@ const retentionWindows = [
   {
     variable: "CRONIUM_WORKFLOW_RETENTION_DAYS",
     days: 90,
-    deletes: "Finished workflow runs and their per-step rows",
+    deletes:
+      "Finished workflow runs, their per-step rows, and workflow log lines",
   },
   {
     variable: "CRONIUM_INCIDENT_RETENTION_DAYS",
@@ -74,6 +75,11 @@ const retentionWindows = [
     variable: "CRONIUM_TOOL_ACTION_LOG_RETENTION_DAYS",
     days: 90,
     deletes: "Tool action logs",
+  },
+  {
+    variable: "CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS",
+    days: "0 (keep forever)",
+    deletes: "Tool audit log: who changed or used a tool credential",
   },
   {
     variable: "CRONIUM_JOB_RETENTION_DAYS",
@@ -889,9 +895,28 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
               </li>
               <li>
                 Only finished work is deleted. A job that is still active keeps
-                its logs, and a workflow run in progress keeps its rows, however
-                old they are. Events, workflows, servers and webhooks themselves
-                are never touched.
+                its logs, and a workflow run in progress keeps its run and step
+                rows, however old they are. Events, workflows, servers, webhooks
+                and tool credentials themselves are never touched. Workflow log
+                lines aren&apos;t tied to a run, so each one ages from when it
+                was written.
+              </li>
+              <li>
+                The tool audit log is kept until you set a window. It is a
+                security record, not run output: it holds who changed or used a
+                tool credential, with the IP address and user agent for changes.
+                Deleting that is your decision, so it keeps growing, by about
+                150 bytes a row, until you set its variable. The tool action
+                window doesn&apos;t affect it, and quotas don&apos;t read it.
+              </li>
+              <li>
+                Deleting audit rows leaves a record. Each batch the worker
+                deletes writes a row to the same table, in the same transaction,
+                with <code>action</code> set to <code>retention.purge</code>.
+                Its <code>action_details</code> holds the window, the cutoff,
+                how many rows went, and their lowest and highest ids, so missing
+                rows can be told apart from tampering after the worker&apos;s
+                logs are gone. These rows are never purged.
               </li>
               <li>
                 Monthly quotas count run logs and tool action logs, so keep
@@ -905,7 +930,9 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                 history past these defaults as soon as it comes up after the
                 upgrade. To keep everything, set the variables to <code>0</code>{" "}
                 in <code>.env</code> first. Re-running the installer keeps your
-                existing <code>.env</code> and does not add them for you.
+                existing <code>.env</code> and does not add them for you. The
+                tool audit log is the exception: nothing is deleted from it
+                until you set a window.
               </AlertDescription>
             </Alert>
           </div>

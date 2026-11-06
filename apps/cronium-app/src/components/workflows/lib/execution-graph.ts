@@ -103,6 +103,21 @@ export function deriveNodeStatuses(
   });
 }
 
+/** Statuses of a run that has stopped, including the lowercase forms an optimistic
+ * client record can hold before the first poll comes back. */
+const FINISHED_RUN_STATUSES: ReadonlySet<string> = new Set([
+  LogStatus.SUCCESS,
+  LogStatus.FAILURE,
+  LogStatus.TIMEOUT,
+  LogStatus.PARTIAL,
+  "completed",
+  "failed",
+]);
+
+export function isFinishedRunStatus(status: string): boolean {
+  return FINISHED_RUN_STATUSES.has(status);
+}
+
 // Get status color for a node
 export function getNodeStatusClasses(
   node: Pick<NodeWithStatus, "isCurrentlyExecuting" | "status">,

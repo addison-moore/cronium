@@ -582,35 +582,35 @@ if __name__ == "__main__":
           <h2 className="mb-6 text-2xl font-bold">API Integration</h2>
           <div className="space-y-6">
             <p className="text-muted-foreground text-lg">
-              Comprehensive REST API for integrating Cronium with your existing
-              tools and workflows.
+              Trigger runs from CI over the REST API, and build and inspect
+              automations from AI clients over MCP.
             </p>
 
             <div className="bg-muted rounded-lg p-6">
               <h3 className="mb-4 font-semibold">API Features</h3>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <div>
-                  <h4 className="mb-2 font-medium">Event Management</h4>
+                  <h4 className="mb-2 font-medium">REST API</h4>
                   <ul className="text-muted-foreground space-y-1 text-sm">
-                    <li>• Create and update events</li>
-                    <li>• Execute events remotely</li>
-                    <li>• Retrieve execution logs</li>
+                    <li>• Run events and workflows from CI</li>
+                    <li>• Create, update and delete events</li>
+                    <li>• Manage servers and read execution logs</li>
                   </ul>
                 </div>
                 <div>
-                  <h4 className="mb-2 font-medium">Workflow Control</h4>
+                  <h4 className="mb-2 font-medium">MCP</h4>
                   <ul className="text-muted-foreground space-y-1 text-sm">
-                    <li>• Trigger workflows</li>
-                    <li>• Monitor progress</li>
-                    <li>• Handle callbacks</li>
+                    <li>• Build workflows from AI clients</li>
+                    <li>• Follow workflow runs</li>
+                    <li>• Read results and fix what failed</li>
                   </ul>
                 </div>
                 <div>
-                  <h4 className="mb-2 font-medium">System Integration</h4>
+                  <h4 className="mb-2 font-medium">API Tokens</h4>
                   <ul className="text-muted-foreground space-y-1 text-sm">
-                    <li>• Webhook notifications</li>
-                    <li>• Event streaming</li>
-                    <li>• Third-party connectors</li>
+                    <li>• Scoped to full access or MCP only</li>
+                    <li>• Expire within 90 days</li>
+                    <li>• Limited to what their owner can do</li>
                   </ul>
                 </div>
               </div>

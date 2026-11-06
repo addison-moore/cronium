@@ -527,8 +527,8 @@ uptime`}</CodeBlock>
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground mb-3 text-sm">
-                  Integrate Cronium with your applications using our
-                  comprehensive API.
+                  Trigger runs from CI and manage events and servers with API
+                  tokens.
                 </p>
                 <a
                   href={`/docs/api`}

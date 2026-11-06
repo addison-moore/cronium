@@ -1,298 +1,149 @@
-// Response formats and error handling examples for API documentation
+// Response bodies shown in the API documentation. They are objects, not strings,
+// so the contract test can check their fields against the database schema.
+
+const eventColumns = {
+  id: 42,
+  userId: "user_123",
+  name: "Nightly backup",
+  description: "Back up the database",
+  shared: false,
+  type: "BASH",
+  content: 'echo "Starting backup"',
+  status: "ACTIVE",
+  triggerType: "SCHEDULE",
+  scheduleNumber: 1,
+  scheduleUnit: "MINUTES",
+  customSchedule: "0 2 * * *",
+  timezone: "UTC",
+  overlapPolicy: "SKIP",
+  runLocation: "LOCAL",
+  serverId: null,
+  timeoutValue: 5,
+  timeoutUnit: "MINUTES",
+  retries: 1,
+  maxExecutions: 0,
+  executionCount: 12,
+  successCount: 11,
+  failureCount: 1,
+  lastRunAt: "2026-11-04T02:00:00.000Z",
+  nextRunAt: "2026-11-05T02:00:00.000Z",
+  tags: ["backup"],
+  createdAt: "2026-10-01T09:30:00.000Z",
+  updatedAt: "2026-11-04T02:00:04.000Z",
+};
+
+const logColumns = {
+  id: 1001,
+  eventId: 42,
+  workflowId: null,
+  jobId: "job_Byl2WgC1kGC1",
+  status: "SUCCESS",
+  output: "Starting backup\n",
+  error: null,
+  startTime: "2026-11-04T02:00:00.000Z",
+  endTime: "2026-11-04T02:00:04.000Z",
+  duration: 4210,
+  executionDuration: 3890,
+  setupDuration: 320,
+  retries: 0,
+  eventName: "Nightly backup",
+  eventType: "BASH",
+  userId: "user_123",
+  createdAt: "2026-11-04T02:00:00.000Z",
+  updatedAt: "2026-11-04T02:00:04.000Z",
+};
+
+const serverFields = {
+  id: 7,
+  userId: "user_123",
+  name: "Production",
+  address: "203.0.113.10",
+  username: "deploy",
+  port: 22,
+  sshHostKey: "SHA256:Tm9uZSBvZiB0aGlzIGlzIHJlYWw",
+  shared: false,
+  online: true,
+  lastChecked: "2026-11-04T01:55:00.000Z",
+  isArchived: false,
+  hasPrivateKey: true,
+  hasPassword: false,
+  createdAt: "2026-10-01T09:00:00.000Z",
+  updatedAt: "2026-11-04T01:55:00.000Z",
+};
 
 export const responseExamples = {
-  // Standard success responses
-  listEventsResponse: `{
-  "events": [
+  eventRun: {
+    success: true,
+    logId: 1001,
+    jobId: "job_Byl2WgC1kGC1",
+  },
+
+  workflowRun: {
+    success: true,
+    executionId: 88,
+    status: "RUNNING",
+  },
+
+  eventList: [
     {
-      "id": 1,
-      "name": "Daily Backup",
-      "description": "Automated database backup",
-      "type": "BASH",
-      "status": "active",
-      "schedule": "0 2 * * *",
-      "createdAt": "2024-01-15T10:30:00Z",
-      "lastRun": "2024-01-20T02:00:00Z"
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "limit": 10,
-    "total": 25,
-    "pages": 3
-  }
-}`,
-
-  createEventResponse: `{
-  "event": {
-    "id": 42,
-    "name": "New Event",
-    "description": "Event created via API",
-    "type": "BASH",
-    "status": "active",
-    "createdAt": "2024-01-20T15:30:00Z"
-  }
-}`,
-
-  getEventResponse: `{
-  "event": {
-    "id": 123,
-    "name": "Data Processing",
-    "description": "Process daily data files",
-    "type": "PYTHON",
-    "status": "active",
-    "schedule": "0 6 * * *",
-    "script": "import pandas as pd\\ndf = pd.read_csv('data.csv')\\ndf.to_json('output.json')",
-    "serverId": 1,
-    "maxExecutions": null,
-    "executionCount": 15,
-    "createdAt": "2024-01-10T08:00:00Z",
-    "updatedAt": "2024-01-20T14:30:00Z",
-    "lastRun": "2024-01-20T06:00:00Z",
-    "nextRun": "2024-01-21T06:00:00Z"
-  }
-}`,
-
-  executeEventResponse: `{
-  "execution": {
-    "id": "exec_456789",
-    "eventId": 123,
-    "status": "running",
-    "startedAt": "2024-01-20T15:45:00Z",
-    "input": {
-      "param1": "value1",
-      "param2": "value2"
-    }
-  }
-}`,
-
-  eventLogsResponse: `{
-  "logs": [
-    {
-      "id": 1001,
-      "eventId": 123,
-      "executedAt": "2024-01-20T06:00:00Z",
-      "success": true,
-      "output": "Data processing completed successfully. Processed 1,234 records.",
-      "errorMessage": null,
-      "executionTime": 45.2,
-      "serverId": 1
+      ...eventColumns,
+      eventServers: [],
+      secretFieldsRedacted: false,
     },
-    {
-      "id": 1000,
-      "eventId": 123,
-      "executedAt": "2024-01-19T06:00:00Z", 
-      "success": false,
-      "output": "Error: File not found",
-      "errorMessage": "FileNotFoundError: [Errno 2] No such file or directory: 'data.csv'",
-      "executionTime": 2.1,
-      "serverId": 1
-    }
   ],
-  "pagination": {
-    "page": 1,
-    "limit": 10,
-    "total": 45,
-    "pages": 5
-  }
-}`,
 
-  listWorkflowsResponse: `{
-  "workflows": [
-    {
-      "id": 456,
-      "name": "Data Pipeline",
-      "description": "Complete data processing pipeline",
-      "status": "active",
-      "schedule": "0 3 * * *",
-      "nodes": [
-        {
-          "id": "node1",
-          "type": "event",
-          "eventId": 1,
-          "position": {"x": 100, "y": 100}
-        },
-        {
-          "id": "node2",
-          "type": "event",
-          "eventId": 2,
-          "position": {"x": 300, "y": 100}
-        }
-      ],
-      "edges": [
-        {
-          "id": "edge1",
-          "source": "node1",
-          "target": "node2",
-          "connectionType": "ON_SUCCESS"
-        }
-      ],
-      "createdAt": "2024-01-12T09:00:00Z",
-      "lastRun": "2024-01-20T03:00:00Z"
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "limit": 10,
-    "total": 8,
-    "pages": 1
-  }
-}`,
+  event: {
+    ...eventColumns,
+    envVars: [
+      {
+        id: 3,
+        eventId: 42,
+        key: "BACKUP_BUCKET",
+        value: "nightly-backups",
+        createdAt: "2026-10-01T09:30:00.000Z",
+        updatedAt: "2026-10-01T09:30:00.000Z",
+      },
+    ],
+    server: null,
+    servers: [],
+    secretFieldsRedacted: false,
+  },
 
-  executeWorkflowResponse: `{
-  "execution": {
-    "id": "wf_exec_789012",
-    "workflowId": 456,
-    "status": "running",
-    "startedAt": "2024-01-20T16:00:00Z",
-    "input": {
-      "startParam": "initialValue"
+  logList: {
+    logs: [{ ...logColumns, workflowName: null }],
+    total: 45,
+    page: 1,
+    pageSize: 20,
+    totalPages: 3,
+  },
+
+  log: {
+    ...logColumns,
+    scriptContent: 'echo "Starting backup"',
+  },
+
+  serverList: [serverFields],
+
+  server: serverFields,
+
+  serverDeleted: { message: "Server deleted successfully" },
+};
+
+export const errorExamples = {
+  general: { error: "Access denied" },
+
+  validation: {
+    error: "Validation failed",
+    details: {
+      _errors: ['Unrecognized key: "script"'],
+      timeoutValue: { _errors: ["Too small: expected number to be >=1"] },
     },
-    "progress": {
-      "completedNodes": 0,
-      "totalNodes": 3,
-      "currentNode": "node1"
-    }
-  }
-}`,
+  },
 
-  listServersResponse: `{
-  "servers": [
-    {
-      "id": 789,
-      "name": "Production Server",
-      "address": "192.168.1.100",
-      "port": 22,
-      "username": "deploy",
-      "status": "online",
-      "lastHealthCheck": "2024-01-20T15:30:00Z",
-      "createdAt": "2024-01-05T12:00:00Z"
-    },
-    {
-      "id": 790,
-      "name": "Staging Server", 
-      "address": "192.168.1.101",
-      "port": 22,
-      "username": "staging",
-      "status": "offline",
-      "lastHealthCheck": "2024-01-20T15:25:00Z",
-      "createdAt": "2024-01-05T12:30:00Z"
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "limit": 10,
-    "total": 5,
-    "pages": 1
-  }
-}`,
-
-  listVariablesResponse: `{
-  "variables": [
-    {
-      "id": 1,
-      "key": "DATABASE_URL",
-      "value": "postgresql://user:password@localhost:5432/mydb",
-      "description": "Production database connection string",
-      "createdAt": "2024-01-15T10:30:00Z",
-      "updatedAt": "2024-01-20T14:15:00Z"
-    },
-    {
-      "id": 2,
-      "key": "API_SECRET_KEY",
-      "value": "sk-1234567890abcdef",
-      "description": "Secret key for external API authentication",
-      "createdAt": "2024-01-16T09:15:00Z",
-      "updatedAt": "2024-01-16T09:15:00Z"
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "limit": 2,
-    "total": 2,
-    "pages": 1
-  }
-}`,
-
-  createVariableResponse: `{
-  "variable": {
-    "id": 3,
-    "key": "DATABASE_URL",
-    "value": "postgresql://user:password@localhost:5432/mydb",
-    "description": "Production database connection string",
-    "createdAt": "2024-01-20T16:00:00Z",
-    "updatedAt": "2024-01-20T16:00:00Z"
-  }
-}`,
-
-  getVariableResponse: `{
-  "variable": {
-    "id": 1,
-    "key": "DATABASE_URL",
-    "value": "postgresql://user:password@localhost:5432/mydb",
-    "description": "Production database connection string",
-    "createdAt": "2024-01-15T10:30:00Z",
-    "updatedAt": "2024-01-20T14:15:00Z"
-  }
-}`,
-
-  serverConnectionTestResponse: `{
-  "success": true,
-  "message": "Connection successful. Server: Ubuntu 20.04.6 LTS, Uptime: 45 days"
-}`,
-
-  // Error response examples
-  unauthorizedError: `{
-  "error": "Unauthorized",
-  "message": "Invalid or missing API token",
-  "code": 401,
-  "timestamp": "2024-01-20T16:15:00Z"
-}`,
-
-  forbiddenError: `{
-  "error": "Forbidden", 
-  "message": "Insufficient permissions to access this resource",
-  "code": 403,
-  "timestamp": "2024-01-20T16:15:00Z"
-}`,
-
-  notFoundError: `{
-  "error": "Not Found",
-  "message": "Event with ID 999 not found",
-  "code": 404,
-  "timestamp": "2024-01-20T16:15:00Z"
-}`,
-
-  validationError: `{
-  "error": "Validation Error",
-  "message": "Invalid request data",
-  "code": 400,
-  "details": [
-    {
-      "field": "name",
-      "message": "Name is required"
-    },
-    {
-      "field": "type", 
-      "message": "Type must be one of: BASH, PYTHON, NODEJS, HTTP_REQUEST"
-    }
-  ],
-  "timestamp": "2024-01-20T16:15:00Z"
-}`,
-
-  rateLimitError: `{
-  "error": "Rate Limit Exceeded",
-  "message": "Too many requests. Rate limit: 100 requests per minute",
-  "code": 429,
-  "retryAfter": 60,
-  "timestamp": "2024-01-20T16:15:00Z"
-}`,
-
-  serverError: `{
-  "error": "Internal Server Error",
-  "message": "An unexpected error occurred",
-  "code": 500,
-  "requestId": "req_abc123def456",
-  "timestamp": "2024-01-20T16:15:00Z"
-}`,
+  unknownRoute: {
+    error: "Not Found",
+    message: "API endpoint '/api/does-not-exist' does not exist",
+    statusCode: 404,
+    timestamp: "2026-11-04T16:15:00.000Z",
+  },
 };
