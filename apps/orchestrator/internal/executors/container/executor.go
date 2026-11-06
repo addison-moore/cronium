@@ -383,7 +383,7 @@ func (e *Executor) getImageForScript(scriptType types.ScriptType) string {
 func (e *Executor) buildCommand(script *types.Script) []string {
 	switch script.Type {
 	case types.ScriptTypeBash:
-		// cronium.sh is also auto-sourced via BASH_ENV; source explicitly for safety.
+		// cronium.sh exports its functions, so a bash the script starts can call them too.
 		return []string{"/bin/bash", "-c", "source /usr/local/bin/cronium.sh 2>/dev/null || true\n" + script.Content}
 	case types.ScriptTypePython:
 		return []string{"python", "-c", "import cronium\n" + script.Content}

@@ -185,7 +185,8 @@ event_info = cronium.event()
 #### Bash
 
 ```bash
-# The cronium_* helper functions are automatically available (auto-sourced).
+# The cronium_* helper functions are automatically available (auto-sourced),
+# and a bash this script starts can call them too.
 
 # Data flow
 input_data=$(cronium_input)
@@ -201,6 +202,8 @@ cronium_set_condition true
 # Metadata
 event_info=$(cronium_event)
 ```
+
+The helpers are exported shell functions, so a `bash` the script starts inherits them with the environment, and they read their settings from it each time they run. That includes a `bash` started from a script file or through `sh`. `sh` itself can't call them, and neither can a process started with `env -i`. To keep the execution token from something a container job runs, start it with `env -u CRONIUM_EXECUTION_TOKEN`: it runs as usual, but it has no token to send, so the runtime refuses any helper it calls.
 
 ## Chaining events (Workflows)
 
