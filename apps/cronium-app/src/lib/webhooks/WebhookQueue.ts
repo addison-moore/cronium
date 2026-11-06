@@ -74,7 +74,7 @@ export class WebhookQueue {
     try {
       await this.processItem(nextItem);
     } catch {
-      // processDelivery has already recorded the failed attempt.
+      // processDelivery has already recorded the failed attempt, if it could.
       this.scheduleRetry(nextItem);
     } finally {
       this.processing.delete(nextItem.id);
