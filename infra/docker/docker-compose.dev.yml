@@ -105,6 +105,7 @@ services:
 
       # Encryption
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      ENCRYPTION_KEYS_RETIRED: ${ENCRYPTION_KEYS_RETIRED:-}
 
       # Services
       ORCHESTRATOR_URL: http://cronium-orchestrator-dev:8080

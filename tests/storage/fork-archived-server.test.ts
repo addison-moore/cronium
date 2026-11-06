@@ -106,7 +106,11 @@ describe("events.fork with an archived server", () => {
       const owner = await seedUser();
       const archived = await seedArchivedServer(owner, "retired-box");
       const source = await seedEventOnServers(owner, [archived]);
-      await storage.createEnvVar({ eventId: source, key: "TOKEN", value: "x" });
+      await storage.updateScript(
+        source,
+        {},
+        { envVars: [{ key: "TOKEN", value: "x" }], userId: owner },
+      );
 
       await expect(
         callerFor(owner).events.fork({ id: source }),
@@ -243,11 +247,11 @@ describe("events.fork with an archived server", () => {
         serverId: direct,
         status: EventStatus.ACTIVE,
       });
-      await storage.createEnvVar({
-        eventId: source,
-        key: "TOKEN",
-        value: "s3cret",
-      });
+      await storage.updateScript(
+        source,
+        {},
+        { envVars: [{ key: "TOKEN", value: "s3cret" }], userId: owner },
+      );
 
       const fork = await callerFor(owner).events.fork({ id: source });
 

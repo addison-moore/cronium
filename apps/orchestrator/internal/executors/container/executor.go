@@ -430,7 +430,7 @@ func scriptLoader(scriptType types.ScriptType) string {
 		// against <anonymous_script>.
 		return "globalThis.cronium = require('cronium'); //# sourceURL=[eval]\n"
 	default:
-		// cronium.sh is also auto-sourced via BASH_ENV; source explicitly for safety.
+		// cronium.sh exports its functions, so a bash the script starts can call them too.
 		return "source /usr/local/bin/cronium.sh 2>/dev/null || true\n"
 	}
 }

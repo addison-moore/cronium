@@ -22,11 +22,12 @@ import { getDefaultScriptContent } from "@/lib/scriptTemplates";
 import { MonacoEditor } from "@cronium/ui";
 import { TagsInput } from "@cronium/ui";
 import AIScriptAssistant from "@/components/dashboard/AIScriptAssistant-lazy";
+import EnvVarValueField from "./EnvVarValueField";
 import ToolActionSection from "./ToolActionSection";
 import EditorSettingsModal, {
   type EditorSettings,
 } from "./EditorSettingsModal";
-import { Eye, EyeOff, Trash2, Settings, Lock } from "lucide-react";
+import { Trash2, Settings, Lock } from "lucide-react";
 import { isToolActionsUIEnabled } from "@/lib/featureFlags";
 import { parseToolActionConfig } from "@/lib/tools/tool-action-config";
 import {
@@ -75,8 +76,6 @@ const eventsCopy = {
     KeyPlaceholder: "EXAMPLE_API_KEY",
     Value: "Value",
     ValuePlaceholder: "your_secret_value",
-    ValueLostLineBreaks:
-      "This field holds one line, so this value lost its line breaks, and a PEM key won't work like this. Base64-encode it and decode it in your script, or set it through the REST API.",
     AddVariable: "Add Variable",
     Security: "Security",
     SecurityNote:
@@ -178,9 +177,6 @@ export default function EventForm({
   });
   const [isEditorSettingsModalOpen, setIsEditorSettingsModalOpen] =
     useState(false);
-  const [lostLineBreaks, setLostLineBreaks] = useState<Record<number, boolean>>(
-    {},
-  );
   const [passwordVisibility, setPasswordVisibility] = useState<
     Record<number, boolean>
   >({});
@@ -305,7 +301,9 @@ export default function EventForm({
       }
 
       // Parse and set env vars
-      const envVars = parseInitialEnvVars(initialData.environmentVariables);
+      const envVars = parseInitialEnvVars(
+        initialData.environmentVariables ?? initialData.envVars,
+      );
       if (envVars) {
         setValue("envVars", envVars);
       }
@@ -883,8 +881,8 @@ export default function EventForm({
                 >
                   {envVars.map((envVar, index) => (
                     <div key={index} className="space-y-1">
-                      <div className="flex items-end gap-2">
-                        <div className="flex-1">
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
+                        <div>
                           <Label htmlFor={`envKey-${index}`}>
                             {eventsCopy.Fields.Key}
                           </Label>
@@ -903,71 +901,39 @@ export default function EventForm({
                             aria-invalid={!!errors.envVars?.[index]?.key}
                           />
                         </div>
-                        <div className="flex-1">
+                        <div className="col-span-2 lg:col-span-1">
                           <Label htmlFor={`envValue-${index}`}>
                             {eventsCopy.Fields.Value}
                           </Label>
-                          <div className="relative">
-                            <Input
-                              id={`envValue-${index}`}
-                              type={
-                                passwordVisibility[index] ? "text" : "password"
-                              }
-                              value={envVar.value}
-                              // A single-line input turns pasted line breaks into
-                              // spaces and drops any already in the value, which
-                              // breaks a PEM key without saying so. One at the end
-                              // does no harm.
-                              onPaste={(e) => {
-                                const pasted = e.clipboardData.getData("text");
-                                setLostLineBreaks((lost) => ({
-                                  ...lost,
-                                  [index]: /[\r\n]/.test(pasted.trimEnd()),
-                                }));
-                              }}
-                              onChange={(e) => {
-                                if (/[\r\n]/.test(envVar.value.trimEnd())) {
-                                  setLostLineBreaks((lost) => ({
-                                    ...lost,
-                                    [index]: true,
-                                  }));
-                                }
-                                const updatedEnvVars = [...envVars];
-                                updatedEnvVars[index] = {
-                                  ...envVar,
-                                  value: e.target.value,
-                                };
-                                field.onChange(updatedEnvVars);
-                              }}
-                              placeholder={eventsCopy.Fields.ValuePlaceholder}
-                              className="pr-10"
-                              aria-invalid={!!errors.envVars?.[index]?.value}
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="absolute top-0 right-0 h-10 w-10"
-                              onClick={() => togglePasswordVisibility(index)}
-                            >
-                              {passwordVisibility[index] ? (
-                                <EyeOff className="h-4 w-4" />
-                              ) : (
-                                <Eye className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </div>
+                          <EnvVarValueField
+                            id={`envValue-${index}`}
+                            value={envVar.value}
+                            onChange={(value) => {
+                              const updatedEnvVars = [...envVars];
+                              updatedEnvVars[index] = { ...envVar, value };
+                              field.onChange(updatedEnvVars);
+                            }}
+                            shown={!!passwordVisibility[index]}
+                            onToggleShown={() =>
+                              togglePasswordVisibility(index)
+                            }
+                            placeholder={eventsCopy.Fields.ValuePlaceholder}
+                            invalid={!!errors.envVars?.[index]?.value}
+                          />
                         </div>
                         <Button
                           type="button"
                           variant="destructive"
                           size="icon"
+                          className="col-start-2 row-start-1 mt-6 lg:col-start-3"
                           onClick={() => {
                             const updatedEnvVars = envVars.filter(
                               (_, i) => i !== index,
                             );
                             field.onChange(updatedEnvVars);
-                            setLostLineBreaks({});
+                            // This is kept by position, so the row after a shown
+                            // one would otherwise appear in the clear.
+                            setPasswordVisibility({});
                           }}
                         >
                           ×
@@ -981,11 +947,6 @@ export default function EventForm({
                       {errors.envVars?.[index]?.value && (
                         <p className="text-destructive text-sm">
                           {errors.envVars[index].value.message}
-                        </p>
-                      )}
-                      {lostLineBreaks[index] && envVar.value && (
-                        <p className="text-warning-text text-sm">
-                          {eventsCopy.Fields.ValueLostLineBreaks}
                         </p>
                       )}
                     </div>
