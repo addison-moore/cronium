@@ -1,7 +1,6 @@
 import crypto from "crypto";
 import { z } from "zod";
 import axios from "axios";
-import { TRPCError } from "@trpc/server";
 import { db } from "@/server/db";
 import { webhooks, webhookEvents, webhookDeliveries } from "@/shared/schema";
 import { eq, and, desc } from "drizzle-orm";
@@ -288,8 +287,8 @@ export class WebhookManager {
    * its own in the form `triggerEvent` stores. So it shows in the webhook's history
    * and stats, under `webhook.test`, and can be retried.
    *
-   * @throws TRPCError `PRECONDITION_FAILED` when the webhook is disabled. Nothing
-   * is sent or recorded then. A failed attempt isn't thrown: it comes back with
+   * @throws WebhookPreconditionError when the webhook is disabled. Nothing is sent
+   * or recorded then. A failed attempt isn't thrown: it comes back with
    * `success: false`, recorded like any other.
    */
   async sendTestEvent(
@@ -299,10 +298,7 @@ export class WebhookManager {
   ): Promise<WebhookDeliveryResult> {
     // Disabled means nothing goes to this URL, as with `triggerEvent`.
     if (!webhook.active) {
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "Webhook is disabled",
-      });
+      throw new WebhookPreconditionError("Webhook is disabled");
     }
 
     // Decrypted before anything is recorded: a secret that can't be read means
@@ -333,13 +329,7 @@ export class WebhookManager {
       webhook.url,
       secret,
       headers,
-      {
-        id: event.id.toString(),
-        event: event.event,
-        timestamp: event.createdAt,
-        data,
-        metadata,
-      },
+      deliveryPayload(event, data, metadata),
     );
   }
 

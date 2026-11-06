@@ -444,6 +444,10 @@ export const webhookSystemRouter = createTRPCRouter({
   // Send a test event to this webhook and report what the receiver did
   test: protectedProcedure
     .use(withTiming)
+    // Each call makes an outbound request and waits for it, outside the queue's
+    // limit on how many run at once, and writes two rows. This stops a client in a
+    // loop. Calls made at the same moment can get past it, as on retryDelivery.
+    .use(withRateLimit(10, 60000))
     .input(
       z.object({
         webhookId: z.number(),
@@ -469,17 +473,19 @@ export const webhookSystemRouter = createTRPCRouter({
             throw notFoundError("Webhook");
           }
 
-          const attempt = await webhookManager.sendTestEvent(
-            webhook,
-            {
-              test: true,
-              timestamp: new Date().toISOString(),
-              ...input.testData,
-            },
-            {
-              webhookId: input.webhookId,
-              triggeredBy: ctx.session.user.id,
-            },
+          const attempt = await withRefusalsMapped(() =>
+            webhookManager.sendTestEvent(
+              webhook,
+              {
+                test: true,
+                timestamp: new Date().toISOString(),
+                ...input.testData,
+              },
+              {
+                webhookId: input.webhookId,
+                triggeredBy: ctx.session.user.id,
+              },
+            ),
           );
 
           // Not mutationResponse, whose `success` is always true. A receiver

@@ -814,10 +814,7 @@ describe("webhookSystem.test", () => {
   it("passes on a refusal to send, with its message", async () => {
     mockDbState.results.set(webhooks, [ownedWebhookRow({ active: false })]);
     managerMock.sendTestEvent.mockRejectedValue(
-      new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "Webhook is disabled",
-      }),
+      new WebhookPreconditionError("Webhook is disabled"),
     );
 
     await expect(
@@ -826,6 +823,24 @@ describe("webhookSystem.test", () => {
       code: "PRECONDITION_FAILED",
       message: "Webhook is disabled",
     });
+  });
+
+  it("is limited per user, and past the limit does nothing", async () => {
+    mockDbState.results.set(webhooks, [ownedWebhookRow()]);
+    const checkLimit = RateLimitService.checkLimit as jest.Mock;
+    checkLimit.mockRejectedValueOnce(
+      new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Slow down" }),
+    );
+
+    await expect(
+      userCaller().webhookSystem.test({ webhookId: 42 }),
+    ).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+
+    expect(checkLimit).toHaveBeenCalledWith(USER_ID, "webhookSystem.test", {
+      maxRequests: 10,
+      windowMs: 60000,
+    });
+    expect(managerMock.sendTestEvent).not.toHaveBeenCalled();
   });
 
   it("returns NOT_FOUND for a webhook the caller does not own", async () => {
