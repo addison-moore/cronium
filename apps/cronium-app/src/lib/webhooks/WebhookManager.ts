@@ -4,7 +4,7 @@ import { z } from "zod";
 import axios from "axios";
 import { db } from "@/server/db";
 import { webhooks, webhookEvents, webhookDeliveries } from "@/shared/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { storage } from "@/server/storage";
 import { WebhookSecurity } from "./WebhookSecurity";
 import { WebhookQueue, type QueueFullReason } from "./WebhookQueue";
@@ -34,6 +34,7 @@ import {
   webhookCustomHeadersSchema,
 } from "./custom-headers";
 import {
+  DROPPED_WHILE_DISABLED_MESSAGE,
   NOT_QUEUED_MESSAGE,
   WebhookPreconditionError,
   WebhookQueueFullError,
@@ -374,6 +375,52 @@ export class WebhookManager {
       },
       { id: deliveryId, webhookId, success: false, duration: 0 },
     );
+  }
+
+  /**
+   * Whether each of these webhooks is enabled, for the queue. A deleted one isn't in the
+   * answer. One statement with one parameter, because nothing limits how many webhooks
+   * have something waiting, and a statement can have at most 65,535.
+   */
+  async webhooksEnabled(webhookIds: number[]): Promise<Map<number, boolean>> {
+    const rows = await db
+      .select({ id: webhooks.id, active: webhooks.active })
+      .from(webhooks)
+      .where(sql`${webhooks.id} = ANY(${sql.param(webhookIds)}::int[])`);
+    return new Map(rows.map(({ id, active }) => [id, active]));
+  }
+
+  /**
+   * Record deliveries the queue dropped because their webhook was disabled, each in the
+   * form a failed attempt takes. `retryDelivery` works from these rows, so this is how
+   * its owner can still send them.
+   *
+   * One statement, because a backlog can be 15,000 deliveries, far past the 65,535
+   * parameters a statement can have if each row had its own. Selecting from the events
+   * also means one that's been removed since is left out, rather than failing the rest.
+   * The time goes in as a string in UTC, as Drizzle writes it elsewhere: `now()` would
+   * be in the session's time zone. The statement failing can't change anything, because
+   * these deliveries are over, so the server log says what fell out of the history.
+   */
+  async recordDroppedDeliveries(
+    webhookId: number,
+    webhookEventIds: number[],
+  ): Promise<void> {
+    try {
+      await db.execute(sql`
+        INSERT INTO webhook_deliveries
+          (webhook_id, webhook_event_id, delivery_id, status, error, headers, duration, attempted_at)
+        SELECT
+          ${webhookId}::int, id, gen_random_uuid()::text, 'failed',
+          ${DROPPED_WHILE_DISABLED_MESSAGE}::text, '{}'::jsonb, 0,
+          ${new Date().toISOString()}::timestamp
+        FROM webhook_events
+        WHERE id = ANY(${sql.param(webhookEventIds)}::int[])`);
+    } catch (error) {
+      console.error(
+        `[Webhook] ${webhookEventIds.length} deliveries dropped from webhook ${webhookId} weren't recorded: ${describeFailure(error)}`,
+      );
+    }
   }
 
   /**
