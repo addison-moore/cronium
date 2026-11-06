@@ -79,7 +79,7 @@ services:
       bash -c "
       source /usr/local/bin/cronium.sh
       echo 'Bash SDK loaded successfully'
-      echo \"Execution ID: \$CRONIUM_EXEC_ID\"
+      echo \"Execution ID: \$CRONIUM_EXECUTION_ID\"
       cronium_info
       "
 

@@ -19,10 +19,10 @@ import {
  * external account, so they must not be stored in plaintext. These helpers
  * encrypt on write and decrypt on read using the same AES-256-GCM service as
  * tool credentials. Existing plaintext tokens are detected on read and passed
- * through unchanged; they are re-encrypted the next time they are stored (e.g.
- * on refresh).
+ * through unchanged, until the next time they are stored (e.g. on refresh) or
+ * `rotate:secrets --encrypt-legacy` encrypts them.
  */
-function encryptSecret(value: string): string {
+export function encryptSecret(value: string): string {
   // Fail CLOSED: an OAuth token is never stored in plaintext. If the encryption
   // service is unavailable the write is refused rather than persisting the
   // token in the clear (HI-08).
@@ -48,7 +48,7 @@ function reasonFor(what: string, error: unknown): string {
   return `${what}: ${error instanceof Error ? error.message : "Unknown error"}`;
 }
 
-function decryptSecret(stored: string): string {
+export function decryptSecret(stored: string): string {
   const enc = parseEncryptedData(stored);
   if (!enc) return stored; // legacy plaintext
   const dec = credentialEncryption.decrypt(enc);

@@ -323,7 +323,7 @@ async function main(): Promise<void> {
     })
     .catch((error) => {
       console.warn(
-        "[Worker] Could not check for legacy plaintext secrets:",
+        "[Worker] Could not check for legacy secrets:",
         describeFailure(error),
       );
     });

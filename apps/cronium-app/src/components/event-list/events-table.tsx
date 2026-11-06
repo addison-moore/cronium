@@ -88,8 +88,18 @@ export function EventsTable({
   searchTerm,
 }: EventsTableProps) {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [isClient, setIsClient] = useState(false);
+
+  // Who's looking. The session answers first, and still answers when
+  // getCurrentUser fails, which isn't retried.
+  const viewerId = user?.id ?? session?.user?.id;
+
+  // Until the session answers, a row is neither the viewer's nor someone else's.
+  const ownerOf = (event: Event): "viewer" | "other" | "unknown" => {
+    if (viewerId === undefined) return "unknown";
+    return event.userId === viewerId ? "viewer" : "other";
+  };
 
   useEffect(() => {
     setIsClient(true);
@@ -208,7 +218,7 @@ export function EventsTable({
       key: "name",
       header: copy.eventName,
       cell: (event) => {
-        const isSharedEvent = event.userId !== user?.id;
+        const isSharedEvent = ownerOf(event) === "other";
         return (
           <div className="flex items-center">
             <div className="mr-2">
@@ -300,16 +310,21 @@ export function EventsTable({
         data={events}
         columns={columns}
         actions={(event) => {
-          const isSharedEvent = event.userId !== user?.id;
+          const owner = ownerOf(event);
+          const viewDetails: StandardizedTableAction = {
+            label: copy.viewDetails,
+            icon: <Eye className="h-4 w-4" />,
+            onClick: () => router.push(`/dashboard/events/${event.id}`),
+          };
 
-          if (isSharedEvent) {
+          // Only what suits anyone's event until we know whose this is. Fork
+          // here would have owners forking their own events.
+          if (owner === "unknown") return [viewDetails];
+
+          if (owner === "other") {
             // Limited actions for shared events
             return [
-              {
-                label: copy.viewDetails,
-                icon: <Eye className="h-4 w-4" />,
-                onClick: () => router.push(`/dashboard/events/${event.id}`),
-              },
+              viewDetails,
               {
                 label: copy.fork,
                 icon: <GitBranch className="h-4 w-4" />,
@@ -320,11 +335,7 @@ export function EventsTable({
 
           // Full actions for owned events
           return [
-            {
-              label: copy.viewDetails,
-              icon: <Eye className="h-4 w-4" />,
-              onClick: () => router.push(`/dashboard/events/${event.id}`),
-            },
+            viewDetails,
             {
               label: copy.editEvent,
               icon: <Edit className="h-4 w-4" />,

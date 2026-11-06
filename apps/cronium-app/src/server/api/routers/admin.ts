@@ -27,7 +27,7 @@ import { sendInvitationEmail, sendEmailDetailed } from "@/lib/email";
 import { hashApiToken } from "@/lib/api-token-hash";
 import { listAvailableModels } from "@/lib/ai";
 import { AI_PROVIDER_IDS } from "@/shared/ai-providers";
-import { failureWithStack } from "@/lib/pg-errors";
+import { failureWithStack, messageForCaller } from "@/lib/pg-errors";
 
 // Use centralized admin authentication from trpc.ts
 
@@ -320,9 +320,11 @@ export const adminRouter = createTRPCRouter({
 
               results.push({ id: userId, success: true });
             } catch (error) {
-              const errorMessage =
-                error instanceof Error ? error.message : String(error);
-              results.push({ id: userId, success: false, error: errorMessage });
+              results.push({
+                id: userId,
+                success: false,
+                error: messageForCaller(error),
+              });
             }
           }
 
@@ -743,10 +745,7 @@ export const adminRouter = createTRPCRouter({
         }
         return {
           success: false,
-          message:
-            error instanceof Error
-              ? error.message
-              : "Failed to send test email",
+          message: messageForCaller(error, "Failed to send test email"),
         };
       }
     }),

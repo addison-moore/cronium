@@ -42,6 +42,15 @@ export function parseEncryptedData(
   return null;
 }
 
+/**
+ * Whether a plaintext tool credential row has nothing in it to protect: empty, or the
+ * empty JSON the app reads as no credentials at all.
+ */
+export function toolCredentialsHoldNothing(stored: string): boolean {
+  const trimmed = stored.trim();
+  return trimmed === "" || trimmed === "{}" || trimmed === "[]";
+}
+
 export interface EncryptionConfig {
   algorithm?: string;
   keyLength?: number;

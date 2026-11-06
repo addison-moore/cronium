@@ -23,7 +23,7 @@ import {
   healthCheckSchema,
 } from "@/shared/schemas/monitoring";
 import { storage } from "@/server/storage";
-import { failureWithStack } from "@/lib/pg-errors";
+import { failureWithStack, messageForCaller } from "@/lib/pg-errors";
 
 // Helper types for monitoring data
 export interface SystemInfo {
@@ -151,14 +151,12 @@ export const monitoringRouter = createTRPCRouter({
                 message: "Database connection successful",
               });
             } catch (error) {
-              const errorMessage =
-                error instanceof Error ? error.message : String(error);
               health.checks.push({
                 name: "database",
                 status: "unhealthy",
                 responseTime: input.timeout * 1000,
                 message: "Database connection failed",
-                error: errorMessage,
+                error: messageForCaller(error),
               });
               health.overall = "unhealthy";
             }

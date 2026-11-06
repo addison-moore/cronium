@@ -610,6 +610,49 @@ describe("GET+PUT /api/internal/variables/[userId]/[key]", () => {
     expect(mockDecrypt).toHaveBeenCalledWith("enc:hello", USER_ID, "MY_KEY");
   });
 
+  describe("with a token from before an ENCRYPTION_KEY change", () => {
+    const NEW_KEY = "c".repeat(64);
+
+    function restartWith(active: string, retired?: string): void {
+      process.env.ENCRYPTION_KEY = active;
+      if (retired === undefined) delete process.env.ENCRYPTION_KEYS_RETIRED;
+      else process.env.ENCRYPTION_KEYS_RETIRED = retired;
+      __resetJobCapabilityKeyForTests();
+    }
+
+    afterEach(() => restartWith(ENC_KEY));
+
+    it("GET reads the variable while the old key is retired", async () => {
+      const headers = capHeader();
+      mockDb.select!.mockReturnValue(
+        dbChain([
+          { key: "MY_KEY", value: "enc:hello", updatedAt: new Date(T0) },
+        ]),
+      );
+      restartWith(NEW_KEY, JSON.stringify([ENC_KEY]));
+
+      const res = await variableGET(
+        req(url, "GET", undefined, headers),
+        varParams,
+      );
+
+      await expectContract(res, fx.responses.getSuccess!);
+    });
+
+    it("GET 403s once the old key has left the list", async () => {
+      const headers = capHeader();
+      restartWith(NEW_KEY);
+
+      const res = await variableGET(
+        req(url, "GET", undefined, headers),
+        varParams,
+      );
+
+      await expectContract(res, fx.responses.forbidden!);
+      expect(mockDb.select).not.toHaveBeenCalled();
+    });
+  });
+
   it("PUT 401s / 403s on missing token and cross-user writes", async () => {
     await expectContract(
       await variablePUT(req(url, "PUT", { value: "x" }), varParams),
