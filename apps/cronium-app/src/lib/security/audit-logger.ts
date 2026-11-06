@@ -24,7 +24,9 @@ export type AuditAction =
   | "tool.rate_limit_exceeded"
   | "config.update"
   | "permission.grant"
-  | "permission.revoke";
+  | "permission.revoke"
+  // Written by the retention purge, in the transaction that deletes the rows.
+  | "retention.purge";
 
 export interface AuditContext {
   userId: string;
@@ -294,21 +296,6 @@ export class AuditLogger {
       .offset(options.offset ?? 0);
 
     return { logs, total: count };
-  }
-
-  /**
-   * Clean up old audit logs
-   */
-  async cleanup(retentionDays = 90): Promise<number> {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
-
-    const result = await db
-      .delete(toolAuditLogs)
-      .where(sql`${toolAuditLogs.createdAt} < ${cutoffDate}`);
-
-    // Drizzle returns an array with result info
-    return (result as { rowCount?: number }).rowCount ?? 0;
   }
 
   /**

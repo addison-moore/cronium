@@ -11,6 +11,7 @@
  */
 
 import { db } from "@/server/db";
+import type { AuditAction } from "@/lib/security/audit-logger";
 import {
   executions,
   jobs,
@@ -18,10 +19,12 @@ import {
   logs,
   scheduleIncidents,
   toolActionLogs,
+  toolAuditLogs,
   webhookDeliveries,
   webhookEvents,
   webhookLogs,
   workflowExecutions,
+  workflowLogs,
   JobStatus,
   LogStatus,
 } from "@/shared/schema";
@@ -31,6 +34,7 @@ import {
   inArray,
   isNull,
   lt,
+  ne,
   notExists,
   or,
   sql,
@@ -59,6 +63,11 @@ const FINISHED_RUN_STATUSES: LogStatus[] = [
   LogStatus.PARTIAL,
 ];
 
+// What a purge of the tool audit log leaves behind. The actor can't be mistaken for
+// a user: user ids are UUIDs and nanoids, and neither contains a colon.
+const AUDIT_PURGE_ACTOR = "system:retention";
+const AUDIT_PURGE_ACTION = "retention.purge" satisfies AuditAction;
+
 const BATCH = 500;
 const MAX_BATCHES_PER_RUN = 20;
 const DAY_MS = 86_400_000;
@@ -81,6 +90,16 @@ const WINDOWS = {
   toolActionLogs: {
     env: "CRONIUM_TOOL_ACTION_LOG_RETENTION_DAYS",
     defaultDays: 90,
+  },
+  // Not shared with toolActionLogs, because the two change for different reasons.
+  // That one is run output: disk space sets it, and monthly quotas need 31 days of
+  // it. This one is the security record of who changed or used a credential, with
+  // IP addresses, so compliance and privacy rules set it, in either direction.
+  // Deleting it takes an operator's decision, so it keeps everything until one sets
+  // a window. Someone who set every other window to 0 has no setting for it yet.
+  toolAuditLogs: {
+    env: "CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS",
+    defaultDays: KEEP_FOREVER,
   },
   webhooks: { env: "CRONIUM_WEBHOOK_RETENTION_DAYS", defaultDays: 30 },
 } as const;
@@ -133,7 +152,11 @@ function finishedBefore(cutoff: Date, ...columns: AnyPgColumn[]): SQL {
   return sql`COALESCE(${coalesced}) < ${sql.param(cutoff, columns[0])}`;
 }
 
-type BatchPurge = (cutoff: Date, limit: number) => Promise<number>;
+type BatchPurge = (
+  cutoff: Date,
+  limit: number,
+  windowDays: number,
+) => Promise<number>;
 
 /**
  * One batch from a table whose dependents, if any, cascade. SKIP LOCKED lets a
@@ -240,7 +263,57 @@ const purgeJobsBatch: BatchPurge = (cutoff, limit) =>
     return ids.length;
   });
 
-/** In FK-safe order; tables that share a window age out together. */
+/**
+ * Audit rows go in the same transaction as a row recording that they went, so an
+ * auditor who finds rows missing can tell retention from tampering long after the
+ * worker's logs have rotated, and a record that can't be written stops the delete.
+ * That makes it one record per batch, since a batch is the transaction, and keeps it
+ * out of AuditLogger, whose buffer writes later. It holds only numbers and a date, so
+ * it needs none of the cleaning a logged entry gets. Records are never purged
+ * themselves, because they have to outlive what they account for.
+ */
+const purgeAuditLogsBatch: BatchPurge = (cutoff, limit, windowDays) =>
+  db.transaction(async (tx) => {
+    const rows = await tx
+      .select({ id: toolAuditLogs.id })
+      .from(toolAuditLogs)
+      .where(
+        and(
+          lt(toolAuditLogs.createdAt, cutoff),
+          ne(toolAuditLogs.action, AUDIT_PURGE_ACTION),
+        ),
+      )
+      .limit(limit)
+      .for("update", { skipLocked: true });
+    if (rows.length === 0) return 0;
+
+    const ids = rows.map((row) => row.id);
+    await tx.delete(toolAuditLogs).where(inArray(toolAuditLogs.id, ids));
+    await tx.insert(toolAuditLogs).values({
+      userId: AUDIT_PURGE_ACTOR,
+      action: AUDIT_PURGE_ACTION,
+      actionDetails: {
+        windowDays,
+        cutoff: cutoff.toISOString(),
+        deleted: ids.length,
+        minId: Math.min(...ids),
+        maxId: Math.max(...ids),
+      },
+    });
+    return ids.length;
+  });
+
+/**
+ * In FK-safe order; tables that share a window age out together.
+ *
+ * quota_usage is left out because no window is safe for it. QuotaManager.getUsage
+ * only bounds its read by time for resources named PerMonth or PerDay, so any other
+ * resource reads a row of any age. Once the last row goes, totalStorageMB and
+ * apiRequestsPerMinute fall back to a count that is always 0, so purging an old row
+ * makes a live read low. Nothing writes the table today either: consumeQuota is
+ * only reached from createMiddleware, which has no callers. Whoever wires that up
+ * decides what is safe to purge then.
+ */
 const PURGES = [
   // Ahead of jobs so logs that are going anyway are never detached first.
   { table: "logs", window: "logs", batch: purgeLogsBatch },
@@ -262,6 +335,17 @@ const PURGES = [
     ),
   },
   {
+    table: "workflow_logs",
+    window: "workflowExecutions",
+    // It has no FK to workflow_executions, so that purge doesn't reach it. Rows
+    // are never updated, so a start row reads RUNNING for good and status can't
+    // be a filter here. With no run id to check instead, each row ages from when
+    // it was written: guarding by workflow would keep a busy one's rows forever.
+    batch: flatBatch(workflowLogs, workflowLogs.id, (cutoff) =>
+      lt(workflowLogs.createdAt, cutoff),
+    ),
+  },
+  {
     table: "schedule_incidents",
     window: "scheduleIncidents",
     batch: flatBatch(scheduleIncidents, scheduleIncidents.id, (cutoff) =>
@@ -274,6 +358,11 @@ const PURGES = [
     batch: flatBatch(toolActionLogs, toolActionLogs.id, (cutoff) =>
       lt(toolActionLogs.createdAt, cutoff),
     ),
+  },
+  {
+    table: "tool_audit_logs",
+    window: "toolAuditLogs",
+    batch: purgeAuditLogsBatch,
   },
   // Ahead of webhook_events, which are only eligible once no delivery is left.
   {
@@ -353,7 +442,7 @@ export async function runRetention(
 
     try {
       for (let i = 0; i < maxBatches; i++) {
-        const removed = await batch(cutoff, batchSize);
+        const removed = await batch(cutoff, batchSize, days);
         deleted[table] += removed;
         if (removed < batchSize) break;
         if (i === maxBatches - 1) backlog = true;
