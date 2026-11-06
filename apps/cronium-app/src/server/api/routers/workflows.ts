@@ -44,6 +44,7 @@ import {
   toWorkflowApiDto,
   toWorkflowListApiDto,
 } from "@/server/security/api-dto";
+import { failureWithStack, messageForCaller } from "@/lib/pg-errors";
 
 // Use centralized authentication from trpc.ts
 
@@ -501,7 +502,10 @@ export const workflowsRouter = createTRPCRouter({
           };
         }
       } catch (error: unknown) {
-        console.error("Error fetching workflow executions:", error);
+        console.error(
+          "Error fetching workflow executions:",
+          failureWithStack(error),
+        );
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -620,13 +624,7 @@ export const workflowsRouter = createTRPCRouter({
             results.push({
               id: workflowId,
               success: false,
-              error:
-                typeof error === "object" &&
-                error !== null &&
-                "message" in error &&
-                typeof error.message === "string"
-                  ? error.message
-                  : "Unknown error",
+              error: messageForCaller(error, "Unknown error"),
             });
           }
         }

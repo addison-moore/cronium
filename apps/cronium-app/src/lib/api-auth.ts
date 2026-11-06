@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
 import type { Capability } from "@/server/security/authorization";
 import { TokenStatus, type UserRole } from "@/shared/schema";
+import { failureWithStack } from "@/lib/pg-errors";
 
 /** Extract a bearer token from an `Authorization` header, if present. */
 export function getBearerToken(headers: Headers): string | null {
@@ -45,7 +46,7 @@ export async function authenticateApiToken(token: string): Promise<{
       scopes: apiToken.scopes ?? [],
     };
   } catch (error) {
-    console.error("Error validating API token:", error);
+    console.error("Error validating API token:", failureWithStack(error));
     return null;
   }
 }

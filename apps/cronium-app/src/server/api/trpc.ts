@@ -12,6 +12,7 @@ import superjson from "superjson";
 import { ZodError } from "zod";
 import type { Session } from "next-auth";
 import { getCachedServerSession } from "../../lib/auth-cache";
+import { failureWithStack } from "../../lib/pg-errors";
 import { UserRole, UserStatus } from "../../shared/schema";
 import { db } from "../db";
 import {
@@ -339,7 +340,7 @@ export const withTiming = t.middleware(async ({ path, type, next }) => {
     const message = `❌ Failed ${type.toUpperCase()} ${path}: ${duration}ms`;
 
     if (isDev) {
-      console.error(message, error);
+      console.error(message, failureWithStack(error));
     } else {
       console.error(message); // Could be sent to error monitoring
     }
@@ -454,7 +455,10 @@ const devAutoAuth = t.middleware(async ({ ctx, next }) => {
         });
       }
     } catch (error) {
-      console.error("[DEV] Failed to auto-authenticate:", error);
+      console.error(
+        "[DEV] Failed to auto-authenticate:",
+        failureWithStack(error),
+      );
     }
   }
 

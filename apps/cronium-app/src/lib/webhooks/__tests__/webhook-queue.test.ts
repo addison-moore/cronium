@@ -80,4 +80,23 @@ describe("WebhookQueue", () => {
     expect(processDelivery).toHaveBeenCalledTimes(3);
     expect(retained(queue).size).toBe(0);
   });
+
+  it("makes no more attempts at a failure that another can't change", async () => {
+    processDelivery.mockResolvedValue({
+      success: false,
+      retryable: false,
+      error: "too long",
+    });
+    const queue = new WebhookQueue();
+
+    await queue.enqueue(
+      item({ maxRetries: 3, retryDelay: 100, backoffMultiplier: 2 }),
+    );
+    await flush();
+    expect(retained(queue).size).toBe(0);
+
+    jest.advanceTimersByTime(60_000);
+    await flush();
+    expect(processDelivery).toHaveBeenCalledTimes(1);
+  });
 });

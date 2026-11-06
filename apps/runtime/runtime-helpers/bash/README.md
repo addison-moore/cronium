@@ -126,3 +126,5 @@ In a container, everything is in the image. The SDK there needs:
   - `CRONIUM_RUNTIME_API` - API URL (optional, defaults to http://localhost:8081)
 
 On a remote server, the functions need only `bash`, because they run on helper binaries that the runner brings with it. A script that calls `jq` itself, like the examples above, needs `jq` installed on that server.
+
+Loading the SDK overwrites none of an event's env vars, so an event can use a name like `CRONIUM_TOKEN` for a REST API token. Names starting with `_cronium_` are the SDK's own.

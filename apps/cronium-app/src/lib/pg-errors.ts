@@ -2,6 +2,14 @@
  * Reading a failed query's error. Drizzle wraps the driver's error in
  * DrizzleQueryError, so the details are on `cause`: a check of `error.code` never
  * matches on the real path, only in a test that rejects with a hand-built object.
+ *
+ * Logging one takes more care than reading it. Drizzle's message ends with every
+ * bound value, the driver's `detail` and `where` quote the row or the JSON it
+ * refused, and console.error prints all of those for an error passed as it is, as
+ * well as a stack that starts with the message. So a catch block logs
+ * describeFailure or failureWithStack, never the error or its `.message`.
+ *
+ * Handing one back to whoever called is the same: messageForCaller, not `.message`.
  */
 import { quotedForLog } from "@/lib/security/audit-entry";
 
@@ -14,17 +22,140 @@ export interface DriverError {
   severity?: string;
 }
 
+/** What a caller reads in place of a failed query's message. */
+export const QUERY_FAILED_MESSAGE = "A database query failed";
+
+/** More than any wrapping here takes, and it also stops a cycle. */
+const MAX_CAUSES = 8;
+
+/** How Drizzle's message starts. Anything after it can be a bound value. */
+const DRIZZLE_MESSAGE = "Failed query:";
+
+/**
+ * Bound values shorter than this stay in a message that quotes them. They can't be
+ * much of a secret, and replacing them would eat ordinary words of the message.
+ */
+const MIN_REPLACED_VALUE_CHARS = 6;
+
+/** The error, what caused it, and so on: tRPC wraps Drizzle's wrapper in its own. */
+function causeChain(error: unknown): DriverError[] {
+  const chain: DriverError[] = [];
+  let link = error;
+  while (
+    typeof link === "object" &&
+    link !== null &&
+    chain.length < MAX_CAUSES
+  ) {
+    chain.push(link);
+    link = (link as { cause?: unknown }).cause;
+  }
+  return chain;
+}
+
+/** The deepest error that says anything: tRPC turns a plain cause into a blank one. */
 export function driverError(error: unknown): DriverError {
-  const failure = (error ?? {}) as DriverError & { cause?: DriverError };
-  return failure.cause ?? failure;
+  const chain = causeChain(error);
+  return (
+    chain.findLast(({ code, message }) => code ?? message) ?? chain[0] ?? {}
+  );
 }
 
 export function pgErrorCode(error: unknown): string | undefined {
   return driverError(error).code;
 }
 
-/** Leaves out Drizzle's own message, which repeats every value in the query. */
+/** A failed query, rather than something that went wrong around one. */
+export function isQueryFailure(error: unknown): boolean {
+  return causeChain(error).some(
+    ({ message, severity }) =>
+      severity !== undefined || String(message).includes(DRIZZLE_MESSAGE),
+  );
+}
+
+/**
+ * An error's message, for a place that sends it back to whoever called. Most of them
+ * are written for that person, such as a refusal or what an SMTP server said, so they
+ * stay. A failed query's is the SQL and every bound value, so that becomes a fixed line,
+ * and the reason goes to the log, since the caller no longer gets it and many of these
+ * catch blocks log nothing else. One that does should use isQueryFailure directly.
+ */
+export function messageForCaller(error: unknown, otherwise?: string): string {
+  if (isQueryFailure(error)) {
+    console.error("Query failed:", failureWithStack(error));
+    return QUERY_FAILED_MESSAGE;
+  }
+  const { message } = causeChain(error)[0] ?? {};
+  return typeof message === "string" ? message : (otherwise ?? String(error));
+}
+
+/** Longest first, so one that contains another doesn't leave its remainder behind. */
+function boundValues(error: unknown): string[] {
+  return causeChain(error)
+    .flatMap((link) => (link as { params?: unknown }).params)
+    .filter(
+      (value): value is string =>
+        typeof value === "string" && value.length >= MIN_REPLACED_VALUE_CHARS,
+    )
+    .sort((a, b) => b.length - a.length);
+}
+
+function messageForLog(error: unknown, { message, name }: DriverError): string {
+  // JSON.parse quotes what it couldn't parse: a request body, a stored setting.
+  if (name === "SyntaxError")
+    return "[message not logged, it quotes its input]";
+
+  const text = String(message ?? "");
+  // A wrapper with no cause, or an error built from Drizzle's message.
+  const cut = text.indexOf(DRIZZLE_MESSAGE);
+  const kept = cut === -1 ? text : `${text.slice(0, cut)}[query not logged]`;
+
+  // Postgres quotes the value it refused in some messages, such as 22P02's.
+  return boundValues(error).reduce(
+    (remaining, value) => remaining.replaceAll(value, "[value]"),
+    kept,
+  );
+}
+
+/**
+ * One line for the server log: the SQLSTATE or error name and the driver's own
+ * message, without any of what's above. What's left of a message is masked, since a
+ * trigger's own wording can quote a value in a form that can't be matched exactly.
+ */
 export function describeFailure(error: unknown): string {
-  const { code, message, name } = driverError(error);
-  return quotedForLog(`${String(code ?? name)}: ${String(message)}`);
+  const failure: DriverError =
+    typeof error === "object" && error !== null
+      ? driverError(error)
+      : { message: String(error) };
+  const label = String(failure.code ?? failure.name ?? "Error");
+  return quotedForLog(`${label}: ${messageForLog(error, failure)}`);
+}
+
+/**
+ * Where it happened, without the message a stack starts with. If the message can't
+ * be found there it was changed after the stack was captured, so what's in the stack
+ * can't be told apart from the frames, and that error's stack is left out.
+ */
+export function stackFrames(error: unknown): string {
+  for (const link of causeChain(error).reverse()) {
+    const { message, stack } = link as { message?: unknown; stack?: unknown };
+    if (typeof stack !== "string") continue;
+
+    const text = typeof message === "string" ? message : "";
+    const start = stack.indexOf(text);
+    if (start === -1) continue;
+
+    const frames = stack
+      .slice(start + text.length)
+      .split("\n")
+      .filter((line) => /^\s+at /.test(line));
+    if (frames.length > 0) return frames.join("\n");
+  }
+  return "";
+}
+
+/** For a catch block that would otherwise log the error itself, to keep its stack. */
+export function failureWithStack(error: unknown): string {
+  return [describeFailure(error), stackFrames(error)]
+    .filter(Boolean)
+    .join("\n");
 }

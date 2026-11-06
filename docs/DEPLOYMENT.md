@@ -98,7 +98,10 @@ routes are intended only for Cronium services and require
 A reverse proxy in front of the app also carries saves, so let it pass request
 bodies of at least 10 MB, the most one save can carry. nginx's
 `client_max_body_size` defaults to 1 MB, and past that it refuses a script before
-Cronium sees it.
+Cronium sees it, so set `client_max_body_size 10m;`. Until a proxy allows a save,
+the event form and the JSON import dialog say that a reverse proxy refused it, and
+callers of the REST API and `/api/mcp` get the proxy's own 413, which may not be
+JSON.
 
 The socket server accepts browser handshakes only from exact trusted origins.
 It uses `PUBLIC_APP_URL` and `AUTH_URL` by default. If more than one frontend
@@ -219,9 +222,11 @@ docker compose up -d
   those variables to `0` in `.env` first. Re-running `install.sh` keeps your existing
   `.env` and does not add them for you. The tool audit log is the exception: nothing
   is deleted from it until you set a window.
-- **Webhooks and variables saved before July 2026 stay plaintext until you encrypt
-  them.** Upgrading doesn't do it for you. The worker logs a warning at boot if any
-  remain, and
+- **Secrets saved before encryption at rest stay as they were until you encrypt them.**
+  Webhook values, variables, tool credentials and OAuth tokens can still be plaintext.
+  Server credentials, env vars, MFA secrets and sensitive settings can be plaintext or
+  older ciphertext, which changing `ENCRYPTION_KEY` orphans. Upgrading doesn't do it for
+  you. The worker logs a warning at boot if any remain, and
   [Encrypting values saved before encryption at rest](ENVIRONMENT_VARIABLES.md#encrypting-values-saved-before-encryption-at-rest)
   has the command.
 - **Since November 2026, container jobs need Docker's attach endpoint.** A job's script

@@ -23,7 +23,7 @@ import { desc, eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { credentialEncryption } from "@/lib/security/credential-encryption";
 import {
-  countLegacyPlaintextRows,
+  countLegacyRows,
   encryptLegacySecrets,
   legacySecretsBootWarning,
   LegacySecretsRefusedError,
@@ -1268,7 +1268,8 @@ describe("the key, on a database with no envelopes", () => {
 
       const report = await encryptLegacySecrets();
 
-      expect(report.totalEncrypted).toBe(2);
+      expect(surface(report.surfaces, "webhooks").encrypted).toBe(1);
+      expect(surface(report.surfaces, "user_variables").encrypted).toBe(1);
       expect(report.remaining).toBe(0);
       const { secret } = await storedWebhook(id);
       expect(secret.split(".")[2]).toBe(keyIdOf(KEY_A));
@@ -1281,7 +1282,8 @@ describe("the key, on a database with no envelopes", () => {
 
       const report = await encryptLegacySecrets();
 
-      expect(report.totalEncrypted).toBe(1);
+      expect(surface(report.surfaces, "webhooks").encrypted).toBe(1);
+      expect(report.remaining).toBe(0);
       const { secret } = await storedWebhook(id);
       expect(secret.split(".")[2]).toBe(keyIdOf(KEY_B));
     });
@@ -1320,7 +1322,8 @@ describe("the key, on a database with no envelopes", () => {
 
     const report = await encryptLegacySecrets();
 
-    expect(report.totalEncrypted).toBe(1);
+    expect(surface(report.surfaces, "webhooks").encrypted).toBe(1);
+    expect(report.remaining).toBe(0);
     expect((await storedWebhook(id)).secret.split(".")[2]).toBe(keyIdOf(KEY_B));
   });
 
@@ -1355,7 +1358,8 @@ describe("the key, on a database with no envelopes", () => {
     await seedAppWebhook();
     const report = await encryptLegacySecrets();
 
-    expect(report.failures).toEqual([]);
+    // The value itself stays, reported, because nothing can say which it is.
+    expect(report.failures.map((f) => f.surface)).toEqual(["env_vars"]);
     expect((await storedWebhook(id)).secret.startsWith("crn.1.")).toBe(true);
   });
 
@@ -1487,7 +1491,7 @@ describe("the worker's boot warning", () => {
 
     const warning = await legacySecretsBootWarning();
 
-    expect(warning).toContain("2 webhook or user-variable row(s)");
+    expect(warning).toContain("2 row(s)");
     expect(warning).toContain("--encrypt-legacy");
     expect(await allVersions()).toBe(before);
   });
@@ -1506,9 +1510,9 @@ describe("the worker's boot warning", () => {
     const decrypt = jest.spyOn(credentialEncryption, "decrypt");
 
     useKeys(KEY_B); // a run would refuse this one
-    expect(await legacySecretsBootWarning()).toContain("1 webhook");
+    expect(await legacySecretsBootWarning()).toContain("1 row(s)");
     useKeys(undefined); // and any decryption would throw on this
-    expect(await legacySecretsBootWarning()).toContain("1 webhook");
+    expect(await legacySecretsBootWarning()).toContain("1 row(s)");
 
     expect(decrypt).not.toHaveBeenCalled();
     decrypt.mockRestore();
@@ -1540,12 +1544,12 @@ describe("the worker's boot warning", () => {
     await seedAppWebhook();
     const { id } = await seedWebhook({ headersJson: '["x"]' });
 
-    expect(await countLegacyPlaintextRows()).toBe(1);
+    expect(await countLegacyRows()).toBe(1);
 
     const { failures } = await encryptLegacySecrets();
     expect(failures.map((f) => f.id)).toEqual([id]);
     expect((await storedWebhook(id)).secret).toBe(SECRET);
-    expect(await countLegacyPlaintextRows()).toBe(1);
+    expect(await countLegacyRows()).toBe(1);
   });
 
   it("counts a row once, whichever of its columns hold plaintext", async () => {
@@ -1558,7 +1562,7 @@ describe("the worker's boot warning", () => {
       headersJson: JSON.stringify(JSON.stringify(HEADERS)),
     });
 
-    expect(await countLegacyPlaintextRows()).toBe(5);
+    expect(await countLegacyRows()).toBe(5);
   });
 
   it("agrees with what a dry run would encrypt, and with a real run", async () => {
@@ -1574,11 +1578,11 @@ describe("the worker's boot warning", () => {
     const dryRun = await encryptLegacySecrets({ dryRun: true });
     expect(dryRun.failures).toEqual([]);
     expect(dryRun.totalEncrypted).toBe(5);
-    expect(await countLegacyPlaintextRows()).toBe(5);
+    expect(await countLegacyRows()).toBe(5);
 
     const realRun = await encryptLegacySecrets();
     expect(realRun.totalEncrypted).toBe(5);
-    expect(await countLegacyPlaintextRows()).toBe(0);
+    expect(await countLegacyRows()).toBe(0);
   });
 
   // Each row says what a run would read for that stored JSON, and so whether the
@@ -1620,7 +1624,7 @@ describe("the worker's boot warning", () => {
         .from(webhooks);
 
       expect(isLegacyWebhookHeaders(row!.headers)).toBe(plaintext);
-      expect(await countLegacyPlaintextRows()).toBe(plaintext ? 1 : 0);
+      expect(await countLegacyRows()).toBe(plaintext ? 1 : 0);
     },
   );
 
@@ -1646,13 +1650,13 @@ describe("the worker's boot warning", () => {
     it("counts a webhook secret the way a run reads it", async () => {
       await seedWebhook({ secret: value, headersJson: null });
 
-      expect(await countLegacyPlaintextRows()).toBe(plaintext ? 1 : 0);
+      expect(await countLegacyRows()).toBe(plaintext ? 1 : 0);
     });
 
     it("counts a variable the way a run reads it", async () => {
       await seedVariable({ value });
 
-      expect(await countLegacyPlaintextRows()).toBe(plaintext ? 1 : 0);
+      expect(await countLegacyRows()).toBe(plaintext ? 1 : 0);
     });
   });
 });

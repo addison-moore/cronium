@@ -38,9 +38,12 @@ const smtpConfig = {
 
 const pool = new Pool({ connectionString: databaseUrl });
 
-// Mirrors EncryptionService.encrypt in src/lib/encryption-service.ts so seeded
-// sensitive settings (smtpPassword) match what the admin UI stores.
-function encryptSensitiveValue(plaintext) {
+// Mirrors SecretVault.encrypt in src/lib/security/secret-vault.ts, with the binding
+// encryptSystemSetting uses in src/lib/security/field-secret.ts, so a seeded sensitive
+// setting (smtpPassword) is what the admin UI stores: an envelope the app can read and
+// the rotation driver can move. tests/storage/secret-rotation.test.ts runs this script
+// and reads the result back with the app's own code, so it fails if the two drift.
+function encryptSensitiveValue(plaintext, settingKey) {
   const masterKeyHex = process.env.ENCRYPTION_KEY;
   if (!masterKeyHex || !/^[0-9a-fA-F]{64}$/.test(masterKeyHex)) {
     console.error(
@@ -50,14 +53,37 @@ function encryptSensitiveValue(plaintext) {
     process.exit(1);
   }
   const masterKey = Buffer.from(masterKeyHex, "hex");
-  const iv = crypto.randomBytes(16);
+  const keyId = crypto
+    .createHash("sha256")
+    .update(masterKey)
+    .digest("hex")
+    .slice(0, 8);
+  const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", masterKey, iv);
-  cipher.setAAD(Buffer.from("cronium-server-encryption"));
-  const encrypted = Buffer.concat([
+  cipher.setAAD(
+    Buffer.from(
+      JSON.stringify({
+        p: "system-setting",
+        t: "system_settings",
+        c: "value",
+        r: settingKey,
+        u: "system",
+      }),
+      "utf8",
+    ),
+  );
+  const ciphertext = Buffer.concat([
     cipher.update(plaintext, "utf8"),
     cipher.final(),
   ]);
-  return Buffer.concat([iv, encrypted, cipher.getAuthTag()]).toString("base64");
+  return [
+    "crn",
+    "1",
+    keyId,
+    iv.toString("base64url"),
+    ciphertext.toString("base64url"),
+    cipher.getAuthTag().toString("base64url"),
+  ].join(".");
 }
 
 async function ensureAdmin() {
@@ -146,7 +172,7 @@ async function ensureSmtpDefaults() {
     [
       "smtpPassword",
       smtpConfig.password
-        ? encryptSensitiveValue(String(smtpConfig.password))
+        ? encryptSensitiveValue(String(smtpConfig.password), "smtpPassword")
         : smtpConfig.password,
     ],
     ["smtpFromEmail", smtpConfig.fromEmail],

@@ -23,6 +23,12 @@ import { canRunWithoutServers, runsInProcess } from "@/shared/event-servers";
 import { storage } from "@/server/storage";
 import { type Log } from "@shared/schema";
 import { toEventListApiDto, toServerApiDto } from "@/server/security/api-dto";
+import {
+  QUERY_FAILED_MESSAGE,
+  failureWithStack,
+  isQueryFailure,
+  messageForCaller,
+} from "@/lib/pg-errors";
 
 /**
  * NOTE: Several methods in this router use direct database queries instead of
@@ -341,7 +347,7 @@ export const serversRouter = createTRPCRouter({
       } catch (error: unknown) {
         if (error instanceof TRPCError) throw error;
 
-        console.error("Server deletion impact error:", error);
+        console.error("Server deletion impact error:", failureWithStack(error));
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to analyze server deletion impact",
@@ -399,7 +405,7 @@ export const serversRouter = createTRPCRouter({
       } catch (error: unknown) {
         if (error instanceof TRPCError) throw error;
 
-        console.error("Server archive error:", error);
+        console.error("Server archive error:", failureWithStack(error));
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to archive server",
@@ -461,7 +467,7 @@ export const serversRouter = createTRPCRouter({
           });
         }
 
-        console.error("Server restore error:", error);
+        console.error("Server restore error:", failureWithStack(error));
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to restore server",
@@ -496,7 +502,7 @@ export const serversRouter = createTRPCRouter({
     } catch (error: unknown) {
       if (error instanceof TRPCError) throw error;
 
-      console.error("Get archived servers error:", error);
+      console.error("Get archived servers error:", failureWithStack(error));
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to fetch archived servers",
@@ -540,7 +546,10 @@ export const serversRouter = createTRPCRouter({
       } catch (error: unknown) {
         if (error instanceof TRPCError) throw error;
 
-        console.error("Server permanent deletion error:", error);
+        console.error(
+          "Server permanent deletion error:",
+          failureWithStack(error),
+        );
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to permanently delete server",
@@ -576,7 +585,7 @@ export const serversRouter = createTRPCRouter({
         if (error instanceof TRPCError) throw error;
 
         // Log the actual error for debugging
-        console.error("Server deletion error:", error);
+        console.error("Server deletion error:", failureWithStack(error));
 
         // Check for specific database constraint errors
         const errorMessage =
@@ -597,7 +606,8 @@ export const serversRouter = createTRPCRouter({
 
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `Failed to delete server: ${errorMessage}`,
+          // Logged above. A 500's message is only hidden on the HTTP path.
+          message: `Failed to delete server: ${isQueryFailure(error) ? QUERY_FAILED_MESSAGE : errorMessage}`,
           cause: error,
         });
       }
@@ -684,7 +694,7 @@ export const serversRouter = createTRPCRouter({
             : `Failed to connect to ${input.address}`,
         };
       } catch (error: unknown) {
-        console.error("Connection test error:", error);
+        console.error("Connection test error:", failureWithStack(error));
         return {
           success: false,
           message:
@@ -808,13 +818,7 @@ export const serversRouter = createTRPCRouter({
             results.push({
               id: serverId,
               success: false,
-              error:
-                typeof error === "object" &&
-                error !== null &&
-                "message" in error &&
-                typeof error.message === "string"
-                  ? error.message
-                  : "Unknown error",
+              error: messageForCaller(error, "Unknown error"),
             });
           }
         }
@@ -926,7 +930,10 @@ export const serversRouter = createTRPCRouter({
 
         return archivedServers.map(toServerApiDto);
       } catch (error) {
-        console.error("Error fetching upcoming deletions:", error);
+        console.error(
+          "Error fetching upcoming deletions:",
+          failureWithStack(error),
+        );
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to fetch upcoming deletions",
@@ -959,7 +966,7 @@ export const serversRouter = createTRPCRouter({
           .where(and(...conditions))
           .orderBy(desc(serverDeletionNotifications.sentAt));
       } catch (error) {
-        console.error("Error fetching notifications:", error);
+        console.error("Error fetching notifications:", failureWithStack(error));
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to fetch notifications",
@@ -993,7 +1000,10 @@ export const serversRouter = createTRPCRouter({
 
         return { success: true };
       } catch (error) {
-        console.error("Error acknowledging notification:", error);
+        console.error(
+          "Error acknowledging notification:",
+          failureWithStack(error),
+        );
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to acknowledge notification",

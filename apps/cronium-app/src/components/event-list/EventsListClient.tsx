@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { EventStatus } from "@/shared/schema";
-import type { TimeUnit, RunLocation, EventType } from "@/shared/schema";
+import type { EventType } from "@/shared/schema";
 import { useToast } from "@cronium/ui";
 import { ConfirmationDialog } from "@cronium/ui";
 import { Pagination } from "@cronium/ui";
@@ -24,7 +25,9 @@ import type {
   EventListState,
   ServerData,
 } from "@/components/event-list";
+import { buildDuplicateEventInput } from "./duplicate-event";
 import { trpc } from "@/lib/trpc";
+import { trpcErrorMessage } from "@/trpc/shared";
 import { usePersistentPagination } from "@/hooks/use-persistent-pagination";
 
 const copy = {
@@ -50,6 +53,7 @@ export function EventsListClient({
   onRefresh,
 }: EventsListClientProps) {
   const { itemsPerPage, setItemsPerPage } = usePersistentPagination(10);
+  const router = useRouter();
 
   // Filter state
   const [filters, setFilters] = useState<EventListFilters>({
@@ -78,6 +82,22 @@ export function EventsListClient({
 
   const { toast } = useToast();
 
+  /** The onError of a mutation that acts on one event: says what the server said. */
+  const toastFailure = (fallback: string) => (error: unknown) => {
+    toast({
+      title: "Error",
+      description: trpcErrorMessage(error, fallback),
+      variant: "destructive",
+    });
+  };
+
+  // The rows come from the page's server component, so a new event only appears
+  // once that runs again.
+  const showNewEvent = () => {
+    if (onRefresh) onRefresh();
+    else router.refresh();
+  };
+
   // Sync itemsPerPage from localStorage when it loads
   useEffect(() => {
     setState((prev) => ({
@@ -99,13 +119,7 @@ export function EventsListClient({
       });
       if (onRefresh) onRefresh();
     },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete event",
-        variant: "destructive",
-      });
-    },
+    onError: toastFailure("Failed to delete event"),
   });
 
   const executeEventMutation = trpc.events.execute.useMutation({
@@ -117,6 +131,7 @@ export function EventsListClient({
       });
       if (onRefresh) onRefresh();
     },
+    onError: toastFailure("Failed to run event"),
   });
 
   const createEventMutation = trpc.events.create.useMutation({
@@ -128,6 +143,7 @@ export function EventsListClient({
       });
       if (onRefresh) onRefresh();
     },
+    onError: toastFailure("Failed to duplicate event"),
   });
 
   const forkEventMutation = trpc.events.fork.useMutation({
@@ -139,13 +155,7 @@ export function EventsListClient({
       });
       if (onRefresh) onRefresh();
     },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to fork event",
-        variant: "destructive",
-      });
-    },
+    onError: toastFailure("Failed to fork event"),
   });
 
   const updateEventMutation = trpc.events.update.useMutation({
@@ -158,6 +168,7 @@ export function EventsListClient({
       });
       if (onRefresh) onRefresh();
     },
+    onError: toastFailure("Failed to update event"),
   });
 
   const activateEventMutation = trpc.events.activate.useMutation({
@@ -169,6 +180,7 @@ export function EventsListClient({
       });
       if (onRefresh) onRefresh();
     },
+    onError: toastFailure("Failed to activate event"),
   });
 
   const deactivateEventMutation = trpc.events.deactivate.useMutation({
@@ -180,9 +192,66 @@ export function EventsListClient({
       });
       if (onRefresh) onRefresh();
     },
+    onError: toastFailure("Failed to pause event"),
   });
 
   const downloadMutation = trpc.events.download.useMutation();
+
+  // A useMutation's callbacks run once per call, so a bulk action on the mutations
+  // above would raise a toast per event. These have none, and the bulk handlers
+  // report one summary through reportBulkResults.
+  const bulkDeleteMutation = trpc.events.delete.useMutation();
+  const bulkActivateMutation = trpc.events.activate.useMutation();
+  const bulkDeactivateMutation = trpc.events.deactivate.useMutation();
+  const bulkUpdateMutation = trpc.events.update.useMutation();
+
+  /**
+   * The one toast a bulk action gets. Returns the ids that worked, because only
+   * those rows should change: an event the server refused is still as it was.
+   */
+  const reportBulkResults = (
+    ids: number[],
+    results: PromiseSettledResult<unknown>[],
+    done: string,
+    verb: string,
+  ): Set<number> => {
+    const succeeded = new Set(
+      ids.filter((_, index) => results[index]?.status === "fulfilled"),
+    );
+    const failures = results.filter(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    // Usually the same reason for every event, so each is only said once.
+    const reasons = [
+      ...new Set(
+        failures.map((failure) =>
+          trpcErrorMessage(failure.reason, `Failed to ${verb} event`),
+        ),
+      ),
+    ].join("; ");
+
+    if (failures.length === 0) {
+      toast({
+        title: "Success",
+        description: `Successfully ${done.toLowerCase()} ${ids.length} event(s).`,
+        variant: "success",
+      });
+    } else if (succeeded.size > 0) {
+      toast({
+        title: "Partial Success",
+        description: `${done} ${succeeded.size} of ${ids.length} event(s). ${failures.length} failed: ${reasons}`,
+        variant: "info",
+      });
+    } else {
+      toast({
+        title: "Error",
+        description: `Failed to ${verb} ${ids.length} event(s): ${reasons}`,
+        variant: "destructive",
+      });
+    }
+
+    return succeeded;
+  };
 
   // Helper functions for state updates
   const updateFilters = useCallback((newFilters: Partial<EventListFilters>) => {
@@ -360,9 +429,10 @@ export function EventsListClient({
       await deleteEventMutation.mutateAsync({ id: deleteEventId });
       setEvents((prev) => prev.filter((e) => e.id !== deleteEventId));
       setDeleteEventId(null);
-    } catch (error) {
-      // Re-throw to let ConfirmationDialog know the operation failed
-      throw error;
+    } catch {
+      // Error handling is done in the mutation onError callback. No re-throw:
+      // ConfirmationDialog closes either way and doesn't catch, so a rejection
+      // here would only end up as an unhandled one.
     }
   };
 
@@ -387,108 +457,19 @@ export function EventsListClient({
       // Find the event in the current data first to avoid unnecessary query
       const existingEvent = events.find((e) => e.id === eventId);
       if (!existingEvent) {
-        throw new Error("Event not found");
+        toast({
+          title: "Error",
+          description: "Event not found",
+          variant: "destructive",
+        });
+        return;
       }
 
-      const eventData = existingEvent;
+      await createEventMutation.mutateAsync(
+        buildDuplicateEventInput(existingEvent),
+      );
 
-      // Create duplicate event with "(copy)" appended to name
-      // Build the duplicate data object with proper type safety
-      const duplicateData = {
-        // Required fields
-        name: `${eventData.name} (copy)`,
-        type: eventData.type,
-
-        // Optional fields
-        ...(eventData.description !== undefined &&
-          eventData.description !== null && {
-            description: eventData.description,
-          }),
-        ...(eventData.shared !== undefined && {
-          shared: Boolean(eventData.shared),
-        }),
-        ...(Array.isArray(eventData.tags) && {
-          tags: eventData.tags.map(String),
-        }),
-        ...(eventData.content !== undefined &&
-          eventData.content !== null && {
-            content: eventData.content,
-          }),
-        status: EventStatus.DRAFT,
-
-        // HTTP specific fields
-        ...(eventData.httpMethod !== undefined &&
-          eventData.httpMethod !== null && {
-            httpMethod: eventData.httpMethod,
-          }),
-        ...(eventData.httpUrl !== undefined &&
-          eventData.httpUrl !== null && {
-            httpUrl: eventData.httpUrl,
-          }),
-        ...(Array.isArray(eventData.httpHeaders) && {
-          httpHeaders: eventData.httpHeaders.map(
-            (h: { key?: unknown; value?: unknown }) => ({
-              key:
-                typeof h.key === "string"
-                  ? h.key
-                  : typeof h.key === "number" || typeof h.key === "boolean"
-                    ? String(h.key)
-                    : "",
-              value:
-                typeof h.value === "string"
-                  ? h.value
-                  : typeof h.value === "number" || typeof h.value === "boolean"
-                    ? String(h.value)
-                    : "",
-            }),
-          ),
-        }),
-        ...(eventData.httpBody !== undefined &&
-          eventData.httpBody !== null && {
-            httpBody: eventData.httpBody,
-          }),
-
-        // Schedule related fields
-        ...(typeof eventData.scheduleNumber === "number" && {
-          scheduleNumber: eventData.scheduleNumber,
-        }),
-        ...(eventData.scheduleUnit && {
-          scheduleUnit: eventData.scheduleUnit as TimeUnit,
-        }),
-        ...(eventData.customSchedule !== undefined &&
-          eventData.customSchedule !== null && {
-            customSchedule: eventData.customSchedule,
-          }),
-
-        // Server related fields
-        ...(eventData.runLocation && {
-          runLocation: eventData.runLocation as RunLocation,
-        }),
-        ...(typeof eventData.serverId === "number" && {
-          serverId: eventData.serverId,
-        }),
-        ...(Array.isArray(eventData.eventServers) && {
-          serverIds: eventData.eventServers,
-        }),
-
-        // Additional fields
-        ...(typeof eventData.timeoutValue === "number" && {
-          timeoutValue: eventData.timeoutValue,
-        }),
-        ...(eventData.timeoutUnit && {
-          timeoutUnit: eventData.timeoutUnit as TimeUnit,
-        }),
-        ...(typeof eventData.retries === "number" && {
-          retries: eventData.retries,
-        }),
-      };
-
-      await createEventMutation.mutateAsync(duplicateData);
-
-      // Update local state to include the new event
-      if (onRefresh) {
-        onRefresh();
-      }
+      showNewEvent();
     } catch {
       // Error handling is done in the mutation onError callback
     }
@@ -499,10 +480,7 @@ export function EventsListClient({
     try {
       await forkEventMutation.mutateAsync({ id: eventId });
 
-      // Update local state to include the new event
-      if (onRefresh) {
-        onRefresh();
-      }
+      showNewEvent();
     } catch {
       // Error handling is done in the mutation onError callback
     }
@@ -542,43 +520,28 @@ export function EventsListClient({
 
     updateState({ bulkActionLoading: "delete" });
 
-    let successCount = 0;
-    let failureCount = 0;
-
     try {
+      const selectedIds = Array.from(state.selectedEvents);
+
       // Process deletions sequentially to avoid overwhelming the server
-      for (const eventId of Array.from(state.selectedEvents)) {
-        try {
-          await deleteEventMutation.mutateAsync({ id: eventId });
-          successCount++;
-        } catch {
-          failureCount++;
-        }
+      const results: PromiseSettledResult<unknown>[] = [];
+      for (const id of selectedIds) {
+        results.push(
+          ...(await Promise.allSettled([
+            bulkDeleteMutation.mutateAsync({ id }),
+          ])),
+        );
       }
 
-      // Show appropriate success/failure message
-      if (successCount > 0 && failureCount === 0) {
-        toast({
-          title: "Success",
-          description: `Successfully deleted ${successCount} event(s).`,
-          variant: "success",
-        });
-      } else if (successCount > 0 && failureCount > 0) {
-        toast({
-          title: "Partial Success",
-          description: `Deleted ${successCount} of ${state.selectedEvents.size} event(s). ${failureCount} failed.`,
-          variant: "info",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: `Failed to delete all ${state.selectedEvents.size} event(s).`,
-          variant: "destructive",
-        });
-      }
+      const deleted = reportBulkResults(
+        selectedIds,
+        results,
+        "Deleted",
+        "delete",
+      );
 
       updateState({ selectedEvents: new Set() });
-      setEvents((prev) => prev.filter((e) => !state.selectedEvents.has(e.id)));
+      setEvents((prev) => prev.filter((e) => !deleted.has(e.id)));
     } catch {
       toast({
         title: "Error",
@@ -595,39 +558,26 @@ export function EventsListClient({
 
     updateState({ bulkActionLoading: "activate" });
     try {
-      const activatePromises = Array.from(state.selectedEvents).map(
-        async (eventId) => {
-          return activateEventMutation.mutateAsync({
-            id: eventId,
-            resetCounter: false,
-          });
-        },
+      const selectedIds = Array.from(state.selectedEvents);
+      const results = await Promise.allSettled(
+        selectedIds.map((id) =>
+          bulkActivateMutation.mutateAsync({ id, resetCounter: false }),
+        ),
       );
 
-      const results = await Promise.allSettled(activatePromises);
-      const failures = results.filter((result) => result.status === "rejected");
-
-      if (failures.length > 0) {
-        toast({
-          title: "Partial Success",
-          description: `Activated ${state.selectedEvents.size - failures.length} of ${state.selectedEvents.size} event(s). ${failures.length} failed.`,
-          variant: "info",
-        });
-      } else {
-        toast({
-          title: "Success",
-          description: `Successfully activated ${state.selectedEvents.size} event(s).`,
-          variant: "success",
-        });
-      }
+      const activated = reportBulkResults(
+        selectedIds,
+        results,
+        "Activated",
+        "activate",
+      );
 
       updateState({ selectedEvents: new Set() });
 
       // Update local state
-      const selectedIds = Array.from(state.selectedEvents);
       setEvents((prev) =>
         prev.map((e) =>
-          selectedIds.includes(e.id) ? { ...e, status: EventStatus.ACTIVE } : e,
+          activated.has(e.id) ? { ...e, status: EventStatus.ACTIVE } : e,
         ),
       );
     } catch {
@@ -646,36 +596,19 @@ export function EventsListClient({
 
     updateState({ bulkActionLoading: "pause" });
     try {
-      const pausePromises = Array.from(state.selectedEvents).map(
-        async (eventId) => {
-          return deactivateEventMutation.mutateAsync({ id: eventId });
-        },
+      const selectedIds = Array.from(state.selectedEvents);
+      const results = await Promise.allSettled(
+        selectedIds.map((id) => bulkDeactivateMutation.mutateAsync({ id })),
       );
 
-      const results = await Promise.allSettled(pausePromises);
-      const failures = results.filter((result) => result.status === "rejected");
-
-      if (failures.length > 0) {
-        toast({
-          title: "Partial Success",
-          description: `Paused ${state.selectedEvents.size - failures.length} of ${state.selectedEvents.size} event(s). ${failures.length} failed.`,
-          variant: "info",
-        });
-      } else {
-        toast({
-          title: "Success",
-          description: `Successfully paused ${state.selectedEvents.size} event(s).`,
-          variant: "success",
-        });
-      }
+      const paused = reportBulkResults(selectedIds, results, "Paused", "pause");
 
       updateState({ selectedEvents: new Set() });
 
       // Update local state
-      const selectedIds = Array.from(state.selectedEvents);
       setEvents((prev) =>
         prev.map((e) =>
-          selectedIds.includes(e.id) ? { ...e, status: EventStatus.PAUSED } : e,
+          paused.has(e.id) ? { ...e, status: EventStatus.PAUSED } : e,
         ),
       );
     } catch {
@@ -712,17 +645,30 @@ export function EventsListClient({
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      toast({
-        title: "Success",
-        description: `Successfully downloaded ${state.selectedEvents.size} event(s).`,
-        variant: "info",
-      });
+      // The server leaves out events this person can no longer see, rather than refusing.
+      const missing = eventIds.length - downloadData.eventCount;
+      toast(
+        missing > 0
+          ? {
+              title: "Partial Success",
+              description: `Downloaded ${downloadData.eventCount} of ${eventIds.length} event(s). ${missing} no longer available.`,
+              variant: "info",
+            }
+          : {
+              title: "Success",
+              description: `Successfully downloaded ${eventIds.length} event(s).`,
+              variant: "info",
+            },
+      );
 
       updateState({ selectedEvents: new Set() });
-    } catch {
+    } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to download events. Please try again.",
+        description: trpcErrorMessage(
+          error,
+          "Failed to download events. Please try again.",
+        ),
         variant: "destructive",
       });
     } finally {
@@ -735,41 +681,29 @@ export function EventsListClient({
 
     updateState({ bulkActionLoading: "archive" });
     try {
-      const archivePromises = Array.from(state.selectedEvents).map(
-        async (eventId) => {
-          return updateEventMutation.mutateAsync({
-            id: eventId,
+      const selectedIds = Array.from(state.selectedEvents);
+      const results = await Promise.allSettled(
+        selectedIds.map((id) =>
+          bulkUpdateMutation.mutateAsync({
+            id,
             status: EventStatus.ARCHIVED,
-          });
-        },
+          }),
+        ),
       );
 
-      const results = await Promise.allSettled(archivePromises);
-      const failures = results.filter((result) => result.status === "rejected");
-
-      if (failures.length > 0) {
-        toast({
-          title: "Partial Success",
-          description: `Archived ${state.selectedEvents.size - failures.length} of ${state.selectedEvents.size} event(s). ${failures.length} failed.`,
-          variant: "info",
-        });
-      } else {
-        toast({
-          title: "Success",
-          description: `Successfully archived ${state.selectedEvents.size} event(s).`,
-          variant: "success",
-        });
-      }
+      const archived = reportBulkResults(
+        selectedIds,
+        results,
+        "Archived",
+        "archive",
+      );
 
       updateState({ selectedEvents: new Set() });
 
       // Update local state
-      const selectedIds = Array.from(state.selectedEvents);
       setEvents((prev) =>
         prev.map((e) =>
-          selectedIds.includes(e.id)
-            ? { ...e, status: EventStatus.ARCHIVED }
-            : e,
+          archived.has(e.id) ? { ...e, status: EventStatus.ARCHIVED } : e,
         ),
       );
     } catch {

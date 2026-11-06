@@ -41,6 +41,7 @@ import {
   toEventListApiDto,
 } from "@/server/security/api-dto";
 import { canReadEnvVarValues } from "@/server/token-scopes";
+import { failureWithStack } from "@/lib/pg-errors";
 
 /**
  * A fork writes its own links to the source event's servers, and no write can
@@ -125,7 +126,7 @@ export const eventsRouter = createTRPCRouter({
       } catch (error) {
         if (error instanceof TRPCError) throw error;
 
-        console.error("Error in events.getById:", error);
+        console.error("Error in events.getById:", failureWithStack(error));
 
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -547,6 +548,7 @@ export const eventsRouter = createTRPCRouter({
           return {
             format: "json",
             filename: `${String(event.name ?? "event")}.json`,
+            eventCount: 1,
             data: JSON.stringify(
               toEventApiDto(event, userId, {
                 revealEnvVarValues: canReadEnvVarValues(ctx.tokenScopes),
@@ -567,6 +569,8 @@ export const eventsRouter = createTRPCRouter({
         return {
           format: "json",
           filename: "events.json",
+          // What was asked for, less anything this user can't see or that's gone.
+          eventCount: events.filter(Boolean).length,
           data: JSON.stringify(
             events.map((event) =>
               event

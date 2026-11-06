@@ -14,6 +14,7 @@ import {
 } from "@shared/schemas/logs";
 import { storage, type LogFilters } from "@/server/storage";
 import { LogStatus } from "@shared/schema";
+import { messageForCaller } from "@/lib/pg-errors";
 
 // Use centralized authentication from trpc.ts
 
@@ -497,7 +498,7 @@ export const logsRouter = createTRPCRouter({
             results.push({
               id: logId,
               success: false,
-              error: (error as Error).message,
+              error: messageForCaller(error),
             });
           }
         }

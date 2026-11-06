@@ -8,6 +8,7 @@ import {
   restPrincipalErrorResponse,
 } from "@/lib/api-auth";
 import { toServerApiDto } from "@/server/security/api-dto";
+import { failureWithStack } from "@/lib/pg-errors";
 
 export async function GET(req: NextRequest) {
   try {
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(servers.map(toServerApiDto));
   } catch (error) {
-    console.error("Error fetching servers:", error);
+    console.error("Error fetching servers:", failureWithStack(error));
     return NextResponse.json(
       { error: "Failed to fetch servers" },
       { status: 500 },
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
         );
       }
     } catch (error) {
-      console.error("SSH connection test error:", error);
+      console.error("SSH connection test error:", failureWithStack(error));
 
       // Provide a detailed error message
       const errorMessage =
@@ -125,7 +126,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(toServerApiDto(server), { status: 201 });
   } catch (error) {
-    console.error("Error creating server:", error);
+    console.error("Error creating server:", failureWithStack(error));
     return NextResponse.json(
       { error: "Failed to create server" },
       { status: 500 },
