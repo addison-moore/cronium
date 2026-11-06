@@ -102,6 +102,16 @@ The orchestrator determines execution type based on:
 5. **Output Capture**: stdout/stderr collected and delivered with the job completion report; live log lines reach the UI through the app's socket-server broadcasts (`POST /broadcast/log-line`)
 6. **Result Collection**: Exit code, final output, runtime data, duration
 
+A container job runs on a read-only root filesystem, and has these directories to write to:
+
+| Directory    | Use                                           | Size limit |
+| ------------ | --------------------------------------------- | ---------- |
+| `/workspace` | Working directory                             | 500 MB     |
+| `/home`      | `$HOME`, unless the event sets its own `HOME` | 100 MB     |
+| `/tmp`       | Scratch space                                 | 100 MB     |
+
+A job can write to these whichever user it runs as (`CRONIUM_CONTAINER_SECURITY_USER`). They are in-memory filesystems, so their files are gone when the job ends and count towards its memory limit. Files there can't be run directly: `./script.sh` is refused, while `sh script.sh` works. Root owns each directory itself, so a job can't `chmod` one, and `git` refuses a repository at the top of one as dubious ownership. A subdirectory has neither problem.
+
 #### Remote/SSH Execution
 
 1. **Connection Establishment**: SSH to target server
