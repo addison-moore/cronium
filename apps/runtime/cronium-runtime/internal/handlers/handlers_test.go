@@ -57,6 +57,9 @@ type fakeApp struct {
 
 	failContext    bool // serve the pinned 500 for the context route
 	failToolAction bool // serve the pinned actionFailure for tools/execute
+
+	// When set, what a variable GET answers in place of the pinned getSuccess.
+	variableAnswer *testsupport.FixtureResponse
 }
 
 func newFakeApp(t *testing.T) *fakeApp {
@@ -98,6 +101,7 @@ func newFakeApp(t *testing.T) *fakeApp {
 		a.capabilities[key] = r.Header.Get("X-Job-Capability")
 		failContext := a.failContext
 		failToolAction := a.failToolAction
+		variableAnswer := a.variableAnswer
 		a.mu.Unlock()
 
 		path := r.URL.Path
@@ -119,6 +123,10 @@ func newFakeApp(t *testing.T) *fakeApp {
 		case r.Method == http.MethodPost && strings.HasSuffix(path, "/condition"):
 			conditionOK.Write(w)
 		case r.Method == http.MethodGet && strings.HasPrefix(path, "/api/internal/variables/"):
+			if variableAnswer != nil {
+				variableAnswer.Write(w)
+				return
+			}
 			varGetOK.Write(w)
 		case r.Method == http.MethodPut && strings.HasPrefix(path, "/api/internal/variables/"):
 			varPutOK.Write(w)
@@ -634,6 +642,73 @@ func TestSetVariable_NullIsRejected(t *testing.T) {
 
 // Backend failures surface as a clean script-facing 500, not a panic or a
 // leaked backend body.
+// Reading a variable nobody has set is a normal thing for a script to do, and every SDK
+// documents the answer as null or empty. It has to look different from a read that
+// failed, because the bash helpers start a counter from nothing on the one and must leave
+// it alone on the other.
+func TestGetVariable_NoSuchVariableIsNull(t *testing.T) {
+	e := newEnv(t)
+	notFound := testsupport.LoadFixture(t, "variables.json", "notFound", nil)
+	e.app.mu.Lock()
+	e.app.variableAnswer = &notFound
+	e.app.mu.Unlock()
+	base := "/executions/" + testExecutionID + "/variables/NEW_KEY"
+	getKey := "GET /api/internal/variables/" + testUserID + "/NEW_KEY"
+
+	status, body := e.call(t, http.MethodGet, base, bearer(token(t)), nil)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %#v", status, body)
+	}
+	data, ok := body["data"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("body = %#v, want a data object", body)
+	}
+	if value, present := data["value"]; !present || value != nil {
+		t.Errorf("data = %#v, want a null value", data)
+	}
+	if data["key"] != "NEW_KEY" {
+		t.Errorf("key = %#v, want NEW_KEY", data["key"])
+	}
+	if got := e.app.hitCount(getKey); got != 1 {
+		t.Errorf("backend GETs = %d, want 1", got)
+	}
+
+	// Not remembered: a variable that doesn't exist yet can appear at any moment, from
+	// another job. A write in this execution goes on to be read back as usual.
+	e.call(t, http.MethodGet, base, bearer(token(t)), nil)
+	if got := e.app.hitCount(getKey); got != 2 {
+		t.Errorf("backend GETs after a second read = %d, want 2", got)
+	}
+	status, _ = e.call(t, http.MethodPut, base, bearer(token(t)), []byte(`{"value":"1"}`))
+	if status != http.StatusOK {
+		t.Fatalf("PUT status = %d, want 200", status)
+	}
+	_, body = e.call(t, http.MethodGet, base, bearer(token(t)), nil)
+	if data, _ := body["data"].(map[string]interface{}); data["value"] != "1" {
+		t.Errorf("data after PUT = %#v, want the written value", body["data"])
+	}
+}
+
+func TestGetVariable_FailedReadIsAnError(t *testing.T) {
+	for _, scenario := range []string{"serverError", "unauthorized", "forbiddenUserScope"} {
+		t.Run(scenario, func(t *testing.T) {
+			e := newEnv(t)
+			answer := testsupport.LoadFixture(t, "variables.json", scenario, nil)
+			e.app.mu.Lock()
+			e.app.variableAnswer = &answer
+			e.app.mu.Unlock()
+
+			status, body := e.call(t, http.MethodGet, "/executions/"+testExecutionID+"/variables/MY_KEY", bearer(token(t)), nil)
+			if status != http.StatusInternalServerError {
+				t.Fatalf("status = %d, want 500; body = %#v", status, body)
+			}
+			if body["message"] != "failed to get variable" {
+				t.Errorf("body = %#v, want the generic script-facing message", body)
+			}
+		})
+	}
+}
+
 func TestBackendOutage_MapsTo500(t *testing.T) {
 	e := newEnv(t)
 	e.app.failContext = true

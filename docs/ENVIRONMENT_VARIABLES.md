@@ -67,7 +67,7 @@ These environment variables must be set for the application to function correctl
 | `AUTH_URL`                 | NextAuth base URL                                                                                                                                                                                              | `string` (URL)          | Yes      | `http://localhost:3000`                 | 📱      |
 | `AUTH_SECRET`              | NextAuth encryption secret                                                                                                                                                                                     | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` | 📱      |
 | `ENCRYPTION_KEY`           | Data encryption key (active). Encrypts every secret at rest via the versioned vault + tool-credential scheme                                                                                                   | `string` (64 hex)       | Yes      | Generate with `openssl rand -hex 32`    | 📱      |
-| `ENCRYPTION_KEYS_RETIRED`  | JSON array of former `ENCRYPTION_KEY` values kept in the keyring during a key rotation, so secrets under them still decrypt and job tokens under them verify. Empty/unset otherwise. See "Key rotation" below. | `string` (JSON array)   | No       | e.g. `["<old-hex-key>"]`                | 📱      |
+| `ENCRYPTION_KEYS_RETIRED`  | JSON array of former `ENCRYPTION_KEY` values kept during a key rotation so secrets under them decrypt and job tokens verify. Empty/unset otherwise. The app won't start if it's malformed. See "Key rotation". | `string` (JSON array)   | No       | e.g. `["<old-hex-key>"]`                | 📱      |
 | `JWT_SECRET`               | JWT signing secret                                                                                                                                                                                             | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` |
 | `CRONIUM_ORCHESTRATOR_KEY` | Orchestrator service-identity credential — the app verifies it on the orchestrator-facing routes (claim, heartbeat, health/metrics)                                                                            | `string`                | Yes      | Generate with `openssl rand -base64 32` |
 | `SOCKET_BROADCAST_KEY`     | Authenticates internal broadcasts from the app/worker to the socket server                                                                                                                                     | `string`                | Yes      | Generate with `openssl rand -base64 32` |
@@ -166,7 +166,16 @@ Analytics render only in production builds, so `pnpm dev` never sends events.
 
 OAuth apps used by tool integrations (currently Google Sheets). Register the
 redirect URI `{AUTH_URL}/api/oauth/callback` with the provider. Users then
-click "Connect" on the tool's credential card to authorize their account.
+click "Connect" on the tool's credential card to authorize their account, and
+the Tools page says how it went when the provider sends them back.
+
+Set these for the app and the worker, which runs tool actions and refreshes
+their tokens. Both Compose files pass them on from `.env`.
+
+Open Cronium at the address in `AUTH_URL` to connect an account. The flow is
+tied to the browser by a cookie on the address it starts from, and the provider
+always comes back to `AUTH_URL`, so starting anywhere else ends in "OAuth
+session could not be verified for this browser".
 
 | Variable                        | Description                                    | Type     | Default | Required |
 | ------------------------------- | ---------------------------------------------- | -------- | ------- | -------- |
@@ -533,6 +542,7 @@ openssl rand -base64 32  # For SOCKET_BROADCAST_KEY
 4. **Containerization**: Container-related variables are prepared for future isolation features
 5. **Service Architecture**: The application uses multiple services (app, websocket, orchestrator) that communicate via internal URLs
 6. **Proxies**: HTTP request events, outbound webhooks and user-supplied AI endpoints ignore `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` and always connect directly, because a proxy would resolve the target itself and bypass the SSRF guard. These features need direct outbound access from the app and worker.
+7. **Name resolution**: HTTP request events, outbound webhooks and user-supplied AI endpoints read `/etc/hosts`, then ask the name servers in `/etc/resolv.conf` directly, so a host whose name server hangs can't hold up anything else in the process. They don't try search domains, so give these a fully qualified name. A host is refused if its name server doesn't answer for IPv4 or for IPv6, even if it answered for the other.
 
 ## Key rotation (`ENCRYPTION_KEY`)
 
@@ -599,9 +609,13 @@ docker compose exec -e ENCRYPTION_KEY="$NEW" -e ENCRYPTION_KEYS_RETIRED='["<old-
 #    this: their job tokens stay valid while the old key is retired.
 
 # 3. Give both services both keys. Change these two lines in .env, keeping the single
-#    quotes, restart, and note the time. docker compose restart wouldn't load them.
+#    quotes. This should print "Environment validation passed": the services won't start
+#    on a typo in either line, and everything is still running at this point.
 #      ENCRYPTION_KEY=<new-hex-key>
 #      ENCRYPTION_KEYS_RETIRED='["<old-hex-key>"]'
+docker compose run --rm --no-deps cronium-app node apps/cronium-app/scripts/validate-env.cjs
+
+# Restart, and note the time. docker compose restart wouldn't load the new values.
 docker compose up -d --no-deps cronium-app cronium-worker
 date -u '+%F %T'
 
@@ -699,6 +713,15 @@ those values may still be under the old key, so don't take it as the last one.
   including webhooks sent to Cronium, so a sender needs to retry. Nothing is dispatched
   until the worker is back. Signed-in users stay signed in. A tool action or HTTP request
   running in the worker gets up to 30 seconds to finish when it stops.
+- **A malformed `ENCRYPTION_KEYS_RETIRED` keeps the app and worker down until it's
+  fixed,** which is why step 3 checks `.env` before restarting. If one gets through,
+  `docker compose up` fails after about 5 seconds with
+  `dependency failed to start: container ... is unhealthy`. The app keeps restarting and
+  answers nothing, and the worker doesn't start. `docker compose logs cronium-app` says
+  what's wrong, without printing the value. Nothing has run on the new key and no row has
+  moved, so correct the line and run the command again, or put the two old lines back. A
+  list that's well formed but holds the wrong key still starts, which is why step 3 also
+  checks that something reads.
 - **Nothing stops between the restarts.** About 500 requests to the app all succeeded
   while the driver moved 20,000 rows, so steps 4 and 5 can take as long as they need.
 - **A script running at step 3 carries on.** Its job token is signed with the old key,
@@ -729,10 +752,11 @@ first. This also covers a failed check at step 3, because anything saved since t
 restart is under the new key, and the driver brings it back.
 
 ```bash
-# 1. Change these two lines in .env, restart, and note the time. Running scripts carry on,
-#    because tokens signed with either key still verify.
+# 1. Change these two lines in .env, check them as in step 3, restart, and note the time.
+#    Running scripts carry on, because tokens signed with either key still verify.
 #      ENCRYPTION_KEY=<old-hex-key>
 #      ENCRYPTION_KEYS_RETIRED='["<new-hex-key>"]'
+docker compose run --rm --no-deps cronium-app node apps/cronium-app/scripts/validate-env.cjs
 docker compose up -d --no-deps cronium-app cronium-worker
 date -u '+%F %T'
 docker compose exec cronium-app printenv ENCRYPTION_KEY ENCRYPTION_KEYS_RETIRED

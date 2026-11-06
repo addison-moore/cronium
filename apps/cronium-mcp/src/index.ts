@@ -58,35 +58,105 @@ function requestIds(msg: unknown): JsonRpcId[] {
   return Array.isArray(msg) ? msg.flatMap(one) : one(msg);
 }
 
-/** Whether a response body is a JSON-RPC message, as /api/mcp's own 413 is. */
-function isJsonRpc(body: string): boolean {
+/**
+ * A response body if it's JSON-RPC, one message or a batch of them, and otherwise undefined.
+ * This is how the bridge tells Cronium from anything else in front of it. It goes by the body,
+ * not the status or the content type, because /api/mcp itself answers at 200, 400 and 413, a
+ * proxy's page can come at 200, and real Kong answers in JSON, at 200 as well. The route's
+ * other answers, its 401 and its empty 202 for notifications, go by their status.
+ */
+function parseJsonRpc(body: string): unknown {
+  const isMessage = (value: unknown): boolean =>
+    (value as { jsonrpc?: unknown } | null)?.jsonrpc === "2.0";
+  let parsed: unknown;
   try {
-    return (
-      (JSON.parse(body) as { jsonrpc?: unknown } | null)?.jsonrpc === "2.0"
-    );
+    parsed = JSON.parse(body);
   } catch {
-    return false;
+    return undefined;
+  }
+  const isJsonRpc = Array.isArray(parsed)
+    ? parsed.length > 0 && parsed.every(isMessage)
+    : isMessage(parsed);
+  return isJsonRpc ? parsed : undefined;
+}
+
+/** Whether this message, or one in a batch, is a tool call: nothing else here changes anything. */
+function hasToolCall(msg: unknown): boolean {
+  const isCall = (m: unknown): boolean =>
+    (m as { method?: unknown } | null)?.method === "tools/call";
+  return Array.isArray(msg) ? msg.some(isCall) : isCall(msg);
+}
+
+/**
+ * Where a redirect was going. It leaves out the query, which on the way to a sign-in page is
+ * long and says nothing to whoever reads this.
+ */
+function redirectTarget(res: Response): string {
+  const location = res.headers.get("location");
+  if (!location) return "";
+  try {
+    const target = new URL(location, ENDPOINT);
+    return ` to ${target.origin}${target.pathname}`;
+  } catch {
+    return "";
   }
 }
 
-/** Human-actionable message for an HTTP-level (non-JSON-RPC) failure. */
-function httpFailureMessage(status: number, body: string): string {
-  if (status === 401) {
+/**
+ * What to say when something other than Cronium answers. All the bridge knows is the status and
+ * that the body isn't Cronium's, so it offers causes without choosing one, and it leaves out the
+ * body, because an MCP client hands this to an agent. A 3xx or 4xx is a refusal. Anything else can
+ * come after Cronium acted on the request: nginx giving up early gave a real 504, and with
+ * `error_page` a real 200, with the event saved. So a tool call says so, for an agent about to
+ * repeat it.
+ */
+function notCroniumMessage(res: Response, isToolCall: boolean): string {
+  const isRedirect = res.status >= 300 && res.status < 400;
+  const isRefusal = res.status >= 300 && res.status < 500;
+  const answer = `Got HTTP ${res.status}${isRedirect ? redirectTarget(res) : ""}, not Cronium's answer`;
+  const causes =
+    res.status >= 500
+      ? "Cronium may be restarting, or a reverse proxy in front of it can't reach it."
+      : "It may be from a reverse proxy, firewall or sign-in page, or CRONIUM_BASE_URL may be wrong.";
+  return isToolCall && !isRefusal
+    ? `${answer}, so this call may still have gone through: check before repeating it. ${causes}`
+    : `${answer}. ${causes}`;
+}
+
+/** Human-actionable message for an HTTP answer that can't be passed on as it is. */
+function httpFailureMessage(
+  res: Response,
+  body: string,
+  isToolCall: boolean,
+): string {
+  if (res.status === 401) {
     return (
       "Cronium rejected the API token (HTTP 401). Check CRONIUM_API_TOKEN — " +
       "create a token with the MCP scope under Settings → API Tokens (tokens expire)."
     );
   }
-  // Cronium never saw this one, so it isn't right to say Cronium returned it, and the
-  // proxy's own page, such as nginx's HTML, doesn't say what to do about it.
-  if (status === 413 && !isJsonRpc(body)) {
+  if (parseJsonRpc(body) !== undefined) {
+    return `Cronium /api/mcp returned HTTP ${res.status}: ${body.slice(0, 300)}`;
+  }
+  // Cronium never saw this one, and the proxy's own page, such as nginx's HTML, doesn't say
+  // what to do about it.
+  if (res.status === 413) {
     return (
       "A reverse proxy in front of Cronium refused this request as too long (HTTP 413). " +
       "It should allow up to 10 MB, as Cronium does. In nginx, that's client_max_body_size."
     );
   }
-  const detail = body.slice(0, 300);
-  return `Cronium /api/mcp returned HTTP ${status}${detail ? `: ${detail}` : ""}`;
+  return notCroniumMessage(res, isToolCall);
+}
+
+/** Logs a failure, with the start of a body that isn't Cronium's, which only the log gets. */
+function logFailure(message: string, body: string): void {
+  console.error(`cronium-mcp: ${message}`);
+  if (parseJsonRpc(body) === undefined) {
+    console.error(
+      `cronium-mcp: the answer began ${JSON.stringify(body.slice(0, 300))}`,
+    );
+  }
 }
 
 /** Forward one raw JSON-RPC message (already parsed) and emit the response. */
@@ -101,26 +171,21 @@ async function forward(msg: unknown): Promise<void> {
         accept: "application/json",
       },
       body: JSON.stringify(msg),
+      // Cronium never redirects this. Following one would turn a call into a GET, or send it
+      // on without the token, and then whatever answered that would be taken for the answer.
+      redirect: "manual",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
 
-    // Notifications-only → 202 with no body; nothing to write back.
-    if (res.status === 202) return;
+    // Notifications-only → 202 with no body; nothing to write back. Cronium doesn't answer a
+    // request with one, and a client would wait for an answer that isn't coming.
+    if (res.status === 202 && ids.length === 0) return;
 
     const text = await res.text();
-    if (!res.ok) {
-      const message = httpFailureMessage(res.status, text);
-      console.error(`cronium-mcp: ${message}`);
-      for (const id of ids) emit(rpcError(id, -32001, message));
-      return;
-    }
-
-    let payload: unknown;
-    try {
-      payload = JSON.parse(text);
-    } catch {
-      const message = `Cronium /api/mcp returned non-JSON: ${text.slice(0, 300)}`;
-      console.error(`cronium-mcp: ${message}`);
+    const payload = parseJsonRpc(text);
+    if (!res.ok || payload === undefined) {
+      const message = httpFailureMessage(res, text, hasToolCall(msg));
+      logFailure(message, text);
       for (const id of ids) emit(rpcError(id, -32001, message));
       return;
     }
@@ -156,11 +221,18 @@ async function probe(): Promise<void> {
         authorization: `Bearer ${API_TOKEN}`,
       },
       body: JSON.stringify({ jsonrpc: "2.0", id: "probe", method: "ping" }),
+      redirect: "manual",
       signal: AbortSignal.timeout(10_000),
     });
+    const body = await res.text();
     if (res.status === 401) {
-      console.error(`cronium-mcp: ${httpFailureMessage(401, "")}`);
+      logFailure(httpFailureMessage(res, body, false), body);
       process.exit(1);
+    }
+    if (parseJsonRpc(body) === undefined) {
+      const message = httpFailureMessage(res, body, false);
+      logFailure(`warning — ${message} Will retry per request.`, body);
+      return;
     }
     console.error(`cronium-mcp: connected to ${ENDPOINT}`);
   } catch (err) {

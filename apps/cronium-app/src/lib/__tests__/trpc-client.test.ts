@@ -32,7 +32,7 @@ jest.mock("@server/api/root", () => {
           .mutation(({ input }) => ({ length: input.content.length })),
         // Stands in for any failure of Cronium's own, at a status other than 413.
         update: t.procedure.mutation(() => {
-          throw new TRPCError({ code: "UNAUTHORIZED" });
+          throw new TRPCError({ code: "FORBIDDEN" });
         }),
         getAll: t.procedure.query(() => ["one", "two"]),
         // Fail with the code they're given, as a save and as a read.
@@ -223,10 +223,10 @@ describe("Cronium's own answers", () => {
 
     const error = await failureOf(trpcClient.events.update.mutate({} as never));
 
-    expect(error.message).toBe("UNAUTHORIZED");
+    expect(error.message).toBe("FORBIDDEN");
     expect(error.data).toMatchObject({
-      code: "UNAUTHORIZED",
-      httpStatus: 401,
+      code: "FORBIDDEN",
+      httpStatus: 403,
     });
   });
 });

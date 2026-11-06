@@ -1,11 +1,67 @@
 import { createTRPCReact, type CreateTRPCReact } from "@trpc/react-query";
-import { httpBatchLink } from "@trpc/client";
+import { httpBatchLink, type TRPCLink } from "@trpc/client";
+import { observable } from "@trpc/server/observable";
 import { type AppRouter } from "@/server/api/root";
 import { PROXY_REFUSED_REQUEST_MESSAGE } from "@/shared/request-limits";
 import superjson from "superjson";
 
 export const trpc: CreateTRPCReact<AppRouter, unknown> =
   createTRPCReact<AppRouter>();
+
+/**
+ * What a person reads when a call fails because their session has gone. It says a new tab
+ * because the session cookie is shared across tabs, so signing in there is enough, and
+ * reloading this one would lose what's in a form.
+ */
+export const SESSION_ENDED_MESSAGE =
+  "Your session has expired or you've been signed out. Sign in again in a new tab, then try again here. Reloading this page would lose anything unsaved.";
+
+/**
+ * The same for a session that a password or role change has revoked. The pages only check its
+ * cookie, which is still good, so a new tab shows the dashboard and not the sign-in page.
+ */
+export const SESSION_REVOKED_MESSAGE =
+  "Your session is no longer valid. In a new tab, sign out and sign in again, then try again here. Reloading this page would lose anything unsaved.";
+
+/**
+ * What to say if Cronium refused a call because the session has gone. The code alone doesn't
+ * tell: `UNAUTHORIZED` is also a wrong password, a disabled account, a database it couldn't
+ * reach and an AI provider refusing its key, each with its own message, and signing in again
+ * fixes none of them. The session checks in server/api/trpc.ts give no message, which leaves
+ * tRPC's default of the code itself, or say `Session is no longer valid`.
+ */
+function sessionMessage(
+  code: string | undefined,
+  message: string,
+): string | undefined {
+  if (code !== "UNAUTHORIZED") return undefined;
+  if (message === code) return SESSION_ENDED_MESSAGE;
+  return message.startsWith("Session is no longer valid")
+    ? SESSION_REVOKED_MESSAGE
+    : undefined;
+}
+
+/**
+ * Puts those messages on a failure, here so that every screen gets them, since most of them
+ * show `error.message` as it is. They aren't on the server because a tab and a form only exist
+ * in this page. API tokens and MCP read the server's answer, where "in a new tab" would be no
+ * use, so that stays as it was. `error.data.code` stays `UNAUTHORIZED` here too.
+ */
+const sayingWhenASessionEnded: TRPCLink<AppRouter> =
+  () =>
+  ({ next, op }) =>
+    observable((observer) =>
+      next(op).subscribe({
+        next: (answer) => observer.next(answer),
+        complete: () => observer.complete(),
+        error: (failure) => {
+          failure.message =
+            sessionMessage(failure.data?.code, failure.message) ??
+            failure.message;
+          observer.error(failure);
+        },
+      }),
+    );
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -86,6 +142,7 @@ function readingOnlyTrpc(response: Response, method?: string): Response {
 
 export const trpcClient = trpc.createClient({
   links: [
+    sayingWhenASessionEnded,
     httpBatchLink({
       url: "/api/trpc",
       // Cronium never redirects these. A sign-in proxy does, usually to another origin, which

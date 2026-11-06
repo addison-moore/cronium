@@ -176,9 +176,17 @@ export class TokenManager {
         );
         await this.storeTokens(userId, toolId, newTokens);
         return newTokens.accessToken;
-      } catch {
-        // If refresh fails, delete the invalid tokens
-        await this.deleteTokens(userId, toolId);
+      } catch (error) {
+        console.error(
+          "[TokenManager] Refreshing an access token failed:",
+          describeFailure(error),
+        );
+        // Only invalid_grant says the refresh token is no good. The provider being down
+        // or our own secret being wrong can pass, and forgetting the tokens over those
+        // would make someone connect the account again.
+        if (error instanceof OAuthError && error.code === "invalid_grant") {
+          await this.deleteTokens(userId, toolId);
+        }
         throw new OAuthError(
           "Failed to refresh access token",
           "refresh_failed",

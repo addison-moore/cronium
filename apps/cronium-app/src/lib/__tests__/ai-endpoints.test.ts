@@ -13,12 +13,12 @@ jest.mock("@google/genai", () => ({ GoogleGenAI: jest.fn() }));
 jest.mock("@/server/storage", () => ({
   storage: { getSetting: jest.fn() },
 }));
-jest.mock("dns/promises", () => ({ lookup: jest.fn() }));
+jest.mock("../resolve-host", () => ({ resolveHost: jest.fn() }));
 
 jest.mock("../../env.mjs", () => ({ env: {} }));
 
 import OpenAI from "openai";
-import { lookup } from "dns/promises";
+import { resolveHost } from "../resolve-host";
 import { getAiConfig, generateText, listAvailableModels } from "../ai";
 import { ssrfGuardedFetch } from "../ssrf-guard";
 import { storage } from "@/server/storage";
@@ -28,7 +28,7 @@ const mockOpenAI = OpenAI as unknown as jest.Mock;
 const mockModelsList = jest.fn();
 const mockCreate = jest.fn();
 const mockEnv = env as unknown as Record<string, string | undefined>;
-const mockLookup = lookup as unknown as jest.Mock;
+const mockResolveHost = resolveHost as unknown as jest.Mock;
 const mockGetSetting = storage.getSetting as jest.Mock;
 
 // eslint-disable-next-line @typescript-eslint/require-await
@@ -48,7 +48,7 @@ beforeEach(() => {
     choices: [{ message: { content: "hi" }, finish_reason: "stop" }],
   });
   mockGetSetting.mockResolvedValue(undefined);
-  mockLookup.mockResolvedValue([{ address: "198.51.100.1", family: 4 }]);
+  mockResolveHost.mockResolvedValue([{ address: "198.51.100.1", family: 4 }]);
   jest.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
@@ -81,7 +81,7 @@ describe("listAvailableModels", () => {
   });
 
   it("refuses a hostname that resolves internally", async () => {
-    mockLookup.mockResolvedValue([{ address: "10.0.0.5", family: 4 }]);
+    mockResolveHost.mockResolvedValue([{ address: "10.0.0.5", family: 4 }]);
 
     const result = await listAvailableModels(
       "custom",

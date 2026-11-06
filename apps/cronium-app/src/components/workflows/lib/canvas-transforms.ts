@@ -35,6 +35,45 @@ export function filterAvailableEvents(
   );
 }
 
+/**
+ * Nodes showing what their events say now. A node's own copy dates from when it was
+ * read or dropped on the canvas, and the canvas's undo history holds older ones, so
+ * this is for display and isn't written back: an event's details aren't a change to the
+ * workflow. A node that already matches stays the same object, because React Flow
+ * rebuilds a node it's handed as a new one.
+ */
+export function withCurrentEventDetails<N extends { data: object }>(
+  nodes: N[],
+  events: AvailableEvent[],
+): N[] {
+  const eventsById = new Map(events.map((event) => [event.id, event]));
+
+  return nodes.map((node) => {
+    const data = node.data as Record<string, unknown>;
+    const event = eventsById.get(data.eventId as number);
+    if (!event) return node;
+
+    // An event says nothing about a field it doesn't have, so that clears the node's.
+    const details = {
+      label: event.name,
+      type: event.type,
+      eventTypeIcon: event.type,
+      description: event.description ?? "",
+      tags: event.tags ?? [],
+      serverId: event.serverId,
+      serverName: event.serverName,
+      createdAt: event.createdAt,
+      updatedAt: event.updatedAt,
+    };
+    // As JSON, because a date is a Date from the API and a string from the undo history.
+    const matches = Object.entries(details).every(
+      ([key, value]) =>
+        JSON.stringify(data[key] ?? null) === JSON.stringify(value ?? null),
+    );
+    return matches ? node : { ...node, data: { ...data, ...details } };
+  });
+}
+
 /** Fill in the edge properties the canvas requires when they are missing. */
 export function normalizeEdge(edge: Edge): Edge {
   return {
