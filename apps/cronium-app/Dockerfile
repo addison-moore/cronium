@@ -10,7 +10,7 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@11.20.0 --activate
 
 # Copy package files for all workspaces
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY turbo.json ./
 COPY apps/cronium-app/package.json ./apps/cronium-app/
 COPY packages/ui/package.json ./packages/ui/
