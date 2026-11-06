@@ -241,7 +241,10 @@ sweeper, and retention. All values have sensible defaults.
 | `WORKER_HEALTH_PORT`                     | HTTP health endpoint port (container healthcheck)                                  | `number` | `5003`              | No       |
 | `WORKER_DISPATCH_INTERVAL_MS`            | Schedule dispatcher tick interval                                                  | `number` | `5000`              | No       |
 | `WORKER_CLAIM_INTERVAL_MS`               | In-process job claim interval                                                      | `number` | `2000`              | No       |
+| `WORKER_SWEEP_INTERVAL_MS`               | Lease and timeout sweeper interval                                                 | `number` | `30000`             | No       |
 | `WORKER_MAX_CONCURRENT`                  | Max concurrent in-process (tool/HTTP) executions                                   | `number` | `10`                | No       |
+| `WORKER_DB_CHECKOUT_LIMIT_MS`            | How long the worker can hold a database connection before closing it as hung       | `number` | `300000`            | No       |
+| `WORKER_LISTEN_PROBE_INTERVAL_MS`        | How often the worker checks that its `LISTEN` connection still answers             | `number` | `30000`             | No       |
 | `CRONIUM_JOB_RETENTION_DAYS`             | Days to keep finished jobs, with their executions and transitions. Their logs stay | `number` | `30`                | No       |
 | `CRONIUM_LOG_RETENTION_DAYS`             | Days to keep run logs                                                              | `number` | `90`                | No       |
 | `CRONIUM_WORKFLOW_RETENTION_DAYS`        | Days to keep finished workflow runs, their step rows and workflow log lines        | `number` | `90`                | No       |
@@ -254,6 +257,13 @@ For the `*_RETENTION_DAYS` variables, `0` keeps that data forever. An unset or
 empty variable uses the default. Any other value that isn't a number of days up
 to 36500 is ignored with a warning in the worker's log, and that data is kept
 until it is fixed. See [Data Retention](./DEPLOYMENT.md#data-retention).
+
+`WORKER_DB_CHECKOUT_LIMIT_MS` gets the worker out from behind a database connection
+that has stopped answering without closing, since nothing else ends that wait. What
+was using the connection fails and is tried again, and the worker's log says
+`Closed N database connection(s)`. A statement or transaction that really takes this
+long is cut off and rolled back, so raise the limit if that line appears while the
+database is healthy. An unset, empty or unreadable value uses the default.
 
 ### Orchestrator Service (cronium-orchestrator)
 
