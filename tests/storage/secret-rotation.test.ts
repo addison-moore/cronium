@@ -37,6 +37,7 @@ import {
   getSecretVault,
   isSecretEnvelope,
 } from "@/lib/security/secret-vault";
+import { UnreadableSettingError } from "@/lib/security/unreadable-setting";
 import { db, pool } from "@/server/db";
 import { storage } from "@/server/storage";
 import {
@@ -283,7 +284,7 @@ describe("sensitive settings outside the vault", () => {
     expect(await storedSetting("smtpHost")).toBe("mail.example.test");
   });
 
-  it("is right to warn: a key change turns one into a wrong password", async () => {
+  it("is right to warn: after a key change nothing can use one", async () => {
     const oldScheme = encryptionService.encrypt("smtp-canary");
     await seedSetting("smtpPassword", oldScheme);
     jest.spyOn(console, "error").mockImplementation(() => undefined);
@@ -291,7 +292,9 @@ describe("sensitive settings outside the vault", () => {
     expect((await getSmtpSettings()).password).toBe("smtp-canary");
 
     restartWith(KEY_NEW, [KEY_OLD]);
-    expect((await getSmtpSettings()).password).toBe(oldScheme);
+    await expect(getSmtpSettings()).rejects.toBeInstanceOf(
+      UnreadableSettingError,
+    );
   });
 
   it("stops counting one saved again, which then survives the rotation", async () => {
