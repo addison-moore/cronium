@@ -39,6 +39,7 @@ import {
   stopCleanupService,
 } from "./src/lib/services/workflow-cleanup-service";
 import { serverCleanupService } from "./src/lib/services/server-cleanup-service";
+import { legacySecretsBootWarning } from "./src/lib/security/legacy-secrets";
 import { initializePlugins } from "./src/tools/plugins";
 
 const WORKER_ID = process.env.WORKER_ID ?? `worker-${os.hostname()}`;
@@ -301,6 +302,18 @@ async function main(): Promise<void> {
   claimLoop.poke();
   sweepLoop.poke();
   workflowLoop.poke();
+
+  // Reads only, and doesn't hold up startup.
+  void legacySecretsBootWarning()
+    .then((warning) => {
+      if (warning) console.warn(`[Worker] ${warning}`);
+    })
+    .catch((error) => {
+      console.warn(
+        "[Worker] Could not check for legacy plaintext secrets:",
+        error instanceof Error ? error.message : String(error),
+      );
+    });
 }
 
 async function shutdown(signal: string): Promise<void> {

@@ -528,7 +528,8 @@ authenticated, so a wrong key/binding fails safely (recorded as an error, never
 written) rather than corrupting data.
 
 Run it from a source checkout (it needs `tsx`, a devDependency) pointed at the
-target `DATABASE_URL`:
+target `DATABASE_URL`, or in a published image as
+`node apps/cronium-app/dist/rotate-secrets.cjs`:
 
 ```bash
 # 1. Generate a new key
@@ -548,6 +549,74 @@ unset ENCRYPTION_KEYS_RETIRED   # and remove it from .env
 
 To **roll back** mid-rotation, run again with the keys swapped (old active, new
 retired). The driver **warns** about any `legacy` (pre-vault) values still bound
-to the current key: those cannot be rotated and must first be migrated to vault
-envelopes (they re-encrypt automatically the next time their record is saved) —
-rotating the key while legacy values remain would orphan them.
+to the current key on servers, env vars and MFA secrets: those cannot be rotated
+and must first be migrated to vault envelopes (they re-encrypt automatically the
+next time their record is saved) — rotating the key while legacy values remain
+would orphan them. It also counts plaintext webhook and user-variable values as
+`legacy`. A key change doesn't affect those, and the next section encrypts them.
+
+## Encrypting values saved before encryption at rest
+
+Webhook secrets, webhook custom headers and user variables are encrypted at rest
+since July 2026. A row saved before that stays plaintext until that exact field is
+next written: an edit to a webhook's URL leaves its headers and secret as they are,
+and an edit to a variable's description leaves its value. Anyone with a copy of the
+database can read them. The app keeps working either way, so nothing fails to tell
+you. The worker logs a warning at boot while such rows exist.
+
+To encrypt them, take a database backup, then:
+
+```bash
+# See what would change. Writes nothing.
+docker compose exec cronium-worker node apps/cronium-app/dist/rotate-secrets.cjs --encrypt-legacy --dry-run
+
+# Encrypt. The app can stay up.
+docker compose exec cronium-worker node apps/cronium-app/dist/rotate-secrets.cjs --encrypt-legacy
+```
+
+From a source checkout, the same flags go on
+`pnpm --filter @cronium/app rotate:secrets`, with the instance's `DATABASE_URL`,
+`ENCRYPTION_KEY`, `AUTH_URL` and `PUBLIC_APP_URL` set.
+
+Nothing changes for senders, subscribers or scripts: signatures still use the same
+secret, deliveries send the same headers, and `cronium.getVariable()` returns the
+same value.
+
+The run is safe to repeat and to stop: each row is written once on its own, so a
+second run changes nothing and a run after an interruption does what's left. It
+doesn't overwrite a value someone changes while it runs. It stops before writing
+anything if `ENCRYPTION_KEY` can't be used, or if the database holds encrypted values
+and none of them use a key in the ring, which usually means a restored database next
+to a newly generated `.env`. If the database holds no encrypted values at all, there
+is nothing to check the key against, so make sure it's the one the app runs with: a
+row encrypted with the wrong key can only be read again by adding that key to
+`ENCRYPTION_KEYS_RETIRED` and rotating.
+
+It ends with `Legacy rows remaining: N`, and exits non-zero if that isn't 0 or if a
+row failed. A failed row is named by id and column, and is left exactly as it was,
+including any value in it that could have been encrypted. A value reported as
+`looks encrypted, but this keyring can't decrypt it for this row` can't be read by
+the app either: the read path treats anything starting with `crn.` as encrypted, so
+this can also be a plaintext value that happens to start that way. Replace it
+(regenerate the webhook secret, save the headers, or set the variable again), then
+run this again.
+
+**This doesn't erase the old values.** They were on disk for months and are still
+there:
+
+- **Table files.** Updated rows leave their old versions behind. A plain `VACUUM`
+  clears most but can leave bytes in a page. This rewrites both tables, and blocks
+  them while it runs:
+
+  ```bash
+  docker compose exec postgres psql -U cronium -d cronium -c "VACUUM FULL webhooks, user_variables;"
+  ```
+
+- **WAL.** Recycled by later checkpoints, unless you archive it.
+- **Backups and dumps.** Every copy taken before this run still holds the plaintext.
+  If any of those copies could have been read by someone who shouldn't have, rotate
+  the credentials themselves: regenerate the webhook's secret, replace its custom
+  headers at the service that issued them, and replace any secret held in a variable.
+
+Rolling back to an image from before July 2026 after this has run doesn't work,
+because those versions can't read encrypted values. Restore the backup instead.
