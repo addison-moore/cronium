@@ -25,6 +25,7 @@ const mockRequests: Request[] = [];
 const mockHeldPaths = new Set<string>();
 let mockReleaseHeld: Array<() => void> = [];
 const mockFailingPaths = new Set<string>();
+const mockModalToast = jest.fn();
 // One object, because the event page's effects depend on these functions' identity.
 const mockSocket = {
   subscribeToLog: jest.fn(),
@@ -112,6 +113,8 @@ jest.mock("@cronium/ui", () => {
   const ReactActual = jest.requireActual<typeof import("react")>("react");
   return {
     ...actual,
+    // Called later, because this factory runs before that variable has its value.
+    toast: (...args: unknown[]) => mockModalToast(...args) as unknown,
     MonacoEditor: ({ value }: { value?: string }) =>
       ReactActual.createElement("textarea", {
         readOnly: true,
@@ -160,6 +163,7 @@ jest.setTimeout(120_000);
 const OWNER = "owner";
 const EVENT_ID = 42;
 const FIND = { timeout: 60_000 };
+const NEXT_RUN = new Date("2027-01-02T03:04:05.000Z");
 
 function storedEvent(): Record<string, unknown> {
   return {
@@ -230,7 +234,10 @@ function mockServerAnswer({ path, input }: Request): unknown {
           ),
         }),
       });
-      return eventDto();
+      // The real one works out the schedule after reading the row it answers with.
+      const answer = eventDto();
+      mockStored.nextRunAt = NEXT_RUN;
+      return answer;
     }
     case "events.activate":
       mockStored.status = EventStatus.ACTIVE;
@@ -343,6 +350,8 @@ function EventReader() {
         Showing: {data?.name ?? "nothing yet"}, run {data?.executionCount ?? 0}{" "}
         times
       </p>
+      <p>Next run: {data?.nextRunAt ? "scheduled" : "none"}</p>
+      <p>Status: {data?.status ?? "unknown"}</p>
       <button onClick={() => void refetch()}>Read again</button>
       <button onClick={() => update.mutate({ id: EVENT_ID, name: "renamed" })}>
         Rename
@@ -386,10 +395,27 @@ async function addTag(user: UserEvent, tag: string) {
   );
 }
 
+const dialogToClose = () =>
+  waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), FIND);
+
 async function saveAndWaitForClose(user: UserEvent) {
   await user.click(screen.getByRole("button", { name: "Update Event" }));
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), FIND);
+  await dialogToClose();
 }
+
+/** Open the modal and leave without saving, which leaves a copy in the cache. */
+async function openAndCancel(user: UserEvent) {
+  await openModal(user);
+  await nameField();
+  await user.click(screen.getByRole("button", { name: "Cancel" }));
+  await dialogToClose();
+}
+
+const letHeldRequestsThrough = () =>
+  act(async () => {
+    mockHeldPaths.clear();
+    mockReleaseHeld.splice(0).forEach((release) => release());
+  });
 
 const SAVED_FIELDS = {
   name: "renamed",
@@ -425,6 +451,7 @@ describe("the copy of an event the edit form starts from", () => {
     mockHeldPaths.clear();
     mockReleaseHeld = [];
     mockFailingPaths.clear();
+    mockModalToast.mockClear();
     clockOffset = 0;
     clock = jest
       .spyOn(Date, "now")
@@ -476,13 +503,7 @@ describe("the copy of an event the edit form starts from", () => {
       "shows every field as it is now when reopened %s after another tab saved",
       async (_name, elapsed) => {
         const { user } = setUp(workflowNode);
-        await openModal(user);
-        expect(await nameField()).toHaveValue("nightly");
-        await user.click(screen.getByRole("button", { name: "Cancel" }));
-        await waitFor(
-          () => expect(screen.queryByRole("dialog")).toBeNull(),
-          FIND,
-        );
+        await openAndCancel(user);
 
         changedElsewhere({
           name: "from another tab",
@@ -505,13 +526,7 @@ describe("the copy of an event the edit form starts from", () => {
 
     it("waits for the event as it is now instead of starting from the old copy", async () => {
       const { user } = setUp(workflowNode);
-      await openModal(user);
-      await nameField();
-      await user.click(screen.getByRole("button", { name: "Cancel" }));
-      await waitFor(
-        () => expect(screen.queryByRole("dialog")).toBeNull(),
-        FIND,
-      );
+      await openAndCancel(user);
 
       changedElsewhere({ name: "from another tab" });
       mockHeldPaths.add("events.getById");
@@ -522,23 +537,14 @@ describe("the copy of an event the edit form starts from", () => {
       ).toBeInTheDocument();
       expect(screen.queryByLabelText("Event Name")).toBeNull();
 
-      await act(async () => {
-        mockHeldPaths.clear();
-        mockReleaseHeld.splice(0).forEach((release) => release());
-      });
+      await letHeldRequestsThrough();
 
       expect(await nameField()).toHaveValue("from another tab");
     });
 
     it("says it couldn't load the event rather than offering an old copy to save", async () => {
       const { user } = setUp(workflowNode);
-      await openModal(user);
-      await nameField();
-      await user.click(screen.getByRole("button", { name: "Cancel" }));
-      await waitFor(
-        () => expect(screen.queryByRole("dialog")).toBeNull(),
-        FIND,
-      );
+      await openAndCancel(user);
 
       mockFailingPaths.add("events.getById");
       await openModal(user);
@@ -549,37 +555,40 @@ describe("the copy of an event the edit form starts from", () => {
       expect(screen.queryByLabelText("Event Name")).toBeNull();
       expect(screen.queryByRole("button", { name: "Update Event" })).toBeNull();
 
+      expect(mockModalToast).toHaveBeenCalledTimes(1);
+      expect(mockModalToast).toHaveBeenCalledWith(
+        expect.objectContaining({ description: "events.getById failed" }),
+      );
+
       // The dialog has no X and ignores a click outside it.
       await user.click(screen.getByRole("button", { name: "Close" }));
-      await waitFor(
-        () => expect(screen.queryByRole("dialog")).toBeNull(),
-        FIND,
-      );
+      await dialogToClose();
     });
 
     it("recovers on the next opening after a refresh failed", async () => {
       const { user } = setUp(workflowNode);
-      await openModal(user);
-      await nameField();
-      await user.click(screen.getByRole("button", { name: "Cancel" }));
-      await waitFor(
-        () => expect(screen.queryByRole("dialog")).toBeNull(),
-        FIND,
-      );
+      await openAndCancel(user);
 
       mockFailingPaths.add("events.getById");
       await openModal(user);
       await screen.findByText("Failed to load event data", undefined, FIND);
       await user.keyboard("{Escape}");
-      await waitFor(
-        () => expect(screen.queryByRole("dialog")).toBeNull(),
-        FIND,
-      );
+      await dialogToClose();
 
+      // The query still holds that error while this opening reads again.
       mockFailingPaths.clear();
+      mockHeldPaths.add("events.getById");
       await openModal(user);
 
+      expect(
+        await screen.findByText("Loading event data...", undefined, FIND),
+      ).toBeInTheDocument();
+      expect(mockModalToast).toHaveBeenCalledTimes(1);
+
+      await letHeldRequestsThrough();
+
       expect(await nameField()).toHaveValue("nightly");
+      expect(mockModalToast).toHaveBeenCalledTimes(1);
     });
 
     it("leaves unsaved edits alone when the window regains focus", async () => {
@@ -612,10 +621,7 @@ describe("the copy of an event the edit form starts from", () => {
 
       mockFailingPaths.clear();
       await user.click(screen.getByRole("button", { name: "Cancel" }));
-      await waitFor(
-        () => expect(screen.queryByRole("dialog")).toBeNull(),
-        FIND,
-      );
+      await dialogToClose();
       await openModal(user);
 
       expect(await nameField()).toHaveValue("nightly");
@@ -655,11 +661,13 @@ describe("the copy of an event the edit form starts from", () => {
     });
 
     it.each([
-      ["Set to draft", EventStatus.DRAFT],
-      ["Pause", EventStatus.PAUSED],
+      ["Set to draft", EventStatus.ACTIVE, EventStatus.DRAFT],
+      ["Pause", EventStatus.ACTIVE, EventStatus.PAUSED],
+      ["Activate", EventStatus.PAUSED, EventStatus.ACTIVE],
     ])(
       "doesn't undo %s from the events list when the event is saved next",
-      async (button, status) => {
+      async (button, before, after) => {
+        mockStored.status = before;
         const { user, goTo } = setUp(eventPageOnEditTab());
         await nameField();
 
@@ -676,31 +684,10 @@ describe("the copy of an event the edit form starts from", () => {
           FIND,
         );
 
-        expect(sent("events.update").at(-1)).toMatchObject({ status });
-        expect(mockStored.status).toBe(status);
+        expect(sent("events.update").at(-1)).toMatchObject({ status: after });
+        expect(mockStored.status).toBe(after);
       },
     );
-
-    it("doesn't undo Activate from the events list when the event is saved next", async () => {
-      mockStored.status = EventStatus.PAUSED;
-      const { user, goTo } = setUp(eventPageOnEditTab());
-      await nameField();
-
-      window.location.hash = "";
-      goTo(<EventActions />);
-      await user.click(screen.getByRole("button", { name: "Activate" }));
-      await screen.findByText("Finished: yes", undefined, FIND);
-
-      goTo(eventPageOnEditTab());
-      await nameField();
-      await user.click(screen.getByRole("button", { name: "Update Event" }));
-      await waitFor(() => expect(sent("events.update")).toHaveLength(1), FIND);
-
-      expect(sent("events.update")[0]).toMatchObject({
-        status: EventStatus.ACTIVE,
-      });
-      expect(mockStored.status).toBe(EventStatus.ACTIVE);
-    });
 
     it("updates what's on screen without waiting for another read", async () => {
       const { user } = setUp(<EventReader />);
@@ -729,10 +716,7 @@ describe("the copy of an event the edit form starts from", () => {
       await user.click(screen.getByRole("button", { name: "Rename" }));
       await screen.findByText("Showing: renamed, run 3 times", undefined, FIND);
 
-      await act(async () => {
-        mockHeldPaths.clear();
-        mockReleaseHeld.splice(0).forEach((release) => release());
-      });
+      await letHeldRequestsThrough();
       // Long enough for a late answer to have landed, and for the read after it.
       await waitFor(
         () => expect(sent("events.getById").length).toBeGreaterThan(2),
@@ -744,6 +728,43 @@ describe("the copy of an event the edit form starts from", () => {
 
       expect(
         screen.getByText("Showing: renamed, run 3 times"),
+      ).toBeInTheDocument();
+    });
+
+    // Nothing is showing this one, so reading again wouldn't replace it for the next page.
+    it("isn't overwritten by a read still on its way from a page that's been left", async () => {
+      const { user, goTo } = setUp(<EventReader />);
+      await screen.findByText(`Status: ${EventStatus.ACTIVE}`, undefined, FIND);
+
+      mockHeldPaths.add("events.getById");
+      await user.click(screen.getByRole("button", { name: "Read again" }));
+      await waitFor(() => expect(sent("events.getById")).toHaveLength(2), FIND);
+      goTo(<EventActions />);
+
+      await user.click(screen.getByRole("button", { name: "Set to draft" }));
+      await screen.findByText("Finished: yes", undefined, FIND);
+      await letHeldRequestsThrough();
+
+      mockHeldPaths.add("events.getById");
+      goTo(<EventReader />);
+
+      expect(
+        await screen.findByText(
+          `Status: ${EventStatus.DRAFT}`,
+          undefined,
+          FIND,
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it("reads the event again after a save, whose answer comes before the schedule does", async () => {
+      const { user } = setUp(<EventReader />);
+      await screen.findByText("Next run: none", undefined, FIND);
+
+      await user.click(screen.getByRole("button", { name: "Rename" }));
+
+      expect(
+        await screen.findByText("Next run: scheduled", undefined, FIND),
       ).toBeInTheDocument();
     });
 
