@@ -7,6 +7,7 @@
  * and whatever was queued is simply claimed by the next worker.
  */
 
+import { driverError } from "@/lib/pg-errors";
 import { db } from "@/server/db";
 import { storage } from "@/server/storage";
 import {
@@ -181,7 +182,7 @@ export class InProcessWorkerPool {
         // never throws; defensive catch below regardless.
         await runInProcessJob(job, event, payload?.input ?? {});
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = driverError(error).message ?? String(error);
         console.error(`[WorkerPool] Job ${job.id} crashed:`, message);
         await transitionJob(job.id, JobStatus.FAILED, {
           actor: `worker:${this.workerId}`,
