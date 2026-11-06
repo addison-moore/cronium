@@ -7,6 +7,7 @@ import { Mail, Save, Send, Eye, EyeOff } from "lucide-react";
 import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
 import { Label } from "@cronium/ui";
+import { ignoreEarlyPress } from "@/hooks/useEarlyFormInput";
 import { SettingsSection } from "./settings-section";
 
 const copy = {
@@ -88,7 +89,11 @@ export function SmtpSettings({
       description={copy.description}
       icon={Mail}
     >
-      <form onSubmit={form.handleSubmit(onSave)} className="space-y-6">
+      <form
+        action={ignoreEarlyPress}
+        onSubmit={form.handleSubmit(onSave)}
+        className="space-y-6"
+      >
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="smtpHost">{copy.hostLabel}</Label>
