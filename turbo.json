@@ -92,6 +92,12 @@
     "db:studio": {
       "cache": false,
       "env": ["DATABASE_URL"]
+    },
+    "@cronium/app#test": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/cronium-info/src/**"],
+      "outputs": ["coverage/**"],
+      "env": ["NODE_ENV"]
     }
   }
 }

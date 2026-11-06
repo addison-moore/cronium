@@ -10,6 +10,7 @@ import (
 	"crypto/rand"
 	"crypto/sha512"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/addison-moore/cronium/apps/runner/cronium-runner/internal/helpers"
 	"github.com/addison-moore/cronium/apps/runner/cronium-runner/internal/payload"
 	"github.com/addison-moore/cronium/apps/runner/cronium-runner/pkg/types"
 	"github.com/sirupsen/logrus"
@@ -34,12 +36,77 @@ const (
 // TestMain re-execs the test binary as a small helper process for the signal
 // handling test (setupSignalHandling calls os.Exit, so it cannot be exercised
 // in-process).
+//
+// Tests get stub helper files by default, so everything but the helpers themselves
+// runs in a build that embeds none. realHelpers swaps in binaries built from source.
 func TestMain(m *testing.M) {
 	if os.Getenv(signalChildEnv) == "1" {
 		signalChildMain()
 		return
 	}
-	os.Exit(m.Run())
+	extractHelpers = extractStubHelpers
+	code := m.Run()
+	if builtHelpersDir != "" {
+		_ = os.RemoveAll(builtHelpersDir)
+	}
+	os.Exit(code)
+}
+
+func extractStubHelpers(dir string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	for _, name := range helpers.HelperNames {
+		if err := os.WriteFile(filepath.Join(dir, "cronium."+name), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+var (
+	builtHelpersOnce sync.Once
+	builtHelpersDir  string
+	builtHelpersErr  error
+)
+
+// realHelpers makes SetupHelpers extract helper binaries built from cmd/helpers
+// for this machine, whatever this test binary embeds.
+func realHelpers(t *testing.T) {
+	t.Helper()
+	builtHelpersOnce.Do(func() {
+		builtHelpersDir, builtHelpersErr = os.MkdirTemp("", "cronium-helpers-")
+		if builtHelpersErr != nil {
+			return
+		}
+		for _, name := range helpers.HelperNames {
+			cmd := exec.Command("go", "build", "-tags", "nohelpers", "-o", filepath.Join(builtHelpersDir, "cronium."+name), "../../cmd/helpers/"+name)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				builtHelpersErr = fmt.Errorf("go build %s: %v\n%s", name, err, out)
+				return
+			}
+		}
+	})
+	if builtHelpersErr != nil {
+		t.Fatalf("failed to build helpers: %v", builtHelpersErr)
+	}
+	previous := extractHelpers
+	t.Cleanup(func() { extractHelpers = previous })
+	extractHelpers = func(dir string) error {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+		for _, name := range helpers.HelperNames {
+			data, err := os.ReadFile(filepath.Join(builtHelpersDir, "cronium."+name))
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(filepath.Join(dir, "cronium."+name), data, 0o755); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 }
 
 // signalChildMain registers the executor's signal handler with a work
@@ -61,10 +128,12 @@ type logRecord struct {
 	fields  map[string]interface{}
 }
 
-// captureHook records every log entry so tests can assert on streamed output.
+// captureHook records every log entry, and the script's output streams.
 type captureHook struct {
 	mu      sync.Mutex
 	records []logRecord
+	stdout  bytes.Buffer
+	stderr  bytes.Buffer
 }
 
 func (h *captureHook) Levels() []logrus.Level { return logrus.AllLevels }
@@ -80,17 +149,19 @@ func (h *captureHook) Fire(e *logrus.Entry) error {
 	return nil
 }
 
-// streamLines returns the messages logged for one output stream, in order.
+// streamLines returns the lines a script wrote to one output stream, in order.
 func (h *captureHook) streamLines(stream string) []string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	var out []string
-	for _, r := range h.records {
-		if r.fields["stream"] == stream {
-			out = append(out, r.message)
-		}
+	buffer := &h.stdout
+	if stream == "stderr" {
+		buffer = &h.stderr
 	}
-	return out
+	text := strings.TrimSuffix(buffer.String(), "\n")
+	if text == "" {
+		return nil
+	}
+	return strings.Split(text, "\n")
 }
 
 func (h *captureHook) hasMessageContaining(substr string) bool {
@@ -104,18 +175,6 @@ func (h *captureHook) hasMessageContaining(substr string) bool {
 	return false
 }
 
-func (h *captureHook) findField(message, field string) (interface{}, bool) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	for _, r := range h.records {
-		if r.message == message {
-			v, ok := r.fields[field]
-			return v, ok
-		}
-	}
-	return nil, false
-}
-
 func newTestExecutor(t *testing.T) (*Executor, *captureHook) {
 	t.Helper()
 	hook := &captureHook{}
@@ -123,7 +182,10 @@ func newTestExecutor(t *testing.T) (*Executor, *captureHook) {
 	log.SetOutput(io.Discard)
 	log.SetLevel(logrus.DebugLevel)
 	log.AddHook(hook)
-	return New(log), hook
+	e := New(log)
+	e.stdout = &hook.stdout
+	e.stderr = &hook.stderr
+	return e, hook
 }
 
 func requireTool(t *testing.T, name string) {
@@ -196,8 +258,6 @@ echo err-line-1 1>&2
 	}
 
 	stdout := hook.streamLines("stdout")
-	// Per-stream ordering is pinned; interleaving across streams is not
-	// deterministic (two goroutines) and deliberately not asserted.
 	want := []string{"out-line-1", "out-line-2"}
 	if len(stdout) != len(want) || stdout[0] != want[0] || stdout[1] != want[1] {
 		t.Errorf("stdout lines = %#v, want %#v", stdout, want)
@@ -210,14 +270,47 @@ echo err-line-1 1>&2
 
 func TestExecuteScriptNonZeroExitReported(t *testing.T) {
 	requireTool(t, "bash")
-	e, hook := setupScript(t, types.ScriptTypeBash, "script.sh", "exit 7\n")
+	e, _ := setupScript(t, types.ScriptTypeBash, "script.sh", "exit 7\n")
 
 	err := runWithWatchdog(t, e, 10*time.Second)
-	if err == nil || !strings.Contains(err.Error(), "script exited with code 7") {
-		t.Fatalf("expected exit-code-7 error, got: %v", err)
+	var scriptExit *ScriptExitError
+	if !errors.As(err, &scriptExit) || scriptExit.Code != 7 {
+		t.Fatalf("expected a ScriptExitError with code 7, got: %v", err)
 	}
-	if code, ok := hook.findField("Script exited with non-zero status", "exit_code"); !ok || code != 7 {
-		t.Errorf("exit_code log field = %v (present=%v), want 7", code, ok)
+	if !strings.Contains(err.Error(), "script exited with code 7") {
+		t.Errorf("error = %q", err)
+	}
+}
+
+func TestExecuteScriptKilledBySignalUsesShellExitCode(t *testing.T) {
+	requireTool(t, "bash")
+	e, _ := setupScript(t, types.ScriptTypeBash, "script.sh", "kill -KILL $$\n")
+
+	err := runWithWatchdog(t, e, 10*time.Second)
+	var scriptExit *ScriptExitError
+	if !errors.As(err, &scriptExit) || scriptExit.Code != 137 {
+		t.Fatalf("expected a ScriptExitError with code 137, got: %v", err)
+	}
+}
+
+// The script's output reaches the job untouched: no log fields around it, no
+// newline added to a partial last line, and no runner messages mixed into stdout.
+func TestExecuteScriptOutputIsPassedThroughVerbatim(t *testing.T) {
+	requireTool(t, "bash")
+	e, hook := setupScript(t, types.ScriptTypeBash, "script.sh", `
+printf 'level=info "quoted" \\t\n'
+printf 'no newline at the end'
+printf 'to stderr' >&2
+`)
+
+	if err := runWithWatchdog(t, e, 10*time.Second); err != nil {
+		t.Fatalf("script failed: %v", err)
+	}
+	if got, want := hook.stdout.String(), "level=info \"quoted\" \\t\nno newline at the end"; got != want {
+		t.Errorf("stdout = %q, want %q", got, want)
+	}
+	if got, want := hook.stderr.String(), "to stderr"; got != want {
+		t.Errorf("stderr = %q, want %q", got, want)
 	}
 }
 
@@ -342,10 +435,8 @@ func TestExecuteScriptExecutionIDFromManifestWhenEnvUnset(t *testing.T) {
 	}
 }
 
-// Regression test for the long-line hang: a 200 KB line exceeded the old
-// default 64 KB bufio.Scanner limit; scanning aborted, nobody drained the
-// pipe, the child blocked in write(2), and cmd.Wait() never returned. With
-// the enlarged buffer the line is captured intact and the run completes.
+// Regression test for the long-line hang: a 200 KB line once stopped the runner
+// reading a script's output, so the script blocked in write(2) forever.
 func TestExecuteScriptLongLineDoesNotHang(t *testing.T) {
 	requireTool(t, "bash")
 	e, hook := setupScript(t, types.ScriptTypeBash, "script.sh", `
@@ -370,28 +461,30 @@ echo after-long-line
 	}
 }
 
-// Pin the over-limit policy: a single line larger than maxLogLineBytes aborts
-// line scanning for that stream — a read error is logged, the remainder of
-// the stream (including anything after the giant line) is drained unlogged —
-// but the child still runs to completion and its exit status is honored.
-func TestExecuteScriptOverlongLineIsDroppedNotHung(t *testing.T) {
+// There is no line length limit in the runner: a very long line comes through whole,
+// and what follows it still arrives. The orchestrator bounds what it keeps.
+func TestExecuteScriptVeryLongLineComesThroughWhole(t *testing.T) {
 	requireTool(t, "bash")
-	overlong := maxLogLineBytes + 512*1024 // 1.5 MiB > 1 MiB cap
+	const length = 1536 * 1024 // 1.5 MiB
 	e, hook := setupScript(t, types.ScriptTypeBash, "script.sh", fmt.Sprintf(`
 head -c %d /dev/zero | tr '\0' 'b'
 echo
 echo trailing-line
-`, overlong))
+`, length))
 
 	if err := runWithWatchdog(t, e, 15*time.Second); err != nil {
-		t.Fatalf("expected exit 0 despite dropped output, got: %v", err)
+		t.Fatalf("script failed: %v", err)
 	}
 
-	if lines := hook.streamLines("stdout"); len(lines) != 0 {
-		t.Errorf("expected no stdout lines after over-long token, got %d", len(lines))
+	lines := hook.streamLines("stdout")
+	if len(lines) != 2 {
+		t.Fatalf("stdout line count = %d, want 2", len(lines))
 	}
-	if !hook.hasMessageContaining("Error reading stdout stream") {
-		t.Error("expected a logged read error for the over-long stdout line")
+	if len(lines[0]) != length {
+		t.Errorf("long line length = %d, want %d", len(lines[0]), length)
+	}
+	if lines[1] != "trailing-line" {
+		t.Errorf("trailing line = %q", lines[1])
 	}
 }
 
@@ -675,10 +768,8 @@ func TestExecuteInvalidManifest(t *testing.T) {
 // collect output -> cleanup. Requires the embedded Linux helper binaries, so
 // it runs on Linux CI and is skipped elsewhere.
 func TestExecuteEndToEndBash(t *testing.T) {
-	if !helperBinariesEmbedded() {
-		t.Skip("embedded helper binaries exist only for linux/amd64 and linux/arm64 (embed.go); SetupHelpers cannot succeed on this host")
-	}
 	requireTool(t, "bash")
+	realHelpers(t)
 	pinCroniumEnv(t)
 	t.Setenv("CRONIUM_EXECUTION_ID", "exec-e2e")
 
@@ -737,13 +828,14 @@ echo '{"msg":"hi"}' | cronium.output
 	}
 }
 
-// On hosts without embedded helper binaries (darwin), Execute must stop at
-// helper setup — but only after the helper config has been written, which
-// pins the mode-selection wiring inside the full Execute path.
+// A runner built without helpers must stop at helper setup — but only after the
+// helper config has been written, which pins the mode-selection wiring inside the
+// full Execute path.
 func TestExecuteStopsAtHelperExtractionWithoutEmbeddedBinaries(t *testing.T) {
-	if helperBinariesEmbedded() {
-		t.Skip("this host embeds helper binaries; the failure branch is unreachable (covered on darwin)")
-	}
+	previous := extractHelpers
+	t.Cleanup(func() { extractHelpers = previous })
+	extractHelpers = func(string) error { return errors.New("no helpers embedded") }
+
 	requireTool(t, "bash")
 	pinCroniumEnv(t)
 

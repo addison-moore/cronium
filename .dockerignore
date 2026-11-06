@@ -89,4 +89,5 @@ temp
 apps/orchestrator/tmp
 apps/orchestrator/orchestrator
 apps/runtime/cronium-runtime/cronium-runtime
+apps/runner/cronium-runner/internal/helpers/binaries
 **/*.exe

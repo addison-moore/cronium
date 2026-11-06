@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -24,7 +25,7 @@ func TestBundledGetInputMissingFileReturnsNil(t *testing.T) {
 		t.Fatalf("expected nil error for missing input.json, got: %v", err)
 	}
 	if data != nil {
-		t.Fatalf("expected nil data, got: %#v", data)
+		t.Fatalf("expected nil data, got: %s", data)
 	}
 }
 
@@ -40,9 +41,13 @@ func TestBundledGetInputRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetInput failed: %v", err)
 	}
+	var got map[string]interface{}
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("input is not JSON: %v (%s)", err, data)
+	}
 	want := map[string]interface{}{"name": "cronium", "count": float64(3)}
-	if !reflect.DeepEqual(data, want) {
-		t.Errorf("input = %#v, want %#v", data, want)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("input = %#v, want %#v", got, want)
 	}
 }
 
@@ -62,7 +67,7 @@ func TestBundledGetInputMalformed(t *testing.T) {
 
 func TestBundledSetOutputWritesOutputJSON(t *testing.T) {
 	c, workDir := newBundledClient(t)
-	if err := c.SetOutput(map[string]interface{}{"result": "ok"}); err != nil {
+	if err := c.SetOutput(json.RawMessage(`{"result":"ok"}`)); err != nil {
 		t.Fatalf("SetOutput failed: %v", err)
 	}
 
@@ -82,10 +87,10 @@ func TestBundledSetOutputWritesOutputJSON(t *testing.T) {
 func TestBundledSetVariableCreatesFileThenGetVariable(t *testing.T) {
 	c, _ := newBundledClient(t)
 
-	if err := c.SetVariable("greeting", "hello"); err != nil {
+	if err := c.SetVariable("greeting", json.RawMessage(`"hello"`)); err != nil {
 		t.Fatalf("SetVariable on fresh work dir failed: %v", err)
 	}
-	if err := c.SetVariable("count", 42); err != nil {
+	if err := c.SetVariable("count", json.RawMessage(`42`)); err != nil {
 		t.Fatalf("second SetVariable failed: %v", err)
 	}
 
@@ -93,51 +98,73 @@ func TestBundledSetVariableCreatesFileThenGetVariable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetVariable failed: %v", err)
 	}
-	if got != "hello" {
-		t.Errorf("greeting = %#v, want hello", got)
+	if string(got) != `"hello"` {
+		t.Errorf("greeting = %s, want \"hello\"", got)
 	}
 
-	// Numbers come back as float64 after the JSON round trip.
 	got, err = c.GetVariable("count")
 	if err != nil {
 		t.Fatalf("GetVariable failed: %v", err)
 	}
-	if got != float64(42) {
-		t.Errorf("count = %#v (%T), want float64 42", got, got)
+	if string(got) != `42` {
+		t.Errorf("count = %s, want 42", got)
 	}
 }
 
 func TestBundledSetVariableOverwritesExisting(t *testing.T) {
 	c, _ := newBundledClient(t)
-	if err := c.SetVariable("k", "v1"); err != nil {
+	if err := c.SetVariable("k", json.RawMessage(`"v1"`)); err != nil {
 		t.Fatalf("SetVariable failed: %v", err)
 	}
-	if err := c.SetVariable("k", "v2"); err != nil {
+	if err := c.SetVariable("k", json.RawMessage(`"v2"`)); err != nil {
 		t.Fatalf("SetVariable overwrite failed: %v", err)
 	}
 	got, err := c.GetVariable("k")
 	if err != nil {
 		t.Fatalf("GetVariable failed: %v", err)
 	}
-	if got != "v2" {
-		t.Errorf("k = %#v, want v2", got)
+	if string(got) != `"v2"` {
+		t.Errorf("k = %s, want \"v2\"", got)
 	}
 }
 
+// An unset variable reads as nil, matching the API client and the SDK docs.
 func TestBundledGetVariableMissing(t *testing.T) {
 	c, _ := newBundledClient(t)
 
-	// No variables.json at all: reported as variable-not-found.
-	if _, err := c.GetVariable("nope"); err == nil || !strings.Contains(err.Error(), "variable 'nope' not found") {
-		t.Fatalf("expected not-found error without variables.json, got: %v", err)
+	// No variables.json at all.
+	if got, err := c.GetVariable("nope"); err != nil || got != nil {
+		t.Fatalf("without variables.json: got %s, %v; want nil, nil", got, err)
 	}
 
 	// File exists but the key does not.
-	if err := c.SetVariable("other", 1); err != nil {
+	if err := c.SetVariable("other", json.RawMessage(`1`)); err != nil {
 		t.Fatalf("SetVariable failed: %v", err)
 	}
-	if _, err := c.GetVariable("nope"); err == nil || !strings.Contains(err.Error(), "variable 'nope' not found") {
-		t.Fatalf("expected not-found error for absent key, got: %v", err)
+	if got, err := c.GetVariable("nope"); err != nil || got != nil {
+		t.Fatalf("for an absent key: got %s, %v; want nil, nil", got, err)
+	}
+}
+
+func TestBundledSetConditionWritesConditionJSON(t *testing.T) {
+	c, workDir := newBundledClient(t)
+	if err := c.SetCondition(true); err != nil {
+		t.Fatalf("SetCondition failed: %v", err)
+	}
+	var got ConditionData
+	if err := ReadJSON(filepath.Join(workDir, ".cronium", "condition.json"), &got); err != nil {
+		t.Fatalf("failed to read back condition.json: %v", err)
+	}
+	if !got.Condition {
+		t.Errorf("condition = %v, want true", got.Condition)
+	}
+}
+
+func TestBundledToolActionExplainsWhyItCannotRun(t *testing.T) {
+	c, _ := newBundledClient(t)
+	_, err := c.ExecuteToolAction("email", "send_message", json.RawMessage(`{}`))
+	if err == nil || !strings.Contains(err.Error(), "runtime API") {
+		t.Fatalf("expected an error naming the runtime API, got: %v", err)
 	}
 }
 
@@ -157,12 +184,16 @@ func TestBundledGetContextRoundTrip(t *testing.T) {
 		t.Fatalf("failed to seed context.json: %v", err)
 	}
 
-	got, err := c.GetContext()
+	data, err := c.GetContext()
 	if err != nil {
 		t.Fatalf("GetContext failed: %v", err)
 	}
-	if !reflect.DeepEqual(*got, want) {
-		t.Errorf("context = %#v, want %#v", *got, want)
+	var got EventContext
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("context is not JSON: %v (%s)", err, data)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("context = %#v, want %#v", got, want)
 	}
 }
 

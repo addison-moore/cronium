@@ -1,6 +1,6 @@
 # Cronium Node.js SDK
 
-Runtime SDK for Cronium containerized script execution.
+Runtime SDK for Node.js scripts in Cronium, in a container or on a remote server. In both, `cronium` is already available to a script as a global, and `require("cronium")` works too.
 
 ## Installation
 
@@ -28,11 +28,9 @@ await cronium.output(result);
 await cronium.setVariable("last_run", new Date().toISOString());
 const lastRun = await cronium.getVariable("last_run");
 
-// Send notifications
-await cronium.sendEmail({
-  to: "admin@example.com",
-  subject: "Task Complete",
-  body: `Processed ${result.length} items`,
+// Run a tool action
+const rows = await cronium.executeToolAction("SQL", "run-query", {
+  query: "SELECT 1",
 });
 ```
 
@@ -72,7 +70,10 @@ All methods return Promises and should be used with async/await or `.then()`.
 - `sendSlackMessage(options)` - Send Slack message
 - `sendDiscordMessage(options)` - Send Discord message
 
-> **Note:** the tool-action methods (`executeToolAction` and the
-> `sendEmail`/`sendSlackMessage`/`sendDiscordMessage` wrappers) run against the
-> tool connection of the given type belonging to the event's owner. If you have
-> more than one connection of a type, the most recently created one is used.
+> **Note:** `executeToolAction` takes the type of a saved tool connection and the
+> action's ID. It runs against the event owner's connection of that type, and the
+> most recently created one if there are several.
+>
+> The `sendEmail`/`sendSlackMessage`/`sendDiscordMessage` wrappers **currently
+> fail**, in a container and on a remote server. They send a lowercase tool type,
+> the action ID `send_message`, and parameter names those tools do not recognize.
