@@ -158,8 +158,15 @@ export const eventsRouter = createTRPCRouter({
           source: ctx.requestSource ?? null,
         };
 
-        // Create the event
-        const event = await storage.createScript(eventData);
+        // Create the event with its environment variables and, for remote execution
+        // (REMOTE or LOCAL_AND_REMOTE), its servers
+        const event = await storage.createScript(eventData, {
+          envVars: input.envVars,
+          serverIds:
+            input.runLocation === RunLocation.LOCAL
+              ? []
+              : input.selectedServerIds,
+        });
 
         if (ctx.requestSource === "mcp") {
           console.log(
@@ -167,34 +174,9 @@ export const eventsRouter = createTRPCRouter({
           );
         }
 
-        // Handle environment variables
-        if (input.envVars && input.envVars.length > 0) {
-          for (const envVar of input.envVars) {
-            await storage.createEnvVar({
-              eventId: event.id,
-              key: envVar.key,
-              value: envVar.value,
-            });
-          }
-        }
-
-        // Handle server associations for remote execution (REMOTE or
-        // LOCAL_AND_REMOTE)
-        if (
-          input.runLocation !== RunLocation.LOCAL &&
-          input.selectedServerIds.length > 0
-        ) {
-          await storage.setEventServers(
-            event.id,
-            input.selectedServerIds,
-            userId,
-          );
-        }
-
         // Materialize the durable schedule — an event created directly as
         // ACTIVE + SCHEDULE starts firing without needing a separate edit
-        // (scheduling review M6). Last, so the dispatcher cannot pick the event
-        // up before its env vars and servers exist.
+        // (scheduling review M6).
         await scheduler.updateScript(event.id);
 
         // Get the complete event with relations
@@ -238,45 +220,24 @@ export const eventsRouter = createTRPCRouter({
 
         const { id, envVars, selectedServerIds, ...eventData } = input;
 
-        // Update the event
-        if (Object.keys(eventData).length > 0) {
-          // Filter out undefined values to satisfy exactOptionalPropertyTypes
-          const filteredEventData = Object.fromEntries(
-            Object.entries(eventData).filter(
-              ([, value]) => value !== undefined,
-            ),
-          );
+        // Filter out undefined values to satisfy exactOptionalPropertyTypes
+        const filteredEventData = Object.fromEntries(
+          Object.entries(eventData).filter(([, value]) => value !== undefined),
+        );
 
-          const updateData = {
-            ...filteredEventData,
-            ...(eventData.startTime && {
-              startTime: new Date(eventData.startTime),
-            }),
-          };
-          await storage.updateScript(id, updateData);
-        }
+        const updateData = {
+          ...filteredEventData,
+          ...(eventData.startTime && {
+            startTime: new Date(eventData.startTime),
+          }),
+        };
 
-        // Handle environment variables
-        if (envVars !== undefined) {
-          // Delete existing env vars
-          await storage.deleteEnvVarsByEventId(id);
-
-          // Create new env vars
-          if (envVars.length > 0) {
-            for (const envVar of envVars) {
-              await storage.createEnvVar({
-                eventId: id,
-                key: envVar.key,
-                value: envVar.value,
-              });
-            }
-          }
-        }
-
-        // Handle server associations
-        if (selectedServerIds !== undefined) {
-          await storage.setEventServers(id, selectedServerIds, userId);
-        }
+        // Update the event with its environment variables and servers
+        await storage.updateScript(id, updateData, {
+          envVars,
+          serverIds: selectedServerIds,
+          userId,
+        });
 
         // Get the updated event with relations
         const updatedEvent = await storage.getEventWithRelations(id);
@@ -676,24 +637,9 @@ export const eventsRouter = createTRPCRouter({
           startTime: originalEvent.startTime,
         };
 
-        // Create the forked event
-        const forkedEvent = await storage.createScript(forkedEventData);
-
-        // Copy environment variables
-        if (forkProjection.envVars && forkProjection.envVars.length > 0) {
-          for (const envVar of forkProjection.envVars) {
-            await storage.createEnvVar({
-              eventId: forkedEvent.id,
-              key: envVar.key,
-              value: envVar.value,
-            });
-          }
-        }
-
-        // Copy server associations
+        const serverIds: number[] = [];
         const servers = forkProjection.servers;
-        if (servers && Array.isArray(servers) && servers.length > 0) {
-          const serverIds: number[] = [];
+        if (servers && Array.isArray(servers)) {
           for (const server of servers) {
             if (
               server &&
@@ -704,10 +650,13 @@ export const eventsRouter = createTRPCRouter({
               serverIds.push(server.id);
             }
           }
-          if (serverIds.length > 0) {
-            await storage.setEventServers(forkedEvent.id, serverIds, userId);
-          }
         }
+
+        // Create the forked event, copying its environment variables and servers
+        const forkedEvent = await storage.createScript(forkedEventData, {
+          envVars: forkProjection.envVars,
+          serverIds,
+        });
 
         // Note: We intentionally do NOT copy conditional actions (successEvents, failEvents, etc.)
         // as per the requirement
