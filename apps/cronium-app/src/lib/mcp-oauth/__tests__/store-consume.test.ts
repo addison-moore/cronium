@@ -32,6 +32,8 @@ jest.mock("@/lib/cache/cache-service", () => {
 import {
   allowRefresh,
   consumeRefresh,
+  peekAuthCode,
+  peekRefresh,
   putAuthCode,
   takeAuthCode,
 } from "@/lib/mcp-oauth/store";
@@ -81,6 +83,49 @@ describe("takeAuthCode (single use via GETDEL)", () => {
     ]);
     const winners = [a, b].filter((r) => r !== null);
     expect(winners).toHaveLength(1);
+  });
+});
+
+describe("peeking", () => {
+  it("leaves a code for whoever takes it", async () => {
+    await putAuthCode("code-3", {
+      sub: "u3",
+      cid: "c3",
+      redirectUri: "https://app/cb",
+      codeChallenge: "chal",
+      scope: "mcp",
+      resource: "r",
+      sv: 1,
+    });
+
+    expect((await peekAuthCode("code-3"))?.sub).toBe("u3");
+    expect((await peekAuthCode("code-3"))?.sub).toBe("u3");
+    expect(mocked.cacheService.getdel).not.toHaveBeenCalled();
+
+    expect((await takeAuthCode("code-3"))?.sub).toBe("u3");
+    expect(await peekAuthCode("code-3")).toBeNull();
+  });
+
+  it("leaves a refresh jti for whoever consumes it", async () => {
+    await allowRefresh("jti-2", {
+      sub: "u2",
+      cid: "c2",
+      scope: "mcp",
+      aud: "a",
+      sv: 1,
+    });
+
+    expect((await peekRefresh("jti-2"))?.sub).toBe("u2");
+    expect((await peekRefresh("jti-2"))?.sub).toBe("u2");
+    expect(mocked.cacheService.getdel).not.toHaveBeenCalled();
+
+    expect((await consumeRefresh("jti-2"))?.sub).toBe("u2");
+    expect(await peekRefresh("jti-2")).toBeNull();
+  });
+
+  it("finds nothing under a name it wasn't given", async () => {
+    await expect(peekAuthCode("never-issued")).resolves.toBeNull();
+    await expect(peekRefresh("never-issued")).resolves.toBeNull();
   });
 });
 

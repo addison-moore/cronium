@@ -72,6 +72,14 @@ export async function putAuthCode(
   });
 }
 
+/**
+ * Look at an auth code without using it up, or renewing its minute. This can't let anyone
+ * use it, because another request can take it straight after: only takeAuthCode can.
+ */
+export async function peekAuthCode(code: string): Promise<AuthCodeData | null> {
+  return cacheService.get<AuthCodeData>(`${CODE_PREFIX}${code}`);
+}
+
 /** Fetch + delete an auth code (single use). Returns null if unknown/expired/used. */
 export async function takeAuthCode(code: string): Promise<AuthCodeData | null> {
   // Atomic GETDEL: two concurrent token requests with the same code cannot both
@@ -86,6 +94,14 @@ export async function allowRefresh(
   await cacheService.set(`${REFRESH_PREFIX}${jti}`, data, {
     ttl: REFRESH_TOKEN_TTL_SEC,
   });
+}
+
+/**
+ * Look at a refresh jti without using it up, or renewing it. This can't let anyone rotate
+ * it, because another request can take it straight after: only consumeRefresh can.
+ */
+export async function peekRefresh(jti: string): Promise<RefreshData | null> {
+  return cacheService.get<RefreshData>(`${REFRESH_PREFIX}${jti}`);
 }
 
 /** Consume a refresh jti (rotation): valid only if still in the allowlist. */
