@@ -7,10 +7,20 @@
  * Each place that edits an event runs here against the same `events.getById`
  * result, built by the real `toEventApiDto`, so a change to the field names on
  * either side of the form fails these tests rather than losing data.
+ *
+ * It all runs outside UTC, where a start time the form mixes up between UTC and
+ * local time moves on every save. `lib/__tests__/start-time.test.ts` has the detail.
  */
 import React from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { inTimeZone } from "../../../../../../tests/in-time-zone";
 
 const mockUpdateMutateAsync = jest.fn();
 const mockRefetch = jest.fn();
@@ -161,6 +171,8 @@ import {
 // Each test renders the whole form up to three times, and CI runs with coverage.
 jest.setTimeout(30_000);
 
+inTimeZone("America/Los_Angeles");
+
 const OWNER = "owner";
 const EVENT_ID = 42;
 
@@ -287,6 +299,7 @@ const EVENTS = [
         { key: "WITH_SPACES", value: "two words" },
       ],
       tags: ["alpha", "beta"],
+      startTime: "2027-03-04T05:06:00.000Z",
     },
   },
   {
@@ -301,6 +314,8 @@ const EVENTS = [
         customSchedule: "0 3 * * 1",
         timezone: "America/New_York",
         runLocation: RunLocation.REMOTE,
+        // With seconds, and in the hour the clocks repeat in this browser's zone.
+        startTime: new Date("2027-11-07T09:30:30.500Z"),
         servers: [sandbox],
       },
       [{ key: "A", value: "1" }],
@@ -314,6 +329,7 @@ const EVENTS = [
       runLocation: RunLocation.REMOTE,
       selectedServerIds: [6],
       envVars: [{ key: "A", value: "1" }],
+      startTime: "2027-11-07T09:30:30.500Z",
     },
   },
   {
@@ -480,4 +496,43 @@ describe("saving an event without changing anything", () => {
     expect(screen.getByDisplayValue("WITH_SPACES")).toBeInTheDocument();
     expect(screen.getByDisplayValue("two words")).toBeInTheDocument();
   });
+
+  it.each(SURFACES)(
+    "shows the start time in the browser's timezone and names it, on %s",
+    async (_name, surface) => {
+      mockApiEvent = toEventApiDto(EVENTS[0]!.stored, OWNER, {
+        revealEnvVarValues: true,
+      });
+      render(surface());
+
+      expect(await screen.findByLabelText("Start Time (Optional)")).toHaveValue(
+        "2027-03-03T21:06",
+      );
+      expect(
+        screen.getByText(/your browser's timezone \(America\/Los_Angeles\)/),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it.each(SURFACES)(
+    "reads a new start time as the browser's, on %s",
+    async (_name, surface) => {
+      mockApiEvent = toEventApiDto(EVENTS[0]!.stored, OWNER, {
+        revealEnvVarValues: true,
+      });
+      const user = userEvent.setup();
+      render(surface());
+
+      fireEvent.change(await screen.findByLabelText("Start Time (Optional)"), {
+        target: { value: "2027-03-03T22:00" },
+      });
+      await user.click(screen.getByText("Update Event"));
+
+      await waitFor(() =>
+        expect(mockUpdateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({ startTime: "2027-03-04T06:00:00.000Z" }),
+        ),
+      );
+    },
+  );
 });
