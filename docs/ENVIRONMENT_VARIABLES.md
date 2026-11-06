@@ -607,11 +607,6 @@ docker compose exec postgres psql -U cronium -d cronium -c \
 
 # 6. Remove the ENCRYPTION_KEYS_RETIRED line from .env and restart.
 docker compose up -d --no-deps cronium-app cronium-worker
-
-# 7. With docker-compose.example.yml the orchestrator and runtime also load .env, and
-#    until they restart their environment still holds the old key, though neither uses
-#    it. When no script is running, recreate them. This leaves the app and worker alone.
-docker compose up -d
 ```
 
 Keep the old key for as long as you keep a backup taken before the rotation. Those
@@ -663,11 +658,8 @@ backups can't be read without it.
   claims whatever is queued, and anyone can still start a run by hand, through the API
   or with a webhook. If one starts after the count says 0, wait for it as well. If it's
   still running at the restart, it ends as above, so check on it and run it again.
-- **Step 7, or a plain `docker compose up -d` in place of steps 3 and 6, recreates the
-  orchestrator** with `docker-compose.example.yml`, because all four services load
-  `.env`. A script running then ends the same way and leaves its containers behind, and
-  the app is down for about 17 seconds if it's recreated too, because Compose waits for
-  the orchestrator to stop first.
+- **The orchestrator and runtime aren't restarted.** They don't read either key, so a
+  plain `docker compose up -d` in steps 3 and 6 recreates the same two services.
 - **A job still queued when the old key goes fails,** with
   `Could not prepare this job to run`, which is why step 5 waits. Running the event
   again works.
