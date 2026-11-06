@@ -22,7 +22,7 @@ import {
   eventDownloadSchema,
   eventFilterSchema,
 } from "@/shared/schemas/events";
-import { storage } from "@/server/storage";
+import { storage, type EventWithRelations } from "@/server/storage";
 import { scheduler } from "@/lib/scheduler";
 import { touchesEventSchedule } from "@/lib/scheduling/materialize";
 import {
@@ -36,6 +36,39 @@ import {
   toEventListApiDto,
 } from "@/server/security/api-dto";
 import { canReadEnvVarValues } from "@/server/token-scopes";
+
+/**
+ * A fork writes its own links to the source event's servers, and no write can
+ * link an archived server. Refuse rather than leave the server out: a REMOTE
+ * draft with no server still activates and then runs in a local container, with
+ * only a warning in the server log, so the fork would quietly move the script.
+ * The source itself can't run until its owner deals with these servers.
+ *
+ * Only call this for the event's owner, because it names the servers.
+ */
+function assertNoArchivedServersToFork(
+  event: Pick<EventWithRelations, "server" | "servers">,
+): void {
+  const linked = event.server
+    ? [...event.servers, event.server]
+    : event.servers;
+  // Keyed by id because a server can be both the direct one and a link.
+  const archived = new Map(
+    linked
+      .filter((server) => server.isArchived)
+      .map((server) => [server.id, server.name]),
+  );
+  if (archived.size === 0) return;
+
+  const [servers, them] =
+    archived.size === 1
+      ? ["an archived server", "it"]
+      : ["archived servers", "them"];
+  throw new TRPCError({
+    code: "CONFLICT",
+    message: `This event can't be forked while it's linked to ${servers}: ${[...archived.values()].join(", ")}. Restore ${them} or remove ${them} from the event, then try again.`,
+  });
+}
 
 // Use the centralized development-friendly protected procedure
 // This handles authentication and auto-login in development mode
@@ -564,6 +597,7 @@ export const eventsRouter = createTRPCRouter({
         );
         if (forkProjection.owner) {
           await assertEventRelations(input.id, userId, "view");
+          assertNoArchivedServersToFork(originalEvent);
         }
 
         // Create forked event data
