@@ -74,6 +74,8 @@ describe("webhook delivery record", () => {
     expect(sent.Authorization).toBe("Bearer SECRET-SENTINEL");
     expect(sent["X-Api-Key"]).toBe("ALSO-SECRET-SENTINEL");
     expect(sent["X-Webhook-Signature"]).toMatch(/^sha256=/);
+    expect(sent["X-Webhook-Signature-V2"]).toMatch(/^sha512=/);
+    expect(sent["X-Delivery-Timestamp"]).toBeTruthy();
 
     const recorded = inserted[0]!.headers as Record<string, string>;
     expect(JSON.stringify(recorded)).not.toContain("SENTINEL");
@@ -81,6 +83,8 @@ describe("webhook delivery record", () => {
     expect(recorded["X-Api-Key"]).toBe("[redacted]");
     expect(recorded["X-Webhook-Event"]).toBe("user.created");
     expect(recorded).not.toHaveProperty("X-Webhook-Signature");
+    expect(recorded).not.toHaveProperty("X-Webhook-Signature-V2");
+    expect(recorded).not.toHaveProperty("X-Delivery-Timestamp");
   });
 
   it("records nothing sensitive when the delivery fails", async () => {

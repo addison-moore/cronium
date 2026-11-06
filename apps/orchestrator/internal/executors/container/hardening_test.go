@@ -1,6 +1,7 @@
 package container
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/config"
@@ -145,5 +146,64 @@ func TestBuildMounts_WritableDirsAreTmpfs(t *testing.T) {
 		if !seen {
 			t.Fatalf("expected a writable tmpfs mount at %s", dir)
 		}
+	}
+}
+
+// A job has to be able to write to each of these whichever user it runs as, so none can
+// depend on who owns it. And each has to stay sized, because opening them up is only
+// safe if what a job can put in them is still bounded.
+func TestBuildMounts_WritableDirsTakeAnyUserAndHaveASizeLimit(t *testing.T) {
+	e := hardenedExecutor()
+
+	for _, m := range e.buildMounts(&types.Job{ID: "job-1"}) {
+		if m.TmpfsOptions == nil {
+			t.Fatalf("%s has no tmpfs options", m.Target)
+		}
+		if m.TmpfsOptions.Mode != 0o1777 {
+			t.Errorf("%s has mode %o, which not every user can write to", m.Target, m.TmpfsOptions.Mode)
+		}
+		if m.TmpfsOptions.SizeBytes <= 0 {
+			t.Errorf("%s has no size limit", m.Target)
+		}
+	}
+}
+
+func homeEntries(env []string) []string {
+	var entries []string
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "HOME=") {
+			entries = append(entries, entry)
+		}
+	}
+	return entries
+}
+
+// The image's HOME is hidden under the tmpfs at /home, so a job's HOME has to be a
+// directory that the mounts themselves provide.
+func TestBuildEnvironment_HomeIsAWritableMount(t *testing.T) {
+	e := newUnitExecutor()
+	job := scriptJob(types.ScriptTypeBash)
+
+	entries := homeEntries(e.buildEnvironment(job))
+	if len(entries) != 1 || entries[0] != "HOME="+jobHomeDir {
+		t.Fatalf("expected HOME=%s once, got %v", jobHomeDir, entries)
+	}
+
+	for _, m := range e.buildMounts(job) {
+		if m.Target == jobHomeDir {
+			return
+		}
+	}
+	t.Fatalf("no mount at %s, so a job's HOME wouldn't be writable", jobHomeDir)
+}
+
+func TestBuildEnvironment_JobCanSetItsOwnHome(t *testing.T) {
+	e := newUnitExecutor()
+	job := scriptJob(types.ScriptTypeBash)
+	job.Execution.Environment = map[string]string{"HOME": "/tmp/somewhere"}
+
+	entries := homeEntries(e.buildEnvironment(job))
+	if len(entries) != 1 || entries[0] != "HOME=/tmp/somewhere" {
+		t.Fatalf("expected only the job's own HOME, got %v", entries)
 	}
 }
