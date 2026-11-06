@@ -26,6 +26,7 @@ import {
   resourceAccessHttpStatus,
 } from "@/server/security/resource-access";
 import { toEventApiDto, toEventListApiDto } from "@/server/security/api-dto";
+import { readEventSaveBody } from "@/lib/request-body";
 
 // Schema for validating new script input
 const createEventSchema = z
@@ -189,16 +190,10 @@ export async function POST(request: NextRequest) {
       return restPrincipalErrorResponse(auth);
     }
 
-    // Past 10 MB the proxy passes on only the start of a body, which isn't JSON.
-    const body: unknown = await request.json().catch(() => null);
-    if (body === null) {
-      return NextResponse.json(
-        { error: "Request body must be a JSON object under 10 MB" },
-        { status: 400 },
-      );
-    }
+    const read = await readEventSaveBody(request);
+    if (!read.ok) return read.response;
 
-    const validationResult = createEventSchema.safeParse(body);
+    const validationResult = createEventSchema.safeParse(read.body);
 
     if (!validationResult.success) {
       return NextResponse.json(

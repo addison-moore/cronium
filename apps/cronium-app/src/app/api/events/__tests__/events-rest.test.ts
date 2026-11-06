@@ -46,6 +46,10 @@ import { storage } from "@/server/storage";
 import { scheduler } from "@/lib/scheduler";
 import { resourceAccessHttpStatus } from "@/server/security/resource-access";
 import { TRPCError } from "@trpc/server";
+import {
+  EVENT_TOO_LONG_MESSAGE,
+  MAX_REQUEST_BODY_BYTES,
+} from "@/shared/request-limits";
 
 const s = storage as unknown as Record<string, jest.Mock>;
 const USER = "user-1";
@@ -359,5 +363,150 @@ describe("env var values over REST", () => {
       envVars: Array<{ key: string; value: string }>;
     };
     expect(body.envVars).toEqual([{ key: "TOKEN", value: "" }]);
+  });
+});
+
+describe("a save past what one request can carry", () => {
+  /** A JSON body of exactly `bytes` bytes, with the event's script making up the room. */
+  const eventOfSize = (bytes: number, fields: object) => {
+    const shell = JSON.stringify({ ...fields, content: "" }).length;
+    return JSON.stringify({ ...fields, content: "x".repeat(bytes - shell) });
+  };
+  const OVER = MAX_REQUEST_BODY_BYTES + 1;
+
+  /** A body sent in pieces, with no declared length, counting what's read. */
+  function streamed(chunks: Iterable<Uint8Array>) {
+    const source = chunks[Symbol.iterator]();
+    const seen = { pulls: 0, cancelled: false };
+    const stream = new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          seen.pulls++;
+          const next = source.next();
+          if (next.done) controller.close();
+          else controller.enqueue(next.value);
+        },
+        cancel() {
+          seen.cancelled = true;
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    return { stream, seen };
+  }
+
+  type Body = string | ReadableStream<Uint8Array>;
+  const sendPost = (body: Body, headers: Record<string, string> = {}) =>
+    POST(
+      new NextRequest("http://localhost:5001/api/events", {
+        method: "POST",
+        headers,
+        body,
+        duplex: "half",
+      } as ConstructorParameters<typeof NextRequest>[1]),
+    );
+  const sendPatch = (body: Body, headers: Record<string, string> = {}) =>
+    PATCH(
+      new NextRequest("http://localhost:5001/api/events/1", {
+        method: "PATCH",
+        headers,
+        body,
+        duplex: "half",
+      } as ConstructorParameters<typeof NextRequest>[1]),
+      { params: Promise.resolve({ id: "1" }) },
+    );
+
+  describe.each([
+    ["POST", sendPost, baseEvent, "createScript"],
+    ["PATCH", sendPatch, {}, "updateScript"],
+  ] as const)("%s", (_method, send, fields, writes) => {
+    it("saves a body of exactly the limit", async () => {
+      const res = await send(eventOfSize(MAX_REQUEST_BODY_BYTES, fields));
+
+      expect(res.status).toBeLessThan(300);
+      expect(s[writes]).toHaveBeenCalledTimes(1);
+    });
+
+    it("refuses a body one byte over, says why, and saves nothing", async () => {
+      const res = await send(eventOfSize(OVER, fields));
+
+      expect(res.status).toBe(413);
+      expect(await res.json()).toEqual({ error: EVENT_TOO_LONG_MESSAGE });
+      expect(s[writes]).not.toHaveBeenCalled();
+    });
+
+    it("refuses a declared oversize body without reading any of it", async () => {
+      const { stream, seen } = streamed([new TextEncoder().encode("{}")]);
+
+      const res = await send(stream, {
+        "content-length": String(OVER),
+      });
+
+      expect(res.status).toBe(413);
+      expect(seen.pulls).toBe(0);
+      expect(s[writes]).not.toHaveBeenCalled();
+    });
+
+    it("stops reading an undeclared body as soon as it passes the limit", async () => {
+      const chunkSize = 2 * 1024 * 1024;
+      // Bounded, so a regression fails the assertion below instead of running the test
+      // process out of memory.
+      function* farTooMuch() {
+        for (let i = 0; i < 64; i++) yield new Uint8Array(chunkSize);
+      }
+      const { stream, seen } = streamed(farTooMuch());
+
+      const res = await send(stream);
+
+      expect(res.status).toBe(413);
+      // Five chunks reach the limit exactly, and the sixth passes it.
+      expect(seen.pulls).toBe(6);
+      expect(seen.cancelled).toBe(true);
+      expect(s[writes]).not.toHaveBeenCalled();
+    });
+
+    it("counts what's sent, so a script's line breaks count twice", async () => {
+      // 6 MB of script, under the limit, and 12 MB of JSON, over it.
+      const content = `echo hi${"\n".repeat(6 * 1024 * 1024)}`;
+
+      const res = await send(JSON.stringify({ ...fields, content }));
+
+      expect(res.status).toBe(413);
+      expect(s[writes]).not.toHaveBeenCalled();
+    });
+
+    it("answers 400, not 500, to a body that isn't JSON", async () => {
+      const res = await send('{"name":"e","content":"xxxxxxx');
+
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        error: "Request body must be a JSON object under 10 MB",
+      });
+      expect(s[writes]).not.toHaveBeenCalled();
+    });
+  });
+
+  it("POST checks who's asking before the body", async () => {
+    (authenticateRestPrincipal as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 401,
+    });
+    const { restPrincipalErrorResponse } =
+      jest.requireMock<typeof import("@/lib/api-auth")>("@/lib/api-auth");
+    (restPrincipalErrorResponse as jest.Mock).mockReturnValue(
+      new Response(null, { status: 401 }),
+    );
+
+    const res = await sendPost(eventOfSize(OVER, baseEvent));
+
+    expect(res.status).toBe(401);
+  });
+
+  it("PATCH checks the event exists before the body", async () => {
+    s.getEvent!.mockResolvedValue(undefined);
+
+    const res = await sendPatch(eventOfSize(OVER, {}));
+
+    expect(res.status).toBe(404);
   });
 });
