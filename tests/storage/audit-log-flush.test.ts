@@ -10,6 +10,7 @@
  */
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import { asc, eq } from "drizzle-orm";
 import { executeToolAction } from "@/lib/scheduler/tool-action-executor";
@@ -76,6 +77,30 @@ const settled = (promise: Promise<unknown>, as: string, withinMs = 1000) =>
     promise.then(() => as),
     sleep(withinMs).then(() => "still waiting"),
   ]);
+
+const writeToStderr = process.stderr.write.bind(process.stderr) as (
+  ...args: unknown[]
+) => boolean;
+
+/**
+ * Decides what becomes of the empty write shutdown waits on. It can't be left to
+ * the real stderr: Jest's default reporter swaps process.stderr.write for one that
+ * never calls back, so every shutdown that logs something would wait out its cap,
+ * and only there. Inside a coding agent Jest picks a reporter that leaves stderr
+ * alone, so a run there can pass where CI fails. --reporters=default shows both.
+ */
+function answerStderrWait(answer: (callback: () => void) => void) {
+  jest.spyOn(process.stderr, "write").mockImplementation(((
+    chunk: unknown,
+    ...rest: unknown[]
+  ) => {
+    if (chunk === "") {
+      answer(rest[0] as () => void);
+      return true;
+    }
+    return writeToStderr(chunk, ...rest);
+  }) as never);
+}
 
 /** For what happens after log() has returned: it doesn't wait for a flush. */
 async function until(
@@ -206,6 +231,7 @@ beforeEach(async () => {
   errorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
   warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   jest.spyOn(console, "log").mockImplementation(() => undefined);
+  answerStderrWait((callback) => callback());
 
   // A test that failed midway must not leave its entries for the next one.
   Object.assign(auditLogger, { buffer: [], retrying: false });
@@ -1520,17 +1546,7 @@ describe("shutting down", () => {
     /** Holds up the empty write shutdown waits on, as a full pipe would. */
     function holdStderr() {
       const held: Array<() => void> = [];
-      const write = process.stderr.write.bind(process.stderr);
-      jest.spyOn(process.stderr, "write").mockImplementation(((
-        chunk: unknown,
-        ...rest: unknown[]
-      ) => {
-        if (chunk === "") {
-          held.push(rest[0] as () => void);
-          return true;
-        }
-        return (write as (...args: unknown[]) => boolean)(chunk, ...rest);
-      }) as never);
+      answerStderrWait((callback) => held.push(callback));
       return held;
     }
 
@@ -1671,8 +1687,11 @@ const buildBundle = (script: string, ...flags: string[]) =>
  */
 describe("a real worker being stopped", () => {
   const WORKER_BUNDLE = "dist/audit-log-test-worker.cjs";
+  /** The compose files' stop_grace_period for the worker. Docker kills it after. */
+  const DOCKER_STOP_ALLOWANCE_MS = 40_000;
 
   let worker: ChildProcess | null = null;
+  let healthPort = 0;
   let output = "";
 
   beforeAll(() => {
@@ -1689,8 +1708,17 @@ describe("a real worker being stopped", () => {
     worker = null;
   });
 
+  const freePort = () =>
+    new Promise<number>((resolve) => {
+      const probe = net.createServer().listen(0, "127.0.0.1", () => {
+        const { port } = probe.address() as net.AddressInfo;
+        probe.close(() => resolve(port));
+      });
+    });
+
   async function startWorker(databaseUrl = process.env.DATABASE_URL!) {
     output = "";
+    healthPort = await freePort();
     worker = spawn(process.execPath, [WORKER_BUNDLE], {
       cwd: APP_DIR,
       env: {
@@ -1698,7 +1726,7 @@ describe("a real worker being stopped", () => {
         DATABASE_URL: databaseUrl,
         NODE_ENV: "production",
         WORKER_ID: "audit-log-test",
-        WORKER_HEALTH_PORT: "0",
+        WORKER_HEALTH_PORT: String(healthPort),
         WORKER_CLAIM_INTERVAL_MS: "100",
         // Nothing here is old enough to purge, but a worker should never be
         // left with that as the only thing protecting a database.
@@ -1752,6 +1780,47 @@ describe("a real worker being stopped", () => {
   const jobsWithStatus = async (status: JobStatus) =>
     (await db.select().from(jobs).where(eq(jobs.status, status))).length;
 
+  /** A job's status changes before it is done: it still has its log to finalize. */
+  const noJobsRunning = async () => {
+    const response = await fetch(`http://127.0.0.1:${healthPort}/health`);
+    const health = (await response.json()) as { activeInProcessJobs: number };
+    return health.activeInProcessJobs === 0;
+  };
+
+  /** An event whose query takes 2 seconds, on a connection of its own. */
+  async function seedSlowQueryEvent() {
+    const { hostname, port, pathname, username, password } = new URL(
+      process.env.DATABASE_URL!,
+    );
+    const [tool] = await db
+      .insert(toolCredentials)
+      .values({
+        userId: USER,
+        name: "This database",
+        type: "sql",
+        credentials: JSON.stringify({
+          dialect: "postgres",
+          host: hostname,
+          port: Number(port),
+          database: pathname.slice(1),
+          user: username,
+          password,
+          ssl: "disable",
+        }),
+      })
+      .returning({ id: toolCredentials.id });
+    const eventId = await seedEvent(USER, {
+      type: EventType.TOOL_ACTION,
+      toolActionConfig: {
+        toolType: "sql",
+        toolId: tool!.id,
+        actionId: "run-query",
+        parameters: { query: "SELECT pg_sleep(2)" },
+      },
+    });
+    return { eventId, toolId: tool!.id };
+  }
+
   const actionIds = async () =>
     (await storedRows())
       .map((row) => (row.actionDetails as Details).actionId as string)
@@ -1786,35 +1855,7 @@ describe("a real worker being stopped", () => {
   });
 
   it("writes the entry of a job that finishes while it drains", async () => {
-    const { hostname, port, pathname, username, password } = new URL(
-      process.env.DATABASE_URL!,
-    );
-    const [tool] = await db
-      .insert(toolCredentials)
-      .values({
-        userId: USER,
-        name: "This database",
-        type: "sql",
-        credentials: JSON.stringify({
-          dialect: "postgres",
-          host: hostname,
-          port: Number(port),
-          database: pathname.slice(1),
-          user: username,
-          password,
-          ssl: "disable",
-        }),
-      })
-      .returning({ id: toolCredentials.id });
-    const eventId = await seedEvent(USER, {
-      type: EventType.TOOL_ACTION,
-      toolActionConfig: {
-        toolType: "sql",
-        toolId: tool!.id,
-        actionId: "run-query",
-        parameters: { query: "SELECT pg_sleep(2)" },
-      },
-    });
+    const { eventId, toolId } = await seedSlowQueryEvent();
 
     await startWorker();
     await seedJob(eventId, USER, { type: JobType.TOOL_ACTION, payload: {} });
@@ -1831,7 +1872,7 @@ describe("a real worker being stopped", () => {
       expect.objectContaining({
         action: "tool.execute",
         success: true,
-        toolId: tool!.id,
+        toolId,
       }),
     ]);
   });
@@ -1848,6 +1889,7 @@ describe("a real worker being stopped", () => {
         async () =>
           (await jobsWithStatus(JobStatus.FAILED)) === expected.length,
       );
+      await until("what they do after that", noJobsRunning);
 
       database.hang();
       const { code, tookMs } = await stopWorker(20_000);
@@ -1862,6 +1904,34 @@ describe("a real worker being stopped", () => {
             droppedFromOutput(label).length,
         ).toBeGreaterThanOrEqual(1);
       }
+    } finally {
+      database.close();
+    }
+  });
+
+  it("gives a job the hang caught all of its drain, and still exits before Docker's time is up", async () => {
+    const database = await hangableDatabase(process.env.DATABASE_URL!);
+    try {
+      const { eventId } = await seedSlowQueryEvent();
+      await startWorker(database.url);
+      await seedJob(eventId, USER, { type: JobType.TOOL_ACTION, payload: {} });
+      // Past the reads it needs first. The query isn't on the database that hangs,
+      // so it finishes, logs its entry, and only then gets stuck writing the rest.
+      await until("the query to be running", async () => {
+        const { rows } = await pool.query(
+          `SELECT 1 FROM pg_stat_activity
+            WHERE query LIKE '%pg_sleep(2)%' AND pid <> pg_backend_pid()`,
+        );
+        return rows.length > 0;
+      });
+
+      database.hang();
+      const { code } = await stopWorker(DOCKER_STOP_ALLOWANCE_MS);
+
+      expect(code).toBe(0);
+      expect(output).toContain("Draining 1 in-flight job(s)");
+      expect(droppedFromOutput("run-query")).toHaveLength(1);
+      expect(await storedRows()).toEqual([]);
     } finally {
       database.close();
     }
