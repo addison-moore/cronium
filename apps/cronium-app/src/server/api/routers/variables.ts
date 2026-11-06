@@ -13,6 +13,7 @@ import {
   variableUsageSchema,
 } from "@shared/schemas/variables";
 import { storage } from "@/server/storage";
+import { messageForCaller } from "@/lib/pg-errors";
 
 // Use centralized authentication from trpc.ts
 
@@ -291,7 +292,7 @@ export const variablesRouter = createTRPCRouter({
             results.push({
               id: variableId,
               success: false,
-              error: error instanceof Error ? error.message : String(error),
+              error: messageForCaller(error),
             });
           }
         }
