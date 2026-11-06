@@ -50,6 +50,7 @@ import {
   extractServerIds,
   linkedServers,
   parseInitialEnvVars,
+  parseInitialHttpHeaders,
   parseInitialTags,
   type EventFormInitialData,
   type EventFormServer,
@@ -301,7 +302,8 @@ export default function EventForm({
   // be the dependency: EventEditTab builds a new one on every render, and every
   // toast re-renders it, so each run put the saved tags, env vars and servers back
   // over what had been edited. A refused save lost a new env var, and a toast
-  // closing re-ticked an archived server that had just been unticked.
+  // closing re-ticked an archived server that had just been unticked. The event's
+  // type can't be either: changing it to or from HTTP Request did the same.
   useEffect(() => {
     if (initialData) {
       // Parse and set tool action config. Stored value may be an object (newer
@@ -332,14 +334,15 @@ export default function EventForm({
         setValue("envVars", envVars);
       }
 
-      // Parse HTTP request data
-      if (isHttpRequest && initialData.httpMethod) {
+      // Parse HTTP request data, whatever the event's type. One that used to be an
+      // HTTP request still has these, and they should be there if it's switched
+      // back. buildEventPayload only sends them for an HTTP request.
+      if (initialData.httpMethod) {
         setValue("httpMethod", initialData.httpMethod);
         setValue("httpUrl", initialData.httpUrl ?? "");
         setValue(
           "httpHeaders",
-          (initialData.httpHeaders as Array<{ key: string; value: string }>) ??
-            [],
+          parseInitialHttpHeaders(initialData.httpHeaders),
         );
         setValue("httpBody", initialData.httpBody ?? "");
       }
@@ -356,7 +359,7 @@ export default function EventForm({
         );
       }
     }
-  }, [initialData?.id, setValue, isHttpRequest]);
+  }, [initialData?.id, setValue]);
 
   // Update content when type changes
   useEffect(() => {
@@ -365,9 +368,10 @@ export default function EventForm({
         setValue("content", getDefaultScriptContent(type));
       }
     }
-    // Not the whole object, for the same reason as the effect above: a script
-    // written after changing the event's type would go back to the template.
-  }, [type, initialData?.content, initialData?.type, isScriptType, setValue]);
+    // Only when the type changes. With anything from initialData here, a refetch
+    // that changed the stored script could put the template back over one written
+    // after changing the type.
+  }, [type, isScriptType, setValue]);
 
   // Force local execution for Tool Actions
   useEffect(() => {

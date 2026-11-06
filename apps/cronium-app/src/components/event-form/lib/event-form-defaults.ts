@@ -150,6 +150,21 @@ export function parseInitialEnvVars(
   return null;
 }
 
+/**
+ * Stored HTTP headers as the form holds them. The form's schema checks these for
+ * every event type, and refuses with nothing on screen when they aren't on screen,
+ * so anything it wouldn't take stays out.
+ */
+export function parseInitialHttpHeaders(
+  headers: unknown,
+): Array<{ key: string; value: string }> {
+  if (!Array.isArray(headers)) return [];
+  return (headers as Array<{ key?: unknown; value?: unknown } | null>).filter(
+    (header): header is { key: string; value: string } =>
+      typeof header?.key === "string" && typeof header?.value === "string",
+  );
+}
+
 /** Extract the numeric server ids from an event's servers relation. */
 export function extractServerIds(
   servers: Array<{ id: number; name: string }>,
