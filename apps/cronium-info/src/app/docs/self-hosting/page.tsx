@@ -365,6 +365,12 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                 bucket and webhook IP allowlists can never match.
               </li>
               <li>
+                A TLS proxy also carries saves, so let it pass request bodies of
+                at least 10 MB, the most one save can carry. Nginx&apos;s{" "}
+                <code>client_max_body_size</code> defaults to 1 MB, so set it to{" "}
+                <code>10m</code>.
+              </li>
+              <li>
                 Optional features are enabled purely by adding variables to{" "}
                 <code>.env</code>: <code>SMTP_HOST</code>/<code>SMTP_PORT</code>
                 /<code>SMTP_USER</code>/<code>SMTP_PASSWORD</code>/
