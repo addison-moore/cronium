@@ -6,9 +6,17 @@
  * real database — the whole reason this suite exists.
  */
 import { eq, inArray } from "drizzle-orm";
-import { db } from "@/server/db";
+import { db, pool } from "@/server/db";
+import { runSweepTick } from "@/lib/scheduling/sweeper";
+import { InProcessWorkerPool } from "@/lib/scheduling/worker-executor";
 import { jobService, DEFAULT_CLAIM_LEASE_MS } from "@/lib/services/job-service";
-import { jobs, JobStatus } from "@/shared/schema";
+import {
+  EventType,
+  jobs,
+  JobStatus,
+  JobType,
+  LeaseLossPolicy,
+} from "@/shared/schema";
 import { resetDatabase, closePool } from "./helpers/db-reset";
 import { seedUser, seedEvent, seedJob } from "./helpers/seed";
 
@@ -112,6 +120,50 @@ describe("claimJobs — concurrent disjoint claiming", () => {
 
     const claimed = await jobService.claimJobs("orch-A", 10);
     expect(claimed.map((j) => j.id)).toEqual([scriptId]);
+  });
+});
+
+describe("InProcessWorkerPool — a claim that outlasts the drain", () => {
+  it("leaves its jobs for the sweeper instead of starting them", async () => {
+    const userId = await seedUser();
+    const eventId = await seedEvent(userId, {
+      type: EventType.TOOL_ACTION,
+      toolActionConfig: { toolType: "slack", actionId: "not-to-be-run" },
+    });
+    const jobId = await seedJob(eventId, userId, {
+      type: JobType.TOOL_ACTION,
+      payload: {},
+      scheduledFor: new Date(Date.now() - 1000),
+      leaseLossPolicy: LeaseLossPolicy.RETRY,
+      maxAttempts: 1,
+    });
+    const currentJob = async () => {
+      const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId));
+      return job!;
+    };
+
+    // Holds the claim up until the worker has stopped waiting for it.
+    const lock = await pool.connect();
+    await lock.query("BEGIN");
+    await lock.query("LOCK TABLE jobs IN ACCESS EXCLUSIVE MODE");
+    const workerPool = new InProcessWorkerPool("worker-stopping");
+    const claiming = workerPool.claimAndRun();
+    await workerPool.drain(100);
+    await lock.query("ROLLBACK");
+    lock.release();
+
+    await expect(claiming).resolves.toBe(0);
+    expect(workerPool.activeCount).toBe(0);
+    const claimed = await currentJob();
+    expect(claimed).toMatchObject({
+      status: JobStatus.CLAIMED,
+      orchestratorId: "worker-stopping",
+      startedAt: null,
+    });
+
+    const leaseOver = new Date(claimed.leaseExpiresAt!.getTime() + 1);
+    expect((await runSweepTick(leaseOver)).requeued).toBe(1);
+    expect((await currentJob()).status).toBe(JobStatus.QUEUED);
   });
 });
 
