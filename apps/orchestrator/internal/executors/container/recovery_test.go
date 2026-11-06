@@ -115,6 +115,14 @@ func TestPeriodicCleanupOnlyConsidersWhatIsItsOwn(t *testing.T) {
 	}
 }
 
+func TestWhatItLabelledCountsAsOrphanedSooner(t *testing.T) {
+	e := recoveryExecutor()
+	e.timeoutConfig.SetupTimeout = 5 * time.Minute
+	assert.Equal(t, 5*time.Minute, e.orphanedAfter(map[string]string{labelOrchestratorID: "orchestrator-1"}))
+	assert.Equal(t, time.Hour, e.orphanedAfter(map[string]string{labelManaged: "true"}), "from before these labels")
+	assert.Equal(t, time.Hour, e.orphanedAfter(nil))
+}
+
 func inspected(t *testing.T, status container.ContainerState, env []string, labels map[string]string) container.InspectResponse {
 	t.Helper()
 	if labels == nil {

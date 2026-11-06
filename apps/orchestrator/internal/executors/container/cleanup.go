@@ -38,6 +38,16 @@ func (e *Executor) isOrphanCandidate(names []string, labels map[string]string) b
 	return false
 }
 
+// orphanedAfter is how old an untracked container must be to count as orphaned. One
+// labelled by this orchestrator is only untracked while it's being set up, so past
+// that its removal failed. An older one may be anything's, so it gets longer.
+func (e *Executor) orphanedAfter(labels map[string]string) time.Duration {
+	if _, labelled := labels[labelOrchestratorID]; labelled && e.timeoutConfig.SetupTimeout > 0 {
+		return e.timeoutConfig.SetupTimeout
+	}
+	return time.Hour
+}
+
 // CleanupManager handles cleanup of Docker resources
 type CleanupManager struct {
 	executor     *Executor
@@ -114,8 +124,7 @@ func (cm *CleanupManager) cleanupOrphanedContainers(ctx context.Context) error {
 			continue
 		}
 		if !trackedContainers[container.ID] {
-			// Check if container is old enough (e.g., created more than 1 hour ago)
-			if time.Since(time.Unix(container.Created, 0)) > time.Hour {
+			if time.Since(time.Unix(container.Created, 0)) > cm.executor.orphanedAfter(container.Labels) {
 				cm.log.WithFields(logrus.Fields{
 					"containerID":   container.ID[:12],
 					"containerName": container.Names[0],
