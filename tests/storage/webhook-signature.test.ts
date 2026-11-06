@@ -638,9 +638,25 @@ describe("a delivery sent to an inbound endpoint", () => {
   });
 });
 
+// `recordedDelivery` goes straight to `registerWebhook`, so these are webhooks stored
+// before `webhookSystem.create` refused any names. The rest of what custom headers
+// can do is in webhook-custom-headers.test.ts.
 describe("custom headers", () => {
-  it.each(["X-Delivery-Timestamp", "x-delivery-timestamp"])(
-    "one named %s replaces the system header, as the docs say",
+  beforeEach(() => {
+    jest.spyOn(console, "warn").mockImplementation();
+  });
+
+  it.each([
+    "X-Webhook-Signature",
+    "x-webhook-signature",
+    "X-Webhook-Signature-V2",
+    "x-webhook-signature-v2",
+    "X-Delivery-Id",
+    "x-delivery-id",
+    "X-Delivery-Timestamp",
+    "x-delivery-timestamp",
+  ])(
+    "one named %s doesn't replace the system header, as the docs say",
     async (name) => {
       const receiver = await startReceiver();
       await recordedDelivery(
@@ -650,8 +666,39 @@ describe("custom headers", () => {
       );
       const request = receiver.received[0]!;
 
-      expect(header(request, "x-delivery-timestamp")).toBe("custom");
-      expect(verifyDelivery(request.headers, request.body, SECRET)).toBe(false);
+      expect(header(request, name.toLowerCase())).not.toBe("custom");
+      expect(verifyDelivery(request.headers, request.body, SECRET)).toBe(true);
+      expect(header(request, "x-webhook-signature")).toBe(
+        sha256Of(request.body, SECRET),
+      );
+    },
+  );
+
+  it.each([
+    "Content-Type",
+    "content-type",
+    "X-Webhook-Id",
+    "x-webhook-id",
+    "X-Webhook-Event",
+    "x-webhook-event",
+    "X-Webhook-Timestamp",
+    "x-webhook-timestamp",
+  ])(
+    "one named %s replaces the system header, as the docs say, and the delivery still verifies",
+    async (name) => {
+      const receiver = await startReceiver();
+      await recordedDelivery(
+        receiver,
+        { order: 1 },
+        { headers: { [name]: "custom" } },
+      );
+      const request = receiver.received[0]!;
+
+      expect(header(request, name.toLowerCase())).toBe("custom");
+      expect(verifyDelivery(request.headers, request.body, SECRET)).toBe(true);
+      expect(header(request, "x-webhook-signature")).toBe(
+        sha256Of(request.body, SECRET),
+      );
     },
   );
 });

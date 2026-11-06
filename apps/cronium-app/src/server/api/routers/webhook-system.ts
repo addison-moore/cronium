@@ -9,6 +9,7 @@ import {
   WebhookConfigSchema,
   type WebhookConfig,
 } from "@/lib/webhooks";
+import { webhookCustomHeadersSchema } from "@/lib/webhooks/custom-headers";
 import { webhookRetryConfigSchema } from "@/lib/webhooks/retry-config-schema";
 import { withErrorHandling, notFoundError } from "@/server/utils/error-utils";
 import {
@@ -34,7 +35,7 @@ const WebhookUpdateSchema = z.object({
   url: z.string().url().optional(),
   events: z.array(z.string()).optional(),
   secret: z.string().optional(),
-  headers: z.record(z.string(), z.string()).optional(),
+  headers: webhookCustomHeadersSchema.optional(),
   active: z.boolean().optional(),
   retryConfig: webhookRetryConfigSchema.optional(),
 });

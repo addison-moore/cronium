@@ -83,11 +83,14 @@ jest.mock("@/lib/rate-limit-service", () => ({
 // field-for-field copy of the schema in WebhookManager.ts.
 jest.mock("@/lib/webhooks", () => {
   const { z } = jest.requireActual<typeof import("zod")>("zod");
+  const { webhookCustomHeadersSchema } = jest.requireActual<
+    typeof import("@/lib/webhooks/custom-headers")
+  >("@/lib/webhooks/custom-headers");
   const WebhookConfigSchema = z.object({
     url: z.string().url(),
     events: z.array(z.string()),
     secret: z.string().optional(),
-    headers: z.record(z.string(), z.string()).optional(),
+    headers: webhookCustomHeadersSchema.optional(),
     active: z.boolean().default(true),
     retryConfig: z
       .object({
@@ -334,6 +337,19 @@ describe("webhookSystem.create", () => {
     expect(managerMock.registerWebhook).not.toHaveBeenCalled();
   });
 
+  it("refuses a custom header a signature depends on, in any letter case", async () => {
+    await expect(
+      userCaller().webhookSystem.create({
+        ...VALID_CREATE_INPUT,
+        headers: { "x-webhook-signature": "the-value" },
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringContaining("X-Webhook-Signature"),
+    });
+    expect(managerMock.registerWebhook).not.toHaveBeenCalled();
+  });
+
   it("maps unexpected manager failures through withErrorHandling", async () => {
     managerMock.registerWebhook.mockRejectedValue(new Error("boom"));
     await expect(
@@ -470,6 +486,19 @@ describe("webhookSystem.update", () => {
       headers: { "X-Custom": "value" },
       retryConfig: { maxRetries: 5, retryDelay: 500, backoffMultiplier: 2 },
     });
+  });
+
+  it("refuses a custom header a signature depends on, and forwards nothing", async () => {
+    await expect(
+      userCaller().webhookSystem.update({
+        id: 42,
+        updates: {
+          active: false,
+          headers: { "X-Delivery-Timestamp": "the-value" },
+        },
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(managerMock.updateWebhook).not.toHaveBeenCalled();
   });
 
   it("does not inject active:true into an unrelated partial update (zod v4 .partial() default regression)", async () => {

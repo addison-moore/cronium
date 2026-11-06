@@ -39,7 +39,9 @@ Both signatures cover the body. The request also has these headers:
 | `X-Webhook-Signature-V2` | The signature to check. See [Verifying a delivery](#verifying-a-delivery). |                             |
 | `X-Webhook-Signature`    | An older signature over the body alone. See [below](#x-webhook-signature). |                             |
 
-Any custom headers configured on the webhook are added last, and one with the same name as a header above replaces it. Giving a custom header the name of a signature or anything a signature covers means the signature won't verify. Other headers, such as `User-Agent`, come from the HTTP client and aren't something to rely on.
+Any custom headers configured on the webhook are added to these, but none can replace a signature or anything a signature covers, because that would stop you verifying the delivery. `webhookSystem.create` and `webhookSystem.update` refuse the names `X-Webhook-Signature`, `X-Webhook-Signature-V2`, `X-Delivery-Id` and `X-Delivery-Timestamp`, in any letter case. A webhook set up before that rule can still have one stored. It isn't sent, and setting the webhook's headers again without it removes it.
+
+A custom header with the name of any other header above replaces it, so a webhook's owner can change what those say. No signature covers them, so the delivery still verifies. If it matters, read `event` and `timestamp` from the body, which custom headers can't change. `Content-Type` can be whatever the receiver asks for, and the body is the same JSON regardless, so if your code matches on it, as `express.raw` does, match what the webhook sends. Other headers, such as `User-Agent`, come from the HTTP client and aren't something to rely on.
 
 ### Which events are sent
 
