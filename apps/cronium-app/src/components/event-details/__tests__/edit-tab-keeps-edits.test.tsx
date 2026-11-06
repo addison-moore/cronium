@@ -173,9 +173,16 @@ jest.mock("@/components/ui/clickable-status-badge", () => {
 
 // The other tabs aren't what's being tested, and need a lot of data.
 jest.mock("@/components/event-details/EventOverviewTab", () => ({
-  EventOverviewTab: ({ onRefresh }: { onRefresh: () => Promise<void> }) => (
+  EventOverviewTab: ({
+    event,
+    onRefresh,
+  }: {
+    event: { updatedAt: string };
+    onRefresh: () => Promise<void>;
+  }) => (
     <>
       <p>Overview panel</p>
+      <p data-testid="event-read">{event.updatedAt}</p>
       <button onClick={() => void onRefresh()}>Read the event again</button>
     </>
   ),
@@ -291,9 +298,12 @@ function storedVariables(variables: Array<{ key: string; value: string }>) {
   }));
 }
 
+let eventAnswers = 0;
+
 /**
  * With Dates of its own, as every answer over the wire has. Sharing them, React Query's
  * structural sharing would hand back the same object, and the page wouldn't re-render.
+ * `updatedAt` differs each time too, so a test can see when an answer reaches the page.
  */
 function eventDto() {
   const dto = toEventApiDto(
@@ -303,10 +313,11 @@ function eventDto() {
       revealEnvVarValues: true,
     },
   );
+  eventAnswers += 1;
   return {
     ...dto,
     createdAt: new Date(dto.createdAt),
-    updatedAt: new Date(dto.updatedAt),
+    updatedAt: new Date(new Date(dto.updatedAt).getTime() + eventAnswers),
   };
 }
 
@@ -444,15 +455,14 @@ async function save(user: UserEvent) {
 
 /** Read the event again from Overview, and wait for the answer to reach the page. */
 async function readAgain(user: UserEvent) {
-  const before = sent("events.getById").length;
+  const shown = screen.getByTestId("event-read").textContent;
   await user.click(
     screen.getByRole("button", { name: "Read the event again" }),
   );
   await waitFor(
-    () => expect(sent("events.getById").length).toBeGreaterThan(before),
+    () => expect(screen.getByTestId("event-read").textContent).not.toBe(shown),
     FIND,
   );
-  await settle();
 }
 
 const changeValue = (label: string, value: string) =>
@@ -484,6 +494,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   mockStored = scriptEvent();
+  eventAnswers = 0;
   mockRequests.length = 0;
   mockFailingPaths.clear();
   mockAfterSave = null;
@@ -729,13 +740,15 @@ describe("a form on another tab", () => {
     await goTo(user, "Logs");
     await settle();
     mockFormRendered.mockClear();
-    const reads = sent("events.getById").length;
+    changedElsewhere({ status: EventStatus.PAUSED });
     await refocusLater();
     await waitFor(
-      () => expect(sent("events.getById").length).toBeGreaterThan(reads),
+      () =>
+        expect(screen.getByTestId("badge")).toHaveTextContent(
+          EventStatus.PAUSED,
+        ),
       FIND,
     );
-    await settle();
 
     expect(mockFormRendered).not.toHaveBeenCalled();
   });
