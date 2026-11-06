@@ -6,25 +6,24 @@
  * RESUMABLE by construction:
  *
  *   - Both keys stay in the ring during rotation (active = ENCRYPTION_KEY,
- *     retired = ENCRYPTION_KEYS_RETIRED), so every row decrypts throughout —
- *     the app keeps working while rotation runs, as long as it holds both too.
+ *     retired = ENCRYPTION_KEYS_RETIRED), so every row decrypts throughout, for a
+ *     process holding both. A running service still on the old key can't read a
+ *     row this driver has moved, so the services need both keys before it runs.
  *   - It is idempotent: a row already under the active key is skipped
  *     (vault: `needsReencryption`; credentials: `isUnderActiveKey`). Re-running
  *     after an interruption simply finishes the remainder — that is the
- *     interrupted-rotation recovery. To ROLL BACK, run again with the keys
- *     swapped (old active, new retired).
+ *     interrupted-rotation recovery. To ROLL BACK, restart the services with the
+ *     keys swapped (old active, new retired), then run again with the same keys.
  *   - Each row is updated independently; a single unreadable row is recorded as
  *     an error and skipped rather than aborting the whole run.
  *   - Decryption is authenticated (AES-GCM + AAD binding), so a wrong key or
  *     binding throws — it can never write mis-bound ciphertext.
  *
- * Operator runbook (docs/ENVIRONMENT_VARIABLES.md has the full steps):
- *   1. with ENCRYPTION_KEY=<new>, ENCRYPTION_KEYS_RETIRED=["<old>"] set for this
- *      process only, dry-run this driver and fix what it reports
- *   2. give the app and the worker the same two values and restart them: a service
- *      holding only the old key can't read a row this driver has moved
- *   3. run this driver until it reports 0 re-encrypted
- *   4. remove <old> from ENCRYPTION_KEYS_RETIRED and restart them
+ * Operator runbook: "Key rotation" in docs/ENVIRONMENT_VARIABLES.md. The order
+ * matters, because the wrong one loses data:
+ *   1. restart the services with ENCRYPTION_KEY=<new>, ENCRYPTION_KEYS_RETIRED=["<old>"]
+ *   2. run this driver until it reports 0 re-encrypted
+ *   3. remove <old> and restart the services
  *
  * Plaintext from before encryption at rest is not this driver's job, though it
  * counts it as `legacy`: `legacy-secrets.ts` encrypts it.
