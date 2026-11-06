@@ -5,6 +5,7 @@
 import { db } from "@/server/db";
 import { toolRateLimits, userToolQuotas } from "@/shared/schema";
 import { and, eq, gte, sql } from "drizzle-orm";
+import { failureWithStack } from "@/lib/pg-errors";
 
 export interface RateLimitConfig {
   windowSize: number; // in milliseconds
@@ -197,7 +198,7 @@ export class RateLimiter {
         ),
       };
     } catch (error) {
-      console.error("Rate limit check failed:", error);
+      console.error("Rate limit check failed:", failureWithStack(error));
       // Fail closed: a broken limiter must not become an open door for abuse.
       return {
         allowed: false,
@@ -293,7 +294,7 @@ export class RateLimiter {
         tier,
       };
     } catch (error) {
-      console.error("Quota check failed:", error);
+      console.error("Quota check failed:", failureWithStack(error));
       // Fail closed: deny rather than let a broken quota check waive the cap.
       return {
         allowed: false,

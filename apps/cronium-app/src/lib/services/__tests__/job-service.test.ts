@@ -1037,7 +1037,7 @@ describe("updateJobStatus", () => {
       expect(result).toBe(requeued);
       expect(errorSpy).toHaveBeenCalledWith(
         "[JobService] Failed to record retry on execution log:",
-        expect.any(Error),
+        expect.stringContaining("Error: db down"),
       );
     });
 
@@ -1383,7 +1383,7 @@ describe("updateJobStatus", () => {
       expect(result).not.toBeNull();
       expect(errorSpy).toHaveBeenCalledWith(
         "[JobService] Error sending broadcast:",
-        expect.any(Error),
+        expect.stringContaining("Error: no socket server"),
       );
     });
   });

@@ -2,6 +2,8 @@ import Redis, { type Redis as RedisClient } from "ioredis";
 import { env } from "@/env.mjs";
 import superjson from "superjson";
 import { normalizeValkeyUrl } from "@/lib/valkey-url";
+import { failureWithStack } from "@/lib/pg-errors";
+import { quotedForLog } from "@/lib/security/audit-entry";
 
 // Cache key prefixes for remaining cache use cases
 export const CACHE_PREFIXES = {
@@ -22,6 +24,18 @@ export interface CacheOptions {
   tags?: string[];
 }
 
+/**
+ * A key for the log, cut before its last segment. That segment can be a credential:
+ * MCP OAuth's keys are `mcpoauth:code:<code>` and `mcpoauth:rt:<jti>`. What's left
+ * says which kind of key failed. It can still hold text from a request, since a client
+ * can send a code with a colon in it, so it stays out of the format string and is
+ * masked like any other quoted text.
+ */
+function keyForLog(key: string): string {
+  const kept = key.slice(0, key.lastIndexOf(":") + 1);
+  return `${quotedForLog(kept)}[not logged]`;
+}
+
 export class CacheService {
   private client: RedisClient | null = null;
   private isConnected = false;
@@ -30,7 +44,10 @@ export class CacheService {
   constructor() {
     // Don't block initialization on connection
     this.connect().catch((error) => {
-      console.error("Failed to initialize cache connection:", error);
+      console.error(
+        "Failed to initialize cache connection:",
+        failureWithStack(error),
+      );
     });
   }
 
@@ -76,7 +93,10 @@ export class CacheService {
       });
 
       this.client.on("error", (error) => {
-        console.error("Valkey/Redis connection error:", error);
+        console.error(
+          "Valkey/Redis connection error:",
+          failureWithStack(error),
+        );
         this.isConnected = false;
       });
 
@@ -88,7 +108,10 @@ export class CacheService {
       // Wait for connection
       await this.client.ping();
     } catch (error) {
-      console.error("Failed to connect to Valkey/Redis:", error);
+      console.error(
+        "Failed to connect to Valkey/Redis:",
+        failureWithStack(error),
+      );
       this.client = null;
       this.isConnected = false;
     }
@@ -111,7 +134,11 @@ export class CacheService {
       // Use superjson for proper serialization/deserialization
       return superjson.parse(value);
     } catch (error) {
-      console.error(`Cache get error for key ${key}:`, error);
+      console.error(
+        "Cache get error for key %s:",
+        keyForLog(key),
+        failureWithStack(error),
+      );
       // Return null on any error to prevent app crashes
       return null;
     }
@@ -150,7 +177,11 @@ export class CacheService {
 
       return true;
     } catch (error) {
-      console.error(`Cache set error for key ${key}:`, error);
+      console.error(
+        "Cache set error for key %s:",
+        keyForLog(key),
+        failureWithStack(error),
+      );
       // Return false on any error to prevent app crashes
       return false;
     }
@@ -171,7 +202,11 @@ export class CacheService {
       if (!value) return null;
       return superjson.parse(value);
     } catch (error) {
-      console.error(`Cache getdel error for key ${key}:`, error);
+      console.error(
+        "Cache getdel error for key %s:",
+        keyForLog(key),
+        failureWithStack(error),
+      );
       return null;
     }
   }
@@ -188,7 +223,11 @@ export class CacheService {
       await this.client.del(key);
       return true;
     } catch (error) {
-      console.error(`Cache delete error for key ${key}:`, error);
+      console.error(
+        "Cache delete error for key %s:",
+        keyForLog(key),
+        failureWithStack(error),
+      );
       return false;
     }
   }
@@ -208,7 +247,11 @@ export class CacheService {
       }
       return true;
     } catch (error) {
-      console.error(`Cache delete by pattern error for ${pattern}:`, error);
+      console.error(
+        "Cache delete by pattern error for %s:",
+        keyForLog(pattern),
+        failureWithStack(error),
+      );
       return false;
     }
   }
@@ -225,7 +268,7 @@ export class CacheService {
       await this.client.flushdb();
       return true;
     } catch (error) {
-      console.error("Cache clear error:", error);
+      console.error("Cache clear error:", failureWithStack(error));
       return false;
     }
   }
@@ -269,7 +312,7 @@ export class CacheService {
 
       return { hits, misses, hitRate };
     } catch (error) {
-      console.error("Cache stats error:", error);
+      console.error("Cache stats error:", failureWithStack(error));
       return null;
     }
   }

@@ -5,6 +5,7 @@
 
 import { storage } from "@/server/storage";
 import type { Server } from "@/shared/schema";
+import { describeFailure, failureWithStack } from "@/lib/pg-errors";
 
 interface CleanupServiceConfig {
   enabled: boolean;
@@ -123,11 +124,9 @@ export class ServerCleanupService {
     } catch (error) {
       console.error(
         "[ServerCleanupService] Error during cleanup cycle:",
-        error,
+        failureWithStack(error),
       );
-      result.errors.push(
-        error instanceof Error ? error.message : "Unknown error",
-      );
+      result.errors.push(describeFailure(error));
     }
 
     return result;
@@ -171,17 +170,17 @@ export class ServerCleanupService {
             `[ServerCleanupService] Successfully deleted server ${server.id}`,
           );
         } catch (error) {
-          const errorMsg = `Failed to delete server ${server.id}: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`;
+          const errorMsg = `Failed to delete server ${server.id}: ${describeFailure(
+            error,
+          )}`;
           console.error(`[ServerCleanupService] ${errorMsg}`);
           result.errors.push(errorMsg);
         }
       }
     } catch (error) {
-      const errorMsg = `Failed to fetch servers for deletion: ${
-        error instanceof Error ? error.message : "Unknown error"
-      }`;
+      const errorMsg = `Failed to fetch servers for deletion: ${describeFailure(
+        error,
+      )}`;
       console.error(`[ServerCleanupService] ${errorMsg}`);
       result.errors.push(errorMsg);
     }
@@ -230,18 +229,18 @@ export class ServerCleanupService {
               );
             }
           } catch (error) {
-            const errorMsg = `Failed to send notification for server ${server.id}: ${
-              error instanceof Error ? error.message : "Unknown error"
-            }`;
+            const errorMsg = `Failed to send notification for server ${server.id}: ${describeFailure(
+              error,
+            )}`;
             console.error(`[ServerCleanupService] ${errorMsg}`);
             result.errors.push(errorMsg);
           }
         }
       }
     } catch (error) {
-      const errorMsg = `Failed to process deletion warnings: ${
-        error instanceof Error ? error.message : "Unknown error"
-      }`;
+      const errorMsg = `Failed to process deletion warnings: ${describeFailure(
+        error,
+      )}`;
       console.error(`[ServerCleanupService] ${errorMsg}`);
       result.errors.push(errorMsg);
     }
@@ -278,7 +277,7 @@ export class ServerCleanupService {
     } catch (error) {
       console.error(
         "[ServerCleanupService] Error fetching upcoming deletions:",
-        error,
+        failureWithStack(error),
       );
       return [];
     }

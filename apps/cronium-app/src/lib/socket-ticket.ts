@@ -4,6 +4,7 @@ import { randomId, signTicket, verifyTicket } from "@/lib/mcp-oauth/tokens";
 import { storage } from "@/server/storage";
 import { consumeSocketTicketOnce } from "@/server/socket-security-store";
 import { UserStatus, type UserRole } from "@/shared/schema";
+import { failureWithStack } from "@/lib/pg-errors";
 
 export const SOCKET_TICKET_TTL_SECONDS = 30;
 
@@ -153,7 +154,7 @@ export async function authenticateSocketTicket(
   try {
     if (!(await consumeTicket(claims.jti, claims.exp, now))) return null;
   } catch (error) {
-    console.error("Socket ticket consumption failed:", error);
+    console.error("Socket ticket consumption failed:", failureWithStack(error));
     return null;
   }
 
@@ -171,7 +172,10 @@ export async function authenticateSocketTicket(
       authorizationFingerprint: socketUserAuthorizationFingerprint(user),
     };
   } catch (error) {
-    console.error("Socket authentication lookup failed:", error);
+    console.error(
+      "Socket authentication lookup failed:",
+      failureWithStack(error),
+    );
     return null;
   }
 }
@@ -202,7 +206,7 @@ export function createSocketAuthMiddleware(
         next();
       })
       .catch((error) => {
-        console.error("Socket authentication failed:", error);
+        console.error("Socket authentication failed:", failureWithStack(error));
         next(new Error("Authentication failed"));
       });
   };

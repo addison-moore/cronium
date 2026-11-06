@@ -159,7 +159,7 @@ describe("consumeJobTransitions", () => {
     ]);
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining("will retry"),
-      "side effect exploded",
+      "Error: side effect exploded",
     );
   });
 
@@ -177,7 +177,7 @@ describe("consumeJobTransitions", () => {
     expect(processedAtWrites).toEqual([NOW]);
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining("Dropping poison transition 1"),
-      "permanently broken",
+      "Error: permanently broken",
     );
   });
 
@@ -208,7 +208,7 @@ describe("consumeJobTransitions", () => {
     expect(processed).toBe(1);
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining("Dropping poison transition"),
-      "poison string",
+      "Error: poison string",
     );
   });
 
@@ -222,7 +222,7 @@ describe("consumeJobTransitions", () => {
 
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining("will retry"),
-      "string failure",
+      "Error: string failure",
     );
   });
 });

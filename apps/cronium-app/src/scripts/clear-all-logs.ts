@@ -37,10 +37,10 @@ async function clearAllLogs() {
       message: `All logs have been deleted (approximately ${logCount} total).`,
     };
   } catch (error) {
-    console.error("Error clearing logs:", error);
+    console.error("Error clearing logs:", failureWithStack(error));
     return {
       success: false,
-      message: `Failed to clear logs: ${String(error)}`,
+      message: `Failed to clear logs: ${reasonFor(error)}`,
     };
   }
 }
@@ -86,10 +86,13 @@ async function clearEventLogs(eventId: number) {
       message: `Deleted ${logCount} logs for event/script ID ${eventId}.`,
     };
   } catch (error) {
-    console.error(`Error clearing logs for event ${eventId}:`, error);
+    console.error(
+      `Error clearing logs for event ${eventId}:`,
+      failureWithStack(error),
+    );
     return {
       success: false,
-      message: `Failed to clear logs: ${String(error)}`,
+      message: `Failed to clear logs: ${reasonFor(error)}`,
     };
   }
 }
@@ -128,10 +131,13 @@ async function clearOldLogs(daysAgo: number) {
       message: `Deleted ${logCount} logs older than ${daysAgo} days.`,
     };
   } catch (error) {
-    console.error(`Error clearing logs older than ${daysAgo} days:`, error);
+    console.error(
+      `Error clearing logs older than ${daysAgo} days:`,
+      failureWithStack(error),
+    );
     return {
       success: false,
-      message: `Failed to clear logs: ${String(error)}`,
+      message: `Failed to clear logs: ${reasonFor(error)}`,
     };
   }
 }
@@ -212,13 +218,21 @@ async function main() {
     );
     process.exit(1);
   } catch (error) {
-    console.error("Unexpected error:", error);
+    console.error("Unexpected error:", failureWithStack(error));
     process.exit(1);
   }
 }
 
 // Import SQL for direct database queries
 import { sql } from "drizzle-orm";
+import {
+  QUERY_FAILED_MESSAGE,
+  failureWithStack,
+  isQueryFailure,
+} from "@/lib/pg-errors";
+
+const reasonFor = (error: unknown) =>
+  isQueryFailure(error) ? QUERY_FAILED_MESSAGE : String(error);
 
 // Run the script
 void main();

@@ -26,7 +26,7 @@
  * exits 1 if it leaves rows to do: with --encrypt-legacy any that still need it, and
  * when rotating any that changed during the run, which running it again finishes.
  */
-import { driverError } from "@/lib/pg-errors";
+import { describeFailure } from "@/lib/pg-errors";
 import { encryptLegacySecrets } from "@/lib/security/legacy-secrets";
 import { rotateAllSecrets } from "@/lib/security/secret-rotation";
 import { pool } from "@/server/db";
@@ -162,7 +162,7 @@ async function main(): Promise<number> {
 
 void main()
   .catch((error: unknown) => {
-    console.error(`Failed: ${driverError(error).message ?? String(error)}`);
+    console.error(`Failed: ${describeFailure(error)}`);
     return 1;
   })
   .then(async (code) => {

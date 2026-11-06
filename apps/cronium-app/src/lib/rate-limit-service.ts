@@ -1,5 +1,6 @@
 import { cacheService, CACHE_PREFIXES } from "./cache/cache-service";
 import { TRPCError } from "@trpc/server";
+import { failureWithStack } from "@/lib/pg-errors";
 
 export interface RateLimitConfig {
   maxRequests: number;
@@ -103,7 +104,7 @@ export class RateLimitService {
       }
 
       // Log other errors but allow request (fail open)
-      console.error("Rate limiting error:", error);
+      console.error("Rate limiting error:", failureWithStack(error));
       return {
         remaining: maxRequests,
         reset: new Date(now + windowMs),
@@ -135,7 +136,10 @@ export class RateLimitService {
         return { allowed: false, remaining: 0, resetAt: status.reset };
       }
       // Unexpected error: fail open, matching checkLimit's behavior
-      console.error("Rate limiting error (fail-open):", error);
+      console.error(
+        "Rate limiting error (fail-open):",
+        failureWithStack(error),
+      );
       return {
         allowed: true,
         remaining: config.maxRequests,
