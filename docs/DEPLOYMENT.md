@@ -237,9 +237,13 @@ to its end and reports the result, including for a script that ended while no
 orchestrator was running. A script that passed its timeout in the meantime is stopped
 when the orchestrator returns.
 
-- **If the orchestrator is down for longer than a job's lease,** which is about 60 to 90
-  seconds, the job has already been failed with `Lease expired`, or re-queued if it has
-  retries left. Its next process removes the old containers, script included.
+- **If only the orchestrator is down, for longer than a job's lease,** which is about 60
+  to 90 seconds, the worker fails the job with `Lease expired`, or re-queues it if it has
+  retries left. The next orchestrator process removes the old containers, script
+  included. When the whole stack restarts this doesn't apply: a worker that has just
+  started waits a lease's length before failing anything, however long the restart took.
+- **If the app stays down for more than a minute while the orchestrator stays up,** running
+  jobs are stopped, and failed or re-queued, because their leases can't be renewed.
 - **What can't be left running gets up to 30 seconds:** remote jobs, jobs that run both
   locally and remotely, and jobs still starting. If one is still going after that, it's
   stopped, and failed or re-queued once its lease runs out. The compose files give the

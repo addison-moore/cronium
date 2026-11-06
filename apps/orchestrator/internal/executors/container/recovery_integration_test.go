@@ -26,9 +26,13 @@ import (
 
 const recoveryTestImage = "alpine:latest"
 
+// recoveryTestTimeout is generous because a busy daemon can take half a minute to
+// create one container.
+const recoveryTestTimeout = 2 * time.Minute
+
 func recoveryDockerClient(t *testing.T) *client.Client {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), recoveryTestTimeout)
 	defer cancel()
 	cli, err := client.New(client.FromEnv)
 	if err != nil {
@@ -58,9 +62,19 @@ func recoveryProcess(t *testing.T, cli *client.Client, stack string) *Executor {
 // sidecar and a network, with the labels and token that process would have given them.
 func startLeftJob(t *testing.T, e *Executor, jobID, script string, timeoutSeconds int) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), recoveryTestTimeout)
 	defer cancel()
 	cli := e.dockerClient
+
+	// By name, and first, so that a create that times out on a busy daemon but still
+	// happens doesn't stay behind.
+	t.Cleanup(func() {
+		cleanupCtx, done := context.WithTimeout(context.Background(), recoveryTestTimeout)
+		defer done()
+		_, _ = cli.ContainerRemove(cleanupCtx, jobContainerName(jobID), client.ContainerRemoveOptions{Force: true})
+		_, _ = cli.ContainerRemove(cleanupCtx, sidecarContainerName(jobID), client.ContainerRemoveOptions{Force: true})
+		_, _ = cli.NetworkRemove(cleanupCtx, jobNetworkName(jobID), client.NetworkRemoveOptions{})
+	})
 
 	network, err := e.sidecar.CreateJobNetwork(ctx, jobID)
 	require.NoError(t, err)
@@ -90,14 +104,6 @@ func startLeftJob(t *testing.T, e *Executor, jobID, script string, timeoutSecond
 	})
 	require.NoError(t, err)
 
-	t.Cleanup(func() {
-		cleanupCtx, done := context.WithTimeout(context.Background(), 30*time.Second)
-		defer done()
-		_, _ = cli.ContainerRemove(cleanupCtx, created.ID, client.ContainerRemoveOptions{Force: true})
-		_, _ = cli.ContainerRemove(cleanupCtx, sidecar.ID, client.ContainerRemoveOptions{Force: true})
-		_, _ = cli.NetworkRemove(cleanupCtx, network, client.NetworkRemoveOptions{})
-	})
-
 	_, err = cli.ContainerStart(ctx, created.ID, client.ContainerStartOptions{})
 	require.NoError(t, err)
 	_, err = cli.ContainerStart(ctx, sidecar.ID, client.ContainerStartOptions{})
@@ -106,7 +112,7 @@ func startLeftJob(t *testing.T, e *Executor, jobID, script string, timeoutSecond
 
 func findLeftJob(t *testing.T, e *Executor, jobID string) *types.LeftoverJob {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), recoveryTestTimeout)
 	defer cancel()
 	found, err := e.FindLeftoverJobs(ctx)
 	require.NoError(t, err)
@@ -146,7 +152,7 @@ func drainUpdates(t *testing.T, updates <-chan types.ExecutionUpdate) (stdout []
 
 func assertResourcesGone(t *testing.T, cli *client.Client, jobID string) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), recoveryTestTimeout)
 	defer cancel()
 	for _, name := range []string{jobContainerName(jobID), sidecarContainerName(jobID)} {
 		_, err := cli.ContainerInspect(ctx, name, client.ContainerInspectOptions{})
@@ -198,7 +204,7 @@ func TestLeftoverThatAlreadyExitedKeepsItsResultEvenPastItsTimeout(t *testing.T)
 	stack := jobID + "-stack"
 	startLeftJob(t, recoveryProcess(t, cli, stack), jobID, `echo done; exit 0`, 1)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), recoveryTestTimeout)
 	defer cancel()
 	wait := cli.ContainerWait(ctx, jobContainerName(jobID), client.ContainerWaitOptions{Condition: container.WaitConditionNotRunning})
 	select {
@@ -277,7 +283,7 @@ func TestLeftoverRemovalKillsARunningScriptAndTakesEverything(t *testing.T) {
 
 	next := recoveryProcess(t, cli, stack)
 	require.NotNil(t, findLeftJob(t, next, jobID))
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), recoveryTestTimeout)
 	defer cancel()
 	require.NoError(t, next.RemoveLeftoverJob(ctx, jobID))
 	assertResourcesGone(t, cli, jobID)
@@ -300,12 +306,26 @@ func TestLeftoverOfAnotherStackIsNotFound(t *testing.T) {
 	assert.Nil(t, findLeftJob(t, otherOrchestrator, jobID))
 }
 
+// The dev stacks set no shared network, so the label is there with an empty value.
+func TestLeftoverOfAStackWithNoSharedNetworkIsFound(t *testing.T) {
+	cli := recoveryDockerClient(t)
+	jobID := uniqueID(t)
+	first := recoveryProcess(t, cli, "")
+	first.orchestratorID = jobID + "-orchestrator"
+	startLeftJob(t, first, jobID, `sleep 300`, 600)
+
+	next := recoveryProcess(t, cli, "")
+	next.orchestratorID = jobID + "-orchestrator"
+	require.NotNil(t, findLeftJob(t, next, jobID))
+	assert.Nil(t, findLeftJob(t, recoveryProcess(t, cli, "some-network"), jobID))
+}
+
 func TestLeftoverOnlyPartlySetUpHasNothingToResume(t *testing.T) {
 	cli := recoveryDockerClient(t)
 	jobID := uniqueID(t)
 	stack := jobID + "-stack"
 	e := recoveryProcess(t, cli, stack)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), recoveryTestTimeout)
 	defer cancel()
 	network, err := e.sidecar.CreateJobNetwork(ctx, jobID)
 	require.NoError(t, err)
@@ -327,7 +347,7 @@ func TestStaleResourcesOfAnEarlierAttemptAreCleared(t *testing.T) {
 
 	// Claiming the job again is what makes them stale, whoever made them.
 	claimant := recoveryProcess(t, cli, jobID+"-elsewhere")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), recoveryTestTimeout)
 	defer cancel()
 	require.NoError(t, claimant.removeStaleResources(ctx, jobID))
 	assertResourcesGone(t, cli, jobID)
@@ -345,7 +365,7 @@ func TestStaleResourcesRemovalIsExactByName(t *testing.T) {
 	startLeftJob(t, recoveryProcess(t, cli, stack), longer, `sleep 300`, 600)
 
 	claimant := recoveryProcess(t, cli, stack)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), recoveryTestTimeout)
 	defer cancel()
 	require.NoError(t, claimant.removeStaleResources(ctx, jobID))
 
@@ -363,7 +383,7 @@ func TestPeriodicCleanupFilterIsAnchored(t *testing.T) {
 	e := recoveryProcess(t, cli, jobID+"-stack")
 	startLeftJob(t, e, jobID, `sleep 300`, 600)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), recoveryTestTimeout)
 	defer cancel()
 	serviceName := "not-a-" + jobID + "-cronium-runtime-1"
 	service, err := cli.ContainerCreate(ctx, client.ContainerCreateOptions{
