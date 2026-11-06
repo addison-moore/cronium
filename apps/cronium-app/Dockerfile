@@ -56,6 +56,9 @@ RUN pnpm exec next build --webpack
 RUN pnpm run build:worker
 # Bundle the authenticated terminal/log Socket.IO bridge.
 RUN pnpm run build:socket
+# Bundle the secret maintenance CLI: src/ isn't in the runtime image, and Postgres
+# isn't reachable from outside the compose network.
+RUN pnpm run build:rotate
 WORKDIR /app
 
 # Stage 3: Runtime
