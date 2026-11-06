@@ -17,8 +17,9 @@ import { sessionFromApiToken } from "@/server/api/trpc";
 import { sessionFromOAuthToken } from "@/lib/mcp-oauth/resource";
 import { getBearerToken } from "@/lib/api-auth";
 import { getBaseUrl, resourceMetadataUrl } from "@/lib/mcp-oauth/metadata";
-import { messageForCaller } from "@/lib/pg-errors";
+import { failureWithStack, messageForCaller } from "@/lib/pg-errors";
 import { readBodyWithin } from "@/lib/request-body";
+import { CredentialCheckFailedError } from "@/server/security/credential-check";
 import {
   EVENT_TOO_LONG_MESSAGE,
   MAX_REQUEST_BODY_BYTES,
@@ -32,6 +33,9 @@ const SERVER_INFO = { name: "cronium", version: "0.2.0" };
 // Tools run sequentially and can execute events, so a batch has to be bounded.
 const MAX_BATCH_SIZE = 25;
 const DEFAULT_PROTOCOL = "2025-06-18";
+const INTERNAL_ERROR = -32603;
+const INTERNAL_ERROR_MESSAGE =
+  "Internal error: the reason is in Cronium's server log";
 
 type JsonRpcId = string | number | null;
 interface JsonRpcRequest {
@@ -124,6 +128,28 @@ async function handleMessage(
 }
 
 export async function POST(req: Request): Promise<Response> {
+  try {
+    return await handlePost(req);
+  } catch (error) {
+    // Next's answer to a throw is a 500 with no body, which a client can't tell from a
+    // proxy's. The id is null because the body may not have been read, so these aren't
+    // a 200, for the same reason as the 413 below.
+    if (error instanceof CredentialCheckFailedError) {
+      return Response.json(rpcError(null, INTERNAL_ERROR, error.message), {
+        status: 503,
+      });
+    }
+    console.error("MCP request failed:", failureWithStack(error));
+    return Response.json(
+      rpcError(null, INTERNAL_ERROR, INTERNAL_ERROR_MESSAGE),
+      {
+        status: 500,
+      },
+    );
+  }
+}
+
+async function handlePost(req: Request): Promise<Response> {
   // Strict bearer auth (no dev auto-auth on this internet-facing route):
   // accept an OAuth 2.1 access token or a raw Cronium API token. Either may
   // carry scopes that limit what the caller can do.
@@ -192,8 +218,17 @@ export async function POST(req: Request): Promise<Response> {
   }
   const responses: object[] = [];
   for (const m of messages) {
-    const res = await handleMessage(m as JsonRpcRequest, caller, baseUrl);
-    if (res) responses.push(res);
+    try {
+      const res = await handleMessage(m as JsonRpcRequest, caller, baseUrl);
+      if (res) responses.push(res);
+    } catch (error) {
+      // Earlier calls in a batch may have run, so this one can't lose their answers.
+      console.error("MCP message failed:", failureWithStack(error));
+      const { id } = m as JsonRpcRequest;
+      responses.push(
+        rpcError(id ?? null, INTERNAL_ERROR, INTERNAL_ERROR_MESSAGE),
+      );
+    }
   }
 
   // Notifications only → 202 with no body.
