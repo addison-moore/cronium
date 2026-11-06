@@ -1,11 +1,6 @@
 "use client";
 import { useState } from "react";
-import {
-  EventStatus,
-  TimeUnit,
-  RunLocation,
-  type Event as DbEvent,
-} from "@shared/schema";
+import { EventStatus, TimeUnit, type Event as DbEvent } from "@shared/schema";
 import { useToast } from "@cronium/ui";
 import { ConfirmationDialog } from "@cronium/ui";
 import { Input } from "@cronium/ui";
@@ -19,13 +14,14 @@ import {
   SelectValue,
 } from "@cronium/ui";
 import { EventsTable } from "@/components/event-list";
+import { buildDuplicateEventInput } from "@/components/event-list/duplicate-event";
 import type {
   Event,
   EventListFilters,
   EventListState,
 } from "@/components/event-list";
 import { trpc } from "@/lib/trpc";
-import { QUERY_OPTIONS } from "@/trpc/shared";
+import { QUERY_OPTIONS, trpcErrorMessage } from "@/trpc/shared";
 
 const copy = {
   runSuccessTitle: "Event Triggered",
@@ -137,10 +133,30 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
     onError: (error) => {
       toast({
         title: "Error",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Failed to duplicate event. Please try again.",
+        description: trpcErrorMessage(
+          error,
+          "Failed to duplicate event. Please try again.",
+        ),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const forkEventMutation = trpc.events.fork.useMutation({
+    onSuccess: () => {
+      toast({
+        title: "Event Forked",
+        description: "The event has been successfully forked.",
+      });
+      void refetchEvents();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: trpcErrorMessage(
+          error,
+          "Failed to fork event. Please try again.",
+        ),
         variant: "destructive",
       });
     },
@@ -269,6 +285,11 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
     if (typeof dbEvent.runLocation === "string") {
       mappedEvent.runLocation = dbEvent.runLocation;
     }
+    if (Array.isArray(dbEvent.eventServers)) {
+      mappedEvent.eventServers = dbEvent.eventServers.filter(
+        (id): id is number => typeof id === "number",
+      );
+    }
     if (typeof dbEvent.timeoutValue === "number") {
       mappedEvent.timeoutValue = dbEvent.timeoutValue;
     }
@@ -372,39 +393,23 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
         return;
       }
 
-      // Create a new event with the same properties
-      await duplicateEventMutation.mutateAsync({
-        name: `${eventToDuplicate.name} (Copy)`,
-        description: eventToDuplicate.description ?? undefined,
-        type: eventToDuplicate.type,
-        status: EventStatus.DRAFT,
-        content: eventToDuplicate.content ?? undefined,
-        scheduleNumber: eventToDuplicate.scheduleNumber,
-        scheduleUnit: eventToDuplicate.scheduleUnit as TimeUnit,
-        customSchedule: eventToDuplicate.customSchedule ?? undefined,
-        runLocation: (eventToDuplicate.runLocation ??
-          RunLocation.LOCAL) as RunLocation,
-        ...(eventToDuplicate.serverId && {
-          serverId: eventToDuplicate.serverId,
-        }),
-        timeoutValue: eventToDuplicate.timeoutValue ?? 30,
-        timeoutUnit: (eventToDuplicate.timeoutUnit ??
-          TimeUnit.SECONDS) as TimeUnit,
-        retries: eventToDuplicate.retries ?? 0,
-        ...(eventToDuplicate.httpMethod && {
-          httpMethod: eventToDuplicate.httpMethod,
-        }),
-        ...(eventToDuplicate.httpUrl && { httpUrl: eventToDuplicate.httpUrl }),
-        ...(eventToDuplicate.httpHeaders && {
-          httpHeaders: eventToDuplicate.httpHeaders,
-        }),
-        ...(eventToDuplicate.httpBody && {
-          httpBody: eventToDuplicate.httpBody,
-        }),
-      });
+      await duplicateEventMutation.mutateAsync(
+        buildDuplicateEventInput(eventToDuplicate),
+      );
     } catch (error) {
       console.error(
         "Error duplicating event:",
+        error instanceof Error ? error.message : "Unknown error",
+      );
+    }
+  };
+
+  const handleForkEvent = async (eventId: number) => {
+    try {
+      await forkEventMutation.mutateAsync({ id: eventId });
+    } catch (error) {
+      console.error(
+        "Error forking event:",
         error instanceof Error ? error.message : "Unknown error",
       );
     }
@@ -542,7 +547,7 @@ export default function ServerEventsList({ serverId }: ServerEventsListProps) {
         }
         onEventRun={handleRunEvent}
         onEventDuplicate={handleDuplicateEvent}
-        onEventFork={handleDuplicateEvent} // Fork uses same logic as duplicate
+        onEventFork={handleForkEvent}
         onEventStatusChange={handleStatusChange}
         onEventDelete={confirmDelete}
         isRunning={state.isRunning}

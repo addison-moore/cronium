@@ -8,7 +8,11 @@ import {
 import { db } from "@/server/db";
 import { oauthStates } from "@/shared/schema";
 import { eq } from "drizzle-orm";
-import { failureWithStack } from "@/lib/pg-errors";
+import {
+  QUERY_FAILED_MESSAGE,
+  failureWithStack,
+  isQueryFailure,
+} from "@/lib/pg-errors";
 
 // Tool credential forms (where the Connect flow starts) live on the Tools page
 const RETURN_PATH = "/dashboard/tools";
@@ -71,10 +75,18 @@ export async function GET(request: NextRequest) {
     } catch (error) {
       console.error("OAuth callback error:", failureWithStack(error));
 
+      // This ends up in a URL, so in browser history and proxy logs, and a failed
+      // query's message holds the tokens it was saving, even encrypted.
+      const details = isQueryFailure(error)
+        ? QUERY_FAILED_MESSAGE
+        : error instanceof Error
+          ? error.message
+          : "Unknown error";
+
       // Redirect to error page
       return NextResponse.redirect(
         new URL(
-          `${RETURN_PATH}?error=oauth_failed&details=${encodeURIComponent(error instanceof Error ? error.message : "Unknown error")}`,
+          `${RETURN_PATH}?error=oauth_failed&details=${encodeURIComponent(details)}`,
           request.url,
         ),
       );

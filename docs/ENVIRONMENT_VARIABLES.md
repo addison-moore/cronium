@@ -67,7 +67,7 @@ These environment variables must be set for the application to function correctl
 | `AUTH_URL`                 | NextAuth base URL                                                                                                                                                                                              | `string` (URL)          | Yes      | `http://localhost:3000`                 | 📱      |
 | `AUTH_SECRET`              | NextAuth encryption secret                                                                                                                                                                                     | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` | 📱      |
 | `ENCRYPTION_KEY`           | Data encryption key (active). Encrypts every secret at rest via the versioned vault + tool-credential scheme                                                                                                   | `string` (64 hex)       | Yes      | Generate with `openssl rand -hex 32`    | 📱      |
-| `ENCRYPTION_KEYS_RETIRED`  | JSON array of previous `ENCRYPTION_KEY` values kept in the ring during a key rotation so secrets written under them still decrypt until re-encrypted. Empty/unset outside a rotation. See "Key rotation" below | `string` (JSON array)   | No       | e.g. `["<old-hex-key>"]`                | 📱      |
+| `ENCRYPTION_KEYS_RETIRED`  | JSON array of former `ENCRYPTION_KEY` values kept in the keyring during a key rotation, so secrets under them still decrypt and job tokens under them verify. Empty/unset otherwise. See "Key rotation" below. | `string` (JSON array)   | No       | e.g. `["<old-hex-key>"]`                | 📱      |
 | `JWT_SECRET`               | JWT signing secret                                                                                                                                                                                             | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` |
 | `CRONIUM_ORCHESTRATOR_KEY` | Orchestrator service-identity credential — the app verifies it on the orchestrator-facing routes (claim, heartbeat, health/metrics)                                                                            | `string`                | Yes      | Generate with `openssl rand -base64 32` |
 | `SOCKET_BROADCAST_KEY`     | Authenticates internal broadcasts from the app/worker to the socket server                                                                                                                                     | `string`                | Yes      | Generate with `openssl rand -base64 32` |
@@ -522,6 +522,9 @@ two services that use the key, `cronium-app` and `cronium-worker`, so it isn't f
 downtime. See [What stops working](#what-stops-working) below. Between the two restarts
 every row stays readable, because both services hold both keys.
 
+**Rotating because the key leaked?** Use [If the old key leaked](#if-the-old-key-leaked)
+instead. The steps below keep trusting the old key until step 6.
+
 **Every service must hold both keys before any row moves.** A service reads the keys
 when it starts, so changing them anywhere else doesn't reach it until it restarts. A
 service still on the old key can't read a row the driver has moved: signed webhooks get
@@ -560,6 +563,11 @@ devDependency), with its keys set for that command only. It also needs `DATABASE
 # Run all of this in one shell with neither key exported.
 unset ENCRYPTION_KEY ENCRYPTION_KEYS_RETIRED
 
+# 0. While the old key is still the active one, move what's from before the vault. Take
+#    a backup first. "Encrypting values saved before encryption at rest" below has a dry
+#    run, and what to do with what it reports.
+docker compose exec cronium-worker node apps/cronium-app/dist/rotate-secrets.cjs --encrypt-legacy
+
 # 1. Back up the database, generate a new key and preview the run. Nothing moves and
 #    nothing restarts. The driver gets both keys for this one command, because the
 #    worker doesn't hold the new one yet.
@@ -567,18 +575,15 @@ NEW=$(openssl rand -hex 32)
 docker compose exec -e ENCRYPTION_KEY="$NEW" -e ENCRYPTION_KEYS_RETIRED='["<old-hex-key>"]' \
   cronium-worker node apps/cronium-app/dist/rotate-secrets.cjs --dry-run
 
-# 2. Fix anything in "Before step 3" below. Then let scripts finish: stopping the worker
-#    holds back scheduled runs, and gives a tool action or HTTP request running in it up
-#    to 30 seconds to finish. Wait for this to say 0, then go straight to step 3.
-docker compose stop cronium-worker
-docker compose exec postgres psql -U cronium -d cronium -c \
-  "SELECT count(*) FROM jobs WHERE type = 'SCRIPT' AND status IN ('queued', 'claimed', 'running');"
+# 2. Fix anything in "Before step 3" below. Scripts can keep running through all of
+#    this: their job tokens stay valid while the old key is retired.
 
 # 3. Give both services both keys. Change these two lines in .env, keeping the single
-#    quotes, and restart. docker compose restart wouldn't load them.
+#    quotes, restart, and note the time. docker compose restart wouldn't load them.
 #      ENCRYPTION_KEY=<new-hex-key>
 #      ENCRYPTION_KEYS_RETIRED='["<old-hex-key>"]'
 docker compose up -d --no-deps cronium-app cronium-worker
+date -u '+%F %T'
 
 # Check that both services hold both keys, then that a variable or a webhook still
 # reads. If either fails, nothing has moved yet: roll back, as described below.
@@ -590,13 +595,20 @@ docker compose exec cronium-worker printenv ENCRYPTION_KEY ENCRYPTION_KEYS_RETIR
 #    "Total re-encrypted: 0; errors: 0".
 docker compose exec cronium-worker node apps/cronium-app/dist/rotate-secrets.cjs
 
-# 5. Check that nothing still needs the old key, right before it goes. A job queued during
-#    step 4 can hold a copy of an env var from before that env var moved. This has to
-#    print "Total to re-encrypt: 0; errors: 0". If it doesn't, go back to step 4.
+# 5. Check that nothing still needs the old key, right before it goes. Scripts started
+#    before step 3 hold job tokens only the old key can verify. Wait for this to say 0.
+docker compose exec postgres psql -U cronium -d cronium -c \
+  "SELECT count(*) FROM jobs WHERE type = 'SCRIPT' AND status IN ('claimed', 'running') AND created_at < '<time from step 3>';"
+
+# A job queued during step 4 can hold a copy of an env var from before that env var
+# moved. This has to print "Total to re-encrypt: 0; errors: 0". If it doesn't, go back to
+# step 4.
 docker compose exec cronium-worker node apps/cronium-app/dist/rotate-secrets.cjs --dry-run
 
-# 6. Remove the ENCRYPTION_KEYS_RETIRED line from .env and restart.
+# 6. Remove the ENCRYPTION_KEYS_RETIRED line from .env and restart. From here the app
+#    no longer trusts the old key, so check it's gone: this should print nothing.
 docker compose up -d --no-deps cronium-app cronium-worker
+docker compose exec cronium-app printenv ENCRYPTION_KEYS_RETIRED
 
 # 7. With docker-compose.example.yml the orchestrator and runtime also load .env, and
 #    until they restart their environment still holds the old key, though neither uses
@@ -617,6 +629,12 @@ docker compose exec postgres psql -U cronium -d cronium -c \
   "UPDATE jobs SET payload = payload - 'environment' WHERE status NOT IN ('queued', 'claimed', 'running') AND payload ? 'environment';"
 ```
 
+The driver doesn't overwrite a value saved while it runs, such as a regenerated webhook
+secret or a refreshed OAuth token: each write applies only to the row version it read. A
+row that changed is left as it was saved, and its values count as `changed-during-run`, not
+as re-encrypted or as errors. That run exits non-zero and says so on its total line, because
+those values may still be under the old key, so don't take it as the last one.
+
 An API token keeps its value when it's hashed. So if you're rotating because the old key
 may have leaked, anyone holding it and a copy of the database from before a token was
 hashed can still use that token after the rotation. This revokes the ones not hashed yet
@@ -630,17 +648,19 @@ docker compose exec postgres psql -U cronium -d cronium -c \
 
 ### Before step 3
 
-- **`errors` isn't 0 in the dry run, or it warns about values still bound to the current
-  key.** Those are `legacy` values on servers, env vars and MFA secrets. A retired key
-  can't read them, so they stop working at step 3: an env var reads back blank. Save them
-  again first, which re-encrypts them. Its other warning, about plaintext webhook and
-  variable values, doesn't matter here: a key change doesn't affect them, and the next
-  section encrypts them.
-- **It warns about sensitive settings.** These are stored outside the vault, which is how
-  the bootstrap seed used to store `SMTP_PASSWORD`. After step 3 the app can't read them
-  and uses the ciphertext as the value, so an SMTP login fails with only a log line to
-  show for it. Enter each one it names again in the admin settings. Saving with the field
-  blank keeps the old value, so it has to be typed.
+- **It warns about values still bound to the key they were saved under.** Those are
+  `legacy` values on servers, env vars and MFA secrets. Reads only try the active key, so
+  they stop working at step 3: an env var reads back blank. Step 0 moves them, so run it
+  again and fix anything it reports. If the key has already changed, it can still open
+  them while the old key is in `ENCRYPTION_KEYS_RETIRED`. Its other warning, about
+  plaintext values, doesn't matter here: a key change doesn't affect them. Step 0 encrypts
+  those too.
+- **`errors` isn't 0 in the dry run.** No key in the ring can read those values, so the app
+  can't either. Replace each one it names in the app.
+- **It warns about sensitive settings.** Older ciphertext is stored outside the vault,
+  which is how the bootstrap seed used to store `SMTP_PASSWORD`. After step 3 the app
+  can't read it and uses the ciphertext as the value, so an SMTP login fails with only a
+  log line to show for it. Step 0 moves these too.
 - **It warns about API tokens.** Tokens from before hashing stay encrypted until they're
   used, and the app can read them only with the active key. Unless the old key may have
   leaked, as above, you don't need to use or replace them: step 4 hashes each one a key in
@@ -656,29 +676,32 @@ docker compose exec postgres psql -U cronium -d cronium -c \
 - **It warns about env var values copied into unfinished jobs.** Each job it names was
   queued with a copy of an env var from before the vault. The driver can't move that copy,
   so the job fails at step 3 with `Could not prepare this job to run`. Let the job finish
-  first, or cancel it and run the event again once its env var has been saved. An error on
-  `jobs.payload.environment` means a copy no key in the ring can read, and that job fails
-  too, so cancel it as well.
+  first, or cancel it and run the event again once step 0 has moved its env var. An error
+  on `jobs.payload.environment` means a copy no key in the ring can read, and that job
+  fails too, so cancel it as well.
 
 ### What stops working
 
 - **Each restart in steps 3 and 6 is an outage.** On a Mac, with the published compose
-  file and the real image, the app answered nothing for about 3 seconds each time, and
-  the worker was down for about 12 while it waited for the app to be healthy. Requests
-  in that window fail, including webhooks sent to Cronium, so a sender needs to retry.
-  Nothing is dispatched until the worker is back. Signed-in users stay signed in.
+  file and the real image, the app answered nothing for about 3 seconds each time, or
+  up to 16 if a request was still in flight, which it waits for, and the worker was down
+  for about 12 while it waited for the app to be healthy. Requests in that window fail,
+  including webhooks sent to Cronium, so a sender needs to retry. Nothing is dispatched
+  until the worker is back. Signed-in users stay signed in. A tool action or HTTP request
+  running in the worker gets up to 30 seconds to finish when it stops.
 - **Nothing stops between the restarts.** About 500 requests to the app all succeeded
   while the driver moved 20,000 rows, so steps 4 and 5 can take as long as they need.
-- **A script running at step 3 can't finish cleanly, which is why step 2 waits.** Its
-  token is signed with the old key and the app stops accepting it, so its
+- **A script running at step 3 carries on.** Its job token is signed with the old key,
+  which the app keeps accepting while that key is in `ENCRYPTION_KEYS_RETIRED`. Its calls
+  wait out the restart: bash scripts writing a variable every second paused for 5 seconds,
+  or 16 with a request held in flight, with no failed call, and finished normally.
+- **A script still running when the old key goes at step 6 can't finish cleanly, which
+  is why step 5 waits.** Its token is one the app no longer accepts, so its
   `cronium.getVariable()` calls and its completion report get a 403 and its result is
   lost. A minute or two later it's marked failed with `Lease expired`, or, if the event
   has retries, it runs again from the start, even if its script had already finished.
-  At step 6 the signing key doesn't change, and a running script finished normally.
-- **Stopping the worker doesn't stop scripts from starting.** The orchestrator still
-  claims whatever is queued, and anyone can still start a run by hand, through the API
-  or with a webhook. If one starts after the count says 0, wait for it as well. If it's
-  still running at the restart, it ends as above, so check on it and run it again.
+  A script started after step 3 has a token signed with the new key, and step 6 doesn't
+  affect it.
 - **Step 7, or a plain `docker compose up -d` in place of steps 3 and 6, recreates the
   orchestrator** with `docker-compose.example.yml`, because all four services load
   `.env`. A script running then ends the same way and leaves its containers behind, and
@@ -696,39 +719,110 @@ first. This also covers a failed check at step 3, because anything saved since t
 restart is under the new key, and the driver brings it back.
 
 ```bash
-# 1. Let scripts finish, as in step 2. Changing the active key again has the same effect
-#    on a running script as step 3.
-
-# 2. Change these two lines in .env and restart.
+# 1. Change these two lines in .env, restart, and note the time. Running scripts carry on,
+#    because tokens signed with either key still verify.
 #      ENCRYPTION_KEY=<old-hex-key>
 #      ENCRYPTION_KEYS_RETIRED='["<new-hex-key>"]'
 docker compose up -d --no-deps cronium-app cronium-worker
+date -u '+%F %T'
 docker compose exec cronium-app printenv ENCRYPTION_KEY ENCRYPTION_KEYS_RETIRED
 docker compose exec cronium-worker printenv ENCRYPTION_KEY ENCRYPTION_KEYS_RETIRED
 
-# 3. Move the rows back. Re-run until it prints "Total re-encrypted: 0; errors: 0", then
-#    check as in step 5.
+# 2. Move the rows back. Re-run until it prints "Total re-encrypted: 0; errors: 0", then
+#    wait and check as in step 5, with the time from step 1 here.
 docker compose exec cronium-worker node apps/cronium-app/dist/rotate-secrets.cjs
 
-# 4. Remove the ENCRYPTION_KEYS_RETIRED line from .env and restart.
+# 3. Remove the ENCRYPTION_KEYS_RETIRED line from .env and restart.
 docker compose up -d --no-deps cronium-app cronium-worker
 ```
 
-The driver **warns** about any `legacy` (pre-vault) values still bound to the current key
-on servers, env vars and MFA secrets: those cannot be rotated and must first be migrated
-to vault envelopes (they re-encrypt automatically the next time their record is saved) —
-rotating the key while legacy values remain would orphan them. It also counts plaintext
-webhook and user-variable values as `legacy`. A key change doesn't affect those, and the
-next section encrypts them.
+### If the old key leaked
+
+Whoever holds a key can sign a job token the app accepts, for any job and any user, for
+as long as that key is `ENCRYPTION_KEY` or in `ENCRYPTION_KEYS_RETIRED` on a running app,
+and `/api/internal` answers on the app's own port. With the right ids, such a token can
+read and write a user's variables, change a job's status, run a tool action as a job's
+owner, and read a server's address and username. The usual steps would keep that open
+until step 6, so here the old key never goes in a running service's list. The app and
+worker stay down while the rows move, with nothing to read them:
+
+```bash
+# Run all of this in one shell with neither key exported.
+unset ENCRYPTION_KEY ENCRYPTION_KEYS_RETIRED
+
+# 1. Run step 0 above, while the old key is still the active one. Then back up the
+#    database, generate a new key and preview the run, as in step 1 above, and fix anything
+#    in "Before step 3".
+
+# 2. Decide whether to let running scripts finish. A script still running at step 3 loses
+#    its result, but waiting leaves the key trusted for that long. To wait: stopping the
+#    worker holds back scheduled runs, and gives a tool action or HTTP request running in
+#    it up to 30 seconds to finish. Wait for this to say 0.
+docker compose stop cronium-worker
+docker compose exec postgres psql -U cronium -d cronium -c \
+  "SELECT count(*) FROM jobs WHERE type = 'SCRIPT' AND status IN ('queued', 'claimed', 'running');"
+
+# 3. Stop the app and worker. From here nobody's token is accepted, forged or real.
+docker compose stop cronium-app cronium-worker
+
+# 4. Move the rows from a one-off worker container, which gets both keys for this one
+#    command. Re-run until it prints "Total re-encrypted: 0; errors: 0".
+docker compose run --rm --no-deps -e ENCRYPTION_KEY="$NEW" -e ENCRYPTION_KEYS_RETIRED='["<old-hex-key>"]' \
+  cronium-worker node apps/cronium-app/dist/rotate-secrets.cjs
+
+# 5. Change these lines in .env and start the services. The printenv should print nothing.
+#      ENCRYPTION_KEY=<new-hex-key>
+#      ENCRYPTION_KEYS_RETIRED=
+docker compose up -d --no-deps cronium-app cronium-worker
+docker compose exec cronium-app printenv ENCRYPTION_KEYS_RETIRED
+
+# 6. Finished jobs keep their env var copies under the old key, so anyone holding it and a
+#    copy of the database can read them. This removes them, and touches only finished jobs.
+docker compose exec postgres psql -U cronium -d cronium -c \
+  "UPDATE jobs SET payload = payload - 'environment' WHERE status NOT IN ('queued', 'claimed', 'running') AND payload ? 'environment';"
+
+# 7. As step 7 above: when no script is running, recreate the orchestrator and runtime,
+#    whose environment can still hold the old key.
+docker compose up -d
+```
+
+This costs more downtime and some running work:
+
+- **The app answers nothing from step 3 until step 5 finishes.** That's roughly 15 ms a
+  row on top of the restart: 20,000 variables took 4 to 6 minutes in tests, and an install
+  with a few hundred secrets takes seconds.
+- **A script running at step 3 loses its result,** the same way as one running at step 6
+  of the usual steps.
+- **A job still queued at step 3 runs normally once the services are back,** because the
+  driver moves its env var copies, unless the dry run named it in step 1. See
+  [Before step 3](#before-step-3).
+
+Rotating doesn't undo the leak. Anyone with the old key can still read a backup taken
+before the rotation, and could use forged tokens until step 3, so replace the passwords,
+SSH keys and API credentials your secrets hold too.
 
 ## Encrypting values saved before encryption at rest
 
-Webhook secrets, webhook custom headers and user variables are encrypted at rest
-since July 2026. A row saved before that stays plaintext until that exact field is
-next written: an edit to a webhook's URL leaves its headers and secret as they are,
-and an edit to a variable's description leaves its value. Anyone with a copy of the
-database can read them. The app keeps working either way, so nothing fails to tell
-you. The worker logs a warning at boot while such rows exist.
+Values saved before encryption at rest, or before the record-bound vault, stay as they
+were until that exact field is next written: an edit to a webhook's URL leaves its
+headers and secret as they are, and an edit to a variable's description leaves its
+value.
+
+| Column                                                    | Can still hold              | Afterwards, encrypted with               |
+| --------------------------------------------------------- | --------------------------- | ---------------------------------------- |
+| `webhooks.secret`, `webhooks.headers`                     | plaintext                   | the vault, bound to the webhook          |
+| `user_variables.value`                                    | plaintext                   | the vault, bound to the owner and key    |
+| `servers.ssh_key`, `servers.password`                     | older ciphertext, plaintext | the vault, bound to the owner and column |
+| `env_vars.value`                                          | older ciphertext, plaintext | the vault, bound to the event and key    |
+| `users.mfa_secret`                                        | older ciphertext, plaintext | the vault, bound to the user             |
+| Sensitive `system_settings` values                        | older ciphertext, plaintext | the vault, bound to the setting          |
+| `tool_credentials.credentials`                            | plaintext                   | the format reads already use, unbound    |
+| `oauth_tokens.access_token`, `oauth_tokens.refresh_token` | plaintext                   | the format reads already use, unbound    |
+
+Anyone with a copy of the database can read plaintext. Older ciphertext isn't bound to
+its row, so anyone who can write to the database can move it to another row, and a key
+change orphans it. The app keeps working either way, so nothing fails to tell you. The
+worker logs a warning at boot while such rows exist.
 
 To encrypt them, take a database backup, then:
 
@@ -744,9 +838,12 @@ From a source checkout, the same flags go on
 `pnpm --filter @cronium/app rotate:secrets`, with the instance's `.env` loaded and
 its `DATABASE_URL` reachable from where you run it.
 
-Nothing changes for senders, subscribers or scripts: signatures still use the same
-secret, deliveries send the same headers, and `cronium.getVariable()` returns the
-same value.
+Nothing changes for what reads these values: signatures still use the same secret,
+deliveries send the same headers, `cronium.getVariable()` returns the same value, SSH
+logs in with the same key, scripts get the same env vars, authenticator apps keep
+working, and tools and OAuth connections use the same credentials. The one exception is
+older ciphertext under a key in `ENCRYPTION_KEYS_RETIRED`, which the app can't read at all
+until this moves it.
 
 The run is safe to repeat and to stop: each row is written once on its own, so a
 second run changes nothing and a run after an interruption does what's left. It
@@ -778,29 +875,55 @@ against.
 
 It ends with `Legacy rows remaining: N`, and exits non-zero if that isn't 0 or if a
 row failed. A failed row is named by id and column, and is left exactly as it was,
-including any value in it that could have been encrypted. A value reported as
-`looks encrypted, but this keyring can't decrypt it for this row` can't be read by
-the app either: the read path treats anything starting with `crn.` as encrypted, so
-this can also be a plaintext value that happens to start that way. Replace it
-(regenerate the webhook secret, save the headers, or set the variable again), then
-run this again.
+including any value in it that could have been encrypted. To fix one, replace the value
+in the app: regenerate the webhook secret, save its headers, set the variable or env var
+again, save the server's credentials or the tool's, enter the setting again in the admin
+settings, connect the OAuth account again, or have the user enrol in MFA again. Then run
+this again. The reasons it gives:
+
+- `looks encrypted, but this keyring can't decrypt it for this row`. The app can't read
+  this either: the read path treats anything starting with `crn.` as encrypted, so this
+  can also be a plaintext value that happens to start that way.
+- `has the shape of old ciphertext, but no key in this keyring opens it`. The app takes
+  50 or more base64 characters to be older ciphertext, and can't read this either. It's
+  ciphertext under a key you no longer have, or a long plaintext made only of those
+  characters, and nothing can tell which. If you have the old key, add it to
+  `ENCRYPTION_KEYS_RETIRED` and run this again.
+- `marked as encrypted, but isn't in the encrypted format`,
+  `marked as not encrypted, but holds encrypted data` and
+  `not a JSON object of credentials`. A tool credential the app can't use.
+- `did not read back unchanged after encrypting`. An OAuth token a read would change once
+  encrypted, such as one that's also a JSON number, or anything else that didn't come
+  back the same. Nothing was written.
+
+**Values that read as ciphertext.** A line starting `NOTE:` names a value whose reads get
+ciphertext instead of what someone saved, and did before this run. A value of 1 to 4 bytes
+saved before the vault does this, because its ciphertext is too short for the app to
+recognize, and so does a value encrypted twice, because an old edit form was handed
+ciphertext and saved it back. So a script expecting `1` has been getting a string of base64.
+The run doesn't change what reads return, so a script doesn't start behaving differently
+because of it. It encrypts such a value as it reads, and these lines aren't failures and
+don't count as remaining. To fix one, set the real value again. The run can't recover it
+for you, and nothing can once the key it's under is gone.
 
 **This doesn't erase the old values.** They were on disk for months and are still
 there:
 
 - **Table files.** Updated rows leave their old versions behind. A plain `VACUUM`
-  clears most but can leave bytes in a page. This rewrites both tables, and blocks
+  clears most but can leave bytes in a page. This rewrites these tables, and blocks
   them while it runs:
 
   ```bash
-  docker compose exec postgres psql -U cronium -d cronium -c "VACUUM FULL webhooks, user_variables;"
+  docker compose exec postgres psql -U cronium -d cronium -c "VACUUM FULL webhooks, user_variables, servers, env_vars, users, system_settings, tool_credentials, oauth_tokens;"
   ```
 
 - **WAL.** Recycled by later checkpoints, unless you archive it.
 - **Backups and dumps.** Every copy taken before this run still holds the plaintext.
   If any of those copies could have been read by someone who shouldn't have, rotate
   the credentials themselves: regenerate the webhook's secret, replace its custom
-  headers at the service that issued them, and replace any secret held in a variable.
+  headers at the service that issued them, replace any secret held in a variable or an
+  env var, replace the servers' SSH keys and passwords, and reissue tool credentials and
+  OAuth tokens. Have users enrol in MFA again if the secret was plaintext.
 
 Rolling back to an image from before July 2026 after this has run doesn't work,
 because those versions can't read encrypted values. Restore the backup instead.
