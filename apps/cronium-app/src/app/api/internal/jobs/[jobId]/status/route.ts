@@ -8,6 +8,11 @@ import {
 } from "@/lib/security/internal-route-auth";
 import { failureWithStack } from "@/lib/pg-errors";
 
+/** The orchestrator sends `details.error` as an object (types.ErrorDetails). */
+function reportedError(error: string | { message?: string } | undefined) {
+  return typeof error === "string" ? error : error?.message;
+}
+
 // Update job status (orchestrator progress reports)
 export async function PUT(
   request: NextRequest,
@@ -29,7 +34,7 @@ export async function PUT(
       details?: {
         message?: string;
         exitCode?: number;
-        error?: string;
+        error?: string | { message?: string };
       };
     };
 
@@ -93,7 +98,9 @@ export async function PUT(
           {
             completedAt: new Date(),
             error:
-              body.details?.error ?? body.details?.message ?? "Unknown error",
+              reportedError(body.details?.error) ??
+              body.details?.message ??
+              "Unknown error",
             exitCode: body.details?.exitCode ?? 1,
           },
           actor,
@@ -105,7 +112,8 @@ export async function PUT(
           JobStatus.TIMED_OUT,
           {
             completedAt: new Date(),
-            error: body.details?.error ?? "Job execution timed out",
+            error:
+              reportedError(body.details?.error) ?? "Job execution timed out",
             exitCode: body.details?.exitCode ?? -1,
           },
           actor,
@@ -117,7 +125,7 @@ export async function PUT(
           JobStatus.CANCELLED,
           {
             completedAt: new Date(),
-            error: body.details?.error ?? "Job cancelled",
+            error: reportedError(body.details?.error) ?? "Job cancelled",
           },
           actor,
         );

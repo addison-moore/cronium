@@ -1,5 +1,6 @@
 import { seedEvents } from "./seed-events";
 import { seedWorkflows } from "./seed-workflows";
+import { failureWithStack } from "@/lib/pg-errors";
 
 /**
  * This script runs all seed scripts in sequence
@@ -19,7 +20,7 @@ async function seedAll() {
     console.log("\nAll seed scripts completed successfully!");
     process.exit(0);
   } catch (error) {
-    console.error("Error running seed scripts:", error);
+    console.error("Error running seed scripts:", failureWithStack(error));
     process.exit(1);
   }
 }

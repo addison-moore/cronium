@@ -263,6 +263,7 @@ export class WebhookManager {
 
       await this.webhookQueue.enqueue({
         webhookId: webhook.id,
+        ownerUserId: webhook.userId,
         webhookEventId: webhookEvent.id,
         url: webhook.url,
         // Decrypt at the delivery-signing boundary.

@@ -5,6 +5,10 @@
  * either one writes what it was saving to the log: request headers, script content,
  * whatever a script printed.
  *
+ * The worker, the socket server and what they call log the same errors with nobody
+ * watching. There the query is holding an event's script or HTTP headers, a step's
+ * output or what a job printed, and some of these write the text to a row too.
+ *
  * Real Postgres on purpose. A mocked route test rejects with a hand-built error,
  * which has no params in its message and none of the driver's fields, so it can't
  * see any of this.
@@ -15,10 +19,20 @@ jest.mock("next-auth", () => ({
   getServerSession: jest.fn().mockResolvedValue(null),
 }));
 jest.mock("@/lib/auth", () => ({ authOptions: {} }));
+// There's no socket server here, and each log update would retry with backoff.
+jest.mock("@/lib/websocket-broadcaster", () => ({
+  getWebSocketBroadcaster: () => ({
+    broadcastLogUpdate: () => Promise.resolve({ success: true, attempts: 1 }),
+  }),
+}));
 
 import { randomUUID } from "node:crypto";
 import { format } from "node:util";
+import { eq } from "drizzle-orm";
+import Redis from "ioredis";
 import { NextRequest } from "next/server";
+import type { Server as SocketIOServer, Socket } from "socket.io";
+import { z } from "zod";
 import {
   DELETE as deleteEvent,
   GET as getEvent,
@@ -32,20 +46,66 @@ import { POST as triggerWorkflowWebhook } from "@/app/api/workflows/webhook/[key
 import { hashApiToken } from "@/lib/api-token-hash";
 import { hashWorkflowWebhookKey } from "@/lib/workflow-webhook-key";
 import { cacheService } from "@/lib/cache/cache-service";
+import { TokenManager } from "@/lib/oauth/TokenManager";
 import { describeFailure, failureWithStack } from "@/lib/pg-errors";
+import * as httpEvents from "@/lib/scheduler/http-event-executor";
+import { runInProcessJob } from "@/lib/scheduler/in-process-executor";
+import { executeToolAction } from "@/lib/scheduler/tool-action-executor";
+import { runDispatchTick } from "@/lib/scheduling/dispatcher";
+import { POISON_AGE_MS, consumeJobTransitions } from "@/lib/scheduling/outbox";
+import { runRetention } from "@/lib/scheduling/retention";
+import { runSweepTick } from "@/lib/scheduling/sweeper";
+import { InProcessWorkerPool } from "@/lib/scheduling/worker-executor";
+import {
+  advanceRunsForJob,
+  advanceWorkflowRun,
+  reconcileWorkflowRuns,
+  startWorkflowRun,
+} from "@/lib/scheduling/workflow-engine";
+import { auditLogger } from "@/lib/security/audit-logger";
+import { encryptEnvVarValue } from "@/lib/security/field-secret";
+import { jobService } from "@/lib/services/job-service";
+import { serverCleanupService } from "@/lib/services/server-cleanup-service";
+import { WorkflowCleanupService } from "@/lib/services/workflow-cleanup-service";
+import {
+  authenticateSocketTicket,
+  mintSocketTicket,
+} from "@/lib/socket-ticket";
+import { credentialCache } from "@/lib/tools/credential-cache";
+import * as serverActions from "@/lib/tools/server-action-executor";
 import { db, pool } from "@/server/db";
+import { LogsWebSocketHandler } from "@/server/logs-websocket";
 import { storage } from "@/server/storage";
+import { TerminalWebSocketHandler } from "@/server/terminal-websocket";
 import { withErrorHandling } from "@/server/utils/error-utils";
 import {
   EventStatus,
+  EventTriggerType,
+  EventType,
+  JobStatus,
+  JobType,
+  LeaseLossPolicy,
+  LogStatus,
+  WorkflowStepStatus,
   WorkflowTriggerType,
+  envVars,
   events,
+  jobTransitions,
+  jobs,
+  logs,
+  scheduleIncidents,
+  toolActionLogs,
+  toolAuditLogs,
+  toolCredentials,
   users,
+  workflowExecutionEvents,
+  workflowExecutions,
   workflowNodes,
+  workflowStepRuns,
   workflows,
 } from "@/shared/schema";
 import { closePool, resetDatabase } from "./helpers/db-reset";
-import { seedEvent, seedUser } from "./helpers/seed";
+import { seedEvent, seedJob, seedUser } from "./helpers/seed";
 
 // jest-circus only reads a global testTimeout, so the one on this project in
 // jest.config.js has no effect and the default here would be 5 seconds.
@@ -56,6 +116,9 @@ const SECRET = "sentinel-do-not-log-8f3a";
 
 /** V8 quotes the JSON it couldn't parse whole only if that's under 21 characters. */
 const SHORT_SECRET = "sentinel-8f3a";
+
+/** What gets stored or sent in place of a failed query's text. */
+const QUERY_FAILED = "A database query failed";
 
 let logged: string[] = [];
 
@@ -97,20 +160,36 @@ function expectNothingOfTheQuery() {
 const refusedStatement = "RAISE EXCEPTION 'refused'";
 
 /** Makes Postgres refuse every write to a table, with a real driver error. */
-async function refuseWrites(table: string, raise = refusedStatement) {
+async function refuseWrites(
+  table: string,
+  raise = refusedStatement,
+  operations = "INSERT OR UPDATE OR DELETE",
+) {
   await pool.query(`
     CREATE FUNCTION refuse_write() RETURNS trigger AS $$
     BEGIN ${raise}; END
     $$ LANGUAGE plpgsql;
-    CREATE TRIGGER refuse_write BEFORE INSERT OR UPDATE OR DELETE ON ${table}
+    CREATE TRIGGER refuse_write BEFORE ${operations} ON ${table}
       FOR EACH ROW EXECUTE FUNCTION refuse_write();
   `);
 }
 
-async function withTableRenamed(table: string, run: () => Promise<void>) {
+async function waitForLog(text: string) {
+  const deadline = Date.now() + 10_000;
+  while (!logged.some((line) => line.includes(text))) {
+    if (Date.now() > deadline) {
+      throw new Error(
+        `Timed out waiting for "${text}" in: ${logged.join("\n")}`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+async function withTableRenamed<T>(table: string, run: () => Promise<T>) {
   await pool.query(`ALTER TABLE ${table} RENAME TO ${table}_gone`);
   try {
-    await run();
+    return await run();
   } finally {
     await pool.query(`ALTER TABLE ${table}_gone RENAME TO ${table}`);
   }
@@ -173,6 +252,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
+  auditLogger.stopFlushInterval();
   await closePool();
   await cacheService.disconnect();
 });
@@ -523,6 +603,963 @@ describe("withErrorHandling, which most tRPC routers go through", () => {
     expect(failure.code).toBe("INTERNAL_SERVER_ERROR");
     expect(failure.message).not.toContain(SECRET);
     expect(failure.message).not.toContain("Failed query");
+  });
+});
+
+/** One run of a workflow with one node, for the engine's own writes to fail. */
+async function seedWorkflowRun(
+  stepStatus: WorkflowStepStatus,
+  stepFields: Partial<typeof workflowStepRuns.$inferInsert> = {},
+) {
+  const eventId = await seedEvent(owner);
+  const [workflow] = await db
+    .insert(workflows)
+    .values({
+      userId: owner,
+      name: "workflow",
+      status: EventStatus.ACTIVE,
+      triggerType: WorkflowTriggerType.MANUAL,
+    })
+    .returning({ id: workflows.id });
+  const [node] = await db
+    .insert(workflowNodes)
+    .values({ workflowId: workflow!.id, eventId })
+    .returning({ id: workflowNodes.id });
+  const [run] = await db
+    .insert(workflowExecutions)
+    .values({
+      workflowId: workflow!.id,
+      userId: owner,
+      status: LogStatus.RUNNING,
+      triggerType: WorkflowTriggerType.MANUAL,
+      startedAt: new Date(),
+    })
+    .returning({ id: workflowExecutions.id });
+  const [step] = await db
+    .insert(workflowStepRuns)
+    .values({
+      workflowExecutionId: run!.id,
+      nodeId: node!.id,
+      eventId,
+      status: stepStatus,
+      ...stepFields,
+    })
+    .returning({ id: workflowStepRuns.id });
+  return {
+    eventId,
+    runId: run!.id,
+    stepId: step!.id,
+    workflowId: workflow!.id,
+  };
+}
+
+/** A script with a secret in it, an env var encrypted at rest and one from before that. */
+async function seedEventWithSecrets(
+  overrides: Partial<typeof events.$inferInsert> = {},
+): Promise<number> {
+  const id = await seedEvent(owner, {
+    content: `curl -H "Authorization: ${SECRET}" example.com`,
+    ...overrides,
+  });
+  await db.insert(envVars).values({
+    eventId: id,
+    key: "API_KEY",
+    value: encryptEnvVarValue(`${SECRET}-env`, id, "API_KEY"),
+  });
+  await db.insert(envVars).values({
+    eventId: id,
+    key: "LEGACY_KEY",
+    value: `${SECRET}-legacy`,
+  });
+  return id;
+}
+
+describe("the dispatcher", () => {
+  const due = {
+    status: EventStatus.ACTIVE,
+    triggerType: EventTriggerType.SCHEDULE,
+    scheduleNumber: 1,
+    scheduleUnit: "MINUTES",
+    nextRunAt: new Date(Date.now() - 1000),
+  };
+  const seedDueEvent = () => seedEventWithSecrets(due as never);
+
+  // The job's payload has the script, and the env vars as they're stored: ciphertext,
+  // or plaintext on a row that hasn't been encrypted.
+  it("doesn't log or store a script or env var when the job can't be saved", async () => {
+    const id = await seedDueEvent();
+    await refuseWrites("jobs");
+
+    const result = await runDispatchTick();
+
+    expect(result.dispatched).toBe(0);
+    expectNothingOfTheQuery();
+    expect(logged.join("\n")).not.toContain("crn.");
+    expect(logged.join("\n")).toMatch(
+      new RegExp(
+        `\\[Dispatcher\\] Failed to dispatch event ${id} tick \\S+: P0001: refused`,
+      ),
+    );
+
+    const incidents = await db.select().from(scheduleIncidents);
+    expect(incidents).toHaveLength(1);
+    expect((incidents[0]!.details as { reason: string }).reason).toBe(
+      `dispatch failed: ${QUERY_FAILED}`,
+    );
+  });
+
+  // Nothing encrypts these, so what's logged is the header as it was typed.
+  it("doesn't log or store an HTTP event's headers, URL or body", async () => {
+    await seedEvent(owner, {
+      ...due,
+      type: EventType.HTTP_REQUEST,
+      httpMethod: "POST",
+      httpUrl: `https://example.com/hook?key=${SECRET}`,
+      httpHeaders: [{ key: "Authorization", value: `Bearer ${SECRET}` }],
+      httpBody: `{"key":"${SECRET}"}`,
+    } as never);
+    await refuseWrites("jobs");
+
+    await runDispatchTick();
+
+    expectNothingOfTheQuery();
+    const [incident] = await db.select().from(scheduleIncidents);
+    expect((incident!.details as { reason: string }).reason).toBe(
+      `dispatch failed: ${QUERY_FAILED}`,
+    );
+  });
+
+  it.each([
+    ["linking the job to its log", "logs", "UPDATE", "link a job to its log"],
+    [
+      "recording the job's creation",
+      "job_transitions",
+      "INSERT",
+      "record a job's creation",
+    ],
+  ])(
+    "leaves the query out when %s fails",
+    async (_, table, operation, what) => {
+      const id = await seedDueEvent();
+      await refuseWrites(table, refusedStatement, operation);
+
+      const result = await runDispatchTick();
+
+      // The job is queued whatever happens to this write.
+      expect(result.dispatched).toBe(1);
+      expectNothingOfTheQuery();
+      expect(logged).toContainEqual(
+        `[Dispatch] Failed to ${what} for event ${id}: P0001: refused`,
+      );
+    },
+  );
+});
+
+describe("the workflow engine", () => {
+  const seedFinishedStep = async () => {
+    const eventId = await seedEvent(owner);
+    const jobId = await seedJob(eventId, owner, {
+      status: JobStatus.COMPLETED,
+      result: { scriptOutput: { apiKey: SECRET } },
+    });
+    return seedWorkflowRun(WorkflowStepStatus.DISPATCHED, {
+      jobId,
+      startedAt: new Date(),
+    }).then((run) => ({ ...run, jobId }));
+  };
+
+  it("doesn't log a step's output when advancing the run fails", async () => {
+    const { jobId, runId } = await seedFinishedStep();
+    await refuseWrites("workflow_step_runs");
+
+    await advanceRunsForJob(jobId);
+
+    expectNothingOfTheQuery();
+    expect(logged).toContainEqual(
+      `[WorkflowEngine] advance failed for run ${runId}: P0001: refused`,
+    );
+  });
+
+  it("doesn't log a step's output when the reconcile sweep's advance fails", async () => {
+    const { runId } = await seedFinishedStep();
+    await refuseWrites("workflow_step_runs");
+
+    await reconcileWorkflowRuns();
+
+    expectNothingOfTheQuery();
+    expect(logged).toContainEqual(
+      `[WorkflowEngine] reconcile failed for run ${runId}: P0001: refused`,
+    );
+  });
+
+  // The step's error is shown in the run's history, so the job's payload would be
+  // stored a second time, in plaintext, and sent to whoever looks at the run.
+  it("doesn't log or store the job's payload when dispatching a step fails", async () => {
+    const eventId = await seedEventWithSecrets();
+    const [workflow] = await db
+      .insert(workflows)
+      .values({
+        userId: owner,
+        name: "workflow",
+        status: EventStatus.ACTIVE,
+        triggerType: WorkflowTriggerType.MANUAL,
+      })
+      .returning({ id: workflows.id });
+    await db
+      .insert(workflowNodes)
+      .values({ workflowId: workflow!.id, eventId });
+    await refuseWrites("jobs");
+
+    await startWorkflowRun(workflow!.id, {
+      triggerType: WorkflowTriggerType.MANUAL,
+      input: { apiKey: SECRET },
+    });
+
+    expectNothingOfTheQuery();
+    const [step] = await db.select().from(workflowStepRuns);
+    expect(step!.error).toBe(`Dispatch failed: ${QUERY_FAILED}`);
+    expect(logged).toContainEqual(
+      `[WorkflowEngine] Failed to dispatch step ${step!.id}: P0001: refused`,
+    );
+    const [telemetry] = await db.select().from(workflowExecutionEvents);
+    expect(telemetry!.errorMessage).toBe(`Dispatch failed: ${QUERY_FAILED}`);
+  });
+
+  it("doesn't store the query when the authorization check before a dispatch fails", async () => {
+    const { runId, stepId } = await seedWorkflowRun(WorkflowStepStatus.PENDING);
+
+    await withTableRenamed("workflows", () => advanceWorkflowRun(runId));
+
+    expectNothingOfTheQuery();
+    const [step] = await db
+      .select()
+      .from(workflowStepRuns)
+      .where(eq(workflowStepRuns.id, stepId));
+    expect(step!.error).toBe(
+      `Workflow authorization changed before dispatch: ${QUERY_FAILED}`,
+    );
+    expect(logged).toContainEqual(
+      `[WorkflowEngine] Couldn't check authorization for run ${runId}: 42P01: relation "workflows" does not exist`,
+    );
+  });
+});
+
+describe("a job run in the worker", () => {
+  const seedHttpJob = async (status = JobStatus.CLAIMED) => {
+    const eventId = await seedEvent(owner, {
+      type: EventType.HTTP_REQUEST,
+      httpMethod: "GET",
+      httpUrl: "https://example.com",
+    } as never);
+    const [log] = await db
+      .insert(logs)
+      .values({
+        eventId,
+        status: LogStatus.RUNNING,
+        startTime: new Date(),
+        userId: owner,
+      } as never)
+      .returning({ id: logs.id });
+    const jobId = await seedJob(eventId, owner, {
+      type: JobType.HTTP_REQUEST,
+      status,
+      payload: { executionLogId: log!.id },
+    });
+    const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId));
+    const [event] = await db
+      .select()
+      .from(events)
+      .where(eq(events.id, eventId));
+    return { event: event!, job: job!, jobId, logId: log!.id };
+  };
+
+  // Saving the result fails, and what's caught is then saved as the job's failure:
+  // in the job, in its transition and in the log its owner reads.
+  it("doesn't log or store what a request returned when saving it fails", async () => {
+    const { event, job, jobId, logId } = await seedHttpJob();
+    jest.spyOn(httpEvents, "executeHttpEvent").mockResolvedValue({
+      stdout: `printed ${SECRET}`,
+      stderr: "",
+      exitCode: 0,
+      data: { body: SECRET },
+      producesOutput: true,
+    } as never);
+    await refuseWrites(
+      "jobs",
+      "IF NEW.status = 'completed' THEN RAISE EXCEPTION 'refused'; END IF; RETURN NEW",
+      "UPDATE",
+    );
+
+    await runInProcessJob(job, event);
+
+    expectNothingOfTheQuery();
+    expect(logged).toContainEqual(
+      `[InProcess] Job ${jobId} failed to execute: P0001: refused`,
+    );
+    const [stored] = await db.select().from(jobs).where(eq(jobs.id, jobId));
+    expect(stored!.status).toBe(JobStatus.FAILED);
+    expect(stored!.lastError ?? "").not.toContain("Failed query");
+    const reasons = await db
+      .select({ reason: jobTransitions.reason })
+      .from(jobTransitions)
+      .where(eq(jobTransitions.jobId, jobId));
+    expect(JSON.stringify(reasons)).not.toContain(SECRET);
+    expect(JSON.stringify(reasons)).not.toContain("Failed query");
+    const [log] = await db.select().from(logs).where(eq(logs.id, logId));
+    expect(log!.output).toBe(QUERY_FAILED);
+    expect(log!.error).toBe(QUERY_FAILED);
+  });
+
+  it("leaves the query out when finalizing the failed job fails too", async () => {
+    const { event, job, jobId } = await seedHttpJob();
+    jest.spyOn(httpEvents, "executeHttpEvent").mockResolvedValue({
+      stdout: `printed ${SECRET}`,
+      stderr: "",
+      exitCode: 0,
+    } as never);
+    await refuseWrites(
+      "jobs",
+      "IF NEW.status <> 'running' THEN RAISE EXCEPTION 'refused'; END IF; RETURN NEW",
+      "UPDATE",
+    );
+
+    await runInProcessJob(job, event);
+
+    expectNothingOfTheQuery();
+    const line = logged.find((text) =>
+      text.startsWith(`[InProcess] Could not finalize failed job ${jobId}:`),
+    );
+    expect(line).toContain("P0001: refused");
+  });
+
+  it("doesn't store the query when the pool can't load the job's event", async () => {
+    const { jobId } = await seedHttpJob(JobStatus.QUEUED);
+    const workerPool = new InProcessWorkerPool("worker-under-test");
+
+    await withTableRenamed("env_vars", async () => {
+      expect(await workerPool.claimAndRun()).toBe(1);
+      await workerPool.drain(5_000);
+    });
+
+    expectNothingOfTheQuery();
+    expect(logged).toContainEqual(
+      `[WorkerPool] Job ${jobId} crashed: 42P01: relation "env_vars" does not exist`,
+    );
+    const [stored] = await db.select().from(jobs).where(eq(jobs.id, jobId));
+    expect(stored!.lastError).toBe(QUERY_FAILED);
+    const [transition] = await db
+      .select({ reason: jobTransitions.reason })
+      .from(jobTransitions)
+      .where(eq(jobTransitions.toStatus, JobStatus.FAILED));
+    expect(transition!.reason).toBe(QUERY_FAILED);
+  });
+});
+
+describe("a job that fails", () => {
+  const printed = `the script printed ${SECRET}`;
+
+  it("doesn't log what it printed when the retry can't be recorded", async () => {
+    const eventId = await seedEvent(owner);
+    const [log] = await db
+      .insert(logs)
+      .values({
+        eventId,
+        status: LogStatus.RUNNING,
+        startTime: new Date(),
+        userId: owner,
+      } as never)
+      .returning({ id: logs.id });
+    const jobId = await seedJob(eventId, owner, {
+      status: JobStatus.RUNNING,
+      attempts: 0,
+      maxAttempts: 2,
+      payload: { executionLogId: log!.id },
+    });
+    await refuseWrites("logs");
+
+    await jobService.updateJobStatus(jobId, JobStatus.FAILED, {
+      error: printed,
+    });
+
+    expectNothingOfTheQuery();
+    const line = logged.find((text) =>
+      text.startsWith("[JobService] Failed to record retry on execution log:"),
+    );
+    expect(line).toContain("P0001: refused");
+  });
+
+  // An orchestrator reporting late, or twice. What it reports is the script's stderr.
+  it("doesn't log what it printed when its report comes too late", async () => {
+    const eventId = await seedEvent(owner);
+    const jobId = await seedJob(eventId, owner, {
+      status: JobStatus.COMPLETED,
+    });
+
+    await jobService.updateJobStatus(jobId, JobStatus.FAILED, {
+      error: printed,
+    });
+
+    expect(logged.join("\n")).not.toContain(SECRET);
+    expect(logged).toContainEqual(
+      `[JobTransition] Rejected completed → failed for job ${jobId} (actor: app)`,
+    );
+  });
+});
+
+describe("a tool action", () => {
+  const seedTool = async (
+    fields: Partial<typeof toolCredentials.$inferInsert> = {},
+  ) => {
+    const [tool] = await db
+      .insert(toolCredentials)
+      .values({
+        userId: owner,
+        name: "tool",
+        type: "SLACK",
+        credentials: JSON.stringify({ webhookUrl: "https://example.com/x" }),
+        ...fields,
+      })
+      .returning({ id: toolCredentials.id });
+    return tool!.id;
+  };
+
+  const run = async (toolId: number, execute = () => Promise.resolve({})) => {
+    const id = await seedEvent(owner, {
+      type: EventType.TOOL_ACTION,
+      toolActionConfig: {
+        toolType: "SLACK",
+        actionId: "fake",
+        toolId,
+        parameters: { text: `posted ${SECRET}` },
+      },
+    } as never);
+    const [event] = await db.select().from(events).where(eq(events.id, id));
+    jest.spyOn(serverActions, "getServerActionById").mockReturnValue({
+      id: "fake",
+      name: "Fake",
+      actionType: "SEND",
+      inputSchema: z.object({}).passthrough(),
+      execute,
+    } as never);
+    const result = await executeToolAction(event!);
+    await auditLogger.flush();
+    return result;
+  };
+
+  // Each run also logs its parameters and result on purpose, after redacting them,
+  // so these look at what the failure added and not at the whole log.
+  it("leaves the query out when logging a run that worked fails", async () => {
+    const toolId = await seedTool();
+    await refuseWrites("tool_action_logs");
+
+    const result = await run(toolId, () =>
+      Promise.resolve({ ok: true, echoed: SECRET }),
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(logged.join("\n")).not.toContain("Failed query");
+    expect(logged).toContainEqual(
+      "Failed to log tool action execution: P0001: refused",
+    );
+  });
+
+  it("leaves the query out when logging a run that failed fails", async () => {
+    const toolId = await seedTool();
+    await refuseWrites("tool_action_logs");
+
+    const result = await run(toolId, () =>
+      Promise.reject(new Error("the provider said no")),
+    );
+
+    expect(result.exitCode).toBe(1);
+    expect(logged.join("\n")).not.toContain("Failed query");
+    expect(logged).toContainEqual(
+      "Failed to log tool action error: P0001: refused",
+    );
+  });
+
+  // The audit table and tool_action_logs keep this, and a script calling the action
+  // gets it back, stack and all, in `data`.
+  it("doesn't store or return the query when one fails during the run", async () => {
+    const toolId = await seedTool();
+
+    const result = await withTableRenamed("user_variables", () => run(toolId));
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe(
+      `An unexpected error occurred\n\nDetails: ${QUERY_FAILED}`,
+    );
+    expect(JSON.stringify(result)).not.toContain("Failed query");
+
+    const [toolLog] = await db.select().from(toolActionLogs);
+    expect(toolLog!.errorMessage).toBe(QUERY_FAILED);
+    const audited = await db.select().from(toolAuditLogs);
+    expect(JSON.stringify(audited)).not.toContain("Failed query");
+
+    expect(logged.join("\n")).not.toContain("Failed query");
+    expect(logged).toContainEqual(
+      '[ToolAction] Execution failed: 42P01: relation "user_variables" does not exist',
+    );
+  });
+
+  // The real action against a real database that isn't this app's business: what it
+  // says is what the action's owner needs, and it's a driver's error too.
+  it("still reports a SQL action's own failure", async () => {
+    const { hostname, password, pathname, port, username } = new URL(
+      process.env.DATABASE_URL!,
+    );
+    const toolId = await seedTool({
+      type: "sql",
+      credentials: JSON.stringify({
+        dialect: "postgres",
+        host: hostname,
+        port: Number(port),
+        database: pathname.slice(1),
+        user: username,
+        password,
+        ssl: "disable",
+      }),
+    });
+    const id = await seedEvent(owner, {
+      type: EventType.TOOL_ACTION,
+      toolActionConfig: {
+        toolType: "sql",
+        actionId: "run-query",
+        toolId,
+        parameters: { query: "select * from no_such_table" },
+      },
+    } as never);
+    const [event] = await db.select().from(events).where(eq(events.id, id));
+
+    const result = await executeToolAction(event!);
+    await auditLogger.flush();
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('relation "no_such_table" does not exist');
+    const [toolLog] = await db.select().from(toolActionLogs);
+    expect(toolLog!.errorMessage).toContain(
+      'relation "no_such_table" does not exist',
+    );
+  });
+
+  it("doesn't log unencrypted credentials that aren't JSON, which JSON.parse's message quotes", async () => {
+    const toolId = await seedTool({ credentials: SHORT_SECRET });
+
+    const result = await run(toolId);
+
+    expect(logged.join("\n")).not.toContain(SHORT_SECRET);
+    expect(logged.join("\n")).toContain(
+      "[ToolAction] Failed to parse unencrypted credentials: SyntaxError",
+    );
+    expect(JSON.stringify(result)).not.toContain(SHORT_SECRET);
+    expect(result.stderr).toContain("Invalid credential format");
+  });
+
+  it("doesn't log or return stored credentials that don't parse", async () => {
+    const toolId = await seedTool({
+      credentials: SHORT_SECRET,
+      encrypted: true,
+    });
+
+    const result = await run(toolId);
+
+    expect(logged.join("\n")).not.toContain(SHORT_SECRET);
+    expect(logged.join("\n")).toContain(
+      "[ToolAction] Failed to decrypt credentials: SyntaxError",
+    );
+    expect(JSON.stringify(result)).not.toContain(SHORT_SECRET);
+    expect(result.stderr).toContain("Failed to decrypt tool credentials");
+    const [toolLog] = await db.select().from(toolActionLogs);
+    expect(toolLog!.errorMessage).not.toContain(SHORT_SECRET);
+  });
+
+  it("leaves the query out when reading the credentials fails", async () => {
+    const toolId = await seedTool();
+
+    await withTableRenamed("tool_credentials", async () => {
+      await credentialCache.get(toolId, owner);
+    });
+
+    expectNothingOfTheQuery();
+    const line = logged.find((text) =>
+      text.startsWith("Error fetching credential:"),
+    );
+    expect(line).toContain('42P01: relation "tool_credentials" does not exist');
+  });
+});
+
+describe("the background sweeps", () => {
+  it.each([
+    ["will retry", 0, "will retry: P0001: refused"],
+    ["drops", POISON_AGE_MS + 60_000, "of failures: P0001: refused"],
+  ])(
+    "the outbox %s without logging what its handler was saving",
+    async (_, age, ending) => {
+      const eventId = await seedEvent(owner);
+      const jobId = await seedJob(eventId, owner);
+      const [log] = await db
+        .insert(logs)
+        .values({
+          eventId,
+          status: LogStatus.RUNNING,
+          startTime: new Date(),
+          userId: owner,
+        } as never)
+        .returning({ id: logs.id });
+      await db.insert(jobTransitions).values({
+        jobId,
+        toStatus: JobStatus.QUEUED,
+        actor: "test",
+      });
+      await refuseWrites("logs");
+
+      await consumeJobTransitions(
+        async () => {
+          await db
+            .update(logs)
+            .set({ output: SECRET })
+            .where(eq(logs.id, log!.id));
+        },
+        { now: () => new Date(Date.now() + age) },
+      );
+
+      expectNothingOfTheQuery();
+      const line = logged.find((text) => text.startsWith("[Outbox]"));
+      expect(line).toContain(ending);
+    },
+  );
+
+  it("the sweeper leaves the query out when finalizing a log fails", async () => {
+    const eventId = await seedEvent(owner);
+    const [log] = await db
+      .insert(logs)
+      .values({
+        eventId,
+        status: LogStatus.RUNNING,
+        startTime: new Date(),
+        userId: owner,
+      } as never)
+      .returning({ id: logs.id });
+    const jobId = await seedJob(eventId, owner, {
+      status: JobStatus.RUNNING,
+      leaseExpiresAt: new Date(Date.now() - 60_000),
+      leaseLossPolicy: LeaseLossPolicy.FAIL,
+      payload: { executionLogId: log!.id },
+    });
+    await refuseWrites("logs");
+
+    const result = await runSweepTick();
+
+    expect(result.failed).toBe(1);
+    expectNothingOfTheQuery();
+    expect(logged).toContainEqual(
+      `[Sweeper] Failed to finalize log ${log!.id} for job ${jobId}: P0001: refused`,
+    );
+  });
+
+  it("retention says why a table failed, without the query", async () => {
+    const result = await withTableRenamed("logs", () =>
+      runRetention({ windows: { logs: 1 } }),
+    );
+
+    expect(result.failed).toContain("logs");
+    expectNothingOfTheQuery();
+    const line = logged.find((text) =>
+      text.startsWith("[Retention] Failed to purge logs:"),
+    );
+    expect(line).toContain('42P01: relation "logs" does not exist');
+  });
+
+  it("workflow cleanup leaves the query out when it can't write a timeout log", async () => {
+    const service = new WorkflowCleanupService({ sweepJobs: false });
+    const { runId } = await seedWorkflowRun(WorkflowStepStatus.PENDING);
+    await refuseWrites("workflow_logs");
+
+    await service.cleanupWorkflow(runId);
+
+    expectNothingOfTheQuery();
+    const line = logged.find((text) =>
+      text.startsWith(
+        `[WorkflowCleanup] Error writing the timeout log for workflow run ${runId}:`,
+      ),
+    );
+    expect(line).toContain("P0001: refused");
+  });
+
+  it("server cleanup leaves the query out of its log and its result", async () => {
+    let result: Awaited<
+      ReturnType<typeof serverCleanupService.runCleanupCycle>
+    >;
+    await withTableRenamed("servers", async () => {
+      result = await serverCleanupService.runCleanupCycle();
+    });
+
+    expectNothingOfTheQuery();
+    expect(result!.errors).toContainEqual(
+      'Failed to fetch servers for deletion: 42P01: relation "servers" does not exist',
+    );
+    expect(logged).toContainEqual(
+      '[ServerCleanupService] Failed to fetch servers for deletion: 42P01: relation "servers" does not exist',
+    );
+  });
+});
+
+describe("OAuth tokens", () => {
+  const manager = new TokenManager({ id: "google" } as never);
+
+  // This text ends up in a redirect's query string, so in browser history and
+  // access logs too.
+  it("doesn't put the encrypted tokens in the error when saving them fails", async () => {
+    await refuseWrites("oauth_tokens");
+
+    const failure = await manager
+      .storeTokens(owner, 1, { accessToken: SECRET, tokenType: "Bearer" })
+      .catch((error: unknown) => error as Error);
+
+    expect((failure as Error).message).toBe(
+      `Failed to store tokens: ${QUERY_FAILED}`,
+    );
+    expectNothingOfTheQuery();
+    expect(logged).toContainEqual(
+      "[TokenManager] Failed to store tokens: P0001: refused",
+    );
+  });
+
+  it("says so without the query when reading or deleting them fails", async () => {
+    const reasons: string[] = [];
+    await withTableRenamed("oauth_tokens", async () => {
+      for (const attempt of [
+        () => manager.getTokens(owner, 1),
+        () => manager.deleteTokens(owner, 1),
+      ]) {
+        await attempt().catch((error: Error) => reasons.push(error.message));
+      }
+    });
+
+    expect(reasons).toEqual([
+      `Failed to retrieve tokens: ${QUERY_FAILED}`,
+      // Deleting reads them first.
+      `Failed to delete tokens: Failed to retrieve tokens: ${QUERY_FAILED}`,
+    ]);
+    expect(logged.join("\n")).not.toContain("Failed query");
+  });
+});
+
+describe("the socket server", () => {
+  /** Just enough of socket.io to reach a handler. */
+  const fakeSocket = (userId: string) => {
+    const handlers: Record<string, (data: unknown) => Promise<void>> = {};
+    const emitted: Array<[string, unknown]> = [];
+    const socket = {
+      id: "socket-under-test",
+      connected: true,
+      data: { userId },
+      handshake: { auth: {} },
+      on: (name: string, handler: (data: unknown) => Promise<void>) => {
+        handlers[name] = handler;
+      },
+      emit: (name: string, payload: unknown) => {
+        emitted.push([name, payload]);
+      },
+    };
+    return { emitted, handlers, socket: socket as unknown as Socket };
+  };
+
+  it("doesn't log a user's id with the query when authenticating fails", async () => {
+    const { ticket } = mintSocketTicket(SECRET, "logs");
+
+    await withTableRenamed("users", async () => {
+      const principal = await authenticateSocketTicket(ticket, "logs", {
+        consumeTicket: () => Promise.resolve(true),
+      });
+
+      expect(principal).toBeNull();
+    });
+
+    expectNothingOfTheQuery();
+    const line = logged.find((text) =>
+      text.startsWith("Socket authentication lookup failed:"),
+    );
+    expect(line).toContain('42P01: relation "users" does not exist');
+  });
+
+  it("doesn't send the query to a client that asked for a terminal", async () => {
+    const { emitted, handlers, socket } = fakeSocket(owner);
+    const terminal = new TerminalWebSocketHandler({
+      use: () => undefined,
+      on: (_: string, connect: (client: Socket) => void) => connect(socket),
+    } as unknown as SocketIOServer);
+
+    await withTableRenamed("users", async () => {
+      await handlers["create-terminal"]!({
+        serverId: 1,
+        cols: 80,
+        rows: 24,
+      });
+    });
+    terminal.cleanup();
+
+    expect(emitted).toEqual([
+      [
+        "terminal-error",
+        { error: `Failed to create terminal: ${QUERY_FAILED}` },
+      ],
+    ]);
+    expectNothingOfTheQuery();
+    const line = logged.find((text) =>
+      text.startsWith("Server: Failed to create terminal session:"),
+    );
+    expect(line).toContain('42P01: relation "users" does not exist');
+  });
+
+  it("leaves the query out when broadcasting a job's update fails", async () => {
+    const namespace = { use: () => undefined, on: () => undefined };
+    const handler = new LogsWebSocketHandler({
+      of: () => namespace,
+    } as unknown as SocketIOServer);
+
+    await withTableRenamed("logs", async () => {
+      handler.broadcastJobUpdate({ id: SECRET, status: "running" } as never);
+      await waitForLog("Error broadcasting job update:");
+    });
+
+    expectNothingOfTheQuery();
+  });
+});
+
+describe("the cache", () => {
+  let admin: Redis;
+
+  beforeEach(async () => {
+    admin = new Redis(process.env.VALKEY_URL!);
+    while (!cacheService.isAvailable()) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  });
+
+  afterEach(async () => {
+    await admin.config("SET", "min-replicas-to-write", "0");
+    await admin.flushdb();
+    admin.disconnect();
+  });
+
+  /** Fails however it's touched: a list refuses GET, and with no replica, any write. */
+  async function refuseEverythingOn(key: string) {
+    await admin.rpush(key, "not what the cache writes");
+    await admin.config("SET", "min-replicas-to-write", "1");
+  }
+
+  const lineStarting = (start: string) =>
+    logged.find((text) => text.startsWith(start));
+
+  // Not a query, but the same mistake: ioredis puts the command on its error, and
+  // console.error prints it, so a refused write logged the value it was caching.
+  it("doesn't log the value when Valkey refuses a write", async () => {
+    await admin.config("SET", "maxmemory-policy", "noeviction");
+    await admin.config("SET", "maxmemory", "1");
+    try {
+      await cacheService.set("static:the-key", { apiKey: SECRET });
+    } finally {
+      await admin.config("SET", "maxmemory", "0");
+    }
+
+    expect(logged.join("\n")).not.toContain(SECRET);
+    expect(
+      lineStarting("Cache set error for key static:[not logged]:"),
+    ).toContain("OOM command not allowed");
+  });
+
+  // A key's last segment can be a live credential, as this one would be.
+  it.each<[string, string, string, (key: string) => Promise<unknown>]>([
+    [
+      "get",
+      "Cache get error for key",
+      "WRONGTYPE",
+      (key) => cacheService.get(key),
+    ],
+    [
+      "set",
+      "Cache set error for key",
+      "NOREPLICAS",
+      (key) => cacheService.set(key, true),
+    ],
+    [
+      "getdel",
+      "Cache getdel error for key",
+      "NOREPLICAS",
+      (key) => cacheService.getdel(key),
+    ],
+    [
+      "delete",
+      "Cache delete error for key",
+      "NOREPLICAS",
+      (key) => cacheService.delete(key),
+    ],
+    [
+      "deleteByPattern",
+      "Cache delete by pattern error for",
+      "NOREPLICAS",
+      (key) => cacheService.deleteByPattern(key),
+    ],
+  ])(
+    "%s doesn't log the last segment of a key",
+    async (_method, label, refusal, touch) => {
+      const key = `mcpoauth:code:${SECRET}`;
+      await refuseEverythingOn(key);
+
+      await touch(key);
+
+      expect(logged.join("\n")).not.toContain(SECRET);
+      expect(lineStarting(`${label} mcpoauth:code:[not logged]: `)).toContain(
+        refusal,
+      );
+    },
+  );
+
+  it.each([
+    [`mcpoauth:rt:${SECRET}`, "mcpoauth:rt:[not logged]"],
+    [`mcpoauth:client:${SECRET}`, "mcpoauth:client:[not logged]"],
+    [`principal:v1:${SECRET}`, "principal:v1:[not logged]"],
+    [`static:${SECRET}`, "static:[not logged]"],
+    [`rate_limit:the-user:${SECRET}`, "rate_limit:the-user:[not logged]"],
+    // All of it is the last segment.
+    [SECRET, "[not logged]"],
+  ])("logs %s as %s", async (key, expected) => {
+    await refuseEverythingOn(key);
+
+    await cacheService.get(key);
+
+    expect(logged.join("\n")).not.toContain(SECRET);
+    expect(lineStarting(`Cache get error for key ${expected}: `)).toContain(
+      "WRONGTYPE",
+    );
+  });
+
+  // In the format string, the %s took the failure, and it was printed in its place.
+  it("prints a % in a key as it is", async () => {
+    const key = "rate_limit:%s:the-path";
+    await refuseEverythingOn(key);
+
+    await cacheService.get(key);
+
+    expect(
+      lineStarting("Cache get error for key rate_limit:%s:[not logged]: "),
+    ).toContain("WRONGTYPE");
+  });
+
+  // A client chooses the code it sends, and what's before a colon in it gets logged.
+  it("keeps a key from a request to one line", async () => {
+    const key = "mcpoauth:code:a\nA forged line:b";
+    await refuseEverythingOn(key);
+
+    await cacheService.get(key);
+
+    expect(
+      lineStarting(
+        "Cache get error for key mcpoauth:code:a A forged line:[not logged]: ",
+      ),
+    ).toContain("WRONGTYPE");
+    expect(logged.join("\n")).not.toContain("\nA forged line");
   });
 });
 

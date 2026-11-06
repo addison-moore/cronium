@@ -6,6 +6,7 @@ import { db } from "@/server/db";
 import { logs, executions, jobs } from "@/shared/schema";
 import { eq, isNull, sql } from "drizzle-orm";
 import type { Log } from "@/shared/schema";
+import { failureWithStack } from "@/lib/pg-errors";
 
 export interface IntegrityIssue {
   logId?: number;
@@ -316,7 +317,7 @@ class IntegrityService {
         await this.ensureLogHasExecution(log);
         linked++;
       } catch (error) {
-        console.error(`Failed to link log ${log.id}:`, error);
+        console.error(`Failed to link log ${log.id}:`, failureWithStack(error));
         failed++;
       }
     }

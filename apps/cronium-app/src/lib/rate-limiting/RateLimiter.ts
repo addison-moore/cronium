@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/server/db";
 import { rateLimitBuckets } from "@/shared/schema";
 import { eq, and, gte, sql } from "drizzle-orm";
+import { failureWithStack } from "@/lib/pg-errors";
 
 export const RateLimitConfigSchema = z.object({
   windowMs: z.number().min(1000).default(60000), // 1 minute default
@@ -118,7 +119,7 @@ export class RateLimiter extends EventEmitter {
 
       return result;
     } catch (error) {
-      console.error("Rate limit check error:", error);
+      console.error("Rate limit check error:", failureWithStack(error));
       // Fail open - allow request on error
       return {
         allowed: true,

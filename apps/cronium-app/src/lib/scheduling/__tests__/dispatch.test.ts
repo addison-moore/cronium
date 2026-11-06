@@ -630,7 +630,7 @@ describe("dispatchEventJob — execution bookkeeping", () => {
 
       expect(consoleError).toHaveBeenCalledWith(
         "[Dispatch] Failed to record a job's creation for event 7:",
-        "db down",
+        "Error: db down",
       );
     });
   });

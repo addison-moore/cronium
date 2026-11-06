@@ -9,6 +9,7 @@ import { storage } from "@/server/storage";
 import { db } from "@/server/db";
 import { env } from "@/env.mjs";
 import { MIN_PASSWORD_LENGTH } from "@/shared/schemas/password";
+import { failureWithStack } from "@/lib/pg-errors";
 
 /**
  * Whether the first-admin flow requires a bootstrap token. True when the
@@ -173,7 +174,7 @@ export async function createFirstAdmin(formData: SetupFormData) {
 
     return { success: true };
   } catch (error) {
-    console.error("First-run setup error:", error);
+    console.error("First-run setup error:", failureWithStack(error));
     return {
       success: false,
       error: "An unexpected error occurred. Please try again.",

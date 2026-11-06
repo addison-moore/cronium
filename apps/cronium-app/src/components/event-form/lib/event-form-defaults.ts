@@ -1,3 +1,4 @@
+import { format } from "date-fns";
 import {
   EventType,
   EventStatus,
@@ -40,6 +41,15 @@ function normalizeRunLocation(location: unknown): RunLocation | null {
 }
 
 /**
+ * A stored start time as a `datetime-local` input's value: the browser's local time, to
+ * the minute. The input has no zone of its own and `buildEventPayload` reads what it
+ * holds as local time, so writing anything else here moves the time on every save.
+ */
+export function toDatetimeLocal(startTime: Date | string): string {
+  return format(new Date(startTime), "yyyy-MM-dd'T'HH:mm");
+}
+
+/**
  * Resolve the form's default values from an (optional) existing event.
  * Pure: no React/tRPC imports.
  *
@@ -47,7 +57,7 @@ function normalizeRunLocation(location: unknown): RunLocation | null {
  *   expression (cron mode vs interval mode).
  * - `runOnLocal` is true unless the event is remote-only.
  * - `startTime` is converted to the `datetime-local` input format
- *   (`YYYY-MM-DDTHH:mm`, UTC).
+ *   (`YYYY-MM-DDTHH:mm`, the browser's local time).
  * - `scheduleUnit`, `timeoutUnit` and `runLocation` are normalized, because
  *   rows from before the enum migration hold lowercase values. The form's
  *   schema refuses those with no message, so the save would silently do nothing.
@@ -70,7 +80,7 @@ export function buildEventFormDefaults(
     scheduleUnit:
       normalizeTimeUnit(initialData?.scheduleUnit) ?? TimeUnit.MINUTES,
     startTime: initialData?.startTime
-      ? new Date(initialData.startTime).toISOString().slice(0, 16)
+      ? toDatetimeLocal(initialData.startTime)
       : null,
     useCronScheduling: !!initialData?.customSchedule,
     customSchedule: initialData?.customSchedule ?? "",
@@ -140,6 +150,21 @@ export function parseInitialEnvVars(
   return null;
 }
 
+/**
+ * Stored HTTP headers as the form holds them. The form's schema checks these for
+ * every event type, and refuses with nothing on screen when they aren't on screen,
+ * so anything it wouldn't take stays out.
+ */
+export function parseInitialHttpHeaders(
+  headers: unknown,
+): Array<{ key: string; value: string }> {
+  if (!Array.isArray(headers)) return [];
+  return (headers as Array<{ key?: unknown; value?: unknown } | null>).filter(
+    (header): header is { key: string; value: string } =>
+      typeof header?.key === "string" && typeof header?.value === "string",
+  );
+}
+
 /** Extract the numeric server ids from an event's servers relation. */
 export function extractServerIds(
   servers: Array<{ id: number; name: string }>,
@@ -151,22 +176,41 @@ export function extractServerIds(
 
 /**
  * The servers the form must keep selected and on screen for an event: its links,
- * and an archived direct server (the deprecated `serverId`), which stops the
- * event just as an archived link does. A LOCAL event's direct server is left out:
- * ticked, the event would start running on it once it was restored and saved.
- * Left out, any save clears it.
+ * and the deprecated direct server (`serverId`) where it counts. A save writes
+ * what's ticked as the event's links and clears the direct server, so what's ticked
+ * here is where the event runs after any save, and an untouched save shouldn't
+ * change that.
+ *
+ * - On a LOCAL event the direct server is a leftover. Ticked, the event would start
+ *   running on it. Left out, any save clears it.
+ * - An archived one stops the event wherever a run would go, so it gets a row that
+ *   can be unticked.
+ * - An active one is ticked only if a run goes to it. A run goes to the links
+ *   instead once there are two, or one on a LOCAL_AND_REMOTE event
+ *   (enhancedTransformJobForOrchestrator), and ticking the direct server then would
+ *   add a server. Otherwise a run goes to the direct server and not to a lone link
+ *   (buildJobPayload), and ticking that link would add it. An archived link stays
+ *   ticked either way, because it stops the event until someone unticks it.
+ *
+ * tests/storage/event-save-direct-server.test.ts checks this against a real run.
  */
 export function linkedServers(
   initialData?: EventFormInitialData,
 ): EventFormServer[] {
   const links = initialData?.servers ?? [];
   const direct = initialData?.server;
-  const runLocation = initialData?.runLocation ?? RunLocation.LOCAL;
-  return direct?.isArchived &&
-    runLocation !== RunLocation.LOCAL &&
-    !links.some((link) => link.id === direct.id)
-    ? [...links, direct]
-    : links;
+  const runLocation =
+    normalizeRunLocation(initialData?.runLocation) ?? RunLocation.LOCAL;
+  if (!direct || runLocation === RunLocation.LOCAL) return links;
+  if (links.some((link) => link.id === direct.id)) return links;
+  if (direct.isArchived) return [...links, direct];
+
+  const runGoesToLinks =
+    links.length > 1 ||
+    (runLocation === RunLocation.LOCAL_AND_REMOTE && links.length > 0);
+  return runGoesToLinks
+    ? links
+    : [direct, ...links.filter((link) => link.isArchived)];
 }
 
 /**

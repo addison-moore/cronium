@@ -1,5 +1,6 @@
 import { db } from "@server/db";
 import { events, EventStatus, EventType, TimeUnit } from "@shared/schema";
+import { failureWithStack } from "@/lib/pg-errors";
 
 /**
  * This script seeds the database with sample events/scripts
@@ -652,7 +653,7 @@ if (require.main === module) {
   seedEvents()
     .then(() => process.exit(0))
     .catch((error) => {
-      console.error("Error seeding events/scripts:", error);
+      console.error("Error seeding events/scripts:", failureWithStack(error));
       process.exit(1);
     });
 }

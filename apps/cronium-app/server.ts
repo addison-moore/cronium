@@ -20,6 +20,7 @@ import { SHUTDOWN_TIMEOUT_MS } from "./src/server/socket-server-shutdown";
 import { socketUserAuthorizationFingerprint } from "./src/lib/socket-ticket";
 import { storage } from "./src/server/storage";
 import { UserStatus, type Job, type Log } from "./src/shared/schema";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Type definitions for request body
 interface LogUpdateRequest {
@@ -116,7 +117,10 @@ async function revalidateConnectedUsers(): Promise<void> {
           disconnectUser(userId);
         }
       } catch (error) {
-        console.error(`Socket user revalidation failed for ${userId}:`, error);
+        console.error(
+          `Socket user revalidation failed for ${userId}:`,
+          failureWithStack(error),
+        );
         disconnectUser(userId);
       }
     }),
@@ -161,7 +165,7 @@ app.post("/broadcast/log-update", (req, res) => {
         .json({ error: "WebSocket handler not initialized" });
     }
   } catch (error) {
-    console.error("Broadcast error:", error);
+    console.error("Broadcast error:", failureWithStack(error));
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -187,7 +191,7 @@ app.post("/broadcast/job-update", (req, res) => {
         .json({ error: "WebSocket handler not initialized" });
     }
   } catch (error) {
-    console.error("Broadcast error:", error);
+    console.error("Broadcast error:", failureWithStack(error));
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -215,7 +219,7 @@ app.post("/broadcast/execution-update", (req, res) => {
         .json({ error: "WebSocket handler not initialized" });
     }
   } catch (error) {
-    console.error("Broadcast error:", error);
+    console.error("Broadcast error:", failureWithStack(error));
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -240,7 +244,7 @@ app.post("/broadcast/log-line", (req, res) => {
         .json({ error: "WebSocket handler not initialized" });
     }
   } catch (error) {
-    console.error("Broadcast error:", error);
+    console.error("Broadcast error:", failureWithStack(error));
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -310,7 +314,10 @@ function shutdown(exitCode: number): void {
 
   void closeConnections()
     .catch((error) => {
-      console.error("Socket.IO server failed to close cleanly:", error);
+      console.error(
+        "Socket.IO server failed to close cleanly:",
+        failureWithStack(error),
+      );
     })
     .finally(() => process.exit(exitCode));
 }
@@ -323,6 +330,9 @@ process.once("SIGINT", () => shutdown(130));
 void start().catch((error) => {
   // A stop during startup closes the store the preflight is waiting on.
   if (shuttingDown) return;
-  console.error("Socket.IO server failed security preflight:", error);
+  console.error(
+    "Socket.IO server failed security preflight:",
+    failureWithStack(error),
+  );
   process.exit(1);
 });

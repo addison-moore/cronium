@@ -7,7 +7,6 @@
  * and whatever was queued is simply claimed by the next worker.
  */
 
-import { driverError } from "@/lib/pg-errors";
 import { db } from "@/server/db";
 import { storage } from "@/server/storage";
 import {
@@ -19,6 +18,7 @@ import {
 } from "@/shared/schema";
 import { and, desc, eq, inArray, lte } from "drizzle-orm";
 import { transitionJob } from "./job-transition";
+import { describeFailure, messageForJobLog } from "@/lib/pg-errors";
 
 const IN_PROCESS_TYPES = [JobType.TOOL_ACTION, JobType.HTTP_REQUEST];
 
@@ -182,8 +182,11 @@ export class InProcessWorkerPool {
         // never throws; defensive catch below regardless.
         await runInProcessJob(job, event, payload?.input ?? {});
       } catch (error) {
-        const message = driverError(error).message ?? String(error);
-        console.error(`[WorkerPool] Job ${job.id} crashed:`, message);
+        console.error(
+          `[WorkerPool] Job ${job.id} crashed:`,
+          describeFailure(error),
+        );
+        const message = messageForJobLog(error);
         await transitionJob(job.id, JobStatus.FAILED, {
           actor: `worker:${this.workerId}`,
           reason: message,

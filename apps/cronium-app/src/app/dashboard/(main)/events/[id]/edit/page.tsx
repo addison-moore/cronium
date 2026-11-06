@@ -36,11 +36,9 @@ export default function EditEventPage() {
   }
 
   // Fetch the event data using tRPC
-  const {
-    data: event,
-    isLoading,
-    error,
-  } = trpc.events.getById.useQuery({ id: eventId });
+  const { data: event, isLoading } = trpc.events.getById.useQuery({
+    id: eventId,
+  });
 
   // Handle form submission success
   const handleSuccess = useCallback(
@@ -56,7 +54,9 @@ export default function EditEventPage() {
     return <DetailPageSkeleton withSidebar={false} />;
   }
 
-  if (error || !event) {
+  // Not on an error alone: a failed refetch keeps the event it had, and giving up the
+  // form for this message would throw away what's been typed into it.
+  if (!event) {
     return (
       <div className="container py-6">
         <div className="bg-destructive/10 text-destructive rounded-md p-4">

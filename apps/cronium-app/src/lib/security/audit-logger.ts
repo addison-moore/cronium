@@ -3,7 +3,11 @@
  */
 
 import { db } from "@/server/db";
-import { describeFailure, driverError } from "@/lib/pg-errors";
+import {
+  describeFailure,
+  driverError,
+  failureWithStack,
+} from "@/lib/pg-errors";
 import {
   quotedForLog,
   serializeEntry,
@@ -64,6 +68,11 @@ const SHUTDOWN_RETRY_MS = 1000;
 
 /** For the server log to take what shutdown() wrote to it. */
 const SERVER_LOG_DRAIN_MS = 2000;
+
+/** A flush deals with its own failures, so this is only for one it didn't expect. */
+function logFailedFlush(error: unknown): void {
+  console.error("[AuditLog] Flush failed:", failureWithStack(error));
+}
 
 /**
  * An entry as the buffer holds it. The time it happened is an ISO string because
@@ -229,7 +238,7 @@ export class AuditLogger {
       !this.earlyFlush
     ) {
       this.earlyFlush = this.flush()
-        .catch(console.error)
+        .catch(logFailedFlush)
         .finally(() => {
           this.earlyFlush = null;
         });
@@ -456,7 +465,7 @@ export class AuditLogger {
    */
   private startFlushInterval(): void {
     this.flushInterval = setInterval(() => {
-      this.flush().catch(console.error);
+      this.flush().catch(logFailedFlush);
     }, this.flushIntervalMs);
   }
 

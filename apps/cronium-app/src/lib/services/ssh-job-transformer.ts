@@ -6,6 +6,7 @@ import {
 import { db } from "@/server/db";
 import { events, envVars } from "@/shared/schema";
 import { eq } from "drizzle-orm";
+import { failureWithStack } from "@/lib/pg-errors";
 
 /**
  * Transform SSH jobs to include script content and metadata
@@ -91,7 +92,7 @@ export async function transformSSHJobForOrchestrator(
       `Prepared SSH job ${job.id} with script content for orchestrator payload creation`,
     );
   } catch (error) {
-    console.error("Failed to prepare SSH job:", error);
+    console.error("Failed to prepare SSH job:", failureWithStack(error));
     // Continue with existing script content
   }
 

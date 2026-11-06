@@ -58,6 +58,12 @@ func (c *daemonCore) spoolRetryLoop(ctx context.Context) {
 	if c.spoolDir == "" {
 		return
 	}
+	// Start with what an earlier process couldn't deliver. A stack restarting stops
+	// the app before the orchestrator, so this is the usual way for a job finishing
+	// just then to get here, and its lease isn't being renewed: the sweeper would fail
+	// or re-run it if this waited for the first tick.
+	c.drainSpoolOnce(ctx)
+
 	ticker := time.NewTicker(c.spoolRetryInterval)
 	defer ticker.Stop()
 
