@@ -15,6 +15,7 @@ import {
   validateIntervalSeconds,
 } from "@/lib/scheduling/schedule-math";
 import { canReadEnvVarValues } from "@/server/token-scopes";
+import { envVarsSchema } from "@/shared/schemas/events";
 import { z } from "zod";
 import {
   authenticateRestPrincipal,
@@ -80,14 +81,7 @@ const createEventSchema = z
     timeoutValue: z.number().min(1),
     timeoutUnit: z.enum([TimeUnit.SECONDS, TimeUnit.MINUTES, TimeUnit.HOURS]),
     retries: z.number().min(0),
-    envVars: z
-      .array(
-        z.object({
-          key: z.string().min(1),
-          value: z.string(),
-        }),
-      )
-      .optional(),
+    envVars: envVarsSchema.optional(),
   })
   .strict()
   .refine(
@@ -195,7 +189,16 @@ export async function POST(request: NextRequest) {
       return restPrincipalErrorResponse(auth);
     }
 
-    const validationResult = createEventSchema.safeParse(await request.json());
+    // Past 10 MB the proxy passes on only the start of a body, which isn't JSON.
+    const body: unknown = await request.json().catch(() => null);
+    if (body === null) {
+      return NextResponse.json(
+        { error: "Request body must be a JSON object under 10 MB" },
+        { status: 400 },
+      );
+    }
+
+    const validationResult = createEventSchema.safeParse(body);
 
     if (!validationResult.success) {
       return NextResponse.json(
