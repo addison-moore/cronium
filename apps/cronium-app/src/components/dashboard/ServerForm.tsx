@@ -39,6 +39,7 @@ import { type UpdateServerInput } from "@shared/schemas/servers";
 import { z } from "zod";
 import { AuthType } from "@/lib/validations/server";
 import { trpc } from "@/lib/trpc";
+import { ignoreEarlyPress } from "@/hooks/useEarlyFormInput";
 
 // Create a form schema that matches the update schema structure
 const serverFormSchema = z
@@ -306,7 +307,11 @@ export default function ServerForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form
+        action={ignoreEarlyPress}
+        onSubmit={form.handleSubmit(onSubmit)}
+        className="space-y-6"
+      >
         <div className="space-y-4">
           <FormField<ServerFormInput>
             control={form.control}
