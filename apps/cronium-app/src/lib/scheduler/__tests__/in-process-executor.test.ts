@@ -40,9 +40,26 @@ const lastData = () =>
   >;
 
 beforeEach(() => {
-  mockUpdate.mockReset().mockResolvedValue(null);
+  // updateJobStatus returns the updated job, and null when it rejects the update
+  mockUpdate.mockReset().mockResolvedValue(job);
   mockExec.mockReset();
   mockHttp.mockReset();
+});
+
+describe("runInProcessJob — a job that ended after it was claimed", () => {
+  it("runs nothing when its RUNNING report is rejected", async () => {
+    mockUpdate.mockResolvedValue(null);
+
+    await runInProcessJob(job, event);
+    await runInProcessJob(httpJob, event);
+
+    expect(mockExec).not.toHaveBeenCalled();
+    expect(mockHttp).not.toHaveBeenCalled();
+    // One rejected report each, and nothing that would overwrite the outcome
+    expect(statuses().every((status) => status === JobStatus.RUNNING)).toBe(
+      true,
+    );
+  });
 });
 
 describe("runInProcessJob — dispatch by job type", () => {

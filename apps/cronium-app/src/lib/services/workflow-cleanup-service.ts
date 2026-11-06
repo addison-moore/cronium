@@ -8,16 +8,66 @@
 import { db } from "@/server/db";
 import {
   workflowExecutions,
+  workflowExecutionEvents,
+  workflowStepRuns,
   jobs,
   logs,
   workflowLogs,
   executions,
 } from "@/shared/schema";
-import { eq, and, lt, or, isNull, inArray, sql } from "drizzle-orm";
-import { LogStatus, JobStatus, WorkflowLogLevel } from "@/shared/schema";
+import {
+  asc,
+  eq,
+  and,
+  exists,
+  gt,
+  lt,
+  or,
+  isNull,
+  inArray,
+  sql,
+} from "drizzle-orm";
+import {
+  LogStatus,
+  JobStatus,
+  WorkflowLogLevel,
+  WorkflowStepStatus,
+} from "@/shared/schema";
+import { executionLogIdOf } from "@/lib/scheduling/sweeper";
+import {
+  MAX_DURATION_MS,
+  durationBetween,
+  limitLockWait,
+  settleTimedOutRunSteps,
+} from "@/lib/scheduling/workflow-engine";
 
-// What workflow_executions.total_duration, an integer, can hold: about 24.8 days.
-const MAX_TOTAL_DURATION_MS = 2_147_483_647;
+const RUN_TIMED_OUT = "Workflow run timed out";
+const RUN_TIMED_OUT_BEFORE_JOB_STARTED =
+  "Workflow run timed out before this job started";
+const RUN_TIMED_OUT_BEFORE_RETRY =
+  "Workflow run timed out while this job was waiting to retry";
+
+const RESETTLE_BATCH = 100;
+
+/** Any job that hasn't finished. Written as an OR so each arm can use its partial
+ * index (jobs_claim_idx, jobs_lease_idx). No index covers `status IN (all
+ * three)`, which would read the whole table. */
+const jobIsUnfinished = or(
+  eq(jobs.status, JobStatus.QUEUED),
+  inArray(jobs.status, [JobStatus.CLAIMED, JobStatus.RUNNING]),
+);
+
+/** Why a job ended because its run timed out. A queued job with an earlier attempt
+ * did start once, so "before this job started" would be untrue of it. */
+function whyRunTimeoutEndedJob(job: {
+  status: JobStatus;
+  attempts: number;
+}): string {
+  if (job.status !== JobStatus.QUEUED) return RUN_TIMED_OUT;
+  return job.attempts > 0
+    ? RUN_TIMED_OUT_BEFORE_RETRY
+    : RUN_TIMED_OUT_BEFORE_JOB_STARTED;
+}
 
 interface CleanupOptions {
   maxWorkflowAge?: number; // Max time a workflow can run (ms)
@@ -32,6 +82,9 @@ interface CleanupOptions {
 export class WorkflowCleanupService {
   private intervalId: NodeJS.Timeout | null = null;
   private options: Required<CleanupOptions>;
+  /** How far resettleTimedOutRuns got, so that runs which can't settle can't fill
+   * every pass. A restart only begins the rounds again. */
+  private resettleAfterRunId = 0;
 
   constructor(options: CleanupOptions = {}) {
     this.options = {
@@ -82,6 +135,9 @@ export class WorkflowCleanupService {
 
       // Clean up stuck workflows
       await this.cleanupStuckWorkflows();
+
+      // Finish anything an earlier timeout left open
+      await this.resettleTimedOutRuns();
 
       // Clean up stuck jobs
       if (this.options.sweepJobs) {
@@ -176,15 +232,15 @@ export class WorkflowCleanupService {
   }
 
   /**
-   * Mark a workflow run as timed out, along with its running jobs.
+   * Mark a workflow run as timed out, and settle what it leaves behind.
    *
    * `runId` is a workflow_executions id. Runs and workflows are numbered
    * separately, so the workflow and owner for the log line come from the run.
    *
    * Returns false if no run with that id is still running, and throws if the
    * run can't be updated. Past that point the run has timed out, so a failure
-   * writing the log line or finding the jobs is logged, not thrown, and neither
-   * one stops the other.
+   * writing the log line or settling the rest is logged, not thrown, and neither
+   * one stops the other. The sweep retries whatever settling didn't finish.
    */
   private async markWorkflowAsTimedOut(runId: number): Promise<boolean> {
     const now = new Date();
@@ -210,25 +266,31 @@ export class WorkflowCleanupService {
     // RUNNING only: the engine may have finished this run since the sweep read
     // it, and the admin route passes whatever id it was given. A finished run
     // keeps its result, and gets no timeout line.
-    const [run] = await db
-      .update(workflowExecutions)
-      .set({
-        status: LogStatus.TIMEOUT,
-        completedAt: now,
-        // Capped so that a run stuck for weeks can still be updated
-        totalDuration: Math.min(elapsedMs, MAX_TOTAL_DURATION_MS),
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(workflowExecutions.id, runId),
-          eq(workflowExecutions.status, LogStatus.RUNNING),
-        ),
-      )
-      .returning({
-        workflowId: workflowExecutions.workflowId,
-        userId: workflowExecutions.userId,
-      });
+    const [run] = await db.transaction(async (tx) => {
+      // An advance holds this row while it works, and one that hangs mustn't stall
+      // the sweep's whole batch. The sweep logs it, and this run is still RUNNING
+      // for its next pass.
+      await limitLockWait(tx);
+      return tx
+        .update(workflowExecutions)
+        .set({
+          status: LogStatus.TIMEOUT,
+          completedAt: now,
+          // Capped so that a run stuck for weeks can still be updated
+          totalDuration: Math.min(elapsedMs, MAX_DURATION_MS),
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(workflowExecutions.id, runId),
+            eq(workflowExecutions.status, LogStatus.RUNNING),
+          ),
+        )
+        .returning({
+          workflowId: workflowExecutions.workflowId,
+          userId: workflowExecutions.userId,
+        });
+    });
 
     if (!run) {
       console.log(
@@ -254,19 +316,31 @@ export class WorkflowCleanupService {
       );
     }
 
+    await this.settleTimedOutRun(runId);
+
+    return true;
+  }
+
+  /**
+   * Close out a timed-out run: time out its unfinished jobs, queued ones
+   * included so they can't start later, then settle its steps and telemetry.
+   * Jobs go first because a step follows its job. Logs failures rather than
+   * throwing, and is safe to repeat.
+   */
+  async settleTimedOutRun(runId: number): Promise<void> {
     try {
-      const runningJobs = await db
-        .select({ id: jobs.id })
+      const unfinishedJobs = await db
+        .select({ id: jobs.id, status: jobs.status, attempts: jobs.attempts })
         .from(jobs)
         .where(
           and(
-            inArray(jobs.status, [JobStatus.RUNNING, JobStatus.CLAIMED]),
+            jobIsUnfinished,
             sql`${jobs.metadata}->>'workflowExecutionId' = ${String(runId)}`,
           ),
         );
 
-      for (const job of runningJobs) {
-        await this.markJobAsTimedOut(job.id);
+      for (const job of unfinishedJobs) {
+        await this.markJobAsTimedOut(job.id, whyRunTimeoutEndedJob(job));
       }
     } catch (error) {
       console.error(
@@ -275,14 +349,105 @@ export class WorkflowCleanupService {
       );
     }
 
-    return true;
+    try {
+      await settleTimedOutRunSteps(runId);
+    } catch (error) {
+      console.error(
+        `[WorkflowCleanup] Error settling the steps of workflow run ${runId}:`,
+        error,
+      );
+    }
   }
 
   /**
-   * Mark a job as timed out
+   * Retry runs that timed out with something still open: a job, a step, or a
+   * telemetry row. That covers a failure or crash partway through
+   * settleTimedOutRun, and runs that timed out before it existed.
    */
-  private async markJobAsTimedOut(jobId: string): Promise<void> {
+  private async resettleTimedOutRuns(): Promise<void> {
+    try {
+      const runs = await db
+        .select({ id: workflowExecutions.id })
+        .from(workflowExecutions)
+        .where(
+          and(
+            gt(workflowExecutions.id, this.resettleAfterRunId),
+            eq(workflowExecutions.status, LogStatus.TIMEOUT),
+            or(
+              exists(
+                db
+                  .select({ id: workflowStepRuns.id })
+                  .from(workflowStepRuns)
+                  .where(
+                    and(
+                      eq(
+                        workflowStepRuns.workflowExecutionId,
+                        workflowExecutions.id,
+                      ),
+                      inArray(workflowStepRuns.status, [
+                        WorkflowStepStatus.PENDING,
+                        WorkflowStepStatus.DISPATCHED,
+                      ]),
+                    ),
+                  ),
+              ),
+              exists(
+                db
+                  .select({ id: workflowExecutionEvents.id })
+                  .from(workflowExecutionEvents)
+                  .where(
+                    and(
+                      eq(
+                        workflowExecutionEvents.workflowExecutionId,
+                        workflowExecutions.id,
+                      ),
+                      eq(workflowExecutionEvents.status, LogStatus.RUNNING),
+                    ),
+                  ),
+              ),
+              exists(
+                db
+                  .select({ id: jobs.id })
+                  .from(jobs)
+                  .where(
+                    and(
+                      jobIsUnfinished,
+                      sql`${jobs.metadata}->>'workflowExecutionId' = ${workflowExecutions.id}::text`,
+                    ),
+                  ),
+              ),
+            ),
+          ),
+        )
+        .orderBy(asc(workflowExecutions.id))
+        .limit(RESETTLE_BATCH);
+
+      // A short batch reached the end, so the next pass starts over
+      this.resettleAfterRunId =
+        runs.length === RESETTLE_BATCH ? runs.at(-1)!.id : 0;
+
+      for (const run of runs) {
+        await this.settleTimedOutRun(run.id);
+      }
+    } catch (error) {
+      console.error(
+        "[WorkflowCleanup] Error settling timed-out workflow runs:",
+        error,
+      );
+    }
+  }
+
+  /**
+   * Mark a job as timed out. `reason` replaces the stock message when the job
+   * didn't time out on its own account.
+   */
+  private async markJobAsTimedOut(
+    jobId: string,
+    reason?: string,
+  ): Promise<void> {
     const now = new Date();
+    const jobError = reason ?? "Job timed out - no response from executor";
+    const logError = reason ?? "Job execution timed out";
 
     try {
       console.log(`[WorkflowCleanup] Marking job ${jobId} as timed out`);
@@ -293,10 +458,10 @@ export class WorkflowCleanupService {
       const { transitionJob } = await import("@/lib/scheduling/job-transition");
       const outcome = await transitionJob(jobId, JobStatus.TIMED_OUT, {
         actor: "sweeper",
-        reason: "Job timed out - no response from executor",
+        reason: jobError,
         set: {
           completedAt: now,
-          lastError: "Job timed out - no response from executor",
+          lastError: jobError,
           result: {
             exitCode: -1,
             error: "Timeout",
@@ -311,35 +476,34 @@ export class WorkflowCleanupService {
         return;
       }
 
-      // Update associated log if exists
-      const [log] = await db
-        .select()
-        .from(logs)
-        .where(eq(logs.jobId, jobId))
-        .limit(1);
+      // Update associated log if exists. Dispatch writes logs.job_id best-effort,
+      // so the job's own record of its log comes first.
+      const logId = executionLogIdOf(outcome.job);
+      await db
+        .update(logs)
+        .set({
+          status: LogStatus.TIMEOUT,
+          endTime: now,
+          error: logError,
+          // A job that never started has no duration to report, and requeueing a
+          // job clears its startedAt, so a retry's wait doesn't count as run time
+          duration: durationBetween(outcome.job.startedAt, now),
+        })
+        .where(logId ? eq(logs.id, logId) : eq(logs.jobId, jobId));
 
-      if (log) {
-        await db
-          .update(logs)
-          .set({
-            status: LogStatus.TIMEOUT,
-            endTime: now,
-            error: "Job execution timed out",
-            duration: this.options.maxJobAge,
-          })
-          .where(eq(logs.id, log.id));
-      }
-
-      // Update executions table if exists
+      // Update the execution still in progress, if any. A job queued for a retry
+      // has earlier attempts here, and those keep their real results.
       await db
         .update(executions)
         .set({
           status: JobStatus.FAILED,
           completedAt: now,
-          error: "Job execution timed out",
+          error: logError,
           exitCode: -1,
         })
-        .where(eq(executions.jobId, jobId));
+        .where(
+          and(eq(executions.jobId, jobId), isNull(executions.completedAt)),
+        );
     } catch (error) {
       console.error(
         `[WorkflowCleanup] Error marking job ${jobId} as timed out:`,
