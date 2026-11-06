@@ -7,11 +7,9 @@ import * as monaco from "monaco-editor";
  * Self-host the Monaco editor (security plan Phase 1.6).
  *
  * Left unconfigured, @monaco-editor/react injects
- * `<script src="https://cdn.jsdelivr…/loader.js">` and runs Monaco's AMD build
- * from the CDN. The production Content-Security-Policy does not stop this:
- * `'strict-dynamic'` trusts any script that a nonced script inserts, whatever
- * its origin. It only stops the stylesheet that build then appends, because
- * `style-src` has no such exception, which leaves the editor unstyled.
+ * `<script src="https://cdn.jsdelivr…/loader.js">` to run Monaco's AMD build
+ * from the CDN. The production Content-Security-Policy blocks that script, so
+ * the editor would never render.
  *
  * Giving the loader this bundled copy keeps Monaco's JavaScript, CSS and fonts
  * in the app's own webpack output, so none of them leave our origin.

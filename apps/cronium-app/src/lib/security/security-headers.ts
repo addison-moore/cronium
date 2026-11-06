@@ -7,9 +7,15 @@
  * there would break the dev server without improving production security.
  *
  * The policy deliberately avoids broad `unsafe-*` script exceptions:
- *   - script-src uses a per-request nonce + `strict-dynamic`, so Next's own
- *     bundled scripts run (Next injects the nonce) but injected inline scripts
- *     do not.
+ *   - script-src allows the per-request nonce, which Next puts on its own tags,
+ *     and our own origin, which is where webpack loads lazy chunks from. Inline
+ *     scripts without the nonce do not run. It leaves out `strict-dynamic`: that
+ *     trusts anything a nonced script inserts, whatever its origin, and it is how
+ *     Monaco's CDN build ran here unnoticed. No script may load from another
+ *     origin, so a new dependency that tries to fails in the browser.
+ *     `'self'` also admits a `<script src>` from our origin without the nonce, so
+ *     no route may serve user-controlled content as JavaScript. nosniff, below,
+ *     stops any other content type running as a script.
  *   - worker-src allows our own origin only. Monaco's workers are bundled chunks.
  *   - connect-src allows same-origin plus ws/wss for Socket.IO live logs and
  *     the terminal (proxied to the page origin in production).
@@ -23,7 +29,7 @@
 export function buildContentSecurityPolicy(nonce: string): string {
   const directives = [
     `default-src 'self'`,
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `script-src 'self' 'nonce-${nonce}'`,
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' data: blob: https:`,
     `font-src 'self' data:`,
