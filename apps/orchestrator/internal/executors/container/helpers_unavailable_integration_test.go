@@ -95,6 +95,14 @@ func TestBashJobRunsWithoutATokenInTheSandbox(t *testing.T) {
 			stderr: []string{noTokenError},
 		},
 		{
+			// It inherits the functions but not the SDK's copy of the token, so with
+			// nounset on, reading that can't be what ends the shell.
+			name:   "calling a helper from a bash it starts under set -u",
+			script: `bash -uc 'cronium_input; echo "rc=$?"'` + "\n",
+			stdout: []string{"rc=1"},
+			stderr: []string{noTokenError},
+		},
+		{
 			name:   "loading the SDK itself",
 			script: `source /usr/local/bin/cronium.sh; echo "rc=$?"` + "\n",
 			stdout: []string{"rc=0"},
