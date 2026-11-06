@@ -1428,25 +1428,138 @@ describe("the socket server", () => {
 });
 
 describe("the cache", () => {
+  let admin: Redis;
+
+  beforeEach(async () => {
+    admin = new Redis(process.env.VALKEY_URL!);
+    while (!cacheService.isAvailable()) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  });
+
+  afterEach(async () => {
+    await admin.config("SET", "min-replicas-to-write", "0");
+    await admin.flushdb();
+    admin.disconnect();
+  });
+
+  /** Fails however it's touched: a list refuses GET, and with no replica, any write. */
+  async function refuseEverythingOn(key: string) {
+    await admin.rpush(key, "not what the cache writes");
+    await admin.config("SET", "min-replicas-to-write", "1");
+  }
+
+  const lineStarting = (start: string) =>
+    logged.find((text) => text.startsWith(start));
+
   // Not a query, but the same mistake: ioredis puts the command on its error, and
   // console.error prints it, so a refused write logged the value it was caching.
   it("doesn't log the value when Valkey refuses a write", async () => {
-    const admin = new Redis(process.env.VALKEY_URL!);
-    await cacheService.set("reachable", true);
     await admin.config("SET", "maxmemory-policy", "noeviction");
     await admin.config("SET", "maxmemory", "1");
     try {
-      await cacheService.set("the-key", { apiKey: SECRET });
+      await cacheService.set("static:the-key", { apiKey: SECRET });
     } finally {
       await admin.config("SET", "maxmemory", "0");
-      admin.disconnect();
     }
 
     expect(logged.join("\n")).not.toContain(SECRET);
-    const line = logged.find((text) =>
-      text.startsWith("Cache set error for key the-key:"),
+    expect(
+      lineStarting("Cache set error for key static:[not logged]:"),
+    ).toContain("OOM command not allowed");
+  });
+
+  // A key's last segment can be a live credential, as this one would be.
+  it.each<[string, string, string, (key: string) => Promise<unknown>]>([
+    [
+      "get",
+      "Cache get error for key",
+      "WRONGTYPE",
+      (key) => cacheService.get(key),
+    ],
+    [
+      "set",
+      "Cache set error for key",
+      "NOREPLICAS",
+      (key) => cacheService.set(key, true),
+    ],
+    [
+      "getdel",
+      "Cache getdel error for key",
+      "NOREPLICAS",
+      (key) => cacheService.getdel(key),
+    ],
+    [
+      "delete",
+      "Cache delete error for key",
+      "NOREPLICAS",
+      (key) => cacheService.delete(key),
+    ],
+    [
+      "deleteByPattern",
+      "Cache delete by pattern error for",
+      "NOREPLICAS",
+      (key) => cacheService.deleteByPattern(key),
+    ],
+  ])(
+    "%s doesn't log the last segment of a key",
+    async (_method, label, refusal, touch) => {
+      const key = `mcpoauth:code:${SECRET}`;
+      await refuseEverythingOn(key);
+
+      await touch(key);
+
+      expect(logged.join("\n")).not.toContain(SECRET);
+      expect(lineStarting(`${label} mcpoauth:code:[not logged]: `)).toContain(
+        refusal,
+      );
+    },
+  );
+
+  it.each([
+    [`mcpoauth:rt:${SECRET}`, "mcpoauth:rt:[not logged]"],
+    [`mcpoauth:client:${SECRET}`, "mcpoauth:client:[not logged]"],
+    [`principal:v1:${SECRET}`, "principal:v1:[not logged]"],
+    [`static:${SECRET}`, "static:[not logged]"],
+    [`rate_limit:the-user:${SECRET}`, "rate_limit:the-user:[not logged]"],
+    // All of it is the last segment.
+    [SECRET, "[not logged]"],
+  ])("logs %s as %s", async (key, expected) => {
+    await refuseEverythingOn(key);
+
+    await cacheService.get(key);
+
+    expect(logged.join("\n")).not.toContain(SECRET);
+    expect(lineStarting(`Cache get error for key ${expected}: `)).toContain(
+      "WRONGTYPE",
     );
-    expect(line).toContain("OOM command not allowed");
+  });
+
+  // In the format string, the %s took the failure, and it was printed in its place.
+  it("prints a % in a key as it is", async () => {
+    const key = "rate_limit:%s:the-path";
+    await refuseEverythingOn(key);
+
+    await cacheService.get(key);
+
+    expect(
+      lineStarting("Cache get error for key rate_limit:%s:[not logged]: "),
+    ).toContain("WRONGTYPE");
+  });
+
+  // A client chooses the code it sends, and what's before a colon in it gets logged.
+  it("keeps a key from a request to one line", async () => {
+    const key = "mcpoauth:code:a\nA forged line:b";
+    await refuseEverythingOn(key);
+
+    await cacheService.get(key);
+
+    expect(
+      lineStarting(
+        "Cache get error for key mcpoauth:code:a A forged line:[not logged]: ",
+      ),
+    ).toContain("WRONGTYPE");
+    expect(logged.join("\n")).not.toContain("\nA forged line");
   });
 });
 
