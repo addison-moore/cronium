@@ -181,6 +181,16 @@ export default function ToolsPage() {
               <em>Test Connection</em> to verify it against the provider before
               you rely on it.
             </p>
+            <p>
+              Google Sheets also needs an OAuth app on your server. Set{" "}
+              <code>OAUTH_GOOGLE_CLIENT_ID</code> and{" "}
+              <code>OAUTH_GOOGLE_CLIENT_SECRET</code> in <code>.env</code>, and
+              register <code>{"{AUTH_URL}"}/api/oauth/callback</code> as the
+              redirect URI with Google. Then press{" "}
+              <em>Connect Google Account</em> on the tool, from the address in{" "}
+              <code>AUTH_URL</code>. Google sends you back to the Tools page,
+              which says whether it worked and, if not, why.
+            </p>
           </div>
 
           <div className="space-y-6">
