@@ -370,7 +370,7 @@ func (c *daemonCore) resolveLeftovers(ctx context.Context) error {
 			if leftover.Job != nil {
 				log.Warn("Removing a job left by an earlier process: its lease is gone, so the sweeper has failed or re-queued it, or it already finished")
 			} else {
-				log.Warn("Removing a job left by an earlier process before its script started: the sweeper will fail or re-queue it when its lease runs out")
+				log.Warn("Removing what an earlier process left of a job with no script to follow: if the job hasn't ended, the sweeper will fail or re-queue it when its lease runs out")
 			}
 			if err := c.recovery.RemoveLeftoverJob(ctx, leftover.ID); err != nil {
 				log.WithError(err).Error("Could not remove what an earlier process left; the periodic cleanup will try again")
