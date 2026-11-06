@@ -42,7 +42,7 @@ func sandboxExecutor(t *testing.T, ctx context.Context) *Executor {
 // sandboxedJob makes a job for this language. It skips the test if the image is missing.
 func sandboxedJob(t *testing.T, ctx context.Context, e *Executor, in interpreter, content string) *types.Job {
 	t.Helper()
-	image := e.getImageForScript(in.scriptType)
+	image := e.getImageForScript(ctx, in.scriptType)
 	if _, err := e.dockerClient.ImageInspect(ctx, image); err != nil {
 		t.Skipf("%s not present locally (this test does not build it): %v", image, err)
 	}

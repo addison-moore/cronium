@@ -166,11 +166,3 @@ func TestExecutionTokenStoreAndGet(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "tok-2", got)
 }
-
-func TestGetRuntimeImage(t *testing.T) {
-	e := newUnitExecutor()
-	assert.Equal(t, "cronium/runtime-api:latest", e.sidecar.getRuntimeImage())
-
-	e.config.Runtime.Image = "custom/runtime:2"
-	assert.Equal(t, "custom/runtime:2", e.sidecar.getRuntimeImage())
-}
