@@ -88,6 +88,7 @@ Execute pre-built integrations with third-party services:
 - **Timeout Controls**: Prevent runaway executions
 - **Retry Logic**: Automatic retries on failure (0-10 attempts)
 - **Execution Logs**: Complete stdout/stderr capture with timestamps
+- **Script Length**: One save can carry at most 10 MB (10,485,760 bytes), counting the script and every other field as they're sent. A line break or a quote in a script takes 2 bytes, so a script of many short lines reaches the limit well before its own length does. The form says so before sending anything, and the API answers 413. A reverse proxy in front of Cronium can have a lower limit of its own, such as nginx's `client_max_body_size`
 - **Real-time Monitoring**: Watch executions as they happen
 
 #### 🔗 Chaining events (Workflows)

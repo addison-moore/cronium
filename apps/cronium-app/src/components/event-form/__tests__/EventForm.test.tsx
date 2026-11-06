@@ -16,6 +16,7 @@ import userEvent from "@testing-library/user-event";
 
 const mockCreateMutateAsync = jest.fn();
 const mockUpdateMutateAsync = jest.fn();
+const mockToast = jest.fn();
 
 jest.mock("@/lib/trpc", () => ({
   trpc: {
@@ -68,6 +69,7 @@ jest.mock("@cronium/ui", () => {
   const ReactActual = jest.requireActual<typeof import("react")>("react");
   return {
     ...actual,
+    useToast: () => ({ toast: mockToast }),
     MonacoEditor: ({
       value,
       onChange,
@@ -91,6 +93,8 @@ jest.mock("@/components/dashboard/AIScriptAssistant-lazy", () => ({
 
 import EventForm from "../EventForm";
 import { EventType, EventTriggerType, TimeUnit } from "@/shared/schema";
+import { MAX_REQUEST_BODY_BYTES } from "@/shared/request-limits";
+import { saveRequestBytes } from "../lib/event-payload";
 
 const scheduledBashEvent = {
   type: EventType.BASH,
@@ -102,6 +106,7 @@ describe("EventForm", () => {
   beforeEach(() => {
     mockCreateMutateAsync.mockReset().mockResolvedValue({ id: 123 });
     mockUpdateMutateAsync.mockReset().mockResolvedValue({ id: 123 });
+    mockToast.mockReset();
   });
 
   describe("cron/interval mode switching", () => {
@@ -326,6 +331,183 @@ describe("EventForm", () => {
         }),
       );
       expect(payload).not.toHaveProperty("runOnLocal");
+    });
+  });
+
+  describe("a save too long for one request", () => {
+    const manualBashEvent = {
+      type: EventType.BASH,
+      content: "echo hello",
+      triggerType: EventTriggerType.MANUAL,
+    };
+    const tooLong = /This script is too long to save/;
+    const consoleError = () =>
+      jest.spyOn(console, "error").mockImplementation(() => undefined);
+
+    function setScript(script: string) {
+      // Pasted, in effect: typing this many characters would take days.
+      fireEvent.change(screen.getByTestId("monaco-stub"), {
+        target: { value: script },
+      });
+    }
+
+    async function save(
+      user: ReturnType<typeof userEvent.setup>,
+      button = "Create Event",
+    ) {
+      await user.click(screen.getByRole("button", { name: button }));
+    }
+
+    async function renderNamed() {
+      const user = userEvent.setup();
+      render(<EventForm initialData={manualBashEvent} />);
+      await user.type(screen.getByLabelText("Event Name"), "Long");
+      return user;
+    }
+
+    /** A script that brings this form's request to exactly `bytes`. */
+    async function scriptForRequestOf(
+      bytes: number,
+      user: ReturnType<typeof userEvent.setup>,
+    ) {
+      await save(user);
+      await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalled());
+      const input = mockCreateMutateAsync.mock.calls[0]?.[0] as object;
+      const shell = saveRequestBytes({ ...input, content: "" });
+      mockCreateMutateAsync.mockClear();
+      return "x".repeat(bytes - shell);
+    }
+
+    it("refuses a script past the limit before sending anything, and says why beside it", async () => {
+      const user = await renderNamed();
+
+      setScript("x".repeat(MAX_REQUEST_BODY_BYTES + 1));
+      await save(user);
+
+      expect(await screen.findByText(tooLong)).toHaveTextContent(
+        /comes to 10\.01 MB once sent, and the limit is 10 MB/,
+      );
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+      expect(mockToast).not.toHaveBeenCalled();
+    });
+
+    it("brings the script into view, because the submit button is a screen or more below it", async () => {
+      const user = await renderNamed();
+
+      setScript("x".repeat(MAX_REQUEST_BODY_BYTES + 1));
+      await save(user);
+
+      await screen.findByText(tooLong);
+      expect(screen.getByTestId("monaco-stub").parentElement).toHaveFocus();
+    });
+
+    it("sends a request of exactly the limit, and refuses one byte more", async () => {
+      const user = await renderNamed();
+      const script = await scriptForRequestOf(MAX_REQUEST_BODY_BYTES, user);
+
+      setScript(script);
+      await save(user);
+      await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalled());
+      expect(screen.queryByText(tooLong)).not.toBeInTheDocument();
+
+      mockCreateMutateAsync.mockClear();
+      setScript(`${script}x`);
+      await save(user);
+      expect(await screen.findByText(tooLong)).toBeInTheDocument();
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("counts what's sent, so a script under 10 MB can still be too long", async () => {
+      const user = await renderNamed();
+
+      // 6 MB of script, and 12 MB of JSON.
+      setScript(`echo hi${"\n".repeat(6 * 1024 * 1024)}`);
+      await save(user);
+
+      expect(await screen.findByText(tooLong)).toHaveTextContent(/12\.\d+ MB/);
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("clears the message once the script is edited, and saves when it fits", async () => {
+      const user = await renderNamed();
+
+      setScript("x".repeat(MAX_REQUEST_BODY_BYTES + 1));
+      await save(user);
+      await screen.findByText(tooLong);
+
+      setScript("echo short");
+      await waitFor(() =>
+        expect(screen.queryByText(tooLong)).not.toBeInTheDocument(),
+      );
+
+      await save(user);
+      await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalled());
+    });
+
+    it("checks an update the same way, on the request it would send", async () => {
+      const user = userEvent.setup();
+      render(
+        <EventForm
+          initialData={{ ...manualBashEvent, name: "Long" }}
+          isEditing
+          eventId={7}
+        />,
+      );
+
+      setScript("x".repeat(MAX_REQUEST_BODY_BYTES + 1));
+      await save(user, "Update Event");
+
+      expect(await screen.findByText(tooLong)).toBeInTheDocument();
+      expect(mockUpdateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("says so in a toast for an event with no script field to show it beside", async () => {
+      const user = userEvent.setup();
+      render(
+        <EventForm
+          initialData={{
+            type: EventType.HTTP_REQUEST,
+            triggerType: EventTriggerType.MANUAL,
+            name: "Long",
+            httpMethod: "POST",
+            httpUrl: "https://api.example.test/",
+            httpBody: "x".repeat(MAX_REQUEST_BODY_BYTES + 1),
+          }}
+        />,
+      );
+
+      await save(user);
+
+      await waitFor(() =>
+        expect(mockToast).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: "Too long to save",
+            description: expect.stringContaining(
+              "This event is too long to save",
+            ) as string,
+            variant: "destructive",
+          }),
+        ),
+      );
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("shows the server's own words if the server refuses it after all", async () => {
+      consoleError();
+      const message = "This event is too long to save, from the server";
+      mockCreateMutateAsync.mockRejectedValue(new Error(message));
+      const user = await renderNamed();
+
+      await save(user);
+
+      await waitFor(() =>
+        expect(mockToast).toHaveBeenCalledWith(
+          expect.objectContaining({
+            description: message,
+            variant: "destructive",
+          }),
+        ),
+      );
     });
   });
 });

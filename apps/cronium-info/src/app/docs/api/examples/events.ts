@@ -108,7 +108,8 @@ export const eventEndpoints: readonly ApiEndpoint[] = [
         in: "body",
         type: "string",
         required: false,
-        description: "The script. Required unless type is HTTP_REQUEST.",
+        description:
+          "The script. Required unless type is HTTP_REQUEST. The whole request can be at most 10 MB as sent, where a line break or a quote takes 2 bytes.",
       },
       {
         name: "httpMethod",
@@ -256,7 +257,8 @@ export const eventEndpoints: readonly ApiEndpoint[] = [
         in: "body",
         type: "string",
         required: false,
-        description: "The script.",
+        description:
+          "The script. The whole request can be at most 10 MB as sent, where a line break or a quote takes 2 bytes.",
       },
       {
         name: "status",
