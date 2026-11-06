@@ -374,6 +374,21 @@ describe("a stored webhook holding a protected name", () => {
     }
   });
 
+  it("does the same on a test delivery", async () => {
+    const receiver = await startReceiver();
+    const { id } = await storedWebhook(receiver.url, {
+      "X-Webhook-Signature": VALUE,
+      "x-delivery-timestamp": VALUE,
+    });
+
+    await callerFor(owner).webhookSystem.test({ webhookId: id });
+
+    expect(receiver.received).toHaveLength(1);
+    const request = receiver.received[0]!;
+    expect(request.rawHeaders).not.toContain(VALUE);
+    expectBothSignaturesToVerify(request);
+  });
+
   it("does the same when the row is plaintext from before encryption at rest", async () => {
     const receiver = await startReceiver();
     const { id } = await storedWebhook(receiver.url, {});
