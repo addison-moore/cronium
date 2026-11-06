@@ -18,6 +18,15 @@ const mockCreateMutateAsync = jest.fn();
 const mockUpdateMutateAsync = jest.fn();
 const mockToast = jest.fn();
 
+const sandbox = { id: 6, name: "sandbox", address: "192.0.2.10" };
+// What servers.getAll answers: never an archived server (see queryServers).
+let mockActiveServers: Array<typeof sandbox> = [sandbox];
+let mockServerGroups: Array<{
+  id: number;
+  name: string;
+  serverIds: number[];
+}> = [];
+
 jest.mock("@/lib/trpc", () => ({
   trpc: {
     events: {
@@ -33,14 +42,10 @@ jest.mock("@/lib/trpc", () => ({
     },
     servers: {
       getAll: {
-        useQuery: () => ({
-          data: {
-            servers: [{ id: 6, name: "sandbox", address: "192.0.2.10" }],
-          },
-        }),
+        useQuery: () => ({ data: { servers: mockActiveServers } }),
       },
       getGroups: {
-        useQuery: () => ({ data: { groups: [] } }),
+        useQuery: () => ({ data: { groups: mockServerGroups } }),
       },
     },
     tools: {
@@ -92,7 +97,12 @@ jest.mock("@/components/dashboard/AIScriptAssistant-lazy", () => ({
 }));
 
 import EventForm from "../EventForm";
-import { EventType, EventTriggerType, TimeUnit } from "@/shared/schema";
+import {
+  EventType,
+  EventTriggerType,
+  RunLocation,
+  TimeUnit,
+} from "@/shared/schema";
 import { MAX_REQUEST_BODY_BYTES } from "@/shared/request-limits";
 import { saveRequestBytes } from "../lib/event-payload";
 
@@ -107,6 +117,8 @@ describe("EventForm", () => {
     mockCreateMutateAsync.mockReset().mockResolvedValue({ id: 123 });
     mockUpdateMutateAsync.mockReset().mockResolvedValue({ id: 123 });
     mockToast.mockReset();
+    mockActiveServers = [sandbox];
+    mockServerGroups = [];
   });
 
   describe("cron/interval mode switching", () => {
@@ -925,6 +937,426 @@ describe("EventForm", () => {
           }),
         ),
       );
+    });
+  });
+
+  describe("a server the event is linked to that the list leaves out", () => {
+    const retiredBox = {
+      id: 9,
+      name: "retired-box",
+      address: "192.0.2.20",
+      isArchived: true,
+    };
+    const ARCHIVED_ROW = "retired-box (192.0.2.20) Archived";
+    const SANDBOX_ROW = "sandbox (192.0.2.10)";
+    const NOTICE = /can't be saved or run while an archived server is ticked/;
+
+    function eventOn(
+      servers: Array<{
+        id: number;
+        name: string;
+        address: string;
+        isArchived?: boolean;
+      }>,
+      overrides: Record<string, unknown> = {},
+    ) {
+      return {
+        name: "Nightly job",
+        type: EventType.BASH,
+        content: "echo hello",
+        runLocation: RunLocation.REMOTE,
+        servers,
+        ...overrides,
+      };
+    }
+
+    function renderEditing(initialData: ReturnType<typeof eventOn>) {
+      render(<EventForm initialData={initialData} isEditing eventId={5} />);
+      return userEvent.setup();
+    }
+
+    function rowNames() {
+      return screen
+        .getAllByRole("checkbox")
+        .map((box) => box.getAttribute("id"));
+    }
+
+    async function save(user: ReturnType<typeof userEvent.setup>) {
+      await user.click(screen.getByRole("button", { name: "Update Event" }));
+    }
+
+    function lastUpdate() {
+      return mockUpdateMutateAsync.mock.calls.at(-1)?.[0] as Record<
+        string,
+        unknown
+      >;
+    }
+
+    it("lists an archived server ticked and labelled, ahead of the others", async () => {
+      renderEditing(eventOn([retiredBox]));
+
+      expect(
+        await screen.findByRole("checkbox", {
+          name: ARCHIVED_ROW,
+          checked: true,
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("checkbox", { name: SANDBOX_ROW, checked: false }),
+      ).toBeInTheDocument();
+      // First, so a long server list can't scroll it out of view.
+      expect(rowNames()).toEqual(["location-local", "server-9", "server-6"]);
+      expect(screen.getByText(NOTICE)).toBeInTheDocument();
+    });
+
+    it("repoints the event: untick the archived server, tick another, save", async () => {
+      const user = renderEditing(eventOn([retiredBox]));
+
+      await user.click(
+        await screen.findByRole("checkbox", { name: ARCHIVED_ROW }),
+      );
+      expect(screen.queryByText(NOTICE)).not.toBeInTheDocument();
+      await user.click(screen.getByRole("checkbox", { name: SANDBOX_ROW }));
+      await save(user);
+
+      await waitFor(() => expect(mockUpdateMutateAsync).toHaveBeenCalled());
+      expect(lastUpdate()).toEqual(
+        expect.objectContaining({
+          id: 5,
+          runLocation: "REMOTE",
+          selectedServerIds: [6],
+          serverId: null,
+        }),
+      );
+    });
+
+    it("keeps the row after unticking, so a slip can be undone", async () => {
+      const user = renderEditing(eventOn([retiredBox]));
+      const row = await screen.findByRole("checkbox", { name: ARCHIVED_ROW });
+
+      await user.click(row);
+      expect(row).not.toBeChecked();
+      await user.click(row);
+
+      expect(row).toBeChecked();
+      expect(screen.getByText(NOTICE)).toBeInTheDocument();
+    });
+
+    it("won't quietly move a REMOTE event to LOCAL when its only server is unticked", async () => {
+      const user = renderEditing(eventOn([retiredBox]));
+
+      await user.click(
+        await screen.findByRole("checkbox", { name: ARCHIVED_ROW }),
+      );
+      await save(user);
+
+      expect(
+        await screen.findByText("Select at least one execution location"),
+      ).toBeInTheDocument();
+      expect(mockUpdateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("sends an untouched archived server as it stands and shows the server's refusal", async () => {
+      jest.spyOn(console, "error").mockImplementation(() => undefined);
+      const reason =
+        "An archived server can't be used: retired-box. Restore it or choose another server, then try again.";
+      mockUpdateMutateAsync.mockRejectedValueOnce(new Error(reason));
+      const user = renderEditing(eventOn([retiredBox]));
+      await screen.findByRole("checkbox", {
+        name: ARCHIVED_ROW,
+        checked: true,
+      });
+
+      await save(user);
+
+      await waitFor(() =>
+        expect(mockToast).toHaveBeenCalledWith({
+          title: "Error",
+          description: reason,
+          variant: "destructive",
+        }),
+      );
+      // Not dropped on the way: with nothing selected this would be a LOCAL event.
+      expect(lastUpdate()).toEqual(
+        expect.objectContaining({
+          runLocation: "REMOTE",
+          selectedServerIds: [9],
+        }),
+      );
+    });
+
+    it("leaves a LOCAL_AND_REMOTE event local once its archived server is unticked", async () => {
+      const user = renderEditing(
+        eventOn([retiredBox], { runLocation: RunLocation.LOCAL_AND_REMOTE }),
+      );
+
+      await user.click(
+        await screen.findByRole("checkbox", { name: ARCHIVED_ROW }),
+      );
+      await save(user);
+
+      await waitFor(() => expect(mockUpdateMutateAsync).toHaveBeenCalled());
+      expect(lastUpdate()).toEqual(
+        expect.objectContaining({
+          runLocation: "LOCAL",
+          selectedServerIds: [],
+        }),
+      );
+    });
+
+    it("treats a server restored since the event loaded as an ordinary one", async () => {
+      mockActiveServers = [
+        sandbox,
+        { id: 9, name: "retired-box", address: "192.0.2.20" },
+      ];
+      const user = renderEditing(eventOn([retiredBox]));
+
+      expect(
+        await screen.findByRole("checkbox", {
+          name: "retired-box (192.0.2.20)",
+          checked: true,
+        }),
+      ).toBeInTheDocument();
+      expect(rowNames()).toEqual(["location-local", "server-6", "server-9"]);
+      expect(screen.queryByText(NOTICE)).not.toBeInTheDocument();
+
+      await save(user);
+
+      await waitFor(() => expect(mockUpdateMutateAsync).toHaveBeenCalled());
+      expect(lastUpdate().selectedServerIds).toEqual([9]);
+    });
+
+    it("keeps a row for a linked server the list didn't return, without calling it archived", async () => {
+      // One past the list's limit of 100, or archived since the event loaded.
+      const unlisted = { id: 150, name: "far-box", address: "192.0.2.30" };
+      const user = renderEditing(eventOn([unlisted]));
+
+      const row = await screen.findByRole("checkbox", {
+        name: "far-box (192.0.2.30)",
+        checked: true,
+      });
+      expect(screen.queryByText(NOTICE)).not.toBeInTheDocument();
+
+      await user.click(row);
+      expect(row).not.toBeChecked();
+    });
+
+    it("shows the archived row instead of saying there are no servers", async () => {
+      mockActiveServers = [];
+      renderEditing(eventOn([retiredBox]));
+
+      expect(
+        await screen.findByRole("checkbox", {
+          name: ARCHIVED_ROW,
+          checked: true,
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText("No servers available"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("still says there are no servers when there are none at all", () => {
+      mockActiveServers = [];
+      renderEditing(eventOn([]));
+
+      expect(screen.getByText("No servers available")).toBeInTheDocument();
+    });
+
+    describe("in a server group", () => {
+      beforeEach(() => {
+        mockServerGroups = [{ id: 1, name: "fleet", serverIds: [6, 9] }];
+      });
+
+      it("doesn't count the archived member or tick it back", async () => {
+        const user = renderEditing(eventOn([retiredBox]));
+        const row = await screen.findByRole("checkbox", { name: ARCHIVED_ROW });
+        await user.click(row);
+
+        await user.click(screen.getByRole("button", { name: "fleet (1)" }));
+
+        expect(
+          screen.getByRole("checkbox", { name: SANDBOX_ROW }),
+        ).toBeChecked();
+        expect(row).not.toBeChecked();
+      });
+
+      it("doesn't untick the archived member either", async () => {
+        const user = renderEditing(eventOn([retiredBox]));
+        const row = await screen.findByRole("checkbox", {
+          name: ARCHIVED_ROW,
+          checked: true,
+        });
+        const group = screen.getByRole("button", { name: "fleet (1)" });
+
+        await user.click(group);
+        await user.click(group);
+
+        expect(
+          screen.getByRole("checkbox", { name: SANDBOX_ROW }),
+        ).not.toBeChecked();
+        expect(row).toBeChecked();
+      });
+    });
+
+    describe("through the deprecated direct server", () => {
+      function directEvent(overrides: Record<string, unknown> = {}) {
+        return eventOn([], {
+          serverId: retiredBox.id,
+          server: retiredBox,
+          ...overrides,
+        });
+      }
+
+      it("lists an archived one the same way, and unticking it unlinks it", async () => {
+        const user = renderEditing(directEvent());
+        const row = await screen.findByRole("checkbox", {
+          name: ARCHIVED_ROW,
+          checked: true,
+        });
+
+        await user.click(row);
+        await user.click(screen.getByRole("checkbox", { name: SANDBOX_ROW }));
+        await save(user);
+
+        await waitFor(() => expect(mockUpdateMutateAsync).toHaveBeenCalled());
+        expect(lastUpdate()).toEqual(
+          expect.objectContaining({
+            runLocation: "REMOTE",
+            selectedServerIds: [6],
+            serverId: null,
+          }),
+        );
+      });
+
+      it("lists a server once when it's both the direct one and a link", async () => {
+        renderEditing(directEvent({ servers: [retiredBox] }));
+
+        await screen.findByRole("checkbox", {
+          name: ARCHIVED_ROW,
+          checked: true,
+        });
+        expect(rowNames()).toEqual(["location-local", "server-9", "server-6"]);
+      });
+
+      it("leaves one on a LOCAL event alone, because ticking it would add a server", () => {
+        renderEditing(directEvent({ runLocation: RunLocation.LOCAL }));
+
+        expect(rowNames()).toEqual(["location-local", "server-6"]);
+        expect(screen.queryByText(NOTICE)).not.toBeInTheDocument();
+      });
+    });
+
+    describe("when the same event comes back as a new object", () => {
+      // EventEditTab hands over a new object on every render, and every toast
+      // re-renders it. See __tests__/EventEditTab.test.tsx for that wiring.
+      const event = eventOn([retiredBox], { id: 5 });
+
+      function renderWithRerender() {
+        const view = render(
+          <EventForm initialData={event} isEditing eventId={5} />,
+        );
+        return {
+          user: userEvent.setup(),
+          again: (data: Record<string, unknown>) =>
+            view.rerender(
+              <EventForm initialData={data} isEditing eventId={5} />,
+            ),
+        };
+      }
+
+      it("leaves an unticked server unticked", async () => {
+        const { user, again } = renderWithRerender();
+        const row = await screen.findByRole("checkbox", {
+          name: ARCHIVED_ROW,
+          checked: true,
+        });
+        await user.click(row);
+
+        again({ ...event });
+
+        expect(row).not.toBeChecked();
+      });
+
+      it("leaves an edited env var in place", async () => {
+        const { user, again } = renderWithRerender();
+        await user.click(screen.getByRole("button", { name: "Add Variable" }));
+        fireEvent.change(screen.getByLabelText("Key"), {
+          target: { value: "MY_VAR" },
+        });
+
+        again({ ...event, environmentVariables: [] });
+
+        expect(screen.getByLabelText("Key")).toHaveValue("MY_VAR");
+      });
+
+      it("leaves a script written over the template in place", () => {
+        const empty = { ...event, content: "" };
+        const view = render(
+          <EventForm initialData={empty} isEditing eventId={5} />,
+        );
+        fireEvent.change(screen.getByTestId("monaco-stub"), {
+          target: { value: "echo mine" },
+        });
+
+        view.rerender(
+          <EventForm initialData={{ ...empty }} isEditing eventId={5} />,
+        );
+
+        expect(screen.getByTestId("monaco-stub")).toHaveValue("echo mine");
+      });
+
+      it("still labels a server archived since the form loaded", async () => {
+        const live = { id: 11, name: "gone-box", address: "192.0.2.40" };
+        const withLive = eventOn([live], { id: 5 });
+        const view = render(
+          <EventForm initialData={withLive} isEditing eventId={5} />,
+        );
+        await screen.findByRole("checkbox", {
+          name: "gone-box (192.0.2.40)",
+          checked: true,
+        });
+        expect(screen.queryByText(NOTICE)).not.toBeInTheDocument();
+
+        view.rerender(
+          <EventForm
+            initialData={eventOn([{ ...live, isArchived: true }], { id: 5 })}
+            isEditing
+            eventId={5}
+          />,
+        );
+
+        expect(
+          screen.getByRole("checkbox", {
+            name: "gone-box (192.0.2.40) Archived",
+            checked: true,
+          }),
+        ).toBeInTheDocument();
+        expect(screen.getByText(NOTICE)).toBeInTheDocument();
+      });
+
+      it("takes up a different event's servers", async () => {
+        const { user, again } = renderWithRerender();
+        await user.click(
+          await screen.findByRole("checkbox", { name: ARCHIVED_ROW }),
+        );
+
+        again(eventOn([sandbox], { id: 6 }));
+
+        expect(
+          await screen.findByRole("checkbox", {
+            name: SANDBOX_ROW,
+            checked: true,
+          }),
+        ).toBeInTheDocument();
+        expect(rowNames()).toEqual(["location-local", "server-6"]);
+      });
+    });
+
+    it("shows no extra rows when creating an event", () => {
+      render(<EventForm initialData={scheduledBashEvent} />);
+
+      expect(rowNames()).toEqual(["location-local", "server-6"]);
     });
   });
 });
