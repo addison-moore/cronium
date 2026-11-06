@@ -6,7 +6,7 @@ import type { OrchestratorJob } from "@/lib/services/job-transformer";
 import { JobStatus, type Job } from "@/shared/schema";
 import { verifyOrchestratorKey } from "@/lib/internal-auth";
 import { mintJobCapability } from "@/lib/security/job-capability";
-import { describeFailure } from "@/lib/pg-errors";
+import { describeFailure, failureWithStack } from "@/lib/pg-errors";
 
 /**
  * Fail a claimed job that can't be delivered, now and with the reason, instead of
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
       count: transformedJobs.length,
     });
   } catch (error) {
-    console.error("Error claiming jobs:", error);
+    console.error("Error claiming jobs:", failureWithStack(error));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

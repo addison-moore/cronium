@@ -9,6 +9,7 @@ import { createProviderFromEnv } from "@/lib/oauth/providers";
 import { db } from "@/server/db";
 import { toolCredentials } from "@/shared/schema";
 import { eq } from "drizzle-orm";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Request schema
 const authorizeSchema = z.object({
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
     });
     return response;
   } catch (error) {
-    console.error("OAuth authorize error:", error);
+    console.error("OAuth authorize error:", failureWithStack(error));
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(

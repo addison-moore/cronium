@@ -9,12 +9,34 @@ import {
   type Event,
 } from "@/shared/schema";
 import { getDefaultScriptContent } from "@/lib/scriptTemplates";
+import { normalizeTimeUnit } from "@/lib/scheduling/schedule-math";
 import type { EventFormData } from "./event-form-schema";
+
+/** A server as an event's relations carry it. */
+export interface EventFormServer {
+  id: number;
+  name: string;
+  address: string;
+  isArchived?: boolean;
+}
 
 // Extended Event type that includes relation properties
 export interface EventFormInitialData extends Partial<Event> {
+  // What events.getById returns, so its result can be passed straight in. The
+  // form has to find these: it saves whatever rows it shows, and events.update
+  // takes `envVars: []` as deleting every variable the event has.
+  envVars?: Array<{ key: string; value: string }>;
+  // The same rows, as the event details page's view model names them.
   environmentVariables?: Array<{ key: string; value: string }>;
-  servers?: Array<{ id: number; name: string }>;
+  servers?: EventFormServer[];
+  server?: EventFormServer | null;
+}
+
+/** The run location counterpart of `normalizeTimeUnit`. */
+function normalizeRunLocation(location: unknown): RunLocation | null {
+  if (typeof location !== "string") return null;
+  const normalized = location.trim().toUpperCase() as RunLocation;
+  return Object.values(RunLocation).includes(normalized) ? normalized : null;
 }
 
 /**
@@ -26,10 +48,16 @@ export interface EventFormInitialData extends Partial<Event> {
  * - `runOnLocal` is true unless the event is remote-only.
  * - `startTime` is converted to the `datetime-local` input format
  *   (`YYYY-MM-DDTHH:mm`, UTC).
+ * - `scheduleUnit`, `timeoutUnit` and `runLocation` are normalized, because
+ *   rows from before the enum migration hold lowercase values. The form's
+ *   schema refuses those with no message, so the save would silently do nothing.
  */
 export function buildEventFormDefaults(
   initialData?: EventFormInitialData,
 ): EventFormData {
+  const runLocation =
+    normalizeRunLocation(initialData?.runLocation) ?? RunLocation.LOCAL;
+
   return {
     name: initialData?.name ?? "",
     description: initialData?.description ?? "",
@@ -39,7 +67,8 @@ export function buildEventFormDefaults(
     status: initialData?.status ?? EventStatus.DRAFT,
     triggerType: initialData?.triggerType ?? EventTriggerType.MANUAL,
     scheduleNumber: initialData?.scheduleNumber ?? 5,
-    scheduleUnit: initialData?.scheduleUnit ?? TimeUnit.MINUTES,
+    scheduleUnit:
+      normalizeTimeUnit(initialData?.scheduleUnit) ?? TimeUnit.MINUTES,
     startTime: initialData?.startTime
       ? new Date(initialData.startTime).toISOString().slice(0, 16)
       : null,
@@ -50,10 +79,11 @@ export function buildEventFormDefaults(
     overlapPolicy: initialData?.overlapPolicy ?? OverlapPolicy.ALLOW,
     priority: initialData?.priority ?? 1,
     timeoutValue: initialData?.timeoutValue ?? 30,
-    timeoutUnit: initialData?.timeoutUnit ?? TimeUnit.SECONDS,
-    runLocation: initialData?.runLocation ?? RunLocation.LOCAL,
+    timeoutUnit:
+      normalizeTimeUnit(initialData?.timeoutUnit) ?? TimeUnit.SECONDS,
+    runLocation,
     // Local unless the event is remote-only
-    runOnLocal: initialData?.runLocation !== RunLocation.REMOTE,
+    runOnLocal: runLocation !== RunLocation.REMOTE,
     selectedServerIds: [],
     retries: initialData?.retries ?? 0,
     maxExecutions: initialData?.maxExecutions ?? 0,
@@ -101,7 +131,11 @@ export function parseInitialEnvVars(
     }
   }
   if (Array.isArray(value)) {
-    return value as Array<{ key: string; value: string }>;
+    // A row from the API also has an id, an event id and timestamps.
+    return (value as Array<{ key: string; value: string }>).map((envVar) => ({
+      key: envVar.key,
+      value: envVar.value,
+    }));
   }
   return null;
 }
@@ -113,6 +147,26 @@ export function extractServerIds(
   return servers
     .map((server) => server.id)
     .filter((id): id is number => typeof id === "number");
+}
+
+/**
+ * The servers the form must keep selected and on screen for an event: its links,
+ * and an archived direct server (the deprecated `serverId`), which stops the
+ * event just as an archived link does. A LOCAL event's direct server is left out:
+ * ticked, the event would start running on it once it was restored and saved.
+ * Left out, any save clears it.
+ */
+export function linkedServers(
+  initialData?: EventFormInitialData,
+): EventFormServer[] {
+  const links = initialData?.servers ?? [];
+  const direct = initialData?.server;
+  const runLocation = initialData?.runLocation ?? RunLocation.LOCAL;
+  return direct?.isArchived &&
+    runLocation !== RunLocation.LOCAL &&
+    !links.some((link) => link.id === direct.id)
+    ? [...links, direct]
+    : links;
 }
 
 /**

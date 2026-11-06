@@ -6,6 +6,7 @@ import {
   authorizeCapability,
   assertJobScope,
 } from "@/lib/security/internal-route-auth";
+import { failureWithStack } from "@/lib/pg-errors";
 
 /** The orchestrator sends `details.error` as an object (types.ErrorDetails). */
 function reportedError(error: string | { message?: string } | undefined) {
@@ -153,7 +154,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, job: updatedJob });
   } catch (error) {
-    console.error("Error updating job status:", error);
+    console.error("Error updating job status:", failureWithStack(error));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
