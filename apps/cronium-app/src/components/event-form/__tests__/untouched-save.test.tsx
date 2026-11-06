@@ -469,6 +469,39 @@ describe("saving an event without changing anything", () => {
     });
   });
 
+  // With the real plugins and a registry nothing else fills, as on a direct load: no
+  // page here imports them, so the form has to. The save above can go out before they
+  // arrive. This one waits, so it's the real fields that have to leave the config alone.
+  it.each(SURFACES)(
+    "shows a tool action's settings and sends them back unchanged, from %s",
+    async (_name, surface) => {
+      const toolAction = EVENTS.find(({ event }) => event === "a tool action");
+      const stored = toolAction!.stored;
+      mockUpdateMutateAsync.mockClear();
+      mockApiEvent = toEventApiDto(stored, OWNER, { revealEnvVarValues: true });
+
+      const user = userEvent.setup();
+      render(surface());
+
+      expect(
+        await screen.findByDisplayValue("#ops", {}, { timeout: 60_000 }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/No tools match/)).not.toBeInTheDocument();
+
+      await user.click(screen.getByText("Update Event"));
+      await waitFor(() =>
+        expect(mockUpdateMutateAsync).toHaveBeenCalledTimes(1),
+      );
+      const sent = mockUpdateMutateAsync.mock.calls[0]?.[0] as {
+        toolActionConfig: string;
+      };
+      expect(JSON.parse(sent.toolActionConfig)).toEqual(
+        stored.toolActionConfig,
+      );
+    },
+    90_000,
+  );
+
   it.each(SURFACES)("shows the variables, on %s", async (_name, surface) => {
     mockApiEvent = toEventApiDto(EVENTS[0]!.stored, OWNER, {
       revealEnvVarValues: true,
