@@ -55,7 +55,7 @@ func sandboxedJob(t *testing.T, ctx context.Context, e *Executor, in interpreter
 		Type:      types.JobTypeContainer,
 		Execution: types.ExecutionConfig{Script: &types.Script{Type: in.scriptType, Content: content}},
 	}
-	// The bash SDK exits at once without these, as it should in a real job.
+	// A real job has these, and the Python and Node SDKs stop at import without them.
 	e.sidecar.storeExecutionToken(job.ID, "test-token")
 	e.executionIDs[job.ID] = "exec-" + job.ID
 	return job

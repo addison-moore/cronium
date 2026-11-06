@@ -431,7 +431,9 @@ func scriptLoader(scriptType types.ScriptType) string {
 		return "globalThis.cronium = require('cronium'); //# sourceURL=[eval]\n"
 	default:
 		// cronium.sh exports its functions, so a bash the script starts can call them too.
-		return "source /usr/local/bin/cronium.sh 2>/dev/null || true\n"
+		// Loading it prints nothing unless the file itself is at fault, as in an image
+		// without it. The job then runs anyway, and its stderr says why it has no helpers.
+		return "source /usr/local/bin/cronium.sh || true\n"
 	}
 }
 
@@ -550,7 +552,9 @@ func (e *Executor) buildEnvironment(job *types.Job) []string {
 	token, err := e.sidecar.getExecutionToken(job.ID)
 	if err != nil {
 		e.log.WithError(err).Warn("Failed to get execution token")
-		token = "" // Continue without token (will fail auth)
+		// Continue without one. A bash script still runs, and its helpers say why they
+		// can't work. The Python and Node SDKs stop at import, with the same message.
+		token = ""
 	}
 
 	// Get actual execution ID (kept in its own map so it is never clobbered by
