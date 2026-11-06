@@ -12,6 +12,16 @@ This directory contains the Docker container images for the Cronium runtime envi
 > mirror. CI (`scripts/check-sdk-sync.sh`, run via the `sdk-sync` job) fails if
 > the two ever drift.
 
+## How jobs get these images
+
+CI publishes `bash/`, `python/` and `nodejs/` as
+`ghcr.io/addison-moore/cronium-runner-bash`, `cronium-runner-python` and
+`cronium-runner-node`, with the same tags as the app and orchestrator. An orchestrator
+pulls the ones published with it when a job needs them and nothing else is configured. `pnpm dev:docker:build` builds them as
+`cronium/runner:bash-alpine`, `cronium/runner:python-alpine` and `cronium/runner:node-alpine`,
+which a job uses if they're there. See "The images a job runs in" in
+[docs/DEPLOYMENT.md](../../../docs/DEPLOYMENT.md#the-images-a-job-runs-in).
+
 ## Images
 
 ### Base Image (`cronium/base`)
