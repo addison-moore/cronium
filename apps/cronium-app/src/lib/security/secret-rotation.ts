@@ -1,17 +1,19 @@
 /**
  * Secret key-rotation driver (security plan Phase 2.1: 559/565).
  *
- * Re-encrypts every at-rest secret from a retired key onto the active key. It is
- * SAFE and RESUMABLE by construction:
+ * Re-encrypts every at-rest secret from a retired key onto the active key, along
+ * with the env var copies held by jobs that haven't finished. It is SAFE and
+ * RESUMABLE by construction:
  *
  *   - Both keys stay in the ring during rotation (active = ENCRYPTION_KEY,
- *     retired = ENCRYPTION_KEYS_RETIRED), so every row decrypts throughout —
- *     the app keeps working while rotation runs.
+ *     retired = ENCRYPTION_KEYS_RETIRED), so every row decrypts throughout, for a
+ *     process holding both. A running service still on the old key can't read a
+ *     row this driver has moved, so the services need both keys before it runs.
  *   - It is idempotent: a row already under the active key is skipped
  *     (vault: `needsReencryption`; credentials: `isUnderActiveKey`). Re-running
  *     after an interruption simply finishes the remainder — that is the
- *     interrupted-rotation recovery. To ROLL BACK, run again with the keys
- *     swapped (old active, new retired).
+ *     interrupted-rotation recovery. To ROLL BACK, restart the services with the
+ *     keys swapped (old active, new retired), then run again with the same keys.
  *   - Each row is one UPDATE; a row that can't be read or written is recorded as an
  *     error and skipped rather than aborting the whole run.
  *   - It never overwrites a newer value. The app keeps running during this, so each
@@ -21,20 +23,26 @@
  *   - Decryption is authenticated (AES-GCM + AAD binding), so a wrong key or
  *     binding throws — it can never write mis-bound ciphertext.
  *
- * Operator runbook:
- *   1. ENCRYPTION_KEY=<new>, ENCRYPTION_KEYS_RETIRED=["<old>"]
- *   2. run this driver until it reports 0 remaining
- *   3. remove <old> from ENCRYPTION_KEYS_RETIRED
+ * Operator runbook: "Key rotation" in docs/ENVIRONMENT_VARIABLES.md. The order
+ * matters, because the wrong one loses data:
+ *   1. restart the services with ENCRYPTION_KEY=<new>, ENCRYPTION_KEYS_RETIRED=["<old>"]
+ *   2. run this driver until it reports 0 re-encrypted
+ *   3. remove <old> and restart the services
  *
  * Values from before the vault are not this driver's job, though it counts them as
  * `legacy`: `legacy-secrets.ts` moves them into it.
  */
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { isSystemSettingSensitive } from "@/lib/encryption-service";
+import { NON_TERMINAL_JOB_STATUSES } from "@/lib/scheduling/job-transition";
 import { db } from "@/server/db";
 import {
+  apiTokens,
   servers,
   envVars,
+  jobs,
   systemSettings,
+  TokenStatus,
   users,
   userVariables,
   webhooks,
@@ -89,8 +97,9 @@ export interface SurfaceResult {
   changedDuringRun: number;
   // Values in an always-secret column that `legacy-secrets.ts` still has to deal with
   // and this driver can't. On servers, env vars and MFA secrets they are static-AAD
-  // ciphertext or plaintext. Elsewhere they're plaintext, or on tool credentials a row
-  // whose `encrypted` flag doesn't match what it holds.
+  // ciphertext or plaintext. On webhooks, variables, tool credentials and OAuth tokens
+  // they're plaintext, or on tool credentials a row whose `encrypted` flag doesn't match
+  // what it holds. Elsewhere `legacyAdvice` says what they are.
   legacy: number;
   /**
    * The part of `legacy` that has the shape of static-AAD ciphertext, which only opens
@@ -98,6 +107,13 @@ export interface SurfaceResult {
    * can't orphan the rest.
    */
   legacyCiphertext: number;
+  /**
+   * Where the general warnings don't fit: a sentence following the count, saying what
+   * these are and what to do about them.
+   */
+  legacyAdvice?: string;
+  /** Which rows `legacy` counts, for that advice. Never a stored value. */
+  legacyNames?: string[];
 }
 
 export interface RotationReport {
@@ -106,7 +122,7 @@ export interface RotationReport {
   totalReencrypted: number;
   totalErrors: number;
   totalLegacy: number;
-  /** The part of totalLegacy that a key change can't orphan. */
+  /** What a key change can't orphan, among values with no `legacyAdvice` of their own. */
   plaintextLegacy: number;
   totalChangedDuringRun: number;
   /**
@@ -264,8 +280,102 @@ async function rotateEnvVars(dryRun: boolean): Promise<SurfaceResult> {
   return r;
 }
 
+/**
+ * A job copies its event's env vars into `payload.environment` when it's queued and
+ * reads that copy when it's claimed, under the same binding as `env_vars.value`. So a
+ * job still waiting when the old key goes fails, however well its event's rows moved.
+ *
+ * Finished jobs are left out. Terminal states are absorbing, so nothing decrypts their
+ * copies again, and there can be a lot of them.
+ *
+ * Job rows change constantly, with lease renewals and status changes, so a row version
+ * would miss for no reason. This writes only the values it moved, and only if they're
+ * still what it read. Nothing else writes `payload` after a job is created, so a miss
+ * shouldn't happen. If one does, it counts as changed during the run, as it does on the
+ * other surfaces, because that copy may still be under the old key. A later pass
+ * finishes it.
+ */
+async function rotateJobEnvironments(dryRun: boolean): Promise<SurfaceResult> {
+  const legacyJobs: string[] = [];
+  const r: SurfaceResult = {
+    ...emptyResult("jobs.payload.environment"),
+    legacyAdvice:
+      "env var value(s) copied into unfinished jobs aren't in the vault, so this driver can't move them, and those jobs fail with \"Could not prepare this job to run\" once ENCRYPTION_KEY isn't the key they were saved under. Let these jobs finish before the key changes, or cancel them and run their events again:",
+    legacyNames: legacyJobs,
+  };
+  const rows = await db
+    .select({
+      id: jobs.id,
+      eventId: jobs.eventId,
+      environment: sql<Record<string, unknown>>`${jobs.payload}->'environment'`,
+    })
+    .from(jobs)
+    .where(
+      and(
+        inArray(jobs.status, NON_TERMINAL_JOB_STATUSES),
+        sql`jsonb_typeof(${jobs.payload}->'environment') = 'object'`,
+      ),
+    );
+  for (const row of rows) {
+    const read: [string, string][] = [];
+    const moved: [string, string][] = [];
+    for (const [key, value] of Object.entries(row.environment)) {
+      r.scanned++;
+      if (typeof value !== "string") {
+        r.skipped++;
+      } else if (!isSecretEnvelope(value) && looksLikeLegacyCiphertext(value)) {
+        // Unlike `env_vars.value`, plaintext isn't counted: it reads back under any
+        // key, and nothing will ever encrypt this copy.
+        r.legacy++;
+        if (legacyJobs.at(-1) !== row.id) legacyJobs.push(row.id);
+      } else if (!vaultNeedsReencrypt(value)) {
+        r.skipped++;
+      } else {
+        try {
+          const pt = decryptEnvVarValue(value, row.eventId, key);
+          moved.push([key, encryptEnvVarValue(pt, row.eventId, key)]);
+          read.push([key, value]);
+        } catch (e) {
+          r.errors++;
+          logRowError(r.surface, row.id, "environment", e);
+        }
+      }
+    }
+    if (moved.length === 0) continue;
+    if (dryRun) {
+      r.reencrypted += moved.length;
+      continue;
+    }
+    try {
+      const written = await db
+        .update(jobs)
+        .set({
+          payload: sql`jsonb_set(${jobs.payload}, '{environment}', (${jobs.payload}->'environment') || ${JSON.stringify(Object.fromEntries(moved))}::jsonb)`,
+        })
+        .where(
+          and(
+            eq(jobs.id, row.id),
+            sql`${jobs.payload}->'environment' @> ${JSON.stringify(Object.fromEntries(read))}::jsonb`,
+          ),
+        );
+      if ((written.rowCount ?? 0) > 0) r.reencrypted += moved.length;
+      else r.changedDuringRun += moved.length;
+    } catch (e) {
+      r.errors += moved.length;
+      logRowError(r.surface, row.id, "environment", e);
+    }
+  }
+  return r;
+}
+
 async function rotateSystemSettings(dryRun: boolean): Promise<SurfaceResult> {
-  const r = emptyResult("system_settings.value");
+  const legacySettings: string[] = [];
+  const r: SurfaceResult = {
+    ...emptyResult("system_settings.value"),
+    legacyAdvice:
+      "sensitive setting(s) aren't in the vault. Older ciphertext can only be read while ENCRYPTION_KEY is the key it was saved under, and after that the app uses the ciphertext as the value. To move them into the vault, run this again with --encrypt-legacy before the key changes:",
+    legacyNames: legacySettings,
+  };
   const rows = await db
     .select({
       key: systemSettings.key,
@@ -276,6 +386,12 @@ async function rotateSystemSettings(dryRun: boolean): Promise<SurfaceResult> {
     .orderBy(asc(systemSettings.id));
   for (const row of rows) {
     r.scanned++;
+    // Only the sensitive keys are meant to be encrypted. The rest are plain by design.
+    if (isSystemSettingSensitive(row.key) && isLegacyValue(row.value)) {
+      r.legacy++;
+      legacySettings.push(row.key);
+      continue;
+    }
     if (!vaultNeedsReencrypt(row.value)) {
       r.skipped++;
       continue;
@@ -523,6 +639,52 @@ async function rotateOauthTokens(dryRun: boolean): Promise<SurfaceResult> {
   return r;
 }
 
+// What `hashApiToken` stores. `storage.getApiTokenByToken` tells old tokens apart
+// from hashed ones the same way.
+const HASHED_API_TOKEN = /^[0-9a-f]{64}$/;
+
+/**
+ * API tokens from before hashing are ciphertext, hashed the first time each is used.
+ * That lookup decrypts with the active key alone, so one nobody has used by the time
+ * the key changes gets a 401 from then on. Only reports them, so it writes nothing.
+ *
+ * Revoked and expired tokens get a 401 either way, so they aren't counted.
+ */
+async function reportUnhashedApiTokens(): Promise<SurfaceResult> {
+  const unhashed: string[] = [];
+  const r: SurfaceResult = {
+    ...emptyResult("api_tokens.token"),
+    legacyAdvice:
+      "API token(s) haven't been used since tokens began to be stored hashed, and get a 401 once ENCRYPTION_KEY isn't the key they were saved under. Use each one once before the key changes, which hashes it, or issue a new one:",
+    legacyNames: unhashed,
+  };
+  const rows = await db
+    .select({
+      id: apiTokens.id,
+      name: apiTokens.name,
+      token: apiTokens.token,
+      status: apiTokens.status,
+      expiresAt: apiTokens.expiresAt,
+    })
+    .from(apiTokens)
+    .orderBy(asc(apiTokens.id));
+  const now = Date.now();
+  for (const row of rows) {
+    r.scanned++;
+    const usable =
+      row.status === TokenStatus.ACTIVE &&
+      !(row.expiresAt && row.expiresAt.getTime() < now);
+    if (usable && !HASHED_API_TOKEN.test(row.token)) {
+      r.legacy++;
+      // Stringified because a name can hold anything, and this goes to a terminal.
+      unhashed.push(`id=${row.id} ${JSON.stringify(row.name)}`);
+    } else {
+      r.skipped++;
+    }
+  }
+  return r;
+}
+
 function logRowError(
   surface: string,
   id: string,
@@ -546,12 +708,17 @@ export async function rotateAllSecrets(
   const surfaces: SurfaceResult[] = [];
   surfaces.push(await rotateServers(dryRun));
   surfaces.push(await rotateEnvVars(dryRun));
+  // After env_vars, because jobs copy those rows when they're queued. A job queued from
+  // a row that hadn't moved yet is caught here, or by the next pass if it's queued after
+  // this scan, which is why the runbook repeats until a pass moves nothing.
+  surfaces.push(await rotateJobEnvironments(dryRun));
   surfaces.push(await rotateSystemSettings(dryRun));
   surfaces.push(await rotateMfaSecrets(dryRun));
   surfaces.push(await rotateUserVariables(dryRun));
   surfaces.push(await rotateWebhooks(dryRun));
   surfaces.push(await rotateToolCredentials(dryRun));
   surfaces.push(await rotateOauthTokens(dryRun));
+  surfaces.push(await reportUnhashedApiTokens());
 
   const totalReencrypted = surfaces.reduce((n, s) => n + s.reencrypted, 0);
   const totalErrors = surfaces.reduce((n, s) => n + s.errors, 0);
@@ -570,8 +737,9 @@ export async function rotateAllSecrets(
     totalReencrypted,
     totalErrors,
     totalLegacy,
-    plaintextLegacy:
-      totalLegacy - surfaces.reduce((n, s) => n + s.legacyCiphertext, 0),
+    plaintextLegacy: surfaces
+      .filter((s) => !s.legacyAdvice)
+      .reduce((n, s) => n + s.legacy - s.legacyCiphertext, 0),
     totalChangedDuringRun,
     remaining,
   };

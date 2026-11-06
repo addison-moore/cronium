@@ -43,7 +43,7 @@ import {
 import { pool } from "@/server/db";
 import { storage } from "@/server/storage";
 import { closePool, resetDatabase } from "./helpers/db-reset";
-import { seedEvent, seedServer, seedUser } from "./helpers/seed";
+import { seedEvent, seedJob, seedServer, seedUser } from "./helpers/seed";
 
 // jest-circus only reads a global testTimeout, so the one on this project in
 // jest.config.js has no effect and the default here would be 5 seconds.
@@ -314,7 +314,7 @@ const SURFACES: Surface[] = [
   },
 ];
 
-const TRIGGERS_ON = SURFACES.map((s) => s.table);
+const TRIGGERS_ON = [...SURFACES.map((s) => s.table), "jobs"];
 
 const literal = (id: number | string) =>
   typeof id === "number" ? String(id) : `'${id}'`;
@@ -543,6 +543,66 @@ describe("a value in a row that moved on", () => {
     expect(
       decryptWebhookHeaders(after[0]!.headers, after[0]!.key, OWNER),
     ).toEqual({ "X-Token": "token-2" });
+  });
+});
+
+describe("an env var copy in a job that changes during the run", () => {
+  it("isn't called done: the CLI exits 1, and the next run finishes it", async () => {
+    const eventId = await seedEvent(OWNER);
+    const seed = (id: string) =>
+      seedJob(eventId, OWNER, {
+        id,
+        payload: {
+          script: { type: "BASH", content: "echo hi" },
+          environment: {
+            TOKEN: encryptEnvVarValue("original", eventId, "TOKEN"),
+          },
+        } as never,
+      });
+    await seed("job-first");
+    await seed("job-second");
+    const saved = encryptEnvVarValue("saved-during-the-run", eventId, "TOKEN");
+    useKeys(NEW_KEY, [OLD_KEY]);
+    await pool.query(
+      `CREATE FUNCTION rotation_test_fn() RETURNS trigger LANGUAGE plpgsql AS $$
+       BEGIN
+         IF OLD.id = 'job-first' THEN
+           UPDATE jobs SET payload = jsonb_set(payload, '{environment,TOKEN}', to_jsonb('${saved}'::text))
+           WHERE id = 'job-second';
+         END IF;
+         RETURN NEW;
+       END $$`,
+    );
+    await pool.query(
+      `CREATE TRIGGER rotation_test_trigger AFTER UPDATE ON jobs
+       FOR EACH ROW EXECUTE FUNCTION rotation_test_fn()`,
+    );
+    const stored = async () => {
+      const { rows } = await pool.query<{ token: string }>(
+        `SELECT payload->'environment'->>'TOKEN' AS token FROM jobs WHERE id = 'job-second'`,
+      );
+      return rows[0]!.token;
+    };
+
+    const { code, output } = await runCli();
+
+    expect(code).toBe(1);
+    expect(output).toContain(
+      "jobs.payload.environment: scanned=2 re-encrypted=1 skipped=0 legacy=0 changed-during-run=1 errors=0",
+    );
+    expect(output).not.toContain("Rotation pass complete");
+    expect(await stored()).toBe(saved);
+
+    await dropTriggers();
+    const next = await runCli();
+
+    expect(next.code).toBe(0);
+    expect(next.output).toContain("Rotation pass complete");
+    expect((await stored()).split(".")[2]).toBe(activeKeyId());
+    useKeys(NEW_KEY);
+    expect(decryptEnvVarValue(await stored(), eventId, "TOKEN")).toBe(
+      "saved-during-the-run",
+    );
   });
 });
 

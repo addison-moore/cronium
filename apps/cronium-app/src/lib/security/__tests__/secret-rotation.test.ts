@@ -33,10 +33,13 @@ import {
   encryptWebhookSecret,
 } from "@/lib/webhooks/webhook-secret";
 import {
+  apiTokens,
   envVars,
+  jobs,
   oauthTokens,
   servers,
   systemSettings,
+  TokenStatus,
   toolCredentials,
   userVariables,
   users,
@@ -59,6 +62,7 @@ jest.mock("@/server/db", () => ({
     select: () => ({
       from: (table: unknown) => ({
         orderBy: async () => mockDatabase.rows.get(table) ?? [],
+        where: async () => mockDatabase.rows.get(table) ?? [],
       }),
     }),
     update: (table: unknown) => ({
@@ -536,6 +540,138 @@ describe("a value it can't read", () => {
       expect(report.remaining).toBe(1);
     },
   );
+});
+
+describe("env var copies in unfinished jobs", () => {
+  const jobRow = (environment: Record<string, unknown>) => ({
+    id: "job-1",
+    eventId: 42,
+    environment,
+  });
+
+  it("moves them, and counts one that changed as changed, so a run isn't called done", async () => {
+    mockDatabase.rows.set(jobs, [
+      jobRow({ TOKEN: under(() => encryptEnvVarValue("v", 42, "TOKEN")) }),
+    ]);
+
+    const moved = await rotateAllSecrets();
+    expect(surface(moved, "jobs.payload.environment").reencrypted).toBe(1);
+
+    mockDatabase.writeResult = () => ({ rowCount: 0 });
+    const missed = await rotateAllSecrets();
+    expect(surface(missed, "jobs.payload.environment")).toMatchObject({
+      reencrypted: 0,
+      skipped: 0,
+      changedDuringRun: 1,
+    });
+    expect(missed.totalChangedDuringRun).toBe(1);
+    expect(missed.remaining).toBe(1);
+  });
+
+  it("names a copy from before the vault, and leaves plaintext and non-strings", async () => {
+    mockDatabase.rows.set(jobs, [
+      jobRow({
+        OLD: staticAad("an old value", OLD_KEY),
+        PLAIN: "plain",
+        NUMBER: 5,
+      }),
+    ]);
+
+    const report = await rotateAllSecrets();
+
+    const result = surface(report, "jobs.payload.environment") as {
+      legacy: number;
+      skipped: number;
+      legacyNames?: string[];
+    };
+    expect(result).toMatchObject({ legacy: 1, skipped: 2 });
+    expect(result.legacyNames).toEqual(["job-1"]);
+    expect(report.plaintextLegacy).toBe(0);
+    expect(mockDatabase.writes).toEqual([]);
+  });
+
+  it("records an error for a copy it can't read, or can't write", async () => {
+    const logged = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    mockDatabase.rows.set(jobs, [jobRow({ BAD: "crn.1.canary.a.b.c" })]);
+
+    const unreadable = await rotateAllSecrets();
+    expect(surface(unreadable, "jobs.payload.environment").errors).toBe(1);
+
+    mockDatabase.rows.set(jobs, [
+      jobRow({ TOKEN: under(() => encryptEnvVarValue("v", 42, "TOKEN")) }),
+    ]);
+    mockDatabase.writeResult = () => {
+      throw new Error("Failed query: params: crn.1.secret");
+    };
+    const unwritten = await rotateAllSecrets();
+    expect(surface(unwritten, "jobs.payload.environment").errors).toBe(1);
+    const output = logged.mock.calls.flat().join("\n");
+    expect(output).not.toContain("canary");
+    expect(output).not.toContain("crn.1.");
+  });
+});
+
+describe("what it only reports, with advice of its own", () => {
+  it("names sensitive settings outside the vault and points at --encrypt-legacy", async () => {
+    mockDatabase.rows.set(systemSettings, [
+      {
+        key: "smtpPassword",
+        value: staticAad("an old password", OLD_KEY),
+        version: VERSION,
+      },
+      { key: "openaiApiKey", value: "a plaintext key", version: VERSION },
+      { key: "smtpHost", value: "mail.example.test", version: VERSION },
+    ]);
+
+    const report = await rotateAllSecrets();
+
+    const result = surface(report, "system_settings.value") as {
+      legacy: number;
+      legacyNames?: string[];
+      legacyAdvice?: string;
+    };
+    expect(result.legacy).toBe(2);
+    expect(result.legacyNames).toEqual(["smtpPassword", "openaiApiKey"]);
+    expect(result.legacyAdvice).toContain("--encrypt-legacy");
+    // They have their own warning, so they aren't in the general ones as well.
+    expect(report.totalLegacy).toBe(2);
+    expect(report.plaintextLegacy).toBe(0);
+    expect(mockDatabase.writes).toEqual([]);
+  });
+
+  it("names API tokens from before hashing that a key change would break", async () => {
+    const usable = { status: TokenStatus.ACTIVE, expiresAt: null };
+    mockDatabase.rows.set(apiTokens, [
+      { id: 1, name: "old", token: "not-a-hash", ...usable },
+      { id: 2, name: "hashed", token: "ab".repeat(32), ...usable },
+      {
+        id: 3,
+        name: "revoked",
+        token: "not-a-hash",
+        status: TokenStatus.REVOKED,
+      },
+      {
+        id: 4,
+        name: "expired",
+        token: "not-a-hash",
+        status: TokenStatus.ACTIVE,
+        expiresAt: new Date(0),
+      },
+    ]);
+
+    const report = await rotateAllSecrets();
+
+    const result = surface(report, "api_tokens.token") as {
+      legacy: number;
+      skipped: number;
+      legacyNames?: string[];
+    };
+    expect(result).toMatchObject({ legacy: 1, skipped: 3 });
+    expect(result.legacyNames).toEqual(['id=1 "old"']);
+    expect(report.plaintextLegacy).toBe(0);
+  });
 });
 
 describe("what it can't move", () => {
