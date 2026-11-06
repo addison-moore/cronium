@@ -17,7 +17,13 @@ export type ZoneEntry =
   | typeof NEVER
   | "SERVFAIL"
   | "REFUSED"
-  | { A?: FamilyAnswer; AAAA?: FamilyAnswer; CNAME?: string };
+  | {
+      A?: FamilyAnswer;
+      AAAA?: FamilyAnswer;
+      CNAME?: string;
+      /** How long to take over each reply. */
+      delayMs?: number;
+    };
 
 const TYPE_A = 1;
 const TYPE_CNAME = 5;
@@ -119,7 +125,11 @@ export async function startNameServer(
 
     const answer = family ? entry[family] : undefined;
     if (answer === NEVER) return;
-    if (typeof answer === "string") return send(RCODE[answer]!);
+    const respond = (rcode: number, records: Buffer[] = []) => {
+      if (entry.delayMs) setTimeout(() => send(rcode, records), entry.delayMs);
+      else send(rcode, records);
+    };
+    if (typeof answer === "string") return respond(RCODE[answer]!);
 
     // Owned by the alias's target when there is one, as a real chain is.
     const records: Buffer[] = [];
@@ -135,7 +145,7 @@ export async function startNameServer(
           : record(owner, TYPE_AAAA, encodeIpv6(address)),
       );
     }
-    send(0, records);
+    respond(0, records);
   });
 
   await new Promise<void>((resolve) => socket.bind(0, "127.0.0.1", resolve));
