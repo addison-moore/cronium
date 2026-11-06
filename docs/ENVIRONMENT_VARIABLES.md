@@ -516,9 +516,22 @@ openssl rand -base64 32  # For SOCKET_BROADCAST_KEY
 
 ## Key rotation (`ENCRYPTION_KEY`)
 
-Rotating the data encryption key re-encrypts every at-rest secret onto a new key
-without downtime. The keyring keeps both keys available during the rotation, so
-the app keeps decrypting throughout.
+Rotating the data encryption key re-encrypts every at-rest secret onto a new key. It
+needs two restarts of the two services that use the key, `cronium-app` and
+`cronium-worker`, so it isn't free of downtime. See
+[What stops working](#what-stops-working) below. Between the two restarts every row
+stays readable, because both services hold both keys.
+
+**Every service must hold both keys before any row moves.** Exporting the keys in a
+shell reaches the driver, not the services, which read them when they start. A service
+still on the old key can't read a row the driver has moved: signed webhooks get a 500,
+the variables page and `cronium.getVariable()` fail, tool credentials and env vars come
+back empty, and an MFA sign-in is refused as a wrong code. Saving an event's form in
+that state stores its env vars blank, for good. That service also keeps writing with
+the old key, so a value saved after the driver's last pass can't be read once the old
+key is gone, and one such variable fails its owner's whole variables page. If this has
+happened, restart the services with both keys and run the driver again. Everything
+except those blanked env vars comes back, as long as you still have the old key.
 
 The driver (`pnpm --filter @cronium/app rotate:secrets`, i.e.
 `src/scripts/rotate-secrets.ts`) is **idempotent and resumable**: it skips values
@@ -527,27 +540,114 @@ the remainder, and it updates each row independently. Decryption is
 authenticated, so a wrong key/binding fails safely (recorded as an error, never
 written) rather than corrupting data.
 
-Run it from a source checkout (it needs `tsx`, a devDependency) pointed at the
-target `DATABASE_URL`:
+Run it from a source checkout (it needs `tsx`, a devDependency), with the instance's
+`.env` values loaded and its `DATABASE_URL` reachable from where you run it. It won't
+start without `AUTH_SECRET`, `AUTH_URL` and `PUBLIC_APP_URL`. `docker-compose.example.yml`
+doesn't publish Postgres, so that takes a temporary port on loopback. Adding one
+recreates the Postgres container, which held up requests for about a second in a test.
+The steps below use Docker Compose. Anywhere else, restart every process holding the key
+instead: the app, the socket server and the worker.
 
 ```bash
-# 1. Generate a new key
+# 1. Back up the database, generate a new key and preview the run. Nothing moves and
+#    nothing restarts. These exports reach only the driver, in this shell.
 NEW=$(openssl rand -hex 32)
-
-# 2. Make the new key active and keep the old one in the ring
 export ENCRYPTION_KEY="$NEW"
 export ENCRYPTION_KEYS_RETIRED='["<old-hex-key>"]'
-
-# 3. Dry-run to preview, then rotate (re-run until "re-encrypted: 0")
 pnpm --filter @cronium/app rotate:secrets --dry-run
-pnpm --filter @cronium/app rotate:secrets
 
-# 4. Once 0 remain, drop the old key from the ring and restart the services
-unset ENCRYPTION_KEYS_RETIRED   # and remove it from .env
+# 2. Fix anything in "Before step 3" below. Then let running scripts finish: stopping
+#    the worker holds back scheduled runs. A tool action or HTTP request running in the
+#    worker stops with it, as at any restart. Wait for this to say 0.
+docker compose stop cronium-worker
+docker compose exec postgres psql -U cronium -d cronium -c \
+  "SELECT count(*) FROM jobs WHERE type = 'SCRIPT' AND status IN ('claimed', 'running');"
+
+# 3. Give both services both keys. Change these two lines in .env, keeping the single
+#    quotes, and restart. docker compose restart wouldn't load them.
+#      ENCRYPTION_KEY=<new-hex-key>
+#      ENCRYPTION_KEYS_RETIRED='["<old-hex-key>"]'
+docker compose up -d --no-deps cronium-app cronium-worker
+
+# Check that both services have the old key, then that a variable or a webhook still
+# reads. If either fails, nothing has moved yet: put the old values back and restart.
+docker compose exec cronium-app printenv ENCRYPTION_KEYS_RETIRED
+docker compose exec cronium-worker printenv ENCRYPTION_KEYS_RETIRED
+
+# 4. Move the rows. Re-run until it prints "Total re-encrypted: 0; errors: 0", then note
+#    the time.
+pnpm --filter @cronium/app rotate:secrets
+date -u '+%F %T'
+
+# 5. Jobs queued before then can hold their own copies of their env vars, which the
+#    driver doesn't touch and only the old key can read. Wait for this to say 0.
+docker compose exec postgres psql -U cronium -d cronium -c \
+  "SELECT count(*) FROM jobs WHERE status IN ('queued', 'claimed', 'running') AND created_at < '<time from step 4>';"
+
+# 6. Remove the ENCRYPTION_KEYS_RETIRED line from .env and restart.
+docker compose up -d --no-deps cronium-app cronium-worker
+
+# 7. The orchestrator and runtime also load .env, and until they restart their
+#    environment still holds the old key, though neither uses it. When no script is
+#    running, recreate them. This leaves the app and worker alone.
+docker compose up -d
 ```
 
-To **roll back** mid-rotation, run again with the keys swapped (old active, new
-retired). The driver **warns** about any `legacy` (pre-vault) values still bound
-to the current key: those cannot be rotated and must first be migrated to vault
-envelopes (they re-encrypt automatically the next time their record is saved) —
-rotating the key while legacy values remain would orphan them.
+Keep the old key for as long as you keep a backup taken before the rotation. Those
+backups can't be read without it.
+
+### Before step 3
+
+- **`errors` isn't 0 in the dry run, or `legacy` isn't 0 on `servers`, `env_vars` or
+  `users.mfaSecret`.** Those values are bound to the current key and a retired key can't
+  read them, so they stop working at step 3: an env var reads back blank. Save them
+  again first, which re-encrypts them. On webhooks and variables `legacy` means plaintext,
+  which a key change doesn't affect.
+- **Settings stored outside the vault.** The driver reports these as `skipped`, not
+  `legacy`. The bootstrap seed writes `SMTP_PASSWORD` this way. After step 3 the app
+  can't read it and uses the ciphertext as the password, with only a log line to show
+  for it. Save each one again in the admin settings:
+
+  ```bash
+  docker compose exec postgres psql -U cronium -d cronium -c \
+    "SELECT key FROM system_settings WHERE key IN ('smtpPassword', 'openaiApiKey', 'anthropicApiKey', 'geminiApiKey', 'customAiApiKey') AND value <> '' AND value NOT LIKE 'crn.%';"
+  ```
+
+- **API tokens from before they were hashed.** Each is hashed the first time it's used.
+  One nobody has used since stops working at step 3, with a 401, and has to be replaced.
+  Use it once first, or issue a new one:
+
+  ```bash
+  docker compose exec postgres psql -U cronium -d cronium -c \
+    "SELECT id, name FROM api_tokens WHERE status = 'ACTIVE' AND token !~ '^[0-9a-f]{64}$';"
+  ```
+
+### What stops working
+
+- **Each restart in steps 3 and 6 is an outage.** On a Mac, with the published compose
+  file and the real image, the app answered nothing for about 3 seconds each time, and
+  the worker was down for about 12 while it waited for the app to be healthy. Requests
+  in that window fail, including webhooks sent to Cronium, so a sender needs to retry.
+  Nothing is dispatched until the worker is back. Signed-in users stay signed in.
+- **Nothing stops between the restarts.** About 500 requests to the app all succeeded
+  while the driver moved 20,000 rows, so steps 4 and 5 can take as long as they need.
+- **A script running at step 3 can't finish cleanly, which is why step 2 waits.** Its
+  token is signed with the old key and the app stops accepting it, so its
+  `cronium.getVariable()` calls and its completion report get a 403 and its result is
+  lost. A minute or two later it's marked failed with `Lease expired`, or, if the event
+  has retries, it runs again from the start, even if its script had already finished.
+  At step 6 the signing key doesn't change, and a running script finished normally.
+- **Step 7, or a plain `docker compose up -d` in place of steps 3 and 6, recreates the
+  orchestrator,** because all four services load `.env`. A script running then ends the
+  same way and leaves its containers behind, and the app is down for about 17 seconds
+  if it's recreated too, because Compose waits for the orchestrator to stop first.
+- **A job still queued when the old key goes fails,** with
+  `Could not prepare this job to run`, which is why step 5 waits. Running the event
+  again works.
+
+### Rolling back
+
+To **roll back** mid-rotation, do the same with the keys swapped, services first: in
+`.env`, old key active and new key retired, restart as in step 3, run the driver with
+the same two values until it reports 0, then drop the new key and restart as in step 6.
+Changing the active key again has the same effect on running scripts as step 3.
