@@ -73,6 +73,10 @@ async function createDatabase(): Promise<{ url: string; pool: Pool }> {
   await harnessPool.query(`CREATE DATABASE "${name}"`);
   const url = urlOf(name);
   const pool = new Pool({ connectionString: url });
+  // pool.end() can resolve with a client still closing, so the DROP ... WITH (FORCE)
+  // in afterAll has Postgres terminate it. pg-pool emits that as `error` on the pool,
+  // and with no listener it's an uncaught exception, which Jest pins on a random test.
+  pool.on("error", () => undefined);
   openDatabases.push({ name, pool });
   return { url, pool };
 }

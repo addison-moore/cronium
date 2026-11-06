@@ -9,6 +9,7 @@ import {
   legacyEventPatchSchema,
   MAX_ENV_VAR_KEY_LENGTH,
   MAX_ENV_VAR_VALUE_BYTES,
+  MAX_ENV_VARS,
   MAX_ENV_VARS_TOTAL_BYTES,
   updateEventSchema,
 } from "../events";
@@ -114,12 +115,24 @@ describe("an event's environment variables together", () => {
     expect(over.success).toBe(false);
     expect(messagesFor(over)[0]).toContain("at most 1 MB in total");
   });
+
+  it("takes up to the most variables, and refuses one more", () => {
+    const variables = (count: number) =>
+      Array.from({ length: count }, (_, n) => ({ key: `K${n}`, value: "v" }));
+
+    expect(envVarsSchema.safeParse(variables(MAX_ENV_VARS)).success).toBe(true);
+    expect(
+      messagesFor(envVarsSchema.safeParse(variables(MAX_ENV_VARS + 1))),
+    ).toEqual(["An event can have at most 1,000 environment variables"]);
+  });
 });
 
 describe("the limits against what Linux refuses", () => {
   // Measured in the runner images and through the runner on Linux, with an 8 MiB stack.
   const LONGEST_STRING = 131_072;
   const LONGEST_ENVIRONMENT = 2 * 1024 * 1024;
+  // What each variable costs exec beyond its key and value: `=`, NUL and a pointer.
+  const OVERHEAD_PER_VARIABLE = 1 + 1 + 8;
 
   it("always fits `KEY=value` and its NUL, whatever the key", () => {
     const longestKeyBytes = MAX_ENV_VAR_KEY_LENGTH * 3;
@@ -128,10 +141,11 @@ describe("the limits against what Linux refuses", () => {
     );
   });
 
-  it("leaves room for a script as long as an argument can be", () => {
-    expect(MAX_ENV_VARS_TOTAL_BYTES + LONGEST_STRING).toBeLessThan(
-      LONGEST_ENVIRONMENT,
-    );
+  it("leaves half of what exec takes for the rest of a process's environment and arguments", () => {
+    const mostAnEventCanUse =
+      MAX_ENV_VARS_TOTAL_BYTES + MAX_ENV_VARS * OVERHEAD_PER_VARIABLE;
+
+    expect(mostAnEventCanUse).toBeLessThan(LONGEST_ENVIRONMENT / 2);
   });
 });
 

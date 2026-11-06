@@ -15,6 +15,11 @@
  *   clients can gate approval appropriately.
  */
 import type { createCaller } from "@/server/api/root";
+import {
+  MAX_ENV_VAR_VALUE_BYTES,
+  MAX_ENV_VARS,
+  MAX_ENV_VARS_TOTAL_BYTES,
+} from "@/shared/schemas/events";
 
 type Caller = ReturnType<typeof createCaller>;
 
@@ -89,7 +94,7 @@ const EVENT_PROPS: Record<string, unknown> = {
   tags: { type: "array", items: { type: "string" } },
   envVars: {
     type: "array",
-    description: "A value can be up to 128 KB, and all of them up to 1 MB.",
+    description: `Up to ${MAX_ENV_VARS.toLocaleString("en-US")} variables. A value can be up to ${MAX_ENV_VAR_VALUE_BYTES / 1_000} KB, and all of them up to ${MAX_ENV_VARS_TOTAL_BYTES / 1_000_000} MB.`,
     items: {
       type: "object",
       properties: { key: { type: "string" }, value: { type: "string" } },
