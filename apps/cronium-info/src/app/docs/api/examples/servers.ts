@@ -152,6 +152,8 @@ export const serverEndpoints: readonly ApiEndpoint[] = [
     parameters: [serverId],
     status: 200,
     response: responseExamples.serverDeleted,
+    notes:
+      "An active script event that runs only on servers and has no other is paused, and a schedule incident on it says why. One that also runs locally becomes LOCAL and keeps running.",
     example: apiExample({ method: "DELETE", path: "/api/servers/7" }),
   },
 ];

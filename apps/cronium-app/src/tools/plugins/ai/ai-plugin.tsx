@@ -304,8 +304,8 @@ function AiCredentialForm({ tool, onSubmit, onCancel }: CredentialFormProps) {
         />
         {modelError ? (
           <p className="text-warning-text mt-1 text-sm">
-            Couldn&apos;t fetch the live model list — showing common models.
-            Provider error: {modelError}
+            Couldn&apos;t fetch the live model list — showing common models.{" "}
+            {modelError}
           </p>
         ) : (
           modelSource === "fallback" &&

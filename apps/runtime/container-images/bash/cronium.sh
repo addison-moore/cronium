@@ -35,25 +35,29 @@ export CRONIUM_RUNTIME_API="${CRONIUM_RUNTIME_API:-http://localhost:8081}"
 # token.
 export -n _cronium_token="${CRONIUM_EXECUTION_TOKEN:-}"
 
-# Check required environment variables
-if [ -z "$_cronium_token" ]; then
-    echo "Error: CRONIUM_EXECUTION_TOKEN environment variable not set" >&2
-    exit 1
-fi
-
-if [ -z "${CRONIUM_EXECUTION_ID:-}" ]; then
-    echo "Error: CRONIUM_EXECUTION_ID environment variable not set" >&2
-    exit 1
-fi
-
-# Check for required commands
-for _cronium_cmd in curl jq; do
-    if ! command -v "$_cronium_cmd" &> /dev/null; then
-        echo "Error: Required command '$_cronium_cmd' not found" >&2
-        exit 1
+# Says why the helpers can't work here, if they can't. Each one calls this first. Nothing
+# checks as this file loads, because it's sourced ahead of every job's script, where `exit`
+# would end the job before its first line, and a script that calls no helper needs none of
+# this. cronium_info doesn't call it, so that it can show what's missing.
+_cronium_ready() {
+    if [ -z "${CRONIUM_EXECUTION_TOKEN:-${_cronium_token:-}}" ]; then
+        echo "Error: CRONIUM_EXECUTION_TOKEN environment variable not set" >&2
+        return 1
     fi
-done
-unset _cronium_cmd
+
+    if [ -z "${CRONIUM_EXECUTION_ID:-}" ]; then
+        echo "Error: CRONIUM_EXECUTION_ID environment variable not set" >&2
+        return 1
+    fi
+
+    local cmd
+    for cmd in curl jq; do
+        if ! command -v "$cmd" &> /dev/null; then
+            echo "Error: Required command '$cmd' not found" >&2
+            return 1
+        fi
+    done
+}
 
 # Helper function to make API requests with retry logic
 _cronium_request() {
@@ -146,6 +150,7 @@ _cronium_request() {
 
 # Get input data for this execution
 cronium_input() {
+    _cronium_ready || return 1
     local response
     response=$(_cronium_request "GET" "/executions/${CRONIUM_EXECUTION_ID}/input")
     if [ $? -eq 0 ]; then
@@ -159,6 +164,7 @@ cronium_input() {
 
 # Set output data for this execution
 cronium_output() {
+    _cronium_ready || return 1
     local data="$1"
     
     # Anything that is not a single JSON value is sent as a string. Asking
@@ -174,6 +180,7 @@ cronium_output() {
 
 # Get a variable value
 cronium_get_variable() {
+    _cronium_ready || return 1
     local key="$1"
     local encoded_key=$(printf '%s' "$key" | jq -sRr @uri)
     local response
@@ -189,6 +196,7 @@ cronium_get_variable() {
 
 # Set a variable value
 cronium_set_variable() {
+    _cronium_ready || return 1
     local key="$1"
     local value="$2"
     local encoded_key=$(printf '%s' "$key" | jq -sRr @uri)
@@ -204,6 +212,7 @@ cronium_set_variable() {
 
 # Set workflow condition
 cronium_set_condition() {
+    _cronium_ready || return 1
     local condition="$1"
     
     # Convert to boolean
@@ -222,6 +231,7 @@ cronium_set_condition() {
 
 # Get event context
 cronium_event() {
+    _cronium_ready || return 1
     local response
     response=$(_cronium_request "GET" "/executions/${CRONIUM_EXECUTION_ID}/context")
     if [ $? -eq 0 ]; then
@@ -233,6 +243,7 @@ cronium_event() {
 
 # Get specific event field
 cronium_event_field() {
+    _cronium_ready || return 1
     local field="$1"
     # `== null` (not `//`): a field whose value is `false` must print.
     cronium_event | jq -r "if .$field == null then empty else .$field end"
@@ -240,6 +251,7 @@ cronium_event_field() {
 
 # Execute a tool action
 cronium_execute_tool_action() {
+    _cronium_ready || return 1
     local tool="$1"
     local action="$2"
     local config="$3"
@@ -268,6 +280,7 @@ cronium_execute_tool_action() {
 
 # Send an email
 cronium_send_email() {
+    _cronium_ready || return 1
     local to="$1"
     local subject="$2"
     local body="$3"
@@ -303,6 +316,7 @@ cronium_send_email() {
 
 # Send a Slack message
 cronium_send_slack_message() {
+    _cronium_ready || return 1
     local channel="$1"
     local text="$2"
     shift 2
@@ -336,6 +350,7 @@ cronium_send_slack_message() {
 
 # Send a Discord message
 cronium_send_discord_message() {
+    _cronium_ready || return 1
     local channel_id="$1"
     local content="$2"
     shift 2
@@ -356,6 +371,7 @@ cronium_send_discord_message() {
 
 # Utility function to check if a variable exists
 cronium_variable_exists() {
+    _cronium_ready || return 1
     local key="$1"
     local value=$(cronium_get_variable "$key" 2>/dev/null)
     [ -n "$value" ]
@@ -363,12 +379,14 @@ cronium_variable_exists() {
 
 # Utility function to delete a variable (set to null)
 cronium_delete_variable() {
+    _cronium_ready || return 1
     local key="$1"
     cronium_set_variable "$key" "null"
 }
 
 # Utility function to increment a numeric variable
 cronium_increment_variable() {
+    _cronium_ready || return 1
     local key="$1"
     local increment="${2:-1}"
     local current=$(cronium_get_variable "$key" 2>/dev/null || echo "0")
@@ -387,6 +405,7 @@ cronium_increment_variable() {
 
 # Utility function to append to a string variable
 cronium_append_variable() {
+    _cronium_ready || return 1
     local key="$1"
     local append="$2"
     local separator="${3:-}"
@@ -425,4 +444,5 @@ export -f cronium_delete_variable
 export -f cronium_increment_variable
 export -f cronium_append_variable
 export -f cronium_info
+export -f _cronium_ready
 export -f _cronium_request

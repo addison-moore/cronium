@@ -316,7 +316,10 @@ export async function runDispatchTick(
           scheduledMiss: tick.miss,
         });
 
-        if (result.skipped === "max_executions") {
+        if (
+          result.skipped === "max_executions" ||
+          result.skipped === "no_servers"
+        ) {
           // dispatch auto-paused the event; drop remaining ticks.
           break;
         }

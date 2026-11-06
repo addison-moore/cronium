@@ -43,6 +43,14 @@ import { legacySecretsBootWarning } from "./src/lib/security/legacy-secrets";
 import { initializePlugins } from "./src/tools/plugins";
 import { auditLogger } from "./src/lib/security/audit-logger";
 import { describeFailure, failureWithStack } from "./src/lib/pg-errors";
+import { closeHungConnections, tcpKeepAlive } from "./src/server/db";
+
+/** Compose passes an unset variable through as "", and Number("") is 0. As a limit on
+ * how long a connection can be held, 0 would close every one of them. */
+function positiveNumber(raw: string | undefined, fallback: number): number {
+  const value = Number(raw);
+  return value > 0 ? value : fallback;
+}
 
 const WORKER_ID = process.env.WORKER_ID ?? `worker-${os.hostname()}`;
 const HEALTH_PORT = Number(process.env.WORKER_HEALTH_PORT ?? 5003);
@@ -50,7 +58,10 @@ const DISPATCH_INTERVAL_MS = Number(
   process.env.WORKER_DISPATCH_INTERVAL_MS ?? 5_000,
 );
 const CLAIM_INTERVAL_MS = Number(process.env.WORKER_CLAIM_INTERVAL_MS ?? 2_000);
-const SWEEP_INTERVAL_MS = 30_000;
+const SWEEP_INTERVAL_MS = positiveNumber(
+  process.env.WORKER_SWEEP_INTERVAL_MS,
+  30_000,
+);
 const OUTBOX_INTERVAL_MS = 5_000;
 const LEASE_EXTEND_INTERVAL_MS = 20_000;
 const RETENTION_INTERVAL_MS = 6 * 60 * 60_000;
@@ -58,6 +69,18 @@ const RETENTION_BACKLOG_DELAY_MS = 60_000;
 const MAX_CONCURRENT_IN_PROCESS = Number(
   process.env.WORKER_MAX_CONCURRENT ?? 10,
 );
+/** The longest measured hold, half a million rows at a load average of 100, was a
+ * retention batch at 2.1 seconds. A 5 MB job output took 0.25. */
+const DB_CHECKOUT_LIMIT_MS = positiveNumber(
+  process.env.WORKER_DB_CHECKOUT_LIMIT_MS,
+  5 * 60_000,
+);
+const HUNG_CONNECTION_CHECK_INTERVAL_MS = 1_000;
+const LISTEN_PROBE_INTERVAL_MS = positiveNumber(
+  process.env.WORKER_LISTEN_PROBE_INTERVAL_MS,
+  30_000,
+);
+const LISTEN_ANSWER_TIMEOUT_MS = 10_000;
 
 const pool = new InProcessWorkerPool(WORKER_ID, MAX_CONCURRENT_IN_PROCESS);
 
@@ -183,6 +206,22 @@ const workflowLoop = startLoop("workflow-reconcile", 60_000, async () => {
   }
 });
 
+// A connection that stops answering without closing never errors, so a loop waiting on
+// one would stay stuck through any recovery, with nothing to restart it: compose's
+// `restart: unless-stopped` doesn't act on an unhealthy container.
+const hungConnectionLoop = startLoop(
+  "hung-connections",
+  HUNG_CONNECTION_CHECK_INTERVAL_MS,
+  async () => {
+    const closed = closeHungConnections(DB_CHECKOUT_LIMIT_MS);
+    if (closed > 0) {
+      console.error(
+        `[Worker] Closed ${closed} database connection(s) held for over ${DB_CHECKOUT_LIMIT_MS / 1000}s, presumed hung. What was using them fails and is tried again.`,
+      );
+    }
+  },
+);
+
 // --- LISTEN (accelerant only; loops poll regardless) -----------------------
 
 let listenClient: PgClient | null = null;
@@ -191,11 +230,20 @@ async function startListener(): Promise<void> {
   if (shuttingDown) return;
   const client = new PgClient({
     connectionString: process.env.DATABASE_URL?.replace(/^"|"$/g, ""),
+    // With no limits, a database that hangs during the statements below keeps this from
+    // ever reconnecting, and at boot keeps the health endpoint from opening. Any failure
+    // throws this client away, so nothing can reuse it after a timed-out query, which is
+    // what makes query_timeout unsafe on the pool.
+    connectionTimeoutMillis: LISTEN_ANSWER_TIMEOUT_MS,
+    query_timeout: LISTEN_ANSWER_TIMEOUT_MS,
+    ...tcpKeepAlive,
   });
 
   let reconnecting = false;
+  let probe: NodeJS.Timeout | undefined;
   const reconnect = (delayMs: number): void => {
     reconnecting = true;
+    clearInterval(probe);
     listenClient = null;
     client.end().catch(() => undefined);
     if (!shuttingDown) setTimeout(() => void startListener(), delayMs);
@@ -245,6 +293,20 @@ async function startListener(): Promise<void> {
           break;
       }
     });
+
+    // Nothing else is sent on this connection, so if it stops answering, notifications
+    // just stop. Polling covers most of that, but with nothing to reconnect it workflow
+    // steps would advance once a minute until the next restart.
+    probe = setInterval(() => {
+      client.query("SELECT 1").catch((error) => {
+        if (reconnecting || shuttingDown) return;
+        console.warn(
+          "[Worker] LISTEN connection stopped answering; reconnecting in 5s:",
+          describeFailure(error),
+        );
+        reconnect(5_000);
+      });
+    }, LISTEN_PROBE_INTERVAL_MS);
   } catch (error) {
     if (reconnecting) return;
     console.warn(
@@ -344,6 +406,7 @@ async function shutdown(signal: string): Promise<void> {
     leaseLoop,
     retentionLoop,
     workflowLoop,
+    hungConnectionLoop,
   ]) {
     loop.stop();
   }

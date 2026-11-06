@@ -11,6 +11,7 @@ const KIND_LABELS: Record<ScheduleIncidentKind, string> = {
   [ScheduleIncidentKind.CATCHUP_OVERFLOW]: "Catch-up truncated",
   [ScheduleIncidentKind.AUTO_PAUSED]: "Auto-paused (max executions)",
   [ScheduleIncidentKind.LEASE_LOST]: "Executor lost mid-run",
+  [ScheduleIncidentKind.NO_SERVERS]: "No servers left",
 };
 
 /**

@@ -6,9 +6,9 @@ import type { Event } from "./types";
  * The events.create input for a draft copy of an event in a list.
  *
  * The copy keeps its server links, so an archived one makes events.create refuse,
- * in line with events.fork. Leaving it out instead could make a REMOTE draft with
- * no servers, which activates and then runs in a local container, so the copy
- * would quietly move the script.
+ * in line with events.fork. Leaving it out instead would quietly lose a server the
+ * event runs on, and if that was its only one, events.create refuses the copy
+ * anyway, for having no servers, without saying what happened to the server.
  *
  * It only holds what the lists hold, so environment variables and the trigger
  * and scheduling policies aren't copied.
