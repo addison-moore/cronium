@@ -658,10 +658,6 @@ this again. The reasons it gives:
   ciphertext under a key you no longer have, or a long plaintext made only of those
   characters, and nothing can tell which. If you have the old key, add it to
   `ENCRYPTION_KEYS_RETIRED` and run this again.
-- `its encrypted form is too long for this column`. A version where `env_vars.value` is
-  still `varchar(255)` can't hold an encrypted value of more than 150 characters, and the
-  app can't save one there either. A dry run doesn't catch this one. Run this again on a
-  version where the column is wider, or shorten the value.
 - `marked as encrypted, but isn't in the encrypted format`,
   `marked as not encrypted, but holds encrypted data` and
   `not a JSON object of credentials`. A tool credential the app can't use.

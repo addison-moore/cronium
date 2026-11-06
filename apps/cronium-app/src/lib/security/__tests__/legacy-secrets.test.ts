@@ -507,7 +507,7 @@ describe("a row that fails", () => {
       givenWebhooks(webhookRow({ secret: SECRET, headers: HEADERS }));
       failWrite(
         Object.assign(new Error(`Failed query with params: ${SECRET}`), {
-          cause: { code: "23514", message: `check failed: ${SECRET}` },
+          cause: { code: "22001", message: `value too long: ${SECRET}` },
         }),
       );
 
@@ -518,7 +518,7 @@ describe("a row that fails", () => {
           surface: "webhooks",
           id: 1,
           column: "secret+headers",
-          reason: "database error 23514",
+          reason: "database error 22001",
         },
       ]);
       expect(webhookResult(report)).toMatchObject({ failed: 1, encrypted: 0 });
@@ -1062,22 +1062,6 @@ describe("columns that can hold older ciphertext", () => {
       encrypted: 0,
       changedDuringRun: 1,
     });
-  });
-
-  it("explains a value too long for its column", async () => {
-    mockDatabase.writeResult = () => {
-      throw Object.assign(new Error("Failed query: params: crn.1.a.b.c.d"), {
-        cause: { code: "22001" },
-      });
-    };
-    given(envVars, envVarRow("plaintext"));
-
-    const report = await encryptLegacySecrets();
-
-    expect(report.failures[0]?.reason).toBe(
-      "its encrypted form is too long for this column (database error 22001)",
-    );
-    expect(report.failures[0]?.column).toBe("value");
   });
 });
 

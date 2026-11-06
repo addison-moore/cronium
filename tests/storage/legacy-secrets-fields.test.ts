@@ -553,82 +553,20 @@ describe("env vars", () => {
     expect(report.readsAsCiphertext).toEqual([]);
   });
 
-  describe("when the envelope might not fit", () => {
-    // `env_vars.value` is varchar(255) until PR 24's migration. This forces the type so
-    // it holds on either side of that, and undoes it because every suite shares the
-    // database.
-    let originalType: string;
+  it("fits a value whose envelope wouldn't have fit the old varchar(255)", async () => {
+    // 157 bytes is the most the old scheme could store in that column, and its envelope
+    // is over 255 characters. This is why the run needs migration 0016.
+    const value = "z".repeat(157);
+    const stored = old(value);
+    expect(stored.length).toBeLessThanOrEqual(255);
+    const { id, eventId, key } = await seedEnvVar(stored);
 
-    beforeEach(async () => {
-      const { data_type: dataType, length } = await one<{
-        data_type: string;
-        length: number | null;
-      }>(
-        `SELECT data_type, character_maximum_length AS length
-         FROM information_schema.columns
-         WHERE table_name = 'env_vars' AND column_name = 'value'`,
-      );
-      originalType =
-        dataType === "text" ? "text" : `varchar(${String(length)})`;
-      await pool.query(
-        `ALTER TABLE env_vars ALTER COLUMN value TYPE varchar(255)`,
-      );
-    });
+    const report = await encryptLegacySecrets();
 
-    afterEach(async () => {
-      // Emptied first, because a test can leave a value the old type can't hold.
-      await pool.query(`TRUNCATE env_vars`);
-      await pool.query(
-        `ALTER TABLE env_vars ALTER COLUMN value TYPE ${originalType}`,
-      );
-    });
-
-    it("reports a value too long for the column, leaves it, and a later run finishes it", async () => {
-      // A dash, or these would look like old ciphertext. 151 characters come to 202 in
-      // base64url, with 55 around them, and 150 come to exactly 255.
-      const long = `${"x-".repeat(75)}x`;
-      const fits = await seedEnvVar("y-".repeat(75), "FITS");
-      const { id, eventId, key } = await seedEnvVar(long, "TOO_LONG");
-      const before = await storedEnvVar(id);
-
-      const report = await encryptLegacySecrets();
-
-      expect(report.failures).toEqual([
-        {
-          surface: "env_vars",
-          id,
-          column: "value",
-          reason:
-            "its encrypted form is too long for this column (database error 22001)",
-        },
-      ]);
-      expect(report.remaining).toBe(1);
-      expect((await storedEnvVar(id)).version).toBe(before.version);
-      expect((await storedEnvVar(id)).value).toBe(long);
-      expect(isSecretEnvelope((await storedEnvVar(fits.id)).value)).toBe(true);
-
-      await pool.query(`ALTER TABLE env_vars ALTER COLUMN value TYPE text`);
-      const after = await encryptLegacySecrets();
-
-      expect(after.failures).toEqual([]);
-      expect(after.remaining).toBe(0);
-      expect(
-        decryptEnvVarValue((await storedEnvVar(id)).value, eventId, key),
-      ).toBe(long);
-    });
-
-    it("does the same for old ciphertext that fits and whose envelope doesn't", async () => {
-      // 157 bytes is the most the old scheme fits in 255 characters.
-      const value = "z".repeat(157);
-      const stored = old(value);
-      expect(stored.length).toBeLessThanOrEqual(255);
-      const { id } = await seedEnvVar(stored);
-
-      const report = await encryptLegacySecrets();
-
-      expect(report.failures.map((f) => f.id)).toEqual([id]);
-      expect((await storedEnvVar(id)).value).toBe(stored);
-    });
+    expect(report.failures).toEqual([]);
+    const { value: next } = await storedEnvVar(id);
+    expect(next.length).toBeGreaterThan(255);
+    expect(decryptEnvVarValue(next, eventId, key)).toBe(value);
   });
 });
 

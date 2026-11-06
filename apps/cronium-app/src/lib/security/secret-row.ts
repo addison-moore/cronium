@@ -25,9 +25,6 @@ export function secretRowFailureReason(error: unknown): string {
     return "looks encrypted, but this keyring can't decrypt it for this row";
   }
   const { code } = driverError(error);
-  if (code === "22001") {
-    return "its encrypted form is too long for this column (database error 22001)";
-  }
   if (code) return `database error ${code}`;
   return error instanceof Error ? error.name : "unknown error";
 }
