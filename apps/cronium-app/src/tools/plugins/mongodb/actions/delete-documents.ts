@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { counted, writeRun } from "@/tools/utils/test-run";
 import {
   mongoCredentialsSchema,
   deleteDocumentsSchema,
@@ -23,6 +24,10 @@ export const deleteDocumentsAction: ToolAction = {
   actionType: "delete",
   actionTypeColor: "red",
   developmentMode: "visual",
+  testRun: writeRun(
+    (result: { deletedCount: number }) =>
+      `Deleted ${counted(result.deletedCount, "document")}.`,
+  ),
   inputSchema: deleteDocumentsSchema,
   parameters: safeZodToParameters(deleteDocumentsSchema),
   outputSchema: z.object({

@@ -393,7 +393,7 @@ describe("the Tool Action section, opened directly", () => {
     expect(mockSubmit).not.toHaveBeenCalled();
   });
 
-  it.each(["Test Action", "Clear Selection"])(
+  it.each(["Send Message Now", "Clear Selection"])(
     "doesn't submit the form on %s",
     async (name) => {
       const user = userEvent.setup();

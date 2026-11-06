@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { sendRun } from "@/tools/utils/test-run";
 import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for Discord message action parameters - Enhanced to support embeds
@@ -39,6 +40,7 @@ export const sendMessageAction: ToolAction = {
   actionType: "create",
   actionTypeColor: "blue",
   developmentMode: "visual",
+  testRun: sendRun("posts to Discord", () => "Discord accepted the message."),
   inputSchema: sendMessageSchema,
   parameters: safeZodToParameters(sendMessageSchema),
   outputSchema: z.object({

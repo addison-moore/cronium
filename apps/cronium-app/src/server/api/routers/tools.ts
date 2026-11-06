@@ -25,6 +25,7 @@ import {
   mergeCredentials,
 } from "@/lib/tools/credential-redaction";
 import { redactSecrets, redactText } from "@/lib/tools/redact";
+import { failureReason, isFailureResult } from "@/lib/tools/action-result";
 
 /** Blank secret-bearing credential fields before returning a tool to a client. */
 function redactTool<T extends { credentials: Record<string, unknown> }>(
@@ -34,7 +35,12 @@ function redactTool<T extends { credentials: Record<string, unknown> }>(
 }
 import { testToolConnection } from "@/lib/tools/tool-registry";
 import { slackRouter } from "./tools/slack-routes";
-import { describeFailure, failureWithStack } from "@/lib/pg-errors";
+import {
+  QUERY_FAILED_MESSAGE,
+  describeFailure,
+  failureWithStack,
+  isQueryFailure,
+} from "@/lib/pg-errors";
 
 // Use centralized authentication from trpc.ts
 
@@ -307,7 +313,7 @@ async function logManualToolAction(entry: {
   actionId: string;
   parameters: unknown;
   result: unknown;
-  status: "SUCCESS" | "FAILURE";
+  status: "SUCCESS" | "FAILURE" | "SIMULATED";
   executionTime: number;
   errorMessage: string | null;
 }): Promise<void> {
@@ -1276,22 +1282,42 @@ export const toolsRouter = createTRPCRouter({
           toolType: tool.type,
         });
 
-        // Execute the action
+        // Execute the action. It reports failure by throwing or by returning
+        // {success:false}/{ok:false}, and the scheduler path counts both as failed.
         const startTime = Date.now();
         let result: unknown;
+        let failure: string | undefined;
         try {
           result = (await action.execute(
             credentials,
             input.parameters,
             context,
           )) as unknown;
+          if (isFailureResult(result)) {
+            failure = failureReason(result, action.name);
+          }
         } catch (executionError) {
+          console.error(
+            "Error executing tool action:",
+            failureWithStack(executionError),
+          );
+          if (isQueryFailure(executionError)) {
+            failure = QUERY_FAILED_MESSAGE;
+          } else {
+            failure =
+              executionError instanceof Error
+                ? executionError.message
+                : String(executionError);
+          }
+        }
+        const executionTime = Date.now() - startTime;
+
+        // The credential's owner gets the reason, as the action's own answer always
+        // gave it to them. A 500 here would hide it behind a generic message.
+        if (failure !== undefined) {
+          const error = redactText(failure);
           // Audit the failed execution like the scheduler path does:
           // redacted parameters, redacted error message, null eventId.
-          const errorMessage =
-            executionError instanceof Error
-              ? executionError.message
-              : String(executionError);
           await logManualToolAction({
             toolType: tool.type,
             actionType: action.actionType,
@@ -1299,33 +1325,42 @@ export const toolsRouter = createTRPCRouter({
             parameters: redactSecrets(input.parameters),
             result: null,
             status: "FAILURE",
-            executionTime: Date.now() - startTime,
-            errorMessage: redactText(errorMessage),
+            executionTime,
+            errorMessage: error,
           });
-          throw executionError;
+          return {
+            success: false as const,
+            error,
+            executionTime,
+            actionId: action.id,
+            actionName: action.name,
+          };
         }
-        const executionTime = Date.now() - startTime;
 
-        // Audit the successful execution to tool_action_logs, mirroring the
-        // scheduler path (tool-action-executor.ts).
+        // `isTest` only stops an action that reads it, so asking for it says nothing
+        // about what ran. What the action declares does.
+        const simulated = input.isTest && action.testRun.kind === "simulated";
+
+        // Audit the execution to tool_action_logs, mirroring the scheduler path
+        // (tool-action-executor.ts).
         await logManualToolAction({
           toolType: tool.type,
           actionType: action.actionType,
           actionId: action.id,
           parameters: redactSecrets(input.parameters),
           result: redactSecrets(result),
-          status: "SUCCESS",
+          status: simulated ? "SIMULATED" : "SUCCESS",
           executionTime,
           errorMessage: null,
         });
 
         return {
-          success: true,
+          success: true as const,
           result,
           executionTime,
           actionId: action.id,
           actionName: action.name,
-          isTest: input.isTest,
+          simulated,
         };
       } catch (error) {
         console.error("Error executing tool action:", failureWithStack(error));

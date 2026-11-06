@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { sendRun } from "@/tools/utils/test-run";
 import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for the send-message action parameters - Enhanced to support blocks
@@ -33,6 +34,7 @@ export const sendMessageAction: ToolAction = {
   actionType: "create",
   actionTypeColor: "bg-green-500 text-white",
   developmentMode: "visual",
+  testRun: sendRun("posts to Slack", () => "Slack accepted the message."),
   inputSchema: sendMessageSchema,
   parameters: safeZodToParameters(sendMessageSchema),
   templateEncoding: () => "markup",

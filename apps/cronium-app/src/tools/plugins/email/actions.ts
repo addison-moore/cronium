@@ -8,6 +8,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "../../utils/zod-to-parameters";
+import { counted, sendRun } from "@/tools/utils/test-run";
 import { emailCredentialsSchema, type EmailCredentials } from "./schemas";
 
 type SendEmailParams = {
@@ -62,6 +63,16 @@ export const emailActions: ToolAction[] = [
     actionType: "create",
     actionTypeColor: "blue",
     developmentMode: "visual",
+    testRun: sendRun(
+      "sends the email",
+      ({
+        deliveryInfo: { accepted, rejected },
+      }: {
+        deliveryInfo: { accepted: string[]; rejected: string[] };
+      }) =>
+        `The mail server accepted it for ${counted(accepted.length, "recipient")}.` +
+        (rejected.length > 0 ? ` It refused ${rejected.join(", ")}.` : ""),
+    ),
     inputSchema: sendEmailSchema,
     parameters: safeZodToParameters(sendEmailSchema),
     // Only an HTML body is markup. A subject or plain-text body goes out as written.

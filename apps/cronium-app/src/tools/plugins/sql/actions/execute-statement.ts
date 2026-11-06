@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { counted, writeRun } from "@/tools/utils/test-run";
 import {
   sqlCredentialsSchema,
   executeStatementSchema,
@@ -22,6 +23,10 @@ export const executeStatementAction: ToolAction = {
   actionType: "update",
   actionTypeColor: "orange",
   developmentMode: "visual",
+  testRun: writeRun(
+    (result: { rowCount: number }) =>
+      `The database reports ${counted(result.rowCount, "row")} affected.`,
+  ),
   inputSchema: executeStatementSchema,
   parameters: safeZodToParameters(executeStatementSchema),
   // The query text should hold only :placeholders, with values in Parameters where
