@@ -151,22 +151,41 @@ export function extractServerIds(
 
 /**
  * The servers the form must keep selected and on screen for an event: its links,
- * and an archived direct server (the deprecated `serverId`), which stops the
- * event just as an archived link does. A LOCAL event's direct server is left out:
- * ticked, the event would start running on it once it was restored and saved.
- * Left out, any save clears it.
+ * and the deprecated direct server (`serverId`) where it counts. A save writes
+ * what's ticked as the event's links and clears the direct server, so what's ticked
+ * here is where the event runs after any save, and an untouched save shouldn't
+ * change that.
+ *
+ * - On a LOCAL event the direct server is a leftover. Ticked, the event would start
+ *   running on it. Left out, any save clears it.
+ * - An archived one stops the event wherever a run would go, so it gets a row that
+ *   can be unticked.
+ * - An active one is ticked only if a run goes to it. A run goes to the links
+ *   instead once there are two, or one on a LOCAL_AND_REMOTE event
+ *   (enhancedTransformJobForOrchestrator), and ticking the direct server then would
+ *   add a server. Otherwise a run goes to the direct server and not to a lone link
+ *   (buildJobPayload), and ticking that link would add it. An archived link stays
+ *   ticked either way, because it stops the event until someone unticks it.
+ *
+ * tests/storage/event-save-direct-server.test.ts checks this against a real run.
  */
 export function linkedServers(
   initialData?: EventFormInitialData,
 ): EventFormServer[] {
   const links = initialData?.servers ?? [];
   const direct = initialData?.server;
-  const runLocation = initialData?.runLocation ?? RunLocation.LOCAL;
-  return direct?.isArchived &&
-    runLocation !== RunLocation.LOCAL &&
-    !links.some((link) => link.id === direct.id)
-    ? [...links, direct]
-    : links;
+  const runLocation =
+    normalizeRunLocation(initialData?.runLocation) ?? RunLocation.LOCAL;
+  if (!direct || runLocation === RunLocation.LOCAL) return links;
+  if (links.some((link) => link.id === direct.id)) return links;
+  if (direct.isArchived) return [...links, direct];
+
+  const runGoesToLinks =
+    links.length > 1 ||
+    (runLocation === RunLocation.LOCAL_AND_REMOTE && links.length > 0);
+  return runGoesToLinks
+    ? links
+    : [direct, ...links.filter((link) => link.isArchived)];
 }
 
 /**

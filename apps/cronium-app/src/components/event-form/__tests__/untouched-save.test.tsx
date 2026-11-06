@@ -392,6 +392,95 @@ const EVENTS = [
     },
   },
   {
+    // Set through the REST API, MCP or a JSON import. The form only writes links,
+    // so its server has to go out as one or the event loses it.
+    event: "a script on a direct server and locally",
+    stored: storedEvent(
+      {
+        name: "direct-and-local",
+        type: EventType.BASH,
+        content: "true",
+        runLocation: RunLocation.LOCAL_AND_REMOTE,
+        serverId: sandbox.id,
+        server: sandbox,
+      },
+      [{ key: "D", value: "1" }],
+    ),
+    expected: {
+      name: "direct-and-local",
+      runLocation: RunLocation.LOCAL_AND_REMOTE,
+      serverId: null,
+      selectedServerIds: [6],
+      envVars: [{ key: "D", value: "1" }],
+    },
+  },
+  {
+    event: "a script on a direct server only",
+    stored: storedEvent(
+      {
+        name: "direct-only",
+        type: EventType.BASH,
+        content: "true",
+        runLocation: RunLocation.REMOTE,
+        serverId: sandbox.id,
+        server: sandbox,
+      },
+      [],
+    ),
+    expected: {
+      name: "direct-only",
+      runLocation: RunLocation.REMOTE,
+      serverId: null,
+      selectedServerIds: [6],
+    },
+  },
+  {
+    // Ticking a leftover would start running the script on it, however it's spelled.
+    event: "an older local row with a leftover direct server",
+    stored: storedEvent(
+      {
+        name: "leftover",
+        type: EventType.BASH,
+        content: "true",
+        runLocation: "local" as RunLocation,
+        serverId: sandbox.id,
+        server: sandbox,
+      },
+      [],
+    ),
+    expected: {
+      name: "leftover",
+      runLocation: RunLocation.LOCAL,
+      serverId: null,
+      selectedServerIds: [],
+    },
+  },
+  {
+    event: "a tool action with a direct server, which only runs locally",
+    stored: storedEvent(
+      {
+        name: "notify-direct",
+        type: EventType.TOOL_ACTION,
+        runLocation: RunLocation.REMOTE,
+        serverId: sandbox.id,
+        server: sandbox,
+        toolActionConfig: {
+          toolType: "SLACK",
+          toolId: 1,
+          actionId: "slack-send-message",
+          parameters: { channel: "#ops", message: "hi" },
+        },
+      },
+      [],
+    ),
+    expected: {
+      name: "notify-direct",
+      runLocation: RunLocation.LOCAL,
+      serverId: null,
+      selectedServerIds: [],
+    },
+  },
+  {
     event: "an event with no variables",
     stored: storedEvent(
       {

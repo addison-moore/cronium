@@ -344,8 +344,10 @@ export default function EventForm({
       }
 
       // Set server IDs. An archived server stays selected until someone unticks
-      // it: dropping it here would turn a REMOTE event with nothing else selected
-      // into a LOCAL one on any save (deriveRunLocation), quietly moving the script.
+      // it, and so does a direct one a run goes to. Dropped here, a LOCAL_AND_REMOTE
+      // event with nothing else selected would turn LOCAL on any save
+      // (deriveRunLocation), quietly moving the script, and a REMOTE one would ask
+      // for a location it already has.
       if (initialData.servers && Array.isArray(initialData.servers)) {
         setValue(
           "selectedServerIds",
