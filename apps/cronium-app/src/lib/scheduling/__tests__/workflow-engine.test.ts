@@ -86,6 +86,7 @@ jest.mock("drizzle-orm", () => {
 });
 
 import { getTableColumns } from "drizzle-orm";
+import { DrizzleQueryError } from "drizzle-orm/errors";
 import {
   ConnectionType,
   JobStatus,
@@ -570,6 +571,30 @@ describe("startWorkflowRun", () => {
     expect(result).toEqual({ success: false, output: "forbidden" });
     expect(stepsStore).toHaveLength(0);
     expect(mockDispatch).not.toHaveBeenCalled();
+  });
+
+  it("keeps a failed query's values out of what it returns and logs", async () => {
+    setGraph([{ id: 1, eventId: 101 }]);
+    mockAssert.mockRejectedValue(
+      new DrizzleQueryError("insert", ["the-run-input"], new Error("refused")),
+    );
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {
+      // Asserted on below.
+    });
+
+    const result = await startWorkflowRun(WORKFLOW_ID, {
+      triggerType: WorkflowTriggerType.MANUAL,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      output: "The workflow run could not be saved",
+    });
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to start workflow"),
+      "Error: refused",
+    );
+    errorSpy.mockRestore();
   });
 
   it("creates the run + step rows and dispatches the start node with the trigger input", async () => {

@@ -3,6 +3,7 @@
  */
 
 import { TRPCError } from "@trpc/server";
+import { describeFailure, isQueryFailure, stackFrames } from "@/lib/pg-errors";
 
 export enum ErrorSeverity {
   DEBUG = "debug",
@@ -41,15 +42,14 @@ export class ErrorHandler {
     severity: ErrorSeverity = ErrorSeverity.ERROR,
     context?: ErrorContext,
   ): void {
-    const errorMessage = this.formatError(error);
     const timestamp = new Date().toISOString();
 
     const logEntry = {
       timestamp,
       severity,
-      message: errorMessage,
+      message: describeFailure(error),
       ...context,
-      stack: error instanceof Error ? error.stack : undefined,
+      stack: stackFrames(error),
     };
 
     // Log to console based on severity
@@ -134,6 +134,16 @@ export class ErrorHandler {
   ): TRPCError {
     if (error instanceof TRPCError) {
       return error;
+    }
+
+    // Its message is the SQL and the bound values. Those shouldn't reach the client,
+    // and shouldn't pick the code either: the check for "timeout" below would match
+    // the timeout_value column of any query on events.
+    if (isQueryFailure(error)) {
+      return new TRPCError({
+        code: fallbackCode,
+        message: "An unexpected error occurred",
+      });
     }
 
     const message = this.formatError(error);

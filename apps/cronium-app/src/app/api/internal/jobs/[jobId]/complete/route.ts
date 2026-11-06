@@ -9,6 +9,7 @@ import {
   authorizeCapability,
   assertJobScope,
 } from "@/lib/security/internal-route-auth";
+import { failureWithStack } from "@/lib/pg-errors";
 
 /**
  * Final completion report from an executor. Idempotent: a repeated report for
@@ -213,7 +214,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, job: updatedJob });
   } catch (error) {
-    console.error("Error completing job:", error);
+    console.error("Error completing job:", failureWithStack(error));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

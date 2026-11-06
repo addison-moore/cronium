@@ -5,6 +5,7 @@ import { WebhookSecurity } from "./WebhookSecurity";
 import { db } from "@/server/db";
 import { webhookEvents, webhookLogs } from "@/shared/schema";
 import { clientIpFromHeaders } from "@/lib/security/client-ip";
+import { failureWithStack } from "@/lib/pg-errors";
 
 /** Thrown when an inbound webhook body exceeds the size cap. */
 class WebhookBodyTooLargeError extends Error {
@@ -213,7 +214,7 @@ export class WebhookRouter {
         },
       );
     } catch (error) {
-      console.error("Webhook processing error:", error);
+      console.error("Webhook processing error:", failureWithStack(error));
 
       // Logged above. The caller may be anyone holding the key, so nothing about
       // the failure (driver errors, table names) goes back to them.
@@ -402,7 +403,7 @@ export class WebhookRouter {
         createdAt: new Date(),
       });
     } catch (error) {
-      console.error("Failed to log webhook request:", error);
+      console.error("Failed to log webhook request:", failureWithStack(error));
     }
   }
 

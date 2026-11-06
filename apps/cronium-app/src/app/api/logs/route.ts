@@ -7,6 +7,7 @@ import {
 } from "@/lib/api-auth";
 import { z } from "zod";
 import { LogStatus } from "@/shared/schema";
+import { failureWithStack } from "@/lib/pg-errors";
 
 const MAX_PAGE_SIZE = 100;
 
@@ -113,14 +114,14 @@ export async function GET(req: NextRequest) {
         totalPages: Math.ceil(total / pageSize),
       });
     } catch (error) {
-      console.error("Error filtering logs:", error);
+      console.error("Error filtering logs:", failureWithStack(error));
       return NextResponse.json(
         { error: "Failed to filter logs" },
         { status: 500 },
       );
     }
   } catch (error) {
-    console.error("Error fetching logs:", error);
+    console.error("Error fetching logs:", failureWithStack(error));
     return NextResponse.json(
       { error: "Failed to fetch logs" },
       { status: 500 },
@@ -183,7 +184,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(log, { status: 201 });
   } catch (error) {
-    console.error("Error creating log:", error);
+    console.error("Error creating log:", failureWithStack(error));
     return NextResponse.json(
       { error: "Failed to create log" },
       { status: 500 },

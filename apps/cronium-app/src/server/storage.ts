@@ -165,6 +165,7 @@ import type { WorkflowQueryInput } from "../shared/schemas/workflows";
 import type { VariableQueryInput } from "../shared/schemas/variables";
 import type { ServerQueryInput } from "../shared/schemas/servers";
 import type { AdminQueryInput } from "../shared/schemas/admin";
+import { describeFailure, failureWithStack } from "@/lib/pg-errors";
 
 // Re-export types from schema for convenience
 export type { WorkflowExecution } from "../shared/schema";
@@ -1456,7 +1457,10 @@ class DatabaseStorage implements IStorage {
 
       console.log(`Successfully deleted script ${id}`);
     } catch (error) {
-      console.error(`Error in deleteScript for id ${id}:`, error);
+      console.error(
+        `Error in deleteScript for id ${id}:`,
+        failureWithStack(error),
+      );
       throw error;
     }
   }
@@ -2489,7 +2493,7 @@ class DatabaseStorage implements IStorage {
       await refreshWorkflowSchedule(id).catch((error) => {
         console.error(
           `Failed to refresh schedule for workflow ${id}:`,
-          error instanceof Error ? error.message : String(error),
+          describeFailure(error),
         );
       });
     }
@@ -2824,7 +2828,7 @@ class DatabaseStorage implements IStorage {
       } catch (error) {
         console.error(
           `Failed to decrypt legacy API token (ID: ${apiToken.id}):`,
-          error instanceof Error ? error.message : "Unknown error",
+          describeFailure(error),
         );
         continue;
       }
