@@ -353,6 +353,24 @@ describe("retrying a delivery", () => {
     expect(await deliveriesOf(webhook.id)).toHaveLength(2);
   });
 
+  it("sends an event the webhook no longer subscribes to, since the owner asked", async () => {
+    const receiver = await startReceiver([500]);
+    const { webhook, delivery } = await recordedDelivery(receiver);
+    await manager.updateWebhook(webhook.id, owner, {
+      events: ["something.else"],
+    });
+
+    const answer = await callerFor(owner).webhookSystem.retryDelivery({
+      deliveryId: delivery.deliveryId,
+    });
+
+    expect(answer.success).toBe(true);
+    expect(receiver.received).toHaveLength(2);
+    expect(receiver.received[1]!.headers["x-webhook-event"]).toBe(
+      "order.created",
+    );
+  });
+
   it("says so when the receiver refuses it, and makes that one attempt", async () => {
     const receiver = await startReceiver([500, 500, 500, 503]);
     const webhook = await manager.registerWebhook(owner, {
@@ -422,6 +440,32 @@ describe("retrying a delivery", () => {
       statusCode: null,
       error: answer.data.error,
     });
+  });
+});
+
+describe("the rate limit", () => {
+  it("stops a client in a loop after 10 a minute, and only that client", async () => {
+    const receiver = await startReceiver();
+    const { delivery } = await recordedDelivery(receiver);
+    const retry = () =>
+      callerFor(owner).webhookSystem.retryDelivery({
+        deliveryId: delivery.deliveryId,
+      });
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      expect((await retry()).success).toBe(true);
+    }
+    expect(receiver.received).toHaveLength(11);
+
+    await expect(retry()).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+    expect(receiver.received).toHaveLength(11);
+
+    owner = await seedUser({ role: UserRole.USER, status: UserStatus.ACTIVE });
+    const other = await recordedDelivery(receiver);
+    const answer = await callerFor(owner).webhookSystem.retryDelivery({
+      deliveryId: other.delivery.deliveryId,
+    });
+    expect(answer.success).toBe(true);
   });
 });
 
