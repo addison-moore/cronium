@@ -22,6 +22,7 @@ import { toEventApiDto } from "@/server/security/api-dto";
 import { canReadEnvVarValues } from "@/server/token-scopes";
 import { scheduler } from "@/lib/scheduler";
 import { touchesEventSchedule } from "@/lib/scheduling/materialize";
+import { readEventSaveBody } from "@/lib/request-body";
 
 // GET a specific script
 export async function GET(
@@ -126,8 +127,10 @@ export async function PATCH(
 
     await assertEventCapability(eventId, userId, "edit");
 
-    // Past 10 MB the proxy passes on only the start of a body, which isn't JSON.
-    const requestBody: unknown = await request.json().catch(() => null);
+    const read = await readEventSaveBody(request);
+    if (!read.ok) return read.response;
+
+    const requestBody = read.body;
     if (
       typeof requestBody !== "object" ||
       requestBody === null ||

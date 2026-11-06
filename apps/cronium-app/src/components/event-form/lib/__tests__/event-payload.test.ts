@@ -2,7 +2,9 @@ import {
   buildEventPayload,
   deriveRunLocation,
   isScriptEventType,
+  saveRequestBytes,
   SCRIPT_EVENT_TYPES,
+  tooLongToSaveMessage,
 } from "../event-payload";
 import { eventFormSchema, type EventFormData } from "../event-form-schema";
 import { createEventSchema } from "@/shared/schemas/events";
@@ -464,5 +466,58 @@ describe("buildEventPayload vs server createEventSchema (mirror tests)", () => {
       makeFormData({ startTime: "2026-03-01T10:30" }),
     );
     expect(createEventSchema.safeParse(payload).success).toBe(true);
+  });
+});
+
+describe("saveRequestBytes", () => {
+  it("is the length of the batch body the tRPC link sends", () => {
+    const input = { name: "e", content: "echo hi" };
+
+    // Under the Jest stub for superjson, whose serialize gives { json: input }.
+    expect(saveRequestBytes(input)).toBe(
+      JSON.stringify({ 0: { json: input } }).length,
+    );
+  });
+
+  it("counts a line break and a quote as the 2 bytes each they're sent as", () => {
+    const plain = saveRequestBytes({ content: "ab" });
+
+    expect(saveRequestBytes({ content: '\n"' })).toBe(plain + 2);
+  });
+
+  it("counts a control character as the 6 bytes it's sent as", () => {
+    const plain = saveRequestBytes({ content: "a" });
+
+    expect(saveRequestBytes({ content: "\u0001" })).toBe(plain + 5);
+  });
+
+  it("counts UTF-8 bytes, not characters", () => {
+    const plain = saveRequestBytes({ content: "a" });
+
+    expect(saveRequestBytes({ content: "é" })).toBe(plain + 1);
+    expect(saveRequestBytes({ content: "✓" })).toBe(plain + 2);
+    expect(saveRequestBytes({ content: "😀" })).toBe(plain + 3);
+  });
+});
+
+describe("tooLongToSaveMessage", () => {
+  const MB = 1024 * 1024;
+
+  it("says a script is too long, how long, and what the limit is", () => {
+    expect(tooLongToSaveMessage(EventType.BASH, 10.6 * MB)).toBe(
+      "This script is too long to save. With the rest of the event it comes to 10.60 MB once sent, and the limit is 10 MB. Each line break or quote counts as 2 bytes.",
+    );
+  });
+
+  it("doesn't call an event with no script a script", () => {
+    expect(tooLongToSaveMessage(EventType.HTTP_REQUEST, 10.6 * MB)).toBe(
+      "This event is too long to save. It comes to 10.60 MB once sent, and the limit is 10 MB.",
+    );
+  });
+
+  it("never reads as exactly the limit, however little it's over", () => {
+    expect(tooLongToSaveMessage(EventType.BASH, 10 * MB + 1)).toContain(
+      "10.01 MB",
+    );
   });
 });

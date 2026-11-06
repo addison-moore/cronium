@@ -49,6 +49,16 @@ function hasConfiguredHeaders(stored: unknown): boolean {
   return Object.keys(stored).length > 0;
 }
 
+/** What to tell the caller about one attempt, including when it left no record. */
+function attemptMessage(
+  outcome: string,
+  attempt: { recorded?: false },
+): string {
+  return attempt.recorded === false
+    ? `${outcome}. It couldn't be recorded, so it won't show in the webhook's history.`
+    : outcome;
+}
+
 /**
  * Run a webhook operation, giving its refusal the API's code for one, with its
  * message. withErrorHandling would otherwise make that a server error, whose
@@ -423,14 +433,15 @@ export const webhookSystemRouter = createTRPCRouter({
           // Not mutationResponse, whose `success` is always true. A receiver
           // refusing the retry isn't an error in this request, but it isn't a
           // success either, and the attempt's details are worth keeping.
+          const outcome = attempt.success
+            ? "Webhook delivery retry succeeded"
+            : `Webhook delivery retry failed: ${
+                attempt.error ?? `HTTP ${attempt.statusCode ?? "unknown"}`
+              }`;
           return {
             success: attempt.success,
             data: attempt,
-            message: attempt.success
-              ? "Webhook delivery retry succeeded"
-              : `Webhook delivery retry failed: ${
-                  attempt.error ?? `HTTP ${attempt.statusCode ?? "unknown"}`
-                }`,
+            message: attemptMessage(outcome, attempt),
           };
         },
         {
@@ -491,14 +502,15 @@ export const webhookSystemRouter = createTRPCRouter({
           // Not mutationResponse, whose `success` is always true. A receiver
           // refusing the test isn't an error in this request, but it isn't a
           // success either, and the attempt's details are worth keeping.
+          const outcome = attempt.success
+            ? "Test webhook delivered"
+            : `Test webhook failed: ${
+                attempt.error ?? `HTTP ${attempt.statusCode ?? "unknown"}`
+              }`;
           return {
             success: attempt.success,
             data: attempt,
-            message: attempt.success
-              ? "Test webhook delivered"
-              : `Test webhook failed: ${
-                  attempt.error ?? `HTTP ${attempt.statusCode ?? "unknown"}`
-                }`,
+            message: attemptMessage(outcome, attempt),
           };
         },
         {
