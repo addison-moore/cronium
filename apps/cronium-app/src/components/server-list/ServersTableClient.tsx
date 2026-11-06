@@ -30,6 +30,7 @@ import type {
 import { ServerFilters } from "@/components/server-list/ServerFilters";
 import { ServerDeleteConfirmDialog } from "@/components/server-list/ServerDeleteConfirmDialog";
 import { trpc } from "@/lib/trpc";
+import { trpcErrorMessage } from "@/trpc/shared";
 import { usePersistentPagination } from "@/hooks/use-persistent-pagination";
 
 const copy = {
@@ -153,6 +154,16 @@ export function ServersTableClient({
             : server,
         ),
       );
+    },
+    onError: (error) => {
+      toast({
+        title: "Health Check Failed",
+        description: trpcErrorMessage(
+          error,
+          "Failed to check the server. Please try again.",
+        ),
+        variant: "destructive",
+      });
     },
     onSettled: () => {
       setIsCheckingStatus(null);

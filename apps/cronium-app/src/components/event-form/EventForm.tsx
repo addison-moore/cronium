@@ -17,7 +17,7 @@ import {
 } from "@cronium/ui";
 import { Checkbox } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
-import { QUERY_OPTIONS } from "@/trpc/shared";
+import { QUERY_OPTIONS, trpcErrorMessage } from "@/trpc/shared";
 import { getDefaultScriptContent } from "@/lib/scriptTemplates";
 import { MonacoEditor } from "@cronium/ui";
 import { TagsInput } from "@cronium/ui";
@@ -443,16 +443,12 @@ export default function EventForm({
       } catch (error) {
         console.error("Error submitting form:", error);
 
-        // Extract error message from tRPC error
-        let errorMessage = `Failed to ${isEditing ? "update" : "create"} event. Please try again.`;
-
-        if (error && typeof error === "object" && "message" in error) {
-          errorMessage = error.message as string;
-        }
-
         toast({
           title: "Error",
-          description: errorMessage,
+          description: trpcErrorMessage(
+            error,
+            `Failed to ${isEditing ? "update" : "create"} event. Please try again.`,
+          ),
           variant: "destructive",
         });
       }
