@@ -73,10 +73,6 @@ async function createDatabase(): Promise<{ url: string; pool: Pool }> {
   await harnessPool.query(`CREATE DATABASE "${name}"`);
   const url = urlOf(name);
   const pool = new Pool({ connectionString: url });
-  // pool.end() can resolve with a client still closing, so the DROP ... WITH (FORCE)
-  // in afterAll has Postgres terminate it. pg-pool emits that as `error` on the pool,
-  // and with no listener it's an uncaught exception, which Jest pins on a random test.
-  pool.on("error", () => undefined);
   openDatabases.push({ name, pool });
   return { url, pool };
 }
@@ -231,7 +227,12 @@ const everyStamp = journal.entries.map((entry) => entry.when);
 afterAll(async () => {
   for (const { name, pool } of openDatabases) {
     await pool.end();
-    await harnessPool.query(`DROP DATABASE "${name}" WITH (FORCE)`);
+    // Not WITH (FORCE). pool.end() resolves with its clients still closing, and FORCE
+    // has Postgres terminate them, which reaches the pool as an uncaught error that Jest
+    // pins on a random test. A plain drop kills nothing: it waits up to 5 seconds for
+    // them to go, and fails if a session stays open. The pools have no `error` listener
+    // on purpose, so that a session lost during a test still fails that test.
+    await harnessPool.query(`DROP DATABASE "${name}"`);
   }
   await closePool();
 });

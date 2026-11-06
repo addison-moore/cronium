@@ -16,8 +16,9 @@ import {
  *
  * Migration is NON-BREAKING: writes always produce vault envelopes, but reads
  * fall back to the legacy scheme for values that are not yet vault envelopes, so
- * existing ciphertext keeps decrypting and rows migrate as they are rewritten.
- * Plaintext/legacy values pass through the legacy decrypt unchanged.
+ * existing ciphertext keeps decrypting, until a row is rewritten or
+ * `rotate:secrets --encrypt-legacy` moves it. Plaintext/legacy values pass through
+ * the legacy decrypt unchanged.
  */
 
 function encrypt(plaintext: string, binding: SecretBinding): string {
@@ -40,6 +41,8 @@ function decrypt(stored: string, binding: SecretBinding): string {
 const LEGACY_AAD = Buffer.from("cronium-server-encryption");
 const IV_LEN = 16;
 const TAG_LEN = 16;
+const MIN_LEGACY_BYTES = IV_LEN + TAG_LEN + 1;
+const LEGACY_CIPHERTEXT_CHARS = /^[A-Za-z0-9+/=]+$/;
 
 /**
  * Whether a read would try to decrypt this as legacy ciphertext rather than pass it
@@ -47,8 +50,8 @@ const TAG_LEN = 16;
  * characters looks the same, and a read of one fails.
  */
 export function looksLikeLegacyCiphertext(stored: string): boolean {
-  if (stored.length < 50 || !/^[A-Za-z0-9+/=]+$/.test(stored)) return false;
-  return Buffer.from(stored, "base64").length >= IV_LEN + TAG_LEN + 1;
+  if (stored.length < 50 || !LEGACY_CIPHERTEXT_CHARS.test(stored)) return false;
+  return Buffer.from(stored, "base64").length >= MIN_LEGACY_BYTES;
 }
 
 function openLegacyCiphertext(stored: string, masterKey: Buffer): string {
@@ -92,6 +95,57 @@ export function isLegacyCiphertextUnderKey(
   } catch {
     return false;
   }
+}
+
+/**
+ * What a value that isn't an envelope holds, for moving it into the vault, or null if
+ * that can't be told. Decided by whether it authenticates, not by how it looks:
+ *
+ *   - Not the shape of ciphertext: it's what it says it is, as a read takes it to be.
+ *   - Opens under a key in the ring: it's what's inside. A read agrees if that's the
+ *     active key. Under a retired key a read throws, because it only tries the active
+ *     one, but the GCM tag proves this is what was saved.
+ *   - The shape of ciphertext, and nothing opens it: it's ciphertext under a key that's
+ *     gone, or a long plaintext made of base64 characters. A read throws on both, and
+ *     nothing can tell them apart. Treating the first as plaintext would turn a failed
+ *     read into a wrong value, so this doesn't guess.
+ */
+export function readLegacyValue(stored: string): string | null {
+  if (!looksLikeLegacyCiphertext(stored)) return stored;
+  for (const { key } of getSecretVault().keyIds()) {
+    try {
+      return openLegacyCiphertext(stored, key);
+    } catch {
+      // Not this key.
+    }
+  }
+  return null;
+}
+
+/**
+ * Whether what a read returns is itself ciphertext, so whatever uses it gets that and
+ * not the value someone saved. Two things leave a row like this:
+ *
+ *   - A value of 1 to 4 bytes. Its ciphertext is under 50 characters, which the shape
+ *     check has always taken for plaintext.
+ *   - A value encrypted twice, because the old edit form was handed ciphertext and
+ *     saved it back.
+ *
+ * Only ciphertext passes the tag check, so a value can't get here by how it looks.
+ */
+export function readsAsLegacyCiphertext(value: string): boolean {
+  if (!LEGACY_CIPHERTEXT_CHARS.test(value)) return false;
+  if (Buffer.from(value, "base64").length < MIN_LEGACY_BYTES) return false;
+  return getSecretVault()
+    .keyIds()
+    .some(({ key }) => {
+      try {
+        openLegacyCiphertext(value, key);
+        return true;
+      } catch {
+        return false;
+      }
+    });
 }
 
 /* ---- servers.sshKey / servers.password (bound to userId + column) ----
