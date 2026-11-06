@@ -516,7 +516,7 @@ describe("userAuth.forgotPassword", () => {
     await new Promise(setImmediate);
     expect(consoleError).toHaveBeenCalledWith(
       "Failed to send password reset email:",
-      "connection refused",
+      "Error: connection refused",
     );
     consoleError.mockRestore();
   });

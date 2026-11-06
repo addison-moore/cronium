@@ -8,6 +8,7 @@ import {
   authorizeCapability,
   assertJobScope,
 } from "@/lib/security/internal-route-auth";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Stream job logs
 export async function POST(
@@ -79,7 +80,7 @@ export async function POST(
       count: body.logs.length,
     });
   } catch (error) {
-    console.error("Error streaming job logs:", error);
+    console.error("Error streaming job logs:", failureWithStack(error));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
@@ -115,7 +116,7 @@ export async function GET(
 
     return NextResponse.json({ logs: jobLogs });
   } catch (error) {
-    console.error("Error fetching job logs:", error);
+    console.error("Error fetching job logs:", failureWithStack(error));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

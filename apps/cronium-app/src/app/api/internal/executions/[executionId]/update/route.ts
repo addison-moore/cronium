@@ -9,6 +9,7 @@ import {
   authorizeCapability,
   assertJobScope,
 } from "@/lib/security/internal-route-auth";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Update an execution
 export async function PUT(
@@ -129,7 +130,10 @@ export async function PUT(
         broadcastData,
       );
     } catch (error) {
-      console.error("[Execution API] Error broadcasting update:", error);
+      console.error(
+        "[Execution API] Error broadcasting update:",
+        failureWithStack(error),
+      );
     }
 
     // If execution is completing, also update the associated job's log
@@ -211,7 +215,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, execution });
   } catch (error) {
-    console.error("Error updating execution:", error);
+    console.error("Error updating execution:", failureWithStack(error));
     // Do not echo error details — driver/DB messages can leak internals.
     return NextResponse.json(
       { error: "Internal server error" },
