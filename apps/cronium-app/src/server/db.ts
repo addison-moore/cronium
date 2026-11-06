@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { env } from "@/env.mjs";
 import * as schema from "../shared/schema";
 
@@ -22,6 +22,32 @@ const pool = new Pool({
 // Handle pool errors
 pool.on("error", (err) => {
   console.error("Unexpected error on idle client", err);
+});
+
+// The pool only listens for errors on idle clients. A client that loses its connection
+// while checked out, as every db.transaction's is, emits `error` with nothing
+// listening, and that ends any process with no uncaughtException handler, such as the
+// worker.
+//
+// Nothing is logged here: the listener above logs idle clients, and whoever holds a
+// checked-out client gets the rejected query.
+//
+// The slot is given back here because a holder may never do it. Drizzle runs BEGIN
+// outside its try block, so a connection lost on BEGIN is never released, and a dead
+// client still counts towards `max`. Enough of those and every connect times out: the
+// process stays up and does nothing. Measured on the worker: 20 drops on BEGIN stopped
+// it dispatching for good. The holder's own release comes later or not at all, and
+// pg-pool throws on a second one, so it becomes a no-op.
+const checkedOut = new WeakSet<PoolClient>();
+pool.on("acquire", (client) => checkedOut.add(client));
+pool.on("release", (_err, client) => checkedOut.delete(client));
+pool.on("connect", (client) => {
+  client.on("error", (err) => {
+    if (!checkedOut.has(client)) return;
+    const release = client.release.bind(client);
+    client.release = () => undefined;
+    release(err);
+  });
 });
 
 export const db = drizzle(pool, { schema });
