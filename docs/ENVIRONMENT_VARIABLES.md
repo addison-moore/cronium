@@ -557,8 +557,8 @@ export ENCRYPTION_KEYS_RETIRED='["<old-hex-key>"]'
 pnpm --filter @cronium/app rotate:secrets --dry-run
 
 # 2. Fix anything in "Before step 3" below. Then let running scripts finish: stopping
-#    the worker holds back scheduled runs. A tool action or HTTP request running in the
-#    worker stops with it, as at any restart. Wait for this to say 0.
+#    the worker holds back scheduled runs, and gives a tool action or HTTP request
+#    running in it up to 30 seconds to finish. Wait for this to say 0.
 docker compose stop cronium-worker
 docker compose exec postgres psql -U cronium -d cronium -c \
   "SELECT count(*) FROM jobs WHERE type = 'SCRIPT' AND status IN ('claimed', 'running');"
