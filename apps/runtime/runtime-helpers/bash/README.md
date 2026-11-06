@@ -44,9 +44,9 @@ fi
 ### Core Functions
 
 - `cronium_input` - Get execution input data
-- `cronium_output <data>` - Set execution output data
+- `cronium_output <data>` - Set execution output data. A single JSON value is sent as JSON, and anything else as a string, including numbers JSON doesn't allow, such as `010` or `+5`
 - `cronium_get_variable <key>` - Print the variable's bare value. If it has no value, print nothing and return 0. If it can't be read, return 1
-- `cronium_set_variable <key> <value>` - Set a variable. Variables are stored as strings, so `42` and `{"a":1}` read back as that text
+- `cronium_set_variable <key> <value>` - Set a variable. Variables are stored as strings, so `42` and `{"a":1}` read back as that text. A number reads back as it was written, so `010` stays `010` and `1e3` stays `1e3`
 - `cronium_set_condition <true|false>` - Set workflow condition
 - `cronium_event` - Get full event context as JSON
 - `cronium_event_field <field>` - Get specific event field
@@ -67,11 +67,13 @@ These wrappers exist in a container and on a remote server, but **they currently
 
 - `cronium_variable_exists <key>` - Return 0 if the variable has a value, 1 if it doesn't, and 2 if it can't be read. An `if` treats 2 like 1, so check `$?` where the difference matters
 - `cronium_delete_variable <key>` - Not working yet: a variable cannot be deleted from a script, so this returns an error
-- `cronium_increment_variable <key> [increment]` - Add to a numeric variable and print the result. A variable with no value starts from 0
+- `cronium_increment_variable <key> [increment]` - Add to an integer variable and print the result. A variable with no value starts from 0. Both numbers count in decimal and may be negative, so a stored `010` plus 1 is `11`, which is what gets stored
 - `cronium_append_variable <key> <value> [separator]` - Append to a string variable. A variable with no value starts empty
 - `cronium_info` - Display SDK information
 
 If `cronium_increment_variable` or `cronium_append_variable` can't read the variable, it writes nothing, so the stored value stays as it was. It prints why on stderr and returns 1. It also returns 1 if it can't store the result.
+
+`cronium_increment_variable` does the same if the increment or the stored value isn't a 64-bit integer, or the result wouldn't fit in 64 bits. An integer is digits with an optional sign, so `1.5`, `1e3`, `0x10`, `1+1`, the name of a shell variable, an empty string and a number with spaces around it are all refused.
 
 The functions behave the same under `set -u` and `set -e`. Under `set -e`, one that fails ends the script, as any other command does.
 

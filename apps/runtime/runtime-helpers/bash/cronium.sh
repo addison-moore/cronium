@@ -169,20 +169,33 @@ cronium_input() {
     fi
 }
 
+# Whether a value is one JSON value by the JSON grammar, which is how a remote server's
+# helpers decide. jq's own parser can't say: it also reads 010, +5, .5, nan and inf, and
+# writes them back as 10, 5, 0.5, null and 1.7976931348623157e+308. So --argjson checks the
+# structure and the pattern checks everything between the punctuation. Without the
+# lookahead, 010 would pass as 0, 1 and 0.
+_cronium_is_json() {
+    jq -ne --argjson value "$1" --arg text "$1" '
+        def string: "\"(?:[^\"\\\\]|\\\\.)*+\"";
+        def number: "-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?";
+        def bare: "(?:true|false|null|" + number + ")(?![^\\]\\[{}:,\" \t\r\n])";
+        def punctuation: "[\\]\\[{}:, \t\r\n]";
+        $text | test("\\A(?:" + string + "|" + bare + "|" + punctuation + ")*+\\z")
+    ' >/dev/null 2>&1
+}
+
 # Set output data for this execution
 cronium_output() {
     _cronium_ready || return 1
     local data="$1"
     
-    # Anything that is not a single JSON value is sent as a string. Asking
-    # --argjson is what matters: `jq .` also passes an empty value and "1 2",
-    # which --argjson then rejects below.
-    if ! jq -n --argjson d "$data" '$d' >/dev/null 2>&1; then
-        data=$(jq -n --arg d "$data" '$d')
+    # Anything that is not a single JSON value is sent as a string.
+    if ! _cronium_is_json "$data"; then
+        data=$(jq -n --arg d "$data" '$d') || return 1
     fi
     
-    local payload=$(jq -n --argjson data "$data" '{data: $data}')
-    _cronium_request "POST" "/executions/${CRONIUM_EXECUTION_ID}/output" "$payload" >/dev/null
+    # By hand, because $data is JSON by now and jq would rewrite its numbers: 1e3 as 1E+3.
+    _cronium_request "POST" "/executions/${CRONIUM_EXECUTION_ID}/output" "{\"data\":$data}" >/dev/null
 }
 
 # Get a variable value
@@ -208,13 +221,13 @@ cronium_set_variable() {
     local value="$2"
     local encoded_key=$(printf '%s' "$key" | jq -sRr @uri)
     
-    # See cronium_output. The runtime stores whatever arrives as a string.
-    if ! jq -n --argjson v "$value" '$v' >/dev/null 2>&1; then
-        value=$(jq -n --arg v "$value" '$v')
+    # See cronium_output. The runtime stores whatever arrives as a string, and a JSON
+    # value as the text it was written in, so 010 and 1e3 read back as they were set.
+    if ! _cronium_is_json "$value"; then
+        value=$(jq -n --arg v "$value" '$v') || return 1
     fi
     
-    local payload=$(jq -n --argjson value "$value" '{value: $value}')
-    _cronium_request "PUT" "/executions/${CRONIUM_EXECUTION_ID}/variables/${encoded_key}" "$payload" >/dev/null
+    _cronium_request "PUT" "/executions/${CRONIUM_EXECUTION_ID}/variables/${encoded_key}" "{\"value\":$value}" >/dev/null
 }
 
 # Set workflow condition
@@ -266,7 +279,7 @@ cronium_execute_tool_action() {
     local config="$3"
     
     # Ensure config is valid JSON
-    if ! echo "$config" | jq . >/dev/null 2>&1; then
+    if ! _cronium_is_json "$config"; then
         echo "Error: Invalid JSON configuration for tool action" >&2
         return 1
     fi
@@ -398,27 +411,47 @@ cronium_delete_variable() {
     cronium_set_variable "$key" "null"
 }
 
+# Prints a whole number with no plus sign or leading zeros, which is the form $((...)) reads
+# as decimal, or returns 1 if it isn't a 64-bit integer. Left to itself, $((...)) reads a
+# leading 0 as octal, a name as a variable and anything else as an expression, which can
+# run commands. Past 64 bits it wraps without saying so, and then the number doesn't come
+# back the same.
+_cronium_integer() {
+    local pattern='^([-+]?)0*([1-9][0-9]*|0)$'
+    [[ "$1" =~ $pattern ]] || return 1
+    local number="${BASH_REMATCH[1]#+}${BASH_REMATCH[2]}"
+    [ "$number" = "-0" ] && number=0
+    [ "$((number))" = "$number" ] || return 1
+    echo "$number"
+}
+
 # Utility function to increment a numeric variable
 cronium_increment_variable() {
     _cronium_ready || return 1
     local key="$1"
-    local increment="${2:-1}"
+    local by="${2-1}"
+    local increment
     local current
+    increment=$(_cronium_integer "$by") || {
+        echo "Error: Increment '$by' is not a 64-bit integer, so variable '$key' was not changed" >&2
+        return 1
+    }
     # Only a variable with no value starts from 0. One that couldn't be read still holds
     # its value, and anything written here would replace it.
     current=$(cronium_get_variable "$key") || {
         echo "Error: Could not read variable '$key', so it was not changed" >&2
         return 1
     }
-    current="${current:-0}"
-    
-    # Check if current value is numeric
-    if ! [[ "$current" =~ ^-?[0-9]+$ ]]; then
-        echo "Error: Variable '$key' is not numeric" >&2
+    current=$(_cronium_integer "${current:-0}") || {
+        echo "Error: Variable '$key' is not a 64-bit integer, so it was not changed" >&2
         return 1
-    fi
+    }
     
     local new_value=$((current + increment))
+    if (( (increment > 0 && new_value < current) || (increment < 0 && new_value > current) )); then
+        echo "Error: Adding $increment to variable '$key' goes past 64 bits, so it was not changed" >&2
+        return 1
+    fi
     cronium_set_variable "$key" "$new_value" || return 1
     echo "$new_value"
 }
@@ -471,3 +504,5 @@ export -f cronium_append_variable
 export -f cronium_info
 export -f _cronium_ready
 export -f _cronium_request
+export -f _cronium_is_json
+export -f _cronium_integer
