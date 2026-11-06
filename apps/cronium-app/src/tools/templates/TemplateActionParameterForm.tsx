@@ -152,7 +152,9 @@ export function TemplateActionParameterForm({
             />
           </div>
           {description && (
-            <p className="text-muted-foreground text-sm">{description}</p>
+            <p className="text-muted-foreground text-sm wrap-anywhere">
+              {description}
+            </p>
           )}
           {error && <p className="text-destructive text-sm">{error}</p>}
         </div>

@@ -83,7 +83,7 @@ function GoogleSheetsCredentialForm({
     <form onSubmit={handleSubmit} className="space-y-4">
       <Alert>
         <AlertTriangle className="h-4 w-4" />
-        <AlertDescription>
+        <AlertDescription className="wrap-anywhere">
           Google Sheets uses your server&apos;s Google OAuth app (configured by
           the administrator via <code>OAUTH_GOOGLE_CLIENT_ID</code> /{" "}
           <code>OAUTH_GOOGLE_CLIENT_SECRET</code>). After saving, click{" "}
@@ -185,7 +185,7 @@ function GoogleConnectSection({ toolId }: { toolId: number }) {
 
   if (oauthStatus.hasTokens) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Badge
           variant="outline"
           className="border-success/40 bg-success/10 text-success-text"
@@ -236,23 +236,23 @@ function GoogleSheetsCredentialDisplay({
         return (
           <div
             key={tool.id}
-            className="border-border hover:bg-muted/50 flex items-center justify-between rounded-lg border p-4"
+            className="border-border hover:bg-muted/50 flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-0"
           >
-            <div className="flex-1">
-              <div className="mb-2 flex items-center gap-3">
+            <div className="min-w-0 flex-1 wrap-anywhere">
+              <div className="mb-2 flex flex-wrap items-center gap-3">
                 <h4 className="font-medium">{tool.name}</h4>
                 <StatusBadge status={tool.isActive ? "active" : "offline"} />
                 <ToolHealthBadge toolId={tool.id} />
               </div>
               <div className="text-muted-foreground grid grid-cols-1 gap-2 text-sm">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">Scope:</span>
                   <span className="font-mono text-xs">
                     {credentials.scope ?? GOOGLE_SHEETS_SCOPE}
                   </span>
                 </div>
                 {credentials.spreadsheetId && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">Default Spreadsheet:</span>
                     <span className="font-mono text-xs">
                       {credentials.spreadsheetId}
@@ -264,7 +264,7 @@ function GoogleSheetsCredentialDisplay({
                 <GoogleConnectSection toolId={tool.id} />
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => onEdit(tool)}>
                 <Edit className="h-4 w-4" />
               </Button>
