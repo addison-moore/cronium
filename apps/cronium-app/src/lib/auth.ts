@@ -7,6 +7,7 @@ import { consumeAtomicRateLimit } from "@/lib/security/atomic-rate-limiter";
 import { resolveRequestClientIp } from "@/lib/security/client-ip";
 import { sameOriginRedirect } from "@/lib/safe-redirect";
 import { verifyTotp } from "@/lib/security/totp";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // A TOTP code verifies for up to 90s (±1 step of 30s); remember it a little longer.
 const TOTP_REPLAY_WINDOW_MS = 120_000;
@@ -152,7 +153,7 @@ export const authOptions: NextAuthOptions = {
           ) {
             throw error;
           }
-          console.error("Error in authorize:", error);
+          console.error("Error in authorize:", failureWithStack(error));
           return null;
         }
       },

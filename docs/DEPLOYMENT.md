@@ -98,7 +98,10 @@ routes are intended only for Cronium services and require
 A reverse proxy in front of the app also carries saves, so let it pass request
 bodies of at least 10 MB, the most one save can carry. nginx's
 `client_max_body_size` defaults to 1 MB, and past that it refuses a script before
-Cronium sees it.
+Cronium sees it, so set `client_max_body_size 10m;`. Until a proxy allows a save,
+the event form and the JSON import dialog say that a reverse proxy refused it, and
+callers of the REST API and `/api/mcp` get the proxy's own 413, which may not be
+JSON.
 
 The socket server accepts browser handshakes only from exact trusted origins.
 It uses `PUBLIC_APP_URL` and `AUTH_URL` by default. If more than one frontend
@@ -349,8 +352,9 @@ docker compose down -v     # stop and delete data volumes
 ## Security Notes
 
 - Secrets live only in `.env` (chmod 600) — never commit it.
-- Rotate secrets periodically; restart the stack after updating `.env`.
-  Rotating `ENCRYPTION_KEY` requires re-entering stored tool credentials.
+- Rotate secrets periodically; restart the stack after updating `.env`. The exception
+  is `ENCRYPTION_KEY`: changing it in `.env` alone makes every stored secret unreadable,
+  so follow [Key rotation](ENVIRONMENT_VARIABLES.md#key-rotation-encryption_key).
 - Keep images fresh (`docker compose pull` on a schedule, or pin and bump).
 - Behind a TLS proxy, set `TRUSTED_PROXY_HOPS=1` (one per trusted proxy). At the
   default of `0` forwarding headers are ignored, so every client shares one login

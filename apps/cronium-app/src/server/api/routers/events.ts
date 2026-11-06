@@ -36,6 +36,7 @@ import {
   toEventListApiDto,
 } from "@/server/security/api-dto";
 import { canReadEnvVarValues } from "@/server/token-scopes";
+import { failureWithStack } from "@/lib/pg-errors";
 
 /**
  * A fork writes its own links to the source event's servers, and no write can
@@ -120,7 +121,7 @@ export const eventsRouter = createTRPCRouter({
       } catch (error) {
         if (error instanceof TRPCError) throw error;
 
-        console.error("Error in events.getById:", error);
+        console.error("Error in events.getById:", failureWithStack(error));
 
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",

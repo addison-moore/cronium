@@ -2,6 +2,7 @@ import {
   buildEventFormDefaults,
   buildTimezoneOptions,
   extractServerIds,
+  linkedServers,
   parseInitialEnvVars,
   parseInitialTags,
 } from "../event-form-defaults";
@@ -103,6 +104,30 @@ describe("buildEventFormDefaults", () => {
     expect(defaults.startTime).toBe("2026-03-05T12:34");
   });
 
+  it("normalizes the lowercase values older rows can hold", () => {
+    const defaults = buildEventFormDefaults({
+      scheduleUnit: "hours" as TimeUnit,
+      timeoutUnit: "minutes" as TimeUnit,
+      runLocation: "remote" as RunLocation,
+    });
+    expect(defaults.scheduleUnit).toBe(TimeUnit.HOURS);
+    expect(defaults.timeoutUnit).toBe(TimeUnit.MINUTES);
+    expect(defaults.runLocation).toBe(RunLocation.REMOTE);
+    expect(defaults.runOnLocal).toBe(false);
+  });
+
+  it("falls back to the defaults for a value that isn't a known one", () => {
+    const defaults = buildEventFormDefaults({
+      scheduleUnit: "fortnights" as TimeUnit,
+      timeoutUnit: "fortnights" as TimeUnit,
+      runLocation: "moon" as RunLocation,
+    });
+    expect(defaults.scheduleUnit).toBe(TimeUnit.MINUTES);
+    expect(defaults.timeoutUnit).toBe(TimeUnit.SECONDS);
+    expect(defaults.runLocation).toBe(RunLocation.LOCAL);
+    expect(defaults.runOnLocal).toBe(true);
+  });
+
   it("never carries servers/env vars/tags into defaults (set later by effect)", () => {
     const defaults = buildEventFormDefaults({
       environmentVariables: [{ key: "A", value: "1" }],
@@ -157,6 +182,18 @@ describe("parseInitialEnvVars", () => {
     const vars = [{ key: "K", value: "V" }];
     expect(parseInitialEnvVars(vars)).toEqual(vars);
   });
+
+  it("keeps only the key and value of a row from the API", () => {
+    const row = {
+      id: 7,
+      eventId: 42,
+      key: "K",
+      value: "V",
+      createdAt: new Date("2026-01-02T03:04:05.000Z"),
+      updatedAt: new Date("2026-01-02T03:04:05.000Z"),
+    };
+    expect(parseInitialEnvVars([row])).toEqual([{ key: "K", value: "V" }]);
+  });
 });
 
 describe("extractServerIds", () => {
@@ -175,6 +212,70 @@ describe("extractServerIds", () => {
       { id: "7", name: "b" },
     ] as unknown as Array<{ id: number; name: string }>;
     expect(extractServerIds(servers)).toEqual([6]);
+  });
+});
+
+describe("linkedServers", () => {
+  const live = { id: 6, name: "live-box", address: "192.0.2.10" };
+  const retired = {
+    id: 7,
+    name: "retired-box",
+    address: "192.0.2.20",
+    isArchived: true,
+  };
+
+  it("is empty for a new event", () => {
+    expect(linkedServers(undefined)).toEqual([]);
+    expect(linkedServers({})).toEqual([]);
+  });
+
+  it("returns an event's links, archived or not", () => {
+    expect(linkedServers({ servers: [live, retired] })).toEqual([
+      live,
+      retired,
+    ]);
+  });
+
+  it("adds an archived direct server, once", () => {
+    const remote = { runLocation: RunLocation.REMOTE, server: retired };
+    expect(linkedServers({ ...remote, servers: [live] })).toEqual([
+      live,
+      retired,
+    ]);
+    expect(linkedServers({ ...remote, servers: [retired] })).toEqual([retired]);
+  });
+
+  it("adds an archived direct server on a LOCAL_AND_REMOTE event too", () => {
+    expect(
+      linkedServers({
+        runLocation: RunLocation.LOCAL_AND_REMOTE,
+        server: retired,
+        servers: [],
+      }),
+    ).toEqual([retired]);
+  });
+
+  it("leaves out a direct server that is active, or on a LOCAL event", () => {
+    expect(
+      linkedServers({
+        runLocation: RunLocation.REMOTE,
+        server: live,
+        servers: [],
+      }),
+    ).toEqual([]);
+    expect(
+      linkedServers({
+        runLocation: RunLocation.LOCAL,
+        server: retired,
+        servers: [],
+      }),
+    ).toEqual([]);
+    expect(
+      linkedServers({
+        server: retired,
+        servers: [],
+      }),
+    ).toEqual([]);
   });
 });
 
