@@ -322,8 +322,8 @@ jobs:
       - name: Pull alpine (integration test never pulls)
         run: docker pull alpine:latest
 
-      # What a job can do in the sandbox depends on the image: each sets its own
-      # HOME and user. The E2E job builds only the bash one.
+      # Scripts reach a job on stdin through a bootstrap per language, so these
+      # tests run in the real images. The E2E job builds only the bash one.
       - name: Build the runner images (integration tests never build)
         working-directory: apps/runtime/container-images
         run: |
@@ -338,7 +338,7 @@ jobs:
           go test -tags=integration -count=1 -v ./internal/executors/container/ | tee /tmp/itest.out
           # These tests self-skip when Docker or an image is unavailable; on
           # this runner that would mean the job silently proved nothing — fail.
-          if grep -E -- "--- SKIP: (TestCreatedContainerHasHardenedHostConfig|.*InTheSandbox)" /tmp/itest.out; then
+          if grep -E -- "--- SKIP: (TestCreatedContainerHasHardenedHostConfig|.*InTheSandbox|TestCutOffDeliveryRunsNothing)" /tmp/itest.out; then
             echo "a container integration test was skipped — Docker or an image is unavailable" >&2
             exit 1
           fi

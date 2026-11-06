@@ -15,9 +15,12 @@ import {
 } from "@/lib/ssrf-guard";
 import { SsrfBlockedError } from "@/lib/tools/safe-fetch";
 import { webhookRetryConfigSchema } from "./retry-config-schema";
+import { WebhookPreconditionError } from "./webhook-errors";
 
 // Cap the response body we buffer from a webhook target.
 const MAX_WEBHOOK_RESPONSE_BYTES = 1 * 1024 * 1024;
+// How much of it a delivery keeps and reports.
+const MAX_RECORDED_RESPONSE_CHARS = 1000;
 
 // Webhook configuration schema
 export const WebhookConfigSchema = z.object({
@@ -47,7 +50,34 @@ export interface WebhookDeliveryResult {
   response?: string;
   error?: string;
   duration: number;
-  retryCount: number;
+}
+
+/**
+ * What `triggerEvent` stores in `webhook_events.payload`: the part of a delivery
+ * body that the row's columns don't hold. Strict, because `WebhookRouter` writes
+ * to the same table. Its rows record what came in, with the request's body merged
+ * in, so they can have a `data` and `metadata` of their own, and no delivery is
+ * ever sent from them.
+ */
+const storedEventContentSchema = z.strictObject({
+  data: z.record(z.string(), z.unknown()),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+/** The delivery body for a stored event. A retry has to produce what the first
+ * attempt sent, so both build it here. */
+function deliveryPayload(
+  event: typeof webhookEvents.$inferSelect,
+  data: Record<string, unknown>,
+  metadata?: Record<string, unknown>,
+): WebhookPayload {
+  return {
+    id: event.id.toString(),
+    event: event.event,
+    timestamp: event.createdAt,
+    data,
+    ...(metadata !== undefined && { metadata }),
+  };
 }
 
 export class WebhookManager {
@@ -202,35 +232,15 @@ export class WebhookManager {
       return;
     }
 
-    const sourceWebhookId =
-      typeof metadata?.webhookId === "number" ? metadata.webhookId : null;
-
-    // Create webhook event record, stamped with its owning tenant.
-    const result = await db
-      .insert(webhookEvents)
-      .values({
-        event,
-        payload: { data, metadata },
-        userId: ownerUserId,
-        sourceWebhookId,
-        createdAt: new Date(),
-      })
-      .returning();
-
-    if (!result[0]) {
-      throw new Error("Failed to create webhook event");
-    }
-
-    const webhookEvent = result[0];
+    const webhookEvent = await this.recordEvent(
+      event,
+      data,
+      ownerUserId,
+      metadata,
+    );
 
     // Queue deliveries for each webhook
-    const payload: WebhookPayload = {
-      id: webhookEvent.id.toString(),
-      event,
-      timestamp: webhookEvent.createdAt,
-      data,
-      ...(metadata !== undefined && { metadata }),
-    };
+    const payload = deliveryPayload(webhookEvent, data, metadata);
 
     const { decryptWebhookSecret, decryptWebhookHeaders } =
       await import("./webhook-secret");
@@ -262,6 +272,96 @@ export class WebhookManager {
         ...(retryConfig !== undefined && { retryConfig }),
       });
     }
+  }
+
+  /**
+   * Send a test event to this one webhook, whatever it subscribes to, and report
+   * what the receiver did.
+   *
+   * It doesn't fan out, so no other webhook gets anything. It makes one attempt
+   * and waits for it, so the outcome it returns is real. It stays out of the queue,
+   * which could only say the attempt was queued, and which would repeat a failure
+   * on its own schedule after the caller had moved on.
+   *
+   * The attempt is recorded like any other delivery, on a `webhook_events` row of
+   * its own in the form `triggerEvent` stores. So it shows in the webhook's history
+   * and stats, under `webhook.test`, and can be retried.
+   *
+   * @throws WebhookPreconditionError when the webhook is disabled. Nothing is sent
+   * or recorded then. A failed attempt isn't thrown: it comes back with
+   * `success: false`, recorded like any other.
+   */
+  async sendTestEvent(
+    webhook: typeof webhooks.$inferSelect,
+    data: Record<string, unknown>,
+    metadata: Record<string, unknown>,
+  ): Promise<WebhookDeliveryResult> {
+    // Disabled means nothing goes to this URL, as with `triggerEvent`.
+    if (!webhook.active) {
+      throw new WebhookPreconditionError("Webhook is disabled");
+    }
+
+    // Decrypted before anything is recorded: a secret that can't be read means
+    // there was no attempt.
+    const { decryptWebhookSecret, decryptWebhookHeaders } =
+      await import("./webhook-secret");
+    const secret = decryptWebhookSecret(
+      webhook.secret,
+      webhook.key,
+      webhook.userId,
+    );
+    const headers = decryptWebhookHeaders(
+      webhook.headers,
+      webhook.key,
+      webhook.userId,
+    );
+
+    const event = await this.recordEvent(
+      "webhook.test",
+      data,
+      webhook.userId,
+      metadata,
+    );
+
+    return this.processDelivery(
+      webhook.id,
+      event.id,
+      webhook.url,
+      secret,
+      headers,
+      deliveryPayload(event, data, metadata),
+    );
+  }
+
+  /**
+   * Store an event that's about to be delivered, stamped with its owning tenant.
+   * Its `payload` is the part of a delivery body that the row's columns don't hold.
+   */
+  private async recordEvent(
+    event: string,
+    data: Record<string, unknown>,
+    ownerUserId: string,
+    metadata?: Record<string, unknown>,
+  ) {
+    const sourceWebhookId =
+      typeof metadata?.webhookId === "number" ? metadata.webhookId : null;
+
+    const result = await db
+      .insert(webhookEvents)
+      .values({
+        event,
+        payload: { data, metadata },
+        userId: ownerUserId,
+        sourceWebhookId,
+        createdAt: new Date(),
+      })
+      .returning();
+
+    if (!result[0]) {
+      throw new Error("Failed to create webhook event");
+    }
+
+    return result[0];
   }
 
   /**
@@ -303,18 +403,28 @@ export class WebhookManager {
           webhookId,
           success: false,
           statusCode: 0,
-          response: guardError.message,
+          error: guardError.message,
           duration,
-          retryCount: 0,
         };
       }
       throw guardError;
     }
 
     try {
-      // Generate signature
-      const signature = this.webhookSecurity.generateSignature(
-        JSON.stringify(payload),
+      const rawBody = JSON.stringify(payload);
+      // When this attempt is made. The body's `timestamp` and `X-Webhook-Timestamp`
+      // are the event's and stay the same on every attempt, so neither can tell a
+      // late retry from a replayed request.
+      const attemptTimestamp = new Date().toISOString();
+
+      // Generate signatures. `X-Webhook-Signature` stays over the body alone, because
+      // receivers verify it that way; `X-Webhook-Signature-V2` also covers the
+      // attempt. docs/WEBHOOKS.md tells receivers how to check them.
+      const signature = this.webhookSecurity.generateSignature(rawBody, secret);
+      const signatureV2 = this.webhookSecurity.generateDeliverySignature(
+        attemptTimestamp,
+        deliveryId,
+        rawBody,
         secret,
       );
 
@@ -328,13 +438,17 @@ export class WebhookManager {
       };
       const requestHeaders = {
         ...systemHeaders,
+        "X-Delivery-Timestamp": attemptTimestamp,
         "X-Webhook-Signature": signature,
+        "X-Webhook-Signature-V2": signatureV2,
         ...headers,
       };
       // What the delivery record keeps. `headers` was decrypted just to make this
       // request (HI-09), and they are usually credentials, so only their names
       // survive; webhook_deliveries is not encrypted and is returned by the
-      // history API.
+      // history API. The signatures and the attempt's time stay out too. That time
+      // is close to `attempted_at` less `duration`: the column is set when the attempt
+      // ends, up to 30 seconds after it starts.
       const recordedHeaders = {
         ...systemHeaders,
         ...Object.fromEntries(
@@ -351,7 +465,7 @@ export class WebhookManager {
         method: "POST",
         url,
         headers: requestHeaders,
-        data: JSON.stringify(payload),
+        data: rawBody,
         timeout: 30000,
         httpAgent: ssrfHttpAgent,
         httpsAgent: ssrfHttpsAgent,
@@ -370,6 +484,10 @@ export class WebhookManager {
         typeof response.data === "string"
           ? response.data
           : JSON.stringify(response.data);
+      const recordedResponse = responseText.substring(
+        0,
+        MAX_RECORDED_RESPONSE_CHARS,
+      );
       const ok = response.status >= 200 && response.status < 300;
 
       // Record delivery
@@ -379,7 +497,7 @@ export class WebhookManager {
         deliveryId,
         status: ok ? "success" : "failed",
         statusCode: response.status,
-        response: responseText.substring(0, 1000), // Limit response size
+        response: recordedResponse,
         headers: recordedHeaders,
         duration,
         attemptedAt: new Date(),
@@ -390,9 +508,8 @@ export class WebhookManager {
         webhookId,
         success: ok,
         statusCode: response.status,
-        response: responseText,
+        response: recordedResponse,
         duration,
-        retryCount: 0,
       };
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -417,7 +534,6 @@ export class WebhookManager {
         success: false,
         error: errorMessage,
         duration,
-        retryCount: 0,
       };
     }
   }
@@ -442,7 +558,24 @@ export class WebhookManager {
   }
 
   /**
-   * Retry failed webhook delivery
+   * Send a recorded delivery's event to its webhook again, and report what the
+   * receiver did.
+   *
+   * The body is the original event, rebuilt from its row. Its `id` stays the same,
+   * so a receiver can tell it's the same event. Its `timestamp` is the event's, in
+   * the body and in `X-Webhook-Timestamp`, and `X-Delivery-Id` and
+   * `X-Delivery-Timestamp` are new because they name one attempt; all of that is
+   * what an automatic retry sends. jsonb doesn't keep key order, so the bytes and
+   * therefore `X-Webhook-Signature` can differ from the first attempt's even under
+   * the same secret. The URL, secret and headers are the webhook's current ones.
+   *
+   * This makes one attempt and waits for it, so the outcome it returns is real. It
+   * stays out of the queue, which could only say the attempt was queued, and which
+   * would repeat a failure on its own schedule after the caller had moved on.
+   *
+   * @throws WebhookPreconditionError when it won't send. Nothing is sent or
+   * recorded then. A failed attempt isn't thrown: it comes back with
+   * `success: false`, recorded like any other.
    */
   async retryDelivery(deliveryId: string): Promise<WebhookDeliveryResult> {
     // Use optimized query to get delivery with webhook and event in single query
@@ -454,40 +587,43 @@ export class WebhookManager {
 
     const { webhook, event } = result;
 
-    // Re-queue the delivery
-    const retryConfig = webhook.retryConfig as
-      | {
-          maxRetries: number;
-          retryDelay: number;
-          backoffMultiplier: number;
-        }
-      | undefined;
+    // Whether the webhook still subscribes to this event isn't checked, on purpose.
+    // Subscriptions decide what fan-out sends. A retry is the owner asking for one
+    // delivery by id, and test deliveries go out whatever the webhook subscribes
+    // to, so they couldn't be retried otherwise.
+
+    // Disabled means nothing goes to this URL, as with `triggerEvent`.
+    if (!webhook.active) {
+      throw new WebhookPreconditionError("Webhook is disabled");
+    }
+
+    // An event only ever goes to its own tenant's webhooks (HI-01). A delivery
+    // from before fan-out was scoped can break that, and one from before events
+    // were stamped can't show it doesn't, so neither goes out again.
+    if (event.userId !== webhook.userId) {
+      throw new WebhookPreconditionError(
+        "This delivery's event isn't recorded under this webhook's owner",
+      );
+    }
+
+    const content = storedEventContentSchema.safeParse(event.payload);
+    if (!content.success) {
+      throw new WebhookPreconditionError(
+        "This delivery's stored event can't be sent again",
+      );
+    }
 
     // Decrypt the HMAC secret and custom headers at this delivery-signing
     // boundary — the stored forms are ciphertext at rest (HI-09).
     const { decryptWebhookSecret, decryptWebhookHeaders } =
       await import("./webhook-secret");
-    await this.webhookQueue.enqueue({
-      webhookId: webhook.id,
-      webhookEventId: event.id,
-      url: webhook.url,
-      secret: decryptWebhookSecret(webhook.secret, webhook.key, webhook.userId),
-      headers: decryptWebhookHeaders(
-        webhook.headers,
-        webhook.key,
-        webhook.userId,
-      ),
-      payload: event.payload as WebhookPayload,
-      ...(retryConfig !== undefined && { retryConfig }),
-      isRetry: true,
-    });
-
-    return {
-      id: deliveryId,
-      webhookId: webhook.id,
-      success: false,
-      duration: 0,
-      retryCount: 1,
-    };
+    return this.processDelivery(
+      webhook.id,
+      event.id,
+      webhook.url,
+      decryptWebhookSecret(webhook.secret, webhook.key, webhook.userId),
+      decryptWebhookHeaders(webhook.headers, webhook.key, webhook.userId),
+      deliveryPayload(event, content.data.data, content.data.metadata),
+    );
   }
 }

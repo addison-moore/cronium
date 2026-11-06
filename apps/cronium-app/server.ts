@@ -16,6 +16,7 @@ import {
   closeSocketSecurityStore,
   subscribeToSocketSecurityEvents,
 } from "./src/server/socket-security-store";
+import { SHUTDOWN_TIMEOUT_MS } from "./src/server/socket-server-shutdown";
 import { socketUserAuthorizationFingerprint } from "./src/lib/socket-ticket";
 import { storage } from "./src/server/storage";
 import { UserStatus, type Job, type Log } from "./src/shared/schema";
@@ -252,6 +253,7 @@ if (!Number.isInteger(PORT) || PORT < 0 || PORT > 65535) {
 let unsubscribeSecurityEvents: (() => Promise<void>) | null = null;
 let revalidationInterval: NodeJS.Timeout | null = null;
 let revalidationInFlight = false;
+let shuttingDown = false;
 
 async function start(): Promise<void> {
   await assertSocketSecurityStoreAvailable();
@@ -273,19 +275,54 @@ async function start(): Promise<void> {
   });
 }
 
-async function shutdown(): Promise<void> {
+async function closeConnections(): Promise<void> {
   if (revalidationInterval) clearInterval(revalidationInterval);
   terminalHandler.cleanup();
+  // Sockets go first: until they are closed they still need to hear revocations,
+  // and a hung Valkey must not leave this server accepting connections.
+  await io.close();
   await unsubscribeSecurityEvents?.();
   await closeSocketSecurityStore();
-  io.close();
-  httpServer.close();
 }
 
-process.once("SIGTERM", () => void shutdown());
-process.once("SIGINT", () => void shutdown());
+/**
+ * Exits explicitly, because closing what this file owns isn't enough. Its imports
+ * open the cache service's Valkey client and start the SSH service's interval, and
+ * either one keeps the process alive indefinitely.
+ *
+ * The status is what the signal would have produced, and what Next exits with
+ * beside this server. worker.ts exits 0, but start.sh reports a 0 from either of
+ * its servers as a failure, so that would turn every `docker stop` into Exited (1).
+ */
+function shutdown(exitCode: number): void {
+  // The other signal arriving during a stop. The same one again never gets here:
+  // `once` has removed its listener, so the default action kills the process, even
+  // if its event loop is stuck.
+  if (shuttingDown) process.exit(exitCode);
+  shuttingDown = true;
+
+  setTimeout(() => {
+    console.error(
+      `Socket.IO server still closing after ${SHUTDOWN_TIMEOUT_MS}ms; exiting anyway`,
+    );
+    process.exit(exitCode);
+  }, SHUTDOWN_TIMEOUT_MS);
+
+  void closeConnections()
+    .catch((error) => {
+      console.error("Socket.IO server failed to close cleanly:", error);
+    })
+    .finally(() => process.exit(exitCode));
+}
+
+// A second signal ends the process at once, whichever it is. start.sh sends one when
+// Next exits first, and it is how a second Ctrl-C gets past a stop that is taking too long.
+process.once("SIGTERM", () => shutdown(143));
+process.once("SIGINT", () => shutdown(130));
 
 void start().catch((error) => {
+  // A stop during startup closes the store the preflight is waiting on.
+  if (shuttingDown) return;
   console.error("Socket.IO server failed security preflight:", error);
   process.exit(1);
 });
