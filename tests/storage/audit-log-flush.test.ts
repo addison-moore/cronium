@@ -2,10 +2,16 @@
  * The tool audit log is the security record of who changed or used a credential.
  * It flushes in batches, and a batch insert is all or nothing, so these pin what
  * happens to an entry the database won't store, and that the others still land.
+ * Entries also wait in memory, so the last sections pin the time a row says it
+ * happened and what becomes of them when the process stops.
  *
  * Real Postgres on purpose: the rejections here only exist there, and the logger
  * has to recognise them through Drizzle's error wrapper.
  */
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import fs from "node:fs";
+import net from "node:net";
+import path from "node:path";
 import { asc, eq } from "drizzle-orm";
 import { executeToolAction } from "@/lib/scheduler/tool-action-executor";
 import { MAX_AUDIT_ENTRY_CHARS } from "@/lib/security/audit-entry";
@@ -19,11 +25,15 @@ import { db, pool } from "@/server/db";
 import {
   events,
   EventType,
+  jobs,
+  JobStatus,
+  JobType,
   toolAuditLogs,
   toolCredentials,
 } from "@/shared/schema";
+import { hangableDatabase } from "../hangable-database";
 import { closePool, resetDatabase } from "./helpers/db-reset";
-import { seedEvent, seedUser } from "./helpers/seed";
+import { seedEvent, seedJob, seedUser } from "./helpers/seed";
 
 // jest-circus only reads a global testTimeout, so the one on this project in
 // jest.config.js has no effect and the default here would be 5 seconds.
@@ -62,6 +72,36 @@ const droppedLines = () =>
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const settled = (promise: Promise<unknown>, as: string, withinMs = 1000) =>
+  Promise.race([
+    promise.then(() => as),
+    sleep(withinMs).then(() => "still waiting"),
+  ]);
+
+const writeToStderr = process.stderr.write.bind(process.stderr) as (
+  ...args: unknown[]
+) => boolean;
+
+/**
+ * Decides what becomes of the empty write shutdown waits on. It can't be left to
+ * the real stderr: Jest's default reporter swaps process.stderr.write for one that
+ * never calls back, so every shutdown that logs something would wait out its cap,
+ * and only there. Inside a coding agent Jest picks a reporter that leaves stderr
+ * alone, so a run there can pass where CI fails. --reporters=default shows both.
+ */
+function answerStderrWait(answer: (callback: () => void) => void) {
+  jest.spyOn(process.stderr, "write").mockImplementation(((
+    chunk: unknown,
+    ...rest: unknown[]
+  ) => {
+    if (chunk === "") {
+      answer(rest[0] as () => void);
+      return true;
+    }
+    return writeToStderr(chunk, ...rest);
+  }) as never);
+}
+
 /** For what happens after log() has returned: it doesn't wait for a flush. */
 async function until(
   what: string,
@@ -95,6 +135,35 @@ async function seedCredential(): Promise<number> {
     })
     .returning({ id: toolCredentials.id });
   return tool!.id;
+}
+
+/**
+ * A logger of its own on a pool of its own, for a database the shared one can't
+ * show: the logger is one per process, so `run` gets the others out of the way.
+ */
+async function withOwnLogger(
+  databaseUrl: string,
+  run: (logger: typeof auditLogger, loggerPool: typeof pool) => Promise<void>,
+) {
+  const key = Symbol.for("cronium.auditLogger");
+  const shared = globalThis as unknown as Record<symbol, unknown>;
+  const original = { url: process.env.DATABASE_URL, logger: shared[key] };
+
+  delete shared[key];
+  process.env.DATABASE_URL = databaseUrl;
+  try {
+    await jest.isolateModulesAsync(async () => {
+      const { auditLogger: logger } =
+        await import("@/lib/security/audit-logger");
+      const { pool: loggerPool } = await import("@/server/db");
+      logger.stopFlushInterval();
+      await run(logger, loggerPool);
+      await loggerPool.end();
+    });
+  } finally {
+    process.env.DATABASE_URL = original.url;
+    shared[key] = original.logger;
+  }
 }
 
 async function runToolAction(toolActionConfig: unknown) {
@@ -162,9 +231,11 @@ beforeEach(async () => {
   errorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
   warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
   jest.spyOn(console, "log").mockImplementation(() => undefined);
+  answerStderrWait((callback) => callback());
 
   // A test that failed midway must not leave its entries for the next one.
-  Object.assign(auditLogger, { buffer: [], retrying: false });
+  // And the one logger has to take entries again after the last test's shutdown.
+  Object.assign(auditLogger, { buffer: [], retrying: false, closed: false });
   await resetDatabase();
   await seedUser({ id: USER });
 });
@@ -834,15 +905,10 @@ describe("a database that can't take anything", () => {
   it("keeps entries while Postgres refuses connections, then writes them", async () => {
     const databaseUrl = process.env.DATABASE_URL!;
 
-    // A second logger on its own pool, pointed where nothing listens.
-    process.env.DATABASE_URL = "postgresql://postgres:x@127.0.0.1:1/nowhere";
-    try {
-      await jest.isolateModulesAsync(async () => {
-        const { auditLogger: logger } =
-          await import("@/lib/security/audit-logger");
-        const { pool: loggerPool } = await import("@/server/db");
-        logger.stopFlushInterval();
-
+    // Pointed where nothing listens.
+    await withOwnLogger(
+      "postgresql://postgres:x@127.0.0.1:1/nowhere",
+      async (logger, loggerPool) => {
         await logger.logSuccess(
           "credential.read",
           { userId: USER },
@@ -860,11 +926,8 @@ describe("a database that can't take anything", () => {
         // The database comes back.
         loggerPool.options.connectionString = databaseUrl;
         await logger.flush();
-        await loggerPool.end();
-      });
-    } finally {
-      process.env.DATABASE_URL = databaseUrl;
-    }
+      },
+    );
 
     expect(labels(await storedRows())).toEqual(["a"]);
   });
@@ -1026,12 +1089,6 @@ describe("the buffer", () => {
     const lock = await pool.connect();
     await lock.query("BEGIN");
     await lock.query("LOCK TABLE tool_audit_logs IN ACCESS EXCLUSIVE MODE");
-
-    const settled = (promise: Promise<unknown>, as: string) =>
-      Promise.race([
-        promise.then(() => as),
-        sleep(1000).then(() => "still waiting"),
-      ]);
 
     try {
       const logging = (async () => {
@@ -1229,5 +1286,721 @@ describe("the buffer", () => {
       "the next batch to be written",
       async () => (await storedRows()).length === 250,
     );
+  });
+});
+
+describe("the time on a row", () => {
+  const createdAtMs = (row: { createdAt: Date }) => row.createdAt.getTime();
+
+  it("is when the entry was logged, however long an outage held it", async () => {
+    const before = Date.now();
+    await logLabelled("held");
+    const after = Date.now();
+
+    await whileTableIsMissing(async () => {
+      await auditLogger.flush();
+      await sleep(1100);
+      await auditLogger.flush();
+    });
+    await flushCompletely();
+
+    const [row] = await storedRows();
+    expect(createdAtMs(row!)).toBeGreaterThanOrEqual(before);
+    expect(createdAtMs(row!)).toBeLessThanOrEqual(after);
+  });
+
+  it("gives entries in one batch their own times, in the order they were logged", async () => {
+    await logLabelled("first");
+    await sleep(20);
+    await logLabelled("second");
+
+    await flushCompletely();
+
+    const [first, second] = await storedRows();
+    expect(createdAtMs(second!) - createdAtMs(first!)).toBeGreaterThanOrEqual(
+      15,
+    );
+  });
+
+  it("survives losing the tool reference", async () => {
+    const before = Date.now();
+    await auditLogger.logFailure(
+      "tool.execute",
+      { userId: USER, toolId: 999 },
+      "boom",
+    );
+    const after = Date.now();
+    await sleep(50);
+
+    await flushCompletely();
+
+    const [row] = await storedRows();
+    expect(row!.toolId).toBeNull();
+    expect(createdAtMs(row!)).toBeGreaterThanOrEqual(before);
+    expect(createdAtMs(row!)).toBeLessThanOrEqual(after);
+  });
+
+  it("survives losing the details", async () => {
+    const before = Date.now();
+    await auditLogger.logFailure(
+      "tool.execute",
+      { userId: USER },
+      "raise-22023",
+    );
+    const after = Date.now();
+    await sleep(50);
+
+    await whileInsertsRaise(async () => {
+      await flushCompletely();
+    });
+
+    const [row] = await storedRows();
+    expect(row!.actionDetails).toEqual({ detailsRejected: "22023" });
+    expect(createdAtMs(row!)).toBeGreaterThanOrEqual(before);
+    expect(createdAtMs(row!)).toBeLessThanOrEqual(after);
+  });
+
+  it("survives details that can't be read", async () => {
+    const before = Date.now();
+    await auditLogger.log({
+      action: "credential.read",
+      context: { userId: USER },
+      success: true,
+      details: {
+        get unreadable(): string {
+          throw new Error("no");
+        },
+      },
+    });
+    const after = Date.now();
+    await sleep(50);
+
+    await flushCompletely();
+
+    const [row] = await storedRows();
+    expect(row!.actionDetails).toMatchObject({ detailsUnreadable: true });
+    expect(createdAtMs(row!)).toBeGreaterThanOrEqual(before);
+    expect(createdAtMs(row!)).toBeLessThanOrEqual(after);
+  });
+
+  it("goes to the server log with an entry that is dropped", async () => {
+    const before = new Date().toISOString().slice(0, 16);
+    await logLabelled("dropped", "u".repeat(256));
+
+    await flushCompletely();
+
+    const [line] = droppedLines();
+    expect(line).toMatch(
+      /"occurredAt":"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z"/,
+    );
+    expect(line).toContain(`"occurredAt":"${before}`);
+  });
+
+  it("doesn't depend on the database session's time zone", async () => {
+    const before = Date.now();
+
+    // Sessions nine hours off UTC, which CURRENT_TIMESTAMP would have shown.
+    await withOwnLogger(
+      `${process.env.DATABASE_URL!}?options=-c%20TimeZone%3DAsia/Tokyo`,
+      async (logger) => {
+        await logger.logSuccess(
+          "credential.read",
+          { userId: USER },
+          { label: "tokyo" },
+        );
+        await logger.flush();
+      },
+    );
+
+    const [row] = await storedRows();
+    expect(labels([row!])).toEqual(["tokyo"]);
+    expect(createdAtMs(row!)).toBeGreaterThanOrEqual(before);
+    expect(createdAtMs(row!)).toBeLessThanOrEqual(Date.now());
+  });
+});
+
+describe("the logger", () => {
+  it("is shared by every copy of this module in a process", async () => {
+    // Next builds it once per layer: the routes log to one copy, and instrumentation
+    // shuts down another.
+    let other: unknown;
+    await jest.isolateModulesAsync(async () => {
+      const copy = await import("@/lib/security/audit-logger");
+      other = copy.auditLogger;
+    });
+
+    expect(other).toBe(auditLogger);
+  });
+});
+
+describe("shutting down", () => {
+  /** Every insert blocks until `run` is done, as on a database that has hung. */
+  async function whileTableIsLocked(run: () => Promise<void>) {
+    const lock = await pool.connect();
+    await lock.query("BEGIN");
+    await lock.query("LOCK TABLE tool_audit_logs IN ACCESS EXCLUSIVE MODE");
+    try {
+      await run();
+    } finally {
+      await lock.query("ROLLBACK");
+      lock.release();
+    }
+  }
+
+  it("writes what is buffered, once each, and has nothing to say about it", async () => {
+    await logLabelled("a");
+    await logLabelled("b");
+
+    await auditLogger.shutdown();
+    await auditLogger.shutdown();
+
+    expect(labels(await storedRows())).toEqual(["a", "b"]);
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it("waits for a flush the interval started, not only a full batch's", async () => {
+    await logLabelled("in flight");
+
+    let stopping!: Promise<void>;
+    await whileTableIsLocked(async () => {
+      // As the interval starts one: log() isn't involved, so it isn't earlyFlush.
+      void auditLogger.flush();
+      stopping = auditLogger.shutdown();
+
+      expect(await settled(stopping, "stopped", 300)).toBe("still waiting");
+    });
+    await stopping;
+
+    expect(labels(await storedRows())).toEqual(["in flight"]);
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it("puts back what a flush in flight fails on, and still writes it", async () => {
+    await logLabelled("a");
+    await pool.query(
+      `ALTER TABLE tool_audit_logs RENAME TO tool_audit_logs_away`,
+    );
+    const failing = auditLogger.flush();
+    const stopping = auditLogger.shutdown();
+    await failing;
+    await endOutage();
+    await stopping;
+
+    expect(labels(await storedRows())).toEqual(["a"]);
+    expect(droppedLines()).toEqual([]);
+  });
+
+  it("writes what arrives while it is writing", async () => {
+    await logLabelled("before");
+
+    let stopping!: Promise<void>;
+    await whileTableIsLocked(async () => {
+      stopping = auditLogger.shutdown();
+      await logLabelled("during");
+    });
+    await stopping;
+
+    expect(labels(await storedRows())).toEqual(["before", "during"]);
+  });
+
+  it("keeps trying through a short outage", async () => {
+    await logLabelled("a");
+    await pool.query(
+      `ALTER TABLE tool_audit_logs RENAME TO tool_audit_logs_away`,
+    );
+
+    const stopping = auditLogger.shutdown();
+    await firstFlushFailed();
+    await endOutage();
+    await stopping;
+
+    expect(labels(await storedRows())).toEqual(["a"]);
+    expect(droppedLines()).toEqual([]);
+  });
+
+  it("sends what it can't write to the server log once time is up", async () => {
+    await logLabelled("a");
+    await auditLogger.logFailure("tool.execute", { userId: USER }, "boom", {
+      apiKey: "not-for-the-logs",
+    });
+
+    await whileTableIsMissing(async () => {
+      await auditLogger.shutdown(300);
+
+      expect(droppedLines()).toEqual([
+        expect.stringMatching(/DROPPED a credential\.read entry.*"label":"a"/),
+        expect.stringMatching(
+          /DROPPED a tool\.execute entry.*"errorMessage":"boom"/,
+        ),
+      ]);
+      expect(droppedLines()[1]).toContain('"apiKey":"[REDACTED]"');
+      expect(droppedLines()[1]).not.toContain("not-for-the-logs");
+    });
+
+    // Logged is final: nothing is left to be written a second time.
+    await flushCompletely();
+    expect(await storedRows()).toHaveLength(0);
+    expect(droppedLines()).toHaveLength(2);
+  });
+
+  describe("the server log", () => {
+    /** Holds up the empty write shutdown waits on, as a full pipe would. */
+    function holdStderr() {
+      const held: Array<() => void> = [];
+      answerStderrWait((callback) => held.push(callback));
+      return held;
+    }
+
+    it("gets to take what was sent to it before shutdown returns", async () => {
+      const held = holdStderr();
+      await logLabelled("a");
+
+      await whileTableIsMissing(async () => {
+        const stopping = auditLogger.shutdown(100);
+
+        expect(await settled(stopping, "stopped", 500)).toBe("still waiting");
+        expect(droppedLines()).toHaveLength(1);
+        held[0]!();
+        expect(await settled(stopping, "stopped")).toBe("stopped");
+      });
+    });
+
+    it("can't hold up shutdown forever", async () => {
+      holdStderr();
+      await logLabelled("a");
+
+      await whileTableIsMissing(async () => {
+        const stopping = auditLogger.shutdown(100);
+
+        expect(await settled(stopping, "stopped", 5000)).toBe("stopped");
+      });
+    });
+
+    it("isn't waited for when nothing went to it", async () => {
+      const held = holdStderr();
+      await logLabelled("a");
+
+      await auditLogger.shutdown();
+
+      expect(held).toEqual([]);
+    });
+
+    it("gets an entry logged once everything is written, masked", async () => {
+      await logLabelled("written");
+      await auditLogger.shutdown();
+      expect(errorSpy).not.toHaveBeenCalled();
+
+      await auditLogger.logFailure("tool.execute", { userId: USER }, "boom", {
+        apiKey: "not-for-the-logs",
+      });
+
+      expect(droppedLines()).toEqual([
+        expect.stringMatching(
+          /DROPPED a tool\.execute entry: logged after shutting down.*"errorMessage":"boom"/,
+        ),
+      ]);
+      expect(droppedLines()[0]).toContain('"apiKey":"[REDACTED]"');
+      expect(droppedLines()[0]).not.toContain("not-for-the-logs");
+      await flushCompletely();
+      expect(labels(await storedRows())).toEqual(["written"]);
+    });
+
+    it("gets an entry logged while shutdown waits on it", async () => {
+      const held = holdStderr();
+      await logLabelled("out of time");
+
+      await whileTableIsMissing(async () => {
+        const stopping = auditLogger.shutdown(100);
+        await until("the wait to start", () => held.length === 1);
+
+        await logLabelled("during the wait");
+        held[0]!();
+        await stopping;
+      });
+
+      expect(droppedLines()).toEqual([
+        expect.stringContaining('"label":"out of time"'),
+        expect.stringContaining('"label":"during the wait"'),
+      ]);
+      await flushCompletely();
+      expect(await storedRows()).toHaveLength(0);
+    });
+  });
+
+  it("doesn't wait for a hung database, and logs a batch caught in flight", async () => {
+    await whileTableIsLocked(async () => {
+      for (let i = 0; i < 100; i++) await logLabelled(`in flight ${i}`);
+      await logLabelled("still buffered");
+
+      const started = Date.now();
+      await expect(
+        settled(auditLogger.shutdown(300), "stopped", 3000),
+      ).resolves.toBe("stopped");
+      expect(Date.now() - started).toBeLessThan(2000);
+
+      const lines = droppedLines();
+      expect(lines).toHaveLength(101);
+      for (let i = 0; i < 100; i++) {
+        expect(
+          lines.filter((line) => line.includes(`"label":"in flight ${i}"`)),
+        ).toHaveLength(1);
+      }
+      expect(
+        lines.filter((line) => line.includes('"label":"still buffered"')),
+      ).toHaveLength(1);
+      // Only this kind of line can be wrong about the table, so it has to say so.
+      const inFlight = lines.filter((line) => line.includes('"in flight 0"'));
+      expect(inFlight[0]).toContain("may still have been written");
+      expect(
+        lines.find((line) => line.includes("still buffered")),
+      ).not.toContain("may still have been written");
+    });
+
+    // The database recovers before the process is gone. The insert it was already
+    // running lands, and nothing it had hold of comes back to be written again.
+    await until(
+      "the batch in flight to land",
+      async () => (await storedRows()).length === 100,
+    );
+    await flushCompletely();
+    expect(await storedRows()).toHaveLength(100);
+    expect(droppedLines()).toHaveLength(101);
+    expect(
+      logged(errorSpy).filter((l) => l.includes("kept for retry")),
+    ).toEqual([]);
+  });
+
+  it("logs only what a one-at-a-time pass hasn't written when time is up", async () => {
+    await pool.query(`
+      CREATE FUNCTION audit_test_fail() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.user_id = 'raise-22023' THEN
+          RAISE EXCEPTION 'raised' USING ERRCODE = '22023';
+        END IF;
+        IF NEW.action_details->>'label' = 'hangs' THEN
+          PERFORM pg_sleep(2);
+        END IF;
+        RETURN NEW;
+      END $$;
+      CREATE TRIGGER audit_test_fail BEFORE INSERT ON tool_audit_logs
+        FOR EACH ROW EXECUTE FUNCTION audit_test_fail();
+    `);
+    await logLabelled("written");
+    await logLabelled("rejected", "raise-22023");
+    await logLabelled("hangs");
+    await logLabelled("not reached");
+
+    await auditLogger.shutdown(300);
+
+    const lines = droppedLines();
+    expect(labels(await storedRows())).toEqual(["written"]);
+    expect(lines.filter((l) => l.includes('"label":"rejected"'))).toHaveLength(
+      1,
+    );
+    expect(lines.filter((l) => l.includes('"label":"hangs"'))).toEqual([
+      expect.stringContaining("may still have been written"),
+    ]);
+    expect(lines.filter((l) => l.includes('"label":"not reached"'))).toEqual([
+      expect.stringContaining("may still have been written"),
+    ]);
+
+    await until(
+      "the row it was writing to land",
+      async () => (await storedRows()).length === 2,
+    );
+    await sleep(50);
+    expect(labels(await storedRows())).toEqual(["written", "hangs"]);
+  });
+});
+
+const APP_DIR = path.resolve(__dirname, "../../apps/cronium-app");
+
+/** With its own flags, then these, as the image's build script would run it. */
+const buildBundle = (script: string, ...flags: string[]) =>
+  execFileSync("pnpm", ["run", script, ...flags], {
+    cwd: APP_DIR,
+    stdio: "pipe",
+  });
+
+/**
+ * Whether anything calls shutdown(), in the right order, is only visible from
+ * outside: these run the bundle the image runs, on this database, and stop it the
+ * way Docker does.
+ */
+describe("a real worker being stopped", () => {
+  const WORKER_BUNDLE = "dist/audit-log-test-worker.cjs";
+  /** The compose files' stop_grace_period for the worker. Docker kills it after. */
+  const DOCKER_STOP_ALLOWANCE_MS = 40_000;
+
+  let worker: ChildProcess | null = null;
+  let healthPort = 0;
+  let output = "";
+
+  beforeAll(() => {
+    buildBundle("build:worker", `--outfile=${WORKER_BUNDLE}`);
+  });
+
+  afterAll(() => {
+    fs.rmSync(path.join(APP_DIR, WORKER_BUNDLE), { force: true });
+  });
+
+  afterEach(() => {
+    // Before the next test truncates what it might be writing to.
+    worker?.kill("SIGKILL");
+    worker = null;
+  });
+
+  const freePort = () =>
+    new Promise<number>((resolve) => {
+      const probe = net.createServer().listen(0, "127.0.0.1", () => {
+        const { port } = probe.address() as net.AddressInfo;
+        probe.close(() => resolve(port));
+      });
+    });
+
+  async function startWorker(databaseUrl = process.env.DATABASE_URL!) {
+    output = "";
+    healthPort = await freePort();
+    worker = spawn(process.execPath, [WORKER_BUNDLE], {
+      cwd: APP_DIR,
+      env: {
+        ...process.env,
+        DATABASE_URL: databaseUrl,
+        NODE_ENV: "production",
+        WORKER_ID: "audit-log-test",
+        WORKER_HEALTH_PORT: String(healthPort),
+        WORKER_CLAIM_INTERVAL_MS: "100",
+        // Nothing here is old enough to purge, but a worker should never be
+        // left with that as the only thing protecting a database.
+        CRONIUM_JOB_RETENTION_DAYS: "0",
+        CRONIUM_LOG_RETENTION_DAYS: "0",
+        CRONIUM_WORKFLOW_RETENTION_DAYS: "0",
+        CRONIUM_INCIDENT_RETENTION_DAYS: "0",
+        CRONIUM_TOOL_ACTION_LOG_RETENTION_DAYS: "0",
+        CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS: "0",
+        CRONIUM_WEBHOOK_RETENTION_DAYS: "0",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    worker.stdout!.on("data", (chunk: Buffer) => (output += chunk.toString()));
+    worker.stderr!.on("data", (chunk: Buffer) => (output += chunk.toString()));
+    await until("the worker to start", () =>
+      output.includes("Health endpoint on"),
+    );
+  }
+
+  /** Sends SIGTERM and resolves with how it went, or fails after `withinMs`. */
+  function stopWorker(withinMs: number) {
+    const started = Date.now();
+    return new Promise<{ code: number | null; tookMs: number }>(
+      (resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(
+            new Error(
+              `The worker hadn't exited ${withinMs}ms after SIGTERM. Its output:\n${output.slice(-4000)}`,
+            ),
+          );
+        }, withinMs);
+        worker!.once("exit", (code) => {
+          clearTimeout(timer);
+          resolve({ code, tookMs: Date.now() - started });
+        });
+        worker!.kill("SIGTERM");
+      },
+    );
+  }
+
+  /** A job whose tool action fails at once, leaving one entry named `label`. */
+  async function queueQuickJob(label: string) {
+    const eventId = await seedEvent(USER, {
+      type: EventType.TOOL_ACTION,
+      toolActionConfig: { toolType: "slack", actionId: label },
+    });
+    return seedJob(eventId, USER, { type: JobType.TOOL_ACTION, payload: {} });
+  }
+
+  const jobsWithStatus = async (status: JobStatus) =>
+    (await db.select().from(jobs).where(eq(jobs.status, status))).length;
+
+  /** A job's status changes before it is done: it still has its log to finalize. */
+  const noJobsRunning = async () => {
+    const response = await fetch(`http://127.0.0.1:${healthPort}/health`);
+    const health = (await response.json()) as { activeInProcessJobs: number };
+    return health.activeInProcessJobs === 0;
+  };
+
+  /** An event whose query takes 2 seconds, on a connection of its own. */
+  async function seedSlowQueryEvent() {
+    const { hostname, port, pathname, username, password } = new URL(
+      process.env.DATABASE_URL!,
+    );
+    const [tool] = await db
+      .insert(toolCredentials)
+      .values({
+        userId: USER,
+        name: "This database",
+        type: "sql",
+        credentials: JSON.stringify({
+          dialect: "postgres",
+          host: hostname,
+          port: Number(port),
+          database: pathname.slice(1),
+          user: username,
+          password,
+          ssl: "disable",
+        }),
+      })
+      .returning({ id: toolCredentials.id });
+    const eventId = await seedEvent(USER, {
+      type: EventType.TOOL_ACTION,
+      toolActionConfig: {
+        toolType: "sql",
+        toolId: tool!.id,
+        actionId: "run-query",
+        parameters: { query: "SELECT pg_sleep(2)" },
+      },
+    });
+    return { eventId, toolId: tool!.id };
+  }
+
+  const actionIds = async () =>
+    (await storedRows())
+      .map((row) => (row.actionDetails as Details).actionId as string)
+      .sort();
+
+  const droppedFromOutput = (label: string) =>
+    output
+      .split("\n")
+      .filter(
+        (line) => line.includes("DROPPED") && line.includes(`"${label}"`),
+      );
+
+  it("writes the entries of jobs it just finished, once each", async () => {
+    await startWorker();
+
+    const expected = ["job-a", "job-b", "job-c", "job-d", "job-e"];
+    for (const label of expected) await queueQuickJob(label);
+    await until(
+      "the jobs to finish",
+      async () => (await jobsWithStatus(JobStatus.FAILED)) === expected.length,
+    );
+    const finished = Date.now();
+
+    const { code } = await stopWorker(20_000);
+
+    expect(code).toBe(0);
+    expect(await actionIds()).toEqual(expected);
+    for (const row of await storedRows()) {
+      expect(row.createdAt.getTime()).toBeLessThanOrEqual(finished);
+    }
+    expect(output).not.toContain("DROPPED");
+  });
+
+  it("writes the entry of a job that finishes while it drains", async () => {
+    const { eventId, toolId } = await seedSlowQueryEvent();
+
+    await startWorker();
+    await seedJob(eventId, USER, { type: JobType.TOOL_ACTION, payload: {} });
+    await until(
+      "the job to start",
+      async () => (await jobsWithStatus(JobStatus.RUNNING)) === 1,
+    );
+
+    const { code } = await stopWorker(20_000);
+
+    expect(code).toBe(0);
+    expect(await jobsWithStatus(JobStatus.COMPLETED)).toBe(1);
+    expect(await storedRows()).toEqual([
+      expect.objectContaining({
+        action: "tool.execute",
+        success: true,
+        toolId,
+      }),
+    ]);
+  });
+
+  it("still exits on a database that has hung, with every entry in the table or the server log", async () => {
+    const database = await hangableDatabase(process.env.DATABASE_URL!);
+    try {
+      await startWorker(database.url);
+
+      const expected = ["job-a", "job-b", "job-c"];
+      for (const label of expected) await queueQuickJob(label);
+      await until(
+        "the jobs to finish",
+        async () =>
+          (await jobsWithStatus(JobStatus.FAILED)) === expected.length,
+      );
+      await until("what they do after that", noJobsRunning);
+
+      database.hang();
+      const { code, tookMs } = await stopWorker(20_000);
+
+      expect(code).toBe(0);
+      expect(tookMs).toBeLessThan(15_000);
+      // Both, for a write that was under way when the database hung.
+      const written = await actionIds();
+      for (const label of expected) {
+        expect(
+          written.filter((id) => id === label).length +
+            droppedFromOutput(label).length,
+        ).toBeGreaterThanOrEqual(1);
+      }
+    } finally {
+      database.close();
+    }
+  });
+
+  it("gives a job the hang caught all of its drain, and still exits before Docker's time is up", async () => {
+    const database = await hangableDatabase(process.env.DATABASE_URL!);
+    try {
+      const { eventId } = await seedSlowQueryEvent();
+      await startWorker(database.url);
+      await seedJob(eventId, USER, { type: JobType.TOOL_ACTION, payload: {} });
+      // Past the reads it needs first. The query isn't on the database that hangs,
+      // so it finishes, logs its entry, and only then gets stuck writing the rest.
+      await until("the query to be running", async () => {
+        const { rows } = await pool.query(
+          `SELECT 1 FROM pg_stat_activity
+            WHERE query LIKE '%pg_sleep(2)%' AND pid <> pg_backend_pid()`,
+        );
+        return rows.length > 0;
+      });
+
+      database.hang();
+      const { code } = await stopWorker(DOCKER_STOP_ALLOWANCE_MS);
+
+      expect(code).toBe(0);
+      expect(output).toContain("Draining 1 in-flight job(s)");
+      expect(droppedFromOutput("run-query")).toHaveLength(1);
+      expect(await storedRows()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+});
+
+describe("the socket server", () => {
+  const BUNDLE = "dist/audit-log-test-socket.cjs";
+  const META = "dist/audit-log-test-socket.json";
+
+  afterAll(() => {
+    for (const file of [BUNDLE, META]) {
+      fs.rmSync(path.join(APP_DIR, file), { force: true });
+    }
+  });
+
+  it("has nothing to write when it stops, because it never loads the logger", () => {
+    // If this fails, something the socket server runs now writes audit entries:
+    // call auditLogger.shutdown() from server.ts's shutdown, as worker.ts does.
+    buildBundle("build:socket", `--outfile=${BUNDLE}`, `--metafile=${META}`);
+    const { inputs } = JSON.parse(
+      fs.readFileSync(path.join(APP_DIR, META), "utf8"),
+    ) as { inputs: Record<string, unknown> };
+
+    expect(Object.keys(inputs)).toContain("server.ts");
+    expect(
+      Object.keys(inputs).filter((file) => file.includes("audit-logger")),
+    ).toEqual([]);
   });
 });
