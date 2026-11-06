@@ -8,6 +8,7 @@ import {
   authorizeCapability,
   assertJobScope,
 } from "@/lib/security/internal-route-auth";
+import { failureWithStack } from "@/lib/pg-errors";
 
 export async function GET(
   request: NextRequest,
@@ -115,11 +116,7 @@ export async function GET(
 
     return NextResponse.json(executionContext);
   } catch (error) {
-    console.error("Error fetching execution context:", error);
-    console.error(
-      "Stack trace:",
-      error instanceof Error ? error.stack : "No stack trace",
-    );
+    console.error("Error fetching execution context:", failureWithStack(error));
     // Do not echo error details — driver/DB messages can leak internals.
     return NextResponse.json(
       { error: "Internal server error" },

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { WebhookRouter } from "@/lib/webhooks";
+import { failureWithStack } from "@/lib/pg-errors";
 
 const webhookRouter = WebhookRouter.getInstance();
 
@@ -19,7 +20,7 @@ export async function POST(
 
     return await webhookRouter.handleRequest(key, request);
   } catch (error) {
-    console.error("Webhook error:", error);
+    console.error("Webhook error:", failureWithStack(error));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

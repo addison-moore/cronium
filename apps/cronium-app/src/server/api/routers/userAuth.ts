@@ -14,6 +14,7 @@ import { getSmtpSettings, sendPasswordResetEmail } from "@/lib/email";
 import { hashApiToken } from "@/lib/api-token-hash";
 import { encryptionService } from "@/lib/encryption-service";
 import { passwordSchema } from "@/shared/schemas/password";
+import { describeFailure } from "@/lib/pg-errors";
 
 // A real bcrypt hash (cost 12, matching encryptionService.hashPassword) of an
 // unguessable random value. Login compares against it when the account does
@@ -233,7 +234,7 @@ export const userAuthRouter = createTRPCRouter({
           (error: unknown) => {
             console.error(
               "Failed to send password reset email:",
-              error instanceof Error ? error.message : String(error),
+              describeFailure(error),
             );
           },
         );

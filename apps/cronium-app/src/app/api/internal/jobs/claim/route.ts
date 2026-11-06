@@ -5,6 +5,7 @@ import { prepareJobsForOrchestrator } from "@/lib/services/enhanced-job-transfor
 import { JobStatus } from "@/shared/schema";
 import { verifyOrchestratorKey } from "@/lib/internal-auth";
 import { mintJobCapability } from "@/lib/security/job-capability";
+import { describeFailure, failureWithStack } from "@/lib/pg-errors";
 
 /**
  * Orchestrator claim endpoint (PLAN.md §4.2): a POST that atomically claims a
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
     for (const { job, error } of failed) {
       console.error(
         `Could not prepare job ${job.id} for the orchestrator:`,
-        error instanceof Error ? error.message : String(error),
+        describeFailure(error),
       );
       await jobService.updateJobStatus(
         job.id,
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
       count: transformedJobs.length,
     });
   } catch (error) {
-    console.error("Error claiming jobs:", error);
+    console.error("Error claiming jobs:", failureWithStack(error));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
