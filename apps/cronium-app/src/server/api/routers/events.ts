@@ -36,6 +36,7 @@ import {
   toEventListApiDto,
 } from "@/server/security/api-dto";
 import { canReadEnvVarValues } from "@/server/token-scopes";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Use the centralized development-friendly protected procedure
 // This handles authentication and auto-login in development mode
@@ -87,7 +88,7 @@ export const eventsRouter = createTRPCRouter({
       } catch (error) {
         if (error instanceof TRPCError) throw error;
 
-        console.error("Error in events.getById:", error);
+        console.error("Error in events.getById:", failureWithStack(error));
 
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",

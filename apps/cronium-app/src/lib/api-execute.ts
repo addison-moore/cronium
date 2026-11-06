@@ -10,6 +10,7 @@ import {
   restPrincipalErrorResponse,
 } from "@/lib/api-auth";
 import { RateLimitService } from "@/lib/rate-limit-service";
+import { describeFailure } from "@/lib/pg-errors";
 import { resourceAccessHttpStatus } from "@/server/security/resource-access";
 
 // The limiter keys on user id + path, and tRPC's `events.execute` uses the same
@@ -158,7 +159,7 @@ export function executeErrorResponse(
   }
   console.error(
     `Failed to execute ${resource.toLowerCase()}:`,
-    error instanceof Error ? error.message : String(error),
+    describeFailure(error),
   );
   return NextResponse.json(
     { error: `Failed to execute ${resource.toLowerCase()}` },

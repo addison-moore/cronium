@@ -22,6 +22,7 @@ import { toEventApiDto } from "@/server/security/api-dto";
 import { canReadEnvVarValues } from "@/server/token-scopes";
 import { scheduler } from "@/lib/scheduler";
 import { touchesEventSchedule } from "@/lib/scheduling/materialize";
+import { describeFailure, failureWithStack } from "@/lib/pg-errors";
 
 // GET a specific script
 export async function GET(
@@ -69,10 +70,7 @@ export async function GET(
       }),
     );
   } catch (error) {
-    console.error(
-      "Error fetching script:",
-      error instanceof Error ? error.message : String(error),
-    );
+    console.error("Error fetching script:", describeFailure(error));
     const accessStatus = resourceAccessHttpStatus(error);
     return new NextResponse(
       JSON.stringify({
@@ -169,7 +167,7 @@ export async function PATCH(
       } catch (parseError) {
         console.error(
           `Error parsing HTTP request data for event ${eventId}:`,
-          parseError instanceof Error ? parseError.message : String(parseError),
+          describeFailure(parseError),
         );
       }
     }
@@ -277,10 +275,7 @@ export async function PATCH(
         : null,
     );
   } catch (error) {
-    console.error(
-      "Error updating script:",
-      error instanceof Error ? error.message : String(error),
-    );
+    console.error("Error updating script:", describeFailure(error));
     const accessStatus = resourceAccessHttpStatus(error);
     return new NextResponse(
       JSON.stringify({
@@ -347,7 +342,7 @@ export async function DELETE(
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
-    console.error("Error deleting script:", error);
+    console.error("Error deleting script:", failureWithStack(error));
     const accessStatus = resourceAccessHttpStatus(error);
     return new NextResponse(
       JSON.stringify({

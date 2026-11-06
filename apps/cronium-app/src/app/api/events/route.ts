@@ -25,6 +25,7 @@ import {
   resourceAccessHttpStatus,
 } from "@/server/security/resource-access";
 import { toEventApiDto, toEventListApiDto } from "@/server/security/api-dto";
+import { describeFailure, failureWithStack } from "@/lib/pg-errors";
 
 // Schema for validating new script input
 const createEventSchema = z
@@ -174,7 +175,7 @@ export async function GET(request: NextRequest) {
       events.map((event) => toEventListApiDto(event, auth.userId)),
     );
   } catch (error) {
-    console.error("Error fetching scripts:", error);
+    console.error("Error fetching scripts:", failureWithStack(error));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
@@ -286,10 +287,7 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
-    console.error(
-      "Error creating script:",
-      error instanceof Error ? error.message : String(error),
-    );
+    console.error("Error creating script:", describeFailure(error));
     const accessStatus = resourceAccessHttpStatus(error);
     return NextResponse.json(
       { error: accessStatus ? "Access denied" : "Internal server error" },
