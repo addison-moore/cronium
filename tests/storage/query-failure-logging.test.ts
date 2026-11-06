@@ -269,11 +269,13 @@ describe("POST /api/events", () => {
     expect(logged).toContainEqual("Error creating script: P0001: refused");
   });
 
-  it("doesn't log a body that isn't JSON, which JSON.parse's message quotes", async () => {
-    await createEvent(request("events", "POST", token, SHORT_SECRET));
+  it("refuses a body that isn't JSON without logging it", async () => {
+    const response = await createEvent(
+      request("events", "POST", token, SHORT_SECRET),
+    );
 
+    expect(response.status).toBe(400);
     expect(logged.join("\n")).not.toContain(SHORT_SECRET);
-    expect(logged.join("\n")).toContain("Error creating script: SyntaxError");
   });
 });
 
@@ -424,6 +426,13 @@ describe("the other routes", () => {
     expect(response.status).toBe(500);
     expectNothingOfTheQuery();
     expect(logged.join("\n")).toContain("Error creating log: P0001: refused");
+  });
+
+  it("POST /api/logs doesn't log a body that isn't JSON, which JSON.parse's message quotes", async () => {
+    await createLog(request("logs", "POST", token, SHORT_SECRET));
+
+    expect(logged.join("\n")).not.toContain(SHORT_SECRET);
+    expect(logged.join("\n")).toContain("Error creating log: SyntaxError");
   });
 
   it("POST /api/events/{id}/execute doesn't log a run's input", async () => {
