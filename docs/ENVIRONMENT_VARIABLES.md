@@ -770,9 +770,11 @@ docker compose exec postgres psql -U cronium -d cronium -c \
 
 This costs more downtime and some running work:
 
-- **The app answers nothing from step 3 until step 5 finishes.** That's roughly 15 ms a
-  row on top of the restart: 20,000 variables took 4 to 6 minutes in tests, and an install
-  with a few hundred secrets takes seconds.
+- **The app answers nothing from step 3 until step 5 finishes.** That's the driver's time
+  on top of the restart. On a Mac, with the published compose file and the real image, it
+  was about 7 seconds with a few hundred secrets and 12 with 20,000 variables, 6 of them
+  the driver's. On a heavily loaded machine the driver alone took 5.5 minutes for those
+  rows.
 - **A script running at step 3 loses its result,** the same way as one running at step 6
   of the usual steps.
 - **A job still queued at step 3 runs normally once the services are back,** because the
