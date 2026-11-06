@@ -14,7 +14,12 @@ import { resetDatabase, closePool } from "./helpers/db-reset";
 import { seedUser } from "./helpers/seed";
 
 jest.mock("axios", () => ({
-  request: jest.fn().mockResolvedValue({ status: 200, data: "ok" }),
+  request: jest.fn(async () => ({
+    status: 200,
+    data: jest
+      .requireActual<typeof import("node:stream")>("node:stream")
+      .Readable.from([Buffer.from("ok")]),
+  })),
 }));
 // The harness's stub has only customAlphabet.
 jest.mock("nanoid", () => ({ nanoid: () => "delivery-1" }));
