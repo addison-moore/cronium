@@ -349,8 +349,9 @@ docker compose down -v     # stop and delete data volumes
 ## Security Notes
 
 - Secrets live only in `.env` (chmod 600) — never commit it.
-- Rotate secrets periodically; restart the stack after updating `.env`.
-  Rotating `ENCRYPTION_KEY` requires re-entering stored tool credentials.
+- Rotate secrets periodically; restart the stack after updating `.env`. The exception
+  is `ENCRYPTION_KEY`: changing it in `.env` alone makes every stored secret unreadable,
+  so follow [Key rotation](ENVIRONMENT_VARIABLES.md#key-rotation-encryption_key).
 - Keep images fresh (`docker compose pull` on a schedule, or pin and bump).
 - Behind a TLS proxy, set `TRUSTED_PROXY_HOPS=1` (one per trusted proxy). At the
   default of `0` forwarding headers are ignored, so every client shares one login

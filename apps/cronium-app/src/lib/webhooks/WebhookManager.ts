@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import type { Readable } from "stream";
 import { z } from "zod";
 import axios from "axios";
 import { db } from "@/server/db";
@@ -7,6 +8,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { storage } from "@/server/storage";
 import { WebhookSecurity } from "./WebhookSecurity";
 import { WebhookQueue } from "./WebhookQueue";
+import { readResponseBody, WEBHOOK_TIMEOUT_MS } from "./response-body";
 import { nanoid } from "nanoid";
 import {
   assertRequestUrlIsPublic,
@@ -58,6 +60,10 @@ export interface WebhookDeliveryResult {
   recorded?: false;
   statusCode?: number;
   response?: string;
+  /**
+   * Why there's no status. Alongside a status, why `response` is only part of the
+   * answer, which doesn't change what the status means.
+   */
   error?: string;
   duration: number;
 }
@@ -513,32 +519,43 @@ export class WebhookManager {
       // proxy from the environment is ignored because it would resolve the host
       // itself, out of the guard's sight, and redirects are not followed so a
       // 3xx cannot bounce past the guard.
-      const response = await axios.request({
+      const response = await axios.request<Readable>({
         method: "POST",
         url,
         headers: requestHeaders,
         data: rawBody,
-        timeout: 30000,
+        timeout: WEBHOOK_TIMEOUT_MS,
         httpAgent: ssrfHttpAgent,
         httpsAgent: ssrfHttpsAgent,
         proxy: false,
         maxRedirects: 0,
-        maxContentLength: MAX_WEBHOOK_RESPONSE_BYTES,
         maxBodyLength: MAX_WEBHOOK_RESPONSE_BYTES,
         // Treat any status as a resolved response; we record the code.
         validateStatus: () => true,
-        responseType: "text",
+        // A stream hands over the status before the body. With a buffered response,
+        // a body past the cap or cut off rejects this call, and the status is lost.
+        responseType: "stream",
         transitional: { clarifyTimeoutError: true },
       });
 
-      const duration = Date.now() - startTime;
-      const responseText =
-        typeof response.data === "string"
-          ? response.data
-          : JSON.stringify(response.data);
-      const recordedResponse = pgStorableText(
-        responseText.substring(0, MAX_RECORDED_RESPONSE_CHARS),
+      // The status is the receiver's answer, and the body is kept only for the record,
+      // so a body that doesn't finish changes what's recorded and nothing else. A 2xx
+      // is a success however its body ends, and the queue doesn't send it again. The
+      // cost falls on a receiver that sends its 2xx before doing the work and then
+      // dies, which would lose the event just the same if its body had finished.
+      // `error` shows these attempts in the history, and a person can retry one.
+      const { text, unfinished } = await readResponseBody(
+        response.data,
+        MAX_WEBHOOK_RESPONSE_BYTES,
+        WEBHOOK_TIMEOUT_MS,
       );
+
+      const duration = Date.now() - startTime;
+      const recordedResponse = pgStorableText(
+        text.substring(0, MAX_RECORDED_RESPONSE_CHARS),
+      );
+      const bodyError =
+        unfinished === undefined ? undefined : pgStorableText(unfinished);
       const ok = response.status >= 200 && response.status < 300;
 
       row = {
@@ -548,6 +565,7 @@ export class WebhookManager {
         status: ok ? "success" : "failed",
         statusCode: response.status,
         response: recordedResponse,
+        error: bodyError,
         headers: recordedHeaders,
         duration,
         attemptedAt: new Date(),
@@ -559,6 +577,7 @@ export class WebhookManager {
         success: ok,
         statusCode: response.status,
         response: recordedResponse,
+        ...(bodyError !== undefined && { error: bodyError }),
         duration,
       };
     } catch (error) {

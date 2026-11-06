@@ -42,7 +42,7 @@ This directory contains the Docker container images for the Cronium runtime envi
 ### Bash Image (`cronium/bash`)
 
 - Alpine Linux with Bash, curl, jq
-- Cronium shell functions pre-loaded
+- Cronium shell functions in `/usr/local/bin/cronium.sh`, which the orchestrator loads for each job
 - Suitable for shell scripts
 - Available variants:
   - `cronium/bash:latest` - Standard image

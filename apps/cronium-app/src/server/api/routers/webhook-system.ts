@@ -10,6 +10,7 @@ import {
   WebhookManager,
   WebhookConfigSchema,
   type WebhookConfig,
+  type WebhookDeliveryResult,
 } from "@/lib/webhooks";
 import { webhookCustomHeadersSchema } from "@/lib/webhooks/custom-headers";
 import { WebhookPreconditionError } from "@/lib/webhooks/webhook-errors";
@@ -50,14 +51,28 @@ function hasConfiguredHeaders(stored: unknown): boolean {
   return Object.keys(stored).length > 0;
 }
 
-/** What to tell the caller about one attempt, including when it left no record. */
+/**
+ * What to tell the caller about one attempt: what the receiver answered, then what
+ * else there is to know. A status comes first because `error` alongside one only says
+ * the body didn't finish. A status of 0 means the SSRF guard stopped the attempt, with
+ * no answer.
+ */
 function attemptMessage(
-  outcome: string,
-  attempt: { recorded?: false },
+  attempt: WebhookDeliveryResult,
+  delivered: string,
+  failed: string,
 ): string {
-  return attempt.recorded === false
-    ? `${outcome}. It couldn't be recorded, so it won't show in the webhook's history.`
-    : outcome;
+  const answer = attempt.statusCode ? `HTTP ${attempt.statusCode}` : undefined;
+  const outcome = attempt.success
+    ? delivered
+    : `${failed}: ${answer ?? attempt.error ?? "HTTP unknown"}`;
+  return [
+    outcome,
+    ...(answer && attempt.error ? [attempt.error] : []),
+    ...(attempt.recorded === false
+      ? ["It couldn't be recorded, so it won't show in the webhook's history."]
+      : []),
+  ].join(". ");
 }
 
 /**
@@ -434,15 +449,14 @@ export const webhookSystemRouter = createTRPCRouter({
           // Not mutationResponse, whose `success` is always true. A receiver
           // refusing the retry isn't an error in this request, but it isn't a
           // success either, and the attempt's details are worth keeping.
-          const outcome = attempt.success
-            ? "Webhook delivery retry succeeded"
-            : `Webhook delivery retry failed: ${
-                attempt.error ?? `HTTP ${attempt.statusCode ?? "unknown"}`
-              }`;
           return {
             success: attempt.success,
             data: attempt,
-            message: attemptMessage(outcome, attempt),
+            message: attemptMessage(
+              attempt,
+              "Webhook delivery retry succeeded",
+              "Webhook delivery retry failed",
+            ),
           };
         },
         {
@@ -503,15 +517,14 @@ export const webhookSystemRouter = createTRPCRouter({
           // Not mutationResponse, whose `success` is always true. A receiver
           // refusing the test isn't an error in this request, but it isn't a
           // success either, and the attempt's details are worth keeping.
-          const outcome = attempt.success
-            ? "Test webhook delivered"
-            : `Test webhook failed: ${
-                attempt.error ?? `HTTP ${attempt.statusCode ?? "unknown"}`
-              }`;
           return {
             success: attempt.success,
             data: attempt,
-            message: attemptMessage(outcome, attempt),
+            message: attemptMessage(
+              attempt,
+              "Test webhook delivered",
+              "Test webhook failed",
+            ),
           };
         },
         {
