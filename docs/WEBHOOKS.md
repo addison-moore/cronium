@@ -45,20 +45,24 @@ A custom header with the name of any other header above replaces it, so a webhoo
 
 ### Which events are sent
 
-A webhook gets an event when its `events` list names it or contains `*`.
+An event from an inbound endpoint goes to each of the owner's active webhooks whose `events` list names it or contains `*`. A test event goes only to the webhook named in the call, whatever its `events` list says, and gets one attempt with no automatic retries.
 
 | Event            | Sent when                                                                                              | `data`                                                                                                                                                                                      | `metadata`                 |
 | ---------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
 | `webhook.<type>` | A request is accepted at one of the owner's inbound endpoints. `<type>` is the name that request gave. | `eventType`, `receivedAt` and `webhookId`, plus the request's JSON fields (or its body under `data` if that wasn't a JSON object). Strings have `&`, `<`, `>`, `"` and `'` escaped as HTML. | `webhookId`, `source`      |
-| `webhook.test`   | `webhookSystem.test` is called.                                                                        | `test`, `timestamp` and any test data given.                                                                                                                                                | `webhookId`, `triggeredBy` |
+| `webhook.test`   | `webhookSystem.test` is called for this webhook.                                                       | `test`, `timestamp` and any test data given.                                                                                                                                                | `webhookId`, `triggeredBy` |
 
 ## Verifying a delivery
 
-`X-Webhook-Signature-V2` is `sha512=` followed by the hex HMAC-SHA512, keyed with the webhook's secret, of:
+`X-Webhook-Signature-V2` is `sha512=` followed by the hex HMAC-SHA512, keyed with the webhook's secret, of these three parts, separated by line feeds (`\n`), with nothing after the body:
 
 ```text
-<X-Delivery-Timestamp>.<X-Delivery-Id>.<raw body>
+<X-Delivery-Timestamp>
+<X-Delivery-Id>
+<raw body>
 ```
+
+A header value can't contain a line feed, so no bytes can move between the headers and the body without changing what's signed.
 
 To handle a delivery:
 
@@ -86,7 +90,7 @@ function verifyDelivery(headers, rawBody, secret) {
 
   const digest = crypto
     .createHmac("sha512", secret)
-    .update(`${timestamp}.${deliveryId}.`)
+    .update(`${timestamp}\n${deliveryId}\n`)
     .update(rawBody)
     .digest("hex");
   const expected = Buffer.from(`sha512=${digest}`);
@@ -121,7 +125,7 @@ def verify_delivery(headers, raw_body, secret):
     if not timestamp or not delivery_id or not signature:
         return False
 
-    signed = f"{timestamp}.{delivery_id}.".encode() + raw_body
+    signed = f"{timestamp}\n{delivery_id}\n".encode() + raw_body
     digest = hmac.new(secret.encode(), signed, hashlib.sha512).hexdigest()
     if not hmac.compare_digest(signature.encode(), f"sha512={digest}".encode()):
         return False
@@ -139,7 +143,7 @@ secret:                 example-secret
 X-Delivery-Timestamp:   2026-11-05T12:00:00.000Z
 X-Delivery-Id:          V1StGXR8_Z5jdHi6B-myT
 body:                   {"id":"42","event":"webhook.test","timestamp":"2026-11-05T11:59:58.000Z","data":{"test":true}}
-X-Webhook-Signature-V2: sha512=e1a0edd56f936908c6a998b788fbfe6e6bb02eb3a18bee74d7910866f42bd93da271d6b91c2daceff11bf3e9a55422be8f224c7c9c5bc83133d86d54be237a5e
+X-Webhook-Signature-V2: sha512=a11490346f854822a05832ffe5bbd95f9650d6d85e683117133dc4bb36101cb5a03bfb745942b6a795fdef54e7e793ffc2b69bd56e6b41b38c7c2f84f2c19988
 X-Webhook-Signature:    sha256=f40c2611e30cf157174fa298d1d561edc8fc6f05f156910ac4160d3702d48445
 ```
 
@@ -186,13 +190,13 @@ Automatic retries already queued keep signing with the old secret, so if you rot
 
 Each webhook also has an inbound endpoint, `POST /api/webhooks/<key>`, and its scheme is not the same as a delivery's:
 
-|                  | Sent by Cronium (a delivery)                        | Sent to Cronium (inbound)                                  |
-| ---------------- | --------------------------------------------------- | ---------------------------------------------------------- |
-| Signature header | `X-Webhook-Signature-V2`                            | `X-Webhook-Signature`                                      |
-| Algorithm        | HMAC-SHA512, as `sha512=<hex>`                      | HMAC-SHA256, as `sha256=<hex>`                             |
-| Signed string    | `<X-Delivery-Timestamp>.<X-Delivery-Id>.<raw body>` | `<X-Webhook-Timestamp>.<X-Webhook-Delivery-Id>.<raw body>` |
-| Time header      | `X-Delivery-Timestamp`                              | `X-Webhook-Timestamp`                                      |
-| Id header        | `X-Delivery-Id`                                     | `X-Webhook-Delivery-Id`                                    |
-| Who checks       | Your receiver, as above                             | Cronium: within 5 minutes, each id accepted once           |
+|                  | Sent by Cronium (a delivery)                          | Sent to Cronium (inbound)                                  |
+| ---------------- | ----------------------------------------------------- | ---------------------------------------------------------- |
+| Signature header | `X-Webhook-Signature-V2`                              | `X-Webhook-Signature`                                      |
+| Algorithm        | HMAC-SHA512, as `sha512=<hex>`                        | HMAC-SHA256, as `sha256=<hex>`                             |
+| Signed string    | `<X-Delivery-Timestamp>\n<X-Delivery-Id>\n<raw body>` | `<X-Webhook-Timestamp>.<X-Webhook-Delivery-Id>.<raw body>` |
+| Time header      | `X-Delivery-Timestamp`                                | `X-Webhook-Timestamp`                                      |
+| Id header        | `X-Delivery-Id`                                       | `X-Webhook-Delivery-Id`                                    |
+| Who checks       | Your receiver, as above                               | Cronium: within 5 minutes, each id accepted once           |
 
 **One Cronium can't receive from another: a delivery sent to an inbound endpoint gets a 401.** That is deliberate. A webhook has one secret for both directions, so accepting deliveries would let anyone holding a captured delivery and the endpoint's URL replay it into that webhook, and a webhook subscribed to `*` whose URL is an inbound endpoint could trigger itself. To forward events between instances, put a small relay between them that verifies the delivery and signs a new inbound request.

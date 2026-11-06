@@ -26,10 +26,13 @@ export class WebhookSecurity {
    * It covers the attempt's time and id as well as the body, so a receiver can
    * refuse a replayed request and still accept a late retry.
    *
-   * SHA-512 keeps it apart from the two SHA-256 signatures made with this secret.
-   * Under SHA-256, a captured one would be accepted, relabelled, at the webhook's
-   * own inbound endpoint (`verifyWebhook` expects this same string), and it would
-   * pass as `X-Webhook-Signature` over the signed string sent as a body.
+   * Line feeds separate the parts because a header value can't hold one, so no bytes
+   * can move between the headers and the body. With `.` they could: the body's
+   * timestamp always has one, so a captured body's start could move into
+   * `X-Delivery-Id` and the rest be sent as the body, under the same signature.
+   *
+   * SHA-512 keeps it apart from `X-Webhook-Signature`. Under SHA-256 it would pass as
+   * that signature, over the signed string sent as a body.
    */
   generateDeliverySignature(
     timestamp: string,
@@ -38,7 +41,7 @@ export class WebhookSecurity {
     secret: string,
   ): string {
     const hmac = crypto.createHmac("sha512", secret);
-    hmac.update(`${timestamp}.${deliveryId}.${rawBody}`);
+    hmac.update(`${timestamp}\n${deliveryId}\n${rawBody}`);
     return `${WebhookSecurity.DELIVERY_SIGNATURE_PREFIX}${hmac.digest("hex")}`;
   }
 
