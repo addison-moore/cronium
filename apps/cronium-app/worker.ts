@@ -298,11 +298,11 @@ async function startListener(): Promise<void> {
     // just stop. Polling covers most of that, but with nothing to reconnect it workflow
     // steps would advance once a minute until the next restart.
     probe = setInterval(() => {
-      client.query("SELECT 1").catch((error: Error) => {
+      client.query("SELECT 1").catch((error) => {
         if (reconnecting || shuttingDown) return;
         console.warn(
           "[Worker] LISTEN connection stopped answering; reconnecting in 5s:",
-          error.message,
+          describeFailure(error),
         );
         reconnect(5_000);
       });

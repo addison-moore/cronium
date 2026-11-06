@@ -15,6 +15,7 @@ import path from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { Client } from "pg";
 import { driverError } from "@/lib/pg-errors";
+import { SWEEP_START_GRACE_MS } from "@/lib/scheduling/sweeper";
 import { closeHungConnections, db, pool } from "@/server/db";
 import {
   EventStatus,
@@ -413,6 +414,7 @@ describe("a real worker on a database that stops answering", () => {
     await until(
       `job ${jobId} to be swept`,
       async () => (await jobStatus(jobId)) !== JobStatus.RUNNING,
+      SWEEP_START_GRACE_MS + 60_000,
     );
   }
 
@@ -431,13 +433,12 @@ describe("a real worker on a database that stops answering", () => {
     });
   }
 
+  const expectToDispatchClaimAndDrain = () =>
+    Promise.all([expectToDispatch(), expectToClaim(), expectToDrainOutbox()]);
+
+  /** Takes a minute on a new worker, which sweeps nothing until SWEEP_START_GRACE_MS. */
   const expectEveryLoopToWork = () =>
-    Promise.all([
-      expectToDispatch(),
-      expectToClaim(),
-      expectToSweep(),
-      expectToDrainOutbox(),
-    ]);
+    Promise.all([expectToDispatchClaimAndDrain(), expectToSweep()]);
 
   const closedHungConnections = () => output.includes("presumed hung");
 
@@ -487,6 +488,8 @@ describe("a real worker on a database that stops answering", () => {
 
   it("dispatches, claims, sweeps and drains its outbox again, without a restart", async () => {
     await startWorker();
+    // Waits out the sweep grace, which is the point: until then the sweep loop touches
+    // no connection, so a hang couldn't catch it.
     await expectEveryLoopToWork();
 
     // Long enough for the loops, on 100 ms intervals, to get stuck on the connections
@@ -529,7 +532,7 @@ describe("a real worker on a database that stops answering", () => {
     expect(status).toBe(503);
 
     database.acceptNewConnections();
-    await expectEveryLoopToWork();
+    await expectToDispatchClaimAndDrain();
   });
 
   it.each(["", "soon"])(
@@ -550,7 +553,7 @@ describe("a real worker on a database that stops answering", () => {
         lock.release();
       }
 
-      await expectEveryLoopToWork();
+      await expectToDispatchClaimAndDrain();
       expect(closedHungConnections()).toBe(false);
     },
   );
