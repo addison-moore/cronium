@@ -42,11 +42,59 @@ export const eventQuerySchema = z.object({
   shared: z.boolean().optional(),
 });
 
+// A script gets these as real environment variables, so Linux sets the limits. It
+// won't start a process given a `KEY=value` over 131,072 bytes, or more than about
+// 2 MiB across its whole environment and arguments (a quarter of the default 8 MiB
+// stack). Past either, a job fails as it starts with "argument list too long", which
+// says nothing about the variable. So these refuse it at save, leaving room for the
+// longest key, the script itself and the variables Cronium adds.
+//
+// Saving replaces an event's variables one row at a time, so whatever the database
+// refuses costs the rows after it. Refusing here costs nothing.
+export const MAX_ENV_VAR_KEY_LENGTH = 255; // env_vars.key is varchar(255)
+export const MAX_ENV_VAR_VALUE_BYTES = 128_000;
+export const MAX_ENV_VARS_TOTAL_BYTES = 1_000_000;
+
+const utf8Bytes = (text: string) => new TextEncoder().encode(text).length;
+// Postgres can't store one in a key, and a process can't be given one in a value.
+const hasNoNul = (text: string) => !text.includes("\0");
+
 // Environment variable schema
 export const envVarSchema = z.object({
-  key: z.string().min(1, "Environment variable key is required"),
-  value: z.string(),
+  key: z
+    .string()
+    .min(1, "Environment variable key is required")
+    .max(
+      MAX_ENV_VAR_KEY_LENGTH,
+      `An environment variable key can be at most ${MAX_ENV_VAR_KEY_LENGTH} characters`,
+    )
+    .refine(hasNoNul, {
+      message: "An environment variable key can't contain a NUL character",
+    }),
+  value: z
+    .string()
+    .refine((value) => utf8Bytes(value) <= MAX_ENV_VAR_VALUE_BYTES, {
+      message:
+        "An environment variable value can be at most 128 KB. Linux won't start a script with a longer one",
+    })
+    .refine(hasNoNul, {
+      message: "An environment variable value can't contain a NUL character",
+    }),
 });
+
+export const envVarsSchema = z
+  .array(envVarSchema)
+  .refine(
+    (envVars) =>
+      envVars.reduce(
+        (total, { key, value }) => total + utf8Bytes(key) + utf8Bytes(value),
+        0,
+      ) <= MAX_ENV_VARS_TOTAL_BYTES,
+    {
+      message:
+        "An event's environment variables can be at most 1 MB in total. Linux won't start a script with more",
+    },
+  );
 
 // HTTP header schema
 export const httpHeaderSchema = z.object({
@@ -121,7 +169,7 @@ export const createEventSchema = z
     resetCounterOnActive: z.boolean().default(false),
 
     // Environment variables and conditional events
-    envVars: z.array(envVarSchema).default([]),
+    envVars: envVarsSchema.default([]),
   })
   .refine(
     (data) => {
@@ -259,7 +307,7 @@ export const updateEventSchema = z.object({
   retries: z.number().min(0).max(10).optional(),
   maxExecutions: z.number().min(0).optional(),
   resetCounterOnActive: z.boolean().optional(),
-  envVars: z.array(envVarSchema).optional(),
+  envVars: envVarsSchema.optional(),
 });
 
 /** Strict compatibility schema for the legacy REST PATCH/PUT endpoint. */

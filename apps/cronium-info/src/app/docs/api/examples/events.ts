@@ -174,7 +174,8 @@ export const eventEndpoints: readonly ApiEndpoint[] = [
         in: "body",
         type: "array",
         required: false,
-        description: "Environment variables as [{ key, value }].",
+        description:
+          "Environment variables as [{ key, value }]. A value can be up to 128 KB, and all of them together up to 1 MB.",
       },
       {
         name: "description",
@@ -365,7 +366,7 @@ export const eventEndpoints: readonly ApiEndpoint[] = [
         type: "array",
         required: false,
         description:
-          "Replaces all env vars, as [{ key, value }]. Send the values too: a value left blank is stored blank.",
+          "Replaces all env vars, as [{ key, value }]. Send the values too: a value left blank is stored blank. A value can be up to 128 KB, and all of them together up to 1 MB.",
       },
       {
         name: "httpMethod",

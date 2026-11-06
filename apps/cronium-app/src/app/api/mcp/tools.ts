@@ -89,6 +89,7 @@ const EVENT_PROPS: Record<string, unknown> = {
   tags: { type: "array", items: { type: "string" } },
   envVars: {
     type: "array",
+    description: "A value can be up to 128 KB, and all of them up to 1 MB.",
     items: {
       type: "object",
       properties: { key: { type: "string" }, value: { type: "string" } },

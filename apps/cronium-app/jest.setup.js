@@ -1,4 +1,8 @@
 import "@testing-library/jest-dom";
+import { TextEncoder } from "node:util";
+
+// Browsers and Node have this and jsdom doesn't. The event schemas count bytes with it.
+globalThis.TextEncoder ??= TextEncoder;
 
 // Mock Next.js router
 jest.mock("next/router", () => ({

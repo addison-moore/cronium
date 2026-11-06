@@ -9,21 +9,26 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import { storage } from "@/server/storage";
-import { envVars, users } from "@/shared/schema";
+import { envVars, jobs, users } from "@/shared/schema";
+import { MAX_ENV_VAR_VALUE_BYTES } from "@/shared/schemas/events";
 import {
   decryptEnvVarValue,
   encryptEnvVarValue,
 } from "@/lib/security/field-secret";
+import { dispatchEventJob } from "@/lib/scheduling/dispatch";
+import { jobService } from "@/lib/services/job-service";
+import { prepareJobsForOrchestrator } from "@/lib/services/enhanced-job-transformer";
 import {
   toEventApiDto,
   toEventForkSecurityProjection,
 } from "@/server/security/api-dto";
 import { resetDatabase, closePool } from "./helpers/db-reset";
+import { seedServer } from "./helpers/seed";
 
 const OWNER = "env-roundtrip-owner";
 const SECRET = "s3cret-value";
 
-async function seedEvent() {
+async function seedOwner() {
   await db.insert(users).values({
     id: OWNER,
     email: "owner@example.test",
@@ -31,6 +36,9 @@ async function seedEvent() {
     role: "USER",
     status: "ACTIVE",
   } as never);
+}
+
+function createEvent(overrides: Record<string, unknown> = {}) {
   return storage.createScript({
     userId: OWNER,
     name: "env roundtrip",
@@ -42,7 +50,13 @@ async function seedEvent() {
     timeoutValue: 30,
     timeoutUnit: "SECONDS",
     retries: 0,
+    ...overrides,
   } as never);
+}
+
+async function seedEvent() {
+  await seedOwner();
+  return createEvent();
 }
 
 /** What events.update does with whatever the form submits. */
@@ -186,5 +200,101 @@ describe("env var read/save round trip", () => {
     ]);
 
     expect(await deliveredValue(fork.id, "API_KEY")).toBe(SECRET);
+  });
+});
+
+// The value is stored as an envelope of 55 characters plus 4/3 of its length. varchar(255)
+// ran out past 150 characters, so ordinary JWTs and API keys couldn't be saved.
+describe("a value too long for the old varchar(255) column", () => {
+  const PEM = [
+    "-----BEGIN PRIVATE KEY-----",
+    ...Array.from({ length: 40 }, () =>
+      "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC".repeat(2),
+    ),
+    "-----END PRIVATE KEY-----",
+    "",
+  ].join("\n");
+
+  it.each([
+    ["one character past the old limit", "x".repeat(151)],
+    ["a JWT", `eyJhbGciOiJSUzI1NiJ9.${"eyJzdWIiOiIxIn0".repeat(300)}.c2ln`],
+    ["a PEM key, line breaks and all", PEM],
+    ["the most the API accepts", "x".repeat(MAX_ENV_VAR_VALUE_BYTES)],
+    [
+      "the most the API accepts in two-byte characters",
+      "é".repeat(MAX_ENV_VAR_VALUE_BYTES / 2),
+    ],
+  ])("saves, reads back and saves again: %s", async (_label, value) => {
+    const event = await seedEvent();
+    await storage.createEnvVar({ eventId: event.id, key: "API_KEY", value });
+
+    const read = await storage.getEventWithRelations(event.id);
+    const dto = toEventApiDto(read!, OWNER, { revealEnvVarValues: true });
+    expect(dto.envVars[0]!.value).toBe(value);
+
+    await saveEnvVars(
+      event.id,
+      dto.envVars.map(({ key, value }) => ({ key, value })),
+    );
+
+    expect(await deliveredValue(event.id, "API_KEY")).toBe(value);
+    const [row] = await db
+      .select()
+      .from(envVars)
+      .where(eq(envVars.eventId, event.id));
+    expect(row!.value.startsWith("crn.1.")).toBe(true);
+    expect(row!.value).not.toContain(value);
+  });
+
+  /** Dispatches the event as a run does, and claims and prepares its job. */
+  async function runToDelivery(eventId: number) {
+    const event = await storage.getEventWithRelations(eventId);
+    const { job } = await dispatchEventJob(event!, { triggeredBy: "manual" });
+    const claimed = await jobService.claimJobs("orchestrator-1", 1);
+    expect(claimed.map(({ id }) => id)).toEqual([job!.id]);
+
+    const { ready, failed } = await prepareJobsForOrchestrator(claimed);
+    expect(failed).toEqual([]);
+    return {
+      jobId: job!.id,
+      type: ready[0]!.transformed.type,
+      environment: ready[0]!.transformed.execution.environment,
+    };
+  }
+
+  const LONG = "x".repeat(MAX_ENV_VAR_VALUE_BYTES);
+
+  it("stays encrypted in jobs.payload and reaches a container job whole", async () => {
+    const event = await seedEvent();
+    await storage.createEnvVar({
+      eventId: event.id,
+      key: "API_KEY",
+      value: LONG,
+    });
+
+    const { jobId, type, environment } = await runToDelivery(event.id);
+
+    expect(type).toBe("container");
+    expect(environment.API_KEY).toBe(LONG);
+    const [persisted] = await db.select().from(jobs).where(eq(jobs.id, jobId));
+    const stored = persisted!.payload as { environment: { API_KEY: string } };
+    expect(stored.environment.API_KEY.startsWith("crn.1.")).toBe(true);
+    expect(JSON.stringify(persisted!.payload)).not.toContain(LONG);
+  });
+
+  it("reaches a job for a remote server whole", async () => {
+    await seedOwner();
+    const serverId = await seedServer(OWNER);
+    const event = await createEvent({ runLocation: "REMOTE", serverId });
+    await storage.createEnvVar({
+      eventId: event.id,
+      key: "API_KEY",
+      value: LONG,
+    });
+
+    const { type, environment } = await runToDelivery(event.id);
+
+    expect(type).toBe("ssh");
+    expect(environment.API_KEY).toBe(LONG);
   });
 });

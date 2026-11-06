@@ -12,6 +12,7 @@ import {
   intervalSecondsFor,
   validateIntervalSeconds,
 } from "@/lib/scheduling/schedule-math";
+import { envVarsSchema } from "@/shared/schemas/events";
 import type { ToolActionConfig } from "../ToolActionSection";
 
 // Form schema using Zod (client-side mirror of the server's createEventSchema;
@@ -45,14 +46,7 @@ export const eventFormSchema = z
     retries: z.number().min(0).max(10).default(0),
     maxExecutions: z.number().min(0).default(0),
     resetCounterOnActive: z.boolean().default(false),
-    envVars: z
-      .array(
-        z.object({
-          key: z.string(),
-          value: z.string(),
-        }),
-      )
-      .default([]),
+    envVars: envVarsSchema.default([]),
     tags: z.array(z.string()).default([]),
     // HTTP Request specific fields
     httpMethod: z.string().optional(),
