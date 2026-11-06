@@ -7,7 +7,7 @@ import { queueFullMessage } from "./webhook-errors";
 import { db } from "@/server/db";
 import { webhookEvents, webhookLogs } from "@/shared/schema";
 import { clientIpFromHeaders } from "@/lib/security/client-ip";
-import { failureWithStack } from "@/lib/pg-errors";
+import { failureWithStack, refusedByPostgres } from "@/lib/pg-errors";
 
 /**
  * How long a sender is told to wait when the delivery queue is full. A receiver that
@@ -48,6 +48,8 @@ export class WebhookRouter {
     request: NextRequest,
   ): Promise<NextResponse> {
     const startTime = Date.now();
+    // Only set while this request holds a delivery id it has done nothing with.
+    let freeDeliveryId: (() => Promise<void>) | undefined;
 
     try {
       // Get webhook configuration
@@ -127,6 +129,15 @@ export class WebhookRouter {
         );
       }
 
+      // The id is consumed now, and however this request ends before it has had an
+      // effect, the id has to come back. Sending it again wouldn't be a replay, and it
+      // would look like one to a sender keeping its id across attempts.
+      const deliveryId = headers["x-webhook-delivery-id"];
+      if (deliveryId) {
+        freeDeliveryId = () =>
+          this.webhookSecurity.releaseDeliveryId(webhook.id, deliveryId);
+      }
+
       // Check rate limit
       const rateLimit = webhook.rateLimit as
         { requests?: number; window?: number } | null | undefined;
@@ -201,12 +212,6 @@ export class WebhookRouter {
       );
       if (prepared.refused) {
         const error = queueFullMessage(prepared.refused);
-        // Nothing happened, so sending this again isn't a replay. Its id was consumed
-        // when its signature was checked, and would make that look like one.
-        const deliveryId = headers["x-webhook-delivery-id"];
-        if (deliveryId) {
-          await this.webhookSecurity.releaseDeliveryId(webhook.id, deliveryId);
-        }
         await this.logWebhookRequest(webhook.id, {
           success: false,
           error,
@@ -243,9 +248,15 @@ export class WebhookRouter {
 
         event = result[0];
       } catch (error) {
+        // Postgres saying no means nothing went in. Any other failure can come after it
+        // did, with only the answer lost, and then a replay would store it again.
+        if (!refusedByPostgres(error)) freeDeliveryId = undefined;
         prepared.cancel();
         throw error;
       }
+
+      // This request has had an effect, so its id stays used, whatever fails from here.
+      freeDeliveryId = undefined;
 
       // Fan out only within the inbound webhook's own tenant (HI-01).
       await prepared.send();
@@ -281,6 +292,9 @@ export class WebhookRouter {
         { error: "Internal server error" },
         { status: 500 },
       );
+    } finally {
+      // Before the answer goes out, so a sender told to retry can't get there first.
+      await freeDeliveryId?.();
     }
   }
 
