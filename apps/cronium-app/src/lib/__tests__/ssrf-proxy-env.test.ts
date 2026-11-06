@@ -9,7 +9,7 @@
  * Each sender below is a real call path, over real sockets with only DNS stubbed:
  * a suite that mocks axios can't see where the connection goes.
  */
-jest.mock("dns/promises", () => ({ lookup: jest.fn() }));
+jest.mock("@/lib/resolve-host", () => ({ resolveHost: jest.fn() }));
 // Same exemption as ssrf-guard.test.ts: the guard refuses loopback, so a test
 // exempts its own server's address and everything else gets the real check.
 jest.mock("@/lib/tools/safe-fetch", () => {
@@ -33,15 +33,15 @@ jest.mock("../webhooks/WebhookSecurity", () => ({
 }));
 jest.mock("nanoid", () => ({ nanoid: () => "delivery-id" }));
 
-import { lookup } from "dns/promises";
 import http from "http";
 import type { AddressInfo } from "net";
 import { executeHttpRequest } from "../scheduler/http-executor";
 import { ssrfGuardedFetch } from "../ssrf-guard";
 import { WebhookManager } from "../webhooks/WebhookManager";
+import { resolveHost } from "@/lib/resolve-host";
 import { isDisallowedIp } from "@/lib/tools/safe-fetch";
 
-const mockLookup = lookup as jest.MockedFunction<typeof lookup>;
+const mockResolveHost = resolveHost as jest.MockedFunction<typeof resolveHost>;
 const mockIsDisallowedIp = isDisallowedIp as jest.MockedFunction<
   typeof isDisallowedIp
 >;
@@ -114,7 +114,7 @@ describe("guarded requests with a proxy in the environment", () => {
     });
 
   beforeEach(async () => {
-    mockLookup.mockReset();
+    mockResolveHost.mockReset();
     mockIsDisallowedIp.mockImplementation(realIsDisallowedIp);
     errorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -162,9 +162,7 @@ describe("guarded requests with a proxy in the environment", () => {
 
   describe.each(senders)("%s", (_name, send) => {
     it("connects to the target itself, through the guard", async () => {
-      mockLookup.mockResolvedValue([
-        { address: "127.0.0.1", family: 4 },
-      ] as never);
+      mockResolveHost.mockResolvedValue([{ address: "127.0.0.1", family: 4 }]);
       mockIsDisallowedIp.mockImplementation(
         (ip) => ip !== "127.0.0.1" && realIsDisallowedIp(ip),
       );
@@ -172,7 +170,7 @@ describe("guarded requests with a proxy in the environment", () => {
       const { status, error } = await send(`http://public.test:${targetPort}/`);
 
       expect(proxyConnections).toBe(0);
-      expect(mockLookup).toHaveBeenCalledWith("public.test", expect.anything());
+      expect(mockResolveHost).toHaveBeenCalledWith("public.test");
       expect(targetConnections).toBe(1);
       expect(error).toBeUndefined();
       expect(status).toBe(200);
@@ -181,9 +179,9 @@ describe("guarded requests with a proxy in the environment", () => {
     it.each(["http", "https"])(
       "refuses an %s host resolving internally instead of handing it to the proxy",
       async (scheme) => {
-        mockLookup.mockResolvedValue([
+        mockResolveHost.mockResolvedValue([
           { address: "127.0.0.1", family: 4 },
-        ] as never);
+        ]);
 
         const { error } = await send(
           `${scheme}://internal.test:${targetPort}/`,
