@@ -19,11 +19,14 @@
  *
  * Scenario 4 — CSP: every page's scripts carry the request's nonce. A prerendered page
  * has none, so the browser blocks all of its JavaScript while the server still answers
- * 200. Only a production build shows this, which is what this stack runs.
+ * 200. Only a production build shows this, which is what this stack runs. Nothing may
+ * store a page either, because its HTML holds that nonce.
  *
  * Scenario 5 — triggering from CI: the REST run routes, over HTTP with a bearer token.
  * Only this stack shows the proxy letting them through and the run actually finishing.
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import {
   APP_URL,
   FatalPollError,
@@ -299,6 +302,7 @@ describe("scenario 3 — signup", () => {
 
 describe("scenario 4 — production CSP", () => {
   it.each([
+    "/",
     "/auth/signin",
     "/auth/signup",
     "/auth/forgot-password",
@@ -307,11 +311,12 @@ describe("scenario 4 — production CSP", () => {
     "/auth/error",
     "/auth/signout",
     "/no-such-page",
-  ])("%s runs its scripts", async (path) => {
-    const res = await fetch(`${APP_URL}${path}`, { redirect: "manual" });
+  ])("%s runs its scripts and cannot be stored", async (page) => {
+    const res = await fetch(`${APP_URL}${page}`, { redirect: "manual" });
     const csp = res.headers.get("content-security-policy") ?? "";
     const nonce = /'nonce-([^']+)'/.exec(csp)?.[1];
     expect(nonce).toBeTruthy();
+    expect(res.headers.get("cache-control")).toContain("no-store");
 
     const html = await res.text();
     const scripts = html.match(/<script\b[^>]*>/g) ?? [];
@@ -321,6 +326,35 @@ describe("scenario 4 — production CSP", () => {
       // A stylesheet listed as a script is a SyntaxError on every page.
       expect(tag).not.toMatch(/src="[^"]*\.css/);
     }
+  });
+
+  // The list above can't see a page added later with force-static. The build output can.
+  it("prerenders no page", () => {
+    const manifest = JSON.parse(
+      readFileSync(
+        path.join(
+          __dirname,
+          "../../apps/cronium-app/.next/prerender-manifest.json",
+        ),
+        "utf8",
+      ),
+    ) as {
+      routes: Record<string, unknown>;
+      dynamicRoutes: Record<string, unknown>;
+    };
+
+    const pages = [
+      ...Object.keys(manifest.routes),
+      ...Object.keys(manifest.dynamicRoutes),
+    ].filter(
+      (route) =>
+        // Files such as /manifest.json have no scripts to block.
+        !/\.\w+$/.test(route) &&
+        // Next's own last-resort 500 page, prerendered whatever the layout does. No
+        // failure we could cause reaches it: they render per request, with the nonce.
+        route !== "/_global-error",
+    );
+    expect(pages).toEqual([]);
   });
 });
 
