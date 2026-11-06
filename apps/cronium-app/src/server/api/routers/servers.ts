@@ -22,7 +22,12 @@ import { type InsertServer } from "@shared/schema";
 import { storage } from "@/server/storage";
 import { type Log } from "@shared/schema";
 import { toEventListApiDto, toServerApiDto } from "@/server/security/api-dto";
-import { failureWithStack } from "@/lib/pg-errors";
+import {
+  QUERY_FAILED_MESSAGE,
+  failureWithStack,
+  isQueryFailure,
+  messageForCaller,
+} from "@/lib/pg-errors";
 
 /**
  * NOTE: Several methods in this router use direct database queries instead of
@@ -576,7 +581,8 @@ export const serversRouter = createTRPCRouter({
 
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `Failed to delete server: ${errorMessage}`,
+          // Logged above. A 500's message is only hidden on the HTTP path.
+          message: `Failed to delete server: ${isQueryFailure(error) ? QUERY_FAILED_MESSAGE : errorMessage}`,
           cause: error,
         });
       }
@@ -787,13 +793,7 @@ export const serversRouter = createTRPCRouter({
             results.push({
               id: serverId,
               success: false,
-              error:
-                typeof error === "object" &&
-                error !== null &&
-                "message" in error &&
-                typeof error.message === "string"
-                  ? error.message
-                  : "Unknown error",
+              error: messageForCaller(error, "Unknown error"),
             });
           }
         }
