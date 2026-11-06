@@ -398,6 +398,20 @@ describe("EventForm", () => {
           ]);
         });
 
+        // Once someone has edited a field, a browser fires `change` when it loses
+        // focus. The input only holds a flattened copy of this value by then.
+        it("keeps a paste's line breaks when the field loses focus after an edit", async () => {
+          const user = await renderWithEmptyRow();
+          await user.type(valueField(), "typed-");
+          await user.paste("one\ntwo");
+          fireEvent.change(valueField());
+
+          expect(screen.getByText(noteFor(1))).toBeInTheDocument();
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "typed-one\ntwo" },
+          ]);
+        });
+
         it("takes a drop the way it takes a paste", async () => {
           const user = await renderWithEmptyRow();
           fireEvent.drop(valueField(), {
