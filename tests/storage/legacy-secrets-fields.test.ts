@@ -788,12 +788,12 @@ describe("a plaintext value that looks like ciphertext", () => {
       `SELECT event_id AS "eventId", key FROM env_vars WHERE id = $1`,
       [id],
     );
-    await storage.deleteEnvVarsByEventId(eventId);
-    await storage.createEnvVar({
+    // What saving the event does.
+    await storage.updateScript(
       eventId,
-      key,
-      value: LOOKS_LIKE_CIPHERTEXT,
-    } as never);
+      {},
+      { envVars: [{ key, value: LOOKS_LIKE_CIPHERTEXT }], userId: OWNER },
+    );
 
     const report = await encryptLegacySecrets();
 
@@ -948,12 +948,21 @@ describe("a value that reads as ciphertext", () => {
     const { eventId, key } = await seedEnvVar(old(SHORT));
     await encryptLegacySecrets();
 
-    await storage.deleteEnvVarsByEventId(eventId);
-    await storage.createEnvVar({ eventId, key, value: SHORT } as never);
+    // What saving the event does.
+    await storage.updateScript(
+      eventId,
+      {},
+      { envVars: [{ key, value: SHORT }], userId: OWNER },
+    );
 
     const report = await encryptLegacySecrets();
 
     expect(report.readsAsCiphertext).toEqual([]);
+    const { rows } = await pool.query<{ value: string }>(
+      `SELECT value FROM env_vars WHERE event_id = $1`,
+      [eventId],
+    );
+    expect(decryptEnvVarValue(rows[0]!.value, eventId, key)).toBe(SHORT);
   });
 
   it("says so from the CLI, without a value, and doesn't fail the run for it", async () => {
