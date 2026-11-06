@@ -22,6 +22,25 @@ export interface EncryptedData {
   };
 }
 
+/**
+ * The stored form of an encrypted credential or OAuth token, or null for anything
+ * else, including legacy plaintext.
+ */
+export function parseEncryptedData(
+  stored: string | null | undefined,
+): EncryptedData | null {
+  if (!stored) return null;
+  try {
+    const o = JSON.parse(stored) as Partial<EncryptedData>;
+    if (o?.encrypted && o.iv && o.authTag && o.keyDerivation) {
+      return o as EncryptedData;
+    }
+  } catch {
+    // Not JSON: legacy plaintext.
+  }
+  return null;
+}
+
 export interface EncryptionConfig {
   algorithm?: string;
   keyLength?: number;
