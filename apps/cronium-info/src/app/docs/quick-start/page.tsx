@@ -372,7 +372,15 @@ uptime`}</CodeBlock>
                 <h4 className="mb-2 font-semibold">3. Review Results</h4>
                 <p className="text-muted-foreground text-sm">
                   Check the execution logs and verify that your script ran
-                  without errors.
+                  without errors. Logs are kept for 90 days by default; on a
+                  self-hosted instance you can change that under{" "}
+                  <a
+                    href={`/docs/self-hosting#data-retention`}
+                    className="text-primary hover:underline"
+                  >
+                    Data Retention
+                  </a>
+                  .
                 </p>
               </div>
             </div>
@@ -519,8 +527,8 @@ uptime`}</CodeBlock>
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground mb-3 text-sm">
-                  Integrate Cronium with your applications using our
-                  comprehensive API.
+                  Trigger runs from CI and manage events and servers with API
+                  tokens.
                 </p>
                 <a
                   href={`/docs/api`}

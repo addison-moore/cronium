@@ -43,20 +43,23 @@ config = input_data.get('config', {})
 if message:
     print(f"Processing message: {message}")`,
     nodejs: `// cronium is automatically available - no imports needed!
+// Every helper returns a Promise, so await it inside an async function.
 
-// Access input data
-const inputData = cronium.input();
-console.log('Received:', inputData);
+(async () => {
+    // Access input data
+    const inputData = await cronium.input();
+    console.log('Received:', inputData);
 
-// Access specific fields with defaults
-const userId = inputData.user_id || 'unknown';
-const message = inputData.message || 'Hello World';
-const config = inputData.config || {};
+    // Access specific fields with defaults
+    const userId = inputData.user_id || 'unknown';
+    const message = inputData.message || 'Hello World';
+    const config = inputData.config || {};
 
-// Use input in processing
-if (message) {
-    console.log(\`Processing message: \${message}\`);
-}`,
+    // Use input in processing
+    if (message) {
+        console.log(\`Processing message: \${message}\`);
+    }
+})();`,
     curl: `# cronium functions are automatically available - no sourcing needed!
 
 # Access input data
@@ -93,22 +96,24 @@ cronium.output(result)
 # The output will be available as input to the next connected node`,
     nodejs: `// cronium is automatically available - no imports needed!
 
-// Create structured output
-const result = {
-    success: true,
-    message: "Data processed successfully",
-    data: {
-        processedItems: 42,
-        totalTime: "2.5s",
-        errors: []
-    },
-    nextAction: "send_notification"
-};
+(async () => {
+    // Create structured output
+    const result = {
+        success: true,
+        message: "Data processed successfully",
+        data: {
+            processedItems: 42,
+            totalTime: "2.5s",
+            errors: []
+        },
+        nextAction: "send_notification"
+    };
 
-// Set output for next workflow node
-cronium.output(result);
+    // Set output for next workflow node
+    await cronium.output(result);
 
-// The output will be available as input to the next connected node`,
+    // The output will be available as input to the next connected node
+})();`,
     curl: `# cronium functions are automatically available - no sourcing needed!
 
 # Create structured output (JSON)
@@ -146,19 +151,22 @@ cronium.set_variable('COUNTER', str(int(cronium.get_variable('COUNTER') or '0') 
 print(f"Processing count: {cronium.get_variable('COUNTER')}")`,
     nodejs: `// cronium is automatically available - no imports needed!
 
-// Get a stored variable
-const exampleApiKey = cronium.getVariable('EXAMPLE_API_KEY');
-const databaseUrl = cronium.getVariable('DATABASE_URL');
+(async () => {
+    // Get a stored variable
+    const exampleApiKey = await cronium.getVariable('EXAMPLE_API_KEY');
+    const databaseUrl = await cronium.getVariable('DATABASE_URL');
 
-// Use variables with defaults
-const redisHost = cronium.getVariable('REDIS_HOST') || 'localhost';
+    // Use variables with defaults
+    const redisHost = (await cronium.getVariable('REDIS_HOST')) || 'localhost';
 
-// Set/update variables
-cronium.setVariable('LAST_PROCESSED', '2025-06-17T10:30:00Z');
-cronium.setVariable('COUNTER', String(parseInt(cronium.getVariable('COUNTER') || '0') + 1));
+    // Set/update variables
+    await cronium.setVariable('LAST_PROCESSED', '2025-06-17T10:30:00Z');
+    const counter = parseInt((await cronium.getVariable('COUNTER')) || '0');
+    await cronium.setVariable('COUNTER', String(counter + 1));
 
-// Variables persist across all script executions for the user
-console.log(\`Processing count: \${cronium.getVariable('COUNTER')}\`);`,
+    // Variables persist across all script executions for the user
+    console.log(\`Processing count: \${await cronium.getVariable('COUNTER')}\`);
+})();`,
     curl: `# cronium functions are automatically available - no sourcing needed!
 
 # Get a stored variable
@@ -200,19 +208,21 @@ else:
     cronium.set_condition(False)  # Don't trigger "On Condition" connections`,
     nodejs: `// cronium is automatically available - no imports needed!
 
-// Process some data
-const inputData = cronium.input();
-const threshold = inputData.threshold || 100;
-const currentValue = processData();
+(async () => {
+    // Process some data
+    const inputData = await cronium.input();
+    const threshold = inputData.threshold || 100;
+    const currentValue = processData();
 
-// Set condition based on processing result
-if (currentValue > threshold) {
-    console.log(\`Value \${currentValue} exceeds threshold \${threshold}\`);
-    cronium.setCondition(true);  // Trigger "On Condition" connections
-} else {
-    console.log(\`Value \${currentValue} is within threshold\`);
-    cronium.setCondition(false);  // Don't trigger "On Condition" connections
-}`,
+    // Set condition based on processing result
+    if (currentValue > threshold) {
+        console.log(\`Value \${currentValue} exceeds threshold \${threshold}\`);
+        await cronium.setCondition(true);  // Trigger "On Condition" connections
+    } else {
+        console.log(\`Value \${currentValue} is within threshold\`);
+        await cronium.setCondition(false);  // Don't trigger "On Condition" connections
+    }
+})();`,
     curl: `# cronium functions are automatically available - no sourcing needed!
 
 # Process some data
@@ -235,80 +245,57 @@ fi`,
 # Access event metadata
 event = cronium.event()
 
-print(f"Event ID: {event.get('id')}")
-print(f"Event Name: {event.get('name')}")
-print(f"Script Type: {event.get('type')}")
-print(f"Run Location: {event.get('runLocation')}")
-
-# Check execution statistics
-print(f"Success Count: {event.get('successCount', 0)}")
-print(f"Failure Count: {event.get('failureCount', 0)}")
-
-# Server information (for remote execution)
-server = event.get('server')
-if server:
-    print(f"Running on server: {server.get('name')} ({server.get('address')})")
-else:
-    print("Running locally")
+print(f"Event ID: {event.get('eventId')}")
+print(f"Event Name: {event.get('eventName')}")
+print(f"Script Type: {event.get('eventType')}")
+run_location = (event.get('event') or {}).get('runLocation')
+print(f"Run Location: {run_location}")
+print(f"Execution ID: {event.get('executionId')}")
 
 # Use metadata for conditional logic
-if event.get('type') == 'PYTHON':
-    import json
-    print("Running in Python environment")`,
+if run_location == 'REMOTE':
+    print("Running on a remote server")
+else:
+    print("Running locally")`,
     nodejs: `// cronium is automatically available - no imports needed!
 
-// Access event metadata
-const event = cronium.event();
+(async () => {
+    // Access event metadata
+    const event = await cronium.event();
 
-console.log('Event ID:', event.id);
-console.log('Event Name:', event.name);
-console.log('Script Type:', event.type);
-console.log('Run Location:', event.runLocation);
+    console.log('Event ID:', event.eventId);
+    console.log('Event Name:', event.eventName);
+    console.log('Script Type:', event.eventType);
+    console.log('Run Location:', event.event?.runLocation);
+    console.log('Execution ID:', event.executionId);
 
-// Check execution statistics
-console.log('Success Count:', event.successCount || 0);
-console.log('Failure Count:', event.failureCount || 0);
-
-// Server information (for remote execution)
-const server = event.server;
-if (server) {
-    console.log(\`Running on server: \${server.name} (\${server.address})\`);
-} else {
-    console.log('Running locally');
-}
-
-// Use metadata for conditional logic
-if (event.type === 'NODEJS') {
-    console.log('Running in Node.js environment');
-}`,
+    // Use metadata for conditional logic
+    if (event.event?.runLocation === 'REMOTE') {
+        console.log('Running on a remote server');
+    } else {
+        console.log('Running locally');
+    }
+})();`,
     curl: `# cronium functions are automatically available - no sourcing needed!
 
-# Access event metadata
-event_data=$(cronium_event)
+# Print the whole event metadata as JSON
+cronium_event
 
-event_id=$(echo "$event_data" | jq -r '.id')
-event_name=$(echo "$event_data" | jq -r '.name')
-script_type=$(echo "$event_data" | jq -r '.type')
-run_location=$(echo "$event_data" | jq -r '.runLocation')
+# Or read one field at a time
+event_id=$(cronium_event_field eventId)
+event_name=$(cronium_event_field eventName)
+script_type=$(cronium_event_field eventType)
+run_location=$(cronium_event_field event.runLocation)
 
 echo "Event ID: $event_id"
 echo "Event Name: $event_name"
 echo "Script Type: $script_type"
 echo "Run Location: $run_location"
+echo "Execution ID: $(cronium_event_field executionId)"
 
-# Check execution statistics
-success_count=$(echo "$event_data" | jq -r '.successCount // 0')
-failure_count=$(echo "$event_data" | jq -r '.failureCount // 0')
-
-echo "Success Count: $success_count"
-echo "Failure Count: $failure_count"
-
-# Server information (for remote execution)
-server_name=$(echo "$event_data" | jq -r '.server.name // "local"')
-server_address=$(echo "$event_data" | jq -r '.server.address // ""')
-
-if [[ "$server_name" != "local" && "$server_name" != "null" ]]; then
-    echo "Running on server: $server_name ($server_address)"
+# Use metadata for conditional logic
+if [[ "$run_location" == "REMOTE" ]]; then
+    echo "Running on a remote server"
 else
     echo "Running locally"
 fi`,
@@ -322,7 +309,7 @@ def main():
     input_data = cronium.input()
     event = cronium.event()
     
-    print(f"Processing event: {event.get('name')}")
+    print(f"Processing event: {event.get('eventName')}")
     
     # Get configuration from variables
     max_retries = int(cronium.get_variable('MAX_RETRIES') or '3')
@@ -368,14 +355,14 @@ if __name__ == "__main__":
 // Complete workflow example
 async function main() {
     // Get input data
-    const inputData = cronium.input();
-    const event = cronium.event();
+    const inputData = await cronium.input();
+    const event = await cronium.event();
     
-    console.log(\`Processing event: \${event.name}\`);
+    console.log(\`Processing event: \${event.eventName}\`);
     
     // Get configuration from variables
-    const maxRetries = parseInt(cronium.getVariable('MAX_RETRIES') || '3');
-    const apiEndpoint = cronium.getVariable('API_ENDPOINT');
+    const maxRetries = parseInt((await cronium.getVariable('MAX_RETRIES')) || '3');
+    const apiEndpoint = await cronium.getVariable('API_ENDPOINT');
     
     // Process data
     const items = inputData.items || [];
@@ -392,12 +379,12 @@ async function main() {
     }
     
     // Update processing stats
-    const totalProcessed = parseInt(cronium.getVariable('TOTAL_PROCESSED') || '0');
-    cronium.setVariable('TOTAL_PROCESSED', String(totalProcessed + processedItems.length));
+    const totalProcessed = parseInt((await cronium.getVariable('TOTAL_PROCESSED')) || '0');
+    await cronium.setVariable('TOTAL_PROCESSED', String(totalProcessed + processedItems.length));
     
     // Set condition for workflow routing
     const successRate = items.length > 0 ? processedItems.length / items.length : 1;
-    cronium.setCondition(successRate > 0.8);  // 80% success threshold
+    await cronium.setCondition(successRate > 0.8);  // 80% success threshold
     
     // Set output for next workflow node
     const result = {
@@ -408,7 +395,7 @@ async function main() {
         processedItems: processedItems,
         errors: errors
     };
-    cronium.output(result);
+    await cronium.output(result);
     
     console.log(\`Processed \${processedItems.length} items with \${errors.length} errors\`);
 }
@@ -421,9 +408,7 @@ main().catch(console.error);`,
 main() {
     # Get input data
     input_data=$(cronium_input)
-    event_data=$(cronium_event)
-    
-    event_name=$(echo "$event_data" | jq -r '.name')
+    event_name=$(cronium_event_field eventName)
     echo "Processing event: $event_name"
     
     # Get configuration from variables
@@ -564,7 +549,7 @@ export default function RuntimeHelpersPage() {
                     </h4>
                     <p className="text-muted-foreground text-sm">
                       <code>cronium.event()</code> for accessing event
-                      information, execution stats, and server details
+                      information and where the event is running
                     </p>
                   </div>
                 </div>
@@ -681,7 +666,8 @@ export default function RuntimeHelpersPage() {
                 </li>
                 <li>
                   • <strong>String storage:</strong> All values stored as
-                  strings (convert as needed)
+                  strings, so a number or object reads back as text (convert as
+                  needed)
                 </li>
                 <li>
                   • <strong>Cross-language:</strong> Variables set in Python can
@@ -752,27 +738,25 @@ export default function RuntimeHelpersPage() {
               </h4>
               <ul className="text-info-text space-y-1 text-sm">
                 <li>
-                  • <strong>id:</strong> Unique event identifier
+                  • <strong>eventId:</strong> Unique event identifier
                 </li>
                 <li>
-                  • <strong>name:</strong> Event display name
+                  • <strong>eventName:</strong> Event display name
                 </li>
                 <li>
-                  • <strong>type:</strong> Script type (PYTHON, NODEJS, BASH,
-                  HTTP_REQUEST)
+                  • <strong>eventType:</strong> Script type (PYTHON, NODEJS,
+                  BASH)
                 </li>
                 <li>
-                  • <strong>runLocation:</strong> LOCAL or REMOTE execution
+                  • <strong>event.runLocation:</strong> LOCAL or REMOTE
+                  execution
                 </li>
                 <li>
-                  • <strong>successCount/failureCount:</strong> Execution
-                  statistics
+                  • <strong>executionId:</strong> This run&apos;s identifier
                 </li>
                 <li>
-                  • <strong>server:</strong> Server details for remote execution
-                </li>
-                <li>
-                  • <strong>lastRunAt:</strong> Timestamp of last execution
+                  • <strong>metadata:</strong> The job&apos;s details, including
+                  its input
                 </li>
               </ul>
             </Callout>

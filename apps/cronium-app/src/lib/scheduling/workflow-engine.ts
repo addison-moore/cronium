@@ -125,6 +125,11 @@ export interface StartWorkflowResult {
   executionId?: number;
   status?: string;
   output?: string;
+  /**
+   * The graph itself cannot run (no nodes, no starting node). Its `output` is safe
+   * to show the caller and theirs to fix, unlike the text of an unexpected error.
+   */
+  notRunnable?: boolean;
 }
 
 /** Create a run + its step rows and kick the first advance. */
@@ -145,7 +150,11 @@ export async function startWorkflowRun(
     const nodes = await storage.getWorkflowNodes(workflowId);
     const connections = await storage.getWorkflowConnections(workflowId);
     if (nodes.length === 0) {
-      return { success: false, output: "Workflow has no nodes" };
+      return {
+        success: false,
+        output: "Workflow has no nodes",
+        notRunnable: true,
+      };
     }
     const hasStart = nodes.some(
       (n) => !connections.some((c) => c.targetNodeId === n.id),
@@ -154,6 +163,7 @@ export async function startWorkflowRun(
       return {
         success: false,
         output: "Workflow has no starting nodes (fully cyclic graph)",
+        notRunnable: true,
       };
     }
 

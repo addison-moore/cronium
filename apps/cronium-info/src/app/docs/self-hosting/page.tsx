@@ -43,6 +43,7 @@ const tableOfContents = [
   { title: "Runtime Service", href: "#runtime-env", level: 3 },
   { title: "Backing Services", href: "#backing-services-env", level: 3 },
   { title: "Deployment Workflow", href: "#deployment-workflow", level: 2 },
+  { title: "Data Retention", href: "#data-retention", level: 2 },
   { title: "Post-Deployment Checklist", href: "#post-deployment", level: 2 },
 ];
 
@@ -52,6 +53,39 @@ export const experimental_ppr = true;
 // ISR configuration - revalidate every hour
 export const revalidate = 3600; // 1 hour
 export const dynamic = "force-static";
+
+const retentionWindows = [
+  {
+    variable: "CRONIUM_LOG_RETENTION_DAYS",
+    days: 90,
+    deletes: "Run logs, the history shown on the Logs page",
+  },
+  {
+    variable: "CRONIUM_WORKFLOW_RETENTION_DAYS",
+    days: 90,
+    deletes: "Finished workflow runs and their per-step rows",
+  },
+  {
+    variable: "CRONIUM_INCIDENT_RETENTION_DAYS",
+    days: 90,
+    deletes: "Schedule incidents (missed or skipped runs)",
+  },
+  {
+    variable: "CRONIUM_TOOL_ACTION_LOG_RETENTION_DAYS",
+    days: 90,
+    deletes: "Tool action logs",
+  },
+  {
+    variable: "CRONIUM_JOB_RETENTION_DAYS",
+    days: 30,
+    deletes: "Finished job queue rows, with their executions and transitions",
+  },
+  {
+    variable: "CRONIUM_WEBHOOK_RETENTION_DAYS",
+    days: 30,
+    deletes: "Webhook deliveries, events and logs",
+  },
+];
 
 export default function SelfHostingPage() {
   return (
@@ -814,6 +848,67 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
               </ol>
             </CardContent>
           </Card>
+        </section>
+
+        <section id="data-retention" className="mb-12">
+          <h2 className="mb-6 text-2xl font-bold">Data Retention</h2>
+          <div className="space-y-6">
+            <p>
+              The <code>cronium-worker</code> service deletes old run history so
+              the database does not grow without limit. It runs when the worker
+              starts and every six hours. Each kind of data has its own window,
+              set in <code>.env</code>; restart the worker to apply a change.
+            </p>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Variable</TableHead>
+                    <TableHead>Default (days)</TableHead>
+                    <TableHead>What it deletes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {retentionWindows.map(({ variable, days, deletes }) => (
+                    <TableRow key={variable}>
+                      <TableCell>
+                        <code>{variable}</code>
+                      </TableCell>
+                      <TableCell>{days}</TableCell>
+                      <TableCell>{deletes}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <ul className="text-muted-foreground list-disc space-y-2 pl-6">
+              <li>
+                <code>0</code> keeps that data forever. A value that isn&apos;t
+                a number of days up to 36500 is ignored with a warning in the
+                worker&apos;s log, and that data is kept until it is fixed.
+              </li>
+              <li>
+                Only finished work is deleted. A job that is still active keeps
+                its logs, and a workflow run in progress keeps its rows, however
+                old they are. Events, workflows, servers and webhooks themselves
+                are never touched.
+              </li>
+              <li>
+                Monthly quotas count run logs and tool action logs, so keep
+                those two windows at 31 days or more if you use quotas.
+              </li>
+            </ul>
+            <Alert className="bg-card text-card-foreground">
+              <AlertTitle>Upgrading an existing instance</AlertTitle>
+              <AlertDescription>
+                If your instance predates retention, the worker starts deleting
+                history past these defaults as soon as it comes up after the
+                upgrade. To keep everything, set the variables to <code>0</code>{" "}
+                in <code>.env</code> first. Re-running the installer keeps your
+                existing <code>.env</code> and does not add them for you.
+              </AlertDescription>
+            </Alert>
+          </div>
         </section>
 
         <section id="post-deployment" className="mb-12">

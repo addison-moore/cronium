@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -13,27 +12,11 @@ import (
 	"github.com/addison-moore/cronium/apps/runner/cronium-runner/pkg/types"
 )
 
-// helperBinariesEmbedded reports whether the default embed.go build carries
-// helper binaries for this platform (Linux only — the runner ships to Linux
-// servers). On other hosts SetupHelpers fails at the extraction step.
-func helperBinariesEmbedded() bool {
-	return runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")
-}
-
-// runSetupHelpers invokes SetupHelpers and normalizes the platform split: on
-// Linux it must fully succeed; elsewhere the only acceptable failure is the
-// helper-binary extraction step, which happens after config.json is written.
+// runSetupHelpers invokes SetupHelpers, which must fully succeed.
 func runSetupHelpers(t *testing.T, e *Executor, m *types.Manifest) {
 	t.Helper()
-	err := e.SetupHelpers(m)
-	if helperBinariesEmbedded() {
-		if err != nil {
-			t.Fatalf("SetupHelpers failed: %v", err)
-		}
-		return
-	}
-	if err == nil || !strings.Contains(err.Error(), "failed to extract helpers") {
-		t.Fatalf("expected extraction failure on %s/%s, got: %v", runtime.GOOS, runtime.GOARCH, err)
+	if err := e.SetupHelpers(m); err != nil {
+		t.Fatalf("SetupHelpers failed: %v", err)
 	}
 }
 
@@ -180,12 +163,8 @@ func TestSetupHelpersModeSelection(t *testing.T) {
 }
 
 // Full SetupHelpers pass: binaries extracted, PATH and env wired, bundled
-// data files materialized, discovery script written. Needs the embedded
-// Linux helper binaries, so it runs on Linux CI and is skipped elsewhere.
+// data files materialized, discovery script written.
 func TestSetupHelpersFullBundledSetup(t *testing.T) {
-	if !helperBinariesEmbedded() {
-		t.Skip("embedded helper binaries exist only for linux/amd64 and linux/arm64 (embed.go); full SetupHelpers cannot succeed on this host")
-	}
 	pinHelperEnv(t, map[string]string{"CRONIUM_EXECUTION_ID": "exec-env"})
 
 	e, _ := newTestExecutor(t)
@@ -212,8 +191,8 @@ func TestSetupHelpersFullBundledSetup(t *testing.T) {
 	croniumDir := filepath.Join(e.workDir, ".cronium")
 	binDir := filepath.Join(croniumDir, "bin")
 
-	// All five helper binaries extracted and executable.
-	for _, name := range []string{"input", "output", "getVariable", "setVariable", "event"} {
+	// Every helper binary extracted and executable.
+	for _, name := range helpers.HelperNames {
 		info, err := os.Stat(filepath.Join(binDir, "cronium."+name))
 		if err != nil {
 			t.Fatalf("helper cronium.%s not extracted: %v", name, err)
@@ -317,6 +296,51 @@ func TestCollectHelperOutputMalformed(t *testing.T) {
 	}
 
 	if _, err := e.CollectHelperOutput(); err == nil || !strings.Contains(err.Error(), "failed to read output") {
+		t.Fatalf("expected read error, got: %v", err)
+	}
+}
+
+func TestCollectHelperConditionNoFile(t *testing.T) {
+	e, _ := newTestExecutor(t)
+	e.workDir = t.TempDir()
+
+	condition, err := e.CollectHelperCondition()
+	if err != nil {
+		t.Fatalf("expected nil error with no condition.json, got: %v", err)
+	}
+	if condition != nil {
+		t.Errorf("expected no condition, got: %v", *condition)
+	}
+}
+
+func TestCollectHelperConditionReadsValue(t *testing.T) {
+	e, _ := newTestExecutor(t)
+	e.workDir = t.TempDir()
+	if err := helpers.WriteJSON(filepath.Join(e.workDir, ".cronium", "condition.json"), helpers.ConditionData{Condition: true}); err != nil {
+		t.Fatalf("failed to seed condition.json: %v", err)
+	}
+
+	condition, err := e.CollectHelperCondition()
+	if err != nil {
+		t.Fatalf("CollectHelperCondition failed: %v", err)
+	}
+	if condition == nil || !*condition {
+		t.Errorf("condition = %v, want true", condition)
+	}
+}
+
+func TestCollectHelperConditionMalformed(t *testing.T) {
+	e, _ := newTestExecutor(t)
+	e.workDir = t.TempDir()
+	dir := filepath.Join(e.workDir, ".cronium")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("failed to create dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "condition.json"), []byte("{bad"), 0o644); err != nil {
+		t.Fatalf("failed to write condition.json: %v", err)
+	}
+
+	if _, err := e.CollectHelperCondition(); err == nil || !strings.Contains(err.Error(), "failed to read condition") {
 		t.Fatalf("expected read error, got: %v", err)
 	}
 }

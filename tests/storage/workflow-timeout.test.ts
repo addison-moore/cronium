@@ -58,7 +58,8 @@ jest.mock("@/lib/websocket-broadcaster", () => ({
 }));
 
 const MAX_AGE_MS = 30 * 60 * 1000;
-const TIMEOUT_MESSAGE = "Workflow execution timed out after 1800s";
+const TIMEOUT_MESSAGE = /^Workflow execution timed out after \d+s$/;
+const MAX_TOTAL_DURATION_MS = 2_147_483_647;
 
 const service = new WorkflowCleanupService({
   maxWorkflowAge: MAX_AGE_MS,
@@ -78,6 +79,7 @@ async function seedWorkflow(userId: string): Promise<number> {
 async function seedStuckRun(
   workflowId: number,
   userId: string,
+  startedAt: Date = pastTheCutoff(),
 ): Promise<number> {
   const [row] = await db
     .insert(workflowExecutions)
@@ -86,7 +88,7 @@ async function seedStuckRun(
       userId,
       triggerType: "MANUAL",
       status: LogStatus.RUNNING,
-      startedAt: pastTheCutoff(),
+      startedAt,
     })
     .returning({ id: workflowExecutions.id });
   return row!.id;
@@ -348,7 +350,7 @@ describe("the timeout row", () => {
         userId: userA,
         status: LogStatus.TIMEOUT,
         level: WorkflowLogLevel.ERROR,
-        message: TIMEOUT_MESSAGE,
+        message: expect.stringMatching(TIMEOUT_MESSAGE),
       }),
     ]);
     expect(await logsOf(workflowB)).toEqual([]);
@@ -368,7 +370,7 @@ describe("the timeout row", () => {
         workflowId,
         userId,
         status: LogStatus.TIMEOUT,
-        message: TIMEOUT_MESSAGE,
+        message: expect.stringMatching(TIMEOUT_MESSAGE),
       }),
     ]);
   });
@@ -390,6 +392,90 @@ describe("the timeout row", () => {
     expect(await logsOf(workflowB)).toEqual([
       expect.objectContaining({ workflowId: workflowB, userId: userB }),
     ]);
+  });
+});
+
+describe("the time it records", () => {
+  /** The seconds in the run's timeout line, and that the run's own columns agree. */
+  async function recordedSeconds(runId: number, workflowId: number) {
+    const run = await runOf(runId);
+    const [line] = await logsOf(workflowId);
+    const [, seconds] = line!.message!.match(/after (\d+)s$/)!;
+    return { run, seconds: Number(seconds) };
+  }
+
+  it("is how long a run stuck past the limit really ran, not the limit", async () => {
+    const userId = await seedUser();
+    const workflowId = await seedWorkflow(userId);
+    const threeHours = 3 * 60 * 60 * 1000;
+    const stuckRun = await seedStuckRun(
+      workflowId,
+      userId,
+      new Date(Date.now() - threeHours),
+    );
+
+    await service.performCleanup();
+
+    const { run, seconds } = await recordedSeconds(stuckRun, workflowId);
+    expect(run.totalDuration).toBeGreaterThanOrEqual(threeHours);
+    expect(run.totalDuration).toBeLessThan(threeHours + 60_000);
+    expect(seconds).toBeGreaterThanOrEqual(10_800);
+    expect(seconds).toBeLessThan(10_860);
+  });
+
+  it("is how long the run really ran when an admin stops it early", async () => {
+    const userId = await seedUser();
+    const workflowId = await seedWorkflow(userId);
+    const twoMinutes = 2 * 60 * 1000;
+    const runId = await seedStuckRun(
+      workflowId,
+      userId,
+      new Date(Date.now() - twoMinutes),
+    );
+
+    await expect(service.cleanupWorkflow(runId)).resolves.toBe(true);
+
+    const { run, seconds } = await recordedSeconds(runId, workflowId);
+    expect(run.totalDuration).toBeGreaterThanOrEqual(twoMinutes);
+    expect(run.totalDuration).toBeLessThan(twoMinutes + 60_000);
+    expect(seconds).toBeGreaterThanOrEqual(120);
+    expect(seconds).toBeLessThan(180);
+  });
+
+  it("is the same instant on completed_at and updated_at", async () => {
+    const userId = await seedUser();
+    const workflowId = await seedWorkflow(userId);
+    const stuckRun = await seedStuckRun(workflowId, userId);
+    const before = await runOf(stuckRun);
+
+    await service.performCleanup();
+
+    const after = await runOf(stuckRun);
+    expect(after.updatedAt.getTime()).toBeGreaterThan(
+      before.updatedAt.getTime(),
+    );
+    expect(after.updatedAt).toEqual(after.completedAt);
+  });
+
+  it("does not stop a run stuck longer than the column can hold from timing out", async () => {
+    const userId = await seedUser();
+    const workflowId = await seedWorkflow(userId);
+    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+    expect(thirtyDays).toBeGreaterThan(MAX_TOTAL_DURATION_MS);
+    const stuckRun = await seedStuckRun(
+      workflowId,
+      userId,
+      new Date(Date.now() - thirtyDays),
+    );
+
+    await service.performCleanup();
+
+    const { run, seconds } = await recordedSeconds(stuckRun, workflowId);
+    expect(run.status).toBe(LogStatus.TIMEOUT);
+    expect(run.totalDuration).toBe(MAX_TOTAL_DURATION_MS);
+    // The line isn't limited by the column, so it still tells the truth.
+    expect(seconds).toBeGreaterThanOrEqual(2_592_000);
+    expect(seconds).toBeLessThan(2_592_060);
   });
 });
 
