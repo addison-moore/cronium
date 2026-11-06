@@ -10,6 +10,7 @@ package executor
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,10 +21,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/addison-moore/cronium/apps/runner/cronium-runner/pkg/types"
 )
@@ -31,6 +34,9 @@ import (
 const (
 	parityExecutionID = "exec-parity"
 	parityToken       = "parity-token-0123456789"
+
+	// maxOutputBytes in apps/runtime/cronium-runtime/internal/handlers/handlers.go.
+	parityMaxOutputBytes = 5242880
 
 	// Written the way the runtime's Go encoder writes it, HTML escapes included.
 	parityInput   = `{"z":1,"a":"\u003cb\u003e \u0026 c","unicode":"é✓","flag":false,"none":null,"f":1.5,"list":[1,"two",{"three":3}],"empty":{},"blank":[]}`
@@ -79,9 +85,19 @@ func (f *fakeRuntime) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	body, _ := io.ReadAll(r.Body)
 	path := r.URL.EscapedPath()
 	root := "/executions/" + parityExecutionID + "/"
+
+	// As in the runtime, output too long is refused while it's still arriving.
+	if path == root+"output" {
+		r.Body = http.MaxBytesReader(w, r.Body, parityMaxOutputBytes)
+	}
+	body, err := io.ReadAll(r.Body)
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		f.reply(w, http.StatusRequestEntityTooLarge, `{"error":"Request Entity Too Large","message":"output exceeds the limit"}`)
+		return
+	}
 
 	if r.Header.Get("Authorization") != "Bearer "+parityToken {
 		f.reply(w, http.StatusUnauthorized, `{"error":"Unauthorized","message":"bad token"}`)
@@ -362,10 +378,18 @@ func lineDiff(container, runner string) string {
 			r = runnerLines[i]
 		}
 		if c != r {
-			fmt.Fprintf(&out, "line %d\n  container: %q\n  runner:    %q\n", i+1, c, r)
+			fmt.Fprintf(&out, "line %d\n  container: %q\n  runner:    %q\n", i+1, shortened(c), shortened(r))
 		}
 	}
 	return out.String()
+}
+
+// shortened keeps a value of a megabyte or so out of a test's failure message.
+func shortened(text string) string {
+	if len(text) <= 500 {
+		return text
+	}
+	return fmt.Sprintf("%s... (%d bytes) ...%s", text[:300], len(text), text[len(text)-100:])
 }
 
 func requireTools(t *testing.T, tools ...string) {
@@ -1021,6 +1045,392 @@ func TestRunnerBashInfoWithoutATokenUnderSetU(t *testing.T) {
 	result := runOnRunner(t, types.ScriptTypeBash, "unset CRONIUM_API_TOKEN\nset -u\ncronium_info >/dev/null\necho \"rc=$?\"\n")
 	if result.stdout != "rc=0\n" || result.exitCode != 0 {
 		t.Errorf("stdout = %q, exit code = %d\nstderr: %s", result.stdout, result.exitCode, result.stderr)
+	}
+}
+
+// With no value to send, cronium_output and cronium_set_variable take it from stdin. On a
+// remote server cronium_output always did. In a container it sent an empty string with
+// status 0, which lost piped output, and under `set -u` it ended the script. Neither side's
+// cronium_set_variable looked at stdin, so a piped value replaced the stored one with nothing.
+const parityBashStdinScript = `
+echo x | cronium_output; echo "text rc=$?"
+printf x | cronium_output; echo "no newline rc=$?"
+printf 'x\n\n' | cronium_output; echo "two newlines rc=$?"
+printf 'x\r\n' | cronium_output; echo "carriage return rc=$?"
+printf '\n' | cronium_output; echo "only a newline rc=$?"
+printf '  x  ' | cronium_output; echo "spaces rc=$?"
+echo '{"b": 1, "a": [1,2]}' | cronium_output; echo "object rc=$?"
+printf ' 42 \n' | cronium_output; echo "number rc=$?"
+echo true | cronium_output; echo "boolean rc=$?"
+echo null | cronium_output; echo "null rc=$?"
+echo '"quoted"' | cronium_output; echo "JSON string rc=$?"
+echo '1 2' | cronium_output; echo "two values rc=$?"
+printf 'a\0b' | cronium_output; echo "NUL rc=$?"
+printf 'caf\351 ok' | cronium_output; echo "invalid UTF-8 rc=$?"
+echo from a file > input.txt; cronium_output < input.txt; echo "file rc=$?"
+
+# Nothing to read. A closed stdin is what would hang if the read checked inside $(...).
+cronium_output; echo "nothing piped rc=$?"
+cronium_output < /dev/null; echo "/dev/null rc=$?"
+cronium_output <&-; echo "closed stdin rc=$?"
+(exec <&-; cronium_output; echo "closed by exec rc=$?")
+# That check borrows a descriptor, which has to come back as it was.
+echo kept > kept.txt; exec 9< kept.txt; cronium_output; read -r -u 9 line; exec 9<&-; echo "descriptor 9 still reads $line"
+
+# An argument is the value, even an empty one, and leaves stdin to whatever else reads it.
+echo x | cronium_output y; echo "argument rc=$?"
+echo x | cronium_output ''; echo "empty argument rc=$?"
+printf 'a\nb\n' | while read -r line; do cronium_output "$line"; done; echo "arguments in a loop rc=$?"
+# With no argument it reads to the end, so a loop reading the same stdin stops there.
+printf 'a\nb\nc\n' | while read -r line; do cronium_output; echo "no argument after $line rc=$?"; done
+
+bash -c 'cronium_output; echo "child, nothing piped rc=$?"'
+echo x | bash -c 'cronium_output; echo "child rc=$?"'
+
+# The two don't word this the same, but both send nothing and return 1.
+cronium_output < . 2>/dev/null || echo "unreadable rc=$?"
+
+echo x | cronium_set_variable TEXT; echo "variable text rc=$?"
+echo '{"a": 1}' | cronium_set_variable OBJECT; echo "variable object rc=$?"
+echo "stored: [$(cronium_get_variable TEXT)] [$(cronium_get_variable OBJECT)]"
+cronium_set_variable TWICE first
+cronium_set_variable TWICE; echo "variable, nothing piped rc=$?"
+echo "stored: [$(cronium_get_variable TWICE)]"
+cronium_set_variable CLOSED <&-; echo "variable, closed stdin rc=$?"
+echo x | cronium_set_variable ARGUMENT y; echo "variable argument rc=$?"
+echo x | cronium_set_variable EMPTY ''; echo "variable empty argument rc=$?"
+bash -c 'cronium_set_variable CHILD_BARE; echo "variable child, nothing piped rc=$?"'
+echo x | bash -c 'cronium_set_variable CHILD; echo "variable child rc=$?"'
+cronium_set_variable UNREADABLE < . 2>/dev/null || echo "variable unreadable rc=$?"
+echo null | cronium_set_variable REFUSED 2>&1 || echo "variable null rc=$?"
+`
+
+func TestParityBashValuesFromStdin(t *testing.T) {
+	requireTools(t, "bash", "curl", "jq")
+
+	const wantStdout = `text rc=0
+no newline rc=0
+two newlines rc=0
+carriage return rc=0
+only a newline rc=0
+spaces rc=0
+object rc=0
+number rc=0
+boolean rc=0
+null rc=0
+JSON string rc=0
+two values rc=0
+NUL rc=0
+invalid UTF-8 rc=0
+file rc=0
+nothing piped rc=0
+/dev/null rc=0
+closed stdin rc=0
+closed by exec rc=0
+descriptor 9 still reads kept
+argument rc=0
+empty argument rc=0
+arguments in a loop rc=0
+no argument after a rc=0
+child, nothing piped rc=0
+child rc=0
+unreadable rc=1
+variable text rc=0
+variable object rc=0
+stored: [x] [{"a":1}]
+variable, nothing piped rc=0
+stored: []
+variable, closed stdin rc=0
+variable argument rc=0
+variable empty argument rc=0
+variable child, nothing piped rc=0
+variable child rc=0
+variable unreadable rc=1
+Error: API request failed - HTTP 400 - Value must be a string
+variable null rc=1
+`
+	output := func(data string) string { return `POST /executions/exec-parity/output {"data":` + data + `}` }
+	put := func(key, value string) string {
+		return `PUT /executions/exec-parity/variables/` + key + ` {"value":` + value + `}`
+	}
+	get := func(key string) string { return `GET /executions/exec-parity/variables/` + key + ` ` }
+	wantRequests := []string{
+		output(`"x\n"`),
+		output(`"x"`),
+		output(`"x\n\n"`),
+		output(`"x\r\n"`),
+		output(`"\n"`),
+		output(`"  x  "`),
+		output(`{"a":[1,2],"b":1}`),
+		output(`42`),
+		output(`true`),
+		output(`null`),
+		output(`"quoted"`),
+		output(`"1 2\n"`),
+		output(`"a\u0000b"`),
+		output("\"caf\ufffd ok\""),
+		output(`"from a file\n"`),
+		output(`""`),
+		output(`""`),
+		output(`""`),
+		output(`""`),
+		output(`""`),
+		output(`"y"`),
+		output(`""`),
+		output(`"a"`),
+		output(`"b"`),
+		output(`"b\nc\n"`),
+		output(`""`),
+		output(`"x\n"`),
+		put("TEXT", `"x\n"`),
+		put("OBJECT", `{"a":1}`),
+		get("TEXT"),
+		get("OBJECT"),
+		put("TWICE", `"first"`),
+		put("TWICE", `""`),
+		get("TWICE"),
+		put("CLOSED", `""`),
+		put("ARGUMENT", `"y"`),
+		put("EMPTY", `""`),
+		put("CHILD_BARE", `""`),
+		put("CHILD", `"x\n"`),
+	}
+
+	for _, strict := range []struct{ name, mode string }{
+		{"with no strict mode", ""},
+		{"under set -u", "set -u\n"},
+		{"under set -euo pipefail", "set -euo pipefail\n"},
+	} {
+		t.Run(strict.name, func(t *testing.T) {
+			result := compareRuns(t, types.ScriptTypeBash, strict.mode+parityBashStdinScript)
+
+			if result.exitCode != 0 {
+				t.Errorf("exit code = %d\nstderr: %s", result.exitCode, result.stderr)
+			}
+			if result.stdout != wantStdout {
+				t.Errorf("stdout differs from what's pinned\n%s", lineDiff(wantStdout, result.stdout))
+			}
+			if got, want := strings.Join(result.requests, "\n"), strings.Join(wantRequests, "\n"); got != want {
+				t.Errorf("requests differ from what's pinned\n%s", lineDiff(want, got))
+			}
+		})
+	}
+}
+
+// Linux refuses any one argument over 128 KB, and macOS a whole command line over 1 MiB, so a
+// value this long fails if any part of its way to the runtime goes through an argument.
+func TestParityBashLargeValues(t *testing.T) {
+	requireTools(t, "bash", "curl", "jq")
+
+	const size = 1200 * 1024
+	result := compareRuns(t, types.ScriptTypeBash, fmt.Sprintf(`large() { head -c %d /dev/zero | tr '\0' x; }
+large | cronium_output; echo "piped rc=$?"
+cronium_output "$(large)"; echo "argument rc=$?"
+echo "{\"a\":\"$(large)\"}" | cronium_output; echo "piped JSON rc=$?"
+large | cronium_set_variable PIPED; echo "piped variable rc=$?"
+cronium_set_variable ARGUMENT "$(large)"; echo "argument variable rc=$?"
+stored=$(cronium_get_variable PIPED); echo "stored ${#stored}"
+`, size))
+
+	wantStdout := fmt.Sprintf("piped rc=0\nargument rc=0\npiped JSON rc=0\npiped variable rc=0\nargument variable rc=0\nstored %d\n", size)
+	if result.stdout != wantStdout {
+		t.Errorf("stdout = %q, want %q", result.stdout, wantStdout)
+	}
+	if result.stderr != "" {
+		t.Errorf("stderr = %q", shortened(result.stderr))
+	}
+	value := strings.Repeat("x", size)
+	wantRequests := []string{
+		`POST /executions/exec-parity/output {"data":"` + value + `"}`,
+		`POST /executions/exec-parity/output {"data":"` + value + `"}`,
+		`POST /executions/exec-parity/output {"data":{"a":"` + value + `"}}`,
+		`PUT /executions/exec-parity/variables/PIPED {"value":"` + value + `"}`,
+		`PUT /executions/exec-parity/variables/ARGUMENT {"value":"` + value + `"}`,
+		`GET /executions/exec-parity/variables/PIPED `,
+	}
+	if got, want := strings.Join(result.requests, "\n"), strings.Join(wantRequests, "\n"); got != want {
+		t.Errorf("requests differ from what's pinned\n%s", lineDiff(want, got))
+	}
+}
+
+// Stdin can hold more than the runtime takes as output. Both sides have to say so and fail,
+// though the runtime answers while they're still sending.
+func TestParityBashOutputPastTheRuntimesLimit(t *testing.T) {
+	requireTools(t, "bash", "curl", "jq")
+
+	result := compareRuns(t, types.ScriptTypeBash, fmt.Sprintf(`head -c %d /dev/zero | tr '\0' x | cronium_output; echo "rc=$?"`, parityMaxOutputBytes+1024))
+
+	if result.stdout != "rc=1\n" {
+		t.Errorf("stdout = %q, want rc=1", result.stdout)
+	}
+	if want := "Error: API request failed - HTTP 413 - output exceeds the limit\n"; result.stderr != want {
+		t.Errorf("stderr = %q, want %q", shortened(result.stderr), want)
+	}
+}
+
+// A long value goes by the same rule as a short one. Checked all at once, the pattern gives up
+// at about 1.6 MB of short tokens, and then jq's parser would read the 010 as a number. Megabytes
+// of spaces can still make it give up, and that has to send the value rather than fail.
+func TestParityBashLongJSON(t *testing.T) {
+	requireTools(t, "bash", "curl", "jq")
+
+	result := compareRuns(t, types.ScriptTypeBash, `many() { yes 1, | head -n 1600000 | tr -d '\n'; }
+{ printf '['; many; echo '1]'; } | cronium_output; echo "many values rc=$?"
+{ printf '['; many; echo '010]'; } | cronium_output; echo "many values and a bad number rc=$?"
+{ head -c 5000000 /dev/zero | tr '\0' ' '; echo 1; } | cronium_output; echo "many spaces rc=$?"
+`)
+
+	if want := "many values rc=0\nmany values and a bad number rc=0\nmany spaces rc=0\n"; result.stdout != want {
+		t.Errorf("stdout = %q, want %q", result.stdout, want)
+	}
+	if result.stderr != "" {
+		t.Errorf("stderr = %q", shortened(result.stderr))
+	}
+	if len(result.requests) != 3 {
+		t.Fatalf("%d requests, want 3", len(result.requests))
+	}
+	if !strings.HasPrefix(result.requests[0], `POST /executions/exec-parity/output {"data":[1,1,1,`) {
+		t.Errorf("many values didn't go as JSON: %q", shortened(result.requests[0]))
+	}
+	if !strings.HasPrefix(result.requests[1], `POST /executions/exec-parity/output {"data":"[1,1,1,`) ||
+		!strings.HasSuffix(result.requests[1], `,010]\n"}`) {
+		t.Errorf("a bad number didn't make it a string: %q", shortened(result.requests[1]))
+	}
+	if want := `POST /executions/exec-parity/output {"data":1}`; result.requests[2] != want {
+		t.Errorf("many spaces: request = %q, want %q", shortened(result.requests[2]), want)
+	}
+}
+
+// TestBashValuesGoByTheRunnersRule holds what a container sends for a value, given as an
+// argument and on stdin, to what a remote server sends for the same text, which is the rule in
+// helpers.jsonOrString. A number has to arrive as it was written, so this compares using
+// json.Number.
+func TestBashValuesGoByTheRunnersRule(t *testing.T) {
+	requireTools(t, "bash", "jq")
+
+	sdk, err := filepath.Abs(repoPath("apps", "runtime", "runtime-helpers", "bash", "cronium.sh"))
+	if err != nil {
+		t.Fatalf("failed to resolve the SDK path: %v", err)
+	}
+
+	corpus := bashJSONCheckCorpus()
+	var values bytes.Buffer
+	for _, value := range corpus {
+		values.WriteString(value + "\x00")
+	}
+	cmd := exec.Command("bash", "-c", `source "$1"
+while IFS= read -r -d '' value; do
+  _cronium_value_payload data "$value"; printf '%s\0' "$payload"
+  printf '%s' "$value" | { _cronium_value_payload data; printf '%s\0' "$payload"; }
+done`, "bash", sdk)
+	cmd.Stdin = &values
+	cmd.Dir = t.TempDir()
+	cmd.Stderr = os.Stderr
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("failed to run the helper: %v", err)
+	}
+
+	payloads := strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00")
+	if len(payloads) != 2*len(corpus) {
+		t.Fatalf("%d payloads for %d values", len(payloads), len(corpus))
+	}
+
+	canonical := func(text string) string {
+		decoder := json.NewDecoder(strings.NewReader(text))
+		decoder.UseNumber()
+		var value interface{}
+		if err := decoder.Decode(&value); err != nil {
+			t.Fatalf("%q isn't JSON: %v", text, err)
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			t.Fatalf("failed to encode %q: %v", text, err)
+		}
+		return string(encoded)
+	}
+	for i, value := range corpus {
+		want := ""
+		if trimmed := bytes.TrimSpace([]byte(value)); len(trimmed) > 0 && json.Valid(trimmed) {
+			want = canonical(`{"data":` + string(trimmed) + `}`)
+		} else {
+			encoded, err := json.Marshal(map[string]string{"data": value})
+			if err != nil {
+				t.Fatalf("failed to encode %q: %v", value, err)
+			}
+			want = string(encoded)
+		}
+		for way, payload := range map[string]string{"as an argument": payloads[2*i], "on stdin": payloads[2*i+1]} {
+			if got := canonical(payload); got != want {
+				t.Errorf("%q %s sends %s in a container and %s on a remote server", value, way, got, want)
+			}
+		}
+	}
+}
+
+// A person trying the SDK by hand has a terminal for stdin, which would wait for them to type,
+// and a call with nothing piped to it would look like it hangs. No job has a terminal, so this
+// is the container SDK alone: a remote script's stdin is always /dev/null.
+func TestContainerSDKDoesNotWaitOnATerminal(t *testing.T) {
+	requireTools(t, "bash", "curl", "jq", "script")
+	fake, url := newFakeRuntime(t)
+
+	sdk, err := filepath.Abs(repoPath("apps", "runtime", "runtime-helpers", "bash", "cronium.sh"))
+	if err != nil {
+		t.Fatalf("failed to resolve the SDK path: %v", err)
+	}
+	job := filepath.Join(t.TempDir(), "job.sh")
+	content := "source " + sdk + `
+[ -t 0 ] && echo "on a terminal"
+cronium_output; echo "output rc=$?"
+cronium_set_variable KEY; echo "variable rc=$?"
+`
+	if err := os.WriteFile(job, []byte(content), 0o755); err != nil {
+		t.Fatalf("failed to write the script: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	var cmd *exec.Cmd
+	if runtime.GOOS == "darwin" {
+		cmd = exec.CommandContext(ctx, "script", "-q", "/dev/null", "bash", job)
+	} else {
+		cmd = exec.CommandContext(ctx, "script", "-qc", "bash "+job, "/dev/null")
+	}
+	cmd.WaitDelay = 5 * time.Second
+	cmd.Env = append(os.Environ(),
+		"CRONIUM_RUNTIME_API="+url,
+		"CRONIUM_EXECUTION_TOKEN="+parityToken,
+		"CRONIUM_EXECUTION_ID="+parityExecutionID,
+	)
+	// script passes the end of its own stdin on to the terminal, and a read would then end,
+	// so this has to stay open.
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatalf("failed to open script's stdin: %v", err)
+	}
+	defer stdin.Close()
+
+	stdout, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("still waiting after a minute: %s", stdout)
+	}
+	if err != nil {
+		t.Fatalf("script failed: %v\n%s", err, stdout)
+	}
+
+	got := strings.ReplaceAll(string(stdout), "\r\n", "\n")
+	if want := "on a terminal\noutput rc=0\nvariable rc=0\n"; got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	wantRequests := []string{
+		`POST /executions/exec-parity/output {"data":""}`,
+		`PUT /executions/exec-parity/variables/KEY {"value":""}`,
+	}
+	if got, want := strings.Join(fake.requests, "\n"), strings.Join(wantRequests, "\n"); got != want {
+		t.Errorf("requests = %q, want %q", got, want)
 	}
 }
 

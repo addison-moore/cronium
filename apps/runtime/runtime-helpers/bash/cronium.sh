@@ -14,6 +14,7 @@
 #   
 #   # Set output
 #   cronium_output "$result"
+#   some_command | cronium_output
 #   
 #   # Work with variables
 #   cronium_set_variable "key" "value"
@@ -86,8 +87,9 @@ _cronium_request() {
             -o "$temp_file"
         )
         
+        # The body goes on curl's stdin, because Linux refuses any one argument over 128 KB.
         if [ -n "$data" ]; then
-            curl_args+=(-d "$data")
+            curl_args+=(--data-binary @-)
         fi
         
         # Make request and capture status code. curl's exit status must be
@@ -96,7 +98,7 @@ _cronium_request() {
         # (always zero) exit status and network failures were never retried.
         # The `||` is for a script's `set -e`, which otherwise ends it right here.
         curl_exit=0
-        status_code=$(curl "${curl_args[@]}" "${CRONIUM_RUNTIME_API}${path}" | tail -n1; exit "${PIPESTATUS[0]}") || curl_exit=$?
+        status_code=$(printf '%s' "$data" | curl "${curl_args[@]}" "${CRONIUM_RUNTIME_API}${path}" | tail -n1; exit "${PIPESTATUS[1]}") || curl_exit=$?
 
         # Retry on network failures (connection refused/reset, timeout, DNS):
         # curl exits non-zero and/or reports an http_code of 000.
@@ -169,33 +171,84 @@ cronium_input() {
     fi
 }
 
-# Whether a value is one JSON value by the JSON grammar, which is how a remote server's
-# helpers decide. jq's own parser can't say: it also reads 010, +5, .5, nan and inf, and
-# writes them back as 10, 5, 0.5, null and 1.7976931348623157e+308. So --argjson checks the
-# structure and the pattern checks everything between the punctuation. Without the
+# The jq definitions for telling whether a value is JSON by the JSON grammar, which is how a
+# remote server's helpers decide. jq's own parser can't say: it also reads 010, +5, .5, nan and
+# inf, and writes them back as 10, 5, 0.5, null and 1.7976931348623157e+308. So fromjson checks
+# the structure, and this pattern checks what's left once the strings are out. Without the
 # lookahead, 010 would pass as 0, 1 and 0.
-_cronium_is_json() {
-    jq -ne --argjson value "$1" --arg text "$1" '
-        def string: "\"(?:[^\"\\\\]|\\\\.)*+\"";
+#
+# The pattern goes over 100,000 tokens at a time because of how long a value can be. All at
+# once, it gives up at about 1.6 MB of short tokens (retry-limit-in-match), and it takes 312 MB
+# of memory for a 5 MB string.
+_cronium_json_defs() {
+    printf '%s' '
         def number: "-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?";
-        def bare: "(?:true|false|null|" + number + ")(?![^\\]\\[{}:,\" \t\r\n])";
+        def bare: "(?:true|false|null|" + number + ")(?![^\\]\\[{}:, \t\r\n])";
         def punctuation: "[\\]\\[{}:, \t\r\n]";
-        $text | test("\\A(?:" + string + "|" + bare + "|" + punctuation + ")*+\\z")
+        def outside_strings:
+            (split("\\\\") | add // "") | (split("\\\"") | add // "") |
+            split("\"") | [.[range(0; length; 2)]] | add // "";
+        def by_the_grammar:
+            outside_strings | split(",") | . as $tokens
+            | [range(0; length; 100000) as $i | $tokens[$i:$i + 100000] | map(. + ",") | add // "" |
+               test("\\A(?:" + bare + "|" + punctuation + ")*+\\z")] | all;
+    '
+}
+
+# Whether a value is one JSON value by the JSON grammar.
+_cronium_is_json() {
+    printf '%s' "$1" | jq -Rse "$(_cronium_json_defs)"'
+        (try (fromjson | true) catch false) and by_the_grammar
     ' >/dev/null 2>&1
 }
 
-# Set output data for this execution
+# Sets `payload` in the calling function to a request's body, {"<field>": <value>}. The value
+# is the argument after <field>, even an empty one, or else all of stdin.
+#
+# It's what a remote server sends (jsonOrString in apps/runner/cronium-runner/internal/helpers/
+# format.go). A single JSON value is sent as it was written, because jq would rewrite its
+# numbers: 1e3 as 1E+3. Anything else is sent as a string with every byte in it, including the
+# newline `echo` ends with, which $(...) would strip. The value stays out of jq's arguments,
+# because Linux refuses any one argument over 128 KB.
+#
+# Something like megabytes of spaces around a value can still make the pattern give up. That
+# value goes by jq's parser, and as jq writes it, because the text it accepted might not be JSON.
+_cronium_value_payload() {
+    local field="$1"
+    shift
+    local filter="$(_cronium_json_defs)"'
+        . as $text
+        | (try (fromjson | true) catch false) as $parses
+        | (if $parses then (try by_the_grammar catch null) else false end) as $json
+        | "{\"" + $field + "\":"
+          + (if $json then $text elif $json == false then ($text | tojson) else ($text | fromjson | tojson) end)
+          + "}"
+    '
+
+    # A job's stdin is at its end, as is a remote script's, so a call with nothing piped to it
+    # sends an empty value straight away. Two other kinds of stdin would never get that far: a
+    # terminal waits for someone to type, and in $(...) a closed one is that substitution's own
+    # pipe, so reading it never ends. Inside $(...) it can't be told apart, so check out here.
+    if [ "$#" -eq 0 ] && { [ -t 0 ] || ! { true 9<&0; } 2>/dev/null; }; then
+        set -- ""
+    fi
+
+    if [ "$#" -gt 0 ]; then
+        payload=$(printf '%s' "$1" | jq -Rsr --arg field "$field" "$filter")
+    else
+        payload=$(jq -Rsr --arg field "$field" "$filter")
+    fi || {
+        echo "Error: Could not read the value, so nothing was sent" >&2
+        return 1
+    }
+}
+
+# Set output data for this execution, from an argument or else from stdin
 cronium_output() {
     _cronium_ready || return 1
-    local data="$1"
-    
-    # Anything that is not a single JSON value is sent as a string.
-    if ! _cronium_is_json "$data"; then
-        data=$(jq -n --arg d "$data" '$d') || return 1
-    fi
-    
-    # By hand, because $data is JSON by now and jq would rewrite its numbers: 1e3 as 1E+3.
-    _cronium_request "POST" "/executions/${CRONIUM_EXECUTION_ID}/output" "{\"data\":$data}" >/dev/null
+    local payload
+    _cronium_value_payload data "$@" || return 1
+    _cronium_request "POST" "/executions/${CRONIUM_EXECUTION_ID}/output" "$payload" >/dev/null
 }
 
 # Get a variable value
@@ -214,20 +267,16 @@ cronium_get_variable() {
     fi
 }
 
-# Set a variable value
+# Set a variable value, from an argument or else from stdin. The runtime stores whatever
+# arrives as a string, and a JSON value as the text it was written in, so 010 and 1e3 read
+# back as they were set.
 cronium_set_variable() {
     _cronium_ready || return 1
     local key="$1"
-    local value="$2"
     local encoded_key=$(printf '%s' "$key" | jq -sRr @uri)
-    
-    # See cronium_output. The runtime stores whatever arrives as a string, and a JSON
-    # value as the text it was written in, so 010 and 1e3 read back as they were set.
-    if ! _cronium_is_json "$value"; then
-        value=$(jq -n --arg v "$value" '$v') || return 1
-    fi
-    
-    _cronium_request "PUT" "/executions/${CRONIUM_EXECUTION_ID}/variables/${encoded_key}" "{\"value\":$value}" >/dev/null
+    local payload
+    _cronium_value_payload value "${@:2}" || return 1
+    _cronium_request "PUT" "/executions/${CRONIUM_EXECUTION_ID}/variables/${encoded_key}" "$payload" >/dev/null
 }
 
 # Set workflow condition
@@ -504,5 +553,7 @@ export -f cronium_append_variable
 export -f cronium_info
 export -f _cronium_ready
 export -f _cronium_request
+export -f _cronium_json_defs
 export -f _cronium_is_json
+export -f _cronium_value_payload
 export -f _cronium_integer
