@@ -284,80 +284,308 @@ describe("EventForm", () => {
       expect(mockCreateMutateAsync).not.toHaveBeenCalled();
     });
 
-    describe("line breaks the field can't hold", () => {
-      const note = /this value lost its line breaks/;
+    describe("a value with line breaks", () => {
+      const multiLine = "-----BEGIN KEY-----\nabc\n-----END KEY-----\n";
+      const noteFor = (count: number) =>
+        `This value has ${count} line ${count === 1 ? "break" : "breaks"}. Show it to edit.`;
 
-      async function pasteIntoValue(text: string) {
+      const valueField = () => screen.getByLabelText("Value");
+      const showValue = () =>
+        screen.getByRole("button", { name: "Show value" });
+      const hideValue = () =>
+        screen.getByRole("button", { name: "Hide value" });
+
+      async function renderWithEmptyRow() {
         const user = userEvent.setup();
         render(<EventForm initialData={scheduledBashEvent} />);
+        await user.type(screen.getByLabelText("Event Name"), "With a key");
         await user.click(screen.getByRole("button", { name: "Add Variable" }));
-        fireEvent.paste(screen.getByLabelText("Value"), {
-          clipboardData: { getData: () => text },
-        });
-        // jsdom doesn't do the insert, so this is the input event that follows.
-        fireEvent.change(screen.getByLabelText("Value"), {
-          target: { value: text.trimEnd().replace(/\r?\n/g, " ") },
-        });
+        await user.type(screen.getByLabelText("Key"), "PEM");
         return user;
       }
 
-      it("says so when a paste loses them", async () => {
-        await pasteIntoValue("-----BEGIN KEY-----\nabc\n-----END KEY-----\n");
-        expect(await screen.findByText(note)).toBeInTheDocument();
-      });
-
-      it("says nothing about a paste of one line, trailing line break or not", async () => {
-        await pasteIntoValue("eyJhbGciOiJSUzI1NiJ9.abc.def\n");
-        expect(screen.queryByText(note)).not.toBeInTheDocument();
-      });
-
-      it("takes the note away with the value, and with the row", async () => {
-        const user = await pasteIntoValue("line one\nline two");
-        await screen.findByText(note);
-
-        fireEvent.change(screen.getByLabelText("Value"), {
-          target: { value: "" },
-        });
-        expect(screen.queryByText(note)).not.toBeInTheDocument();
-
-        fireEvent.change(screen.getByLabelText("Value"), {
-          target: { value: "again" },
-        });
-        await screen.findByText(note);
-        await user.click(screen.getByRole("button", { name: "×" }));
-        expect(screen.queryByText(note)).not.toBeInTheDocument();
-      });
-
-      const multiLine = "-----BEGIN KEY-----\nabc\n-----END KEY-----\n";
-      const savedElsewhere = {
-        ...scheduledBashEvent,
-        name: "Set over the API",
-        environmentVariables: [{ key: "PEM", value: multiLine }],
-      };
-
-      it("keeps them in a saved value nobody edited", async () => {
+      function renderSaved(value: string) {
         const user = userEvent.setup();
-        render(<EventForm initialData={savedElsewhere} />);
-
-        await user.click(screen.getByRole("button", { name: "Create Event" }));
-
-        await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalled());
-        expect(mockCreateMutateAsync.mock.calls[0]?.[0]).toEqual(
-          expect.objectContaining({
-            envVars: [{ key: "PEM", value: multiLine }],
-          }),
+        render(
+          <EventForm
+            initialData={{
+              ...scheduledBashEvent,
+              name: "Set over the API",
+              environmentVariables: [{ key: "PEM", value }],
+            }}
+          />,
         );
-        expect(screen.queryByText(note)).not.toBeInTheDocument();
-      });
+        return user;
+      }
 
-      it("says so when editing a saved value loses them", async () => {
-        render(<EventForm initialData={savedElsewhere} />);
+      async function save(user: ReturnType<typeof userEvent.setup>) {
+        await user.click(screen.getByRole("button", { name: "Create Event" }));
+        await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalled());
+        return (
+          mockCreateMutateAsync.mock.calls[0]?.[0] as { envVars: unknown }
+        ).envVars;
+      }
 
-        fireEvent.change(screen.getByLabelText("Value"), {
-          target: { value: "-----BEGIN KEY-----abc-----END KEY-----!" },
+      describe("while it's hidden", () => {
+        it("is only ever in a password input", async () => {
+          const user = renderSaved(multiLine);
+          expect(valueField()).toHaveAttribute("type", "password");
+
+          await user.click(showValue());
+          expect(valueField().tagName).toBe("TEXTAREA");
+          expect(valueField()).toHaveValue(multiLine);
+
+          await user.click(hideValue());
+          expect(valueField()).toHaveAttribute("type", "password");
         });
 
-        expect(await screen.findByText(note)).toBeInTheDocument();
+        it("saves a paste with all its line breaks, and says it has them", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(valueField());
+          await user.paste(multiLine);
+
+          expect(valueField()).toHaveAttribute("type", "password");
+          expect(valueField()).toHaveAccessibleDescription(noteFor(3));
+          expect(await save(user)).toEqual([{ key: "PEM", value: multiLine }]);
+        });
+
+        it("gives a paste's Windows line endings as a textarea would", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(valueField());
+          await user.paste("one\r\ntwo\r\n");
+
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "one\ntwo\n" },
+          ]);
+        });
+
+        it("drops the line break at the end of one pasted line", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(valueField());
+          await user.paste("eyJhbGciOiJSUzI1NiJ9.abc.def\n");
+
+          expect(screen.queryByText(/line break/)).not.toBeInTheDocument();
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "eyJhbGciOiJSUzI1NiJ9.abc.def" },
+          ]);
+        });
+
+        it("puts a paste where the selection is", async () => {
+          const user = renderSaved("start-end");
+          const field = valueField() as HTMLInputElement;
+          await user.click(field);
+          field.setSelectionRange(5, 6);
+          await user.paste("one\ntwo");
+
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "startone\ntwoend" },
+          ]);
+        });
+
+        it("drops only a pasted line's own line break, with the caret after it", async () => {
+          const user = renderSaved("start-end");
+          const field = valueField() as HTMLInputElement;
+          await user.click(field);
+          field.setSelectionRange(5, 6);
+          await user.paste("one\n");
+
+          expect(field).toHaveValue("startoneend");
+          expect(field).not.toHaveAttribute("readonly");
+
+          await user.keyboard("!");
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "startone!end" },
+          ]);
+        });
+
+        it("takes a drop the way it takes a paste", async () => {
+          const user = await renderWithEmptyRow();
+          fireEvent.drop(valueField(), {
+            dataTransfer: { getData: () => multiLine },
+          });
+
+          expect(await save(user)).toEqual([{ key: "PEM", value: multiLine }]);
+        });
+
+        it("leaves one pasted line with none to the input", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(valueField());
+          await user.paste("plain");
+          await user.keyboard("-typed");
+
+          expect(valueField()).not.toHaveAttribute("readonly");
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "plain-typed" },
+          ]);
+        });
+
+        it("can't be edited, so an edit can't lose them", async () => {
+          const user = renderSaved(multiLine);
+          expect(valueField()).toHaveAttribute("readonly");
+          expect(screen.getByText(noteFor(3))).toBeInTheDocument();
+
+          await user.type(valueField(), "typed");
+          await user.click(valueField());
+          await user.paste("pasted\nover");
+
+          expect(await save(user)).toEqual([{ key: "PEM", value: multiLine }]);
+        });
+
+        it.each([
+          ["line feeds", multiLine],
+          ["Windows line endings", "one\r\ntwo\r\n"],
+          ["one at the end", "token\n"],
+        ])("keeps %s nobody edited", async (_name, value) => {
+          const user = renderSaved(value);
+
+          expect(await save(user)).toEqual([{ key: "PEM", value }]);
+        });
+
+        it("still saves the form on Enter, as a one-line value did", async () => {
+          const user = await renderWithEmptyRow();
+          await user.type(valueField(), "typed{Enter}");
+
+          await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalled());
+          expect(mockCreateMutateAsync.mock.calls[0]?.[0]).toEqual(
+            expect.objectContaining({
+              envVars: [{ key: "PEM", value: "typed" }],
+            }),
+          );
+        });
+      });
+
+      describe("once it's shown", () => {
+        it("takes a paste with all its line breaks", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(showValue());
+          await user.click(valueField());
+          await user.paste(multiLine);
+
+          expect(valueField()).toHaveValue(multiLine);
+          expect(await save(user)).toEqual([{ key: "PEM", value: multiLine }]);
+        });
+
+        it("drops the line break at the end of one pasted line", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(showValue());
+          await user.click(valueField());
+          await user.paste("token\n");
+
+          expect(valueField()).toHaveValue("token");
+        });
+
+        it("leaves a typed line break alone when one line is pasted elsewhere", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(showValue());
+          await user.type(valueField(), "abc{Enter}");
+          (valueField() as HTMLTextAreaElement).setSelectionRange(0, 0);
+          await user.paste("x");
+
+          expect(valueField()).toHaveValue("xabc\n");
+          expect(await save(user)).toEqual([{ key: "PEM", value: "xabc\n" }]);
+        });
+
+        it("drops only a pasted line's own line break, with the caret after it", async () => {
+          const user = renderSaved("start-end");
+          await user.click(showValue());
+          await user.click(valueField());
+          (valueField() as HTMLTextAreaElement).setSelectionRange(5, 6);
+          await user.paste("one\n");
+          expect(valueField()).toHaveValue("startoneend");
+
+          await user.keyboard("!");
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "startone!end" },
+          ]);
+        });
+
+        it("leaves the caret after a multi-line paste", async () => {
+          const user = renderSaved("start-end");
+          await user.click(showValue());
+          await user.click(valueField());
+          (valueField() as HTMLTextAreaElement).setSelectionRange(5, 6);
+          await user.paste("one\ntwo\n");
+
+          await user.keyboard("!");
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "startone\ntwo\n!end" },
+          ]);
+        });
+
+        it("still sees an edit that undoes a pasted line", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(showValue());
+          await user.click(valueField());
+          await user.paste("x\n");
+          await user.keyboard("{Backspace}");
+
+          expect(await save(user)).toEqual([{ key: "PEM", value: "" }]);
+        });
+
+        it("adds a line break on Enter instead of saving", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(showValue());
+          await user.type(valueField(), "one{Enter}two{Enter}");
+
+          expect(valueField()).toHaveValue("one\ntwo\n");
+          expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+        });
+
+        it("keeps them through an edit", async () => {
+          const user = renderSaved(multiLine);
+          await user.click(showValue());
+          await user.type(valueField(), "more");
+
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: `${multiLine}more` },
+          ]);
+        });
+
+        it("keeps the browser and writing extensions out", async () => {
+          const user = renderSaved(multiLine);
+          await user.click(showValue());
+
+          expect(valueField()).toHaveAttribute("spellcheck", "false");
+          expect(valueField()).toHaveAttribute("autocomplete", "off");
+          expect(valueField()).toHaveAttribute("data-gramm", "false");
+        });
+
+        it.each([
+          ["one line", "one", 1],
+          ["three lines", "one\ntwo\nthree", 3],
+          ["a last line break", "one\ntwo\n", 3],
+          ["more lines than fit", "line\n".repeat(1_000), 8],
+        ])("sizes the field to %s", async (_name, value, rows) => {
+          const user = renderSaved(value);
+          await user.click(showValue());
+
+          expect(valueField()).toHaveAttribute("rows", String(rows));
+        });
+      });
+
+      it("doesn't show the next row when a shown one is deleted", async () => {
+        const user = userEvent.setup();
+        render(
+          <EventForm
+            initialData={{
+              ...scheduledBashEvent,
+              environmentVariables: [
+                { key: "FIRST", value: "first secret" },
+                { key: "SECOND", value: "second secret" },
+                { key: "THIRD", value: "third secret" },
+              ],
+            }}
+          />,
+        );
+        // Show the second row, then delete the first: the third is now second.
+        await user.click(
+          screen.getAllByRole("button", { name: "Show value" })[1]!,
+        );
+        await user.click(screen.getAllByRole("button", { name: "×" })[0]!);
+
+        for (const field of screen.getAllByLabelText("Value")) {
+          expect(field).toHaveAttribute("type", "password");
+        }
       });
     });
 
