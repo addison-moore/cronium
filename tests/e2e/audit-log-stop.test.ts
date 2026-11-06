@@ -4,7 +4,7 @@
  * SIGTERM. Whether its last entries survive depends on how Next exits, which it
  * doesn't document, so this is what catches an upgrade changing that.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import net from "node:net";
 import path from "node:path";
 import { hangableDatabase } from "../hangable-database";
@@ -59,6 +59,7 @@ let output = "";
 async function startServer(
   launch: (port: number) => Launch,
   databaseUrl = process.env.DATABASE_URL!,
+  extraEnv: NodeJS.ProcessEnv = {},
 ) {
   const port = await freePort();
   const { args, cwd } = launch(port);
@@ -71,6 +72,7 @@ async function startServer(
       NODE_ENV: "production",
       HOSTNAME: "127.0.0.1",
       PORT: String(port),
+      ...extraEnv,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -208,5 +210,26 @@ describe("a Next server being stopped", () => {
     } finally {
       database.close();
     }
+  });
+});
+
+describe("a Next server whose logger can't load", () => {
+  it("serves what doesn't need the logger, on a value only env.mjs rejects", async () => {
+    const badValue = { SKIP_ENV_VALIDATION: "", TRUSTED_PROXY_HOPS: "many" };
+    // What start.sh runs first, so this does reach the server.
+    execFileSync(
+      process.execPath,
+      [path.join(APP_DIR, "scripts/validate-env.cjs")],
+      { env: { ...process.env, ...badValue } },
+    );
+
+    const url = await startServer(STANDALONE, undefined, badValue);
+
+    // A rejected register() turned this into a 500, like every other route.
+    expect((await fetch(`${url}/auth/error`)).status).toBe(200);
+    expect(output).toContain("Couldn't set up writing the last entries");
+
+    const { code } = await stopServer(30_000);
+    expect(code).toBe(143);
   });
 });

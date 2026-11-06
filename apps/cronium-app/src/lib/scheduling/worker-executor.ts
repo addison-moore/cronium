@@ -30,7 +30,7 @@ const FALLBACK_TIMEOUT_MS = 30_000;
 /**
  * How long drain() waits for a claim under way. It is a short transaction, so one
  * still going after this is stuck on the database, which is no reason to spend the
- * whole drain on it. Whatever it claims is recovered by the sweeper.
+ * whole drain on it. If it does finish later, its jobs aren't started: see claim().
  */
 const CLAIM_SETTLE_MS = 3_000;
 
@@ -52,6 +52,8 @@ async function settledWithin(
 export class InProcessWorkerPool {
   private active = new Map<string, Promise<void>>();
   private claims = new Set<Promise<number>>();
+  /** Set once drain() has stopped waiting for claims. */
+  private stopped = false;
 
   constructor(
     private readonly workerId: string,
@@ -126,6 +128,18 @@ export class InProcessWorkerPool {
       );
       return rows;
     });
+
+    // drain() has stopped waiting for this claim, so the process could exit at any
+    // moment. Started now, a job would be cut off partway and then run again. Left
+    // as it is, its lease runs out and the sweeper deals with it.
+    if (this.stopped) {
+      if (claimed.length > 0) {
+        console.warn(
+          `[WorkerPool] Not starting ${claimed.length} job(s) claimed while shutting down; the sweeper will recover them`,
+        );
+      }
+      return 0;
+    }
 
     for (const job of claimed) {
       this.launch(job);
@@ -207,6 +221,7 @@ export class InProcessWorkerPool {
     if (this.claims.size > 0) {
       await settledWithin(this.claims, Math.min(CLAIM_SETTLE_MS, timeoutMs));
     }
+    this.stopped = true;
 
     if (this.active.size === 0) return;
     console.log(

@@ -4,8 +4,18 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { flushAuditLogBeforeExit } =
-      await import("@/lib/security/audit-log-exit");
-    flushAuditLogBeforeExit();
+    // This loads the database module, which checks the environment, so a value only
+    // env.mjs rejects throws here. If that got out of register(), Next would stay up
+    // but answer every route with a 500, including pages that need none of this.
+    try {
+      const { flushAuditLogBeforeExit } =
+        await import("@/lib/security/audit-log-exit");
+      flushAuditLogBeforeExit();
+    } catch (error) {
+      console.error(
+        "[AuditLog] Couldn't set up writing the last entries when this server stops:",
+        error,
+      );
+    }
   }
 }

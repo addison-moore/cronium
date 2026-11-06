@@ -190,6 +190,8 @@ export class AuditLogger {
   private earlyFlush: Promise<void> | null = null;
   /** Each flush still running, by the entries it hasn't finished writing. */
   private readonly writing = new Map<PendingEntry[], Promise<void>>();
+  /** shutdown() has finished with the buffer, so nothing will write it again. */
+  private closed = false;
 
   private constructor() {
     // Start flush interval
@@ -210,9 +212,17 @@ export class AuditLogger {
     // The row's time: when this happened, not when a flush got to it, which an
     // outage can make much later.
     const occurredAt = new Date().toISOString();
+    const pending: PendingEntry = { occurredAt, ...storableEntry(entry) };
+
+    if (this.closed) {
+      console.error(
+        `[AuditLog] DROPPED a ${pending.action} entry: logged after shutting down. Full entry: ${serializeEntry(pending)}`,
+      );
+      return;
+    }
 
     // Add to buffer
-    this.buffer.push({ occurredAt, ...storableEntry(entry) });
+    this.buffer.push(pending);
     this.dropOldestPastLimit();
 
     // Flush a full batch early, one flush at a time so a failure can't put entries
@@ -471,7 +481,8 @@ export class AuditLogger {
    * hold of, and send to the server log whatever isn't written in time. A hung
    * database gets no longer than `timeoutMs`, because nothing else stops it from
    * holding the process open. Call this once whatever creates entries has stopped:
-   * anything logged after it returns waits for a flush that may never come.
+   * from the moment it has finished with the buffer, log() goes straight to the
+   * server log.
    */
   async shutdown(timeoutMs = AUDIT_SHUTDOWN_TIMEOUT_MS): Promise<void> {
     this.stopFlushInterval();
@@ -496,6 +507,8 @@ export class AuditLogger {
           ]);
         }
       }
+      // With no await since the check above, so no entry can slip in between.
+      this.closed = true;
     };
 
     await Promise.race([writeEverything(), timeUp]);
@@ -510,6 +523,7 @@ export class AuditLogger {
    * back, so nothing here can also be written by a later flush.
    */
   private async logUnwritten(timeoutMs: number): Promise<void> {
+    this.closed = true;
     let logged = false;
 
     for (const pending of this.writing.keys()) {

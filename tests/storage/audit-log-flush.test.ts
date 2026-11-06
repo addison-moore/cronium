@@ -234,7 +234,8 @@ beforeEach(async () => {
   answerStderrWait((callback) => callback());
 
   // A test that failed midway must not leave its entries for the next one.
-  Object.assign(auditLogger, { buffer: [], retrying: false });
+  // And the one logger has to take entries again after the last test's shutdown.
+  Object.assign(auditLogger, { buffer: [], retrying: false, closed: false });
   await resetDatabase();
   await seedUser({ id: USER });
 });
@@ -1582,6 +1583,47 @@ describe("shutting down", () => {
       await auditLogger.shutdown();
 
       expect(held).toEqual([]);
+    });
+
+    it("gets an entry logged once everything is written, masked", async () => {
+      await logLabelled("written");
+      await auditLogger.shutdown();
+      expect(errorSpy).not.toHaveBeenCalled();
+
+      await auditLogger.logFailure("tool.execute", { userId: USER }, "boom", {
+        apiKey: "not-for-the-logs",
+      });
+
+      expect(droppedLines()).toEqual([
+        expect.stringMatching(
+          /DROPPED a tool\.execute entry: logged after shutting down.*"errorMessage":"boom"/,
+        ),
+      ]);
+      expect(droppedLines()[0]).toContain('"apiKey":"[REDACTED]"');
+      expect(droppedLines()[0]).not.toContain("not-for-the-logs");
+      await flushCompletely();
+      expect(labels(await storedRows())).toEqual(["written"]);
+    });
+
+    it("gets an entry logged while shutdown waits on it", async () => {
+      const held = holdStderr();
+      await logLabelled("out of time");
+
+      await whileTableIsMissing(async () => {
+        const stopping = auditLogger.shutdown(100);
+        await until("the wait to start", () => held.length === 1);
+
+        await logLabelled("during the wait");
+        held[0]!();
+        await stopping;
+      });
+
+      expect(droppedLines()).toEqual([
+        expect.stringContaining('"label":"out of time"'),
+        expect.stringContaining('"label":"during the wait"'),
+      ]);
+      await flushCompletely();
+      expect(await storedRows()).toHaveLength(0);
     });
   });
 

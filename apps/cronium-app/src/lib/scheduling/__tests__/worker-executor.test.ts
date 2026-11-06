@@ -426,6 +426,36 @@ describe("drain", () => {
     expect(Date.now() - started).toBeLessThan(1000);
   });
 
+  it("doesn't start the jobs of a claim that finishes after it stopped waiting", async () => {
+    const warnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    let releaseClaim!: () => void;
+    const claimReturns = new Promise<void>((resolve) => {
+      releaseClaim = resolve;
+    });
+    primeClaim([makeJob({ id: "job-a" })]);
+    const claim = mockDb.transaction.getMockImplementation()!;
+    mockDb.transaction.mockImplementationOnce(async (run: unknown) => {
+      await claimReturns;
+      return claim(run);
+    });
+    const pool = new InProcessWorkerPool("w1");
+    const claiming = pool.claimAndRun(NOW);
+
+    await pool.drain(100);
+    releaseClaim();
+
+    await expect(claiming).resolves.toBe(0);
+    await settle();
+    expect(pool.activeCount).toBe(0);
+    expect(mockRun).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Not starting 1 job(s)"),
+    );
+    warnSpy.mockRestore();
+  });
+
   it("gives up after the timeout when a job never finishes", async () => {
     primeClaim([makeJob({ id: "job-a" })]);
     mockRun.mockImplementation(() => new Promise<void>(() => undefined));
