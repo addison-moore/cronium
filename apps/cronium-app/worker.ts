@@ -42,7 +42,7 @@ import { serverCleanupService } from "./src/lib/services/server-cleanup-service"
 import { legacySecretsBootWarning } from "./src/lib/security/legacy-secrets";
 import { initializePlugins } from "./src/tools/plugins";
 import { auditLogger } from "./src/lib/security/audit-logger";
-import { describeFailure } from "./src/lib/pg-errors";
+import { describeFailure, failureWithStack } from "./src/lib/pg-errors";
 
 const WORKER_ID = process.env.WORKER_ID ?? `worker-${os.hostname()}`;
 const HEALTH_PORT = Number(process.env.WORKER_HEALTH_PORT ?? 5003);
@@ -112,7 +112,7 @@ const dispatchLoop = startLoop("dispatch", DISPATCH_INTERVAL_MS, async () => {
   // Heartbeat only after a successful tick: a consistently failing dispatcher
   // must not advertise healthy scheduling to the web app.
   await writeWorkerHeartbeat(WORKER_ID).catch((error) => {
-    console.error("[Worker] Heartbeat write failed:", error);
+    console.error("[Worker] Heartbeat write failed:", failureWithStack(error));
   });
   if (result.dispatched > 0 || result.incidents > 0) {
     console.log(
@@ -205,7 +205,7 @@ async function startListener(): Promise<void> {
     if (reconnecting) return;
     console.warn(
       "[Worker] LISTEN connection error; reconnecting in 5s:",
-      error.message,
+      describeFailure(error),
     );
     reconnect(5_000);
   });
@@ -235,7 +235,7 @@ async function startListener(): Promise<void> {
             void advanceRunsForJob(msg.payload).catch((error) => {
               console.error(
                 "[Worker] Workflow advance on job change failed:",
-                error instanceof Error ? error.message : String(error),
+                describeFailure(error),
               );
             });
           }
@@ -246,7 +246,7 @@ async function startListener(): Promise<void> {
     if (reconnecting) return;
     console.warn(
       "[Worker] LISTEN unavailable (polling covers it); retrying in 30s:",
-      error instanceof Error ? error.message : String(error),
+      describeFailure(error),
     );
     reconnect(30_000);
   }
@@ -324,7 +324,7 @@ async function main(): Promise<void> {
     .catch((error) => {
       console.warn(
         "[Worker] Could not check for legacy plaintext secrets:",
-        error instanceof Error ? error.message : String(error),
+        describeFailure(error),
       );
     });
 }
@@ -363,6 +363,6 @@ process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
 
 main().catch((error) => {
-  console.error("[Worker] Fatal startup error:", error);
+  console.error("[Worker] Fatal startup error:", failureWithStack(error));
   process.exit(1);
 });

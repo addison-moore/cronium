@@ -31,6 +31,7 @@ import {
 import { and, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 import { transitionJob } from "./job-transition";
 import { computeRetryBackoffMs } from "@/lib/services/retry-policy";
+import { describeFailure } from "@/lib/pg-errors";
 
 /** Grace on top of a job's own timeout before an unleased RUNNING job is
  * declared dead. */
@@ -69,7 +70,7 @@ async function finalizeLog(job: Job, error: string): Promise<void> {
   } catch (logError) {
     console.error(
       `[Sweeper] Failed to finalize log ${logId} for job ${job.id}:`,
-      logError instanceof Error ? logError.message : String(logError),
+      describeFailure(logError),
     );
   }
 }

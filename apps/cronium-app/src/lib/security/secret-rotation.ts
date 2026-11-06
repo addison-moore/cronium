@@ -72,6 +72,7 @@ import {
   credentialEncryption,
   parseEncryptedData,
 } from "@/lib/security/credential-encryption";
+import { describeFailure } from "@/lib/pg-errors";
 
 export interface SurfaceResult {
   surface: string;
@@ -653,9 +654,9 @@ function logRowError(
 ): void {
   // Never log the secret value — only the location and error class.
   console.error(
-    `[secret-rotation] ${surface} id=${id} column=${column} failed: ${
-      e instanceof Error ? e.message : String(e)
-    }`,
+    `[secret-rotation] ${surface} id=${id} column=${column} failed: ${describeFailure(
+      e,
+    )}`,
   );
 }
 

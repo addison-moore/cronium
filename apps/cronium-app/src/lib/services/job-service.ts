@@ -39,6 +39,7 @@ const generateJobId = customAlphabet(
 );
 import { storage } from "@server/storage";
 import { shouldRetry, computeRetryBackoffMs } from "./retry-policy";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Job queue management service
 export interface CreateJobInput {
@@ -541,7 +542,7 @@ export class JobService {
       } catch (logError) {
         console.error(
           "[JobService] Failed to record retry on execution log:",
-          logError,
+          failureWithStack(logError),
         );
       }
     }
@@ -716,7 +717,10 @@ export class JobService {
           );
         }
       } catch (error) {
-        console.error("[JobService] Error sending broadcast:", error);
+        console.error(
+          "[JobService] Error sending broadcast:",
+          failureWithStack(error),
+        );
       }
     }
 

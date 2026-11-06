@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool, type PoolClient } from "pg";
 import { env } from "@/env.mjs";
 import * as schema from "../shared/schema";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // PostgreSQL connection pool configuration
 // In development, use more aggressive connection pooling to avoid slowdowns
@@ -21,7 +22,7 @@ const pool = new Pool({
 
 // Handle pool errors
 pool.on("error", (err) => {
-  console.error("Unexpected error on idle client", err);
+  console.error("Unexpected error on idle client", failureWithStack(err));
 });
 
 // The pool only listens for errors on idle clients. A client that loses its connection

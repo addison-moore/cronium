@@ -26,7 +26,7 @@
  * --encrypt-legacy, a real run also exits 1 if it leaves rows to do. Rotation doesn't:
  * what's left is in its report, and running it again finishes them.
  */
-import { driverError } from "@/lib/pg-errors";
+import { describeFailure } from "@/lib/pg-errors";
 import { encryptLegacySecrets } from "@/lib/security/legacy-secrets";
 import { rotateAllSecrets } from "@/lib/security/secret-rotation";
 import { pool } from "@/server/db";
@@ -142,7 +142,7 @@ async function main(): Promise<number> {
 
 void main()
   .catch((error: unknown) => {
-    console.error(`Failed: ${driverError(error).message ?? String(error)}`);
+    console.error(`Failed: ${describeFailure(error)}`);
     return 1;
   })
   .then(async (code) => {
