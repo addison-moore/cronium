@@ -76,6 +76,11 @@ Jobs are:
 - Transformed to orchestrator format
 - Returned for processing
 
+A job that can't be prepared, because a value in it no longer decrypts, is failed
+with the reason and left out of the response, or re-queued if it has retries left.
+The rest of the batch is still delivered. Once the claim commits the route answers
+200, so a 500 means nothing was claimed.
+
 The orchestrator renews leases via `POST /api/internal/jobs/heartbeat`
 (which also carries cancellation requests back to the running executor). A
 job whose lease stops being renewed is re-queued or failed by the scheduling

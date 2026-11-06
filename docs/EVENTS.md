@@ -65,7 +65,8 @@ Execute pre-built integrations with third-party services:
 - **Time-based Scheduling**: True elapsed-time intervals (10-second minimum)
 - **Cron Expressions**: Validated at save time, with a next-runs preview
 - **Timezones**: Cron schedules fire in the event's IANA timezone (DST-aware)
-- **Start Time Control**: Schedule events to begin at specific dates/times
+- **Start Time Control**: Schedule events to begin at a specific date and time,
+  entered in your browser's timezone
 - **Missed-run (catch-up) policy**: When Cronium was down at a scheduled time —
   skip (recorded as an incident), run once on recovery, or run each missed tick
 - **Overlap policy**: When a run comes due while the previous one is still

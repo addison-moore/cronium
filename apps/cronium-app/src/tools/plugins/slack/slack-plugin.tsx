@@ -23,6 +23,7 @@ import {
   type CredentialDisplayProps,
 } from "../../types/tool-plugin";
 import { trpc } from "@/lib/trpc";
+import { trpcErrorMessage } from "@/trpc/shared";
 import { useToast } from "@cronium/ui";
 import { slackActions } from "./actions";
 import { ToolHealthBadge } from "@/tools/ToolHealthIndicator";
@@ -123,13 +124,26 @@ function SlackCredentialDisplay({
   const { toast } = useToast();
 
   const testConnectionMutation = trpc.tools.slack.testConnection.useMutation({
+    // A webhook that refuses the test comes back as a result, not an error.
     onSuccess: (result) => {
-      toast({
-        title: "Test Successful",
-        description: result.message,
-      });
-      setTestingTool(null);
+      toast(
+        result.success
+          ? { title: "Test Successful", description: result.message }
+          : {
+              title: "Test Failed",
+              description: result.message,
+              variant: "destructive",
+            },
+      );
     },
+    onError: (error) => {
+      toast({
+        title: "Test Failed",
+        description: trpcErrorMessage(error, "Failed to test the connection"),
+        variant: "destructive",
+      });
+    },
+    onSettled: () => setTestingTool(null),
   });
 
   const sendTestMessageMutation = trpc.tools.slack.send.useMutation({
@@ -138,8 +152,15 @@ function SlackCredentialDisplay({
         title: "Test Message Sent",
         description: result.message,
       });
-      setTestingTool(null);
     },
+    onError: (error) => {
+      toast({
+        title: "Test Message Failed",
+        description: trpcErrorMessage(error, "Failed to send the test message"),
+        variant: "destructive",
+      });
+    },
+    onSettled: () => setTestingTool(null),
   });
 
   const toggleTokenVisibility = (toolId: number) => {
@@ -149,16 +170,16 @@ function SlackCredentialDisplay({
     }));
   };
 
-  const handleTestConnection = async (tool: { id: number }) => {
+  const handleTestConnection = (tool: { id: number }) => {
     setTestingTool(tool.id);
-    await testConnectionMutation.mutateAsync({
+    testConnectionMutation.mutate({
       toolId: tool.id,
     });
   };
 
-  const handleSendTestMessage = async (tool: { id: number }) => {
+  const handleSendTestMessage = (tool: { id: number }) => {
     setTestingTool(tool.id);
-    await sendTestMessageMutation.mutateAsync({
+    sendTestMessageMutation.mutate({
       toolId: tool.id,
       message:
         "🎉 Test message from Cronium! Your Slack integration is working correctly.",

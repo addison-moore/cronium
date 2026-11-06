@@ -1,5 +1,6 @@
 import superjson from "superjson";
 import { EventType, RunLocation } from "@/shared/schema";
+import { toDatetimeLocal } from "./event-form-defaults";
 import type { EventFormData } from "./event-form-schema";
 
 /** Script event types (have editable content, run via the orchestrator). */
@@ -31,6 +32,23 @@ export function deriveRunLocation(
 }
 
 /**
+ * The instant to save for the start time field. A field still showing the stored time
+ * keeps that exact instant, because its string can't carry all of it: it has no seconds,
+ * and in the hour the clocks repeat it can only be read as the first of the two. Anything
+ * else was typed, and means the browser's local time.
+ */
+function startTimeToSave(
+  value: EventFormData["startTime"],
+  storedStartTime: Date | string | null | undefined,
+): string | null {
+  if (!value) return null;
+  if (storedStartTime && value === toDatetimeLocal(storedStartTime)) {
+    return new Date(storedStartTime).toISOString();
+  }
+  return new Date(value).toISOString();
+}
+
+/**
  * Build the create/update event payload from validated form values.
  * Pure: no React/tRPC imports.
  *
@@ -40,11 +58,18 @@ export function deriveRunLocation(
  * - Interval mode omits `customSchedule`; cron mode passes it through and
  *   leaves `scheduleNumber`/`scheduleUnit` untouched.
  * - `content` is only sent for script events.
- * - `startTime` (a `datetime-local` string) becomes an ISO timestamp or null.
+ * - `startTime` (a `datetime-local` string) becomes an ISO timestamp or null. While
+ *   the field still shows `storedStartTime`, what the event holds now, that goes back
+ *   unchanged.
  * - `toolActionConfig` is JSON-stringified for tool-action events only.
- * - `httpHeaders` is only included for HTTP request events.
+ * - The HTTP fields are only sent for HTTP request events. The form holds them for
+ *   any event that has them, and the server refuses an empty URL whether or not the
+ *   event would ever use it.
  */
-export function buildEventPayload(data: EventFormData) {
+export function buildEventPayload(
+  data: EventFormData,
+  storedStartTime?: Date | string | null,
+) {
   const isScriptType = isScriptEventType(data.type);
   const isHttpRequest = data.type === EventType.HTTP_REQUEST;
   const isToolAction = data.type === EventType.TOOL_ACTION;
@@ -61,7 +86,7 @@ export function buildEventPayload(data: EventFormData) {
     ...baseData,
     runLocation: deriveRunLocation(runOnLocal, data.selectedServerIds),
     content: isScriptType ? data.content : undefined,
-    startTime: data.startTime ? new Date(data.startTime).toISOString() : null,
+    startTime: startTimeToSave(data.startTime, storedStartTime),
     customSchedule: data.useCronScheduling ? data.customSchedule : undefined,
     timezone: data.timezone,
     catchupPolicy: data.catchupPolicy,
@@ -74,6 +99,9 @@ export function buildEventPayload(data: EventFormData) {
         : undefined,
     envVars: data.envVars, // Already an array
     tags: data.tags, // Already an array
+    httpMethod: isHttpRequest ? data.httpMethod : undefined,
+    httpUrl: isHttpRequest ? data.httpUrl : undefined,
+    httpBody: isHttpRequest ? data.httpBody : undefined,
     // Include httpHeaders as array if it's HTTP request
     ...(isHttpRequest &&
       data.httpHeaders && {

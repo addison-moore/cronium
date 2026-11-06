@@ -201,7 +201,7 @@ beforeEach(() => {
       .fn()
       .mockResolvedValue({ success: true, attempts: 1 }),
   });
-  mockStorage.getLog.mockResolvedValue(null);
+  mockStorage.getLog.mockResolvedValue({ id: 1, startTime: null });
   mockStorage.updateLog.mockResolvedValue({
     status: LogStatus.SUCCESS,
     output: "out",
@@ -1115,6 +1115,86 @@ describe("updateJobStatus", () => {
     });
   });
 
+  describe("the reason on the job", () => {
+    const setOfLastTransition = () =>
+      (mockTransition.mock.calls.at(-1)![2] as { set: { lastError?: string } })
+        .set;
+
+    it.each([JobStatus.FAILED, JobStatus.TIMED_OUT, JobStatus.CANCELLED])(
+      "goes in the same transition as %s",
+      async (status) => {
+        if (status === JobStatus.FAILED) {
+          mockDb.select.mockReturnValueOnce(chain([makeJob()]));
+        }
+        mockTransition.mockResolvedValueOnce({
+          ok: true,
+          job: makeJob({ status }),
+        });
+
+        await service.updateJobStatus("job_1", status, { error: "it broke" });
+
+        expect(setOfLastTransition().lastError).toBe("it broke");
+      },
+    );
+
+    it("isn't written when a report has none, so an earlier one stays", async () => {
+      mockDb.select.mockReturnValueOnce(chain([makeJob()]));
+      mockTransition.mockResolvedValueOnce({
+        ok: true,
+        job: makeJob({ status: JobStatus.FAILED }),
+      });
+
+      await service.updateJobStatus("job_1", JobStatus.FAILED, { exitCode: 1 });
+
+      expect(setOfLastTransition()).not.toHaveProperty("lastError");
+    });
+
+    it("isn't written on a job that completed", async () => {
+      mockTransition.mockResolvedValueOnce({
+        ok: true,
+        job: makeJob({ status: JobStatus.COMPLETED }),
+      });
+
+      await service.updateJobStatus("job_1", JobStatus.COMPLETED, {
+        error: "a warning",
+      });
+
+      expect(setOfLastTransition()).not.toHaveProperty("lastError");
+    });
+
+    it("keeps the end of a long error, whether the job fails or waits to retry", async () => {
+      const long = `${"x".repeat(10_000)}the real problem`;
+      mockDb.select.mockReturnValueOnce(chain([makeJob()]));
+      mockTransition.mockResolvedValueOnce({
+        ok: true,
+        job: makeJob({ status: JobStatus.FAILED }),
+      });
+      await service.updateJobStatus("job_1", JobStatus.FAILED, { error: long });
+      const failing = setOfLastTransition().lastError!;
+
+      mockDb.select.mockReturnValueOnce(
+        chain([makeJob({ maxAttempts: 2, attempts: 0 })]),
+      );
+      mockTransition.mockResolvedValueOnce({
+        ok: true,
+        job: makeJob({ status: JobStatus.QUEUED }),
+      });
+      await service.updateJobStatus("job_1", JobStatus.FAILED, { error: long });
+      const retrying = setOfLastTransition().lastError!;
+
+      for (const lastError of [failing, retrying]) {
+        expect(lastError).toHaveLength(4001);
+        expect(lastError.startsWith("…")).toBe(true);
+        expect(lastError.endsWith("the real problem")).toBe(true);
+      }
+      // The audit row keeps all of it.
+      const lastCall = mockTransition.mock.calls.at(-2)![2] as {
+        reason?: string;
+      };
+      expect(lastCall.reason).toBe(long);
+    });
+  });
+
   describe("execution-log finalization and broadcast", () => {
     const broadcast = () =>
       (
@@ -1170,6 +1250,43 @@ describe("updateJobStatus", () => {
         endTime: updatedLog.endTime,
         duration: updatedLog.duration,
       });
+    });
+
+    it("returns the job without touching the log when its log is gone", async () => {
+      const job = makeJob({
+        status: JobStatus.COMPLETED,
+        payload: { executionLogId: 42 },
+      });
+      mockTransition.mockResolvedValueOnce({ ok: true, job });
+      mockStorage.getLog.mockResolvedValueOnce(undefined);
+
+      const result = await service.updateJobStatus(
+        "job_1",
+        JobStatus.COMPLETED,
+        { exitCode: 0, output: "done" },
+      );
+
+      expect(result).toBe(job);
+      expect(mockStorage.updateLog).not.toHaveBeenCalled();
+      expect(mockGetBroadcaster).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("its log 42 no longer exists"),
+      );
+    });
+
+    it("throws when the log is there and its write fails, for the reporter to retry", async () => {
+      mockTransition.mockResolvedValueOnce({
+        ok: true,
+        job: makeJob({
+          status: JobStatus.COMPLETED,
+          payload: { executionLogId: 42 },
+        }),
+      });
+      mockStorage.updateLog.mockRejectedValueOnce(new Error("db down"));
+
+      await expect(
+        service.updateJobStatus("job_1", JobStatus.COMPLETED, { exitCode: 0 }),
+      ).rejects.toThrow("db down");
     });
 
     it("reads executionLogId from metadata and leaves endTime/duration unset for non-terminal statuses", async () => {

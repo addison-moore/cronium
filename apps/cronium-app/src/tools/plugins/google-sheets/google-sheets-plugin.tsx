@@ -29,6 +29,8 @@ import { Badge } from "@cronium/ui";
 import { googleSheetsCredentialsSchema } from "./schemas";
 import { GOOGLE_SHEETS_OAUTH } from "../oauth-config";
 import { trpc } from "@/lib/trpc";
+import { trpcErrorMessage } from "@/trpc/shared";
+import { useToast } from "@cronium/ui";
 
 const GOOGLE_SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 
@@ -123,11 +125,22 @@ function GoogleSheetsCredentialForm({
 // Connect/disconnect state for a Google Sheets tool, driven by the real
 // OAuth token status (not stored credential fields)
 function GoogleConnectSection({ toolId }: { toolId: number }) {
+  const { toast } = useToast();
   const { data: oauthStatus, refetch } = trpc.tools.checkOAuthStatus.useQuery({
     toolId,
     providerId: "google",
   });
   const revokeMutation = trpc.tools.revokeOAuthTokens.useMutation({
+    onError: (error) => {
+      toast({
+        title: "Disconnect Failed",
+        description: trpcErrorMessage(
+          error,
+          "Failed to disconnect the Google account",
+        ),
+        variant: "destructive",
+      });
+    },
     onSettled: () => void refetch(),
   });
   const [isConnecting, setIsConnecting] = React.useState(false);
