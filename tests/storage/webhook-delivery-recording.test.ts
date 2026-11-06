@@ -8,13 +8,18 @@
  * have Drizzle's wrapper, whose message repeats every value in the query. That
  * message used to reach the mutation's answer and the `error` column, and a 200
  * nobody could record used to be sent again by the queue. So did a 200 whose body
- * ran past the cap or was cut off, because axios rejected the request over it.
+ * ran past the cap or was cut off, because axios rejected the request over it. An
+ * event past that same cap got no request at all, and three failed rows, even when
+ * the inbound endpoint had answered its sender with a success.
  */
+import { createHmac, randomUUID } from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import zlib from "node:zlib";
 import axios from "axios";
 import { asc, eq } from "drizzle-orm";
+import { NextRequest } from "next/server";
+import { POST as postToInboundRoute } from "@/app/api/webhooks/[key]/route";
 import { SsrfBlockedError } from "@/lib/tools/safe-fetch";
 import { WebhookManager } from "@/lib/webhooks/WebhookManager";
 import { webhookSystemRouter } from "@/server/api/routers/webhook-system";
@@ -24,6 +29,8 @@ import {
   UserRole,
   UserStatus,
   webhookDeliveries,
+  webhookEvents,
+  webhookLogs,
   webhooks,
 } from "@/shared/schema";
 import { closePool, resetDatabase } from "./helpers/db-reset";
@@ -78,6 +85,10 @@ const NOT_RECORDED =
 // MAX_WEBHOOK_RESPONSE_BYTES and MAX_RECORDED_RESPONSE_CHARS, which are private.
 const CAP_BYTES = 1024 * 1024;
 const RECORDED_CHARS = 1000;
+// MAX_WEBHOOK_REQUEST_BYTES, written out because docs/WEBHOOKS.md gives it to receivers.
+const REQUEST_LIMIT_BYTES = 8 * 1024 * 1024;
+// MAX_WEBHOOK_BODY_BYTES in WebhookRouter.
+const INBOUND_CAP_BYTES = 1024 * 1024;
 
 const createCaller = createCallerFactory(
   createTRPCRouter({ webhookSystem: webhookSystemRouter }),
@@ -121,8 +132,10 @@ async function startReceiver(
   meanwhile?: () => Promise<unknown>,
 ) {
   const deliveryIds: string[] = [];
+  const bodies: string[] = [];
   const server = http.createServer((req, res) => {
-    req.resume();
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
     req.on("end", () => {
       const {
         status = 200,
@@ -131,6 +144,7 @@ async function startReceiver(
         respond,
       } = answers[Math.min(deliveryIds.length, answers.length - 1)]!;
       deliveryIds.push(String(req.headers["x-delivery-id"]));
+      bodies.push(Buffer.concat(chunks).toString());
       void Promise.resolve(meanwhile?.()).then(() =>
         respond ? respond(res) : res.writeHead(status, headers).end(body),
       );
@@ -148,7 +162,7 @@ async function startReceiver(
     });
   };
   openReceivers.push(close);
-  return { url: `http://127.0.0.1:${port}/hook`, deliveryIds, close };
+  return { url: `http://127.0.0.1:${port}/hook`, deliveryIds, bodies, close };
 }
 
 /**
@@ -171,10 +185,11 @@ async function refuseDeliveryRows(condition = "true") {
 }
 
 /**
- * What Node says about a header name holding a NUL, which it quotes. Only a webhook's
- * custom headers can put one there. A test can't get this from a real request:
- * Node's error comes from outside Jest's sandbox, where it isn't `instanceof Error`
- * and so would be recorded as "Unknown error".
+ * What Node says about a header name holding a NUL, which it quotes. A delivery now
+ * fails before Node sees such a name, so this stands for any error that quotes what it
+ * was given. A test can't get it from a real request either: Node's error comes from
+ * outside Jest's sandbox, where it isn't `instanceof Error` and so would be recorded as
+ * "Unknown error".
  */
 function nodeRefusalOfHeaderName(): string {
   try {
@@ -236,10 +251,10 @@ const deliveriesOf = (webhookId: number) =>
 const manager = WebhookManager.getInstance();
 let owner: string;
 
-const webhookAt = (url: string) =>
+const webhookAt = (url: string, events = ["order.created"]) =>
   manager.registerWebhook(owner, {
     url,
-    events: ["order.created"],
+    events,
     active: true,
     retryConfig: RETRIES,
   });
@@ -254,14 +269,19 @@ const queueState = (
   }
 ).webhookQueue;
 
-/** Sends a real event through the queue, and waits until it has no attempts left. */
-async function sendThroughQueue() {
-  await manager.triggerEvent("order.created", { order: 1 }, owner);
+/** Waits until the queue has no attempts left to make. */
+async function queueFinished() {
   const deadline = Date.now() + 30_000;
   while (queueState.queue.size > 0 || queueState.processing.size > 0) {
     if (Date.now() > deadline) throw new Error("The queue never finished");
     await sleep(25);
   }
+}
+
+/** Sends a real event through the queue, and waits until it has no attempts left. */
+async function sendThroughQueue(data: Record<string, unknown> = { order: 1 }) {
+  await manager.triggerEvent("order.created", data, owner);
+  await queueFinished();
 }
 
 let errorLog: jest.SpyInstance;
@@ -1224,5 +1244,426 @@ describe("a receiver that goes quiet", () => {
         error: timedOut,
       });
     }
+  });
+});
+
+describe("how long an event can be", () => {
+  const TOO_LONG =
+    /^This event is too long to deliver: its body would be [\d,]+ bytes, and the limit is 8 MB \(8,388,608 bytes\)\.$/;
+
+  /** Nobody could read a failed comparison of strings this long. */
+  const expectSame = (actual: unknown, expected: string) =>
+    expect(actual === expected).toBe(true);
+
+  const outcomes = (rows: Array<typeof webhookDeliveries.$inferSelect>) =>
+    rows.map(({ status, statusCode }) => [status, statusCode]);
+
+  /** Data that gives the first event after a reset a delivery body this long. */
+  function dataForBodyOf(bytes: number) {
+    const withoutPadding = JSON.stringify({
+      id: "1",
+      event: "order.created",
+      timestamp: new Date(),
+      data: { padding: "" },
+    });
+    return { padding: "x".repeat(bytes - withoutPadding.length) };
+  }
+
+  describe("from the inbound endpoint", () => {
+    const SUBSCRIBED = ["webhook.order.created"];
+
+    /** A sender signing the way the docs tell it to, through the real route. */
+    async function postInbound(
+      { key, secret }: { key: string; secret: string },
+      contentType: string,
+      body: string,
+    ) {
+      const timestamp = new Date().toISOString();
+      const deliveryId = randomUUID();
+      const digest = createHmac("sha256", secret)
+        .update(`${timestamp}.${deliveryId}.${body}`)
+        .digest("hex");
+      const response = await postToInboundRoute(
+        new NextRequest(`http://localhost:5001/api/webhooks/${key}`, {
+          method: "POST",
+          headers: {
+            "content-type": contentType,
+            "x-webhook-event": "order.created",
+            "x-webhook-signature": `sha256=${digest}`,
+            "x-webhook-timestamp": timestamp,
+            "x-webhook-delivery-id": deliveryId,
+          },
+          body,
+        }),
+        { params: Promise.resolve({ key }) },
+      );
+      return {
+        status: response.status,
+        answer: (await response.json()) as { success?: true; error?: string },
+      };
+    }
+
+    it("reaches the receiver at the longest body the endpoint takes", async () => {
+      const receiver = await startReceiver();
+      const webhook = await webhookAt(receiver.url, SUBSCRIBED);
+      const note = "x".repeat(INBOUND_CAP_BYTES - '{"note":""}'.length);
+
+      const { status, answer } = await postInbound(
+        webhook,
+        "application/json",
+        JSON.stringify({ note }),
+      );
+      await queueFinished();
+
+      expect(status).toBe(200);
+      expect(answer.success).toBe(true);
+      expect(receiver.deliveryIds).toHaveLength(1);
+      const delivered = JSON.parse(receiver.bodies[0]!) as {
+        data: { note: string };
+      };
+      expectSame(delivered.data.note, note);
+      expect(outcomes(await deliveriesOf(webhook.id))).toEqual([
+        ["success", 200],
+      ]);
+    });
+
+    it.each([
+      {
+        made: "a JSON string of ampersands, well under the endpoint's cap",
+        contentType: "application/json",
+        body: JSON.stringify({ note: "&".repeat(300 * 1024) }),
+        field: "note",
+        expected: "&amp;".repeat(300 * 1024),
+        atLeast: 5 * 300 * 1024,
+      },
+      {
+        made: "a form value of single quotes",
+        contentType: "application/x-www-form-urlencoded",
+        body: `note=${"'".repeat(INBOUND_CAP_BYTES - 5)}`,
+        field: "note",
+        expected: "&#39;".repeat(INBOUND_CAP_BYTES - 5),
+        atLeast: 5 * (INBOUND_CAP_BYTES - 5),
+      },
+      {
+        made: "plain text of double quotes, the longest escaping can make it",
+        contentType: "text/plain",
+        body: '"'.repeat(INBOUND_CAP_BYTES),
+        field: "data",
+        expected: "&quot;".repeat(INBOUND_CAP_BYTES),
+        atLeast: 6 * INBOUND_CAP_BYTES,
+      },
+      {
+        made: "plain text of control characters, the longest JSON can make it",
+        contentType: "text/plain",
+        body: "\u0001".repeat(INBOUND_CAP_BYTES),
+        field: "data",
+        expected: "\u0001".repeat(INBOUND_CAP_BYTES),
+        atLeast: 6 * INBOUND_CAP_BYTES,
+      },
+    ])(
+      "reaches the receiver when processing makes it longer: $made",
+      async ({ contentType, body, field, expected, atLeast }) => {
+        const receiver = await startReceiver();
+        const webhook = await webhookAt(receiver.url, SUBSCRIBED);
+
+        const { status, answer } = await postInbound(
+          webhook,
+          contentType,
+          body,
+        );
+        await queueFinished();
+
+        expect(status).toBe(200);
+        expect(answer.success).toBe(true);
+        expect(receiver.deliveryIds).toHaveLength(1);
+        expect(receiver.bodies[0]!.length).toBeGreaterThan(atLeast);
+        expect(receiver.bodies[0]!.length).toBeLessThan(REQUEST_LIMIT_BYTES);
+        const delivered = JSON.parse(receiver.bodies[0]!) as {
+          data: Record<string, unknown>;
+        };
+        expectSame(delivered.data[field], expected);
+        expect(outcomes(await deliveriesOf(webhook.id))).toEqual([
+          ["success", 200],
+        ]);
+      },
+    );
+
+    // Nothing in the app writes `transformations`, so a row like this is rare, but
+    // it's all that can take a request's event past the limit: it copies fields.
+    const copyingTheBody = (webhookId: number) =>
+      db
+        .update(webhooks)
+        .set({ transformations: { first: "data", second: "data" } })
+        .where(eq(webhooks.id, webhookId));
+
+    it("is refused with a 413 when it could never go out, and nothing is kept", async () => {
+      const receiver = await startReceiver();
+      const webhook = await webhookAt(receiver.url, SUBSCRIBED);
+      await copyingTheBody(webhook.id);
+
+      const { status, answer } = await postInbound(
+        webhook,
+        "text/plain",
+        '"'.repeat(INBOUND_CAP_BYTES),
+      );
+      await queueFinished();
+
+      expect(status).toBe(413);
+      expect(answer.error).toMatch(TOO_LONG);
+      expect(receiver.deliveryIds).toEqual([]);
+      expect(await db.select().from(webhookEvents)).toEqual([]);
+      expect(await deliveriesOf(webhook.id)).toEqual([]);
+      const logs = await db
+        .select()
+        .from(webhookLogs)
+        .where(eq(webhookLogs.webhookId, webhook.id));
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toMatchObject({
+        success: false,
+        error: answer.error,
+        eventId: null,
+      });
+    });
+
+    it("gets that answer whoever subscribes, so a sender can rely on it", async () => {
+      const receiver = await startReceiver();
+      const webhook = await webhookAt(receiver.url, ["something.else"]);
+      await copyingTheBody(webhook.id);
+
+      const { status } = await postInbound(
+        webhook,
+        "text/plain",
+        '"'.repeat(INBOUND_CAP_BYTES),
+      );
+
+      expect(status).toBe(413);
+      expect(await db.select().from(webhookEvents)).toEqual([]);
+    });
+
+    it("goes out with fields copied, as long as it fits", async () => {
+      const receiver = await startReceiver();
+      const webhook = await webhookAt(receiver.url, SUBSCRIBED);
+      await copyingTheBody(webhook.id);
+
+      const { status } = await postInbound(
+        webhook,
+        "text/plain",
+        "x".repeat(INBOUND_CAP_BYTES),
+      );
+      await queueFinished();
+
+      expect(status).toBe(200);
+      expect(receiver.deliveryIds).toHaveLength(1);
+      expect(receiver.bodies[0]!.length).toBeGreaterThan(3 * INBOUND_CAP_BYTES);
+    });
+  });
+
+  describe("through the queue", () => {
+    it.each([
+      ["1 KB under the cap on a response", CAP_BYTES - 1024],
+      ["1 KB past the cap on a response", CAP_BYTES + 1024],
+      ["exactly the limit", REQUEST_LIMIT_BYTES],
+    ])("sends a body at %s", async (_name, bytes) => {
+      const receiver = await startReceiver();
+      const webhook = await webhookAt(receiver.url);
+
+      await sendThroughQueue(dataForBodyOf(bytes));
+
+      expect(receiver.deliveryIds).toHaveLength(1);
+      expect(receiver.bodies[0]!.length).toBe(bytes);
+      expect(outcomes(await deliveriesOf(webhook.id))).toEqual([
+        ["success", 200],
+      ]);
+    });
+
+    it("makes no request a byte past the limit, and records one failed attempt", async () => {
+      const receiver = await startReceiver();
+      const webhook = await webhookAt(receiver.url);
+
+      await sendThroughQueue(dataForBodyOf(REQUEST_LIMIT_BYTES + 1));
+
+      expect(receiver.deliveryIds).toEqual([]);
+      const rows = await deliveriesOf(webhook.id);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        status: "failed",
+        statusCode: null,
+        response: null,
+        headers: {},
+        error:
+          "This event is too long to deliver: its body would be 8,388,609 bytes, and the limit is 8 MB (8,388,608 bytes).",
+      });
+      expect(loggedErrors()).toEqual([]);
+      const stats = await callerFor(owner).webhookSystem.getStats({
+        webhookId: webhook.id,
+      });
+      expect(stats.metrics).toMatchObject({
+        totalDeliveries: 1,
+        successfulDeliveries: 0,
+        failedDeliveries: 1,
+      });
+    });
+
+    it("records that attempt on each webhook subscribed", async () => {
+      const receiver = await startReceiver();
+      const first = await webhookAt(receiver.url);
+      const second = await webhookAt(receiver.url);
+
+      await sendThroughQueue(dataForBodyOf(REQUEST_LIMIT_BYTES + 1));
+
+      expect(receiver.deliveryIds).toEqual([]);
+      expect(outcomes(await deliveriesOf(first.id))).toEqual([
+        ["failed", null],
+      ]);
+      expect(outcomes(await deliveriesOf(second.id))).toEqual([
+        ["failed", null],
+      ]);
+    });
+
+    it("doesn't try again when that attempt can't be recorded either", async () => {
+      await refuseDeliveryRows();
+      const receiver = await startReceiver();
+      await webhookAt(receiver.url);
+
+      await sendThroughQueue(dataForBodyOf(REQUEST_LIMIT_BYTES + 1));
+
+      expect(receiver.deliveryIds).toEqual([]);
+      expect(loggedErrors()).toHaveLength(1);
+    });
+
+    it("still retries a long event after a refusal, until a 2xx", async () => {
+      const receiver = await startReceiver([
+        { status: 503 },
+        { status: 503 },
+        {},
+      ]);
+      const webhook = await webhookAt(receiver.url);
+
+      await sendThroughQueue(dataForBodyOf(CAP_BYTES + 1024));
+
+      expect(receiver.deliveryIds).toHaveLength(3);
+      expect(outcomes(await deliveriesOf(webhook.id))).toEqual([
+        ["failed", 503],
+        ["failed", 503],
+        ["success", 200],
+      ]);
+    });
+
+    it("still retries a long event after a dropped connection", async () => {
+      const receiver = await startReceiver([
+        { respond: (res) => res.destroy() },
+        {},
+      ]);
+      const webhook = await webhookAt(receiver.url);
+
+      await sendThroughQueue(dataForBodyOf(CAP_BYTES + 1024));
+
+      expect(receiver.deliveryIds).toHaveLength(2);
+      expect(outcomes(await deliveriesOf(webhook.id))).toEqual([
+        ["failed", null],
+        ["success", 200],
+      ]);
+    });
+
+    it("still retries when the receiver is the one saying it's too long", async () => {
+      const receiver = await startReceiver([{ status: 413 }]);
+      const webhook = await webhookAt(receiver.url);
+
+      await sendThroughQueue(dataForBodyOf(CAP_BYTES + 1024));
+
+      expect(receiver.deliveryIds).toHaveLength(RETRIES.maxRetries);
+      expect(outcomes(await deliveriesOf(webhook.id))).toEqual([
+        ["failed", 413],
+        ["failed", 413],
+        ["failed", 413],
+      ]);
+    });
+  });
+
+  describe("sent as a test", () => {
+    const testWith = (webhookId: number, padding: string) =>
+      callerFor(owner).webhookSystem.test({
+        webhookId,
+        testData: { padding },
+      });
+
+    it("is delivered past the cap on a response", async () => {
+      const receiver = await startReceiver();
+      const webhook = await webhookAt(receiver.url);
+
+      const answer = await testWith(webhook.id, "x".repeat(CAP_BYTES + 1024));
+
+      expect(answer.success).toBe(true);
+      expect(receiver.deliveryIds).toHaveLength(1);
+      expect(receiver.bodies[0]!.length).toBeGreaterThan(CAP_BYTES + 1024);
+    });
+
+    it("is delivered up to the limit, and refused past it with nothing kept", async () => {
+      const receiver = await startReceiver();
+      const webhook = await webhookAt(receiver.url);
+      await testWith(webhook.id, "");
+      const aroundPadding = receiver.bodies[0]!.length;
+
+      // 9 bytes short, because a refusal counts the longest id an event could have.
+      const fits = await testWith(
+        webhook.id,
+        "x".repeat(REQUEST_LIMIT_BYTES - 9 - aroundPadding),
+      );
+      expect(fits.success).toBe(true);
+      expect(receiver.bodies[1]!.length).toBe(REQUEST_LIMIT_BYTES - 9);
+
+      await expect(
+        testWith(
+          webhook.id,
+          "x".repeat(REQUEST_LIMIT_BYTES - 8 - aroundPadding),
+        ),
+      ).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+        message: expect.stringMatching(TOO_LONG),
+      });
+      expect(receiver.deliveryIds).toHaveLength(2);
+      expect(await deliveriesOf(webhook.id)).toHaveLength(2);
+      expect(await db.select().from(webhookEvents)).toHaveLength(2);
+    });
+  });
+
+  describe("sent again by hand", () => {
+    const retry = (deliveryId: string) =>
+      callerFor(owner).webhookSystem.retryDelivery({ deliveryId });
+
+    it("is delivered past the cap on a response, whole", async () => {
+      const receiver = await startReceiver([{ status: 503 }, {}]);
+      const webhook = await webhookAt(receiver.url);
+      const padding = "x".repeat(CAP_BYTES + 1024);
+      const first = await callerFor(owner).webhookSystem.test({
+        webhookId: webhook.id,
+        testData: { padding },
+      });
+      expect(first.success).toBe(false);
+
+      const answer = await retry(first.data.id);
+
+      expect(answer.success).toBe(true);
+      expect(receiver.deliveryIds).toHaveLength(2);
+      const delivered = JSON.parse(receiver.bodies[1]!) as {
+        data: { padding: string };
+      };
+      expectSame(delivered.data.padding, padding);
+    });
+
+    it("is refused past the limit, with nothing sent or recorded", async () => {
+      const receiver = await startReceiver();
+      const webhook = await webhookAt(receiver.url);
+      await sendThroughQueue(dataForBodyOf(REQUEST_LIMIT_BYTES + 1));
+      const [recorded] = await deliveriesOf(webhook.id);
+
+      await expect(retry(recorded!.deliveryId)).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+        message: expect.stringMatching(TOO_LONG),
+      });
+
+      expect(receiver.deliveryIds).toEqual([]);
+      expect(await deliveriesOf(webhook.id)).toHaveLength(1);
+    });
   });
 });
