@@ -130,15 +130,125 @@ describe("buildEventFormDefaults", () => {
     expect(defaults.runOnLocal).toBe(true);
   });
 
-  it("never carries servers/env vars/tags into defaults (set later by effect)", () => {
+  it("carries the event's servers, env vars and tags", () => {
     const defaults = buildEventFormDefaults({
       environmentVariables: [{ key: "A", value: "1" }],
-      servers: [{ id: 6, name: "sandbox" }],
+      servers: [{ id: 6, name: "sandbox", address: "192.0.2.10" }],
       tags: ["x"],
     });
-    expect(defaults.selectedServerIds).toEqual([]);
-    expect(defaults.envVars).toEqual([]);
-    expect(defaults.tags).toEqual([]);
+    expect(defaults.selectedServerIds).toEqual([6]);
+    expect(defaults.envVars).toEqual([{ key: "A", value: "1" }]);
+    expect(defaults.tags).toEqual(["x"]);
+  });
+
+  it("reads env vars under the name the API gives them, leaving out the rest of the row", () => {
+    const defaults = buildEventFormDefaults({
+      envVars: [{ id: 1, eventId: 2, key: "A", value: "1" }],
+    } as never);
+    expect(defaults.envVars).toEqual([{ key: "A", value: "1" }]);
+  });
+
+  it("keeps a direct server selected where a run goes to it", () => {
+    const direct = { id: 9, name: "direct", address: "192.0.2.20" };
+    const defaults = buildEventFormDefaults({
+      runLocation: RunLocation.REMOTE,
+      servers: [],
+      server: direct,
+    });
+    expect(defaults.selectedServerIds).toEqual([9]);
+  });
+
+  it("reads a stored tool action config whichever way it was encoded", () => {
+    const config = {
+      toolType: "SLACK",
+      toolId: 1,
+      actionId: "a",
+      parameters: {},
+    };
+    const asRead = (toolActionConfig: unknown) =>
+      buildEventFormDefaults({ toolActionConfig } as never).toolActionConfig;
+
+    expect(asRead(config)).toEqual(config);
+    expect(asRead(JSON.stringify(config))).toEqual(config);
+    expect(asRead(JSON.stringify(JSON.stringify(config)))).toEqual(config);
+    expect(asRead("not json")).toBeNull();
+    expect(asRead(undefined)).toBeNull();
+  });
+
+  describe("content", () => {
+    it.each([
+      ["no stored script", null],
+      ["an empty one", ""],
+    ])("is the event type's template with %s", (_name, content) => {
+      expect(
+        buildEventFormDefaults({ type: EventType.BASH, content }).content,
+      ).toBe(getDefaultScriptContent(EventType.BASH));
+    });
+
+    it("is what's stored when there is a script", () => {
+      expect(
+        buildEventFormDefaults({ type: EventType.BASH, content: "echo hi" })
+          .content,
+      ).toBe("echo hi");
+    });
+  });
+
+  describe("HTTP fields", () => {
+    const http = {
+      httpMethod: "POST",
+      httpUrl: "https://example.test/hook",
+      httpHeaders: [{ key: "X-Key", value: "v" }],
+      httpBody: '{"a":1}',
+    };
+
+    it("carries them for an HTTP request", () => {
+      expect(
+        buildEventFormDefaults({ type: EventType.HTTP_REQUEST, ...http }),
+      ).toEqual(expect.objectContaining(http));
+    });
+
+    it("carries them for an event of another type that still has them", () => {
+      expect(buildEventFormDefaults({ type: EventType.BASH, ...http })).toEqual(
+        expect.objectContaining(http),
+      );
+    });
+
+    it("fills the gaps in what's stored", () => {
+      const defaults = buildEventFormDefaults({
+        httpMethod: "GET",
+        httpUrl: null,
+        httpHeaders: null,
+        httpBody: null,
+      });
+      expect(defaults.httpUrl).toBe("");
+      expect(defaults.httpHeaders).toEqual([]);
+      expect(defaults.httpBody).toBe("");
+    });
+
+    it("leaves them out of an event that never had any", () => {
+      const defaults = buildEventFormDefaults({ type: EventType.BASH });
+      expect(defaults).not.toHaveProperty("httpMethod");
+      expect(defaults).not.toHaveProperty("httpUrl");
+      expect(defaults).not.toHaveProperty("httpHeaders");
+      expect(defaults).not.toHaveProperty("httpBody");
+    });
+  });
+
+  // The form compares these on every render, and a difference would count as a change.
+  it("gives equal values for equal events, however they were built", () => {
+    const event = () => ({
+      name: "n",
+      startTime: new Date("2026-03-05T12:34:56.789Z"),
+      environmentVariables: [{ key: "A", value: "1" }],
+      servers: [{ id: 6, name: "sandbox", address: "192.0.2.10" }],
+      tags: ["x"],
+      toolActionConfig: { toolType: "SLACK", toolId: 1, actionId: "a" },
+      httpMethod: "GET",
+      httpHeaders: [{ key: "X-Key", value: "v" }],
+    });
+    expect(buildEventFormDefaults(event())).toEqual(
+      buildEventFormDefaults(event()),
+    );
   });
 });
 
