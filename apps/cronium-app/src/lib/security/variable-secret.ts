@@ -32,8 +32,8 @@ export function encryptVariableValue(
 
 /**
  * Decrypt a stored variable value. Legacy plaintext rows (pre-encryption) are
- * returned as-is so existing variables keep working; they are re-encrypted the
- * next time they are written.
+ * returned as-is so existing variables keep working, until the value is next
+ * written or `rotate:secrets --encrypt-legacy` encrypts them.
  */
 export function decryptVariableValue(
   stored: string,

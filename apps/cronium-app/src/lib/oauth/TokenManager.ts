@@ -5,7 +5,7 @@ import { type OAuthToken, OAuthError } from "./types";
 import type { OAuthProvider } from "./providers";
 import {
   credentialEncryption,
-  type EncryptedData,
+  parseEncryptedData,
 } from "@/lib/security/credential-encryption";
 
 /**
@@ -30,20 +30,8 @@ function encryptSecret(value: string): string {
   return JSON.stringify(credentialEncryption.encrypt(value));
 }
 
-function parseEncrypted(stored: string): EncryptedData | null {
-  try {
-    const o = JSON.parse(stored) as Partial<EncryptedData>;
-    if (o?.encrypted && o.iv && o.authTag && o.keyDerivation) {
-      return o as EncryptedData;
-    }
-  } catch {
-    // not JSON -> legacy plaintext
-  }
-  return null;
-}
-
 function decryptSecret(stored: string): string {
-  const enc = parseEncrypted(stored);
+  const enc = parseEncryptedData(stored);
   if (!enc) return stored; // legacy plaintext
   const dec = credentialEncryption.decrypt(enc);
   return typeof dec === "string" ? dec : String(dec);

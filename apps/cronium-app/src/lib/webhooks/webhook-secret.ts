@@ -35,8 +35,8 @@ export function encryptWebhookSecret(
 
 /**
  * Decrypt a stored webhook secret. Legacy plaintext rows (pre-encryption) are
- * returned as-is so existing webhooks keep verifying; they are re-encrypted the
- * next time the secret is rotated.
+ * returned as-is so existing webhooks keep verifying, until the secret is
+ * regenerated or `rotate:secrets --encrypt-legacy` encrypts them.
  */
 export function decryptWebhookSecret(
   stored: string,
@@ -55,7 +55,8 @@ export function decryptWebhookSecret(
  * The `webhooks.headers` column is jsonb. To avoid changing the column type we
  * store the encrypted form as a small wrapper object `{ __enc: "<envelope>" }`;
  * legacy plaintext rows remain a plain `{ header: value }` object and pass
- * through unchanged (re-encrypted the next time the webhook is updated).
+ * through unchanged, until an update includes headers or
+ * `rotate:secrets --encrypt-legacy` encrypts them.
  */
 function headersBinding(webhookKey: string, userId: string): SecretBinding {
   return {
@@ -78,6 +79,17 @@ function isEncryptedHeaders(value: unknown): value is EncryptedHeaders {
     "__enc" in value &&
     typeof value.__enc === "string" &&
     isSecretEnvelope((value as EncryptedHeaders).__enc)
+  );
+}
+
+/** A plaintext `{ header: value }` object, as opposed to empty or encrypted. */
+export function isLegacyWebhookHeaders(stored: unknown): boolean {
+  return (
+    typeof stored === "object" &&
+    stored !== null &&
+    !Array.isArray(stored) &&
+    Object.keys(stored).length > 0 &&
+    !isEncryptedHeaders(stored)
   );
 }
 
