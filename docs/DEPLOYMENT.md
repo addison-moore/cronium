@@ -224,6 +224,16 @@ docker compose up -d
   remain, and
   [Encrypting values saved before encryption at rest](ENVIRONMENT_VARIABLES.md#encrypting-values-saved-before-encryption-at-rest)
   has the command.
+- **Since November 2026, container jobs need Docker's attach endpoint.** A job's script
+  reaches its container on stdin, so the orchestrator calls
+  `POST /containers/{id}/attach` before it starts any container job, however short the
+  script. The compose files here mount the Docker socket directly, so this only matters
+  if your orchestrator goes through a Docker socket proxy. In that case, before you
+  upgrade, allow that route and let the connection upgrade through. Otherwise every
+  container job fails at once with
+  `failed to attach to container: unable to upgrade to tcp, received 403`, with whatever
+  status your proxy answers, and its container is never started. Remote jobs don't use
+  this endpoint.
 - The orchestrator's signing key persists in `orchestrator-data`, so remote
   runners keep working across upgrades.
 

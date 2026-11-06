@@ -15,6 +15,7 @@ import {
   validateIntervalSeconds,
 } from "@/lib/scheduling/schedule-math";
 import { canReadEnvVarValues } from "@/server/token-scopes";
+import { envVarsSchema } from "@/shared/schemas/events";
 import { z } from "zod";
 import {
   authenticateRestPrincipal,
@@ -81,14 +82,7 @@ const createEventSchema = z
     timeoutValue: z.number().min(1),
     timeoutUnit: z.enum([TimeUnit.SECONDS, TimeUnit.MINUTES, TimeUnit.HOURS]),
     retries: z.number().min(0),
-    envVars: z
-      .array(
-        z.object({
-          key: z.string().min(1),
-          value: z.string(),
-        }),
-      )
-      .optional(),
+    envVars: envVarsSchema.optional(),
   })
   .strict()
   .refine(

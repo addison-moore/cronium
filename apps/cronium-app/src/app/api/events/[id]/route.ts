@@ -137,7 +137,7 @@ export async function PATCH(
       Array.isArray(requestBody)
     ) {
       return NextResponse.json(
-        { error: "Invalid request body" },
+        { error: "Request body must be a JSON object under 10 MB" },
         { status: 400 },
       );
     }
