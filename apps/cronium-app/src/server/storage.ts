@@ -89,7 +89,6 @@ import {
   encryptServerSecret,
   decryptServerSecret,
   encryptEnvVarValue,
-  decryptEnvVarValue,
   isEnvVarCiphertext,
   encryptSystemSetting,
   decryptSystemSetting,
@@ -216,10 +215,16 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 /** A variable as a caller supplies it: storage adds the event and encrypts the value. */
 export type EnvVarInput = Pick<InsertEnvVar, "key" | "value">;
 
-/** What a new event starts with, written in the same transaction as its row. */
-export interface NewEventRelations {
+/** What an event is saved with, in the same transaction as its own row. */
+export interface EventRelations {
   envVars?: EnvVarInput[] | undefined;
   serverIds?: number[] | undefined;
+}
+
+/** A save to an existing event: a relation left out stays as it is. */
+export interface EventRelationsUpdate extends EventRelations {
+  /** Who is saving. They have to own the event and any server it's linked to. */
+  userId: string;
 }
 
 /**
@@ -388,17 +393,15 @@ export interface IStorage {
   getEventsByServerId(serverId: number, userId: string): Promise<Event[]>;
   createScript(
     insertScript: InsertEvent,
-    relations?: NewEventRelations,
+    relations?: EventRelations,
   ): Promise<Event>;
-  updateScript(id: number, updateData: Partial<InsertEvent>): Promise<Event>;
+  updateScript(
+    id: number,
+    updateData: Partial<InsertEvent>,
+    relations?: EventRelationsUpdate,
+  ): Promise<Event>;
   recordEventDispatch(id: number, at?: Date): Promise<void>;
   deleteScript(id: number): Promise<void>;
-
-  createEnvVar(insertEnvVar: InsertEnvVar): Promise<EnvVar>;
-  replaceEventEnvVars(
-    eventId: number,
-    newEnvVars: EnvVarInput[],
-  ): Promise<void>;
 
   // Log methods
   getLog(id: number): Promise<Log | undefined>;
@@ -471,11 +474,6 @@ export interface IStorage {
 
   // Event-Server relationship methods
   getEventServers(eventId: number): Promise<EventServer[]>;
-  setEventServers(
-    eventId: number,
-    serverIds: number[],
-    userId: string,
-  ): Promise<void>;
 
   // Settings methods
   getSetting(key: string): Promise<Setting | undefined>;
@@ -1192,14 +1190,18 @@ class DatabaseStorage implements IStorage {
    */
   async createScript(
     insertScript: InsertEvent,
-    relations: NewEventRelations = {},
+    relations: EventRelations = {},
   ): Promise<Event> {
     // Values are encrypted under the event's id, and before the transaction opens so
-    // the vault is never called with one held. So the id has to come first.
-    const id = await reserveEventId();
-    const envVarRows = (relations.envVars ?? []).map((envVar) =>
-      toEnvVarRow(id, envVar),
-    );
+    // the vault is never called with one held. So an event with values takes its id
+    // first.
+    const newEnvVars = relations.envVars ?? [];
+    const reservedId =
+      newEnvVars.length > 0 ? await reserveEventId() : undefined;
+    const envVarRows =
+      reservedId === undefined
+        ? []
+        : newEnvVars.map((envVar) => toEnvVarRow(reservedId, envVar));
 
     return db.transaction(async (tx) => {
       if (
@@ -1224,7 +1226,10 @@ class DatabaseStorage implements IStorage {
 
       const [script] = await tx
         .insert(events)
-        .values({ ...insertScript, id })
+        .values({
+          ...insertScript,
+          ...(reservedId !== undefined && { id: reservedId }),
+        })
         .returning();
 
       if (!script) {
@@ -1237,7 +1242,7 @@ class DatabaseStorage implements IStorage {
       if (relations.serverIds && relations.serverIds.length > 0) {
         await writeEventServers(
           tx,
-          id,
+          script.id,
           relations.serverIds,
           insertScript.userId,
         );
@@ -1246,9 +1251,15 @@ class DatabaseStorage implements IStorage {
     });
   }
 
+  /**
+   * Saves an event's fields, and any variables and server links it's given, all or
+   * nothing. A failure at any point keeps what it had, and a job dispatched meanwhile
+   * reads the old variables whole.
+   */
   async updateScript(
     id: number,
     updateData: Partial<InsertEvent>,
+    relations?: EventRelationsUpdate,
   ): Promise<Event> {
     // Ownership/provenance are immutable at the storage boundary. This keeps
     // a future route from reintroducing the legacy mass-assignment flaw.
@@ -1278,6 +1289,11 @@ class DatabaseStorage implements IStorage {
       );
     }
 
+    // First, so the vault is never called with a transaction held.
+    const envVarRows = relations?.envVars?.map((envVar) =>
+      toEnvVarRow(id, envVar),
+    );
+
     return db.transaction(async (tx) => {
       if (
         mutableUpdateData.serverId !== null &&
@@ -1306,14 +1322,34 @@ class DatabaseStorage implements IStorage {
         }
       }
 
-      const [script] = await tx
-        .update(events)
-        .set(mutableUpdateData)
-        .where(eq(events.id, id))
-        .returning();
+      // Either way this locks the event's row, so saves to it take turns. Otherwise
+      // each delete below misses the rows another save hasn't committed yet, and both
+      // sets survive, with duplicate keys.
+      const [script] =
+        Object.keys(mutableUpdateData).length > 0
+          ? await tx
+              .update(events)
+              .set(mutableUpdateData)
+              .where(eq(events.id, id))
+              .returning()
+          : await tx
+              .select()
+              .from(events)
+              .where(eq(events.id, id))
+              .for("no key update");
 
       if (!script) {
         throw new Error("Failed to update script - script not found");
+      }
+
+      if (envVarRows) {
+        await tx.delete(envVars).where(eq(envVars.eventId, id));
+        if (envVarRows.length > 0) {
+          await tx.insert(envVars).values(envVarRows);
+        }
+      }
+      if (relations?.serverIds) {
+        await writeEventServers(tx, id, relations.serverIds, relations.userId);
       }
       return script;
     });
@@ -1411,55 +1447,6 @@ class DatabaseStorage implements IStorage {
       console.error(`Error in deleteScript for id ${id}:`, error);
       throw error;
     }
-  }
-
-  async createEnvVar(insertEnvVar: InsertEnvVar): Promise<EnvVar> {
-    const [envVar] = await db
-      .insert(envVars)
-      .values({
-        ...insertEnvVar,
-        ...toEnvVarRow(insertEnvVar.eventId, insertEnvVar),
-      })
-      .returning();
-
-    if (!envVar) {
-      throw new Error("Failed to create environment variable");
-    }
-
-    // Return decrypted data for immediate use
-    return {
-      ...envVar,
-      value: envVar.value
-        ? decryptEnvVarValue(envVar.value, envVar.eventId, envVar.key)
-        : envVar.value,
-    };
-  }
-
-  /**
-   * Swaps an event's variables for a new set in one transaction. A failure at any
-   * point keeps the old set, and a job dispatched meanwhile reads the old set whole.
-   */
-  async replaceEventEnvVars(
-    eventId: number,
-    newEnvVars: EnvVarInput[],
-  ): Promise<void> {
-    // First, so the vault is never called with a transaction held.
-    const rows = newEnvVars.map((envVar) => toEnvVarRow(eventId, envVar));
-
-    await db.transaction(async (tx) => {
-      // Saves take turns. Otherwise each delete misses the rows another save hasn't
-      // committed yet, and both sets survive, with duplicate keys.
-      await tx
-        .select({ id: events.id })
-        .from(events)
-        .where(eq(events.id, eventId))
-        .for("no key update");
-
-      await tx.delete(envVars).where(eq(envVars.eventId, eventId));
-      if (rows.length > 0) {
-        await tx.insert(envVars).values(rows);
-      }
-    });
   }
 
   // Log methods
@@ -2771,16 +2758,6 @@ class DatabaseStorage implements IStorage {
       .where(eq(eventServers.eventId, eventId));
 
     return eventServerList;
-  }
-
-  async setEventServers(
-    eventId: number,
-    serverIds: number[],
-    userId: string,
-  ): Promise<void> {
-    await db.transaction((tx) =>
-      writeEventServers(tx, eventId, serverIds, userId),
-    );
   }
 
   // API Token methods

@@ -31,8 +31,6 @@ jest.mock("@/server/storage", () => ({
     createScript: jest.fn(),
     updateScript: jest.fn(),
     deleteScript: jest.fn(),
-    replaceEventEnvVars: jest.fn(),
-    setEventServers: jest.fn(),
     getFilteredLogs: jest.fn(),
     getAllServers: jest.fn(),
     getServer: jest.fn(),

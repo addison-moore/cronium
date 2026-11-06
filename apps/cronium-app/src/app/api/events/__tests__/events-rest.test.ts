@@ -12,8 +12,6 @@ jest.mock("@/server/storage", () => ({
   storage: {
     createScript: jest.fn(),
     updateScript: jest.fn(),
-    replaceEventEnvVars: jest.fn(),
-    setEventServers: jest.fn(),
     getEvent: jest.fn(),
     getEventWithRelations: jest.fn(),
     getAllEvents: jest.fn(),
@@ -273,40 +271,48 @@ describe("PATCH /api/events/[id]", () => {
     expect(scheduler.updateScript).not.toHaveBeenCalled();
   });
 
-  describe("env vars", () => {
+  describe("saving the fields, env vars and servers", () => {
     const envVars = [{ key: "B", value: "2" }];
 
-    it("replaces them in one call", async () => {
-      const res = await patch({ name: "renamed", envVars });
+    it("does it in one call", async () => {
+      const res = await patch({
+        name: "renamed",
+        envVars,
+        selectedServerIds: [3],
+      });
 
       expect(res.status).toBe(200);
-      expect(s.replaceEventEnvVars).toHaveBeenCalledTimes(1);
-      expect(s.replaceEventEnvVars).toHaveBeenCalledWith(1, envVars);
+      expect(s.updateScript).toHaveBeenCalledTimes(1);
+      expect(s.updateScript).toHaveBeenCalledWith(
+        1,
+        { name: "renamed" },
+        { envVars, serverIds: [3], userId: USER },
+      );
     });
 
-    it("clears them when given an empty list", async () => {
+    it("clears the env vars when given an empty list", async () => {
       await patch({ envVars: [] });
-      expect(s.replaceEventEnvVars).toHaveBeenCalledWith(1, []);
+      expect(s.updateScript).toHaveBeenCalledWith(
+        1,
+        {},
+        { envVars: [], userId: USER },
+      );
     });
 
-    it("leaves them alone when the body has none", async () => {
+    it("leaves the env vars and servers alone when the body has neither", async () => {
       await patch({ name: "renamed" });
-      expect(s.replaceEventEnvVars).not.toHaveBeenCalled();
+      expect(s.updateScript).toHaveBeenCalledWith(
+        1,
+        { name: "renamed" },
+        { userId: USER },
+      );
     });
 
-    it("saves them with no other field, which an empty update would refuse", async () => {
-      const res = await patch({ envVars });
-
-      expect(res.status).toBe(200);
-      expect(s.updateScript).not.toHaveBeenCalled();
-      expect(s.replaceEventEnvVars).toHaveBeenCalledWith(1, envVars);
-    });
-
-    it("answers 500 and stops at a failed save, leaving servers and schedule alone", async () => {
+    it("answers 500 and leaves the schedule alone when the save fails", async () => {
       const error = jest
         .spyOn(console, "error")
         .mockImplementation(() => undefined);
-      s.replaceEventEnvVars!.mockRejectedValueOnce(new Error("save failed"));
+      s.updateScript!.mockRejectedValueOnce(new Error("save failed"));
 
       const res = await patch({
         status: "PAUSED",
@@ -315,18 +321,9 @@ describe("PATCH /api/events/[id]", () => {
       });
 
       expect(res.status).toBe(500);
-      expect(s.setEventServers).not.toHaveBeenCalled();
       expect(scheduler.updateScript).not.toHaveBeenCalled();
       error.mockRestore();
     });
-  });
-
-  it("changes servers with no other field, which an empty update would refuse", async () => {
-    const res = await patch({ selectedServerIds: [3] });
-
-    expect(res.status).toBe(200);
-    expect(s.updateScript).not.toHaveBeenCalled();
-    expect(s.setEventServers).toHaveBeenCalledWith(1, [3], USER);
   });
 });
 
@@ -341,7 +338,6 @@ describe("env vars too long to deliver", () => {
     expect(res.status).toBe(400);
     expect(JSON.stringify(await res.json())).toContain("at most 128 KB");
     expect(s.createScript).not.toHaveBeenCalled();
-    expect(s.createEnvVar).not.toHaveBeenCalled();
   });
 
   it("PATCH answers 400 with the reason, and leaves the variables alone", async () => {
@@ -349,8 +345,7 @@ describe("env vars too long to deliver", () => {
 
     expect(res.status).toBe(400);
     expect(JSON.stringify(await res.json())).toContain("at most 128 KB");
-    expect(s.deleteEnvVarsByEventId).not.toHaveBeenCalled();
-    expect(s.createEnvVar).not.toHaveBeenCalled();
+    expect(s.updateScript).not.toHaveBeenCalled();
   });
 
   // What a body over the proxy's 10 MB cap looks like by the time it arrives.
@@ -387,7 +382,7 @@ describe("env vars too long to deliver", () => {
       expect(await res.json()).toEqual({
         error: "Request body must be a JSON object under 10 MB",
       });
-      expect(s.deleteEnvVarsByEventId).not.toHaveBeenCalled();
+      expect(s.updateScript).not.toHaveBeenCalled();
     },
   );
 
@@ -396,7 +391,8 @@ describe("env vars too long to deliver", () => {
 
     expect((await post({ ...baseEvent, ...long })).status).toBe(201);
     expect((await patch(long)).status).toBe(200);
-    expect(s.createEnvVar).toHaveBeenCalledTimes(2);
+    expect(s.createScript!.mock.calls[0]![1]).toMatchObject(long);
+    expect(s.updateScript!.mock.calls[0]![2]).toMatchObject(long);
   });
 });
 

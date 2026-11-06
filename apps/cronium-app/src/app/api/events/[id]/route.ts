@@ -235,26 +235,16 @@ export async function PATCH(
     const filteredAllowedFields = Object.fromEntries(
       Object.entries(allowedFields).filter(([, value]) => value !== undefined),
     ) as Partial<InsertEvent>;
-    const fieldsToUpdate = {
-      ...filteredAllowedFields,
-      ...(startTime !== undefined && {
-        startTime: startTime ? new Date(startTime) : null,
-      }),
-    };
-    // A PATCH may change only the env vars or servers, and an empty update throws.
-    if (Object.keys(fieldsToUpdate).length > 0) {
-      await storage.updateScript(eventId, fieldsToUpdate);
-    }
-
-    // If env vars are provided, handle them
-    if (envVars !== undefined) {
-      await storage.replaceEventEnvVars(eventId, envVars);
-    }
-
-    // Handle multiple server selection for remote events
-    if (selectedServerIds !== undefined) {
-      await storage.setEventServers(eventId, selectedServerIds, userId);
-    }
+    await storage.updateScript(
+      eventId,
+      {
+        ...filteredAllowedFields,
+        ...(startTime !== undefined && {
+          startTime: startTime ? new Date(startTime) : null,
+        }),
+      },
+      { envVars, serverIds: selectedServerIds, userId },
+    );
 
     // Without this, pausing over REST kept firing and a new schedule never applied.
     if (touchesEventSchedule(parsed.data)) {

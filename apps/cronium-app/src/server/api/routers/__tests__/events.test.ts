@@ -121,8 +121,6 @@ jest.mock("@/server/storage", () => ({
     createScript: jest.fn(),
     updateScript: jest.fn(),
     deleteScript: jest.fn(),
-    replaceEventEnvVars: jest.fn(),
-    setEventServers: jest.fn(),
     getLogsByEventId: jest.fn(),
     getWorkflowsUsingEvent: jest.fn(),
     getAllEvents: jest.fn(),
@@ -172,8 +170,6 @@ const storageMock = storage as unknown as {
   createScript: jest.Mock;
   updateScript: jest.Mock;
   deleteScript: jest.Mock;
-  replaceEventEnvVars: jest.Mock;
-  setEventServers: jest.Mock;
   getLogsByEventId: jest.Mock;
   getWorkflowsUsingEvent: jest.Mock;
   getAllEvents: jest.Mock;
@@ -288,8 +284,6 @@ beforeEach(() => {
   });
   storageMock.updateScript.mockResolvedValue(undefined);
   storageMock.deleteScript.mockResolvedValue(undefined);
-  storageMock.replaceEventEnvVars.mockResolvedValue(undefined);
-  storageMock.setEventServers.mockResolvedValue(undefined);
   storageMock.getLogsByEventId.mockResolvedValue({ logs: [], total: 0 });
   storageMock.getWorkflowsUsingEvent.mockResolvedValue([]);
   storageMock.getAllEvents.mockResolvedValue([]);
@@ -425,8 +419,7 @@ describe("getAll", () => {
 });
 
 describe("saving env vars", () => {
-  // A save deletes the event's variables and then adds them back one at a time, so a
-  // row the database refuses used to cost every row after it.
+  // Refused up front, so the message says why instead of a save failing with a 500.
   it.each([
     ["a value too long to deliver", { key: "A", value: "x".repeat(128_001) }],
     ["a key the column can't hold", { key: "K".repeat(256), value: "v" }],
@@ -441,8 +434,7 @@ describe("saving env vars", () => {
       }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 
-    expect(storageMock.deleteEnvVarsByEventId).not.toHaveBeenCalled();
-    expect(storageMock.createEnvVar).not.toHaveBeenCalled();
+    expect(storageMock.updateScript).not.toHaveBeenCalled();
   });
 });
 
@@ -576,7 +568,6 @@ describe("create", () => {
     // Schedule materialization boundary: always invoked with the new id so an
     // event created directly as ACTIVE+SCHEDULE starts firing.
     expect(schedulerMock.updateScript).toHaveBeenCalledWith(5);
-    expect(storageMock.setEventServers).not.toHaveBeenCalled();
     expect(result).toMatchObject({ id: 5, secretFieldsRedacted: false });
   });
 
@@ -682,19 +673,24 @@ describe("update", () => {
   it("updates plain fields without touching the schedule", async () => {
     const caller = callerWith(sessionFor());
     const result = await caller.events.update({ id: 1, name: "Renamed" });
-    expect(storageMock.updateScript).toHaveBeenCalledWith(1, {
-      name: "Renamed",
-    });
+    // With no env vars or servers given, so storage leaves both as they are.
+    expect(storageMock.updateScript).toHaveBeenCalledWith(
+      1,
+      { name: "Renamed" },
+      { userId: OWNER },
+    );
     expect(schedulerMock.updateScript).not.toHaveBeenCalled();
-    expect(storageMock.replaceEventEnvVars).not.toHaveBeenCalled();
-    expect(storageMock.setEventServers).not.toHaveBeenCalled();
     expect(result).toMatchObject({ id: 1 });
   });
 
-  it("skips the storage write when only the id is provided", async () => {
+  it("gives storage nothing to write when only the id is provided", async () => {
     const caller = callerWith(sessionFor());
     await caller.events.update({ id: 1 });
-    expect(storageMock.updateScript).not.toHaveBeenCalled();
+    expect(storageMock.updateScript).toHaveBeenCalledWith(
+      1,
+      {},
+      { userId: OWNER },
+    );
   });
 
   it.each([
@@ -728,32 +724,49 @@ describe("update", () => {
   it("clears startTime with an explicit null and still re-materializes", async () => {
     const caller = callerWith(sessionFor());
     await caller.events.update({ id: 1, startTime: null });
-    expect(storageMock.updateScript).toHaveBeenCalledWith(1, {
-      startTime: null,
-    });
+    expect(storageMock.updateScript).toHaveBeenCalledWith(
+      1,
+      { startTime: null },
+      { userId: OWNER },
+    );
     expect(schedulerMock.updateScript).toHaveBeenCalledWith(1);
   });
 
-  it("replaces env vars in one call", async () => {
+  it("saves the fields, env vars and servers in one call", async () => {
+    dbState.servers = [
+      { id: 7, userId: OWNER, shared: false, isArchived: false },
+    ];
     const caller = callerWith(sessionFor());
     await caller.events.update({
       id: 1,
+      name: "Renamed",
       envVars: [{ key: "B", value: "2" }],
+      selectedServerIds: [7],
     });
-    expect(storageMock.replaceEventEnvVars).toHaveBeenCalledTimes(1);
-    expect(storageMock.replaceEventEnvVars).toHaveBeenCalledWith(1, [
-      { key: "B", value: "2" },
-    ]);
+    expect(storageMock.updateScript).toHaveBeenCalledTimes(1);
+    expect(storageMock.updateScript).toHaveBeenCalledWith(
+      1,
+      { name: "Renamed" },
+      {
+        envVars: [{ key: "B", value: "2" }],
+        serverIds: [7],
+        userId: OWNER,
+      },
+    );
   });
 
   it("clears env vars when an empty array is sent", async () => {
     const caller = callerWith(sessionFor());
     await caller.events.update({ id: 1, envVars: [] });
-    expect(storageMock.replaceEventEnvVars).toHaveBeenCalledWith(1, []);
+    expect(storageMock.updateScript).toHaveBeenCalledWith(
+      1,
+      {},
+      { envVars: [], userId: OWNER },
+    );
   });
 
-  it("stops at a failed env var save, leaving servers and schedule alone", async () => {
-    storageMock.replaceEventEnvVars.mockRejectedValue(new Error("save failed"));
+  it("leaves the schedule alone when the save fails", async () => {
+    storageMock.updateScript.mockRejectedValue(new Error("save failed"));
     const caller = callerWith(sessionFor());
     await expect(
       caller.events.update({
@@ -766,14 +779,17 @@ describe("update", () => {
       code: "INTERNAL_SERVER_ERROR",
       message: "Failed to update event",
     });
-    expect(storageMock.setEventServers).not.toHaveBeenCalled();
     expect(schedulerMock.updateScript).not.toHaveBeenCalled();
   });
 
   it("clears server associations when an empty list is sent (falsy-length input)", async () => {
     const caller = callerWith(sessionFor());
     await caller.events.update({ id: 1, selectedServerIds: [] });
-    expect(storageMock.setEventServers).toHaveBeenCalledWith(1, [], OWNER);
+    expect(storageMock.updateScript).toHaveBeenCalledWith(
+      1,
+      {},
+      { serverIds: [], userId: OWNER },
+    );
   });
 
   it("denies editing another user's event even when shared", async () => {

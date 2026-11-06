@@ -24,7 +24,7 @@ import { getSecretVault } from "@/lib/security/secret-vault";
 import { eventsRouter } from "@/server/api/routers/events";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 import { db, pool } from "@/server/db";
-import { storage, type NewEventRelations } from "@/server/storage";
+import { storage, type EventRelations } from "@/server/storage";
 import { envVars, eventServers, events, jobs, users } from "@/shared/schema";
 import { MAX_ENV_VAR_VALUE_BYTES } from "@/shared/schemas/events";
 import {
@@ -84,7 +84,11 @@ async function saveEnvVars(
   eventId: number,
   submitted: Array<{ key: string; value: string }>,
 ) {
-  await storage.replaceEventEnvVars(eventId, submitted);
+  await storage.updateScript(
+    eventId,
+    {},
+    { envVars: submitted, userId: OWNER },
+  );
 }
 
 async function deliveredValue(eventId: number, key: string) {
@@ -169,7 +173,7 @@ describe("replacing an event's variables", () => {
 });
 
 describe("creating an event with its variables and servers", () => {
-  function createWith(relations: NewEventRelations) {
+  function createWith(relations: EventRelations) {
     return storage.createScript(
       {
         userId: OWNER,
@@ -232,15 +236,169 @@ describe("creating an event with its variables and servers", () => {
     );
   });
 
+  it("takes no id up front when there are no values to encrypt", async () => {
+    const execute = jest.spyOn(db, "execute");
+
+    const event = await createWith({ envVars: [] });
+    await createWith({});
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(event.id).toBeGreaterThan(0);
+  });
+
   it("takes its ids from the sequence every other insert uses", async () => {
-    const first = await createEvent();
+    const first = await createWith({ envVars: [{ key: "A", value: "a" }] });
     const [inserted] = await db
       .insert(events)
       .values({ userId: OWNER, name: "raw", type: "BASH", content: "echo hi" })
       .returning({ id: events.id });
-    const second = await createEvent();
+    const second = await createWith({ envVars: [{ key: "A", value: "a" }] });
 
     expect([inserted!.id, second.id]).toEqual([first.id + 1, first.id + 2]);
+  });
+});
+
+describe("saving an event's fields with its variables and servers", () => {
+  async function eventWithEverything() {
+    const event = await seedEvent();
+    const serverId = await seedServer(OWNER);
+    await storage.updateScript(
+      event.id,
+      { description: "old" },
+      {
+        envVars: [{ key: "OLD", value: "old" }],
+        serverIds: [serverId],
+        userId: OWNER,
+      },
+    );
+    return { id: event.id, serverId };
+  }
+
+  async function savedState(id: number) {
+    const [event] = await db.select().from(events).where(eq(events.id, id));
+    return {
+      description: event!.description,
+      envVars: await db
+        .select()
+        .from(envVars)
+        .where(eq(envVars.eventId, id))
+        .orderBy(asc(envVars.id)),
+      servers: await db
+        .select()
+        .from(eventServers)
+        .where(eq(eventServers.eventId, id)),
+    };
+  }
+
+  it("writes all three", async () => {
+    const { id } = await eventWithEverything();
+    const newServer = await seedServer(OWNER);
+
+    await storage.updateScript(
+      id,
+      { description: "new" },
+      {
+        envVars: [{ key: "NEW", value: "new" }],
+        serverIds: [newServer],
+        userId: OWNER,
+      },
+    );
+
+    const saved = await savedState(id);
+    expect(saved.description).toBe("new");
+    expect(saved.envVars.map(({ key }) => key)).toEqual(["NEW"]);
+    expect(saved.servers.map(({ serverId }) => serverId)).toEqual([newServer]);
+    expect(decryptEnvVarValue(saved.envVars[0]!.value, id, "NEW")).toBe("new");
+  });
+
+  it.each([
+    ["only the fields", { description: "new" }, {}],
+    ["only the variables", {}, { envVars: [{ key: "NEW", value: "new" }] }],
+    ["only the servers", {}, { serverIds: [] }],
+    ["nothing", {}, {}],
+  ])(
+    "leaves the rest alone when given %s",
+    async (_label, fields, relations) => {
+      const { id } = await eventWithEverything();
+      const before = await savedState(id);
+
+      await storage.updateScript(id, fields, { ...relations, userId: OWNER });
+
+      const after = await savedState(id);
+      expect(after.description).toBe(
+        "description" in fields ? "new" : before.description,
+      );
+      expect(after.envVars.map(({ key }) => key)).toEqual(
+        "envVars" in relations ? ["NEW"] : ["OLD"],
+      );
+      expect(after.servers).toEqual(
+        "serverIds" in relations ? [] : before.servers,
+      );
+    },
+  );
+
+  it("returns the event when there's nothing to write, and throws when there's no event", async () => {
+    const { id } = await eventWithEverything();
+
+    await expect(storage.updateScript(id, {})).resolves.toMatchObject({
+      id,
+      description: "old",
+    });
+    await expect(
+      storage.updateScript(
+        id + 1000,
+        {},
+        {
+          envVars: [{ key: "NEW", value: "new" }],
+          userId: OWNER,
+        },
+      ),
+    ).rejects.toThrow("script not found");
+    expect(
+      await db
+        .select()
+        .from(envVars)
+        .where(eq(envVars.eventId, id + 1000)),
+    ).toEqual([]);
+  });
+
+  it("keeps all of it when a server can't be linked", async () => {
+    const { id } = await eventWithEverything();
+    const before = await savedState(id);
+    const archived = await seedServer(OWNER, { isArchived: true });
+
+    await expect(
+      storage.updateScript(
+        id,
+        { description: "new" },
+        {
+          envVars: [{ key: "NEW", value: "new" }],
+          serverIds: [archived],
+          userId: OWNER,
+        },
+      ),
+    ).rejects.toThrow("Unauthorized event server relationship");
+
+    expect(await savedState(id)).toEqual(before);
+  });
+
+  it("keeps all of it when the saver doesn't own the event", async () => {
+    const { id } = await eventWithEverything();
+    const before = await savedState(id);
+
+    await expect(
+      storage.updateScript(
+        id,
+        { description: "new" },
+        {
+          envVars: [{ key: "NEW", value: "new" }],
+          serverIds: [],
+          userId: "someone-else",
+        },
+      ),
+    ).rejects.toThrow("Unauthorized event relationship");
+
+    expect(await savedState(id)).toEqual(before);
   });
 });
 
@@ -293,6 +451,14 @@ describe("a save that fails partway", () => {
     return (await rowsOf(eventId)).map(({ key }) => key);
   }
 
+  async function descriptionOf(eventId: number) {
+    const [event] = await db
+      .select({ description: events.description })
+      .from(events)
+      .where(eq(events.id, eventId));
+    return event!.description;
+  }
+
   async function eventWithOldVars() {
     const event = await seedEvent();
     await saveEnvVars(event.id, OLD);
@@ -307,6 +473,21 @@ describe("a save that fails partway", () => {
       await expect(saveEnvVars(id, REFUSED_PARTWAY)).rejects.toThrow();
 
       expect(await rowsOf(id)).toEqual(before);
+    });
+
+    it("keeps the event's fields too", async () => {
+      const { id } = await eventWithOldVars();
+      await whenInserting("REFUSED", REFUSE);
+
+      await expect(
+        storage.updateScript(
+          id,
+          { description: "edited" },
+          { envVars: REFUSED_PARTWAY, userId: OWNER },
+        ),
+      ).rejects.toThrow();
+
+      expect(await descriptionOf(id)).toBeNull();
     });
 
     it("keeps the old rows when the connection drops partway", async () => {
@@ -401,13 +582,21 @@ describe("a save that fails partway", () => {
       const { id, before } = await eventWithOldVars();
       await holdSavesAt("HOLD");
 
-      const saving = saveEnvVars(id, [
-        { key: "NEW_A", value: "new-a" },
-        { key: "HOLD", value: "new-b" },
-      ]);
+      const saving = storage.updateScript(
+        id,
+        { description: "edited" },
+        {
+          envVars: [
+            { key: "NEW_A", value: "new-a" },
+            { key: "HOLD", value: "new-b" },
+          ],
+          userId: OWNER,
+        },
+      );
       await connectionsWaitingOnALock(1);
 
       expect(await rowsOf(id)).toEqual(before);
+      expect(await descriptionOf(id)).toBeNull();
       const read = await storage.getEventWithRelations(id);
       expect(read!.envVars.map(({ key }) => key).sort()).toEqual([
         "OLD_A",
@@ -417,25 +606,37 @@ describe("a save that fails partway", () => {
       await letSavesFinish();
       await saving;
       expect(await keysOf(id)).toEqual(["NEW_A", "HOLD"]);
+      expect(await descriptionOf(id)).toBe("edited");
     });
 
-    it("leaves one save's rows when two overlap, not a mix of both", async () => {
-      const { id } = await eventWithOldVars();
-      await holdSavesAt("HOLD");
+    it.each([
+      ["only variables", {}],
+      ["fields as well", { description: "edited" }],
+    ])(
+      "leaves one save's rows when two with %s overlap, not a mix of both",
+      async (_label, fields) => {
+        const { id } = await eventWithOldVars();
+        await holdSavesAt("HOLD");
+        const save = (submitted: Array<{ key: string; value: string }>) =>
+          storage.updateScript(id, fields, {
+            envVars: submitted,
+            userId: OWNER,
+          });
 
-      const first = saveEnvVars(id, [
-        { key: "FIRST", value: "1" },
-        { key: "HOLD", value: "1" },
-      ]);
-      await connectionsWaitingOnALock(1);
-      const second = saveEnvVars(id, [{ key: "SECOND", value: "2" }]);
-      await Promise.race([second, connectionsWaitingOnALock(2)]);
+        const first = save([
+          { key: "FIRST", value: "1" },
+          { key: "HOLD", value: "1" },
+        ]);
+        await connectionsWaitingOnALock(1);
+        const second = save([{ key: "SECOND", value: "2" }]);
+        await Promise.race([second, connectionsWaitingOnALock(2)]);
 
-      await letSavesFinish();
-      await Promise.all([first, second]);
+        await letSavesFinish();
+        await Promise.all([first, second]);
 
-      expect(await keysOf(id)).toEqual(["SECOND"]);
-    });
+        expect(await keysOf(id)).toEqual(["SECOND"]);
+      },
+    );
   });
 
   describe("through the routes", () => {
@@ -515,10 +716,39 @@ describe("a save that fails partway", () => {
       const body = { description: "edited", envVars: REFUSED_PARTWAY };
       expect((await restPatch(id, body)).status).toBe(500);
       expect(await rowsOf(id)).toEqual(before);
+      expect(await descriptionOf(id)).toBeNull();
 
       await pool.query(`DROP TRIGGER ${TRIGGER} ON env_vars`);
       expect((await restPatch(id, body)).status).toBe(200);
       expect(await keysOf(id)).toEqual(["NEW_A", "REFUSED", "NEW_C"]);
+      expect(await descriptionOf(id)).toBe("edited");
+    });
+
+    it("REST PATCH schedules an activated event only once the save has committed", async () => {
+      await seedOwner();
+      const event = await createEvent({
+        triggerType: "SCHEDULE",
+        scheduleNumber: 5,
+        scheduleUnit: "MINUTES",
+      });
+      await whenInserting("REFUSED", REFUSE);
+      const body = { status: "ACTIVE", envVars: REFUSED_PARTWAY };
+
+      expect((await restPatch(event.id, body)).status).toBe(500);
+      const [refused] = await db
+        .select()
+        .from(events)
+        .where(eq(events.id, event.id));
+      expect(refused).toMatchObject({ status: "DRAFT", nextRunAt: null });
+
+      await pool.query(`DROP TRIGGER ${TRIGGER} ON env_vars`);
+      expect((await restPatch(event.id, body)).status).toBe(200);
+      const [saved] = await db
+        .select()
+        .from(events)
+        .where(eq(events.id, event.id));
+      expect(saved!.status).toBe("ACTIVE");
+      expect(saved!.nextRunAt).toBeInstanceOf(Date);
     });
 
     it("REST PATCH can change the variables and nothing else", async () => {
@@ -536,14 +766,21 @@ describe("a save that fails partway", () => {
       const { id, before } = await eventWithOldVars();
       await whenInserting("REFUSED", REFUSE);
 
-      await expect(
-        trpc().events.update({ id, envVars: REFUSED_PARTWAY }),
-      ).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
+      const input = {
+        id,
+        description: "edited",
+        envVars: REFUSED_PARTWAY,
+      };
+      await expect(trpc().events.update(input)).rejects.toMatchObject({
+        code: "INTERNAL_SERVER_ERROR",
+      });
       expect(await rowsOf(id)).toEqual(before);
+      expect(await descriptionOf(id)).toBeNull();
 
       await pool.query(`DROP TRIGGER ${TRIGGER} ON env_vars`);
-      await trpc().events.update({ id, envVars: REFUSED_PARTWAY });
+      await trpc().events.update(input);
       expect(await keysOf(id)).toEqual(["NEW_A", "REFUSED", "NEW_C"]);
+      expect(await descriptionOf(id)).toBe("edited");
     });
 
     it("REST POST leaves no event behind when a later row is refused", async () => {
@@ -609,11 +846,7 @@ describe("a save that fails partway", () => {
 describe("env var read/save round trip", () => {
   it("shows the owner plaintext, and saving it back keeps the secret intact", async () => {
     const event = await seedEvent();
-    await storage.createEnvVar({
-      eventId: event.id,
-      key: "API_KEY",
-      value: SECRET,
-    });
+    await saveEnvVars(event.id, [{ key: "API_KEY", value: SECRET }]);
 
     const read = await storage.getEventWithRelations(event.id);
     const dto = toEventApiDto(read!, OWNER, { revealEnvVarValues: true });
@@ -669,21 +902,13 @@ describe("env var read/save round trip", () => {
   it("keeps a real value that merely looks like an envelope", async () => {
     const event = await seedEvent();
     const lookalike = "crn.1.notreal.a.b.c";
-    await storage.createEnvVar({
-      eventId: event.id,
-      key: "API_KEY",
-      value: lookalike,
-    });
+    await saveEnvVars(event.id, [{ key: "API_KEY", value: lookalike }]);
     expect(await deliveredValue(event.id, "API_KEY")).toBe(lookalike);
   });
 
   it("hides values from callers that were not granted them, keeping the keys", async () => {
     const event = await seedEvent();
-    await storage.createEnvVar({
-      eventId: event.id,
-      key: "API_KEY",
-      value: SECRET,
-    });
+    await saveEnvVars(event.id, [{ key: "API_KEY", value: SECRET }]);
     const read = await storage.getEventWithRelations(event.id);
 
     const dto = toEventApiDto(read!, OWNER);
@@ -694,11 +919,7 @@ describe("env var read/save round trip", () => {
 
   it("re-encrypts under the fork's own binding when an owner forks", async () => {
     const source = await seedEvent();
-    await storage.createEnvVar({
-      eventId: source.id,
-      key: "API_KEY",
-      value: SECRET,
-    });
+    await saveEnvVars(source.id, [{ key: "API_KEY", value: SECRET }]);
     const read = await storage.getEventWithRelations(source.id);
     const { envVars: projected } = toEventForkSecurityProjection(read!, OWNER);
     expect(projected[0]!.value).toBe(SECRET);
@@ -746,7 +967,7 @@ describe("a value too long for the old varchar(255) column", () => {
     ],
   ])("saves, reads back and saves again: %s", async (_label, value) => {
     const event = await seedEvent();
-    await storage.createEnvVar({ eventId: event.id, key: "API_KEY", value });
+    await saveEnvVars(event.id, [{ key: "API_KEY", value }]);
 
     const read = await storage.getEventWithRelations(event.id);
     const dto = toEventApiDto(read!, OWNER, { revealEnvVarValues: true });
@@ -786,11 +1007,7 @@ describe("a value too long for the old varchar(255) column", () => {
 
   it("stays encrypted in jobs.payload and reaches a container job whole", async () => {
     const event = await seedEvent();
-    await storage.createEnvVar({
-      eventId: event.id,
-      key: "API_KEY",
-      value: LONG,
-    });
+    await saveEnvVars(event.id, [{ key: "API_KEY", value: LONG }]);
 
     const { jobId, type, environment } = await runToDelivery(event.id);
 
@@ -805,11 +1022,7 @@ describe("a value too long for the old varchar(255) column", () => {
   // At the limit a job row holds about 1.33 MB of this, and the Jobs page lists 50.
   it("stays out of a list of jobs, and nothing else does", async () => {
     const event = await seedEvent();
-    await storage.createEnvVar({
-      eventId: event.id,
-      key: "API_KEY",
-      value: LONG,
-    });
+    await saveEnvVars(event.id, [{ key: "API_KEY", value: LONG }]);
     const read = await storage.getEventWithRelations(event.id);
     const { job } = await dispatchEventJob(read!, { triggeredBy: "manual" });
 
@@ -832,11 +1045,7 @@ describe("a value too long for the old varchar(255) column", () => {
     await seedOwner();
     const serverId = await seedServer(OWNER);
     const event = await createEvent({ runLocation: "REMOTE", serverId });
-    await storage.createEnvVar({
-      eventId: event.id,
-      key: "API_KEY",
-      value: LONG,
-    });
+    await saveEnvVars(event.id, [{ key: "API_KEY", value: LONG }]);
 
     const { type, environment } = await runToDelivery(event.id);
 

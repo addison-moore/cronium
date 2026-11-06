@@ -187,33 +187,24 @@ export const eventsRouter = createTRPCRouter({
 
         const { id, envVars, selectedServerIds, ...eventData } = input;
 
-        // Update the event
-        if (Object.keys(eventData).length > 0) {
-          // Filter out undefined values to satisfy exactOptionalPropertyTypes
-          const filteredEventData = Object.fromEntries(
-            Object.entries(eventData).filter(
-              ([, value]) => value !== undefined,
-            ),
-          );
+        // Filter out undefined values to satisfy exactOptionalPropertyTypes
+        const filteredEventData = Object.fromEntries(
+          Object.entries(eventData).filter(([, value]) => value !== undefined),
+        );
 
-          const updateData = {
-            ...filteredEventData,
-            ...(eventData.startTime && {
-              startTime: new Date(eventData.startTime),
-            }),
-          };
-          await storage.updateScript(id, updateData);
-        }
+        const updateData = {
+          ...filteredEventData,
+          ...(eventData.startTime && {
+            startTime: new Date(eventData.startTime),
+          }),
+        };
 
-        // Handle environment variables
-        if (envVars !== undefined) {
-          await storage.replaceEventEnvVars(id, envVars);
-        }
-
-        // Handle server associations
-        if (selectedServerIds !== undefined) {
-          await storage.setEventServers(id, selectedServerIds, userId);
-        }
+        // Update the event with its environment variables and servers
+        await storage.updateScript(id, updateData, {
+          envVars,
+          serverIds: selectedServerIds,
+          userId,
+        });
 
         // Get the updated event with relations
         const updatedEvent = await storage.getEventWithRelations(id);
