@@ -174,8 +174,10 @@ An event can reach you more than once, so handle deliveries with the steps above
 
 ## Answering a delivery
 
-- **A 2xx means delivered.** Anything else is recorded as a failed attempt and retried if retries remain. That includes a 3xx, because redirects aren't followed.
-- **You have 30 seconds.** After that the attempt counts as failed. If your work can take longer, answer first and do it afterwards.
+- **A 2xx means delivered, as soon as the status arrives.** Anything else is recorded as a failed attempt and retried if retries remain. That includes a 3xx, because redirects aren't followed.
+- **Send a 2xx only once you've taken the event.** Cronium keeps your answer's body for the record and nothing else, so what happens to the body can't change the status. A 2xx isn't sent again if its connection then drops, or its body runs long or can't be decompressed. When a body doesn't finish, the delivery's `error` says so, and a manual retry can send the event again.
+- **You have 30 seconds to send the status.** After that the attempt counts as failed. If your work can take longer, answer first and do it afterwards.
+- **The body gets another 30 seconds and 1 MB, after decompression.** Cronium stops reading at either limit and closes the connection.
 - **The first 1,000 characters of your answer are stored** in the delivery history, so don't put anything sensitive in them.
 
 Cronium won't deliver to internal addresses (loopback, private ranges and cloud metadata endpoints). The attempt is recorded as failed without a request being made.
