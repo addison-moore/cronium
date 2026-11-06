@@ -476,10 +476,22 @@ export class WebhookManager {
         "X-Webhook-Timestamp": payload.timestamp.toISOString(),
         "X-Delivery-Id": deliveryId,
       };
-      const { sendable: customHeaders, ignored } = splitCustomHeaders(headers);
+      const {
+        sendable: customHeaders,
+        ignored,
+        invalidNames,
+      } = splitCustomHeaders(headers);
       if (ignored.length > 0) {
         console.warn(
-          `Webhook ${webhookId}: left out custom headers that receivers need Cronium's own values for (${ignored.join(", ")}). Update the webhook's headers to remove them.`,
+          `Webhook ${webhookId}: left out custom headers that only Cronium can set (${ignored.join(", ")}). Update the webhook's headers to remove them.`,
+        );
+      }
+      // Recorded below like any failed attempt. Node would refuse these anyway, but
+      // its message repeats the whole name, which can hold a credential pasted in by
+      // mistake, and webhook_deliveries isn't encrypted.
+      if (invalidNames.length > 0) {
+        throw new Error(
+          `Nothing was sent, because these custom header names aren't valid in HTTP: ${invalidNames.map((start) => `"${start}…"`).join(", ")}. Set the webhook's headers again without them.`,
         );
       }
       const requestHeaders = {
@@ -562,8 +574,8 @@ export class WebhookManager {
         duration,
       };
     } catch (error) {
-      // The request couldn't be made or got no answer. Node quotes a header name
-      // it refuses, so this can hold anything the name does.
+      // The request couldn't be made or got no answer. An error can quote what it was
+      // given, as Node does with a header name, so its message may not be storable.
       const duration = Date.now() - startTime;
       const errorMessage = pgStorableText(
         error instanceof Error ? error.message : "Unknown error",
