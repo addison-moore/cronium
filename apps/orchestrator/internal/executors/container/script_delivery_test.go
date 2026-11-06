@@ -6,10 +6,13 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -23,7 +26,7 @@ import (
 const maxArgBytes = 131072
 
 func TestScriptSource_PutsTheLoaderBeforeTheScript(t *testing.T) {
-	const content = "echo 'user script'\n\n"
+	const content = "echo 'user script ✓'\n\n"
 	tests := []struct {
 		name       string
 		scriptType types.ScriptType
@@ -36,8 +39,11 @@ func TestScriptSource_PutsTheLoaderBeforeTheScript(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			source := scriptSource(&types.Script{Type: tc.scriptType, Content: content})
+			script := &types.Script{Type: tc.scriptType, Content: content}
+			source := scriptSource(script)
 			assert.Equal(t, tc.loader+content, string(source))
+			// In bytes: the command's size has to match what is sent.
+			assert.Equal(t, len(source), scriptSize(script))
 		})
 	}
 }
@@ -350,4 +356,38 @@ func TestDeliverScript_GivesUpWhenTheContextEnds(t *testing.T) {
 	received, err := io.ReadAll(daemon)
 	require.NoError(t, err)
 	assert.Less(t, len(received), len(source))
+}
+
+// A Docker socket proxy that allows a container's create and start but not its attach
+// answers like this. docs/DEPLOYMENT.md quotes the message. The job must not start
+// either, because nothing could then give it its script.
+func TestRunContainer_FailsTheJobWithoutStartingItWhenAttachIsRefused(t *testing.T) {
+	var started atomic.Bool
+	docker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/start") {
+			started.Store(true)
+		}
+		http.Error(w, "Forbidden", http.StatusForbidden)
+	}))
+	defer docker.Close()
+	cli, err := client.New(client.WithHost("tcp://"+docker.Listener.Addr().String()), client.WithAPIVersion("1.44"))
+	require.NoError(t, err)
+	e := newUnitExecutor()
+	e.dockerClient = cli
+
+	updates := make(chan types.ExecutionUpdate, 10)
+	e.runContainer(context.Background(), "container-id", scriptJob(types.ScriptTypeBash), updates, "exec-1", NewExecutionTiming())
+	close(updates)
+
+	var statuses []*types.StatusUpdate
+	for update := range updates {
+		status, ok := update.Data.(*types.StatusUpdate)
+		require.True(t, ok, "unexpected update: %+v", update)
+		statuses = append(statuses, status)
+	}
+	require.Len(t, statuses, 2)
+	assert.Equal(t, "failed to attach to container: unable to upgrade to tcp, received 403", statuses[0].Message)
+	assert.Equal(t, types.JobStatusFailed, statuses[1].Status)
+	assert.Equal(t, "Failed to attach to container", statuses[1].Message)
+	assert.False(t, started.Load(), "a job that can't get its script must not start")
 }

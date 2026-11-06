@@ -386,28 +386,38 @@ const (
 	scriptNotDeliveredMessage  = "cronium: the script did not arrive in full, so it was not run"
 )
 
-// scriptSource is the text a job runs: the helper loader, then the user's script.
+// scriptLoader is the line a job runs before its script.
 //
 // Each runtime image ships the cronium helper SDK but does not auto-load it, so
 // the loader exposes `cronium` to the user's script without an explicit import —
 // matching the runner path and the documented no-import usage (e.g.
 // `cronium.output(...)`). Without this the script fails with
 // NameError/ReferenceError: cronium is not defined.
-func scriptSource(script *types.Script) []byte {
-	var loader string
-	switch script.Type {
+func scriptLoader(scriptType types.ScriptType) string {
+	switch scriptType {
 	case types.ScriptTypePython:
-		loader = "import cronium\n"
+		return "import cronium\n"
 	case types.ScriptTypeNode:
 		// The comment names the code as `node -e` does. It has to come first: V8 finds
 		// it while parsing, so a syntax error further up would otherwise be reported
 		// against <anonymous_script>.
-		loader = "globalThis.cronium = require('cronium'); //# sourceURL=[eval]\n"
+		return "globalThis.cronium = require('cronium'); //# sourceURL=[eval]\n"
 	default:
 		// cronium.sh is also auto-sourced via BASH_ENV; source explicitly for safety.
-		loader = "source /usr/local/bin/cronium.sh 2>/dev/null || true\n"
+		return "source /usr/local/bin/cronium.sh 2>/dev/null || true\n"
 	}
-	return []byte(loader + script.Content)
+}
+
+// scriptSource is the text a job runs: the helper loader, then the user's script.
+func scriptSource(script *types.Script) []byte {
+	return []byte(scriptLoader(script.Type) + script.Content)
+}
+
+// scriptSize is the length of scriptSource's result, measured without copying the
+// script. The command carries this size and the container is sent that text, so the two
+// must agree: if they don't, the bootstrap refuses to run the script.
+func scriptSize(script *types.Script) int {
+	return len(scriptLoader(script.Type)) + len(script.Content)
 }
 
 // buildCommand builds the container command, which holds no part of the script.
@@ -428,7 +438,7 @@ func scriptSource(script *types.Script) []byte {
 //
 // Each bootstrap leaves no name behind for the script to see or collide with.
 func (e *Executor) buildCommand(script *types.Script) []string {
-	size := len(scriptSource(script))
+	size := scriptSize(script)
 	switch script.Type {
 	case types.ScriptTypePython:
 		return []string{"python", "-c", pythonBootstrap(size)}
