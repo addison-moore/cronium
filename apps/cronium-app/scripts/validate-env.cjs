@@ -7,6 +7,8 @@
  * ENCRYPTION_KEY used to do exactly that).
  */
 
+const { parseRetiredKeys } = require("./retired-keys.cjs");
+
 const PLACEHOLDER_PATTERN =
   /replace[-_]?with|change[-_]?this|change[-_]?me|your[-_]?(secret|key|32)|<paste|example/i;
 
@@ -50,6 +52,11 @@ if (!encryptionKey) {
       "A wrong-length key would leave stored credentials unencrypted.",
     "openssl rand -hex 32",
   );
+}
+
+const retiredKeys = parseRetiredKeys(process.env.ENCRYPTION_KEYS_RETIRED);
+if (retiredKeys.problem) {
+  fail("ENCRYPTION_KEYS_RETIRED", retiredKeys.problem);
 }
 
 requireSecret("AUTH_SECRET", {
